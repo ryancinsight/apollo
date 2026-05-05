@@ -253,6 +253,97 @@ fn process_j_pair_simd_64(
     }
 }
 
+/// Process one j-position in the radix-8 chunk for Complex32 (scalar twiddle + dft8 kernel).
+#[inline(always)]
+fn process_j_scalar_32(
+    chunk: &mut [Complex32],
+    eighth: usize,
+    j: usize,
+    step: Complex32,
+    inverse: bool,
+) {
+    let mut buf = [Complex32::new(0.0, 0.0); 8];
+    buf[0] = chunk[j];
+    let mut tw = step;
+    for p in 1..8 {
+        buf[p] = winograd::apply_twiddle_32(chunk[j + p * eighth], tw);
+        tw = winograd::apply_twiddle_32(tw, step);
+    }
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+    unsafe { winograd::dft8_avx_fma_32(&mut buf, inverse); }
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+    winograd::dft8_32(&mut buf, inverse);
+    for p in 0..8 {
+        chunk[j + p * eighth] = buf[p];
+    }
+}
+
+/// Process a pair of adjacent j-positions for Complex32 using SIMD twiddle recurrence.
+///
+/// Packs `[tw_j, tw_{j+1}]` into one `__m256` (4 Complex32 = 8 f32) and advances
+/// both twiddle recurrences simultaneously with `cmul4_32`.  Applies twiddles to
+/// `[data[j+p*e], data[j+1+p*e]]` in one SIMD multiply per p.  2× throughput
+/// vs scalar on the twiddle application; inner DFT-8 uses `dft8_avx_fma_32`.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+fn process_j_pair_simd_32(
+    chunk: &mut [Complex32],
+    eighth: usize,
+    j: usize,
+    step_j: Complex32,
+    step_j1: Complex32,
+    inverse: bool,
+) {
+    use std::arch::x86_64::{_mm256_loadu_ps, _mm256_storeu_ps};
+
+    let mut buf_j  = [Complex32::new(0.0, 0.0); 8];
+    let mut buf_j1 = [Complex32::new(0.0, 0.0); 8];
+    buf_j[0]  = chunk[j];
+    buf_j1[0] = chunk[j + 1];
+
+    // Pack step_j and step_{j+1} into one __m256 (positions 0,1 and 2,3 within
+    // the lower 128 bits; upper 128 bits are filled with the same pair for cmul4_32).
+    // Layout: [step_j.re, step_j.im, step_j1.re, step_j1.im,
+    //          step_j.re, step_j.im, step_j1.re, step_j1.im]
+    let step_arr = [
+        step_j.re, step_j.im, step_j1.re, step_j1.im,
+        step_j.re, step_j.im, step_j1.re, step_j1.im,
+    ];
+    let step_pair = unsafe { _mm256_loadu_ps(step_arr.as_ptr()) };
+    // tw_pair starts at step_pair (twiddle^1).
+    let mut tw_pair = step_pair;
+
+    for p in 1..8usize {
+        let base = j + p * eighth;
+        // Load [data[j+p*e], data[j+1+p*e]] into lower 128 bits and replicate to upper.
+        // The two Complex32 are contiguous in memory.
+        let v2 = [
+            chunk[base].re, chunk[base].im,
+            chunk[base + 1].re, chunk[base + 1].im,
+            chunk[base].re, chunk[base].im,
+            chunk[base + 1].re, chunk[base + 1].im,
+        ];
+        let data_pair = unsafe { _mm256_loadu_ps(v2.as_ptr()) };
+        // Apply twiddles: cmul4_32 computes [d_j * tw_j, d_{j+1} * tw_{j+1}] × 2 (upper mirrors lower).
+        let result = unsafe { winograd::cmul4_32(data_pair, tw_pair) };
+        let mut tmp = [0.0f32; 8];
+        unsafe { _mm256_storeu_ps(tmp.as_mut_ptr(), result) };
+        buf_j[p]  = Complex32::new(tmp[0], tmp[1]);
+        buf_j1[p] = Complex32::new(tmp[2], tmp[3]);
+        // Advance twiddle recurrence.
+        tw_pair = unsafe { winograd::cmul4_32(tw_pair, step_pair) };
+    }
+
+    unsafe {
+        winograd::dft8_avx_fma_32(&mut buf_j,  inverse);
+        winograd::dft8_avx_fma_32(&mut buf_j1, inverse);
+    }
+    for p in 0..8 {
+        chunk[j +     p * eighth] = buf_j[p];
+        chunk[j + 1 + p * eighth] = buf_j1[p];
+    }
+}
+
 #[inline(always)]
 fn process_r8_chunk_seq_32(
     chunk: &mut [Complex32],
@@ -266,34 +357,60 @@ fn process_r8_chunk_seq_32(
         for p in 0..8 {
             buf[p] = chunk[p * eighth];
         }
+        #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+        unsafe { winograd::dft8_avx_fma_32(&mut buf, inverse); }
+        #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
         winograd::dft8_32(&mut buf, inverse);
         for p in 0..8 {
             chunk[p * eighth] = buf[p];
         }
     }
     // j = 1..eighth: W_len^{p*j} requires actual twiddle multiplications.
-    for j in 1..eighth {
-        let step = match stage {
-            Some(s) => s[j],
-            None => {
-                let a = if inverse {
-                    std::f64::consts::TAU * j as f64 / (eighth * 8) as f64
-                } else {
-                    -std::f64::consts::TAU * j as f64 / (eighth * 8) as f64
-                };
-                Complex32::new(a.cos() as f32, a.sin() as f32)
-            }
-        };
-        let mut buf = [Complex32::new(0.0, 0.0); 8];
-        buf[0] = chunk[j];
-        let mut tw = step;
-        for p in 1..8 {
-            buf[p] = winograd::apply_twiddle_32(chunk[j + p * eighth], tw);
-            tw = winograd::apply_twiddle_32(tw, step);
+    #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+    {
+        let mut j = 1usize;
+        while j + 1 < eighth {
+            let (step_j, step_j1) = match stage {
+                Some(s) => (s[j], s[j + 1]),
+                None => {
+                    let a = if inverse { std::f64::consts::TAU } else { -std::f64::consts::TAU };
+                    let f = a / (eighth * 8) as f64;
+                    (
+                        Complex32::new((f * j as f64).cos() as f32, (f * j as f64).sin() as f32),
+                        Complex32::new((f * (j + 1) as f64).cos() as f32, (f * (j + 1) as f64).sin() as f32),
+                    )
+                }
+            };
+            process_j_pair_simd_32(chunk, eighth, j, step_j, step_j1, inverse);
+            j += 2;
         }
-        winograd::dft8_32(&mut buf, inverse);
-        for p in 0..8 {
-            chunk[j + p * eighth] = buf[p];
+        if j < eighth {
+            let step = match stage {
+                Some(s) => s[j],
+                None => {
+                    let a = if inverse { std::f64::consts::TAU } else { -std::f64::consts::TAU };
+                    let f = a / (eighth * 8) as f64;
+                    Complex32::new((f * j as f64).cos() as f32, (f * j as f64).sin() as f32)
+                }
+            };
+            process_j_scalar_32(chunk, eighth, j, step, inverse);
+        }
+    }
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+    {
+        for j in 1..eighth {
+            let step = match stage {
+                Some(s) => s[j],
+                None => {
+                    let a = if inverse {
+                        std::f64::consts::TAU * j as f64 / (eighth * 8) as f64
+                    } else {
+                        -std::f64::consts::TAU * j as f64 / (eighth * 8) as f64
+                    };
+                    Complex32::new(a.cos() as f32, a.sin() as f32)
+                }
+            };
+            process_j_scalar_32(chunk, eighth, j, step, inverse);
         }
     }
 }

@@ -54,59 +54,148 @@
 use num_complex::{Complex32, Complex64};
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-use std::arch::x86_64::{_mm256_add_pd, _mm256_loadu_pd, _mm256_storeu_pd, _mm256_sub_pd};
+use std::arch::x86_64::{
+    __m128d, __m256d, _mm256_add_pd, _mm256_castpd128_pd256, _mm256_extractf128_pd,
+    _mm256_fmaddsub_pd, _mm256_insertf128_pd, _mm256_loadu_pd, _mm256_mul_pd,
+    _mm256_permute_pd, _mm256_setr_pd, _mm256_storeu_pd, _mm256_sub_pd, _mm256_unpackhi_pd,
+    _mm256_unpacklo_pd, _mm_add_pd, _mm_permute_pd, _mm_set_pd, _mm_sub_pd, _mm_xor_pd,
+};
 
-/// AVX-accelerated in-place DFT-8 for `Complex64`.
+/// Packed 2×Complex64 complex multiplication using AVX+FMA.
 ///
-/// Strategy: scalar DFT-4 sub-transforms + scalar twiddle application (proven
-/// correct), then SIMD-vectorized 8-point butterfly combine (4×`__m256d` add/sub).
-/// This is numerically identical to `dft8_64`; the SIMD path accelerates the
-/// final 8-pair butterfly stage (16 doubles → 4 AVX ops).
+/// Computes `[a0*b0, a1*b1]` where `a = [a0.re, a0.im, a1.re, a1.im]`.
+/// Uses the identity `(ar + i·ai)·(br + i·bi) = ar·br − ai·bi + i·(ar·bi + ai·br)`,
+/// mapped to `_mm256_fmaddsub_pd(ar, b, ai·bsw)` where `bsw = permute(b, 0b0101)`.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+unsafe fn cmul2_64(a: __m256d, b: __m256d) -> __m256d {
+    let ar = _mm256_unpacklo_pd(a, a); // [a0.re, a0.re, a1.re, a1.re]
+    let ai = _mm256_unpackhi_pd(a, a); // [a0.im, a0.im, a1.im, a1.im]
+    let bsw = _mm256_permute_pd(b, 0b0101); // [b0.im, b0.re, b1.im, b1.re]
+    _mm256_fmaddsub_pd(ar, b, _mm256_mul_pd(ai, bsw))
+}
+
+/// AVX-accelerated in-place DFT-4 for `Complex64`.
+///
+/// Decomposition: DFT-4 = two parallel DFT-2 butterflies (stage 1) followed by
+/// a single twiddle W_4^1 = −i (forward) or +i (inverse) on t3, then two
+/// DFT-2 butterflies (stage 2).  All stages are fully vectorised with AVX/SSE.
+///
+/// **Stage 1** packs `[x0,x2]` and `[x1,x3]` into two `__m256d` registers and
+/// computes sum/dif with a single `add_pd`/`sub_pd` pair.  **Twiddle** is done
+/// with `_mm_permute_pd` + `_mm_xor_pd` (sign bit flip) on the low 128-bit half
+/// of `dif`.  **Stage 2** uses four 128-bit add/sub ops and two `insertf128_pd`
+/// to pack the four output values into two `__m256d` for a 2×`storeu_pd` store.
+///
+/// Operation count (vs scalar `dft4_64`):
+/// - 2 load (vs 4 scalar loads of 4 Complex64)
+/// - 2 add/sub (stage 1)
+/// - 5 128-bit ops (extract ×4 + permute ×1 + xor ×1 + add/sub ×4 + insert ×2)
+/// - 2 store
+/// Total: ~17 µops vs ~32 scalar ops.
+///
+/// # Safety
+/// Caller must ensure `target_feature = "avx"` and `target_feature = "fma"`.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+pub unsafe fn dft4_avx_fma_64(data: &mut [Complex64; 4], inverse: bool) {
+    // Load [x0, x1] and [x2, x3] as packed __m256d.
+    // Layout: [x_k.re, x_k.im, x_{k+1}.re, x_{k+1}.im] per register.
+    let v01 = _mm256_loadu_pd(data.as_ptr() as *const f64);
+    let v23 = _mm256_loadu_pd(data.as_ptr().add(2) as *const f64);
+
+    // Stage 1: two simultaneous DFT-2 butterflies.
+    // sum = [t0.re, t0.im, t2.re, t2.im]  where t0 = x0+x2, t2 = x1+x3
+    // dif = [t1.re, t1.im, t3.re, t3.im]  where t1 = x0-x2, t3 = x1-x3
+    let sum = _mm256_add_pd(v01, v23);
+    let dif = _mm256_sub_pd(v01, v23);
+
+    // Extract 128-bit halves for cross-lane butterfly (AVX has no native
+    // cross-lane SIMD add for the DFT-4 final stage structure).
+    let sum_lo: __m128d = _mm256_extractf128_pd(sum, 0); // [t0.re, t0.im]
+    let sum_hi: __m128d = _mm256_extractf128_pd(sum, 1); // [t2.re, t2.im]
+    let dif_lo: __m128d = _mm256_extractf128_pd(dif, 0); // [t1.re, t1.im]
+    let dif_hi: __m128d = _mm256_extractf128_pd(dif, 1); // [t3.re, t3.im]
+
+    // Stage 2 twiddle: W_4^1 = -i (forward) or +i (inverse) applied to t3.
+    // Forward:  (re, im) * (-i) = (im, -re)  → swap lanes then negate lane 1.
+    // Inverse:  (re, im) * (+i) = (-im, re)  → swap lanes then negate lane 0.
+    // _mm_permute_pd with imm8=0b01: result[0]=a[1]=t3.im, result[1]=a[0]=t3.re.
+    let perm = _mm_permute_pd(dif_hi, 0b01); // [t3.im, t3.re]
+    // _mm_set_pd(e1, e0): e0→lane0, e1→lane1.
+    let t3_tw = if inverse {
+        // [-t3.im, t3.re]: negate lane 0 → XOR sign bit at lane 0.
+        _mm_xor_pd(perm, _mm_set_pd(0.0f64, -0.0f64))
+    } else {
+        // [t3.im, -t3.re]: negate lane 1 → XOR sign bit at lane 1.
+        _mm_xor_pd(perm, _mm_set_pd(-0.0f64, 0.0f64))
+    };
+
+    // Stage 2 final DFT-2 butterflies.
+    let t0_plus_t2 = _mm_add_pd(sum_lo, sum_hi); // out[0]
+    let t0_minus_t2 = _mm_sub_pd(sum_lo, sum_hi); // out[2]
+    let t1_plus_t3tw = _mm_add_pd(dif_lo, t3_tw); // out[1]
+    let t1_minus_t3tw = _mm_sub_pd(dif_lo, t3_tw); // out[3]
+
+    // Pack [out[0], out[1]] and [out[2], out[3]] into two __m256d for 2-store.
+    let out01 = _mm256_insertf128_pd(_mm256_castpd128_pd256(t0_plus_t2), t1_plus_t3tw, 1);
+    let out23 = _mm256_insertf128_pd(_mm256_castpd128_pd256(t0_minus_t2), t1_minus_t3tw, 1);
+    _mm256_storeu_pd(data.as_mut_ptr() as *mut f64, out01);
+    _mm256_storeu_pd(data.as_mut_ptr().add(2) as *mut f64, out23);
+}
+
+/// AVX+FMA-accelerated in-place DFT-8 for `Complex64`.
+///
+/// Full SIMD pipeline:
+/// 1. Gather even/odd sub-arrays (8 scalar reads).
+/// 2. `dft4_avx_fma_64` on each (vectorised DFT-4).
+/// 3. AVX twiddle W_8^k via `cmul2_64` (2 packed complex mults).
+/// 4. Butterfly combine (4 AVX add/sub stores).
+///
+/// Twiddle table (forward), packed as 2×Complex64 per register:
+/// - `tw01 = [W_8^0, W_8^1] = [1, SQ2O2·(1−i)]`
+/// - `tw23 = [W_8^2, W_8^3] = [−i, SQ2O2·(−1−i)]`
+///
+/// # Safety
+/// Caller must ensure `target_feature = "avx"` and `target_feature = "fma"`.
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
 #[inline(always)]
 pub unsafe fn dft8_avx_fma_64(data: &mut [Complex64; 8], inverse: bool) {
-    // Step 1: scalar DFT-4 on even/odd sub-arrays (correct by existing dft4_64).
+    // Step 1: gather even/odd sub-arrays.
     let mut even = [data[0], data[2], data[4], data[6]];
     let mut odd = [data[1], data[3], data[5], data[7]];
-    dft4_64(&mut even, inverse);
-    dft4_64(&mut odd, inverse);
 
-    // Step 2: scalar twiddle application — identical to dft8_64.
+    // Step 2: vectorised DFT-4 on each sub-array.
+    dft4_avx_fma_64(&mut even, inverse);
+    dft4_avx_fma_64(&mut odd, inverse);
+
+    // Step 3: AVX twiddle W_8^k via cmul2_64.
+    // Twiddle constants (packed 2×Complex64):
+    //   Forward: W^0=1+0i, W^1=SQ2O2−i·SQ2O2, W^2=0−i, W^3=−SQ2O2−i·SQ2O2
+    //   Inverse: W^0=1+0i, W^{-1}=SQ2O2+i·SQ2O2, W^{-2}=0+i, W^{-3}=−SQ2O2+i·SQ2O2
+    // _mm256_setr_pd(e0,e1,e2,e3): e0→lane0 (lowest addr), e3→lane3.
     const SQ2O2: f64 = std::f64::consts::FRAC_1_SQRT_2;
-    let o0 = odd[0];
-    let o1 = if inverse {
-        Complex64::new(SQ2O2 * (odd[1].re - odd[1].im), SQ2O2 * (odd[1].re + odd[1].im))
-    } else {
-        Complex64::new(SQ2O2 * (odd[1].re + odd[1].im), SQ2O2 * (odd[1].im - odd[1].re))
-    };
-    let o2 = if inverse {
-        Complex64::new(-odd[2].im, odd[2].re)
-    } else {
-        Complex64::new(odd[2].im, -odd[2].re)
-    };
-    let o3 = if inverse {
-        Complex64::new(
-            SQ2O2 * (-odd[3].re - odd[3].im),
-            SQ2O2 * (odd[3].re - odd[3].im),
+    let odd01 = _mm256_loadu_pd(odd.as_ptr() as *const f64);
+    let odd23 = _mm256_loadu_pd(odd.as_ptr().add(2) as *const f64);
+    let (tw01, tw23) = if inverse {
+        (
+            _mm256_setr_pd(1.0, 0.0, SQ2O2, SQ2O2),
+            _mm256_setr_pd(0.0, 1.0, -SQ2O2, SQ2O2),
         )
     } else {
-        Complex64::new(
-            SQ2O2 * (-odd[3].re + odd[3].im),
-            SQ2O2 * (-odd[3].re - odd[3].im),
+        (
+            _mm256_setr_pd(1.0, 0.0, SQ2O2, -SQ2O2),
+            _mm256_setr_pd(0.0, -1.0, -SQ2O2, -SQ2O2),
         )
     };
+    let ot01 = cmul2_64(odd01, tw01);
+    let ot23 = cmul2_64(odd23, tw23);
 
-    // Step 3: AVX butterfly combine.
-    // Load even[0..4] and odd_twiddle[0..4] each as 2×__m256d (2 Complex64 per register).
+    // Step 4: AVX butterfly combine: data[0..4] = even ± ot, data[4..8] = even ∓ ot.
     let ev01 = _mm256_loadu_pd(even.as_ptr() as *const f64);
     let ev23 = _mm256_loadu_pd(even.as_ptr().add(2) as *const f64);
-    let ot = [o0, o1, o2, o3];
-    let ot01 = _mm256_loadu_pd(ot.as_ptr() as *const f64);
-    let ot23 = _mm256_loadu_pd(ot.as_ptr().add(2) as *const f64);
-    // data[0..2] = even[0..2] + ot[0..2], data[2..4] = even[2..4] + ot[2..4]
     _mm256_storeu_pd(data.as_mut_ptr() as *mut f64, _mm256_add_pd(ev01, ot01));
     _mm256_storeu_pd(data.as_mut_ptr().add(2) as *mut f64, _mm256_add_pd(ev23, ot23));
-    // data[4..6] = even[0..2] - ot[0..2], data[6..8] = even[2..4] - ot[2..4]
     _mm256_storeu_pd(data.as_mut_ptr().add(4) as *mut f64, _mm256_sub_pd(ev01, ot01));
     _mm256_storeu_pd(data.as_mut_ptr().add(6) as *mut f64, _mm256_sub_pd(ev23, ot23));
 }
@@ -316,6 +405,138 @@ pub fn dft8_32(data: &mut [Complex32; 8], inverse: bool) {
     data[5] = even[1] - o1;
     data[6] = even[2] - o2;
     data[7] = even[3] - o3;
+}
+
+// ── AVX+FMA SIMD f32 DFT-4 and DFT-8 ────────────────────────────────────────
+
+/// Packed 4×Complex32 complex multiplication using AVX+FMA.
+///
+/// Computes `[a0*b0, a1*b1, a2*b2, a3*b3]` in one `__m256` register
+/// (4 Complex32 = 8 f32).  Uses `moveldup`/`movehdup` to broadcast re/im
+/// lanes and `fmaddsub` for the Gauss-trick complex multiply.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+pub(crate) unsafe fn cmul4_32(
+    a: std::arch::x86_64::__m256,
+    b: std::arch::x86_64::__m256,
+) -> std::arch::x86_64::__m256 {
+    use std::arch::x86_64::{
+        _mm256_fmaddsub_ps, _mm256_moveldup_ps, _mm256_movehdup_ps,
+        _mm256_mul_ps, _mm256_permute_ps,
+    };
+    let ar = _mm256_moveldup_ps(a); // broadcast .re of each Complex32
+    let ai = _mm256_movehdup_ps(a); // broadcast .im of each Complex32
+    let bsw = _mm256_permute_ps(b, 0xB1); // swap .re/.im of each Complex32
+    _mm256_fmaddsub_ps(ar, b, _mm256_mul_ps(ai, bsw))
+}
+
+/// AVX+FMA in-place DFT-4 for `Complex32`.
+///
+/// Fits all 4 Complex32 (= 8 f32) into one `__m256`, performing the entire
+/// DFT-4 with cross-lane permutes instead of scalar extract/insert.
+///
+/// **Stage 1** swaps 128-bit halves of the register to form `sum = [t0, t2]`
+/// and `dif = [t1, t3]`.  **Twiddle** applies W_4^1 = −i (forward) or +i
+/// (inverse) to t3 via a single `_mm_permute_ps` + `_mm_xor_ps`.  **Stage 2**
+/// uses 64-bit pair swaps and add/sub, then `_mm_movelh_ps` to pack output.
+///
+/// # Safety
+/// Caller must ensure `target_feature = "avx"`.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+pub unsafe fn dft4_avx_fma_32(data: &mut [Complex32; 4], inverse: bool) {
+    use std::arch::x86_64::{
+        _mm256_add_ps, _mm256_castps128_ps256, _mm256_castps256_ps128, _mm256_insertf128_ps,
+        _mm256_loadu_ps, _mm256_permute2f128_ps, _mm256_storeu_ps, _mm256_sub_ps,
+        _mm_add_ps, _mm_movelh_ps, _mm_permute_ps, _mm_set_ps, _mm_sub_ps, _mm_xor_ps,
+    };
+
+    // Load 4×Complex32 into one __m256: [x0.re, x0.im, x1.re, x1.im, x2.re, x2.im, x3.re, x3.im].
+    let v = _mm256_loadu_ps(data.as_ptr() as *const f32);
+
+    // Stage 1: two simultaneous DFT-2 butterflies via 128-bit lane swap.
+    // vswap = [x2.re, x2.im, x3.re, x3.im, x0.re, x0.im, x1.re, x1.im]
+    let vswap = _mm256_permute2f128_ps(v, v, 0x01);
+    // sum lower half = [t0.re, t0.im, t2.re, t2.im] where t0=x0+x2, t2=x1+x3
+    // dif lower half = [t1.re, t1.im, t3.re, t3.im] where t1=x0-x2, t3=x1-x3
+    let sum = _mm256_add_ps(v, vswap);
+    let dif = _mm256_sub_ps(v, vswap);
+    let sum_lo = _mm256_castps256_ps128(sum);
+    let dif_lo = _mm256_castps256_ps128(dif);
+
+    // Twiddle W_4^1 on t3 (lanes 2,3 of dif_lo).
+    // permute 0xB4 = 0b10_11_01_00: out[2]=a[3], out[3]=a[2] — swap t3.re,t3.im.
+    // Result: [t1.re, t1.im, t3.im, t3.re]
+    let dif_perm = _mm_permute_ps(dif_lo, 0xB4);
+    // Forward W_4^1 = −i: (re,im)→(im,−re) → negate lane 3 (t3.re after swap).
+    // Inverse W_4^{−1} = +i: (re,im)→(−im,re) → negate lane 2 (t3.im after swap).
+    // _mm_set_ps(e3,e2,e1,e0): e0→result[0], e3→result[3].
+    let sign = if inverse {
+        _mm_set_ps(0.0f32, -0.0f32, 0.0f32, 0.0f32) // negate lane 2
+    } else {
+        _mm_set_ps(-0.0f32, 0.0f32, 0.0f32, 0.0f32) // negate lane 3
+    };
+    let dif_tw = _mm_xor_ps(dif_perm, sign); // [t1.re, t1.im, t3_tw.re, t3_tw.im]
+
+    // Stage 2: DFT-2 butterflies via 64-bit pair swap + add/sub.
+    // permute 0x4E = 0b01_00_11_10: swap 64-bit pairs.
+    let s_perm = _mm_permute_ps(sum_lo, 0x4E); // [t2.re, t2.im, t0.re, t0.im]
+    let d_perm = _mm_permute_ps(dif_tw, 0x4E); // [t3_tw.re, t3_tw.im, t1.re, t1.im]
+    // Lower 64 of each add/sub holds the correct output element.
+    let add_s = _mm_add_ps(sum_lo, s_perm); // lower 64: out[0]=t0+t2
+    let sub_s = _mm_sub_ps(sum_lo, s_perm); // lower 64: out[2]=t0-t2
+    let add_d = _mm_add_ps(dif_tw, d_perm); // lower 64: out[1]=t1+t3_tw
+    let sub_d = _mm_sub_ps(dif_tw, d_perm); // lower 64: out[3]=t1-t3_tw
+
+    // Pack outputs: movelh concatenates lower 64 bits of each __m128.
+    let out01 = _mm_movelh_ps(add_s, add_d); // [out0.re, out0.im, out1.re, out1.im]
+    let out23 = _mm_movelh_ps(sub_s, sub_d); // [out2.re, out2.im, out3.re, out3.im]
+    let result = _mm256_insertf128_ps(_mm256_castps128_ps256(out01), out23, 1);
+    _mm256_storeu_ps(data.as_mut_ptr() as *mut f32, result);
+}
+
+/// AVX+FMA in-place DFT-8 for `Complex32`.
+///
+/// Mirrors `dft8_avx_fma_64` but uses `__m256` (8 f32 = 4 Complex32) throughout,
+/// so both the even and odd sub-arrays each fit in one register.
+///
+/// Pipeline:
+/// 1. `dft4_avx_fma_32` on even and odd sub-arrays.
+/// 2. Twiddle W_8^k (k=0..3) via `cmul4_32` on the 4-complex odd vector.
+/// 3. `add`/`sub` butterfly with even.
+///
+/// # Safety
+/// Caller must ensure `target_feature = "avx"` and `target_feature = "fma"`.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+#[inline(always)]
+pub unsafe fn dft8_avx_fma_32(data: &mut [Complex32; 8], inverse: bool) {
+    use std::arch::x86_64::{_mm256_add_ps, _mm256_loadu_ps, _mm256_setr_ps, _mm256_storeu_ps, _mm256_sub_ps};
+
+    // Step 1: gather even/odd sub-arrays.
+    let mut even = [data[0], data[2], data[4], data[6]];
+    let mut odd  = [data[1], data[3], data[5], data[7]];
+
+    // Step 2: vectorised DFT-4 on each sub-array.
+    dft4_avx_fma_32(&mut even, inverse);
+    dft4_avx_fma_32(&mut odd, inverse);
+
+    // Step 3: AVX twiddle W_8^k via cmul4_32.
+    // Twiddle constants (packed 4×Complex32):
+    //   Forward: W^0=1+0i, W^1=SQ2O2−iSQ2O2, W^2=0−1i, W^3=−SQ2O2−iSQ2O2
+    //   Inverse: W^0=1+0i, W^{-1}=SQ2O2+iSQ2O2, W^{-2}=0+1i, W^{-3}=−SQ2O2+iSQ2O2
+    const SQ2O2: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    let odd_v = _mm256_loadu_ps(odd.as_ptr() as *const f32);
+    let tw = if inverse {
+        _mm256_setr_ps(1.0, 0.0, SQ2O2, SQ2O2, 0.0, 1.0, -SQ2O2, SQ2O2)
+    } else {
+        _mm256_setr_ps(1.0, 0.0, SQ2O2, -SQ2O2, 0.0, -1.0, -SQ2O2, -SQ2O2)
+    };
+    let ot = cmul4_32(odd_v, tw);
+
+    // Step 4: butterfly combine.
+    let ev = _mm256_loadu_ps(even.as_ptr() as *const f32);
+    _mm256_storeu_ps(data.as_mut_ptr()          as *mut f32, _mm256_add_ps(ev, ot));
+    _mm256_storeu_ps(data.as_mut_ptr().add(4)   as *mut f32, _mm256_sub_ps(ev, ot));
 }
 
 // ── DFT-16 butterfly ─────────────────────────────────────────────────────────
