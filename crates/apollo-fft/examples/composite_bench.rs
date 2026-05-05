@@ -23,7 +23,8 @@ fn time_fft<F: Fn(&mut Vec<Complex64>)>(n: usize, f: F, iters: usize) -> Duratio
 fn main() {
     use apollo_fft::application::execution::kernel::{mixed_radix, bluestein};
 
-    for &n in &[100usize, 1000, 10000] {
+    // Test various 5-smooth and non-5-smooth sizes
+    for &n in &[100usize, 125, 200, 300, 500, 625, 1000, 1250, 2000, 5000, 10000] {
         let iters = if n <= 100 { 50000 } else if n <= 1000 { 5000 } else { 500 };
 
         let composite_time = time_fft(n, |buf| mixed_radix::forward_inplace_64(buf), iters);
@@ -31,7 +32,7 @@ fn main() {
 
         let speedup = bluestein_time.as_nanos() as f64 / composite_time.as_nanos() as f64;
         println!(
-            "N={n:6}: composite={:>6.2}µs  bluestein={:>8.2}µs  speedup={:.1}×",
+            "N={n:6}: composite={:>8.2}µs  bluestein={:>8.2}µs  speedup={:.1}×",
             composite_time.as_secs_f64() * 1e6,
             bluestein_time.as_secs_f64() * 1e6,
             speedup,

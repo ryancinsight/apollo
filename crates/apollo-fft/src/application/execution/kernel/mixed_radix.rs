@@ -28,7 +28,7 @@
 
 use super::f16_bridge::run_f16_via_f32;
 use super::radix2_f16::Cf16;
-use super::radix_shape::{factorize_composite, is_power_of_eight, is_power_of_four};
+use super::radix_shape::{factorize_composite, is_power_of_eight, is_power_of_four, should_use_bluestein_instead_of_composite};
 use super::{bluestein, radix2, radix2_f16, radix4, radix8, radix_composite};
 use num_complex::{Complex32, Complex64};
 use once_cell::sync::Lazy;
@@ -253,11 +253,13 @@ pub fn forward_inplace_64_with_twiddles(data: &mut [Complex64], twiddles: Option
             r2 = radix2::forward_inplace_64_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            radix_composite::forward_inplace_64_with_radices(data, &radices);
-        } else {
-            bluestein::forward_inplace_64(data);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                radix_composite::forward_inplace_64_with_radices(data, &radices);
+                return;
+            }
         }
+        bluestein::forward_inplace_64(data);
     }
 }
 
@@ -303,11 +305,13 @@ pub fn inverse_inplace_unnorm_64_with_twiddles(
             r2 = radix2::inverse_inplace_unnorm_64_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            radix_composite::inverse_inplace_unnorm_64_with_radices(data, &radices);
-        } else {
-            bluestein::inverse_inplace_unnorm_64(data);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                radix_composite::inverse_inplace_unnorm_64_with_radices(data, &radices);
+                return;
+            }
         }
+        bluestein::inverse_inplace_unnorm_64(data);
     }
 }
 
@@ -390,11 +394,13 @@ pub fn forward_inplace_32_with_twiddles(data: &mut [Complex32], twiddles: Option
             r2 = radix2::forward_inplace_32_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            radix_composite::forward_inplace_32_with_radices(data, &radices);
-        } else {
-            bluestein::forward_inplace_32(data);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                radix_composite::forward_inplace_32_with_radices(data, &radices);
+                return;
+            }
         }
+        bluestein::forward_inplace_32(data);
     }
 }
 
@@ -416,11 +422,13 @@ pub fn inverse_inplace_unnorm_32_with_twiddles(
             r2 = radix2::inverse_inplace_unnorm_32_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            radix_composite::inverse_inplace_unnorm_32_with_radices(data, &radices);
-        } else {
-            bluestein::inverse_inplace_unnorm_32(data);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                radix_composite::inverse_inplace_unnorm_32_with_radices(data, &radices);
+                return;
+            }
         }
+        bluestein::inverse_inplace_unnorm_32(data);
     }
 }
 
@@ -505,11 +513,13 @@ pub fn forward_inplace_f16_with_twiddles(data: &mut [Cf16], twiddles: Option<&[C
             r2 = radix2_f16::forward_inplace_f16_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            run_f16_via_f32(data, |buf| radix_composite::forward_inplace_32_with_radices(buf, &radices));
-        } else {
-            run_f16_via_f32(data, bluestein::forward_inplace_32);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                run_f16_via_f32(data, |buf| radix_composite::forward_inplace_32_with_radices(buf, &radices));
+                return;
+            }
         }
+        run_f16_via_f32(data, bluestein::forward_inplace_32);
     }
 }
 
@@ -527,13 +537,15 @@ pub fn inverse_inplace_unnorm_f16_with_twiddles(data: &mut [Cf16], twiddles: Opt
             r2 = radix2_f16::inverse_inplace_unnorm_f16_with_twiddles
         );
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
-            run_f16_via_f32(data, |buf| {
-                radix_composite::inverse_inplace_unnorm_32_with_radices(buf, &radices)
-            });
-        } else {
-            run_f16_via_f32(data, bluestein::inverse_inplace_unnorm_32);
+        if !should_use_bluestein_instead_of_composite(data.len()) {
+            if let Some(radices) = cached_composite_radices(data.len()) {
+                run_f16_via_f32(data, |buf| {
+                    radix_composite::inverse_inplace_unnorm_32_with_radices(buf, &radices)
+                });
+                return;
+            }
         }
+        run_f16_via_f32(data, bluestein::inverse_inplace_unnorm_32);
     }
 }
 

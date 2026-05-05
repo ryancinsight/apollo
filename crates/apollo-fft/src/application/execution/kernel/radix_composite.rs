@@ -62,7 +62,7 @@ use super::radix_shape::factorize_composite;
 use super::radix_stage::normalize_inplace;
 use super::winograd::{
     apply_twiddle_32, apply_twiddle_64, dft2_32, dft2_64, dft3_32, dft3_64, dft4_32, dft4_64,
-    dft5_32, dft5_64, dft8_32, dft8_64,
+    dft5_32, dft5_64, dft5_32_simd, dft5_64_simd, dft8_32, dft8_64,
 };
 
 // ── inner butterfly dispatchers ───────────────────────────────────────────────
@@ -90,7 +90,7 @@ fn apply_dft_r_64(data: &mut [Complex64], r: usize, inverse: bool) {
         }
         5 => {
             let mut b: [Complex64; 5] = data[..5].try_into().unwrap();
-            dft5_64(&mut b, inverse);
+            dft5_64_simd(&mut b, inverse);
             data[..5].copy_from_slice(&b);
         }
         8 => {
@@ -122,7 +122,7 @@ fn apply_dft_r_32(data: &mut [Complex32], r: usize, inverse: bool) {
         }
         5 => {
             let mut b: [Complex32; 5] = data[..5].try_into().unwrap();
-            dft5_32(&mut b, inverse);
+            dft5_32_simd(&mut b, inverse);
             data[..5].copy_from_slice(&b);
         }
         8 => {
@@ -252,31 +252,37 @@ fn composite_core_64_with_radices(data: &mut [Complex64], inverse: bool, radices
     // twiddle exponent sign: −1 for forward (exp(−2πi·…)), +1 for inverse.
     let sign: f64 = if inverse { 1.0 } else { -1.0 };
 
-    // Step 2: iterative butterfly stages (innermost first).
-    // `prev_len` = sub-transform size entering this stage.
-    // `stage_len` = sub-transform size leaving this stage = prev_len × r.
+    // Step 2: precompute twiddles for ALL stages upfront.
+    // For stage s, twiddle[j] = exp(sign·2πi·j / stage_len).
+    // Flatten into a single buffer with stage offsets for cache efficiency.
+    let mut all_twiddles = Vec::new();
+    let mut stage_offsets = Vec::new();
     let mut prev_len = 1usize;
-    let mut stage_twiddles: Vec<Complex64> = Vec::new();
     for &r in radices {
         let stage_len = prev_len * r;
-
-        if stage_twiddles.len() < prev_len {
-            stage_twiddles.resize(prev_len, Complex64::new(0.0, 0.0));
-        }
+        stage_offsets.push(all_twiddles.len());
         for j in 0..prev_len {
-            stage_twiddles[j] = if j == 0 {
-                Complex64::new(1.0, 0.0)
+            if j == 0 {
+                all_twiddles.push(Complex64::new(1.0, 0.0));
             } else {
                 let angle = sign * std::f64::consts::TAU * j as f64 / stage_len as f64;
-                Complex64::new(angle.cos(), angle.sin())
-            };
+                all_twiddles.push(Complex64::new(angle.cos(), angle.sin()));
+            }
         }
+        prev_len = stage_len;
+    }
 
-        // Reusable gather buffer: max radix is 8.
-        let mut buf = [Complex64::default(); 8];
+    // Step 3: iterative butterfly stages (innermost first), using precomputed twiddles.
+    let mut prev_len = 1usize;
+    let mut stage_idx = 0usize;
+    let mut buf = [Complex64::default(); 8];
+
+    for &r in radices {
+        let stage_len = prev_len * r;
+        let stage_twiddles = &all_twiddles[stage_offsets[stage_idx]..stage_offsets[stage_idx] + prev_len];
 
         for chunk in data.chunks_mut(stage_len) {
-            // j = 0: all twiddles are W^0 = 1 → just apply the DFT-r butterfly.
+            // j = 0: twiddle is always 1, just apply DFT-r.
             for k in 0..r {
                 buf[k] = chunk[k * prev_len];
             }
@@ -285,17 +291,15 @@ fn composite_core_64_with_radices(data: &mut [Complex64], inverse: bool, radices
                 chunk[k * prev_len] = buf[k];
             }
 
-            // j = 1..prev_len: use precomputed base twiddle; raise to successive
-            // powers by complex multiplication (1 cmul per additional order k).
+            // j = 1..prev_len: use precomputed base twiddle, build powers by multiplication.
             for j in 1..prev_len {
-                let base_tw = stage_twiddles[j]; // W_{stage_len}^j (precomputed)
+                let base_tw = stage_twiddles[j]; // W_{stage_len}^j
 
-                buf[0] = chunk[j]; // k=0: W^0 = 1
-                let mut tw_k = base_tw; // W^{j·1}
+                buf[0] = chunk[j];
+                let mut tw_k = base_tw;
                 for k in 1..r {
                     buf[k] = apply_twiddle_64(chunk[j + k * prev_len], tw_k);
                     if k + 1 < r {
-                        // W^{j·(k+1)} = W^{j·k} · W^j
                         tw_k = apply_twiddle_64(tw_k, base_tw);
                     }
                 }
@@ -307,6 +311,7 @@ fn composite_core_64_with_radices(data: &mut [Complex64], inverse: bool, radices
         }
 
         prev_len = stage_len;
+        stage_idx += 1;
     }
 }
 
@@ -333,24 +338,33 @@ fn composite_core_32_with_radices(data: &mut [Complex32], inverse: bool, radices
     digit_reverse_permute_mixed(data, &radices);
 
     let sign: f32 = if inverse { 1.0 } else { -1.0 };
+
+    // Precompute ALL stage twiddles upfront.
+    let mut all_twiddles = Vec::new();
+    let mut stage_offsets = Vec::new();
     let mut prev_len = 1usize;
+    for &r in radices {
+        let stage_len = prev_len * r;
+        stage_offsets.push(all_twiddles.len());
+        for j in 0..prev_len {
+            if j == 0 {
+                all_twiddles.push(Complex32::new(1.0, 0.0));
+            } else {
+                let angle = sign * std::f32::consts::TAU * j as f32 / stage_len as f32;
+                all_twiddles.push(Complex32::new(angle.cos(), angle.sin()));
+            }
+        }
+        prev_len = stage_len;
+    }
+
+    // Iterative butterfly stages using precomputed twiddles.
+    let mut prev_len = 1usize;
+    let mut stage_idx = 0usize;
     let mut buf = [Complex32::default(); 8];
-    let mut stage_twiddles: Vec<Complex32> = Vec::new();
 
     for &r in radices {
         let stage_len = prev_len * r;
-
-        if stage_twiddles.len() < prev_len {
-            stage_twiddles.resize(prev_len, Complex32::new(0.0, 0.0));
-        }
-        for j in 0..prev_len {
-            stage_twiddles[j] = if j == 0 {
-                Complex32::new(1.0, 0.0)
-            } else {
-                let angle = sign * std::f32::consts::TAU * j as f32 / stage_len as f32;
-                Complex32::new(angle.cos(), angle.sin())
-            };
-        }
+        let stage_twiddles = &all_twiddles[stage_offsets[stage_idx]..stage_offsets[stage_idx] + prev_len];
 
         for chunk in data.chunks_mut(stage_len) {
             // j = 0: trivial twiddles.
@@ -381,6 +395,7 @@ fn composite_core_32_with_radices(data: &mut [Complex32], inverse: bool, radices
         }
 
         prev_len = stage_len;
+        stage_idx += 1;
     }
 }
 

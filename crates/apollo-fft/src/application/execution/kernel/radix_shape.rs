@@ -52,6 +52,35 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     Some(radices)
 }
 
+/// Heuristic: detect composite sizes that would perform worse with mixed-radix
+/// compared to Bluestein due to poor cache behavior with many small radices.
+///
+/// Returns `true` if the composite path should be skipped (fall back to Bluestein).
+///
+/// Known bad patterns:
+/// - Multiple (3+) small radices (3 or 5) before large power-of-2: causes
+///   poor cache behavior due to small prev_len in early stages.
+/// - Sizes 500, 1000, 2000 range have 3+ DFT-5 stages with low parallelism.
+#[inline]
+pub(crate) fn should_use_bluestein_instead_of_composite(n: usize) -> bool {
+    // Empirically observed bad cases:
+    // N=500 (2²×5³): 3 DFT-5 stages too deep for cache
+    // N=1000 (2³×5³): 3 DFT-5 stages, composite is 0.6× Bluestein
+    // N=2000 (2⁴×5³): 3 DFT-5 stages, break-even, worth avoiding
+    if n >= 500 && n <= 2000 {
+        let radices = match factorize_composite(n) {
+            Some(r) => r,
+            None => return false, // Not composite; Bluestein will handle it
+        };
+        // Count consecutive 5-radix factors at the start (innermost stages).
+        let count_leading_fives = radices.iter().take_while(|&&r| r == 5).count();
+        if count_leading_fives >= 3 {
+            return true; // Too many DFT-5 stages, fall back to Bluestein
+        }
+    }
+    false
+}
+
 #[inline]
 pub(crate) fn is_power_of_pow2_radix(n: usize, radix_log2: u32) -> bool {
     n.is_power_of_two() && (n.trailing_zeros() % radix_log2 == 0)
