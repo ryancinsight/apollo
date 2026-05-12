@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LVI phase)
+- [x] [patch] Integrate remote RustFFT comparator work with the current
+  Stockham/composite/Bluestein FFT architecture. `apollo-fft` now uses the
+  workspace `rustfft` dev-dependency, keeps the separate `vs_rustfft`
+  benchmark, removes dead radix-specific benchmark rows for deleted kernels,
+  routes exact 2/4/8/16/32/64 f64/f32 mixed-radix transforms through a shared
+  static-dispatch short-Winograd helper, and removes unused f16 twiddle caches
+  from the mixed-radix facade.
+
 ## Closed in this sprint (Closure LV phase)
 - [x] [minor] Add caller-owned `apollo-hilbert` analytic observable
   projections and route envelope/phase through reusable analytic scratch.

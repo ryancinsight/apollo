@@ -38,7 +38,8 @@
 use super::f16_bridge::run_f16_via_f32;
 use super::radix2_f16::Cf16;
 use super::radix_shape::{factorize_composite, should_use_bluestein_instead_of_composite};
-use super::{bluestein, radix2, radix2_f16, radix_composite, stockham};
+use super::radix_stage::normalize_inplace;
+use super::{bluestein, radix2, radix_composite, stockham, winograd};
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
 use std::cell::RefCell;
@@ -54,10 +55,6 @@ static TWIDDLE_INV_64_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Comp
 static TWIDDLE_FWD_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static TWIDDLE_INV_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static TWIDDLE_FWD_F16_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Cf16]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static TWIDDLE_INV_F16_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Cf16]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static COMPOSITE_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -77,10 +74,6 @@ thread_local! {
     static TL_FWD_32: RefCell<HashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
     static TL_INV_32: RefCell<HashMap<usize, Arc<[Complex32]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    static TL_FWD_F16: RefCell<HashMap<usize, Arc<[Cf16]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    static TL_INV_F16: RefCell<HashMap<usize, Arc<[Cf16]>>> =
         RefCell::new(HashMap::with_capacity(8));
     static TL_COMPOSITE_RADIX: RefCell<HashMap<usize, Option<Arc<[usize]>>>> =
         RefCell::new(HashMap::with_capacity(8));
@@ -193,46 +186,125 @@ pub(crate) fn cached_twiddle_inv_32(n: usize) -> Arc<[Complex32]> {
     )
 }
 
-#[inline]
-pub(crate) fn cached_twiddle_fwd_f16(n: usize) -> Arc<[Cf16]> {
-    tl_cached(
-        &TL_FWD_F16,
-        &TWIDDLE_FWD_F16_CACHE,
-        n,
-        radix2_f16::build_forward_twiddle_table_f16,
-    )
+trait ShortWinogradScalar: winograd::WinogradScalar {
+    fn dft2(a: &mut num_complex::Complex<Self>, b: &mut num_complex::Complex<Self>);
+    fn dft4(data: &mut [num_complex::Complex<Self>; 4], inverse: bool);
+    fn dft8(data: &mut [num_complex::Complex<Self>; 8], inverse: bool);
+    fn dft16(data: &mut [num_complex::Complex<Self>; 16], inverse: bool);
+    fn dft32(data: &mut [num_complex::Complex<Self>; 32], inverse: bool);
+    fn dft64(data: &mut [num_complex::Complex<Self>; 64], inverse: bool);
 }
 
-#[inline]
-pub(crate) fn cached_twiddle_inv_f16(n: usize) -> Arc<[Cf16]> {
-    tl_cached(
-        &TL_INV_F16,
-        &TWIDDLE_INV_F16_CACHE,
-        n,
-        radix2_f16::build_inverse_twiddle_table_f16,
-    )
+impl ShortWinogradScalar for f64 {
+    #[inline(always)]
+    fn dft2(a: &mut Complex64, b: &mut Complex64) {
+        winograd::dft2_64(a, b);
+    }
+
+    #[inline(always)]
+    fn dft4(data: &mut [Complex64; 4], inverse: bool) {
+        winograd::dft4_64(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft8(data: &mut [Complex64; 8], inverse: bool) {
+        winograd::dft8_64(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft16(data: &mut [Complex64; 16], inverse: bool) {
+        winograd::dft16_64(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft32(data: &mut [Complex64; 32], inverse: bool) {
+        winograd::dft32_64(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft64(data: &mut [Complex64; 64], inverse: bool) {
+        winograd::dft64_64(data, inverse);
+    }
 }
 
-// ── SSOT dispatch macro ───────────────────────────────────────────────────────
+impl ShortWinogradScalar for f32 {
+    #[inline(always)]
+    fn dft2(a: &mut Complex32, b: &mut Complex32) {
+        winograd::dft2_32(a, b);
+    }
 
-/// Emit the dispatch body for a `_with_twiddles` function that is already
-/// inside `if data.len().is_power_of_two()`.
-///
-/// Parameters:
-/// - `$data`      — the `&mut [T]` expression
-/// - `$twiddles`  — the `Option<&[T]>` expression
-/// - `cache`      — thread-local twiddle-cache lookup (`fn(usize) -> Arc<[T]>`)
-/// - `r8`, `r4`, `r2` — `with_twiddles_fn` paths (single function each)
-///
-/// When `$twiddles` is `None`, the cache is consulted (O(1) HashMap lookup
-/// on the hot path after the first per-thread per-size warm-up, no locks).
-/// The previous `_no` (twiddle-rebuilding) variants are no longer needed.
+    #[inline(always)]
+    fn dft4(data: &mut [Complex32; 4], inverse: bool) {
+        winograd::dft4_32(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft8(data: &mut [Complex32; 8], inverse: bool) {
+        winograd::dft8_32(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft16(data: &mut [Complex32; 16], inverse: bool) {
+        winograd::dft16_32(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft32(data: &mut [Complex32; 32], inverse: bool) {
+        winograd::dft32_32(data, inverse);
+    }
+
+    #[inline(always)]
+    fn dft64(data: &mut [Complex32; 64], inverse: bool) {
+        winograd::dft64_32(data, inverse);
+    }
+}
+
+#[inline(always)]
+fn forward_short_winograd<F: ShortWinogradScalar>(data: &mut [num_complex::Complex<F>]) -> bool {
+    short_winograd(data, false, false)
+}
+
+#[inline(always)]
+fn inverse_short_winograd<F: ShortWinogradScalar>(
+    data: &mut [num_complex::Complex<F>],
+    normalize: bool,
+) -> bool {
+    short_winograd(data, true, normalize)
+}
+
+#[inline(always)]
+fn short_winograd<F: ShortWinogradScalar>(
+    data: &mut [num_complex::Complex<F>],
+    inverse: bool,
+    normalize: bool,
+) -> bool {
+    match data.len() {
+        2 => {
+            let (left, right) = data.split_at_mut(1);
+            F::dft2(&mut left[0], &mut right[0]);
+        }
+        4 => F::dft4(data.try_into().expect("length checked"), inverse),
+        8 => F::dft8(data.try_into().expect("length checked"), inverse),
+        16 => F::dft16(data.try_into().expect("length checked"), inverse),
+        32 => F::dft32(data.try_into().expect("length checked"), inverse),
+        64 => F::dft64(data.try_into().expect("length checked"), inverse),
+        _ => return false,
+    }
+    if normalize {
+        normalize_inplace(data, F::cast_f64(1.0 / data.len() as f64));
+    }
+    true
+}
+
 // ── f64 ───────────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT (unnormalized, f64) with optional precomputed twiddles.
 #[inline]
 pub fn forward_inplace_64_with_twiddles(data: &mut [Complex64], twiddles: Option<&[Complex64]>) {
     if data.len() <= 1 {
+        return;
+    }
+    if forward_short_winograd(data) {
         return;
     }
     if data.len().is_power_of_two() {
@@ -299,6 +371,9 @@ pub fn inverse_inplace_unnorm_64_with_twiddles(
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, false) {
+        return;
+    }
     if data.len().is_power_of_two() {
         if let Some(tw) = twiddles {
             with_stockham_scratch_64(data.len(), |scratch| {
@@ -327,6 +402,9 @@ pub fn inverse_inplace_64_with_twiddles(data: &mut [Complex64], twiddles: Option
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, true) {
+        return;
+    }
     if data.len().is_power_of_two() {
         inverse_inplace_unnorm_64_with_twiddles(data, twiddles);
         let scale = 1.0 / data.len() as f64;
@@ -347,6 +425,9 @@ pub fn forward_inplace_64(data: &mut [Complex64]) {
     if data.len() <= 1 {
         return;
     }
+    if forward_short_winograd(data) {
+        return;
+    }
     if data.len().is_power_of_two() {
         let tw = cached_twiddle_fwd_64(data.len());
         forward_inplace_64_with_twiddles(data, Some(tw.as_ref()));
@@ -360,6 +441,9 @@ pub fn inverse_inplace_unnorm_64(data: &mut [Complex64]) {
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, false) {
+        return;
+    }
     if data.len().is_power_of_two() {
         let tw = cached_twiddle_inv_64(data.len());
         inverse_inplace_unnorm_64_with_twiddles(data, Some(tw.as_ref()));
@@ -371,6 +455,9 @@ pub fn inverse_inplace_unnorm_64(data: &mut [Complex64]) {
 /// In-place inverse FFT normalized by 1/N (f64).
 pub fn inverse_inplace_64(data: &mut [Complex64]) {
     if data.len() <= 1 {
+        return;
+    }
+    if inverse_short_winograd(data, true) {
         return;
     }
     if data.len().is_power_of_two() {
@@ -387,6 +474,9 @@ pub fn inverse_inplace_64(data: &mut [Complex64]) {
 #[inline]
 pub fn forward_inplace_32_with_twiddles(data: &mut [Complex32], twiddles: Option<&[Complex32]>) {
     if data.len() <= 1 {
+        return;
+    }
+    if forward_short_winograd(data) {
         return;
     }
     if data.len().is_power_of_two() {
@@ -420,6 +510,9 @@ pub fn inverse_inplace_unnorm_32_with_twiddles(
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, false) {
+        return;
+    }
     if data.len().is_power_of_two() {
         if let Some(tw) = twiddles {
             with_stockham_scratch_32(data.len(), |scratch| {
@@ -448,6 +541,9 @@ pub fn inverse_inplace_32_with_twiddles(data: &mut [Complex32], twiddles: Option
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, true) {
+        return;
+    }
     if data.len().is_power_of_two() {
         inverse_inplace_unnorm_32_with_twiddles(data, twiddles);
         let scale = 1.0 / data.len() as f32;
@@ -469,6 +565,9 @@ pub fn forward_inplace_32(data: &mut [Complex32]) {
     if data.len() <= 1 {
         return;
     }
+    if forward_short_winograd(data) {
+        return;
+    }
     if data.len().is_power_of_two() {
         let tw = cached_twiddle_fwd_32(data.len());
         with_stockham_scratch_32(data.len(), |scratch| {
@@ -484,6 +583,9 @@ pub fn inverse_inplace_unnorm_32(data: &mut [Complex32]) {
     if data.len() <= 1 {
         return;
     }
+    if inverse_short_winograd(data, false) {
+        return;
+    }
     if data.len().is_power_of_two() {
         let tw = cached_twiddle_inv_32(data.len());
         inverse_inplace_unnorm_32_with_twiddles(data, Some(tw.as_ref()));
@@ -495,6 +597,9 @@ pub fn inverse_inplace_unnorm_32(data: &mut [Complex32]) {
 /// In-place inverse FFT normalized by 1/N (f32).
 pub fn inverse_inplace_32(data: &mut [Complex32]) {
     if data.len() <= 1 {
+        return;
+    }
+    if inverse_short_winograd(data, true) {
         return;
     }
     if data.len().is_power_of_two() {
@@ -525,10 +630,12 @@ pub fn forward_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[
         return;
     }
     if data.len().is_power_of_two() {
-        // Promote f16 → f32, run Stockham (no bit-reversal), demote f32 → f16.
         let n = data.len();
-        let tw = cached_twiddle_fwd_32(n);
         run_f16_via_f32(data, |buf| {
+            if forward_short_winograd(buf) {
+                return;
+            }
+            let tw = cached_twiddle_fwd_32(n);
             with_stockham_scratch_32(n, |scratch| {
                 <f32 as stockham::StockhamKernel>::forward_with_scratch(buf, scratch, tw.as_ref());
             });
@@ -557,8 +664,11 @@ pub fn inverse_inplace_unnorm_f16_with_twiddles(data: &mut [Cf16], _twiddles: Op
     }
     if data.len().is_power_of_two() {
         let n = data.len();
-        let tw = cached_twiddle_inv_32(n);
         run_f16_via_f32(data, |buf| {
+            if inverse_short_winograd(buf, false) {
+                return;
+            }
+            let tw = cached_twiddle_inv_32(n);
             with_stockham_scratch_32(n, |scratch| {
                 <f32 as stockham::StockhamKernel>::forward_with_scratch(buf, scratch, tw.as_ref());
             });
@@ -587,8 +697,11 @@ pub fn inverse_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[
     }
     if data.len().is_power_of_two() {
         let n = data.len();
-        let tw = cached_twiddle_inv_32(n);
         run_f16_via_f32(data, |buf| {
+            if inverse_short_winograd(buf, true) {
+                return;
+            }
+            let tw = cached_twiddle_inv_32(n);
             with_stockham_scratch_32(n, |scratch| {
                 <f32 as stockham::StockhamKernel>::forward_with_scratch(buf, scratch, tw.as_ref());
             });
@@ -613,12 +726,7 @@ pub fn forward_inplace_f16(data: &mut [Cf16]) {
     if data.len() <= 1 {
         return;
     }
-    if data.len().is_power_of_two() {
-        let tw = cached_twiddle_fwd_f16(data.len());
-        forward_inplace_f16_with_twiddles(data, Some(tw.as_ref()));
-    } else {
-        forward_inplace_f16_with_twiddles(data, None);
-    }
+    forward_inplace_f16_with_twiddles(data, None);
 }
 
 /// In-place inverse FFT (unnormalized, f16 storage).
@@ -626,12 +734,7 @@ pub fn inverse_inplace_unnorm_f16(data: &mut [Cf16]) {
     if data.len() <= 1 {
         return;
     }
-    if data.len().is_power_of_two() {
-        let tw = cached_twiddle_inv_f16(data.len());
-        inverse_inplace_unnorm_f16_with_twiddles(data, Some(tw.as_ref()));
-    } else {
-        inverse_inplace_unnorm_f16_with_twiddles(data, None);
-    }
+    inverse_inplace_unnorm_f16_with_twiddles(data, None);
 }
 
 /// In-place inverse FFT normalized by 1/N (f16 storage).
@@ -639,12 +742,7 @@ pub fn inverse_inplace_f16(data: &mut [Cf16]) {
     if data.len() <= 1 {
         return;
     }
-    if data.len().is_power_of_two() {
-        let tw = cached_twiddle_inv_f16(data.len());
-        inverse_inplace_f16_with_twiddles(data, Some(tw.as_ref()));
-    } else {
-        inverse_inplace_f16_with_twiddles(data, None);
-    }
+    inverse_inplace_f16_with_twiddles(data, None);
 }
 
 #[cfg(test)]

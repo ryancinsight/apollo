@@ -44,6 +44,26 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LVI - FFT Remote Integration and Short-Winograd Dispatch [patch]
+- **Gap**: Remote RustFFT comparator work targeted the older radix-specific
+  kernel topology and conflicted with the current Stockham/composite/Bluestein
+  architecture. The local mixed-radix facade also retained unused f16 twiddle
+  caches even though f16 storage execution promotes to f32.
+- **Closed by**: Kept deleted radix kernel modules removed, retained RustFFT
+  comparator coverage through the live `vs_rustfft` benchmark, switched
+  `apollo-fft` to the workspace `rustfft` dev-dependency, removed dead
+  radix-specific `kernel_strategy` rows, added shared `ShortWinogradScalar`
+  static dispatch for exact 2/4/8/16/32/64 f64/f32 transforms before
+  Stockham/composite/Bluestein routing, and removed unused f16 twiddle caches.
+- **Residual risk**: Criterion throughput numbers after the merge need a
+  dedicated benchmark run on representative hardware; correctness and compile
+  checks cover the code path.
+- **Evidence**: `cargo check -p apollo-fft --benches --examples`;
+  `cargo test -p apollo-fft --lib -- --test-threads=1`; `cargo check
+  --workspace`; `cargo test -p apollo-hilbert --lib -- --test-threads=1`;
+  conflict-marker scan; dead f16-cache/dead benchmark scan; `git diff
+  --check`.
+
 ### Closure LV - Apollo-Hilbert Caller-Owned Observable Projections [minor]
 - **Gap**: `AnalyticSignal` projection methods allocated new vectors and
   duplicated projection formulas directly in each allocating method. Plan-level

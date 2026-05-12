@@ -1,4 +1,20 @@
 # Apollo Checklist
+## Closure LVI - FFT Remote Integration and Short-Winograd Dispatch [patch]
+Sprint target version: apollo-fft 0.3.0
+
+- [x] Resolve `origin/main` integration without restoring deleted radix
+  kernel modules.
+- [x] Use the workspace `rustfft` dev-dependency and retain the live
+  `vs_rustfft` comparator benchmark.
+- [x] Remove dead `kernel_strategy` benchmark rows for deleted radix-specific
+  public kernels.
+- [x] Add shared static-dispatch short-Winograd routing for exact
+  2/4/8/16/32/64 f64 and f32 mixed-radix transforms.
+- [x] Remove unused f16 twiddle caches from `mixed_radix`; f16 storage paths
+  route through f32 short-Winograd/Stockham execution.
+- [x] Verify merge result with workspace checks, FFT bench/example checks,
+  Hilbert regression tests, conflict-marker scans, and `git diff --check`.
+
 ## Closure LV - Apollo-Hilbert Caller-Owned Observable Projections [minor]
 Sprint target version: apollo-hilbert 0.3.0
 

@@ -24,7 +24,7 @@ thiserror = "1.0"
 approx = "0.5"
 criterion = { workspace = true }
 proptest = "1.6"
-rustfft = "6.2"
+rustfft = { workspace = true }
 
 [[bench]]
 name = "kernel_strategy"

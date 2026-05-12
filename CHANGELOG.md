@@ -30,6 +30,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   - DFT-64: 2×DFT-32 + 32 trigonometric 64th-root twiddles.
   - `apply_twiddle_64` / `apply_twiddle_32` helpers for complex multiply.
   - 23 unit tests covering forward, inverse, roundtrip, and boundary cases for all sizes.
+- `apollo-fft` / `benches/vs_rustfft.rs`: RustFFT comparator benchmark
+  coverage using the workspace-pinned `rustfft` dependency.
 
 ### Breaking
 - [major] `apollo-stft`: removed deprecated `StftPlan::forward_inplace` and
@@ -60,6 +62,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `application::execution::kernel`.
 
 ### Changed
+- `apollo-fft`: exact 2/4/8/16/32/64-point f64 and f32 mixed-radix
+  transforms now route through a shared `ShortWinogradScalar` static-dispatch
+  helper before Stockham/composite/Bluestein routing.
+- `apollo-fft`: removed unused f16 twiddle caches from the mixed-radix facade;
+  f16 storage paths promote to f32 and reuse f32 short-Winograd/Stockham
+  execution without building `Cf16` twiddle tables.
+- `apollo-fft` / `benches/kernel_strategy.rs`: removed dead radix-specific
+  benchmark rows for deleted public kernels and kept only live direct,
+  mixed-radix, auto-selector, Bluestein, and f16 auto-dispatch rows.
+- `apollo-fft`: `rustfft` dev-dependency now uses the workspace dependency
+  version instead of a crate-local version pin.
 - `apollo-hilbert`: allocating observable projection methods now delegate to
   shared non-generic slice helpers, and plan-level envelope/phase execution
   reuses a thread-local Complex64 analytic scratch buffer before projecting
@@ -237,6 +250,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
     auto-selector throughput on both power-of-two and non-power-of-two lengths.
 
 ### Verification
+- `cargo check -p apollo-fft --benches --examples`: passed.
+- `cargo test -p apollo-fft --lib -- --test-threads=1`: passed, 181 tests.
+- `cargo check --workspace`: passed.
+- `cargo test -p apollo-hilbert --lib -- --test-threads=1`: passed, 21 tests.
+- `rg` conflict-marker scan: no matches.
+- `rg` scan for removed f16 twiddle caches and deleted radix-specific
+  benchmark calls: no matches.
+- `git diff --check`: passed.
 - `cargo check -p apollo-hilbert`: passed for `apollo-hilbert` 0.3.0.
 - `cargo test -p apollo-hilbert observables --lib -- --test-threads=1`:
   passed, 2 tests.
