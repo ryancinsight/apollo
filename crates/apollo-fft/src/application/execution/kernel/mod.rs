@@ -6,7 +6,6 @@
 //! |-------------------|------|
 //! | `direct`          | O(N²) reference DFT; used only for testing. |
 //! | `radix2`          | Twiddle-table builders used by Stockham, Bluestein, and tests. |
-//! | `radix2_f16`      | `Cf16` type (f16 complex storage) and conversion utilities. |
 //! | `bluestein`       | O(N log N) chirp-Z FFT for arbitrary-length transforms. |
 //! | `winograd`        | Short-DFT codelets (DFT-3/5/7/8/N) used by the composite kernel. |
 //! | `radix_composite` | Mixed-radix Stockham autosort FFT for 2/3/5/7-smooth composite lengths. |
@@ -15,10 +14,9 @@
 
 pub mod bluestein;
 pub mod direct;
-pub(crate) mod f16_bridge;
 pub mod mixed_radix;
+pub(crate) mod precision_bridge;
 pub mod radix2;
-pub mod radix2_f16;
 pub(crate) mod radix_composite;
 pub(crate) mod radix_shape;
 pub(crate) mod radix_stage;
@@ -34,9 +32,9 @@ pub use direct::{
     dft_forward_32, dft_forward_64, dft_inverse_32, dft_inverse_64, forward_owned_64,
     inverse_owned_64, KernelScalar,
 };
-pub use radix2_f16::Cf16;
 
-use num_complex::{Complex32, Complex64};
+use half::f16;
+use num_complex::{Complex, Complex32, Complex64};
 
 // ── Precision-generic auto-selecting API ─────────────────────────────────────
 
@@ -47,7 +45,7 @@ use num_complex::{Complex32, Complex64};
 /// - Composite mixed-radix DIT for 2/3/5/7-smooth lengths.
 /// - Bluestein chirp-Z for all other lengths.
 ///
-/// Implemented for `Complex64`, `Complex32`, and `Cf16`.
+/// Implemented for `Complex64`, `Complex32`, and `Complex<f16>`.
 pub trait FftPrecision: Sized {
     /// In-place forward FFT, unnormalized.
     fn fft_forward(data: &mut [Self]);
@@ -121,27 +119,6 @@ pub fn fft_inverse_unnorm_32(data: &mut [Complex32]) {
     mixed_radix::inverse_inplace_unnorm_32(data);
 }
 
-/// Auto-selecting forward FFT over `Cf16` (f16 storage; arithmetic via Stockham f32).
-///
-/// All power-of-two lengths promote to f32, run Stockham autosort, then demote back to f16.
-/// Non-PoT lengths promote to f32, run composite radix or Bluestein, then demote.
-#[inline]
-pub fn fft_forward_f16(data: &mut [Cf16]) {
-    mixed_radix::forward_inplace_f16(data);
-}
-
-/// Auto-selecting inverse FFT over `Cf16`, normalized by 1/N.
-#[inline]
-pub fn fft_inverse_f16(data: &mut [Cf16]) {
-    mixed_radix::inverse_inplace_f16(data);
-}
-
-/// Auto-selecting inverse FFT over `Cf16`, unnormalized.
-#[inline]
-pub fn fft_inverse_unnorm_f16(data: &mut [Cf16]) {
-    mixed_radix::inverse_inplace_unnorm_f16(data);
-}
-
 // ── FftPrecision implementations ─────────────────────────────────────────────
 
 impl FftPrecision for Complex64 {
@@ -174,18 +151,18 @@ impl FftPrecision for Complex32 {
     }
 }
 
-impl FftPrecision for Cf16 {
+impl FftPrecision for Complex<f16> {
     #[inline]
     fn fft_forward(data: &mut [Self]) {
-        fft_forward_f16(data);
+        mixed_radix::forward_compact_storage(data);
     }
     #[inline]
     fn fft_inverse(data: &mut [Self]) {
-        fft_inverse_f16(data);
+        mixed_radix::inverse_compact_storage(data);
     }
     #[inline]
     fn fft_inverse_unnorm(data: &mut [Self]) {
-        fft_inverse_unnorm_f16(data);
+        mixed_radix::inverse_unnorm_compact_storage(data);
     }
 }
 
@@ -213,12 +190,12 @@ mod tests {
             .collect()
     }
 
-    fn max_abs_err_f16(got: &[Cf16], expected: &[Cf16]) -> f32 {
+    fn max_abs_err_f16(got: &[Complex<f16>], expected: &[Complex<f16>]) -> f32 {
         got.iter()
             .zip(expected.iter())
             .map(|(x, y)| {
-                let (xr, xi) = x.to_f32_pair();
-                let (yr, yi) = y.to_f32_pair();
+                let (xr, xi) = (x.re.to_f32(), x.im.to_f32());
+                let (yr, yi) = (y.re.to_f32(), y.im.to_f32());
                 let dr = xr - yr;
                 let di = xi - yi;
                 (dr * dr + di * di).sqrt()
@@ -261,16 +238,16 @@ mod tests {
     #[test]
     fn unified_api_forward_f16_matches_typed() {
         let n = 45usize;
-        let input: Vec<Cf16> = sig32(n)
+        let input: Vec<Complex<f16>> = sig32(n)
             .into_iter()
-            .map(|c| Cf16::from_f32_pair(c.re, c.im))
+            .map(|c| Complex::new(f16::from_f32(c.re), f16::from_f32(c.im)))
             .collect();
 
         let mut generic = input.clone();
         fft_forward(&mut generic);
 
         let mut typed = input;
-        fft_forward_f16(&mut typed);
+        fft_forward(&mut typed);
 
         assert!(max_abs_err_f16(&generic, &typed) < 2e-3);
     }

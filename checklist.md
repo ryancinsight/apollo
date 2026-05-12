@@ -1,4 +1,23 @@
 # Apollo Checklist
+## Closure LVII - Radix F16 Module Removal [major]
+Sprint target version: apollo-fft 0.4.0
+
+- [x] Delete `application::execution::kernel::radix2_f16`.
+- [x] Delete dead f16-named bridge/gate files under the FFT kernel directory.
+- [x] Replace custom `Cf16` with `num_complex::Complex<half::f16>` at all
+  in-repo call sites.
+- [x] Add generic `precision_bridge::Complex32Bridge` and route compact f16
+  storage through the monomorphized bridge with reusable Complex32 scratch.
+- [x] Remove public f16-specific FFT wrappers and update callers to use
+  generic `fft_forward` / `fft_inverse` dispatch.
+- [x] Update kernel exports, twiddle-table output abstraction, 1D precision
+  paths, benchmarks, and SIMD module imports.
+- [x] Add value-semantic compact f16 storage tests under `mixed_radix`.
+- [x] Bump `apollo-fft` to 0.4.0 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, source scans, and `git diff --check`.
+
 ## Closure LVI - FFT Remote Integration and Short-Winograd Dispatch [patch]
 Sprint target version: apollo-fft 0.3.0
 
@@ -282,8 +301,8 @@ Sprint target version: apollo-frft 0.1.2; apollo-fft 0.2.1
   with thread-local reusable Complex64 workspaces.
 - [x] Add value-semantic regression coverage proving repeated `Complex32`
   typed calls reuse workspace capacity and preserve outputs.
-- [x] Restore the current `apollo-fft` kernel module header and `radix2_f16`
-  mixed-radix import needed by the FrFT dependency build.
+- [x] Restore the current `apollo-fft` kernel module header needed by the FrFT
+  dependency build.
 - [x] Remove current `apollo-fft` dead helper warnings from f16 bridge,
   radix permutation, radix shape, and radix stage modules without reintroducing
   compatibility facades.

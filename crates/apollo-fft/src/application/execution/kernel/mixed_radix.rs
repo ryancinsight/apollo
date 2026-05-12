@@ -12,9 +12,9 @@
 //!
 //! ## Dispatch hierarchy (f16)
 //!
-//! f16 is a storage-only precision. All PoT sizes are promoted to f32, run
+//! `Complex<f16>` is a storage-only precision. All PoT sizes are promoted to f32, run
 //! through the Stockham f32 kernel, and demoted back to f16 via
-//! `run_f16_via_f32`. The bit-reversal radix2/radix4 kernels are **not** used
+//! `run_via_complex32`. The bit-reversal radix2/radix4 kernels are **not** used
 //! on the PoT path for any precision.
 //!
 //! ## SSOT principle
@@ -29,14 +29,13 @@
 //! |---------|--------------|-------|
 //! | `_64`   | `Complex64`  | Native f64; Stockham for PoT. |
 //! | `_32`   | `Complex32`  | Native f32; Stockham for PoT. |
-//! | `_f16`  | `Cf16`       | Promotes to f32 for all arithmetic; Stockham f32 for PoT. |
+//! | `_f16`  | `Complex<f16>` | Promotes to f32 for CPU arithmetic; Stockham f32 for PoT. |
 
 #![allow(clippy::empty_line_after_doc_comments)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::uninit_vec)]
 
-use super::f16_bridge::run_f16_via_f32;
-use super::radix2_f16::Cf16;
+use super::precision_bridge::{run_via_complex32, Complex32Bridge};
 use super::radix_shape::{factorize_composite, should_use_bluestein_instead_of_composite};
 use super::radix_stage::normalize_inplace;
 use super::{bluestein, radix2, radix_composite, stockham, winograd};
@@ -196,75 +195,75 @@ trait ShortWinogradScalar: winograd::WinogradScalar {
 }
 
 impl ShortWinogradScalar for f64 {
-    #[inline(always)]
+    #[inline]
     fn dft2(a: &mut Complex64, b: &mut Complex64) {
         winograd::dft2_64(a, b);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft4(data: &mut [Complex64; 4], inverse: bool) {
         winograd::dft4_64(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft8(data: &mut [Complex64; 8], inverse: bool) {
         winograd::dft8_64(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft16(data: &mut [Complex64; 16], inverse: bool) {
         winograd::dft16_64(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft32(data: &mut [Complex64; 32], inverse: bool) {
         winograd::dft32_64(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft64(data: &mut [Complex64; 64], inverse: bool) {
         winograd::dft64_64(data, inverse);
     }
 }
 
 impl ShortWinogradScalar for f32 {
-    #[inline(always)]
+    #[inline]
     fn dft2(a: &mut Complex32, b: &mut Complex32) {
         winograd::dft2_32(a, b);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft4(data: &mut [Complex32; 4], inverse: bool) {
         winograd::dft4_32(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft8(data: &mut [Complex32; 8], inverse: bool) {
         winograd::dft8_32(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft16(data: &mut [Complex32; 16], inverse: bool) {
         winograd::dft16_32(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft32(data: &mut [Complex32; 32], inverse: bool) {
         winograd::dft32_32(data, inverse);
     }
 
-    #[inline(always)]
+    #[inline]
     fn dft64(data: &mut [Complex32; 64], inverse: bool) {
         winograd::dft64_32(data, inverse);
     }
 }
 
-#[inline(always)]
+#[inline]
 fn forward_short_winograd<F: ShortWinogradScalar>(data: &mut [num_complex::Complex<F>]) -> bool {
     short_winograd(data, false, false)
 }
 
-#[inline(always)]
+#[inline]
 fn inverse_short_winograd<F: ShortWinogradScalar>(
     data: &mut [num_complex::Complex<F>],
     normalize: bool,
@@ -272,7 +271,7 @@ fn inverse_short_winograd<F: ShortWinogradScalar>(
     short_winograd(data, true, normalize)
 }
 
-#[inline(always)]
+#[inline]
 fn short_winograd<F: ShortWinogradScalar>(
     data: &mut [num_complex::Complex<F>],
     inverse: bool,
@@ -612,26 +611,23 @@ pub fn inverse_inplace_32(data: &mut [Complex32]) {
 
 // ── f16 ───────────────────────────────────────────────────────────────────────
 
-/// In-place forward FFT (unnormalized, f16 storage) with optional precomputed twiddles.
+/// In-place forward FFT (unnormalized) for compact storage routed through `Complex32`.
 ///
 /// ## Dispatch
 ///
 /// All power-of-two sizes promote to f32, run the Stockham f32 autosort kernel
 /// (no bit-reversal), and demote back to f16. Non-PoT 2/3/5/7-smooth sizes use
-/// the composite mixed-radix path via `run_f16_via_f32`. Other lengths use
+/// the composite mixed-radix path via `run_via_complex32`. Other lengths use
 /// Bluestein-f32.
 ///
-/// The `twiddles` parameter is accepted for API uniformity but is unused for
-/// PoT sizes: the f32 Stockham kernel builds and caches its own f32 twiddle
-/// table. Callers may pass `None`.
 #[inline]
-pub fn forward_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[Cf16]>) {
+pub(crate) fn forward_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
     if data.len() <= 1 {
         return;
     }
     if data.len().is_power_of_two() {
         let n = data.len();
-        run_f16_via_f32(data, |buf| {
+        run_via_complex32(data, |buf| {
             if forward_short_winograd(buf) {
                 return;
             }
@@ -643,28 +639,28 @@ pub fn forward_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {
             if let Some(radices) = cached_composite_radices(data.len()) {
-                run_f16_via_f32(data, |buf| {
+                run_via_complex32(data, |buf| {
                     radix_composite::forward_inplace_with_radices(buf, &radices)
                 });
                 return;
             }
         }
-        run_f16_via_f32(data, bluestein::forward_inplace_32);
+        run_via_complex32(data, bluestein::forward_inplace_32);
     }
 }
 
-/// In-place inverse FFT (unnormalized, f16 storage) with optional precomputed twiddles.
+/// In-place inverse FFT (unnormalized) for compact storage routed through `Complex32`.
 ///
-/// PoT sizes: promote f16→f32, run Stockham f32 (inverse twiddles, no 1/N scale),
-/// demote f32→f16. See `forward_inplace_f16_with_twiddles` for the dispatch rationale.
+/// PoT sizes: promote compact storage to f32, run Stockham f32 with inverse
+/// twiddles and no 1/N scale, then demote back to storage precision.
 #[inline]
-pub fn inverse_inplace_unnorm_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[Cf16]>) {
+pub(crate) fn inverse_unnorm_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
     if data.len() <= 1 {
         return;
     }
     if data.len().is_power_of_two() {
         let n = data.len();
-        run_f16_via_f32(data, |buf| {
+        run_via_complex32(data, |buf| {
             if inverse_short_winograd(buf, false) {
                 return;
             }
@@ -676,28 +672,28 @@ pub fn inverse_inplace_unnorm_f16_with_twiddles(data: &mut [Cf16], _twiddles: Op
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {
             if let Some(radices) = cached_composite_radices(data.len()) {
-                run_f16_via_f32(data, |buf| {
+                run_via_complex32(data, |buf| {
                     radix_composite::inverse_inplace_unnorm_with_radices(buf, &radices)
                 });
                 return;
             }
         }
-        run_f16_via_f32(data, bluestein::inverse_inplace_unnorm_32);
+        run_via_complex32(data, bluestein::inverse_inplace_unnorm_32);
     }
 }
 
-/// In-place inverse FFT normalized by 1/N (f16 storage) with optional precomputed twiddles.
+/// In-place inverse FFT normalized by 1/N for compact storage routed through `Complex32`.
 ///
-/// PoT sizes: promote f16→f32, run Stockham f32 (inverse twiddles), apply 1/N scale,
-/// demote f32→f16. See `forward_inplace_f16_with_twiddles` for the dispatch rationale.
+/// PoT sizes: promote compact storage to f32, run Stockham f32 with inverse
+/// twiddles, apply 1/N scale, then demote back to storage precision.
 #[inline]
-pub fn inverse_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[Cf16]>) {
+pub(crate) fn inverse_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
     if data.len() <= 1 {
         return;
     }
     if data.len().is_power_of_two() {
         let n = data.len();
-        run_f16_via_f32(data, |buf| {
+        run_via_complex32(data, |buf| {
             if inverse_short_winograd(buf, true) {
                 return;
             }
@@ -711,38 +707,14 @@ pub fn inverse_inplace_f16_with_twiddles(data: &mut [Cf16], _twiddles: Option<&[
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {
             if let Some(radices) = cached_composite_radices(data.len()) {
-                run_f16_via_f32(data, |buf| {
+                run_via_complex32(data, |buf| {
                     radix_composite::inverse_inplace_with_radices(buf, &radices)
                 });
                 return;
             }
         }
-        run_f16_via_f32(data, bluestein::inverse_inplace_32);
+        run_via_complex32(data, bluestein::inverse_inplace_32);
     }
-}
-
-/// In-place forward FFT (unnormalized, f16 storage).
-pub fn forward_inplace_f16(data: &mut [Cf16]) {
-    if data.len() <= 1 {
-        return;
-    }
-    forward_inplace_f16_with_twiddles(data, None);
-}
-
-/// In-place inverse FFT (unnormalized, f16 storage).
-pub fn inverse_inplace_unnorm_f16(data: &mut [Cf16]) {
-    if data.len() <= 1 {
-        return;
-    }
-    inverse_inplace_unnorm_f16_with_twiddles(data, None);
-}
-
-/// In-place inverse FFT normalized by 1/N (f16 storage).
-pub fn inverse_inplace_f16(data: &mut [Cf16]) {
-    if data.len() <= 1 {
-        return;
-    }
-    inverse_inplace_f16_with_twiddles(data, None);
 }
 
 #[cfg(test)]
@@ -750,6 +722,8 @@ mod tests {
     use super::super::test_utils::max_abs_err_64;
     use super::*;
     use crate::application::execution::kernel::direct::{dft_forward_64, dft_inverse_64};
+    use half::f16;
+    use num_complex::Complex;
 
     #[test]
     fn mixed_forward_n32_matches_direct() {
@@ -844,6 +818,50 @@ mod tests {
         assert!(
             err < tolerance,
             "f32 Stockham N=4096 roundtrip mismatch err={err:.2e} tolerance={tolerance:.2e}"
+        );
+    }
+
+    #[test]
+    fn compact_f16_storage_impulse_has_flat_spectrum() {
+        let n = 8usize;
+        let mut data = vec![Complex::new(f16::ZERO, f16::ZERO); n];
+        data[0] = Complex::new(f16::from_f32(1.0), f16::ZERO);
+
+        forward_compact_storage(&mut data);
+
+        for (bin, value) in data.iter().enumerate() {
+            assert!(
+                (value.re.to_f32() - 1.0).abs() < 5.0e-3,
+                "bin {bin} real part must equal 1 within f16 storage error"
+            );
+            assert!(
+                value.im.to_f32().abs() < 5.0e-3,
+                "bin {bin} imaginary part must equal 0 within f16 storage error"
+            );
+        }
+    }
+
+    #[test]
+    fn compact_f16_storage_roundtrip_stays_within_storage_error() {
+        let input: Vec<Complex<f16>> = (0..64)
+            .map(|index| {
+                let value = (index as f32 * 0.23 - 1.5).tanh();
+                Complex::new(f16::from_f32(value), f16::ZERO)
+            })
+            .collect();
+        let mut data = input.clone();
+
+        forward_compact_storage(&mut data);
+        inverse_compact_storage(&mut data);
+
+        let max_err = data
+            .iter()
+            .zip(input.iter())
+            .map(|(actual, expected)| (actual.re.to_f32() - expected.re.to_f32()).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_err < 5.0e-2,
+            "f16 storage roundtrip max error {max_err:.4e}"
         );
     }
 

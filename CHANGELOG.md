@@ -34,6 +34,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   coverage using the workspace-pinned `rustfft` dependency.
 
 ### Breaking
+- [major] `apollo-fft`: removed the public `radix2_f16` module and the `Cf16`
+  wrapper type. Compact f16 complex storage now uses
+  `num_complex::Complex<half::f16>` through the generic monomorphized
+  precision bridge. Removed the public `fft_forward_f16`, `fft_inverse_f16`,
+  and `fft_inverse_unnorm_f16` wrappers; callers should use the generic
+  `fft_forward`, `fft_inverse`, and `fft_inverse_unnorm` entry points.
 - [major] `apollo-stft`: removed deprecated `StftPlan::forward_inplace` and
   `StftPlan::inverse_inplace` allocating aliases. Callers must use `forward`
   and `inverse` for owned output or `forward_into` and `inverse_into` for
@@ -65,14 +71,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - `apollo-fft`: exact 2/4/8/16/32/64-point f64 and f32 mixed-radix
   transforms now route through a shared `ShortWinogradScalar` static-dispatch
   helper before Stockham/composite/Bluestein routing.
+- `apollo-fft`: replaced the f16-specific bridge and radix f16 storage module
+  with `precision_bridge::Complex32Bridge`, a monomorphized generic bridge
+  implemented for `Complex<half::f16>` with reusable thread-local Complex32
+  scratch.
 - `apollo-fft`: removed unused f16 twiddle caches from the mixed-radix facade;
   f16 storage paths promote to f32 and reuse f32 short-Winograd/Stockham
-  execution without building `Cf16` twiddle tables.
+  execution without building compact f16 twiddle tables.
 - `apollo-fft` / `benches/kernel_strategy.rs`: removed dead radix-specific
   benchmark rows for deleted public kernels and kept only live direct,
   mixed-radix, auto-selector, Bluestein, and f16 auto-dispatch rows.
 - `apollo-fft`: `rustfft` dev-dependency now uses the workspace dependency
   version instead of a crate-local version pin.
+- `apollo-fft`: bumped to 0.4.0 for the pre-1.0 breaking radix f16 module
+  removal and generic compact-storage bridge.
 - `apollo-hilbert`: allocating observable projection methods now delegate to
   shared non-generic slice helpers, and plan-level envelope/phase execution
   reuses a thread-local Complex64 analytic scratch buffer before projecting
@@ -162,8 +174,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   heap allocations per typed forward/inverse call.
 - `apollo-frft`: bumped to 0.1.2 for typed-storage workspace reuse.
 - `apollo-fft`: restored the current kernel module declarations and
-  `FftPrecision` trait header after module-header drift, and restored the
-  `radix2_f16` import required by the current mixed-radix source.
+  `FftPrecision` trait header after module-header drift.
 - `apollo-fft`: removed dead generic helper surface from the f16 bridge,
   radix permutation, radix shape, and radix stage modules after Stockham and
   composite routing became the canonical execution paths.
@@ -226,22 +237,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - `apollo-fft` / `application/execution/kernel/radix64.rs`:
   - Eliminated redundant p=0 twiddle multiplication in radix-64 stage butterflies.
   - Added chunk-level Rayon MIMD execution path for large stage groups.
-- `apollo-fft` / `application/execution/kernel/radix2_f16.rs`:
-  - Added stage-level Rayon MIMD chunk execution for large f16 transforms in both
-    scalar and AVX+F16C+FMA paths (`par_chunks_exact_mut` over independent stage groups).
-  - Refactored stage kernels into chunk-local helpers to preserve Cooley-Tukey ordering
-    while enabling safe parallel chunk execution.
-  - Kept scalar fallback and SIMD dispatch semantics unchanged; no API changes.
 - `apollo-fft` / `application/execution/kernel/mod.rs`:
   - Upgraded mixed-precision f16 auto-selector to unified runtime dispatch:
-    - power-of-two lengths use the native `radix2_f16` SIMD/scalar kernel,
+    - power-of-two lengths use compact `Complex<half::f16>` storage through the generic bridge,
     - non-power-of-two lengths transparently fall back to f32 auto-kernel routing
       (`radix`, `mixed_radix`, or `bluestein`) with output quantization back to f16 storage.
   - Removed radix2-only assumption for mixed precision, preventing non-power-of-two
     runtime failures in normal API usage.
 - `apollo-fft` / `application/execution/plan/fft/dimension_1d.rs`:
   - Mixed-precision typed 1D path now selects:
-    - `Cf16` native SIMD kernel for power-of-two lengths,
+    - `Complex<half::f16>` compact storage for power-of-two lengths,
     - f32 auto-kernel path for non-power-of-two lengths.
   - Added output-comparison regression tests for non-power-of-two mixed precision against
     low-precision f32 spectra plus bounded roundtrip error checks.
@@ -250,6 +255,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
     auto-selector throughput on both power-of-two and non-power-of-two lengths.
 
 ### Verification
+- `cargo check -p apollo-fft --benches --examples`: passed for
+  `apollo-fft` 0.4.0.
+- `cargo test -p apollo-fft --lib -- --test-threads=1`: passed, 176 tests.
+- `cargo check --workspace`: passed.
+- `rg` source scan for `Cf16`, `radix2_f16`, public f16-specific wrappers,
+  f16-named kernel files, and f16 bridge names under `apollo-fft/src` and
+  `apollo-fft/benches`: no matches.
+- `git diff --check`: passed.
 - `cargo check -p apollo-fft --benches --examples`: passed.
 - `cargo test -p apollo-fft --lib -- --test-threads=1`: passed, 181 tests.
 - `cargo check --workspace`: passed.

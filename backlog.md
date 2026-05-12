@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LVII phase)
+- [x] [major] Remove the radix-specific f16 FFT module and custom `Cf16`
+  wrapper from `apollo-fft`. Compact f16 complex storage now uses
+  `num_complex::Complex<half::f16>`; the f16 execution bridge is a generic
+  monomorphized `Complex32Bridge` with reusable thread-local scratch; the dead
+  native f16 CPU gate and public f16-specific FFT wrappers were deleted; caller
+  code and benchmarks now use the generic `fft_forward`/`fft_inverse` trait
+  entry points; and `apollo-fft` was bumped to 0.4.0.
+
 ## Closed in this sprint (Closure LVI phase)
 - [x] [patch] Integrate remote RustFFT comparator work with the current
   Stockham/composite/Bluestein FFT architecture. `apollo-fft` now uses the
@@ -96,8 +105,7 @@
   forward/inverse call. `apollo-frft` was bumped to 0.1.2.
 - [x] [patch] Restore `apollo-fft` dependency compilation after current module
   header drift. Reinstated the kernel module declarations/`FftPrecision` trait
-  header and imported `radix2_f16` in `mixed_radix`; `apollo-fft` was bumped to
-  0.2.1.
+  header; `apollo-fft` was bumped to 0.2.1.
 - [x] [patch] Remove current `apollo-fft` dead generic helper surface. Deleted
   the unused f16 with-twiddles bridge, obsolete uniform power-of-two
   digit-reversal helper, obsolete power-of-four/eight shape predicates, and

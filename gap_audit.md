@@ -44,6 +44,26 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LVII - Radix F16 Module Removal [major]
+- **Gap**: `apollo-fft` still exposed compact f16 complex storage through a
+  radix-specific `radix2_f16` module and custom `Cf16` wrapper. The f16 bridge
+  was type-specific, and a dead native f16 CPU gate remained in the kernel
+  directory.
+- **Closed by**: Deleted the radix-specific f16 module, deleted dead f16-named
+  bridge/gate files, replaced `Cf16` with `num_complex::Complex<half::f16>`,
+  added `precision_bridge::Complex32Bridge` as the generic monomorphized
+  compact-storage bridge with reusable Complex32 scratch, updated FFT kernel
+  exports, removed public f16-specific FFT wrappers in favor of generic
+  `fft_forward`/`fft_inverse` dispatch, updated twiddle-table output, 1D
+  precision paths, benchmarks, and SIMD imports, and bumped `apollo-fft` to
+  0.4.0.
+- **Residual risk**: The public `Cf16` type is removed. In-repo callers are
+  updated; external pre-1.0 callers must migrate to `Complex<half::f16>`.
+- **Evidence**: `cargo check -p apollo-fft --benches --examples`; `cargo
+  test -p apollo-fft --lib -- --test-threads=1`; `cargo check --workspace`;
+  source scans for removed `Cf16`, `radix2_f16`, public f16-specific wrappers,
+  f16-named kernel files, and f16 bridge names; `git diff --check`.
+
 ### Closure LVI - FFT Remote Integration and Short-Winograd Dispatch [patch]
 - **Gap**: Remote RustFFT comparator work targeted the older radix-specific
   kernel topology and conflicted with the current Stockham/composite/Bluestein
