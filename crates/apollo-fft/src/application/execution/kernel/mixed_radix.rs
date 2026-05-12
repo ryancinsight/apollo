@@ -212,17 +212,17 @@ impl ShortWinogradScalar for f64 {
 
     #[inline]
     fn dft16(data: &mut [Complex64; 16], inverse: bool) {
-        winograd::dft16_64(data, inverse);
+        winograd::dft16_impl(data, inverse);
     }
 
     #[inline]
     fn dft32(data: &mut [Complex64; 32], inverse: bool) {
-        winograd::dft32_64(data, inverse);
+        winograd::dft32_impl(data, inverse);
     }
 
     #[inline]
     fn dft64(data: &mut [Complex64; 64], inverse: bool) {
-        winograd::dft64_64(data, inverse);
+        winograd::dft64_impl(data, inverse);
     }
 }
 
@@ -244,17 +244,17 @@ impl ShortWinogradScalar for f32 {
 
     #[inline]
     fn dft16(data: &mut [Complex32; 16], inverse: bool) {
-        winograd::dft16_32(data, inverse);
+        winograd::dft16_impl(data, inverse);
     }
 
     #[inline]
     fn dft32(data: &mut [Complex32; 32], inverse: bool) {
-        winograd::dft32_32(data, inverse);
+        winograd::dft32_impl(data, inverse);
     }
 
     #[inline]
     fn dft64(data: &mut [Complex32; 64], inverse: bool) {
-        winograd::dft64_32(data, inverse);
+        winograd::dft64_impl(data, inverse);
     }
 }
 

@@ -44,6 +44,17 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXIV - FFT Recursive Winograd Generic Codelets [major]
+- **Gap**: `apollo-fft` still exposed public type-suffixed Winograd DFT-16/32/64
+  wrappers and carried duplicated f32/f64 recursive codelet bodies.
+- **Closed by**: Replaced DFT-16/32/64 f32/f64 bodies with generic
+  `dft16_impl`, `dft32_impl`, and `dft64_impl`, routed mixed-radix dispatch to
+  those generic implementations, renamed the stale type-suffixed twiddle table,
+  and bumped `apollo-fft` to 0.8.0.
+- **Residual risk**: External pre-1.0 callers using the removed DFT-16/32/64
+  wrappers must migrate to the public auto-selecting FFT API.
+- **Evidence**: `cargo check -p apollo-fft --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`; `cargo check --workspace`; source scans for removed DFT-16/32/64 wrapper names, short-Winograd wrapper names, direct DFT wrapper names, debug binary references, stale compatibility/deprecation tokens, and deleted f16 wrapper names; `git diff --check`.
+
 ### Closure LXIII - FFT Short-Winograd Wrapper Removal [major]
 - **Gap**: `apollo-fft` still exposed type-suffixed short-Winograd public
   wrappers for small codelets and twiddle multiplication even though generic

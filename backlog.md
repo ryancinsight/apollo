@@ -1,5 +1,11 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXIV phase)
+- [x] [major] Remove the remaining public type-suffixed Winograd DFT-16/32/64
+  wrappers. The recursive Winograd codelets now share one generic implementation
+  family and mixed-radix dispatch calls the generic codelets directly.
+  `apollo-fft` was bumped to 0.8.0.
+
 ## Closed in this sprint (Closure LXIII phase)
 - [x] [major] Remove type-suffixed public short-Winograd wrappers for
   DFT-2/3/4/5/7/8 and twiddle multiplication. Mixed-radix dispatch now calls

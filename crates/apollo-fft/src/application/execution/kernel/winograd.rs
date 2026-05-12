@@ -672,14 +672,8 @@ fn twiddle16_inv(k: usize) -> Complex64 {
     Complex64::new(w.re, -w.im)
 }
 
-fn twiddle16_fwd_32(k: usize) -> Complex32 {
-    let w = twiddle16_fwd(k);
-    Complex32::new(w.re as f32, w.im as f32)
-}
-
-fn twiddle16_inv_32(k: usize) -> Complex32 {
-    let w = twiddle16_inv(k);
-    Complex32::new(w.re as f32, w.im as f32)
+fn cast_twiddle<F: WinogradScalar>(w: Complex64) -> num_complex::Complex<F> {
+    num_complex::Complex::new(F::cast_f64(w.re), F::cast_f64(w.im))
 }
 
 /// In-place Winograd DFT-16.
@@ -692,7 +686,10 @@ fn twiddle16_inv_32(k: usize) -> Complex32 {
 ///
 /// Correctness: Van Loan (1992), §3.3.
 #[inline]
-pub fn dft16_64(data: &mut [Complex64; 16], inverse: bool) {
+pub(crate) fn dft16_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 16],
+    inverse: bool,
+) {
     // Step 1: two DFT-8 sub-transforms on even and odd sub-arrays.
     let mut even = [
         data[0], data[2], data[4], data[6], data[8], data[10], data[12], data[14],
@@ -706,41 +703,11 @@ pub fn dft16_64(data: &mut [Complex64; 16], inverse: bool) {
     // Step 2: apply W_16^k twiddles to odd outputs and butterfly.
     for k in 0..8 {
         let tw = if inverse {
-            twiddle16_inv(k)
+            cast_twiddle(twiddle16_inv(k))
         } else {
-            twiddle16_fwd(k)
+            cast_twiddle(twiddle16_fwd(k))
         };
-        let o = Complex64::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
-        data[k] = even[k] + o;
-        data[k + 8] = even[k] - o;
-    }
-}
-
-/// In-place Winograd DFT-16 (f32 variant).
-#[inline]
-pub fn dft16_32(data: &mut [Complex32; 16], inverse: bool) {
-    let mut even = [
-        data[0], data[2], data[4], data[6], data[8], data[10], data[12], data[14],
-    ];
-    let mut odd = [
-        data[1], data[3], data[5], data[7], data[9], data[11], data[13], data[15],
-    ];
-    dft8_impl(&mut even, inverse);
-    dft8_impl(&mut odd, inverse);
-
-    for k in 0..8 {
-        let tw = if inverse {
-            twiddle16_inv_32(k)
-        } else {
-            twiddle16_fwd_32(k)
-        };
-        let o = Complex32::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
+        let o = apply_twiddle_impl(odd[k], tw);
         data[k] = even[k] + o;
         data[k + 8] = even[k] - o;
     }
@@ -748,7 +715,7 @@ pub fn dft16_32(data: &mut [Complex32; 16], inverse: bool) {
 
 // ── DFT-32 butterfly ─────────────────────────────────────────────────────────
 
-const TWIDDLE32_FWD_64: [Complex64; 16] = [
+const TWIDDLE32_FWD: [Complex64; 16] = [
     Complex64::new(1.0, 0.0),
     Complex64::new(0.9807852804032304, -0.19509032201612825),
     Complex64::new(0.9238795325112867, -0.3826834323650898),
@@ -774,19 +741,14 @@ const TWIDDLE32_FWD_64: [Complex64; 16] = [
 ];
 
 #[inline]
-fn twiddle32_64(k: usize, inverse: bool) -> Complex64 {
-    let w = TWIDDLE32_FWD_64[k];
-    if inverse {
+fn twiddle32<F: WinogradScalar>(k: usize, inverse: bool) -> num_complex::Complex<F> {
+    let w = TWIDDLE32_FWD[k];
+    let w = if inverse {
         Complex64::new(w.re, -w.im)
     } else {
         w
-    }
-}
-
-#[inline]
-fn twiddle32_32(k: usize, inverse: bool) -> Complex32 {
-    let w = twiddle32_64(k, inverse);
-    Complex32::new(w.re as f32, w.im as f32)
+    };
+    cast_twiddle(w)
 }
 
 /// In-place Winograd DFT-32.
@@ -799,7 +761,10 @@ fn twiddle32_32(k: usize, inverse: bool) -> Complex32 {
 ///
 /// Correctness: Van Loan (1992), §3.3 recursive formulation.
 #[inline]
-pub fn dft32_64(data: &mut [Complex64; 32], inverse: bool) {
+pub(crate) fn dft32_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 32],
+    inverse: bool,
+) {
     let mut even = [
         data[0], data[2], data[4], data[6], data[8], data[10], data[12], data[14], data[16],
         data[18], data[20], data[22], data[24], data[26], data[28], data[30],
@@ -808,38 +773,10 @@ pub fn dft32_64(data: &mut [Complex64; 32], inverse: bool) {
         data[1], data[3], data[5], data[7], data[9], data[11], data[13], data[15], data[17],
         data[19], data[21], data[23], data[25], data[27], data[29], data[31],
     ];
-    dft16_64(&mut even, inverse);
-    dft16_64(&mut odd, inverse);
+    dft16_impl(&mut even, inverse);
+    dft16_impl(&mut odd, inverse);
     for k in 0..16 {
-        let tw = twiddle32_64(k, inverse);
-        let o = Complex64::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
-        data[k] = even[k] + o;
-        data[k + 16] = even[k] - o;
-    }
-}
-
-/// In-place Winograd DFT-32 (f32 variant).
-#[inline]
-pub fn dft32_32(data: &mut [Complex32; 32], inverse: bool) {
-    let mut even = [
-        data[0], data[2], data[4], data[6], data[8], data[10], data[12], data[14], data[16],
-        data[18], data[20], data[22], data[24], data[26], data[28], data[30],
-    ];
-    let mut odd = [
-        data[1], data[3], data[5], data[7], data[9], data[11], data[13], data[15], data[17],
-        data[19], data[21], data[23], data[25], data[27], data[29], data[31],
-    ];
-    dft16_32(&mut even, inverse);
-    dft16_32(&mut odd, inverse);
-    for k in 0..16 {
-        let tw = twiddle32_32(k, inverse);
-        let o = Complex32::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
+        let o = apply_twiddle_impl(odd[k], twiddle32(k, inverse));
         data[k] = even[k] + o;
         data[k + 16] = even[k] - o;
     }
@@ -848,10 +785,10 @@ pub fn dft32_32(data: &mut [Complex32; 32], inverse: bool) {
 // ── DFT-64 butterfly ─────────────────────────────────────────────────────────
 
 #[inline]
-fn twiddle64_64(k: usize, inverse: bool) -> Complex64 {
+fn twiddle64<F: WinogradScalar>(k: usize, inverse: bool) -> num_complex::Complex<F> {
     // W_64^(2m) = W_32^m and W_64^(2m+1) = W_32^m * W_64^1.
     // This avoids per-call trig evaluation and avoids lock checks in hot loops.
-    let base = twiddle32_64(k >> 1, inverse);
+    let base = twiddle32(k >> 1, inverse);
     if (k & 1) == 0 {
         base
     } else {
@@ -861,14 +798,8 @@ fn twiddle64_64(k: usize, inverse: bool) -> Complex64 {
         } else {
             Complex64::new(0.9951847266721969, -0.0980171403295606)
         };
-        apply_twiddle_impl(base, w1)
+        apply_twiddle_impl(base, cast_twiddle(w1))
     }
-}
-
-#[inline]
-fn twiddle64_32(k: usize, inverse: bool) -> Complex32 {
-    let w = twiddle64_64(k, inverse);
-    Complex32::new(w.re as f32, w.im as f32)
 }
 
 /// In-place Winograd DFT-64.
@@ -881,35 +812,16 @@ fn twiddle64_32(k: usize, inverse: bool) -> Complex32 {
 ///
 /// Correctness: Van Loan (1992), §3.3 recursive formulation.
 #[inline]
-pub fn dft64_64(data: &mut [Complex64; 64], inverse: bool) {
+pub(crate) fn dft64_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 64],
+    inverse: bool,
+) {
     let mut even = core::array::from_fn(|i| data[2 * i]);
     let mut odd = core::array::from_fn(|i| data[2 * i + 1]);
-    dft32_64(&mut even, inverse);
-    dft32_64(&mut odd, inverse);
+    dft32_impl(&mut even, inverse);
+    dft32_impl(&mut odd, inverse);
     for k in 0..32 {
-        let tw = twiddle64_64(k, inverse);
-        let o = Complex64::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
-        data[k] = even[k] + o;
-        data[k + 32] = even[k] - o;
-    }
-}
-
-/// In-place Winograd DFT-64 (f32 variant).
-#[inline]
-pub fn dft64_32(data: &mut [Complex32; 64], inverse: bool) {
-    let mut even: [Complex32; 32] = core::array::from_fn(|i| data[2 * i]);
-    let mut odd: [Complex32; 32] = core::array::from_fn(|i| data[2 * i + 1]);
-    dft32_32(&mut even, inverse);
-    dft32_32(&mut odd, inverse);
-    for k in 0..32 {
-        let tw = twiddle64_32(k, inverse);
-        let o = Complex32::new(
-            odd[k].re * tw.re - odd[k].im * tw.im,
-            odd[k].re * tw.im + odd[k].im * tw.re,
-        );
+        let o = apply_twiddle_impl(odd[k], twiddle64(k, inverse));
         data[k] = even[k] + o;
         data[k + 32] = even[k] - o;
     }
@@ -1264,7 +1176,7 @@ mod tests {
             .collect();
         let expected = dft_forward(&input);
         let mut buf: [Complex64; 16] = input.as_slice().try_into().unwrap();
-        dft16_64(&mut buf, false);
+        dft16_impl(&mut buf, false);
         let err = max_err(&buf, &expected);
         assert!(err < 1e-11, "DFT-16 forward max_err={err:.2e}");
     }
@@ -1275,8 +1187,8 @@ mod tests {
             .map(|k| Complex64::new((k as f64 * 0.06).cos(), (k as f64 * 0.19).sin()))
             .collect();
         let mut buf: [Complex64; 16] = input.as_slice().try_into().unwrap();
-        dft16_64(&mut buf, false);
-        dft16_64(&mut buf, true);
+        dft16_impl(&mut buf, false);
+        dft16_impl(&mut buf, true);
         let recovered: Vec<Complex64> = buf.iter().map(|x| x / 16.0).collect();
         let err = max_err(&recovered, &input);
         assert!(err < 1e-11, "DFT-16 roundtrip max_err={err:.2e}");
@@ -1290,7 +1202,7 @@ mod tests {
         let expected_unnorm: Vec<Complex64> =
             dft_inverse(&input).into_iter().map(|x| x * 16.0).collect();
         let mut buf: [Complex64; 16] = input.as_slice().try_into().unwrap();
-        dft16_64(&mut buf, true);
+        dft16_impl(&mut buf, true);
         let err = max_err(&buf, &expected_unnorm);
         assert!(err < 1e-11, "DFT-16 inverse max_err={err:.2e}");
     }
@@ -1304,7 +1216,7 @@ mod tests {
             .collect();
         let expected = dft_forward(&input);
         let mut buf: [Complex64; 32] = input.as_slice().try_into().unwrap();
-        dft32_64(&mut buf, false);
+        dft32_impl(&mut buf, false);
         let err = max_err(&buf, &expected);
         assert!(err < 1e-11, "DFT-32 forward max_err={err:.2e}");
     }
@@ -1315,8 +1227,8 @@ mod tests {
             .map(|k| Complex64::new((k as f64 * 0.14).cos(), (k as f64 * 0.37).sin()))
             .collect();
         let mut buf: [Complex64; 32] = input.as_slice().try_into().unwrap();
-        dft32_64(&mut buf, false);
-        dft32_64(&mut buf, true);
+        dft32_impl(&mut buf, false);
+        dft32_impl(&mut buf, true);
         let recovered: Vec<Complex64> = buf.iter().map(|x| x / 32.0).collect();
         let err = max_err(&recovered, &input);
         assert!(err < 1e-11, "DFT-32 roundtrip max_err={err:.2e}");
@@ -1330,7 +1242,7 @@ mod tests {
         let expected_unnorm: Vec<Complex64> =
             dft_inverse(&input).into_iter().map(|x| x * 32.0).collect();
         let mut buf: [Complex64; 32] = input.as_slice().try_into().unwrap();
-        dft32_64(&mut buf, true);
+        dft32_impl(&mut buf, true);
         let err = max_err(&buf, &expected_unnorm);
         assert!(err < 1e-11, "DFT-32 inverse max_err={err:.2e}");
     }
@@ -1344,7 +1256,7 @@ mod tests {
             .collect();
         let expected = dft_forward(&input);
         let mut buf: [Complex64; 64] = input.as_slice().try_into().unwrap();
-        dft64_64(&mut buf, false);
+        dft64_impl(&mut buf, false);
         let err = max_err(&buf, &expected);
         assert!(err < 1e-11, "DFT-64 forward max_err={err:.2e}");
     }
@@ -1355,8 +1267,8 @@ mod tests {
             .map(|k| Complex64::new((k as f64 * 0.08).cos(), (k as f64 * 0.51).sin()))
             .collect();
         let mut buf: [Complex64; 64] = input.as_slice().try_into().unwrap();
-        dft64_64(&mut buf, false);
-        dft64_64(&mut buf, true);
+        dft64_impl(&mut buf, false);
+        dft64_impl(&mut buf, true);
         let recovered: Vec<Complex64> = buf.iter().map(|x| x / 64.0).collect();
         let err = max_err(&recovered, &input);
         assert!(err < 1e-11, "DFT-64 roundtrip max_err={err:.2e}");
@@ -1370,7 +1282,7 @@ mod tests {
         let expected_unnorm: Vec<Complex64> =
             dft_inverse(&input).into_iter().map(|x| x * 64.0).collect();
         let mut buf: [Complex64; 64] = input.as_slice().try_into().unwrap();
-        dft64_64(&mut buf, true);
+        dft64_impl(&mut buf, true);
         let err = max_err(&buf, &expected_unnorm);
         assert!(err < 1e-11, "DFT-64 inverse max_err={err:.2e}");
     }
@@ -1406,7 +1318,7 @@ mod tests {
     #[test]
     fn dft16_dc_produces_energy_in_bin0() {
         let mut buf = [Complex64::new(1.0, 0.0); 16];
-        dft16_64(&mut buf, false);
+        dft16_impl(&mut buf, false);
         assert!((buf[0] - Complex64::new(16.0, 0.0)).norm() < 1e-11);
         for x in &buf[1..] {
             assert!(x.norm() < 1e-11);
@@ -1416,7 +1328,7 @@ mod tests {
     #[test]
     fn dft32_dc_produces_energy_in_bin0() {
         let mut buf = [Complex64::new(1.0, 0.0); 32];
-        dft32_64(&mut buf, false);
+        dft32_impl(&mut buf, false);
         assert!((buf[0] - Complex64::new(32.0, 0.0)).norm() < 1e-11);
         for x in &buf[1..] {
             assert!(x.norm() < 1e-11);
@@ -1426,7 +1338,7 @@ mod tests {
     #[test]
     fn dft64_dc_produces_energy_in_bin0() {
         let mut buf = [Complex64::new(1.0, 0.0); 64];
-        dft64_64(&mut buf, false);
+        dft64_impl(&mut buf, false);
         assert!((buf[0] - Complex64::new(64.0, 0.0)).norm() < 1e-11);
         for x in &buf[1..] {
             assert!(x.norm() < 1e-11);
@@ -1441,7 +1353,7 @@ mod tests {
         let expected = dft_forward(&input);
         let mut buf: [Complex32; 32] =
             core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
-        dft32_32(&mut buf, false);
+        dft32_impl(&mut buf, false);
         let got: Vec<Complex64> = buf
             .iter()
             .map(|x| Complex64::new(x.re as f64, x.im as f64))
@@ -1458,7 +1370,7 @@ mod tests {
         let expected = dft_forward(&input);
         let mut buf: [Complex32; 64] =
             core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
-        dft64_32(&mut buf, false);
+        dft64_impl(&mut buf, false);
         let got: Vec<Complex64> = buf
             .iter()
             .map(|x| Complex64::new(x.re as f64, x.im as f64))

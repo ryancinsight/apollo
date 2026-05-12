@@ -1,4 +1,16 @@
 # Apollo Checklist
+## Closure LXIV - FFT Recursive Winograd Generic Codelets [major]
+Sprint target version: apollo-fft 0.8.0
+
+- [x] Replace duplicated f32/f64 DFT-16 Winograd bodies with generic `dft16_impl`.
+- [x] Replace duplicated f32/f64 DFT-32 Winograd bodies with generic `dft32_impl`.
+- [x] Replace duplicated f32/f64 DFT-64 Winograd bodies with generic `dft64_impl`.
+- [x] Route mixed-radix DFT-16/32/64 dispatch through generic codelets.
+- [x] Bump `apollo-fft` to 0.8.0 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, source scans, and `git diff --check`.
+
 ## Closure LXIII - FFT Short-Winograd Wrapper Removal [major]
 Sprint target version: apollo-fft 0.7.0
 

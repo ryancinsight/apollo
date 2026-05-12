@@ -8,6 +8,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Breaking
+- [major] `apollo-fft`: removed the remaining public type-suffixed Winograd
+  DFT-16/32/64 wrappers and collapsed their duplicated f32/f64 recursive
+  bodies into one generic codelet family.
 - [major] `apollo-fft`: removed type-suffixed public short-Winograd wrappers
   for DFT-2/3/4/5/7/8 and twiddle multiplication. Internal mixed-radix dispatch
   now calls the canonical generic Winograd implementations directly.
