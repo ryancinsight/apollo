@@ -1,4 +1,21 @@
 # Apollo Checklist
+## Closure LXI - FFT Composite Scratch and Twiddle Cache Reuse [patch]
+Sprint target version: apollo-fft 0.5.3
+
+- [x] Reuse Bluestein f64/f32 scratch buffers through thread-local storage
+  instead of retaining one scratch vector per transform length.
+- [x] Reuse mixed-radix composite f64/f32 scratch buffers through thread-local
+  storage.
+- [x] Cache composite twiddle tables by exact radix decomposition and direction.
+- [x] Add regression coverage proving same-length radix orders do not alias in
+  the twiddle cache.
+- [x] Remove stale allocation and `MaybeUninit` documentation from the
+  composite kernel.
+- [x] Bump `apollo-fft` to 0.5.3 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, source scans, and `git diff --check`.
+
 ## Closure LX - FFT 3D Typed Plan Deduplication [patch]
 Sprint target version: apollo-fft 0.5.2
 

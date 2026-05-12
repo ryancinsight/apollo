@@ -8,6 +8,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Fixed
+- [patch] `apollo-fft`: reuse Bluestein and mixed-radix composite FFT scratch
+  buffers across calls, cache composite twiddle tables by exact radix
+  decomposition and direction, and add regression coverage for same-length
+  composite transforms with different radix orders.
 - [patch] `apollo-fft`: consolidated duplicated 3D f32/f16 typed plan paths
   behind a private monomorphized storage trait and removed the now-dead
   f32-only 3D real-to-complex writer.

@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXI phase)
+- [x] [patch] Reuse `apollo-fft` Bluestein and mixed-radix composite scratch
+  buffers across calls and cache composite twiddle tables by exact radix
+  decomposition plus direction. The composite cache no longer aliases different
+  radix orders for the same length, stale allocation/`MaybeUninit` docs were
+  removed, and `apollo-fft` was bumped to 0.5.3.
+
 ## Closed in this sprint (Closure LX phase)
 - [x] [patch] Reduce `apollo-fft` typed 3D plan redundancy. The f32/f16 3D
   allocating and caller-owned paths now share one private monomorphized

@@ -44,6 +44,24 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXI - FFT Composite Scratch and Twiddle Cache Reuse [patch]
+- **Gap**: Bluestein and mixed-radix composite FFT paths still retained
+  allocation-heavy scratch behavior and stale docs. The composite twiddle cache
+  also keyed by transform length only, which could alias different public
+  radix decompositions with the same product.
+- **Closed by**: Reused one thread-local Bluestein scratch buffer per
+  precision, reused one thread-local composite scratch buffer per precision,
+  cached composite twiddle tables by exact radix decomposition and direction,
+  added same-length/different-radix-order regression coverage, removed stale
+  allocation and `MaybeUninit` docs, and bumped `apollo-fft` to 0.5.3.
+- **Residual risk**: Larger FFT kernel implementation files remain above the
+  structural limit and require follow-up module partitioning.
+- **Evidence**: `cargo check -p apollo-fft --benches --examples`; `cargo
+  test -p apollo-fft --lib -- --test-threads=1`; `cargo check --workspace`;
+  source scans for stale `MaybeUninit`/per-call allocation docs, stale
+  compatibility/deprecation tokens, and deleted f16 wrapper names; `git diff
+  --check`.
+
 ### Closure LX - FFT 3D Typed Plan Deduplication [patch]
 - **Gap**: `apollo-fft` duplicated 3D f32 and f16 typed forward/inverse logic
   across allocating and caller-owned APIs, leaving four precision-specific

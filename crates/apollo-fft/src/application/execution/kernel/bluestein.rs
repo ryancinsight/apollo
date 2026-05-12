@@ -40,10 +40,8 @@ thread_local! {
         RefCell::new(HashMap::new());
     static BLUESTEIN_PLAN_TL_32: RefCell<HashMap<usize, Arc<BluesteinPlan32>>> =
         RefCell::new(HashMap::new());
-    static BLUESTEIN_SCRATCH_64: RefCell<HashMap<usize, Vec<Complex64>>> =
-        RefCell::new(HashMap::new());
-    static BLUESTEIN_SCRATCH_32: RefCell<HashMap<usize, Vec<Complex32>>> =
-        RefCell::new(HashMap::new());
+    static BLUESTEIN_SCRATCH_64: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static BLUESTEIN_SCRATCH_32: RefCell<Vec<Complex32>> = const { RefCell::new(Vec::new()) };
 }
 
 const BLUESTEIN_PARALLEL_POINTWISE_THRESHOLD: usize = 65_536;
@@ -1072,21 +1070,12 @@ fn with_scratch64<R, F>(m: usize, f: F) -> R
 where
     F: FnOnce(&mut [Complex64]) -> R,
 {
-    BLUESTEIN_SCRATCH_64.with(|map_cell| {
-        let mut map = map_cell.borrow_mut();
-        let scratch = map.entry(m).or_insert_with(|| {
-            // MaybeUninit: Bluestein convolution writes before reading every slot.
-            let mut v: Vec<Complex64> = Vec::with_capacity(m);
-            // SAFETY: Complex64 = [f64; 2]; no validity constraint beyond bit pattern.
-            unsafe { v.set_len(m) };
-            v
-        });
+    BLUESTEIN_SCRATCH_64.with(|scratch_cell| {
+        let mut scratch = scratch_cell.borrow_mut();
         if scratch.len() < m {
-            let cur = scratch.len();
-            scratch.reserve(m - cur);
-            unsafe { scratch.set_len(m) };
+            scratch.resize(m, Complex64::default());
         }
-        f(scratch.as_mut_slice())
+        f(&mut scratch[..m])
     })
 }
 
@@ -1095,19 +1084,12 @@ fn with_scratch32<R, F>(m: usize, f: F) -> R
 where
     F: FnOnce(&mut [Complex32]) -> R,
 {
-    BLUESTEIN_SCRATCH_32.with(|map_cell| {
-        let mut map = map_cell.borrow_mut();
-        let scratch = map.entry(m).or_insert_with(|| {
-            let mut v: Vec<Complex32> = Vec::with_capacity(m);
-            unsafe { v.set_len(m) };
-            v
-        });
+    BLUESTEIN_SCRATCH_32.with(|scratch_cell| {
+        let mut scratch = scratch_cell.borrow_mut();
         if scratch.len() < m {
-            let cur = scratch.len();
-            scratch.reserve(m - cur);
-            unsafe { scratch.set_len(m) };
+            scratch.resize(m, Complex32::default());
         }
-        f(scratch.as_mut_slice())
+        f(&mut scratch[..m])
     })
 }
 
