@@ -1,4 +1,20 @@
 # Apollo Checklist
+## Closure LXXIV - Real/R2C Initialization Elimination [patch]
+Sprint target version: apollo-fft 0.9.9
+
+- [x] Add `f64` to `UninitWorkspaceElement` sealed trait set in `workspace.rs`.
+- [x] Replace `Array::zeros` with `uninit_copy_vec` + `Array::from_shape_vec`
+  in `dimension_1d.rs` `forward_real_to_complex` and `inverse_complex_to_real`.
+- [x] Replace `mapv(|v| Complex64::new(v, 0.0))` with `uninit_copy_vec` + `Zip`
+  in `dimension_2d.rs` `forward_real_to_complex`.
+- [x] Replace `Array::zeros` with `uninit_copy_vec` + `Array::from_shape_vec`
+  in `dimension_2d.rs` `inverse_complex_to_real`.
+- [x] Replace `Array::zeros` with `uninit_copy_vec` + `Array::from_shape_vec`
+  in `dimension_3d.rs` `forward_real_to_complex`, `inverse_complex_to_real`,
+  `forward_r2c`, and `inverse_c2r`.
+- [x] Bump `apollo-fft` to 0.9.9 and update sprint artifacts.
+- [x] Verify with `cargo check --workspace` and `cargo test -p apollo-fft --release`.
+
 ## Closure LXXIII - Plan-Time Iterator Elimination [patch]
 Sprint target version: apollo-fft 0.9.8
 

@@ -9,6 +9,7 @@ mod sealed {
     pub trait Sealed {}
 
     impl Sealed for f32 {}
+    impl Sealed for f64 {}
     impl Sealed for half::f16 {}
     impl Sealed for num_complex::Complex<half::f16> {}
     impl Sealed for num_complex::Complex32 {}
@@ -23,6 +24,7 @@ mod sealed {
 pub(crate) trait UninitWorkspaceElement: Copy + sealed::Sealed {}
 
 impl UninitWorkspaceElement for f32 {}
+impl UninitWorkspaceElement for f64 {}
 impl UninitWorkspaceElement for f16 {}
 impl UninitWorkspaceElement for Complex<f16> {}
 impl UninitWorkspaceElement for Complex32 {}
@@ -35,7 +37,7 @@ impl UninitWorkspaceElement for Complex64 {}
 /// The returned vector has length `len`, but its element values are unspecified.
 /// Callers may only use it for work buffers whose full contents are overwritten
 /// before the first read. `UninitWorkspaceElement` is sealed to Apollo's current
-/// FFT scratch types: `f16`, `f32`, `Complex<f16>`, `Complex32`, and `Complex64`.
+/// FFT scratch types: `f16`, `f32`, `f64`, `Complex<f16>`, `Complex32`, and `Complex64`.
 #[inline]
 pub(crate) fn uninit_copy_vec<T: UninitWorkspaceElement>(len: usize) -> Vec<T> {
     let mut values = Vec::with_capacity(len);

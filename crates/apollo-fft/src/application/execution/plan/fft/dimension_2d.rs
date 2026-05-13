@@ -267,7 +267,15 @@ impl FftPlan2D {
             (self.nx, self.ny),
             "forward input shape mismatch"
         );
-        let mut data = input.mapv(|value| Complex64::new(value, 0.0));
+        let len = self.nx * self.ny;
+        let mut data =
+            Array2::<Complex64>::from_shape_vec((self.nx, self.ny), uninit_copy_vec(len))
+                .expect("uninit Complex64 2D buffer length must match plan shape");
+        ndarray::Zip::from(&mut data)
+            .and(input)
+            .for_each(|out, &value| {
+                *out = Complex64::new(value, 0.0);
+            });
         self.forward_complex_inplace(&mut data);
         data
     }
@@ -297,7 +305,9 @@ impl FftPlan2D {
     /// Inverse transform returning a real array.
     #[must_use]
     pub fn inverse_complex_to_real(&self, input: &Array2<Complex64>) -> Array2<f64> {
-        let mut output = Array2::<f64>::zeros((self.nx, self.ny));
+        let mut output =
+            Array2::<f64>::from_shape_vec((self.nx, self.ny), uninit_copy_vec(self.nx * self.ny))
+                .expect("uninit f64 2D buffer length must match plan shape");
         self.inverse_complex_to_real_with_workspace(input, &mut output);
         output
     }

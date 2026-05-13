@@ -44,6 +44,21 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXIV - Real/R2C Initialization Elimination [patch]
+- **Gap**: Multiple hot paths for 1D, 2D, and 3D real forward/inverse transforms
+  as well as 3D R2C/C2R packing still used `Array::zeros` or `.mapv` pipelines,
+  which incurred unnecessary heap-initialization and traversal overhead for buffers
+  that are fully overwritten before their first read.
+- **Closed by**: Extended `UninitWorkspaceElement` sealed abstraction to `f64`.
+  Replaced all target `Array::zeros` and `.mapv` calls with zero-allocation
+  `uninit_copy_vec` + `Array::from_shape_vec` + checked overwrite (`Zip` or inplace
+  kernel execution), bumped `apollo-fft` to 0.9.9, and verified workspace stability.
+- **Residual risk**: Criterion benchmarking on allocation-heavy transforms (large N
+  and multi-dimensional) should confirm the actual latency reduction; functional
+  correctness is fully validated.
+- **Evidence**: `cargo check --workspace`; `cargo test -p apollo-fft --release`
+  (177/177); `git diff --check`.
+
 ### Closure LXXIII - Plan-Time Iterator Elimination [patch]
 - **Gap**: Three plan construction paths in `BluesteinPlan64::new`,
   `BluesteinPlan32::new`, and `FftPlan3D::with_precision` built their chirp and

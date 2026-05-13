@@ -351,7 +351,11 @@ impl FftPlan3D {
     /// Forward transform of a real field.
     #[must_use]
     pub fn forward_real_to_complex(&self, input: &Array3<f64>) -> Array3<Complex64> {
-        let mut output = Array3::<Complex64>::zeros((self.nx, self.ny, self.nz));
+        let mut output = Array3::<Complex64>::from_shape_vec(
+            (self.nx, self.ny, self.nz),
+            uninit_copy_vec(self.nx * self.ny * self.nz),
+        )
+        .expect("uninit Complex64 3D buffer length must match plan shape");
         self.forward_real_to_complex_into_full(input, &mut output);
         output
     }
@@ -368,7 +372,11 @@ impl FftPlan3D {
     /// Inverse transform of a full complex spectrum to a real field.
     #[must_use]
     pub fn inverse_complex_to_real(&self, input: &Array3<Complex64>) -> Array3<f64> {
-        let mut output = Array3::<f64>::zeros((self.nx, self.ny, self.nz));
+        let mut output = Array3::<f64>::from_shape_vec(
+            (self.nx, self.ny, self.nz),
+            uninit_copy_vec(self.nx * self.ny * self.nz),
+        )
+        .expect("uninit f64 3D buffer length must match plan shape");
         self.inverse_complex_to_real_with_workspace(input, &mut output);
         output
     }
@@ -996,7 +1004,11 @@ impl FftPlan3D {
     /// absolute error `< 1e-10` for f64 on 64Â³ grids.
     #[must_use]
     pub fn forward_r2c(&self, input: &Array3<f64>) -> Array3<Complex64> {
-        let mut out = Array3::<Complex64>::zeros((self.nx, self.ny, self.nz_c));
+        let mut out = Array3::<Complex64>::from_shape_vec(
+            (self.nx, self.ny, self.nz_c),
+            uninit_copy_vec(self.nx * self.ny * self.nz_c),
+        )
+        .expect("uninit Complex64 r2c 3D buffer length must match plan shape");
         self.forward_r2c_into(input, &mut out);
         out
     }
@@ -1095,7 +1107,11 @@ impl FftPlan3D {
     /// the total normalization is `1/(nx*ny*nz)`. QED
     #[must_use]
     pub fn inverse_c2r(&self, input: &Array3<Complex64>) -> Array3<f64> {
-        let mut out = Array3::<f64>::zeros((self.nx, self.ny, self.nz));
+        let mut out = Array3::<f64>::from_shape_vec(
+            (self.nx, self.ny, self.nz),
+            uninit_copy_vec(self.nx * self.ny * self.nz),
+        )
+        .expect("uninit f64 c2r 3D buffer length must match plan shape");
         let mut scratch = input.clone();
         self.inverse_c2r_into_with_scratch(&mut scratch, &mut out);
         out

@@ -239,7 +239,8 @@ impl FftPlan1D {
         if let (Some(fft_tw), Some(post_tw)) = (&self.twiddle_fwd_64, &self.real_fwd_post_twiddles)
         {
             let input_slice = input.as_slice().expect("input must be contiguous");
-            let mut output = Array1::<Complex64>::zeros(self.n);
+            let mut output = Array1::<Complex64>::from_shape_vec(self.n, uninit_copy_vec(self.n))
+                .expect("uninit Complex64 1D buffer length must match plan n");
             forward_real_inplace_64(
                 input_slice,
                 output.as_slice_mut().expect("output must be contiguous"),
@@ -284,7 +285,8 @@ impl FftPlan1D {
     /// Inverse transform returning a real-valued signal.
     #[must_use]
     pub fn inverse_complex_to_real(&self, input: &Array1<Complex64>) -> Array1<f64> {
-        let mut output = Array1::<f64>::zeros(self.n);
+        let mut output = Array1::<f64>::from_shape_vec(self.n, uninit_copy_vec(self.n))
+            .expect("uninit f64 1D buffer length must match plan n");
         self.inverse_complex_to_real_with_workspace(input, &mut output);
         output
     }
