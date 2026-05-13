@@ -44,6 +44,22 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXI - 2D Native Real32 Exact Buffer Fill [patch]
+- **Gap**: The native 2D f32/f16 real path still used ndarray `mapv`
+  allocation pipelines for real-to-complex packing and complex-to-real
+  projection, duplicating the allocation pattern already removed from 1D
+  compact f16 execution.
+- **Closed by**: Constrained the 2D real32 helper trait to sealed workspace
+  element types and routed native packing/projection through shared exact-size
+  overwrite-first buffers.
+- **Residual risk**: Allocation microbenchmarks should quantify construction
+  and projection cost changes for representative 2D f32/f16 matrix sizes;
+  functional/static verification passed locally.
+- **Evidence**: `cargo check -p apollo-fft`; `cargo check -p apollo-fft
+  --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`;
+  `cargo check --workspace`; cleanup scans for deprecated/type-suffixed FFT
+  APIs and encoding artifacts; `cargo fmt --check`; `git diff --check`.
+
 ### Closure LXX - 1D Compact F16 Exact Buffer Fill [patch]
 - **Gap**: The 1D compact f16 power-of-two path still used iterator
   collection pipelines for compact input packing and output projection, while

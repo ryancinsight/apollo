@@ -1,5 +1,11 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXI phase)
+- [x] [patch] Reduce `apollo-fft` native 2D f32/f16 real allocation
+  pipelines. The native real32 path now uses shared monomorphized
+  overwrite-first packing and projection helpers backed by the sealed workspace
+  allocation contract. `apollo-fft` was bumped to 0.9.6.
+
 ## Closed in this sprint (Closure LXX phase)
 - [x] [patch] Reduce `apollo-fft` 1D compact f16 power-of-two allocation
   pipelines. The compact f16 path now uses exact-size overwrite-first buffers

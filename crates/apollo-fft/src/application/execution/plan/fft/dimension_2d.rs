@@ -35,7 +35,9 @@ use crate::application::execution::kernel::mixed_radix::{
 };
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
 use crate::application::execution::plan::fft::real_storage::RealFftData;
-use crate::application::execution::plan::fft::workspace::uninit_copy_vec;
+use crate::application::execution::plan::fft::workspace::{
+    uninit_copy_vec, UninitWorkspaceElement,
+};
 
 /// Use rayon parallel iteration when total elements exceed this threshold.
 /// Below the threshold, sequential iteration avoids rayon task-spawn overhead
@@ -53,7 +55,7 @@ use num_complex::{Complex32, Complex64};
 use rayon::prelude::*;
 use std::sync::Arc;
 
-trait Plan2dReal32: Copy {
+trait Plan2dReal32: Copy + UninitWorkspaceElement {
     const NATIVE_PROFILE: PrecisionProfile;
 
     fn to_f32(self) -> f32;
@@ -404,7 +406,7 @@ impl FftPlan2D {
             "forward input shape mismatch"
         );
         if self.precision == T::NATIVE_PROFILE {
-            let mut data = input.mapv(|value| Complex32::new(value.to_f32(), 0.0));
+            let mut data = self.pack_real32_complex(input);
             self.forward_complex_inplace_f32(&mut data);
             data
         } else {
@@ -423,12 +425,30 @@ impl FftPlan2D {
         if self.precision == T::NATIVE_PROFILE {
             let mut data = input.clone();
             self.inverse_complex_inplace_f32(&mut data);
-            data.mapv(|value| T::from_f32(value.re))
+            self.project_real32(data)
         } else {
             let promoted =
                 input.mapv(|value| Complex64::new(f64::from(value.re), f64::from(value.im)));
             self.inverse_complex_to_real(&promoted).mapv(T::from_f64)
         }
+    }
+
+    fn pack_real32_complex<T: Plan2dReal32>(&self, input: &Array2<T>) -> Array2<Complex32> {
+        let mut values = uninit_copy_vec(input.len());
+        for (slot, value) in values.iter_mut().zip(input.iter()) {
+            *slot = Complex32::new(value.to_f32(), 0.0);
+        }
+        Array2::from_shape_vec((self.nx, self.ny), values)
+            .expect("packed 2D real32 buffer length must match plan shape")
+    }
+
+    fn project_real32<T: Plan2dReal32>(&self, input: Array2<Complex32>) -> Array2<T> {
+        let mut values = uninit_copy_vec(input.len());
+        for (slot, value) in values.iter_mut().zip(input.iter()) {
+            *slot = T::from_f32(value.re);
+        }
+        Array2::from_shape_vec((self.nx, self.ny), values)
+            .expect("projected 2D real32 buffer length must match plan shape")
     }
 
     fn axis_pass_complex(&self, data: &mut Array2<Complex64>, axis: Axis, forward: bool) {

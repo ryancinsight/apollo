@@ -1,4 +1,19 @@
 # Apollo Checklist
+## Closure LXXI - 2D Native Real32 Exact Buffer Fill [patch]
+Sprint target version: apollo-fft 0.9.6
+
+- [x] Constrain the 2D native real32 helper trait to sealed workspace element
+  types.
+- [x] Replace native 2D f32/f16 real-to-complex `mapv` packing with an
+  exact-size overwrite-first buffer.
+- [x] Replace native 2D f32/f16 complex-to-real `mapv` projection with an
+  exact-size overwrite-first buffer.
+- [x] Bump `apollo-fft` to 0.9.6 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft`, `cargo check -p apollo-fft
+  --benches --examples`, `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, cleanup scans, `cargo fmt --check`, and
+  `git diff --check`.
+
 ## Closure LXX - 1D Compact F16 Exact Buffer Fill [patch]
 Sprint target version: apollo-fft 0.9.5
 
