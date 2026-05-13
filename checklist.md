@@ -1,4 +1,23 @@
 # Apollo Checklist
+## Closure LXXIII - Plan-Time Iterator Elimination [patch]
+Sprint target version: apollo-fft 0.9.8
+
+- [x] Replace `(0..n).map(..).collect()` chirp construction in `BluesteinPlan64::new`
+  with `Vec::with_capacity(n)` + `set_len(n)` + unchecked overwrite loop.
+- [x] Replace `(0..n).map(..).collect()` chirp construction in `BluesteinPlan32::new`
+  with `Vec::with_capacity(n)` + `set_len(n)` + unchecked overwrite loop.
+- [x] Replace `(0..nz_c).map(..).collect()` r2c extraction twiddle construction in
+  `FftPlan3D::with_precision` with `Vec::with_capacity(nz_c)` + `set_len(nz_c)` +
+  unchecked overwrite loop.
+- [x] Add `#![allow(clippy::uninit_vec)]` to `dimension_3d.rs` to maintain zero-warning
+  policy alongside the existing `bluestein.rs` suppression.
+- [x] Remove leftover scratch scripts (`bluestein_opt.py`, `dim3d_opt.py`) from
+  the worktree.
+- [x] Bump `apollo-fft` to 0.9.8 and update sprint artifacts.
+- [x] Verify with `cargo fmt --check -p apollo-fft`, `cargo clippy -p apollo-fft
+  --release -- -D warnings`, `cargo test -p apollo-fft --release`,
+  `git diff --check`.
+
 ## Closure LXXII - 3D Native Real32 Exact Buffer Fill [patch]
 Sprint target version: apollo-fft 0.9.7
 

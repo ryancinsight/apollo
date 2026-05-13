@@ -44,6 +44,23 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXIII - Plan-Time Iterator Elimination [patch]
+- **Gap**: Three plan construction paths in `BluesteinPlan64::new`,
+  `BluesteinPlan32::new`, and `FftPlan3D::with_precision` built their chirp and
+  r2c twiddle vectors through `(0..n).map(..).collect()` iterator pipelines,
+  paying iterator state machine and bounds-check overhead for every element even
+  though the element count is known at construction time.
+- **Closed by**: Replaced all three `.map(..).collect()` chains with
+  `Vec::with_capacity` + `unsafe { set_len }` + unchecked overwrite loops,
+  added `#![allow(clippy::uninit_vec)]` to `dimension_3d.rs` to maintain the
+  zero-warning policy, removed leftover scratch scripts from the worktree, and
+  bumped `apollo-fft` to 0.9.8.
+- **Residual risk**: Criterion plan-construction benchmarks on representative
+  arbitrary-length sizes should confirm the reduction in construction latency.
+- **Evidence**: `cargo fmt --check -p apollo-fft`; `cargo clippy -p apollo-fft
+  --release -- -D warnings`; `cargo test -p apollo-fft --release` (177/177);
+  `git diff --check`.
+
 ### Closure LXXII - 3D Native Real32 Exact Buffer Fill [patch]
 - **Gap**: The allocating native 3D f32/f16 real path still zero-filled its
   Complex32 output before full overwrite and projected native inverse results
