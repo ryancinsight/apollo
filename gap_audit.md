@@ -44,6 +44,22 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXX - 1D Compact F16 Exact Buffer Fill [patch]
+- **Gap**: The 1D compact f16 power-of-two path still used iterator
+  collection pipelines for compact input packing and output projection, while
+  the rest of the FFT workspace layer had moved to explicit exact-size
+  overwrite-first buffers.
+- **Closed by**: Extended the sealed workspace element set to `f16` and
+  `Complex<f16>`, routed compact f16 forward/inverse packing and projection
+  through exact-size overwrite-first vectors, and bumped `apollo-fft` to 0.9.5.
+- **Residual risk**: Allocation microbenchmarks should confirm construction
+  and projection costs on representative short power-of-two f16 transforms;
+  functional/static verification passed locally.
+- **Evidence**: `cargo check -p apollo-fft`; `cargo check -p apollo-fft
+  --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`;
+  `cargo check --workspace`; cleanup scans for deprecated/type-suffixed FFT
+  APIs and encoding artifacts; `cargo fmt --check`; `git diff --check`.
+
 ### Closure LXIX - 1D Native Complex32 Precision Deduplication [patch]
 - **Gap**: 1D f32 native execution and mixed f16 non-power-of-two execution
   duplicated `Complex32` packing, twiddle-aware kernel selection, inverse

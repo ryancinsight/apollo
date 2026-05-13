@@ -25,6 +25,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   generic `dft_forward` and `dft_inverse` functions.
 
 ### Fixed
+- [patch] `apollo-fft`: route the 1D compact f16 power-of-two path through
+  exact-size overwrite-first buffers for compact input packing and output
+  projection instead of iterator-collection pipelines.
 - [patch] `apollo-fft`: consolidate 1D native `Complex32` precision dispatch
   for f32 and mixed f16 non-power-of-two paths behind shared monomorphized
   helpers, reducing duplicated conversion/kernel-selection logic.

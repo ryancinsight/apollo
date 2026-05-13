@@ -1,4 +1,18 @@
 # Apollo Checklist
+## Closure LXX - 1D Compact F16 Exact Buffer Fill [patch]
+Sprint target version: apollo-fft 0.9.5
+
+- [x] Extend sealed FFT workspace allocation to `f16` and `Complex<f16>`.
+- [x] Replace compact f16 power-of-two forward iterator collection with
+  exact-size overwrite-first packing and projection buffers.
+- [x] Replace compact f16 power-of-two inverse iterator collection with
+  exact-size overwrite-first packing and real-output buffers.
+- [x] Bump `apollo-fft` to 0.9.5 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft`, `cargo check -p apollo-fft
+  --benches --examples`, `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, cleanup scans, `cargo fmt --check`, and
+  `git diff --check`.
+
 ## Closure LXIX - 1D Native Complex32 Precision Deduplication [patch]
 Sprint target version: apollo-fft 0.9.4
 

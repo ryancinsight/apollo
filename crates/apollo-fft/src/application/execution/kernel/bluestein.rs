@@ -1,3 +1,4 @@
+#![allow(clippy::uninit_vec)]
 //! Bluestein chirp-Z FFT for arbitrary-length DFT.
 //!
 //! ## Mathematical derivation
@@ -9,7 +10,6 @@
 //! and M = next_pow2(2N-1).
 
 #![allow(clippy::empty_line_after_doc_comments)]
-#![allow(clippy::uninit_vec)]
 
 use super::mixed_radix;
 

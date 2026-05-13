@@ -1,10 +1,11 @@
-//! Precision-specific 1D FFT plan methods.
+﻿//! Precision-specific 1D FFT plan methods.
 
 use super::FftPlan1D;
 use crate::application::execution::kernel::mixed_radix::{
     forward_inplace_32_with_twiddles, inverse_inplace_32_with_twiddles,
 };
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
+use crate::application::execution::plan::fft::workspace::uninit_copy_vec;
 use crate::domain::metadata::precision::PrecisionProfile;
 use half::f16;
 use ndarray::Array1;
@@ -76,16 +77,7 @@ impl FftPlan1D {
     pub(crate) fn forward_f16(&self, input: &Array1<f16>) -> Array1<Complex32> {
         if self.precision == PrecisionProfile::MIXED_PRECISION_F16_F32 {
             if input.len().is_power_of_two() {
-                // Pack real f16 input as compact complex storage (imaginary = 0).
-                let mut buf: Vec<Complex<f16>> =
-                    input.iter().map(|&v| Complex::new(v, f16::ZERO)).collect();
-                fft_forward(&mut buf);
-                // Convert compact spectrum to Complex32 at the output boundary.
-                Array1::from_vec(
-                    buf.into_iter()
-                        .map(|cf| Complex32::new(cf.re.to_f32(), cf.im.to_f32()))
-                        .collect(),
-                )
+                Self::forward_f16_compact_power_of_two(input)
             } else {
                 self.forward_real32_native(input)
             }
@@ -106,14 +98,7 @@ impl FftPlan1D {
     pub(crate) fn inverse_f16(&self, input: &Array1<Complex32>) -> Array1<f16> {
         if self.precision == PrecisionProfile::MIXED_PRECISION_F16_F32 {
             if input.len().is_power_of_two() {
-                // Convert Complex32 spectrum to compact f16 working buffer.
-                let mut buf: Vec<Complex<f16>> = input
-                    .iter()
-                    .map(|&v| Complex::new(f16::from_f32(v.re), f16::from_f32(v.im)))
-                    .collect();
-                fft_inverse(&mut buf);
-                // Extract real parts as f16 (imaginary parts are ~0 by Hermitian symmetry).
-                Array1::from_vec(buf.into_iter().map(|cf| cf.re).collect())
+                Self::inverse_f16_compact_power_of_two(input)
             } else {
                 self.inverse_real32_native(input)
             }
@@ -145,5 +130,35 @@ impl FftPlan1D {
             fft_inverse(slice);
         }
         output.mapv(|value| T::from_f32(value.re))
+    }
+
+    fn forward_f16_compact_power_of_two(input: &Array1<f16>) -> Array1<Complex32> {
+        let input_slice = input.as_slice().expect("Array must be contiguous");
+        let mut buf: Vec<Complex<f16>> = uninit_copy_vec(input_slice.len());
+        for (slot, &value) in buf.iter_mut().zip(input_slice.iter()) {
+            *slot = Complex::new(value, f16::ZERO);
+        }
+        fft_forward(&mut buf);
+
+        let mut output = uninit_copy_vec(buf.len());
+        for (slot, value) in output.iter_mut().zip(buf.into_iter()) {
+            *slot = Complex32::new(value.re.to_f32(), value.im.to_f32());
+        }
+        Array1::from_vec(output)
+    }
+
+    fn inverse_f16_compact_power_of_two(input: &Array1<Complex32>) -> Array1<f16> {
+        let input_slice = input.as_slice().expect("Array must be contiguous");
+        let mut buf: Vec<Complex<f16>> = uninit_copy_vec(input_slice.len());
+        for (slot, &value) in buf.iter_mut().zip(input_slice.iter()) {
+            *slot = Complex::new(f16::from_f32(value.re), f16::from_f32(value.im));
+        }
+        fft_inverse(&mut buf);
+
+        let mut output = uninit_copy_vec(buf.len());
+        for (slot, value) in output.iter_mut().zip(buf.into_iter()) {
+            *slot = value.re;
+        }
+        Array1::from_vec(output)
     }
 }

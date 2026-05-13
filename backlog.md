@@ -1,5 +1,11 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXX phase)
+- [x] [patch] Reduce `apollo-fft` 1D compact f16 power-of-two allocation
+  pipelines. The compact f16 path now uses exact-size overwrite-first buffers
+  for input packing and output projection, backed by the sealed workspace
+  allocation helper. `apollo-fft` was bumped to 0.9.5.
+
 ## Closed in this sprint (Closure LXIX phase)
 - [x] [patch] Reduce `apollo-fft` 1D precision dispatch duplication. Native
   f32 paths and mixed f16 non-power-of-two paths now share monomorphized
