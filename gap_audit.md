@@ -44,6 +44,23 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXII - 3D Native Real32 Exact Buffer Fill [patch]
+- **Gap**: The allocating native 3D f32/f16 real path still zero-filled its
+  Complex32 output before full overwrite and projected native inverse results
+  through ndarray `mapv`, leaving allocation work inconsistent with the sealed
+  overwrite-first workspace contract already used in 1D/2D paths.
+- **Closed by**: Constrained the 3D real32 helper trait to sealed workspace
+  element types, routed allocating forward output through an exact-size
+  overwrite-first Complex32 buffer, and routed native inverse projection
+  through an exact-size overwrite-first real buffer.
+- **Residual risk**: Allocation microbenchmarks should quantify construction
+  and projection cost changes for representative 3D f32/f16 volumes;
+  functional/static verification passed locally.
+- **Evidence**: `cargo check -p apollo-fft`; `cargo check -p apollo-fft
+  --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`;
+  `cargo check --workspace`; cleanup scans for deprecated/type-suffixed FFT
+  APIs and encoding artifacts; `cargo fmt --check`; `git diff --check`.
+
 ### Closure LXXI - 2D Native Real32 Exact Buffer Fill [patch]
 - **Gap**: The native 2D f32/f16 real path still used ndarray `mapv`
   allocation pipelines for real-to-complex packing and complex-to-real

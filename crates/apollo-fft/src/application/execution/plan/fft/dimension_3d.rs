@@ -44,7 +44,9 @@ use crate::application::execution::kernel::mixed_radix::{
 };
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
 use crate::application::execution::plan::fft::real_storage::RealFftData;
-use crate::application::execution::plan::fft::workspace::uninit_copy_vec;
+use crate::application::execution::plan::fft::workspace::{
+    uninit_copy_vec, UninitWorkspaceElement,
+};
 use crate::domain::metadata::precision::PrecisionProfile;
 use crate::domain::metadata::shape::Shape3D;
 use half::f16;
@@ -54,7 +56,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-trait Plan3dReal32: Copy {
+trait Plan3dReal32: Copy + UninitWorkspaceElement {
     const NATIVE_PROFILE: PrecisionProfile;
 
     fn to_f32(self) -> f32;
@@ -450,7 +452,7 @@ impl FftPlan3D {
     }
 
     fn forward_real32<T: Plan3dReal32>(&self, input: &Array3<T>) -> Array3<Complex32> {
-        let mut output = Array3::<Complex32>::zeros((self.nx, self.ny, self.nz));
+        let mut output = self.uninit_complex32_full();
         self.forward_real32_into(input, &mut output);
         output
     }
@@ -460,12 +462,29 @@ impl FftPlan3D {
         if self.precision == T::NATIVE_PROFILE {
             let mut data = input.clone();
             self.inverse_complex_inplace_f32(&mut data);
-            data.mapv(|value| T::from_f32(value.re))
+            self.project_real32(data)
         } else {
             let promoted =
                 input.mapv(|value| Complex64::new(f64::from(value.re), f64::from(value.im)));
             self.inverse_complex_to_real(&promoted).mapv(T::from_f64)
         }
+    }
+
+    fn uninit_complex32_full(&self) -> Array3<Complex32> {
+        Array3::from_shape_vec(
+            (self.nx, self.ny, self.nz),
+            uninit_copy_vec(self.nx * self.ny * self.nz),
+        )
+        .expect("uninitialized Complex32 3D buffer length must match plan shape")
+    }
+
+    fn project_real32<T: Plan3dReal32>(&self, input: Array3<Complex32>) -> Array3<T> {
+        let mut values = uninit_copy_vec(input.len());
+        for (slot, value) in values.iter_mut().zip(input.iter()) {
+            *slot = T::from_f32(value.re);
+        }
+        Array3::from_shape_vec((self.nx, self.ny, self.nz), values)
+            .expect("projected 3D real32 buffer length must match plan shape")
     }
 
     fn forward_real32_into<T: Plan3dReal32>(

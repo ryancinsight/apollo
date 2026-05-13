@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXII phase)
+- [x] [patch] Reduce `apollo-fft` native 3D f32/f16 real allocation
+  pipelines. The allocating native real32 forward path now constructs its
+  caller-owned output buffer through the sealed overwrite-first workspace
+  contract, and native inverse projection uses the same exact-size buffer
+  strategy. `apollo-fft` was bumped to 0.9.7.
+
 ## Closed in this sprint (Closure LXXI phase)
 - [x] [patch] Reduce `apollo-fft` native 2D f32/f16 real allocation
   pipelines. The native real32 path now uses shared monomorphized

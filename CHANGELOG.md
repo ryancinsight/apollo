@@ -25,6 +25,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   generic `dft_forward` and `dft_inverse` functions.
 
 ### Fixed
+- [patch] `apollo-fft`: route native 3D f32/f16 allocating real32 buffers and
+  inverse real-output projection through sealed exact-size overwrite-first
+  buffers instead of zero-fill and `mapv` allocation pipelines.
 - [patch] `apollo-fft`: route native 2D f32/f16 real packing and real-output
   projection through exact-size overwrite-first buffers instead of ndarray
   `mapv` allocation pipelines.
