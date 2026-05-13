@@ -6,9 +6,9 @@
 //!
 //! | Input length       | Kernel selected |
 //! |--------------------|------------------|
-//! | Power of two ≥ 2   | **Stockham autosort** — out-of-place ping-pong FFT between `data` and a thread-local scratch buffer; no bit-reversal permutation. AVX/FMA SIMD codelets for N = 4, 8, 64, 4096 (f32); N = 64 (f64). Falls back to generic `transform<F>` loop for other PoT sizes. |
-//! | 2/3/5/7-smooth     | **Composite mixed-radix** — Cooley-Tukey DIT with digit-reversal permutation. |
-//! | Other non-PoT      | **Bluestein chirp-Z** — pads to next PoT and runs Stockham internally. |
+//! | Power of two >= 2   | **Stockham autosort** - out-of-place ping-pong FFT between `data` and a thread-local scratch buffer; no bit-reversal permutation. AVX/FMA SIMD codelets for N = 4, 8, 64, 4096 (f32); N = 64 (f64). Falls back to generic `transform<F>` loop for other PoT sizes. |
+//! | 2/3/5/7-smooth     | **Composite mixed-radix** - Cooley-Tukey DIT with digit-reversal permutation. |
+//! | Other non-PoT      | **Bluestein chirp-Z** - pads to next PoT and runs Stockham internally. |
 //!
 //! ## Dispatch hierarchy (f16)
 //!
@@ -19,7 +19,7 @@
 //!
 //! ## SSOT principle
 //!
-//! Each precision × operation combination delegates to one of the above three
+//! Each precision x operation combination delegates to one of the above three
 //! authoritative algorithm implementations. No algorithm body is duplicated
 //! across precision variants.
 //!
@@ -37,7 +37,7 @@
 
 use super::precision_bridge::{run_via_complex32, Complex32Bridge};
 use super::radix_shape::{factorize_composite, should_use_bluestein_instead_of_composite};
-use super::radix_stage::normalize_inplace;
+use super::radix_stage::{normalize_inplace, normalize_inplace_c32, normalize_inplace_c64};
 use super::{bluestein, radix2, radix_composite, stockham, winograd};
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
@@ -45,7 +45,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// ── Global backing caches (cross-thread sharing, written once per size) ───────
+// Global backing caches: cross-thread sharing, written once per size.
 
 static TWIDDLE_FWD_64_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -58,10 +58,10 @@ static TWIDDLE_INV_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Comp
 static COMPOSITE_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-// ── Thread-local fast-path caches (zero locking on the hot path after warmup) ─
+// Thread-local fast-path caches: zero locking on the hot path after warmup.
 //
 // On a cache hit the hot path is:
-//   TW_FWD_64.with(|c| c.borrow().get(&n).cloned()) — no atomic, no lock.
+//   TW_FWD_64.with(|c| c.borrow().get(&n).cloned()) - no atomic, no lock.
 // On a miss, the global RwLock is consulted or the table is built once, then
 // the Arc is stored into the thread-local HashMap for all future calls.
 
@@ -119,13 +119,13 @@ fn tl_cached<T: Clone>(
     n: usize,
     build_fn: impl FnOnce(usize) -> Vec<T>,
 ) -> Arc<[T]> {
-    // Fast path: hit in this thread's HashMap — no lock or atomic.
+    // Fast path: hit in this thread's HashMap - no lock or atomic.
     if let Some(tw) = tl.with(|c| c.borrow().get(&n).cloned()) {
         return tw;
     }
     // Slow path (once per thread per size): read or write the global cache.
     // NOTE: The read guard MUST be dropped (via let binding with `;`) before
-    // calling global.write() to avoid a same-thread read→write deadlock with
+    // calling global.write() to avoid a same-thread read-to-write deadlock with
     // parking_lot::RwLock, which does not allow upgrading a read lock on the
     // same thread.
     let tw = {
@@ -295,7 +295,7 @@ fn short_winograd<F: ShortWinogradScalar>(
     true
 }
 
-// ── f64 ───────────────────────────────────────────────────────────────────────
+// f64 dispatch.
 
 /// In-place forward FFT (unnormalized, f64) with optional precomputed twiddles.
 #[inline]
@@ -406,8 +406,7 @@ pub fn inverse_inplace_64_with_twiddles(data: &mut [Complex64], twiddles: Option
     }
     if data.len().is_power_of_two() {
         inverse_inplace_unnorm_64_with_twiddles(data, twiddles);
-        let scale = 1.0 / data.len() as f64;
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c64(data, 1.0 / data.len() as f64);
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {
             if let Some(radices) = cached_composite_radices(data.len()) {
@@ -467,7 +466,7 @@ pub fn inverse_inplace_64(data: &mut [Complex64]) {
     }
 }
 
-// ── f32 ───────────────────────────────────────────────────────────────────────
+// f32 dispatch.
 
 /// In-place forward FFT (unnormalized, f32) with optional precomputed twiddles.
 #[inline]
@@ -545,8 +544,7 @@ pub fn inverse_inplace_32_with_twiddles(data: &mut [Complex32], twiddles: Option
     }
     if data.len().is_power_of_two() {
         inverse_inplace_unnorm_32_with_twiddles(data, twiddles);
-        let scale = 1.0 / data.len() as f32;
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c32(data, 1.0 / data.len() as f32);
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {
             if let Some(radices) = cached_composite_radices(data.len()) {
@@ -609,7 +607,7 @@ pub fn inverse_inplace_32(data: &mut [Complex32]) {
     }
 }
 
-// ── f16 ───────────────────────────────────────────────────────────────────────
+// f16 compact-storage dispatch.
 
 /// In-place forward FFT (unnormalized) for compact storage routed through `Complex32`.
 ///
@@ -701,8 +699,7 @@ pub(crate) fn inverse_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
             with_stockham_scratch_32(n, |scratch| {
                 <f32 as stockham::StockhamKernel>::forward_with_scratch(buf, scratch, tw.as_ref());
             });
-            let scale = 1.0f32 / n as f32;
-            buf.iter_mut().for_each(|v| *v *= scale);
+            normalize_inplace_c32(buf, 1.0f32 / n as f32);
         });
     } else {
         if !should_use_bluestein_instead_of_composite(data.len()) {

@@ -137,7 +137,11 @@ fn build_twiddle_table_inner<C>(
     }
     let log_n = n.trailing_zeros() as usize;
     let mut table = Vec::with_capacity(n - 1);
+    // SAFETY: We initialize exactly `n - 1` elements in the loop below.
+    // The total entries across log₂n stages is Σ_{s=1}^{log₂n} 2^{s-1} = n - 1.
+    unsafe { table.set_len(n - 1) };
     let mut len = 2usize;
+    let mut idx = 0;
     for _ in 0..log_n {
         let half = len >> 1;
         // W_base = exp(sign * 2πi / len): one trig call per stage.
@@ -150,7 +154,8 @@ fn build_twiddle_table_inner<C>(
         let mut tw_re = 1.0f64;
         let mut tw_im = 0.0f64;
         for _ in 0..half {
-            table.push(make_complex(tw_re, tw_im));
+            unsafe { *table.get_unchecked_mut(idx) = make_complex(tw_re, tw_im) };
+            idx += 1;
             // tw = tw * w_base (complex multiply in f64)
             let new_re = tw_re * w_re - tw_im * w_im;
             let new_im = tw_re * w_im + tw_im * w_re;

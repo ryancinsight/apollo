@@ -1,4 +1,4 @@
-//! SSOT for Cooley-Tukey twiddle-factor table construction.
+﻿//! SSOT for Cooley-Tukey twiddle-factor table construction.
 //!
 //! ## Mathematical foundation
 //!
@@ -43,7 +43,10 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Mathematics of Computation*, 19(90), 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §2.2.
 
+
+#![allow(clippy::uninit_vec)]
 use half::f16;
+
 use num_complex::{Complex, Complex32, Complex64};
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
@@ -157,7 +160,14 @@ pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<
         return Vec::new();
     }
     let log_n = n.trailing_zeros() as usize;
-    let mut table = Vec::with_capacity(n - 1);
+    let total = n - 1; // proved in module docs: sum of stage halves = n-1
+                       // Pre-allocate exact capacity; set_len skips zero-init.
+                       // SAFETY: C: TwiddleOutput + Copy has no Drop. Every slot is overwritten
+                       // below before the Vec is returned. The cursor advances by half=2^(s-1)
+                       // per stage; sum over all stages = n-1 = total.
+    let mut table: Vec<C> = Vec::with_capacity(total);
+    unsafe { table.set_len(total) };
+    let mut cursor = 0usize;
     let mut len = 2usize;
     for _ in 0..log_n {
         let half = len >> 1;
@@ -168,15 +178,20 @@ pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<
         let w_im = base_angle.sin();
         let mut tw_re = 1.0f64; // tw[0] = 1
         let mut tw_im = 0.0f64;
-        for _ in 0..half {
-            table.push(C::from_components(tw_re, tw_im));
+        for j in 0..half {
+            // SAFETY: cursor + j < total by stage-size invariant.
+            unsafe {
+                *table.get_unchecked_mut(cursor + j) = C::from_components(tw_re, tw_im);
+            }
             let new_re = tw_re * w_re - tw_im * w_im;
             let new_im = tw_re * w_im + tw_im * w_re;
             tw_re = new_re;
             tw_im = new_im;
         }
+        cursor += half;
         len <<= 1;
     }
+    debug_assert_eq!(cursor, total, "cursor must reach total after all stages");
     table
 }
 
@@ -246,3 +261,4 @@ mod tests {
         assert!(build_twiddle_table::<Complex64>(1, -1.0).is_empty());
     }
 }
+

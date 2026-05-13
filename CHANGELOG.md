@@ -25,6 +25,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   generic `dft_forward` and `dft_inverse` functions.
 
 ### Fixed
+- [patch] `apollo-fft`: reduce normalization and workspace memory overhead by
+  routing inverse scale passes through shared AVX-capable normalization helpers,
+  filling twiddle vectors by exact pre-sized cursors, and avoiding zero-fill for
+  FFT scratch/workspace buffers that are overwritten before read.
 - [patch] `apollo-fft`: removed the debug-only `debug_f32` binary and updated
   direct DFT tests, benchmarks, and kernel regressions to use the canonical
   generic DFT functions.

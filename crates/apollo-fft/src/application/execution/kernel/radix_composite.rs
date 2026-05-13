@@ -1,4 +1,4 @@
-//! Mixed-radix Stockham autosort FFT for 2/3/5/7-smooth composite lengths.
+﻿//! Mixed-radix Stockham autosort FFT for 2/3/5/7-smooth composite lengths.
 //!
 //! ## Algorithm — out-of-place Stockham ping-pong
 //!
@@ -47,13 +47,20 @@
 //! - Glassman, A.J. (1970). A generalization of the Fast Fourier Transform.
 //!   *IEEE Trans. Comput.* C-19(2), 105–116. (Stockham autosort, mixed-radix.)
 
+
+#![allow(clippy::uninit_vec)]
 use num_complex::Complex;
+
 use rayon::prelude::*;
+
 use std::cell::RefCell;
+
 use std::sync::Arc;
 
 use super::radix_stage::normalize_inplace;
+
 use super::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
+
 use super::winograd::{
     apply_twiddle_impl, dft2_impl, dft3_impl, dft4_impl, dft5_impl, dft7_impl, dft8_impl,
     WinogradScalar,
@@ -96,22 +103,33 @@ fn build_composite_twiddles<F: WinogradScalar>(
         })
         .sum();
     let mut all_twiddles = Vec::with_capacity(total_twiddles);
+    // SAFETY: `Complex<F>` is plain numeric storage for the sealed f32/f64
+    // implementors of `WinogradScalar`; every slot is overwritten below.
+    unsafe { all_twiddles.set_len(total_twiddles) };
     let mut stage_offsets = Vec::with_capacity(radices.len());
+    // SAFETY: `usize` has no drop glue and every slot is overwritten below.
+    unsafe { stage_offsets.set_len(radices.len()) };
 
     let one = Complex::new(F::cast_f64(1.0), F::cast_f64(0.0));
     let mut prev_len = 1usize;
+    let mut tw_idx = 0;
+    let mut offset_idx = 0;
     for &r in radices {
         let stage_len = prev_len * r;
-        stage_offsets.push(all_twiddles.len());
+        unsafe { *stage_offsets.get_unchecked_mut(offset_idx) = tw_idx };
+        offset_idx += 1;
         let base_angle = sign * std::f64::consts::TAU / stage_len as f64;
         let w_base = Complex::new(F::cast_f64(base_angle.cos()), F::cast_f64(base_angle.sin()));
         let mut tw = one;
         for _ in 0..prev_len {
-            all_twiddles.push(tw);
+            unsafe { *all_twiddles.get_unchecked_mut(tw_idx) = tw };
+            tw_idx += 1;
             tw = apply_twiddle_impl(tw, w_base);
         }
         prev_len = stage_len;
     }
+    debug_assert_eq!(tw_idx, total_twiddles);
+    debug_assert_eq!(offset_idx, radices.len());
     (all_twiddles, stage_offsets)
 }
 
@@ -121,7 +139,13 @@ impl CompositeCache for f64 {
         TL_SCRATCH_64.with(|scratch| {
             let mut scratch = scratch.borrow_mut();
             if scratch.len() < n {
-                scratch.resize(n, Complex::default());
+                // The Stockham kernel writes every slot before reading it.
+                // Skipping zero-init matches the identical pattern in mixed_radix.rs.
+                let cur = scratch.len();
+                scratch.reserve(n.saturating_sub(cur));
+                // SAFETY: Complex<f64> is plain-data (no Drop); the kernel
+                // overwrites every element before reading.
+                unsafe { scratch.set_len(n) };
             }
             f(&mut scratch[..n])
         })
@@ -163,7 +187,12 @@ impl CompositeCache for f32 {
         TL_SCRATCH_32.with(|scratch| {
             let mut scratch = scratch.borrow_mut();
             if scratch.len() < n {
-                scratch.resize(n, Complex::default());
+                // Same rationale as f64: Stockham overwrites before reading.
+                let cur = scratch.len();
+                scratch.reserve(n.saturating_sub(cur));
+                // SAFETY: Complex<f32> is plain-data (no Drop); the kernel
+                // overwrites every element before reading.
+                unsafe { scratch.set_len(n) };
             }
             f(&mut scratch[..n])
         })
@@ -835,3 +864,4 @@ mod tests {
         assert!(err < 2e-3, "f32 forward N=1000 max_err={err:.2e}");
     }
 }
+

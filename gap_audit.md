@@ -44,6 +44,19 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXVI - FFT Workspace and Normalization Memory Efficiency [patch]
+- **Gap**: Several FFT hot paths still paid avoidable zero-fill or repeated
+  scalar normalization overhead in buffers that are fully overwritten before
+  read.
+- **Closed by**: Added shared f64/f32 normalization helpers with AVX runtime
+  dispatch, routed Stockham/Bluestein/mixed-radix inverse scale passes through
+  them, filled twiddle and composite twiddle vectors through exact pre-sized
+  cursors with debug invariants, skipped zero-fill for overwritten composite
+  scratch and six-step workspace buffers, and bumped `apollo-fft` to 0.9.1.
+- **Residual risk**: Runtime performance ratios need Criterion confirmation on
+  representative hardware; functional and static verification passed locally.
+- **Evidence**: `cargo check -p apollo-fft --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`; `cargo check --workspace`; stale-token scans for removed wrappers/deprecated/debug references; encoding scan for mojibake/BOM markers; `git diff --check`.
+
 ### Closure LXV - FFT Auto-Selector Wrapper Removal [major]
 - **Gap**: `apollo-fft` still exposed concrete f64/f32 public auto-selector
   wrappers even though `fft_forward`, `fft_inverse`, and `fft_inverse_unnorm`

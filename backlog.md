@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXVI phase)
+- [x] [patch] Reduce `apollo-fft` normalization and workspace memory overhead.
+  Inverse scale passes now share AVX-capable normalization helpers, twiddle
+  tables and composite twiddle tables fill exact pre-sized buffers, and
+  overwritten FFT workspace buffers avoid zero-fill allocation cost.
+  `apollo-fft` was bumped to 0.9.1.
+
 ## Closed in this sprint (Closure LXV phase)
 - [x] [major] Remove concrete public auto-selector FFT wrappers from
   `apollo-fft`. Internal plans, tests, and benchmarks now use the canonical

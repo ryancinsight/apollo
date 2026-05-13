@@ -19,6 +19,7 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::empty_line_after_doc_comments)]
 
+use super::radix_stage::{normalize_inplace_c32, normalize_inplace_c64};
 use num_complex::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]
@@ -3752,7 +3753,7 @@ impl StockhamPrecision for F64Stockham {
 
     #[inline]
     fn scale(data: &mut [Complex64], scale: f64) {
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c64(data, scale);
     }
 }
 
@@ -3830,7 +3831,7 @@ impl StockhamPrecision for F32Stockham {
 
     #[inline]
     fn scale(data: &mut [Complex32], scale: f32) {
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c32(data, scale);
     }
 }
 
@@ -4038,7 +4039,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
     }
 
     fn scale(data: &mut [Complex64], scale: f64) {
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c64(data, scale);
     }
 }
 
@@ -4251,7 +4252,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
     }
 
     fn scale(data: &mut [Complex32], scale: f32) {
-        data.iter_mut().for_each(|value| *value *= scale);
+        normalize_inplace_c32(data, scale);
     }
 }
 

@@ -1,4 +1,17 @@
 # Apollo Checklist
+## Closure LXVI - FFT Workspace and Normalization Memory Efficiency [patch]
+Sprint target version: apollo-fft 0.9.1
+
+- [x] Route f64/f32 inverse normalization through shared AVX-capable helpers.
+- [x] Fill twiddle tables and composite twiddle tables through exact pre-sized
+  cursors with invariant checks.
+- [x] Avoid zero-fill for overwritten composite and six-step workspace buffers.
+- [x] Bump `apollo-fft` to 0.9.1 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, stale-token scans, encoding scans, and
+  `git diff --check`.
+
 ## Closure LXV - FFT Auto-Selector Wrapper Removal [major]
 Sprint target version: apollo-fft 0.9.0
 

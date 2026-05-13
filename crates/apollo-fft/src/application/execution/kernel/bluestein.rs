@@ -13,7 +13,7 @@
 
 use super::mixed_radix;
 
-use super::radix_stage::normalize_inplace;
+use super::radix_stage::{normalize_inplace_c32, normalize_inplace_c64};
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rayon::prelude::*;
@@ -1319,7 +1319,7 @@ pub fn inverse_inplace_unnorm_64(data: &mut [Complex64]) {
 /// transformation and applying a $1/N$ scaling factor.
 pub fn inverse_inplace_64(data: &mut [Complex64]) {
     inverse_inplace_unnorm_64(data);
-    normalize_inplace(data, 1.0 / data.len() as f64);
+    normalize_inplace_c64(data, 1.0 / data.len() as f64);
 }
 
 /// In-place forward Bluestein chirp-Z transform for `Complex32`.
@@ -1361,7 +1361,7 @@ pub fn inverse_inplace_unnorm_32(data: &mut [Complex32]) {
 /// Sequentially computes the unnormalized inverse and scales by $1/N$.
 pub fn inverse_inplace_32(data: &mut [Complex32]) {
     inverse_inplace_unnorm_32(data);
-    normalize_inplace(data, 1.0f32 / data.len() as f32);
+    normalize_inplace_c32(data, 1.0f32 / data.len() as f32);
 }
 
 #[cfg(test)]
