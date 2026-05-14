@@ -1,4 +1,5 @@
 //! Stockham unit and differential tests.
+#![allow(unused_imports)]
 
 use super::*;
 use super::precision::{F64Stockham, F32Stockham, F64StockhamAvxFma, F32StockhamAvxFma, StockhamPrecision};

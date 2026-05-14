@@ -4,3 +4,4 @@ pub(crate) mod stage;
 
 pub(crate) use fixed::*;
 pub(crate) use stage::*;
+pub(crate) use hybrid::*;

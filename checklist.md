@@ -1,4 +1,13 @@
 # Apollo Checklist
+## Closure LXXX - Winograd Kernel Hierarchy Decomposition [minor]
+Sprint target version: apollo-fft 0.11.0
+
+- [x] Decomposed winograd.rs (1382 lines) into a deep hierarchical file tree: avx_f32, avx_f64, radix, composite, and traits to adhere to the 500-line SRP architectural rule.
+- [x] Abstracted unit tests into tests/dft_small.rs, tests/dft_large.rs, and tests/boundaries.rs modules.
+- [x] Resolved module boundary visibility (pub(crate)) and dead code analysis warnings.
+- [x] Validated numeric equivalence via 255/255 passing tests across all execution paths.
+- [x] Bump apollo-fft to 0.11.0.
+
 ## Closure LXXIX - Stockham Kernel Hierarchy Stabilization [patch]
 Sprint target version: apollo-fft 0.10.0
 

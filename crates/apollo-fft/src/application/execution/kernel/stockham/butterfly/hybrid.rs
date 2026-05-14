@@ -1,6 +1,7 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-#[cfg(all(test, target_arch = "x86_64"))] use super::fixed::{fixed_len512_32_avx_fma, fixed_len512_avx_fma}; use num_complex::Complex32; 
+#[cfg(all(test, target_arch = "x86_64"))] use super::fixed::{fixed_len512_32_avx_fma, fixed_len512_avx_fma}; use num_complex::{Complex32, Complex64};
+#[cfg(all(test, target_arch = "x86_64"))] use crate::application::execution::kernel::stockham::avx::{stage_triple32_radix1_avx_fma, stage_triple64_radix1_avx_fma};
 
 #[allow(dead_code)] type PackedF32x4 = [Complex32; 4];
 
