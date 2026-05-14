@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Closure LXXXI - Mixed Radix Kernel Hierarchy Decomposition [minor]
+Sprint target version: apollo-fft 0.11.0
+
+- [x] Decomposed mixed_radix.rs (901 lines) into a deep hierarchical file tree: dispatch_f64, dispatch_f32, dispatch_f16, traits, and caches.
+- [x] Extracted unit tests into a dedicated tests.rs module.
+- [x] Maintained generic SSOT dispatch implementations and fixed pub(crate) module boundaries.
+- [x] Zero-warning compilation and 255/255 passing tests.
+
 ## Closure LXXX - Winograd Kernel Hierarchy Decomposition [minor]
 Sprint target version: apollo-fft 0.11.0
 
