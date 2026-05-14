@@ -1,4 +1,15 @@
 # Apollo Checklist
+## Closure LXXVIII - Bluestein Monomorphization + Module Decomposition [minor]
+Sprint target version: apollo-fft 0.10.0
+
+- [x] Created `BluesteinScalar` sealed trait in `bluestein/scalar.rs` with associated AVX/FMA dispatch.
+- [x] Implemented `BluesteinScalar` for `Complex64` and `Complex32`.
+- [x] Replaced 8 `_64`/`_32`-suffixed function pairs with generic implementations in `bluestein/pointwise.rs`.
+- [x] Decomposed `bluestein.rs` (1539 lines) into 6-module directory: all files <= 500 lines.
+- [x] Zero-warning `cargo check -p apollo-fft`.
+- [x] 177/177 tests pass under `--release`.
+- [x] Bump `apollo-fft` to 0.10.0.
+
 ## Closure LXXVII - Iterator Monomorphization & Twiddle Allocation Bounds [patch]
 Sprint target version: apollo-fft 0.9.12
 

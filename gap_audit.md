@@ -1574,6 +1574,11 @@ Open gaps are listed at the top of this audit. Future increments should:
 
 ### Closed in this sprint (Performance & Native GPU Precision phase)
 
+#### Closure LXXVIII (Bluestein Monomorphization + Module Decomposition)
+- Introduced `BluesteinScalar` sealed trait; replaced 8 pairs of `_64`/`_32`-suffixed helpers with single generic implementations.
+- Decomposed flat `bluestein.rs` (1539 lines) into 6-file directory module; all files <= 500 lines.
+- 177/177 regression tests pass; zero warnings.
+
 #### Closure LXXVII (Iterator Monomorphization & Twiddle Allocation Bounds)
 - Replaced `.collect()` iteration paths in `radix2.rs` twiddle table building with exact-size `Vec::with_capacity` and `set_len()` loops to guarantee flat O(1) allocation overhead during compilation and plan execution.
 - Validated CPU numerical baseline across all bounds.
