@@ -1,5 +1,5 @@
 //! Thread-local and global twiddle/composite-radix caches for the mixed-radix dispatch.
-use super::super::{radix_shape::factorize_composite, real_fft};
+use super::super::radix_shape::factorize_composite;
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
 use std::cell::RefCell;
@@ -213,7 +213,7 @@ pub(crate) fn cached_twiddle_fwd_64(n: usize) -> Arc<[Complex64]> {
         &TL_FWD_64,
         &TWIDDLE_FWD_64_CACHE,
         n,
-        real_fft::build_forward_twiddle_table_64,
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table,
     )
 }
 
@@ -223,7 +223,7 @@ pub(crate) fn cached_twiddle_inv_64(n: usize) -> Arc<[Complex64]> {
         &TL_INV_64,
         &TWIDDLE_INV_64_CACHE,
         n,
-        real_fft::build_inverse_twiddle_table_64,
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table,
     )
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn cached_twiddle_fwd_32(n: usize) -> Arc<[Complex32]> {
         &TL_FWD_32,
         &TWIDDLE_FWD_32_CACHE,
         n,
-        real_fft::build_forward_twiddle_table_32,
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table,
     )
 }
 
@@ -243,7 +243,7 @@ pub(crate) fn cached_twiddle_inv_32(n: usize) -> Arc<[Complex32]> {
         &TL_INV_32,
         &TWIDDLE_INV_32_CACHE,
         n,
-        real_fft::build_inverse_twiddle_table_32,
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table,
     )
 }
 

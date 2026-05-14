@@ -34,7 +34,7 @@
 //! ## DRY invariant
 //!
 //! `build_twiddle_table<C>` is the single authoritative implementation.
-//! All typed wrappers (`build_forward_twiddle_table_64`, etc.) are one-line
+//! All typed wrappers (`<f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table`, etc.) are one-line
 //! delegations. Adding a new precision target requires only a new
 //! `impl TwiddleOutput for <new type>` plus a one-line wrapper.
 //!

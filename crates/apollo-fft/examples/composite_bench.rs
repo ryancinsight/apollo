@@ -23,7 +23,7 @@ fn time_fft<F: Fn(&mut Vec<Complex64>)>(n: usize, f: F, iters: usize) -> Duratio
 }
 
 fn main() {
-    use apollo_fft::application::execution::kernel::mixed_radix;
+    use apollo_fft::application::execution::kernel::fft_forward;
 
     // Test various 5-smooth and non-5-smooth sizes
     for &n in &[
@@ -37,11 +37,7 @@ fn main() {
             500
         };
 
-        let composite_time = time_fft(
-            n,
-            |buf| mixed_radix::forward_inplace_64_with_twiddles(buf, None),
-            iters,
-        );
+        let composite_time = time_fft(n, |buf| fft_forward(buf), iters);
         println!(
             "N={n:6}: composite={:>8.2}µs",
             composite_time.as_secs_f64() * 1e6,

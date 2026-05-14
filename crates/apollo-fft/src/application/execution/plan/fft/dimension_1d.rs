@@ -2,11 +2,9 @@
 
 use crate::application::execution::kernel::mixed_radix::{
     cached_twiddle_fwd_32, cached_twiddle_fwd_64, cached_twiddle_inv_32, cached_twiddle_inv_64,
-    forward_inplace_64_with_twiddles, inverse_inplace_64_with_twiddles, with_stockham_scratch_64,
+    dispatch_inplace, with_stockham_scratch_64,
 };
-use crate::application::execution::kernel::real_fft::{
-    build_real_fwd_post_twiddles_64, forward_real_inplace_64, inverse_real_inplace_64,
-};
+use crate::application::execution::kernel::real_fft::RealFft;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::execution::plan::fft::workspace::uninit_copy_vec;
 use crate::domain::metadata::precision::PrecisionProfile;
@@ -147,7 +145,7 @@ impl FftPlan1D {
             twiddle_fwd_32,
             twiddle_inv_32,
             real_fwd_post_twiddles: if shape.n >= 4 && shape.n.is_power_of_two() {
-                Some(build_real_fwd_post_twiddles_64(shape.n))
+                Some(<f64 as RealFft>::build_real_fwd_post_twiddles(shape.n))
             } else {
                 None
             },
@@ -215,7 +213,7 @@ impl FftPlan1D {
             let input_slice = input.as_slice().expect("input must be contiguous");
             let mut output = Array1::<Complex64>::from_shape_vec(self.n, uninit_copy_vec(self.n))
                 .expect("uninit Complex64 1D buffer length must match plan n");
-            forward_real_inplace_64(
+            <f64 as RealFft>::forward_real_inplace(
                 input_slice,
                 output.as_slice_mut().expect("output must be contiguous"),
                 fft_tw.as_ref(),
@@ -253,7 +251,7 @@ impl FftPlan1D {
         assert_eq!(output.len(), self.n, "forward output length mismatch");
         if let (Some(fft_tw), Some(post_tw)) = (&self.twiddle_fwd_64, &self.real_fwd_post_twiddles)
         {
-            forward_real_inplace_64(input, output, fft_tw.as_ref(), post_tw);
+            <f64 as RealFft>::forward_real_inplace(input, output, fft_tw.as_ref(), post_tw);
         } else {
             for (out, &value) in output.iter_mut().zip(input.iter()) {
                 *out = Complex64::new(value, 0.0);
@@ -290,7 +288,7 @@ impl FftPlan1D {
             let output_slice = output.as_slice_mut().expect("output must be contiguous");
             let scratch_slice = scratch.as_slice_mut().expect("scratch must be contiguous");
             let m = self.n >> 1;
-            inverse_real_inplace_64(
+            <f64 as RealFft>::inverse_real_inplace(
                 input_slice,
                 output_slice,
                 &mut scratch_slice[..m],
@@ -324,7 +322,7 @@ impl FftPlan1D {
             let output_slice = output.as_slice_mut().expect("output must be contiguous");
             let m = self.n >> 1;
             with_stockham_scratch_64(m, |scratch| {
-                inverse_real_inplace_64(
+                <f64 as RealFft>::inverse_real_inplace(
                     input_slice,
                     output_slice,
                     scratch,
@@ -347,7 +345,7 @@ impl FftPlan1D {
     pub fn forward_complex_slice_inplace(&self, data: &mut [Complex64]) {
         assert_eq!(data.len(), self.n, "complex forward length mismatch");
         if let Some(twiddles) = &self.twiddle_fwd_64 {
-            forward_inplace_64_with_twiddles(data, Some(twiddles.as_ref()));
+            dispatch_inplace::<f64, false, false>(data, Some(twiddles.as_ref()));
         } else {
             crate::application::execution::kernel::mixed_radix::forward_inplace::<f64>(data);
         }
@@ -357,7 +355,7 @@ impl FftPlan1D {
     pub fn inverse_complex_slice_inplace(&self, data: &mut [Complex64]) {
         assert_eq!(data.len(), self.n, "complex inverse length mismatch");
         if let Some(twiddles) = &self.twiddle_inv_64 {
-            inverse_inplace_64_with_twiddles(data, Some(twiddles.as_ref()));
+            dispatch_inplace::<f64, true, true>(data, Some(twiddles.as_ref()));
         } else {
             crate::application::execution::kernel::mixed_radix::inverse_inplace::<f64>(data);
         }

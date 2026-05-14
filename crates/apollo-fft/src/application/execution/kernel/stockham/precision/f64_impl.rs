@@ -1,6 +1,9 @@
 use super::super::avx::{
-    f64, stage64_avx_fma, stage64_groups_one_avx_fma, stage_pair64_avx_fma,
-    stage_pair64_groups_two_avx_fma, stage_pair64_radix1_avx_fma,
+    generic::{
+        base::stage_avx_fma,
+        pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
+    },
+    stage64_groups_one_avx_fma, stage_pair64_groups_two_avx_fma,
     stage_triple64_groups_eight_avx_fma, stage_triple64_low_live_avx_fma,
     stage_triple64_quarter_groups_one_avx_fma, stage_triple64_radix1_avx_fma,
     stage_triple64_throughput_avx_fma, stockham_quad_groups_eight64_low_live,
@@ -151,7 +154,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
         if groups == 1 && radix >= 2 {
             unsafe { stage64_groups_one_avx_fma(src, dst, radix, twiddles) };
         } else if groups >= 2 {
-            unsafe { stage64_avx_fma(src, dst, radix, twiddles) };
+            unsafe { stage_avx_fma::<f64>(src, dst, radix, twiddles) };
         } else {
             stage_impl(src, dst, radix, twiddles);
         }
@@ -168,7 +171,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
         let groups = src.len() / (radix << 1);
         if radix == 1 {
             if src.len() >= 8 {
-                unsafe { stage_pair64_radix1_avx_fma(src, dst, second_twiddles) };
+                unsafe { stage_pair_radix1_avx_fma::<f64>(src, dst, second_twiddles) };
             } else {
                 stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
             }
@@ -177,7 +180,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
                 stage_pair64_groups_two_avx_fma(src, dst, radix, first_twiddles, second_twiddles)
             };
         } else if groups >= 4 {
-            unsafe { stage_pair64_avx_fma(src, dst, radix, first_twiddles, second_twiddles) };
+            unsafe { stage_pair_avx_fma::<f64>(src, dst, radix, first_twiddles, second_twiddles) };
         } else {
             stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
         }

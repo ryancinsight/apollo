@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXXIII phase)
+- [x] [major] Remove concrete mixed-radix twiddle wrapper entry points and
+  route all internal plan-owned twiddle reuse through the canonical
+  const-generic dispatch body. Dead Winograd AVX wrapper leaves were removed,
+  radix-15 leaves now use the stack-only generic Good-Thomas Winograd codelet,
+  broad Stockham AVX stage/pair leaves now share one monomorphized backend,
+  the unreachable legacy CPU SIMD six-step, matrix-workspace, and radix2
+  infrastructure island was deleted, `dispatch_inplace` remains crate-private,
+  and `apollo-fft` was bumped to 0.12.0.
+
 ## Closed in this sprint (Closure LXXXII phase)
 - [x] [patch] Reduce `apollo-fft` Stockham butterfly leaf size and dispatch
   coupling. The f64 AVX scratch routing logic now lives in a separate

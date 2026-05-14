@@ -8,6 +8,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Breaking
+- [major] `apollo-fft`: removed public type-suffixed mixed-radix twiddle
+  wrapper entry points (`forward_inplace_64_with_twiddles`,
+  `inverse_inplace_64_with_twiddles`,
+  `inverse_inplace_unnorm_64_with_twiddles`,
+  `forward_inplace_32_with_twiddles`,
+  `inverse_inplace_32_with_twiddles`, and
+  `inverse_inplace_unnorm_32_with_twiddles`). Internal plan code now calls the
+  canonical const-generic `dispatch_inplace::<T, INVERSE, NORMALIZE>` body
+  directly.
 - [major] `apollo-fft`: removed concrete public auto-selector wrappers
   `fft_forward_64`, `fft_inverse_64`, `fft_inverse_unnorm_64`,
   `fft_forward_32`, `fft_inverse_32`, and `fft_inverse_unnorm_32`.
@@ -23,6 +32,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `dft_forward_64`, `dft_inverse_64`, `dft_forward_32`, `dft_inverse_32`,
   `forward_owned_64`, and `inverse_owned_64`. Callers must use the canonical
   generic `dft_forward` and `dft_inverse` functions.
+
+### Changed
+- [minor] `apollo-fft`: removed dead Winograd AVX wrapper leaves and routed all
+  remaining plan-owned twiddle reuse through the canonical mixed-radix
+  const-generic dispatch body. `apollo-fft` was bumped to 0.12.0 for the
+  pre-1.0 public wrapper removal.
+- [minor] `apollo-fft`: removed the unreachable legacy CPU SIMD six-step,
+  matrix-workspace, and power-of-two radix2 infrastructure island that was no
+  longer part of the crate module graph.
+- [minor] `apollo-fft`: route radix-15 mixed-radix leaves through a stack-only
+  generic Good-Thomas Winograd codelet with no inter-stage twiddle table.
+- [minor] `apollo-fft`: consolidate broad Stockham AVX stage and pair leaves
+  behind one monomorphized backend trait while retaining shape-specific AVX
+  codelets for specialized schedules.
 
 ### Fixed
 - [patch] `apollo-fft`: split Stockham f64 AVX scratch dispatch out of the

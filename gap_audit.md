@@ -44,6 +44,25 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXXIII - Mixed-Radix Wrapper Removal [major]
+- **Gap**: Public type-suffixed mixed-radix twiddle wrapper entry points
+  remained after the canonical const-generic dispatch body became the single
+  implementation. Dead Winograd AVX wrapper leaves also remained as exported
+  internal modules.
+- **Closed by**: Removed the concrete wrapper entry points, updated 1D/2D/3D
+  plans and real FFT split routines to call
+  `dispatch_inplace::<T, INVERSE, NORMALIZE>` directly, kept the dispatch body
+  crate-private, routed radix-15 leaves through the stack-only generic
+  Good-Thomas Winograd codelet, consolidated broad Stockham AVX stage/pair
+  leaves behind one monomorphized backend trait, removed the dead Winograd AVX
+  leaves, and deleted the unreachable CPU SIMD six-step, matrix-workspace, and
+  radix2 infrastructure island that was not part of the crate module graph.
+- **Residual risk**: none for this closure.
+- **Evidence**: `cargo check -p apollo-fft`,
+  `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, stale-wrapper scan, and deleted AVX module scan.
+
 ### Closure LXXXII - Stockham Butterfly Dispatch Leaf Split [patch]
 - **Gap**: `stockham/butterfly/fixed.rs` remained over the repository
   500-line structural limit and mixed generated fixed codelets with f64 AVX

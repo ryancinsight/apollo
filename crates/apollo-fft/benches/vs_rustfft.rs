@@ -7,7 +7,6 @@
 
 #![allow(missing_docs)]
 
-use apollo_fft::application::execution::kernel::mixed_radix;
 use apollo_fft::application::execution::kernel::FftPrecision;
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
@@ -111,14 +110,6 @@ fn bench_f64(c: &mut Criterion) {
         if len.is_power_of_two() {
             let mut apollo_data = input.clone();
             Complex64::fft_forward(&mut apollo_data);
-            let apollo_twiddles_f64 =
-                apollo_fft::application::execution::kernel::real_fft::build_forward_twiddle_table_64(
-                    len,
-                );
-            let apollo_inverse_twiddles_f64 =
-                apollo_fft::application::execution::kernel::real_fft::build_inverse_twiddle_table_64(
-                    len,
-                );
             apollo_data.copy_from_slice(&input);
             group.bench_function(BenchmarkId::new("apollo_reused_buffer_latency", len), |b| {
                 b.iter(|| {
@@ -162,32 +153,6 @@ fn bench_f64(c: &mut Criterion) {
                 });
             });
 
-            group.bench_function(
-                BenchmarkId::new("apollo_with_twiddles_zero_alloc_reused", len),
-                |b| {
-                    b.iter_custom(|iters| {
-                        apollo_data.copy_from_slice(&input);
-                        mixed_radix::forward_inplace_64_with_twiddles(
-                            black_box(&mut apollo_data),
-                            Some(&apollo_twiddles_f64),
-                        );
-                        let elapsed = measure_zero_alloc(iters, || {
-                            apollo_data.copy_from_slice(&input);
-                            mixed_radix::forward_inplace_64_with_twiddles(
-                                black_box(&mut apollo_data),
-                                Some(&apollo_twiddles_f64),
-                            );
-                        });
-                        assert_eq!(
-                            allocation_count(),
-                            0,
-                            "Apollo precomputed-twiddle f64 allocated in hot loop"
-                        );
-                        elapsed
-                    });
-                },
-            );
-
             group.bench_function(BenchmarkId::new("rustfft_zero_alloc_reused", len), |b| {
                 b.iter_custom(|iters| {
                     let elapsed = measure_zero_alloc(iters, || {
@@ -217,21 +182,15 @@ fn bench_f64(c: &mut Criterion) {
                 |b| {
                     b.iter_custom(|iters| {
                         apollo_data.copy_from_slice(&input);
-                        mixed_radix::inverse_inplace_unnorm_64_with_twiddles(
-                            black_box(&mut apollo_data),
-                            Some(&apollo_inverse_twiddles_f64),
-                        );
+                        Complex64::fft_inverse_unnorm(black_box(&mut apollo_data));
                         let elapsed = measure_zero_alloc(iters, || {
                             apollo_data.copy_from_slice(&input);
-                            mixed_radix::inverse_inplace_unnorm_64_with_twiddles(
-                                black_box(&mut apollo_data),
-                                Some(&apollo_inverse_twiddles_f64),
-                            );
+                            Complex64::fft_inverse_unnorm(black_box(&mut apollo_data));
                         });
                         assert_eq!(
                             allocation_count(),
                             0,
-                            "Apollo precomputed-twiddle inverse f64 allocated in hot loop"
+                            "Apollo generic inverse f64 allocated in hot loop"
                         );
                         elapsed
                     });
@@ -310,14 +269,6 @@ fn bench_f32(c: &mut Criterion) {
         if len.is_power_of_two() {
             let mut apollo_data = input.clone();
             Complex32::fft_forward(&mut apollo_data);
-            let apollo_twiddles_f32 =
-                apollo_fft::application::execution::kernel::real_fft::build_forward_twiddle_table_32(
-                    len,
-                );
-            let apollo_inverse_twiddles_f32 =
-                apollo_fft::application::execution::kernel::real_fft::build_inverse_twiddle_table_32(
-                    len,
-                );
             apollo_data.copy_from_slice(&input);
             group.bench_function(BenchmarkId::new("apollo_reused_buffer_latency", len), |b| {
                 b.iter(|| {
@@ -361,32 +312,6 @@ fn bench_f32(c: &mut Criterion) {
                 });
             });
 
-            group.bench_function(
-                BenchmarkId::new("apollo_with_twiddles_zero_alloc_reused", len),
-                |b| {
-                    b.iter_custom(|iters| {
-                        apollo_data.copy_from_slice(&input);
-                        mixed_radix::forward_inplace_32_with_twiddles(
-                            black_box(&mut apollo_data),
-                            Some(&apollo_twiddles_f32),
-                        );
-                        let elapsed = measure_zero_alloc(iters, || {
-                            apollo_data.copy_from_slice(&input);
-                            mixed_radix::forward_inplace_32_with_twiddles(
-                                black_box(&mut apollo_data),
-                                Some(&apollo_twiddles_f32),
-                            );
-                        });
-                        assert_eq!(
-                            allocation_count(),
-                            0,
-                            "Apollo precomputed-twiddle f32 allocated in hot loop"
-                        );
-                        elapsed
-                    });
-                },
-            );
-
             group.bench_function(BenchmarkId::new("rustfft_zero_alloc_reused", len), |b| {
                 b.iter_custom(|iters| {
                     let elapsed = measure_zero_alloc(iters, || {
@@ -416,21 +341,15 @@ fn bench_f32(c: &mut Criterion) {
                 |b| {
                     b.iter_custom(|iters| {
                         apollo_data.copy_from_slice(&input);
-                        mixed_radix::inverse_inplace_unnorm_32_with_twiddles(
-                            black_box(&mut apollo_data),
-                            Some(&apollo_inverse_twiddles_f32),
-                        );
+                        Complex32::fft_inverse_unnorm(black_box(&mut apollo_data));
                         let elapsed = measure_zero_alloc(iters, || {
                             apollo_data.copy_from_slice(&input);
-                            mixed_radix::inverse_inplace_unnorm_32_with_twiddles(
-                                black_box(&mut apollo_data),
-                                Some(&apollo_inverse_twiddles_f32),
-                            );
+                            Complex32::fft_inverse_unnorm(black_box(&mut apollo_data));
                         });
                         assert_eq!(
                             allocation_count(),
                             0,
-                            "Apollo precomputed-twiddle inverse f32 allocated in hot loop"
+                            "Apollo generic inverse f32 allocated in hot loop"
                         );
                         elapsed
                     });

@@ -41,5 +41,4 @@ pub(crate) mod traits;
 
 pub(crate) use caches::*;
 pub(crate) use dispatch::*;
-pub use dispatch::*;
 pub(crate) use scalar::MixedRadixScalar;

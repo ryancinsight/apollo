@@ -30,8 +30,7 @@
 
 use crate::application::execution::kernel::mixed_radix::{
     cached_twiddle_fwd_32, cached_twiddle_fwd_64, cached_twiddle_inv_32, cached_twiddle_inv_64,
-    forward_inplace_32_with_twiddles, forward_inplace_64_with_twiddles,
-    inverse_inplace_32_with_twiddles, inverse_inplace_64_with_twiddles,
+    dispatch_inplace,
 };
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
 use crate::application::execution::plan::fft::real_storage::RealFftData;
@@ -119,7 +118,7 @@ impl Plan2dReal32 for f16 {
 /// For power-of-two axis lengths, the plan precomputes contiguous per-stage
 /// twiddle tables at construction time (total N-1 entries per axis, per
 /// direction). All row and column butterfly passes use these tables via
-/// `forward_inplace_64_with_twiddles` / `inverse_inplace_64_with_twiddles`,
+/// `dispatch_inplace::<f64, false, false>` / `dispatch_inplace::<f64, true, true>`,
 /// reading twiddles sequentially with no stride. This eliminates:
 /// 1. The per-lane twiddle-table `Vec` allocation that the naïve kernel
 ///    performs on every generic `fft_forward` call (O(ny) alloc × nx rows).
@@ -515,8 +514,8 @@ impl FftPlan2D {
             &self.twiddle_row_fwd_64,
             &self.twiddle_row_inv_64,
         ) {
-            (true, Some(tw), _) => forward_inplace_64_with_twiddles(lane, Some(tw.as_ref())),
-            (false, _, Some(tw)) => inverse_inplace_64_with_twiddles(lane, Some(tw.as_ref())),
+            (true, Some(tw), _) => dispatch_inplace::<f64, false, false>(lane, Some(tw.as_ref())),
+            (false, _, Some(tw)) => dispatch_inplace::<f64, true, true>(lane, Some(tw.as_ref())),
             _ => {
                 if forward {
                     fft_forward(lane)
@@ -559,8 +558,8 @@ impl FftPlan2D {
             &self.twiddle_col_fwd_64,
             &self.twiddle_col_inv_64,
         ) {
-            (true, Some(tw), _) => forward_inplace_64_with_twiddles(lane, Some(tw.as_ref())),
-            (false, _, Some(tw)) => inverse_inplace_64_with_twiddles(lane, Some(tw.as_ref())),
+            (true, Some(tw), _) => dispatch_inplace::<f64, false, false>(lane, Some(tw.as_ref())),
+            (false, _, Some(tw)) => dispatch_inplace::<f64, true, true>(lane, Some(tw.as_ref())),
             _ => {
                 if forward {
                     fft_forward(lane)
@@ -620,8 +619,8 @@ impl FftPlan2D {
             &self.twiddle_row_fwd_32,
             &self.twiddle_row_inv_32,
         ) {
-            (true, Some(tw), _) => forward_inplace_32_with_twiddles(lane, Some(tw.as_ref())),
-            (false, _, Some(tw)) => inverse_inplace_32_with_twiddles(lane, Some(tw.as_ref())),
+            (true, Some(tw), _) => dispatch_inplace::<f32, false, false>(lane, Some(tw.as_ref())),
+            (false, _, Some(tw)) => dispatch_inplace::<f32, true, true>(lane, Some(tw.as_ref())),
             _ => {
                 if forward {
                     fft_forward(lane)
@@ -661,8 +660,8 @@ impl FftPlan2D {
             &self.twiddle_col_fwd_32,
             &self.twiddle_col_inv_32,
         ) {
-            (true, Some(tw), _) => forward_inplace_32_with_twiddles(lane, Some(tw.as_ref())),
-            (false, _, Some(tw)) => inverse_inplace_32_with_twiddles(lane, Some(tw.as_ref())),
+            (true, Some(tw), _) => dispatch_inplace::<f32, false, false>(lane, Some(tw.as_ref())),
+            (false, _, Some(tw)) => dispatch_inplace::<f32, true, true>(lane, Some(tw.as_ref())),
             _ => {
                 if forward {
                     fft_forward(lane)

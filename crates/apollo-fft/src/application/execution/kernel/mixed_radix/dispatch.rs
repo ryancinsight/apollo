@@ -10,11 +10,8 @@
 //! | Function                         | INVERSE | NORMALIZE |
 //! |----------------------------------|---------|-----------|
 //! | `forward_inplace`                | false   | false     |
-//! | `forward_inplace_with_twiddles`  | false   | false     |
 //! | `inverse_inplace_unnorm`         | true    | false     |
-//! | `inverse_inplace_unnorm_with_twiddles` | true | false  |
 //! | `inverse_inplace`                | true    | true      |
-//! | `inverse_inplace_with_twiddles`  | true    | true      |
 
 use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
 use super::super::radix_stage::normalize_inplace_c32;
@@ -31,7 +28,7 @@ use super::traits::{forward_short_winograd, inverse_short_winograd};
 /// `INVERSE` selects twiddle table direction and algorithm variant.
 /// `NORMALIZE` gates the 1/N scale pass, eliminated at compile time when false.
 #[inline]
-fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const NORMALIZE: bool>(
+pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [F::Complex],
     twiddles: Option<&[F::Complex]>,
 ) {
@@ -213,62 +210,4 @@ fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMA
             }
         });
     }
-}
-
-// ── Backward-compatible concrete aliases ──────────────────────────────────────
-//
-// These thin wrappers preserve old concrete call sites in:
-//   - bluestein/plan.rs   (`*_with_twiddles` variants)
-//   - radix2.rs           (`*_with_twiddles` variants)
-//   - dimension_1d/precision.rs (`forward_inplace_32_with_twiddles` etc.)
-//
-// Zero overhead: monomorphized identically to direct `dispatch_inplace::<f64/f32, ..>`.
-
-/// In-place forward FFT (f64, unnormalized) with optional pre-computed twiddles.
-#[inline]
-pub fn forward_inplace_64_with_twiddles(
-    data: &mut [num_complex::Complex64],
-    twiddles: Option<&[num_complex::Complex64]>,
-) {
-    dispatch_inplace::<f64, false, false>(data, twiddles);
-}
-/// In-place inverse FFT (f64, normalized 1/N) with optional pre-computed twiddles.
-#[inline]
-pub fn inverse_inplace_64_with_twiddles(
-    data: &mut [num_complex::Complex64],
-    twiddles: Option<&[num_complex::Complex64]>,
-) {
-    dispatch_inplace::<f64, true, true>(data, twiddles);
-}
-/// In-place inverse FFT (f64, unnormalized) with optional pre-computed twiddles.
-#[inline]
-pub fn inverse_inplace_unnorm_64_with_twiddles(
-    data: &mut [num_complex::Complex64],
-    twiddles: Option<&[num_complex::Complex64]>,
-) {
-    dispatch_inplace::<f64, true, false>(data, twiddles);
-}
-/// In-place forward FFT (f32, unnormalized) with optional pre-computed twiddles.
-#[inline]
-pub fn forward_inplace_32_with_twiddles(
-    data: &mut [num_complex::Complex32],
-    twiddles: Option<&[num_complex::Complex32]>,
-) {
-    dispatch_inplace::<f32, false, false>(data, twiddles);
-}
-/// In-place inverse FFT (f32, normalized 1/N) with optional pre-computed twiddles.
-#[inline]
-pub fn inverse_inplace_32_with_twiddles(
-    data: &mut [num_complex::Complex32],
-    twiddles: Option<&[num_complex::Complex32]>,
-) {
-    dispatch_inplace::<f32, true, true>(data, twiddles);
-}
-/// In-place inverse FFT (f32, unnormalized) with optional pre-computed twiddles.
-#[inline]
-pub fn inverse_inplace_unnorm_32_with_twiddles(
-    data: &mut [num_complex::Complex32],
-    twiddles: Option<&[num_complex::Complex32]>,
-) {
-    dispatch_inplace::<f32, true, false>(data, twiddles);
 }

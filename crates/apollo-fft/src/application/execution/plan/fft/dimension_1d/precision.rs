@@ -1,9 +1,7 @@
 //! Precision-specific 1D FFT plan methods.
 
 use super::FftPlan1D;
-use crate::application::execution::kernel::mixed_radix::{
-    forward_inplace_32_with_twiddles, inverse_inplace_32_with_twiddles,
-};
+use crate::application::execution::kernel::mixed_radix::dispatch_inplace;
 use crate::application::execution::kernel::{fft_forward, fft_inverse};
 use crate::application::execution::plan::fft::workspace::uninit_copy_vec;
 use crate::domain::metadata::precision::PrecisionProfile;
@@ -123,7 +121,7 @@ impl FftPlan1D {
             });
         let slice = output.as_slice_mut().expect("Array must be contiguous");
         if let Some(twiddles) = &self.twiddle_fwd_32 {
-            forward_inplace_32_with_twiddles(slice, Some(twiddles.as_ref()));
+            dispatch_inplace::<f32, false, false>(slice, Some(twiddles.as_ref()));
         } else {
             fft_forward(slice);
         }
@@ -134,7 +132,7 @@ impl FftPlan1D {
         let mut output = input.clone();
         let slice = output.as_slice_mut().expect("Array must be contiguous");
         if let Some(twiddles) = &self.twiddle_inv_32 {
-            inverse_inplace_32_with_twiddles(slice, Some(twiddles.as_ref()));
+            dispatch_inplace::<f32, true, true>(slice, Some(twiddles.as_ref()));
         } else {
             fft_inverse(slice);
         }

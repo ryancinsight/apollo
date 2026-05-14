@@ -140,6 +140,63 @@ pub(crate) fn dft3_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
     data[2] = m0 - m1;
 }
 
+/// In-place Good-Thomas DFT-15.
+///
+/// ## Mathematical derivation
+///
+/// N=15 = N1×N2 = 3×5, gcd(3,5)=1. Good-Thomas PFA requires no inter-stage
+/// twiddle factors because N1 and N2 are coprime (unlike Cooley-Tukey).
+///
+/// **Input CRT mapping**: grid[i1·5+i2] = data[(5·i1 + 3·i2) mod 15]
+/// for i1 ∈ 0..3, i2 ∈ 0..5.
+///
+/// **Apply DFT-5** on each of the 3 rows (i1=0,1,2).
+///
+/// **Transpose** 3×5 → 5×3.
+///
+/// **Apply DFT-3** on each of the 5 columns (now contiguous).
+///
+/// **Output CRT mapping**:
+/// inv(5 mod 3)=2, inv(3 mod 5)=2.
+/// k_idx = (10·k1 + 6·k2) mod 15; data[k_idx] = result[k2·3+k1].
+///
+/// **Real multiplications**: 3×8 + 5×4 = 44 real muls.
+/// All storage is on-stack; zero heap allocation.
+///
+/// References: Good (1958), Thomas (1963), Burrus & Parks (1985) §3.
+#[inline]
+pub(crate) fn dft15_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
+    debug_assert!(data.len() >= 15);
+    // Input CRT permutation: n_idx = (5·i1 + 3·i2) mod 15.
+    let mut grid: [num_complex::Complex<F>; 15] = core::array::from_fn(|idx| {
+        let i1 = idx / 5;
+        let i2 = idx % 5;
+        data[(5 * i1 + 3 * i2) % 15]
+    });
+    // 3 rows of DFT-5 (no twiddles needed — coprime factors).
+    dft5_impl(&mut grid[0..5], inverse);
+    dft5_impl(&mut grid[5..10], inverse);
+    dft5_impl(&mut grid[10..15], inverse);
+    // Transpose 3×5 → 5×3 into a second stack buffer.
+    let mut grid2: [num_complex::Complex<F>; 15] = core::array::from_fn(|idx| {
+        let i2 = idx / 3;
+        let i1 = idx % 3;
+        grid[i1 * 5 + i2]
+    });
+    // 5 columns of DFT-3 (now contiguous rows after transpose).
+    dft3_impl(&mut grid2[0..3], inverse);
+    dft3_impl(&mut grid2[3..6], inverse);
+    dft3_impl(&mut grid2[6..9], inverse);
+    dft3_impl(&mut grid2[9..12], inverse);
+    dft3_impl(&mut grid2[12..15], inverse);
+    // Output CRT permutation: k_idx = (10·k1 + 6·k2) mod 15.
+    for k1 in 0..3_usize {
+        for k2 in 0..5_usize {
+            data[(10 * k1 + 6 * k2) % 15] = grid2[k2 * 3 + k1];
+        }
+    }
+}
+
 /// In-place DFT-5.
 ///
 /// ## Mathematical derivation

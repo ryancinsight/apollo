@@ -29,7 +29,7 @@ fn f32_avx_groups_eight_quad_stage_matches_scalar_reference() {
         .map(|k| Complex32::new((k as f32 * 0.013).sin(), (k as f32 * 0.019).cos()))
         .collect();
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_32(n);
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let base = radix - 1;
     let first = &twiddles[base..base + radix];
     let second = &twiddles[base + radix..base + 3 * radix];
@@ -85,7 +85,7 @@ fn stockham_scheduler_uses_copyback_instead_of_stride1_prepass() {
 #[test]
 fn butterfly512_f32_packed_twiddles_match_separated_column_contract() {
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_32(512);
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(512);
     let packed = build_butterfly512_twiddles_32(&twiddles);
 
     assert_eq!(packed.len(), 120);
@@ -110,7 +110,7 @@ fn butterfly512_f32_packed_twiddles_match_separated_column_contract() {
 #[test]
 fn butterfly512_f64_packed_twiddles_match_separated_column_contract() {
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_64(512);
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(512);
     let packed = build_butterfly512_twiddles_64(&twiddles);
 
     assert_eq!(packed.len(), 240);
@@ -173,7 +173,7 @@ fn f64_avx_groups_eight_triple_stage_matches_scalar_reference() {
         .map(|k| Complex64::new((k as f64 * 0.013).sin(), (k as f64 * 0.019).cos()))
         .collect();
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_64(n);
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let base = radix - 1;
     let first = &twiddles[base..base + radix];
     let second = &twiddles[base + radix..base + 3 * radix];
@@ -210,7 +210,7 @@ fn f64_hybrid_radix8x512_matches_stockham_n4096() {
         .collect();
     let mut actual = expected.clone();
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_64(n);
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let mut expected_scratch = vec![Complex64::new(0.0, 0.0); n];
     let mut actual_scratch = vec![Complex64::new(0.0, 0.0); n];
 
@@ -245,7 +245,7 @@ fn f32_hybrid_radix8x512_matches_stockham_n4096() {
         .collect();
     let mut actual = expected.clone();
     let twiddles =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_32(n);
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let mut expected_scratch = vec![Complex32::new(0.0, 0.0); n];
     let mut actual_scratch = vec![Complex32::new(0.0, 0.0); n];
 
@@ -284,9 +284,9 @@ fn f64_hybrid_radix8x512_inverse_roundtrip_n4096() {
         .collect();
     let original = data.clone();
     let forward =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_64(n);
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let inverse =
-        crate::application::execution::kernel::real_fft::build_inverse_twiddle_table_64(n);
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
     let mut scratch = vec![Complex64::new(0.0, 0.0); n];
 
     unsafe {
@@ -316,9 +316,9 @@ fn f32_hybrid_radix8x512_inverse_roundtrip_n4096() {
         .collect();
     let original = data.clone();
     let forward =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_32(n);
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
     let inverse =
-        crate::application::execution::kernel::real_fft::build_inverse_twiddle_table_32(n);
+        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
     let mut scratch = vec![Complex32::new(0.0, 0.0); n];
 
     unsafe {
@@ -364,9 +364,9 @@ fn f64_avx_schedule_roundtrip_holds_for_n8192() {
     let original = data.clone();
     let mut scratch = vec![Complex64::new(0.0, 0.0); data.len()];
     let forward =
-        crate::application::execution::kernel::real_fft::build_forward_twiddle_table_64(data.len());
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(data.len());
     let inverse =
-        crate::application::execution::kernel::real_fft::build_inverse_twiddle_table_64(data.len());
+        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(data.len());
 
     f64::forward_with_scratch(&mut data, &mut scratch, &forward);
     // inverse_with_scratch removed: implement as forward on inverse twiddles + 1/N scale.

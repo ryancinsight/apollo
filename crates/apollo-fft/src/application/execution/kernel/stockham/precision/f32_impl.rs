@@ -1,9 +1,13 @@
 use super::super::avx::{
-    f32, stage32_avx_fma, stage32_groups_one_avx_fma, stage_pair32_avx_fma,
-    stage_pair32_groups_two_avx_fma, stage_pair32_quarter_groups_two_avx_fma,
-    stage_pair32_radix1_avx_fma, stage_triple32_avx_fma, stage_triple32_low_live_avx_fma,
-    stage_triple32_quarter_groups_one_avx_fma, stage_triple32_quarter_groups_two_avx_fma,
-    stage_triple32_radix1_avx_fma, stockham_quad_groups_eight32,
+    generic::{
+        base::stage_avx_fma,
+        pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
+    },
+    stage32_groups_one_avx_fma, stage_pair32_groups_two_avx_fma,
+    stage_pair32_quarter_groups_two_avx_fma, stage_triple32_avx_fma,
+    stage_triple32_low_live_avx_fma, stage_triple32_quarter_groups_one_avx_fma,
+    stage_triple32_quarter_groups_two_avx_fma, stage_triple32_radix1_avx_fma,
+    stockham_quad_groups_eight32,
 };
 use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
 use super::super::stage::stage_impl;
@@ -152,7 +156,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
         if groups == 1 && radix >= 2 {
             unsafe { stage32_groups_one_avx_fma(src, dst, radix, twiddles) };
         } else if groups >= 4 {
-            unsafe { stage32_avx_fma(src, dst, radix, twiddles) };
+            unsafe { stage_avx_fma::<f32>(src, dst, radix, twiddles) };
         } else {
             stage_impl(src, dst, radix, twiddles);
         }
@@ -169,12 +173,12 @@ impl StockhamPrecision for F32StockhamAvxFma {
         let groups = src.len() / (radix << 1);
         if radix == 1 {
             if src.len() >= 16 {
-                unsafe { stage_pair32_radix1_avx_fma(src, dst, second_twiddles) };
+                unsafe { stage_pair_radix1_avx_fma::<f32>(src, dst, second_twiddles) };
             } else {
                 stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
             }
         } else if groups >= 8 {
-            unsafe { stage_pair32_avx_fma(src, dst, radix, first_twiddles, second_twiddles) };
+            unsafe { stage_pair_avx_fma::<f32>(src, dst, radix, first_twiddles, second_twiddles) };
         } else if groups == 4 {
             unsafe {
                 stage_pair32_quarter_groups_two_avx_fma(

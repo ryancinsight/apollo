@@ -1,4 +1,25 @@
 # Apollo Checklist
+## Closure LXXXIII - Mixed-Radix Wrapper Removal [major]
+Sprint target version: apollo-fft 0.12.0
+
+- [x] Remove public type-suffixed mixed-radix twiddle wrapper entry points.
+- [x] Route 1D/2D/3D plan-owned twiddle reuse through
+  `dispatch_inplace::<T, INVERSE, NORMALIZE>` directly.
+- [x] Keep `dispatch_inplace` crate-private so the public module boundary does
+  not expose private scalar traits.
+- [x] Remove dead Winograd AVX wrapper leaves and their module exports.
+- [x] Route radix-15 mixed-radix leaves through the stack-only generic
+  Good-Thomas Winograd codelet instead of the generic recursive path.
+- [x] Consolidate broad Stockham AVX stage and pair leaves behind one
+  monomorphized backend trait while preserving shape-specific AVX codelets.
+- [x] Remove the unreachable legacy CPU SIMD six-step, matrix-workspace, and
+  radix2 infrastructure island that was not part of the crate module graph.
+- [x] Bump `apollo-fft` to 0.12.0 and update sprint artifacts.
+- [x] Verified with `cargo check -p apollo-fft`,
+  `cargo check -p apollo-fft --benches --examples`,
+  `cargo test -p apollo-fft --lib -- --test-threads=1`, and
+  `cargo check --workspace`.
+
 ## Closure LXXXII - Stockham Butterfly Dispatch Leaf Split [patch]
 Sprint target version: apollo-fft 0.11.1
 
@@ -21,7 +42,8 @@ Sprint target version: apollo-fft 0.11.1
 ## Closure LXXXI - Mixed Radix Kernel Hierarchy Decomposition [minor]
 Sprint target version: apollo-fft 0.11.0
 
-- [x] Decomposed mixed_radix.rs (901 lines) into a deep hierarchical file tree: dispatch_f64, dispatch_f32, dispatch_f16, traits, and caches.
+- [x] Decomposed mixed_radix.rs (901 lines) into a deep hierarchical file tree:
+  dispatch, traits, and caches.
 - [x] Extracted unit tests into a dedicated tests.rs module.
 - [x] Maintained generic SSOT dispatch implementations and fixed pub(crate) module boundaries.
 - [x] Zero-warning compilation and 255/255 passing tests.

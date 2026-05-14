@@ -1,55 +1,6 @@
 use super::fixed::cmul_vec64;
 use num_complex::Complex64;
 
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stage64_avx_fma(
-    src: &[Complex64],
-    dst: &mut [Complex64],
-    radix: usize,
-    twiddles: &[Complex64],
-) {
-    use std::arch::x86_64::{
-        _mm256_add_pd, _mm256_fmaddsub_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute_pd,
-        _mm256_set1_pd, _mm256_storeu_pd, _mm256_sub_pd,
-    };
-
-    let n = src.len();
-    let half_n = n >> 1;
-    let groups = n / (radix << 1);
-    let vector_end = groups & !1usize;
-    for j in 0..radix {
-        let w = twiddles[j];
-        let wr = _mm256_set1_pd(w.re);
-        let wi = _mm256_set1_pd(w.im);
-        let src_base = j * groups * 2;
-        let dst_base = j * groups;
-        let mut k = 0usize;
-        while k < vector_end {
-            let a = _mm256_loadu_pd(src.as_ptr().add(src_base + k).cast::<f64>());
-            let b = _mm256_loadu_pd(src.as_ptr().add(src_base + groups + k).cast::<f64>());
-            let swapped = _mm256_permute_pd::<0b0101>(b);
-            let product = _mm256_fmaddsub_pd(wr, b, _mm256_mul_pd(wi, swapped));
-            _mm256_storeu_pd(
-                dst.as_mut_ptr().add(dst_base + k).cast::<f64>(),
-                _mm256_add_pd(a, product),
-            );
-            _mm256_storeu_pd(
-                dst.as_mut_ptr().add(dst_base + half_n + k).cast::<f64>(),
-                _mm256_sub_pd(a, product),
-            );
-            k += 2;
-        }
-        while k < groups {
-            let a = src[src_base + k];
-            let b = src[src_base + groups + k] * w;
-            dst[dst_base + k] = a + b;
-            dst[dst_base + half_n + k] = a - b;
-            k += 1;
-        }
-    }
-}
-
 /// AVX/FMA final Stockham f64 stage for `groups == 1`.
 ///
 /// For `N = 2R`, the single remaining Stockham stage is
