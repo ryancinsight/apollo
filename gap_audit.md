@@ -1574,6 +1574,10 @@ Open gaps are listed at the top of this audit. Future increments should:
 
 ### Closed in this sprint (Performance & Native GPU Precision phase)
 
+#### Closure LXXVII (Iterator Monomorphization & Twiddle Allocation Bounds)
+- Replaced `.collect()` iteration paths in `radix2.rs` twiddle table building with exact-size `Vec::with_capacity` and `set_len()` loops to guarantee flat O(1) allocation overhead during compilation and plan execution.
+- Validated CPU numerical baseline across all bounds.
+
 - Performance-quantification gap: added Criterion bench targets `buffer_reuse` to both `apollo-nufft-wgpu` (fast Type-1/Type-2 1D, per-call vs `with_buffers`, N=64/128/256) and `apollo-fft-wgpu` (3D forward/inverse, per-call vs `with_buffers`, nx=ny=nz=4/8/16).
 - `NufftWgpuBackend` façade gap: added public `execute_fast_type1_1d_with_buffers`, `execute_fast_type2_1d_with_buffers`, `execute_fast_type1_3d_with_buffers`, `execute_fast_type2_3d_with_buffers` methods delegating to `NufftGpuKernel`.
 - Native f16 GPU compute gap: added `GpuFft3dF16Native` behind `apollo-fft-wgpu/native-f16` feature; WGSL shaders `fft_native_f16.wgsl` and `pack_native_f16.wgsl` use `enable f16;` and `array<f16>` storage; host boundary performs f32↔f16 conversion; parity test verifies |error| < 5×10⁻³ against f32 GPU reference (O(log N)·ε_f16 bound with N=4).

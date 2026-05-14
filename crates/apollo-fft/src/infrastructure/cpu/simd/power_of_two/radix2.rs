@@ -197,12 +197,15 @@ pub fn build_forward_twiddle_table_32(n: usize) -> Vec<Complex32> {
 pub fn build_real_fwd_post_twiddles_64(n: usize) -> Vec<Complex64> {
     debug_assert!(n.is_power_of_two() && n >= 4);
     let m = n >> 1;
-    (0..=m)
-        .map(|k| {
-            let a = -std::f64::consts::TAU * k as f64 / n as f64;
-            Complex64::new(a.cos(), a.sin())
-        })
-        .collect()
+    let len = m + 1;
+    let mut twiddles = Vec::with_capacity(len);
+    #[allow(clippy::uninit_vec)]
+    unsafe { twiddles.set_len(len) };
+    for (k, slot) in twiddles.iter_mut().enumerate() {
+        let a = -std::f64::consts::TAU * k as f64 / n as f64;
+        *slot = Complex64::new(a.cos(), a.sin());
+    }
+    twiddles
 }
 
 /// Real-input forward FFT via half-length complex packing.

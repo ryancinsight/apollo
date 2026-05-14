@@ -1,4 +1,10 @@
 # Apollo Checklist
+## Closure LXXVII - Iterator Monomorphization & Twiddle Allocation Bounds [patch]
+Sprint target version: apollo-fft 0.9.12
+
+- [x] Replace `.collect()` iteration paths in `radix2.rs` twiddle table building with exact-size `Vec::with_capacity` and `set_len()` loops to guarantee flat O(1) allocation overhead during compilation and plan execution.
+- [x] Validated CPU numerical baseline across all bounds.
+
 ## Closure LXXVI - Frequency Utility Exact-Capacity Fill [patch]
 Sprint target version: apollo-fft 0.9.11
 
