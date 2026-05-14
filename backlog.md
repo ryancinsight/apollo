@@ -1,5 +1,10 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXVI phase)
+- [x] [patch] Reduce `apollo-fft` frequency utility iterator construction
+  overhead. `fftfreq` and `rfftfreq` now use exact-capacity fill loops for
+  known-length output vectors. `apollo-fft` was bumped to 0.9.11.
+
 ## Closed in this sprint (Closure LXXV phase)
 - [x] [patch] Reduce `apollo-fft` shift utility redundancy and per-element
   modulo work. `fftshift` and `ifftshift` now share one split-slice copy helper,

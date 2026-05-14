@@ -25,6 +25,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   generic `dft_forward` and `dft_inverse` functions.
 
 ### Fixed
+- [patch] `apollo-fft`: route `fftfreq` and `rfftfreq` through exact-capacity
+  fill loops instead of known-length iterator collection pipelines.
 - [patch] `apollo-fft`: remove the unused `Default` bound from
   `fftshift`/`ifftshift` and route both utilities through a shared split-slice
   copy helper instead of duplicate modulo-index iterator pipelines.

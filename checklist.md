@@ -1,4 +1,17 @@
 # Apollo Checklist
+## Closure LXXVI - Frequency Utility Exact-Capacity Fill [patch]
+Sprint target version: apollo-fft 0.9.11
+
+- [x] Replace `fftfreq` known-length iterator collection with exact-capacity
+  positive/negative half fill loops.
+- [x] Replace `rfftfreq` known-length iterator collection with an exact-capacity
+  fill loop.
+- [x] Bump `apollo-fft` to 0.9.11 and update sprint artifacts.
+- [x] Verify with `cargo check -p apollo-fft`, `cargo check -p apollo-fft
+  --benches --examples`, `cargo test -p apollo-fft --lib -- --test-threads=1`,
+  `cargo check --workspace`, cleanup scans, `cargo fmt --check`, and
+  `git diff --check`.
+
 ## Closure LXXV - Shift Utility Split-Copy Cleanup [patch]
 Sprint target version: apollo-fft 0.9.10
 

@@ -29,15 +29,14 @@ pub fn fftfreq(n: usize, d: f64) -> Vec<f64> {
     }
     let nd = n as f64 * d;
     let half = (n + 1) / 2; // positive bins: 0..half
-    (0..n)
-        .map(|k| {
-            if k < half {
-                k as f64 / nd
-            } else {
-                (k as i64 - n as i64) as f64 / nd
-            }
-        })
-        .collect()
+    let mut bins = Vec::with_capacity(n);
+    for k in 0..half {
+        bins.push(k as f64 / nd);
+    }
+    for k in half..n {
+        bins.push((k as i64 - n as i64) as f64 / nd);
+    }
+    bins
 }
 
 /// Frequency bin centers for a real-input FFT of length `n` with sample spacing `d`.
@@ -54,7 +53,12 @@ pub fn rfftfreq(n: usize, d: f64) -> Vec<f64> {
         return vec![0.0];
     }
     let nd = n as f64 * d;
-    (0..=n / 2).map(|k| k as f64 / nd).collect()
+    let len = n / 2 + 1;
+    let mut bins = Vec::with_capacity(len);
+    for k in 0..len {
+        bins.push(k as f64 / nd);
+    }
+    bins
 }
 
 #[cfg(test)]

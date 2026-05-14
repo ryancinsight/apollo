@@ -44,6 +44,21 @@ by design and will not be implemented.
 | GPU FFT 1D/2D | ✗ | ✗ | ✗ | Open |
 
 ## Closed Gaps
+### Closure LXXVI - Frequency Utility Exact-Capacity Fill [patch]
+- **Gap**: `fftfreq` and `rfftfreq` built known-length output vectors through
+  iterator collection, leaving avoidable iterator state and branch overhead in
+  utility paths used to construct frequency grids.
+- **Closed by**: Replaced the collection pipelines with exact-capacity fill
+  loops while preserving numpy-compatible bin ordering and zero-length
+  behavior.
+- **Residual risk**: Frequency utility benchmarking should quantify the
+  construction cost reduction for large grids; functional/static verification
+  passed locally.
+- **Evidence**: `cargo check -p apollo-fft`; `cargo check -p apollo-fft
+  --benches --examples`; `cargo test -p apollo-fft --lib -- --test-threads=1`;
+  `cargo check --workspace`; cleanup scans for deprecated/type-suffixed FFT
+  APIs and encoding artifacts; `cargo fmt --check`; `git diff --check`.
+
 ### Closure LXXV - Shift Utility Split-Copy Cleanup [patch]
 - **Gap**: `fftshift` and `ifftshift` carried an unused `Default` bound and
   duplicated modulo-index iterator collection, creating unnecessary per-element
