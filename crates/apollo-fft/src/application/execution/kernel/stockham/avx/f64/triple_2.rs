@@ -1,6 +1,5 @@
 use num_complex::Complex64;
-use super::fixed::{cmul_vec64, avx_rotate_quarter_turn};
-use super::quad::stockham_quad_store_pair64;
+use super::fixed::cmul_vec64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

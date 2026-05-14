@@ -1,5 +1,5 @@
 use num_complex::Complex64;
-use super::fixed::{cmul_vec64, avx_rotate_quarter_turn};
+use super::fixed::cmul_vec64;
 
 #[cfg(target_arch = "x86_64")]
 pub(crate) struct StockhamQuadFirstPairs64 {

@@ -1,6 +1,5 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-use num_complex::{Complex32, Complex64};
 
 pub(crate) fn stage_triple_scalar_one_impl<C>(
     src: &[C],

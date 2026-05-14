@@ -1,5 +1,3 @@
-use num_complex::{Complex32, Complex64};
-use super::fusion::{StockhamFused1, StockhamFused2, StockhamFused3, StockhamFused4};
 
 pub(crate) mod private {
     pub trait Sealed {}

@@ -1,8 +1,8 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-#[cfg(all(test, target_arch = "x86_64"))] use super::fixed::{fixed_len512_32_avx_fma, fixed_len512_avx_fma}; use num_complex::{Complex32, Complex64}; use crate::application::execution::kernel::stockham::avx::{stage_triple64_radix1_avx_fma, stage_triple32_radix1_avx_fma};
+#[cfg(all(test, target_arch = "x86_64"))] use super::fixed::{fixed_len512_32_avx_fma, fixed_len512_avx_fma}; use num_complex::Complex32; 
 
-type PackedF32x4 = [Complex32; 4];
+#[allow(dead_code)] type PackedF32x4 = [Complex32; 4];
 
 #[cfg(all(test, target_arch = "x86_64"))]
 type PackedF64x2 = [Complex64; 2];
@@ -110,7 +110,7 @@ pub(crate) unsafe fn hybrid_radix8x512_32_avx_fma<const INVERSE: bool>(
 }
 
 #[inline]
-pub(crate) fn stockham_mixed_twiddle_32<const ROWS: usize, const COLS: usize>(
+#[allow(dead_code)] pub(crate) fn stockham_mixed_twiddle_32<const ROWS: usize, const COLS: usize>(
     twiddles: &[num_complex::Complex32],
     row: usize,
     col: usize,
@@ -129,7 +129,7 @@ pub(crate) fn stockham_mixed_twiddle_32<const ROWS: usize, const COLS: usize>(
 }
 
 #[inline]
-pub(crate) fn stockham_mixed_twiddle_64<const ROWS: usize, const COLS: usize>(
+#[allow(dead_code)] pub(crate) fn stockham_mixed_twiddle_64<const ROWS: usize, const COLS: usize>(
     twiddles: &[num_complex::Complex64],
     row: usize,
     col: usize,

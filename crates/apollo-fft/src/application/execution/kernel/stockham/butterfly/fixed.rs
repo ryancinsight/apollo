@@ -1,7 +1,6 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
 use num_complex::{Complex32, Complex64};
-use super::hybrid::*;
 use super::super::precision::*;
 use super::super::avx::*;
 use super::super::transform::*;

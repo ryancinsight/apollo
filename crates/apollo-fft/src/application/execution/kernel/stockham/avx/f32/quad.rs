@@ -1,5 +1,5 @@
 use num_complex::Complex32;
-use super::fixed::{cmul_vec32, avx_rotate_quarter_turn32, cmul_pair32, store_complex32_low, store_complex32_high};
+use super::fixed::{cmul_vec32, cmul_pair32, store_complex32_low};
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
