@@ -1,4 +1,14 @@
 # Apollo Checklist
+## Closure LXXIX - Stockham Kernel Hierarchy Stabilization [patch]
+Sprint target version: apollo-fft 0.10.0
+
+- [x] Standardized \pub(crate)\ visibility across \vx\ leaf nodes to satisfy new module boundaries.
+- [x] Audited and corrected \use\ path inconsistencies in \vx/f32/\ and \vx/f64/\ modules.
+- [x] Resolved \E0603\ (private function access) and dangling attribute errors.
+- [x] Corrected struct attributes by removing invalid \#[target_feature]\ blocks.
+- [x] Removed unused imports to eliminate compiler warnings.
+- [x] 177/177 tests pass under \--release\.
+
 ## Closure LXXVIII - Bluestein Monomorphization + Module Decomposition [minor]
 Sprint target version: apollo-fft 0.10.0
 

@@ -1,0 +1,286 @@
+use num_complex::Complex64;
+use super::traits::*;
+use super::super::stage::stage_impl;
+use super::super::butterfly::{stage_pair_impl, stage_triple_impl, stage_quad_impl};
+use crate::application::execution::kernel::radix_stage::normalize_inplace_c64;
+use super::super::avx::*;
+use super::super::stage::stockham_f64_stage_is_l1_resident;
+
+#[cfg(any(
+    test,
+    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
+))]
+impl StockhamPrecision for F64Stockham {
+    type Real = f64;
+    type Complex = Complex64;
+
+    const MAX_FUSED_STAGES: u32 = 4;
+
+    #[inline]
+    fn stage(src: &[Complex64], dst: &mut [Complex64], radix: usize, twiddles: &[Complex64]) {
+        stage_impl(src, dst, radix, twiddles);
+    }
+
+    #[inline]
+    fn stage_pair(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+    ) {
+        stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
+    }
+
+    #[inline]
+    fn stage_triple(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+    ) {
+        stage_triple_impl(
+            src,
+            dst,
+            radix,
+            first_twiddles,
+            second_twiddles,
+            third_twiddles,
+        );
+    }
+
+    #[inline]
+    fn stage_quad(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+        fourth_twiddles: &[Complex64],
+    ) {
+        stage_quad_impl(
+            src,
+            dst,
+            radix,
+            first_twiddles,
+            second_twiddles,
+            third_twiddles,
+            fourth_twiddles,
+        );
+    }
+
+    #[inline]
+    fn scale(data: &mut [Complex64], scale: f64) {
+        normalize_inplace_c64(data, scale);
+    }
+}
+#[cfg(target_arch = "x86_64")]
+pub(crate) struct F64StockhamAvxFma;
+
+#[cfg(target_arch = "x86_64")]
+impl private::Sealed for F64StockhamAvxFma {}
+
+#[cfg(target_arch = "x86_64")]
+impl StockhamRadix16AvxLeaf for F64StockhamAvxFma {
+    #[inline]
+    unsafe fn stage_quad_groups_eight_avx_fma(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+        fourth_twiddles: &[Complex64],
+    ) {
+        unsafe {
+            stockham_quad_groups_eight64_low_live(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+                fourth_twiddles,
+            )
+        };
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+impl StockhamPrecision for F64StockhamAvxFma {
+    type Real = f64;
+    type Complex = Complex64;
+
+    const MAX_FUSED_STAGES: u32 = 4;
+
+    #[inline]
+    fn stage_triple_enabled(stride: usize, n: usize, input_is_data: bool) -> bool {
+        // `groups == 4` means exactly three stages remain and is a zero-copy
+        // win only when the source is scratch, because the radix-8 autosort
+        // suffix then writes the final ping-pong pass into `data`.
+        // `groups > 4` leaves at least one additional pass after the radix-8
+        // stage; the fused stage still reduces arithmetic scheduling overhead
+        // without changing the final ping-pong parity.
+        let groups = n / (stride << 1);
+        groups > 4 || (groups == 4 && !input_is_data)
+    }
+
+    #[inline]
+    fn stage_quad_enabled(stride: usize, n: usize, input_is_data: bool) -> bool {
+        let _ = (stride, n, input_is_data);
+        false
+    }
+
+    #[inline]
+    fn stage(src: &[Complex64], dst: &mut [Complex64], radix: usize, twiddles: &[Complex64]) {
+        let groups = src.len() / (radix << 1);
+        if groups == 1 && radix >= 2 {
+            unsafe { stage64_groups_one_avx_fma(src, dst, radix, twiddles) };
+        } else if groups >= 2 {
+            unsafe { stage64_avx_fma(src, dst, radix, twiddles) };
+        } else {
+            stage_impl(src, dst, radix, twiddles);
+        }
+    }
+
+    #[inline]
+    fn stage_pair(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+    ) {
+        let groups = src.len() / (radix << 1);
+        if radix == 1 {
+            if src.len() >= 8 {
+                unsafe { stage_pair64_radix1_avx_fma(src, dst, second_twiddles) };
+            } else {
+                stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
+            }
+        } else if groups == 2 && radix >= 2 {
+            unsafe {
+                stage_pair64_groups_two_avx_fma(src, dst, radix, first_twiddles, second_twiddles)
+            };
+        } else if groups >= 4 {
+            unsafe { stage_pair64_avx_fma(src, dst, radix, first_twiddles, second_twiddles) };
+        } else {
+            stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
+        }
+    }
+
+    #[inline]
+    fn stage_triple(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+    ) {
+        let groups = src.len() / (radix << 1);
+        if radix == 1 && groups >= 8 && stockham_f64_stage_is_l1_resident(src.len()) {
+            unsafe { stage_triple64_radix1_avx_fma(src, dst, second_twiddles, third_twiddles) };
+        } else if groups == 8 {
+            unsafe {
+                stage_triple64_groups_eight_avx_fma(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                    third_twiddles,
+                )
+            };
+        } else if groups >= 8 {
+            if stockham_f64_stage_is_l1_resident(src.len()) {
+                unsafe {
+                    stage_triple64_low_live_avx_fma(
+                        src,
+                        dst,
+                        radix,
+                        groups,
+                        first_twiddles,
+                        second_twiddles,
+                        third_twiddles,
+                    )
+                };
+            } else {
+                unsafe {
+                    stage_triple64_throughput_avx_fma(
+                        src,
+                        dst,
+                        radix,
+                        groups,
+                        first_twiddles,
+                        second_twiddles,
+                        third_twiddles,
+                    )
+                };
+            }
+        } else if groups == 4 {
+            unsafe {
+                stage_triple64_quarter_groups_one_avx_fma(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                    third_twiddles,
+                )
+            };
+        } else {
+            stage_triple_impl(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            );
+        }
+    }
+
+    #[inline]
+    fn stage_quad(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+        fourth_twiddles: &[Complex64],
+    ) {
+        let groups = src.len() / (radix << 1);
+        if groups == 8 {
+            unsafe {
+                <Self as StockhamRadix16AvxLeaf>::stage_quad_groups_eight_avx_fma(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                    third_twiddles,
+                    fourth_twiddles,
+                )
+            };
+        } else {
+            stage_quad_impl(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+                fourth_twiddles,
+            );
+        }
+    }
+
+    fn scale(data: &mut [Complex64], scale: f64) {
+        normalize_inplace_c64(data, scale);
+    }
+}
