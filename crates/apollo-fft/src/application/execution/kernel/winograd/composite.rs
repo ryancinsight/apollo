@@ -2,6 +2,8 @@ mod good_thomas;
 mod large;
 mod medium;
 mod small;
+mod xlarge;
+mod xlarge2;
 
 pub(crate) use good_thomas::dft100_impl;
 pub(crate) use large::{dft33_impl, dft35_impl, dft40_impl, dft49_impl, dft50_impl, dft56_impl};
@@ -10,6 +12,13 @@ pub(crate) use medium::{
     dft63_impl,
 };
 pub(crate) use small::{dft10_impl, dft12_impl, dft14_impl, dft6_impl, dft9_impl};
+pub(crate) use xlarge::{
+    dft70_impl, dft72_impl, dft75_impl, dft77_impl, dft80_impl, dft84_impl, dft88_impl,
+    dft90_impl,
+};
+pub(crate) use xlarge2::{
+    dft96_impl, dft98_impl, dft99_impl, dft105_impl, dft112_impl, dft120_impl, dft126_impl,
+};
 
 use super::radix::{dft5_array_impl, dft8_impl};
 use super::traits::{apply_twiddle_impl, WinogradScalar};
@@ -191,6 +200,43 @@ pub(crate) fn dft64_impl<F: WinogradScalar>(
         let o = apply_twiddle_impl(odd[k], twiddle64(k, inverse));
         data[k] = even[k] + o;
         data[k + 32] = even[k] - o;
+    }
+}
+
+// ── DFT-128 butterfly ────────────────────────────────────────────────────────
+
+#[inline]
+fn twiddle128<F: WinogradScalar>(k: usize, inverse: bool) -> num_complex::Complex<F> {
+    let base = twiddle64(k >> 1, inverse);
+    if (k & 1) == 0 {
+        base
+    } else {
+        let w1 = if inverse {
+            Complex64::new(0.9987954562051724, 0.049067674327418015)
+        } else {
+            Complex64::new(0.9987954562051724, -0.049067674327418015)
+        };
+        apply_twiddle_impl(base, cast_twiddle(w1))
+    }
+}
+
+/// In-place Winograd DFT-128.
+///
+/// **Decomposition**: DFT-128 = 2 × DFT-64 (stride-2 DIT) + 128-point twiddle
+/// butterfly.
+#[inline]
+pub(crate) fn dft128_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 128],
+    inverse: bool,
+) {
+    let mut even = core::array::from_fn(|i| data[2 * i]);
+    let mut odd = core::array::from_fn(|i| data[2 * i + 1]);
+    dft64_impl(&mut even, inverse);
+    dft64_impl(&mut odd, inverse);
+    for k in 0..64 {
+        let o = apply_twiddle_impl(odd[k], twiddle128(k, inverse));
+        data[k] = even[k] + o;
+        data[k + 64] = even[k] - o;
     }
 }
 

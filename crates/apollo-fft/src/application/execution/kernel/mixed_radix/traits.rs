@@ -39,7 +39,23 @@ pub(crate) trait ShortWinogradScalar: winograd::WinogradScalar {
     fn dft56(data: &mut [num_complex::Complex<Self>; 56], inverse: bool);
     fn dft63(data: &mut [num_complex::Complex<Self>; 63], inverse: bool);
     fn dft64(data: &mut [num_complex::Complex<Self>; 64], inverse: bool);
+    fn dft70(data: &mut [num_complex::Complex<Self>; 70], inverse: bool);
+    fn dft72(data: &mut [num_complex::Complex<Self>; 72], inverse: bool);
+    fn dft75(data: &mut [num_complex::Complex<Self>; 75], inverse: bool);
+    fn dft77(data: &mut [num_complex::Complex<Self>; 77], inverse: bool);
+    fn dft80(data: &mut [num_complex::Complex<Self>; 80], inverse: bool);
+    fn dft84(data: &mut [num_complex::Complex<Self>; 84], inverse: bool);
+    fn dft88(data: &mut [num_complex::Complex<Self>; 88], inverse: bool);
+    fn dft90(data: &mut [num_complex::Complex<Self>; 90], inverse: bool);
+    fn dft96(data: &mut [num_complex::Complex<Self>; 96], inverse: bool);
+    fn dft98(data: &mut [num_complex::Complex<Self>; 98], inverse: bool);
+    fn dft99(data: &mut [num_complex::Complex<Self>; 99], inverse: bool);
     fn dft100(data: &mut [num_complex::Complex<Self>; 100], inverse: bool);
+    fn dft105(data: &mut [num_complex::Complex<Self>; 105], inverse: bool);
+    fn dft112(data: &mut [num_complex::Complex<Self>; 112], inverse: bool);
+    fn dft120(data: &mut [num_complex::Complex<Self>; 120], inverse: bool);
+    fn dft126(data: &mut [num_complex::Complex<Self>; 126], inverse: bool);
+    fn dft128(data: &mut [num_complex::Complex<Self>; 128], inverse: bool);
 }
 
 impl ShortWinogradScalar for f64 {
@@ -219,8 +235,88 @@ impl ShortWinogradScalar for f64 {
     }
 
     #[inline]
+    fn dft70(data: &mut [Complex64; 70], inverse: bool) {
+        winograd::dft70_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft72(data: &mut [Complex64; 72], inverse: bool) {
+        winograd::dft72_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft75(data: &mut [Complex64; 75], inverse: bool) {
+        winograd::dft75_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft77(data: &mut [Complex64; 77], inverse: bool) {
+        winograd::dft77_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft80(data: &mut [Complex64; 80], inverse: bool) {
+        winograd::dft80_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft84(data: &mut [Complex64; 84], inverse: bool) {
+        winograd::dft84_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft88(data: &mut [Complex64; 88], inverse: bool) {
+        winograd::dft88_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft90(data: &mut [Complex64; 90], inverse: bool) {
+        winograd::dft90_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft96(data: &mut [Complex64; 96], inverse: bool) {
+        winograd::dft96_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft98(data: &mut [Complex64; 98], inverse: bool) {
+        winograd::dft98_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft99(data: &mut [Complex64; 99], inverse: bool) {
+        winograd::dft99_impl(data, inverse);
+    }
+
+    #[inline]
     fn dft100(data: &mut [Complex64; 100], inverse: bool) {
         winograd::dft100_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft105(data: &mut [Complex64; 105], inverse: bool) {
+        winograd::dft105_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft112(data: &mut [Complex64; 112], inverse: bool) {
+        winograd::dft112_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft120(data: &mut [Complex64; 120], inverse: bool) {
+        winograd::dft120_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft126(data: &mut [Complex64; 126], inverse: bool) {
+        winograd::dft126_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft128(data: &mut [Complex64; 128], inverse: bool) {
+        winograd::dft128_impl(data, inverse);
     }
 }
 
@@ -401,8 +497,88 @@ impl ShortWinogradScalar for f32 {
     }
 
     #[inline]
+    fn dft70(data: &mut [Complex32; 70], inverse: bool) {
+        winograd::dft70_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft72(data: &mut [Complex32; 72], inverse: bool) {
+        winograd::dft72_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft75(data: &mut [Complex32; 75], inverse: bool) {
+        winograd::dft75_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft77(data: &mut [Complex32; 77], inverse: bool) {
+        winograd::dft77_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft80(data: &mut [Complex32; 80], inverse: bool) {
+        winograd::dft80_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft84(data: &mut [Complex32; 84], inverse: bool) {
+        winograd::dft84_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft88(data: &mut [Complex32; 88], inverse: bool) {
+        winograd::dft88_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft90(data: &mut [Complex32; 90], inverse: bool) {
+        winograd::dft90_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft96(data: &mut [Complex32; 96], inverse: bool) {
+        winograd::dft96_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft98(data: &mut [Complex32; 98], inverse: bool) {
+        winograd::dft98_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft99(data: &mut [Complex32; 99], inverse: bool) {
+        winograd::dft99_impl(data, inverse);
+    }
+
+    #[inline]
     fn dft100(data: &mut [Complex32; 100], inverse: bool) {
         winograd::dft100_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft105(data: &mut [Complex32; 105], inverse: bool) {
+        winograd::dft105_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft112(data: &mut [Complex32; 112], inverse: bool) {
+        winograd::dft112_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft120(data: &mut [Complex32; 120], inverse: bool) {
+        winograd::dft120_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft126(data: &mut [Complex32; 126], inverse: bool) {
+        winograd::dft126_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft128(data: &mut [Complex32; 128], inverse: bool) {
+        winograd::dft128_impl(data, inverse);
     }
 }
 
@@ -484,7 +660,23 @@ pub(crate) fn short_winograd<F: ShortWinogradScalar>(
         56 => F::dft56(data.try_into().expect("length checked"), inverse),
         63 => F::dft63(data.try_into().expect("length checked"), inverse),
         64 => F::dft64(data.try_into().expect("length checked"), inverse),
+        70 => F::dft70(data.try_into().expect("length checked"), inverse),
+        72 => F::dft72(data.try_into().expect("length checked"), inverse),
+        75 => F::dft75(data.try_into().expect("length checked"), inverse),
+        77 => F::dft77(data.try_into().expect("length checked"), inverse),
+        80 => F::dft80(data.try_into().expect("length checked"), inverse),
+        84 => F::dft84(data.try_into().expect("length checked"), inverse),
+        88 => F::dft88(data.try_into().expect("length checked"), inverse),
+        90 => F::dft90(data.try_into().expect("length checked"), inverse),
+        96 => F::dft96(data.try_into().expect("length checked"), inverse),
+        98 => F::dft98(data.try_into().expect("length checked"), inverse),
+        99 => F::dft99(data.try_into().expect("length checked"), inverse),
         100 => F::dft100(data.try_into().expect("length checked"), inverse),
+        105 => F::dft105(data.try_into().expect("length checked"), inverse),
+        112 => F::dft112(data.try_into().expect("length checked"), inverse),
+        120 => F::dft120(data.try_into().expect("length checked"), inverse),
+        126 => F::dft126(data.try_into().expect("length checked"), inverse),
+        128 => F::dft128(data.try_into().expect("length checked"), inverse),
         _ => return false,
     }
     if normalize {
