@@ -108,7 +108,7 @@ pub(crate) fn dft8_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
 ///
 /// Constants: cos(2πk/7) and sin(2πk/7) for k=1,2,3.
 /// References: Winograd (1978), Blahut (2010) §3.5.
-#[inline]
+#[inline(always)]
 pub(crate) fn dft7_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 7);
     let xr1 = data[1] + data[6];

@@ -87,6 +87,10 @@ impl FftPrecision for Complex64 {
                 winograd::dft5_impl(data, false);
                 return;
             }
+            7 => {
+                winograd::dft7_impl(data, false);
+                return;
+            }
             _ => {}
         }
         mixed_radix::forward_inplace::<f64>(data);
@@ -104,6 +108,11 @@ impl FftPrecision for Complex64 {
                 radix_stage::normalize_inplace_c64(data, 1.0 / 5.0);
                 return;
             }
+            7 => {
+                winograd::dft7_impl(data, true);
+                radix_stage::normalize_inplace_c64(data, 1.0 / 7.0);
+                return;
+            }
             _ => {}
         }
         mixed_radix::inverse_inplace::<f64>(data);
@@ -117,6 +126,10 @@ impl FftPrecision for Complex64 {
             }
             5 => {
                 winograd::dft5_impl(data, true);
+                return;
+            }
+            7 => {
+                winograd::dft7_impl(data, true);
                 return;
             }
             _ => {}
@@ -137,6 +150,10 @@ impl FftPrecision for Complex32 {
                 winograd::dft5_impl(data, false);
                 return;
             }
+            7 => {
+                winograd::dft7_impl(data, false);
+                return;
+            }
             _ => {}
         }
         mixed_radix::forward_inplace::<f32>(data);
@@ -154,6 +171,11 @@ impl FftPrecision for Complex32 {
                 radix_stage::normalize_inplace_c32(data, 1.0 / 5.0);
                 return;
             }
+            7 => {
+                winograd::dft7_impl(data, true);
+                radix_stage::normalize_inplace_c32(data, 1.0 / 7.0);
+                return;
+            }
             _ => {}
         }
         mixed_radix::inverse_inplace::<f32>(data);
@@ -167,6 +189,10 @@ impl FftPrecision for Complex32 {
             }
             5 => {
                 winograd::dft5_impl(data, true);
+                return;
+            }
+            7 => {
+                winograd::dft7_impl(data, true);
                 return;
             }
             _ => {}
