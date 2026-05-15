@@ -1,5 +1,13 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXXVII phase)
+- [x] [patch] Add N=17 Winograd pair-symmetry codelet and benchmark coverage.
+  The DFT-17 body is shared behind f64/f32 scalar constants and const-generic
+  direction dispatch; call wrappers select inlined f64 and out-of-line f32
+  codegen without cloning the algorithm. Apollo N=17 latest run: f64 71.932 ns
+  vs RustFFT 81.043 ns; f32 90.289 ns vs RustFFT 112.84 ns. `apollo-fft`
+  bumped to 0.12.4.
+
 ## Closed in this sprint (Closure LXXXVI phase)
 - [x] [patch] Add N=13 Winograd pair-symmetry codelet and dispatch coverage.
   Direction is encoded as a const generic so forward/inverse variants are

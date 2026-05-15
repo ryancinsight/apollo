@@ -99,6 +99,10 @@ impl FftPrecision for Complex64 {
                 winograd::dft13_impl::<f64, false>(data);
                 return;
             }
+            17 => {
+                winograd::dft17_inline_impl::<f64, false>(data);
+                return;
+            }
             _ => {}
         }
         mixed_radix::forward_inplace::<f64>(data);
@@ -131,6 +135,11 @@ impl FftPrecision for Complex64 {
                 radix_stage::normalize_inplace_c64(data, 1.0 / 13.0);
                 return;
             }
+            17 => {
+                winograd::dft17_inline_impl::<f64, true>(data);
+                radix_stage::normalize_inplace_c64(data, 1.0 / 17.0);
+                return;
+            }
             _ => {}
         }
         mixed_radix::inverse_inplace::<f64>(data);
@@ -156,6 +165,10 @@ impl FftPrecision for Complex64 {
             }
             13 => {
                 winograd::dft13_impl::<f64, true>(data);
+                return;
+            }
+            17 => {
+                winograd::dft17_inline_impl::<f64, true>(data);
                 return;
             }
             _ => {}
@@ -186,6 +199,10 @@ impl FftPrecision for Complex32 {
             }
             13 => {
                 winograd::dft13_impl::<f32, false>(data);
+                return;
+            }
+            17 => {
+                winograd::dft17_impl::<f32, false>(data);
                 return;
             }
             _ => {}
@@ -220,6 +237,11 @@ impl FftPrecision for Complex32 {
                 radix_stage::normalize_inplace_c32(data, 1.0 / 13.0);
                 return;
             }
+            17 => {
+                winograd::dft17_impl::<f32, true>(data);
+                radix_stage::normalize_inplace_c32(data, 1.0 / 17.0);
+                return;
+            }
             _ => {}
         }
         mixed_radix::inverse_inplace::<f32>(data);
@@ -245,6 +267,10 @@ impl FftPrecision for Complex32 {
             }
             13 => {
                 winograd::dft13_impl::<f32, true>(data);
+                return;
+            }
+            17 => {
+                winograd::dft17_impl::<f32, true>(data);
                 return;
             }
             _ => {}

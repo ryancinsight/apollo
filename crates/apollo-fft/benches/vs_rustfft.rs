@@ -84,7 +84,7 @@ fn selected_sizes(default: &[usize]) -> Vec<usize> {
 }
 
 fn bench_f64(c: &mut Criterion) {
-    const SIZES: &[usize] = &[3, 5, 7, 11, 13, 15, 100, 10_007];
+    const SIZES: &[usize] = &[3, 5, 7, 11, 13, 17, 15, 100, 10_007];
     let sizes = selected_sizes(SIZES);
     if sizes.is_empty() {
         return;
@@ -247,7 +247,7 @@ fn bench_f64(c: &mut Criterion) {
 }
 
 fn bench_f32(c: &mut Criterion) {
-    const SIZES: &[usize] = &[3, 5, 7, 11, 13, 15, 100, 10_007];
+    const SIZES: &[usize] = &[3, 5, 7, 11, 13, 17, 15, 100, 10_007];
     let sizes = selected_sizes(SIZES);
     if sizes.is_empty() {
         return;

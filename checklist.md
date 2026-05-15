@@ -1,4 +1,19 @@
 # Apollo Checklist
+## Closure LXXXVII - Winograd DFT-17 Dispatch and Benchmark [patch]
+Sprint target version: apollo-fft 0.12.4
+
+- [x] Add a dedicated N=17 Winograd pair-symmetry codelet with f64/f32 scalar
+  constants and const-generic forward/inverse direction.
+- [x] Route public f64/f32 `FftPrecision` fast paths and
+  `ShortWinogradScalar::dft17` through the N=17 codelet.
+- [x] Use one shared DFT-17 body with separate monomorphized call wrappers:
+  inlined for f64 and out-of-line for f32.
+- [x] Add N=17 to `vs_rustfft` benchmark sizes.
+- [x] Add DFT-17 value-semantic tests for forward, inverse, roundtrip, and f32
+  differential equivalence against the direct DFT reference.
+- [x] Verified: Apollo N=17 f64 **71.932 ns** vs RustFFT **81.043 ns**;
+  Apollo N=17 f32 **90.289 ns** vs RustFFT **112.84 ns**.
+
 ## Closure LXXXVI - Winograd DFT-13 Dispatch and Monomorphization [patch]
 Sprint target version: apollo-fft 0.12.3
 

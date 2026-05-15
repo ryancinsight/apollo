@@ -6,6 +6,25 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ---
 
+## [0.12.4] - 2026-05-15
+### Added
+- [patch] `apollo-fft`: N=17 now routes through a dedicated Winograd
+  pair-symmetry codelet with f64/f32 scalar constants, direct `FftPrecision`
+  fast paths, and `ShortWinogradScalar::dft17`.
+- [patch] `apollo-fft`: the RustFFT comparison benchmark set now includes
+  N=17 for the one-size-at-a-time optimization sequence.
+
+### Changed
+- [patch] `apollo-fft`: DFT-17 uses one shared mathematical body with two
+  monomorphized call wrappers: an inlined route for f64 and an out-of-line
+  route for f32, preserving one authoritative algorithm while matching the
+  scalar-specific codegen profile.
+
+### Fixed
+- [patch] `apollo-fft`: N=17 performance against RustFFT. Latest isolated run:
+  Apollo f64 71.932 ns vs RustFFT 81.043 ns; Apollo f32 90.289 ns vs RustFFT
+  112.84 ns.
+
 ## [0.12.3] - 2026-05-15
 ### Added
 - [patch] `apollo-fft`: N=13 now routes through a dedicated Winograd
