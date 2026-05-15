@@ -116,7 +116,7 @@ pub(crate) fn normalize_inplace_c32(data: &mut [Complex32], scale: f32) {
 /// ## SSOT role
 ///
 /// Single authoritative 1/N normalization pass used by all inverse transform paths
-/// (`bluestein`, `radix_composite`). Loop bounds and vectorization
+/// (`rader`, `radix_composite`, `stockham`). Loop bounds and vectorization
 /// contract live here; all callers delegate.
 ///
 /// ## Performance

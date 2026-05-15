@@ -1,7 +1,7 @@
 //! `MixedRadixScalar` — sealed precision trait driving generic FFT dispatch.
 //!
 //! Encodes all precision-specific operations (twiddle cache access, scratch
-//! allocation, Stockham/composite/Bluestein kernel dispatch, and normalization)
+//! allocation, Stockham/composite/Rader kernel dispatch, and normalization)
 //! as associated methods, allowing a single generic dispatch body to serve all
 //! precisions without cloned algorithm bodies.
 
@@ -13,7 +13,9 @@ use super::caches::{
 };
 use super::traits::{forward_short_winograd, inverse_short_winograd};
 use num_complex::{Complex32, Complex64};
-use std::sync::Arc;
+use parking_lot::RwLock;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 
 mod private {
     pub trait Sealed {}
@@ -50,6 +52,12 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
 
     fn cached_twiddle_fwd(n: usize) -> Arc<[Self::Complex]>;
     fn cached_twiddle_inv(n: usize) -> Arc<[Self::Complex]>;
+
+    fn cached_rader_spectrum(
+        n: usize,
+        inverse: bool,
+        generator_inverse: usize,
+    ) -> Arc<[Self::Complex]>;
 
     // ── Thread-local scratch ─────────────────────────────────────────────────
 
@@ -127,6 +135,18 @@ impl MixedRadixScalar for f64 {
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
         super::caches::with_rader_padded_scratch_64(n, f)
     }
+
+    #[inline]
+    fn cached_rader_spectrum(
+        n: usize,
+        inverse: bool,
+        generator_inverse: usize,
+    ) -> Arc<[Complex64]> {
+        static CACHE: LazyLock<RwLock<HashMap<(usize, bool, usize), Arc<[Complex64]>>>> =
+            LazyLock::new(|| RwLock::new(HashMap::new()));
+        cached_rader_spectrum_impl::<f64, _>(&CACHE, n, inverse, generator_inverse)
+    }
+
     #[inline]
     fn pointwise_mul(a: &mut [Complex64], b: &[Complex64]) {
         assert_eq!(a.len(), b.len());
@@ -200,6 +220,18 @@ impl MixedRadixScalar for f32 {
             n, f,
         )
     }
+
+    #[inline]
+    fn cached_rader_spectrum(
+        n: usize,
+        inverse: bool,
+        generator_inverse: usize,
+    ) -> Arc<[Complex32]> {
+        static CACHE: LazyLock<RwLock<HashMap<(usize, bool, usize), Arc<[Complex32]>>>> =
+            LazyLock::new(|| RwLock::new(HashMap::new()));
+        cached_rader_spectrum_impl::<f32, _>(&CACHE, n, inverse, generator_inverse)
+    }
+
     #[inline]
     fn pointwise_mul(a: &mut [Complex32], b: &[Complex32]) {
         assert_eq!(a.len(), b.len());
@@ -235,4 +267,47 @@ impl MixedRadixScalar for f32 {
     fn normalize(data: &mut [Complex32], n: usize) {
         normalize_inplace_c32(data, 1.0 / n as f32);
     }
+}
+
+#[inline]
+fn cached_rader_spectrum_impl<F, T>(
+    cache: &'static LazyLock<RwLock<HashMap<(usize, bool, usize), Arc<[T]>>>>,
+    n: usize,
+    inverse: bool,
+    generator_inverse: usize,
+) -> Arc<[T]>
+where
+    F: MixedRadixScalar<Complex = T>,
+    T: Copy + Send + Sync + 'static,
+{
+    let key = (n, inverse, generator_inverse);
+    if let Some(spectrum) = cache.read().get(&key).cloned() {
+        return spectrum;
+    }
+
+    let spectrum = build_rader_spectrum::<F>(n, inverse, generator_inverse);
+    cache
+        .write()
+        .entry(key)
+        .or_insert_with(|| Arc::clone(&spectrum))
+        .clone()
+}
+
+fn build_rader_spectrum<F: MixedRadixScalar>(
+    n: usize,
+    inverse: bool,
+    generator_inverse: usize,
+) -> Arc<[F::Complex]> {
+    let l = n - 1;
+    let padded_len = (2 * l - 1).next_power_of_two();
+    let sign = if inverse { 1.0 } else { -1.0 };
+    let mut kernel = vec![F::complex(0.0, 0.0); padded_len];
+    let mut curr_inv = 1;
+    for value in kernel.iter_mut().take(l) {
+        let angle = sign * std::f64::consts::TAU * (curr_inv as f64) / (n as f64);
+        *value = F::complex(angle.cos(), angle.sin());
+        curr_inv = (curr_inv * generator_inverse) % n;
+    }
+    crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(&mut kernel);
+    Arc::from(kernel.into_boxed_slice())
 }

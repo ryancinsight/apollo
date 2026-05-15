@@ -73,4 +73,152 @@ impl StockhamAvxBackend for f32 {
     unsafe fn permute_complex_swap(a: __m256) -> __m256 {
         unsafe { std::arch::x86_64::_mm256_permute_ps::<0b1011_0001>(a) }
     }
+
+    #[inline(always)]
+    unsafe fn rotate_quarter_turn(v: __m256, sign: f32) -> __m256 {
+        let mask = unsafe {
+            if sign > 0.0 {
+                std::arch::x86_64::_mm256_set_ps(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
+            } else {
+                std::arch::x86_64::_mm256_set_ps(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
+            }
+        };
+        unsafe { super::fixed::avx_rotate_quarter_turn32(v, mask) }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_groups_one(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        twiddles: &[Complex32],
+    ) {
+        unsafe { super::base::stage32_groups_one_avx_fma(src, dst, radix, twiddles) }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_pair_groups_two(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::pair::stage_pair32_groups_two_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_pair_quarter_groups_two(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::pair::stage_pair32_quarter_groups_two_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_triple_quarter_groups_one(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+        third_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::triple_2::stage_triple32_quarter_groups_one_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_triple_quarter_groups_two(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+        third_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::triple_2::stage_triple32_quarter_groups_two_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stockham_quad_groups_eight(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+        third_twiddles: &[Complex32],
+        fourth_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::quad::stockham_quad_groups_eight32(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+                fourth_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stockham_quad_groups_eight_low_live(
+        src: &[Complex32],
+        dst: &mut [Complex32],
+        radix: usize,
+        first_twiddles: &[Complex32],
+        second_twiddles: &[Complex32],
+        third_twiddles: &[Complex32],
+        fourth_twiddles: &[Complex32],
+    ) {
+        unsafe {
+            super::quad::stockham_quad_groups_eight32(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+                fourth_twiddles,
+            )
+        }
+    }
 }

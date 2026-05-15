@@ -1,5 +1,20 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXXV phase)
+- [x] [patch] Replace O(N²) `dft7_impl` with Winograd constant algorithm
+  (18 real muls: Hermitian symmetry + circulant cosine/sine matrix). Add `dft7`
+  to `ShortWinogradScalar` trait and `7 =>` dispatch arm. Partition three
+  identical 534-line winograd test files into domain-scoped modules (185 tests).
+  Apollo f64 N=15: ~82 ns (−24% vs RustFFT ~108 ns); f32: ~89 ns (−15% vs
+  ~105 ns). `apollo-fft` bumped to 0.12.2.
+
+## Closed in this sprint (Closure LXXXIV phase)
+- [x] [patch] Add DFT-100 Good-Thomas PFA codelet to `winograd/composite.rs`
+  and wire it into `ShortWinogradScalar` / `short_winograd` dispatch. N=100
+  previously fell through to the generic `pfa_fft` path. Apollo f64 N=100
+  is now 310 ns (−25% vs RustFFT 415 ns); f32 is 292 ns (−11% vs RustFFT
+  327 ns). Five correctness tests added; all 261 tests pass.
+
 ## Closed in this sprint (Closure LXXXIII phase)
 - [x] [major] Remove concrete mixed-radix twiddle wrapper entry points and
   route all internal plan-owned twiddle reuse through the canonical

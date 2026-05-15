@@ -1,4 +1,5 @@
-//! Thread-local and global twiddle/composite-radix caches for the mixed-radix dispatch.
+//! Thread-local and global twiddle/composite-radix caches for mixed-radix dispatch.
+
 use super::super::radix_shape::factorize_composite;
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
@@ -17,13 +18,6 @@ static TWIDDLE_INV_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Comp
 static COMPOSITE_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-// Thread-local fast-path caches: zero locking on the hot path after warmup.
-//
-// On a cache hit the hot path is:
-//   TW_FWD_64.with(|c| c.borrow().get(&n).cloned()) - no atomic, no lock.
-// On a miss, the global RwLock is consulted or the table is built once, then
-// the Arc is stored into the thread-local HashMap for all future calls.
-
 thread_local! {
     static TL_FWD_64: RefCell<HashMap<usize, Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(8));
@@ -35,24 +29,18 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(8));
     static TL_COMPOSITE_RADIX: RefCell<HashMap<usize, Option<Arc<[usize]>>>> =
         RefCell::new(HashMap::with_capacity(8));
-    // Single-size Stockham ping-pong scratch (one per thread; grows but never shrinks).
     static TL_STOCKHAM_SCRATCH_64: RefCell<Vec<Complex64>> =
         const { RefCell::new(Vec::new()) };
     static TL_STOCKHAM_SCRATCH_32: RefCell<Vec<Complex32>> =
         const { RefCell::new(Vec::new()) };
-
-    // Dedicated ping-pong scratches for PFA and Rader to avoid re-entrant borrows with Stockham.
-    // Rader is re-entrant (e.g., N=10007 -> 10006 -> 5003 -> Rader(5003)), so we use a Vec pool.
     static TL_PFA_SCRATCH_64: RefCell<Vec<Vec<Complex64>>> =
         const { RefCell::new(Vec::new()) };
     static TL_PFA_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
         const { RefCell::new(Vec::new()) };
-
     static TL_RADER_SCRATCH_64: RefCell<Vec<Vec<Complex64>>> =
         const { RefCell::new(Vec::new()) };
     static TL_RADER_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
         const { RefCell::new(Vec::new()) };
-
     static TL_RADER_PADDED_SCRATCH_64: RefCell<Vec<Vec<Complex64>>> =
         const { RefCell::new(Vec::new()) };
     static TL_RADER_PADDED_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
@@ -64,7 +52,6 @@ pub(crate) fn with_stockham_scratch_64<R>(n: usize, f: impl FnOnce(&mut [Complex
     TL_STOCKHAM_SCRATCH_64.with(|scratch| {
         let mut scratch = scratch.borrow_mut();
         if scratch.len() < n {
-            // Grow without zero-init: Stockham kernel overwrites before reading.
             let cur = scratch.len();
             scratch.reserve(n.saturating_sub(cur));
             unsafe { scratch.set_len(n) };
@@ -172,8 +159,6 @@ pub(crate) fn with_rader_padded_scratch_32<R>(
     res
 }
 
-/// Retrieves the Arc from the thread-local map or falls back to global.
-/// `build_fn` is called at most once per (thread, size) pair.
 #[inline]
 fn tl_cached<T: Clone>(
     tl: &'static std::thread::LocalKey<RefCell<HashMap<usize, Arc<[T]>>>>,
@@ -181,17 +166,12 @@ fn tl_cached<T: Clone>(
     n: usize,
     build_fn: impl FnOnce(usize) -> Vec<T>,
 ) -> Arc<[T]> {
-    // Fast path: hit in this thread's HashMap - no lock or atomic.
     if let Some(tw) = tl.with(|c| c.borrow().get(&n).cloned()) {
         return tw;
     }
-    // Slow path (once per thread per size): read or write the global cache.
-    // NOTE: The read guard MUST be dropped (via let binding with `;`) before
-    // calling global.write() to avoid a same-thread read-to-write deadlock with
-    // parking_lot::RwLock, which does not allow upgrading a read lock on the
-    // same thread.
+
     let tw = {
-        let maybe_cached = global.read().get(&n).cloned(); // ReadGuard drops here at `;`
+        let maybe_cached = global.read().get(&n).cloned();
         if let Some(tw) = maybe_cached {
             tw
         } else {
@@ -253,22 +233,20 @@ pub(crate) fn cached_composite_radices(n: usize) -> Option<Arc<[usize]>> {
         return radices;
     }
 
-    // Slow path: factorize and populate global + thread-local cache.
     let radices = {
         let maybe_cached = COMPOSITE_RADIX_CACHE.read().get(&n).cloned();
         if let Some(radices) = maybe_cached {
             radices
         } else {
             let new_radices = factorize_composite(n).map(|rad| Arc::from(rad.into_boxed_slice()));
-            let inserted = COMPOSITE_RADIX_CACHE
+            COMPOSITE_RADIX_CACHE
                 .write()
                 .entry(n)
                 .or_insert_with(|| match &new_radices {
                     Some(a) => Some(Arc::clone(a)),
                     None => None,
                 })
-                .clone();
-            inserted
+                .clone()
         }
     };
 

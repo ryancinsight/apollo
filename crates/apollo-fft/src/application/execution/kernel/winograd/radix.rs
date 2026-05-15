@@ -17,6 +17,16 @@ use super::traits::WinogradScalar;
 #[inline]
 pub(crate) fn dft4_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 4);
+    let data: &mut [num_complex::Complex<F>; 4] =
+        (&mut data[..4]).try_into().expect("length checked");
+    dft4_array_impl(data, inverse);
+}
+
+#[inline(always)]
+pub(crate) fn dft4_array_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 4],
+    inverse: bool,
+) {
     let t0 = data[0] + data[2];
     let t1 = data[0] - data[2];
     let t2 = data[1] + data[3];
@@ -79,29 +89,63 @@ pub(crate) fn dft8_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
     }
 }
 
+/// In-place Winograd DFT-7.
+///
+/// ## Mathematical derivation
+///
+/// N=7 is prime; exploit Hermitian symmetry of the twiddle matrix.
+/// W₇ = exp(−2πi/7). Define xr[n]=x[n]+x[7−n], xi[n]=x[n]−x[7−n] for n=1..3.
+/// Then X[k] = x[0] + Σ_{n=1}^{3} [cos(2πkn/7)·xr[n] + sign·sin(2πkn/7)·(i·xi[n])]
+/// where sign=+1 for inverse (conjugate twiddles), −1 for forward.
+/// X[7−k] = conjugate-symmetric counterpart sharing real parts with X[k].
+///
+/// Cosine matrix (k=1..3, n=1..3): row-cyclic in [c1,c2,c3]:
+///   k=1: [c1,c2,c3],  k=2: [c2,c3,c1],  k=3: [c3,c1,c2].
+/// Sine rows: k=1:[s1,s2,s3], k=2:[s2,−s3,−s1], k=3:[s3,−s1,s2].
+///
+/// **Real multiplications**: 18 scalar×complex (= 36 real muls).
+/// Replaces the O(N²) naive DFT that computed trig at every call.
+///
+/// Constants: cos(2πk/7) and sin(2πk/7) for k=1,2,3.
+/// References: Winograd (1978), Blahut (2010) §3.5.
 #[inline]
 pub(crate) fn dft7_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 7);
-    let sign = if inverse {
-        F::cast_f64(1.0)
-    } else {
-        F::cast_f64(-1.0)
-    };
-    let t = [
-        data[0], data[1], data[2], data[3], data[4], data[5], data[6],
-    ];
-    for k in 0..7 {
-        let mut sum = num_complex::Complex::new(F::cast_f64(0.0), F::cast_f64(0.0));
-        for n in 0..7 {
-            let angle = (k * n) as f64 * std::f64::consts::TAU / 7.0;
-            let tw = num_complex::Complex::new(
-                F::cast_f64(angle.cos()),
-                sign * F::cast_f64(angle.sin()),
-            );
-            sum += t[n] * tw;
-        }
-        data[k] = sum;
-    }
+    let xr1 = data[1] + data[6];
+    let xr2 = data[2] + data[5];
+    let xr3 = data[3] + data[4];
+    let xi1 = data[1] - data[6];
+    let xi2 = data[2] - data[5];
+    let xi3 = data[3] - data[4];
+    // i·xi[n] = (−xi.im, xi.re)
+    let ixi1 = num_complex::Complex::new(-xi1.im, xi1.re);
+    let ixi2 = num_complex::Complex::new(-xi2.im, xi2.re);
+    let ixi3 = num_complex::Complex::new(-xi3.im, xi3.re);
+    let c1 = F::cast_f64(0.6234898018587336);
+    let c2 = F::cast_f64(-0.2225209339563144);
+    let c3 = F::cast_f64(-0.9009688679024191);
+    let s1 = F::cast_f64(0.7818314824680298);
+    let s2 = F::cast_f64(0.9749279121818236);
+    let s3 = F::cast_f64(0.4338837391175582);
+    // sign = +1 inverse (add sine terms), −1 forward (subtract)
+    let sign = if inverse { F::cast_f64(1.0) } else { F::cast_f64(-1.0) };
+    let sixi1 = ixi1 * sign;
+    let sixi2 = ixi2 * sign;
+    let sixi3 = ixi3 * sign;
+    let x0 = data[0];
+    data[0] = x0 + xr1 + xr2 + xr3;
+    let re1 = x0 + xr1 * c1 + xr2 * c2 + xr3 * c3;
+    let re2 = x0 + xr1 * c2 + xr2 * c3 + xr3 * c1;
+    let re3 = x0 + xr1 * c3 + xr2 * c1 + xr3 * c2;
+    let d1 = sixi1 * s1 + sixi2 * s2 + sixi3 * s3;
+    let d2 = sixi1 * s2 - sixi2 * s3 - sixi3 * s1;
+    let d3 = sixi1 * s3 - sixi2 * s1 + sixi3 * s2;
+    data[1] = re1 + d1;
+    data[6] = re1 - d1;
+    data[2] = re2 + d2;
+    data[5] = re2 - d2;
+    data[3] = re3 + d3;
+    data[4] = re3 - d3;
 }
 
 /// In-place DFT-3.
@@ -231,6 +275,16 @@ pub(crate) fn dft15_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>]
 #[inline]
 pub(crate) fn dft5_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 5);
+    let data: &mut [num_complex::Complex<F>; 5] =
+        (&mut data[..5]).try_into().expect("length checked");
+    dft5_array_impl(data, inverse);
+}
+
+#[inline(always)]
+pub(crate) fn dft5_array_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 5],
+    inverse: bool,
+) {
     let c1 = F::cast_f64(0.30901699437494745);
     let c2 = F::cast_f64(-0.8090169943749475);
     let s1 = F::cast_f64(0.9510565162951535);
@@ -249,8 +303,10 @@ pub(crate) fn dft5_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
     let m0 = data[0] + t1 + t3;
     let m1 = t1 * c1 + t3 * c2;
     let m2 = t1 * c2 + t3 * c1;
-    let m3 = num_complex::Complex::new(F::cast_f64(0.0), F::cast_f64(1.0)) * (t2 * s1 + t4 * s2);
-    let m4 = num_complex::Complex::new(F::cast_f64(0.0), F::cast_f64(1.0)) * (t2 * s2 - t4 * s1);
+    let q3 = t2 * s1 + t4 * s2;
+    let q4 = t2 * s2 - t4 * s1;
+    let m3 = num_complex::Complex::new(-q3.im, q3.re);
+    let m4 = num_complex::Complex::new(-q4.im, q4.re);
     let s1_add = data[0] + m1;
     let s2_add = data[0] + m2;
     data[0] = m0;

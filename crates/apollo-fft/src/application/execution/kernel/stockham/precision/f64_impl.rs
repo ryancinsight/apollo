@@ -1,22 +1,24 @@
+use super::super::avx::f64::triple_2::stage_triple64_groups_eight_avx_fma;
 use super::super::avx::{
+    backend::StockhamAvxBackend,
     generic::{
         base::stage_avx_fma,
         pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
+        triple::{
+            stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
+        },
     },
-    stage64_groups_one_avx_fma, stage_pair64_groups_two_avx_fma,
-    stage_triple64_groups_eight_avx_fma, stage_triple64_low_live_avx_fma,
-    stage_triple64_quarter_groups_one_avx_fma, stage_triple64_radix1_avx_fma,
-    stage_triple64_throughput_avx_fma, stockham_quad_groups_eight64_low_live,
 };
 use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
 use super::super::stage::stage_impl;
 use super::super::stage::stockham_f64_stage_is_l1_resident;
+
 #[cfg(any(
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
 use super::traits::F64Stockham;
-use super::traits::{private, StockhamPrecision, StockhamRadix16AvxLeaf};
+use super::traits::{private, StockhamPrecision};
 use crate::application::execution::kernel::radix_stage::normalize_inplace_c64;
 use num_complex::Complex64;
 
@@ -98,32 +100,6 @@ pub(crate) struct F64StockhamAvxFma;
 impl private::Sealed for F64StockhamAvxFma {}
 
 #[cfg(target_arch = "x86_64")]
-impl StockhamRadix16AvxLeaf for F64StockhamAvxFma {
-    #[inline]
-    unsafe fn stage_quad_groups_eight_avx_fma(
-        src: &[Complex64],
-        dst: &mut [Complex64],
-        radix: usize,
-        first_twiddles: &[Complex64],
-        second_twiddles: &[Complex64],
-        third_twiddles: &[Complex64],
-        fourth_twiddles: &[Complex64],
-    ) {
-        unsafe {
-            stockham_quad_groups_eight64_low_live(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-                fourth_twiddles,
-            )
-        };
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
 impl StockhamPrecision for F64StockhamAvxFma {
     type Real = f64;
     type Complex = Complex64;
@@ -152,7 +128,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
     fn stage(src: &[Complex64], dst: &mut [Complex64], radix: usize, twiddles: &[Complex64]) {
         let groups = src.len() / (radix << 1);
         if groups == 1 && radix >= 2 {
-            unsafe { stage64_groups_one_avx_fma(src, dst, radix, twiddles) };
+            unsafe { <f64 as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles) };
         } else if groups >= 2 {
             unsafe { stage_avx_fma::<f64>(src, dst, radix, twiddles) };
         } else {
@@ -177,7 +153,13 @@ impl StockhamPrecision for F64StockhamAvxFma {
             }
         } else if groups == 2 && radix >= 2 {
             unsafe {
-                stage_pair64_groups_two_avx_fma(src, dst, radix, first_twiddles, second_twiddles)
+                <f64 as StockhamAvxBackend>::stage_pair_groups_two(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                )
             };
         } else if groups >= 4 {
             unsafe { stage_pair_avx_fma::<f64>(src, dst, radix, first_twiddles, second_twiddles) };
@@ -197,7 +179,9 @@ impl StockhamPrecision for F64StockhamAvxFma {
     ) {
         let groups = src.len() / (radix << 1);
         if radix == 1 && groups >= 8 && stockham_f64_stage_is_l1_resident(src.len()) {
-            unsafe { stage_triple64_radix1_avx_fma(src, dst, second_twiddles, third_twiddles) };
+            unsafe {
+                stage_triple_radix1_avx_fma::<f64>(src, dst, second_twiddles, third_twiddles)
+            };
         } else if groups == 8 {
             unsafe {
                 stage_triple64_groups_eight_avx_fma(
@@ -212,7 +196,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
         } else if groups >= 8 {
             if stockham_f64_stage_is_l1_resident(src.len()) {
                 unsafe {
-                    stage_triple64_low_live_avx_fma(
+                    stage_triple_low_live_avx_fma::<f64>(
                         src,
                         dst,
                         radix,
@@ -224,7 +208,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
                 };
             } else {
                 unsafe {
-                    stage_triple64_throughput_avx_fma(
+                    stage_triple_avx_fma::<f64>(
                         src,
                         dst,
                         radix,
@@ -237,7 +221,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
             }
         } else if groups == 4 {
             unsafe {
-                stage_triple64_quarter_groups_one_avx_fma(
+                <f64 as StockhamAvxBackend>::stage_triple_quarter_groups_one(
                     src,
                     dst,
                     radix,
@@ -271,7 +255,7 @@ impl StockhamPrecision for F64StockhamAvxFma {
         let groups = src.len() / (radix << 1);
         if groups == 8 {
             unsafe {
-                <Self as StockhamRadix16AvxLeaf>::stage_quad_groups_eight_avx_fma(
+                <f64 as StockhamAvxBackend>::stockham_quad_groups_eight_low_live(
                     src,
                     dst,
                     radix,

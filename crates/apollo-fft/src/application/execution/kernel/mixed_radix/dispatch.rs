@@ -27,7 +27,7 @@ use super::traits::{forward_short_winograd, inverse_short_winograd};
 ///
 /// `INVERSE` selects twiddle table direction and algorithm variant.
 /// `NORMALIZE` gates the 1/N scale pass, eliminated at compile time when false.
-#[inline]
+#[inline(always)]
 pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [F::Complex],
     twiddles: Option<&[F::Complex]>,
@@ -94,7 +94,7 @@ pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const N
 // ── Forward ───────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
-#[inline]
+#[inline(always)]
 pub(crate) fn forward_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
     dispatch_inplace::<F, false, false>(data, None);
 }
@@ -102,7 +102,7 @@ pub(crate) fn forward_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
 // ── Inverse (unnormalized) ────────────────────────────────────────────────────
 
 /// In-place inverse FFT, unnormalized (no 1/N division).
-#[inline]
+#[inline(always)]
 pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar>(data: &mut [F::Complex]) {
     dispatch_inplace::<F, true, false>(data, None);
 }
@@ -110,7 +110,7 @@ pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar>(data: &mut [F::Complex
 // ── Inverse (normalized 1/N) ──────────────────────────────────────────────────
 
 /// In-place inverse FFT, normalized by 1/N.
-#[inline]
+#[inline(always)]
 pub(crate) fn inverse_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
     dispatch_inplace::<F, true, true>(data, None);
 }

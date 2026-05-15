@@ -10,10 +10,7 @@ use super::precision::{
     F32Stockham, F32StockhamAvxFma, F64Stockham, F64StockhamAvxFma, StockhamPrecision,
 };
 use super::*;
-use crate::application::execution::kernel::stockham::avx::{
-    stage_triple32_radix1_avx_fma, stage_triple64_groups_eight_avx_fma,
-    stage_triple64_radix1_avx_fma,
-};
+use crate::application::execution::kernel::stockham::avx::f64::triple_2::stage_triple64_groups_eight_avx_fma;
 use num_complex::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]

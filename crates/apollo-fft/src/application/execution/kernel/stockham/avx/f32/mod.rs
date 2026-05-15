@@ -4,5 +4,4 @@ pub(crate) mod base;
 pub(crate) mod fixed;
 pub(crate) mod pair;
 pub(crate) mod quad;
-pub(crate) mod triple_1;
 pub(crate) mod triple_2;

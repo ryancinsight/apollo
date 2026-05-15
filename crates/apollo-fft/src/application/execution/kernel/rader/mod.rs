@@ -3,6 +3,9 @@
 pub(crate) mod generator;
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use parking_lot::RwLock;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 
 // Rader's algorithm for prime lengths
 /// Rader's Algorithm for prime N
@@ -12,45 +15,52 @@ pub(crate) fn rader_fft<F: MixedRadixScalar>(data: &mut [F::Complex], inverse: b
 
     let g = generator::primitive_root(n);
     let g_inv = mod_inverse(g, n);
+    let kernel_spectrum = F::cached_rader_spectrum(n, inverse, g_inv);
+    let permutation = cached_permutation(n, g, g_inv);
 
     let x0 = data[0];
 
     F::with_rader_scratch(n - 1, |scratch| {
-        // Construct permuted a directly into scratch FIRST before we overwrite data
-        let mut curr = 1;
-        for q in 0..(n - 1) {
-            scratch[q] = data[curr];
-            curr = (curr * g) % n;
-        }
-
-        // Compute sum_x and b directly into data[1..N] to save space
         let mut sum_x = F::complex(0.0, 0.0);
-        let sign = if inverse { 1.0 } else { -1.0 };
-        let mut curr_inv = 1;
-        for q in 0..(n - 1) {
-            sum_x = sum_x + data[1 + q];
-            let angle = sign * std::f64::consts::TAU * (curr_inv as f64) / (n as f64);
-            curr_inv = (curr_inv * g_inv) % n;
-            data[1 + q] = F::complex(angle.cos(), angle.sin());
+        for (q, &(input_idx, _)) in permutation.iter().enumerate() {
+            let value = data[input_idx];
+            scratch[q] = value;
+            sum_x = sum_x + value;
         }
 
-        // Circular convolution of scratch (a) and data[1..N] (b)
-        circular_convolution_inplace::<F>(scratch, &mut data[1..]);
+        circular_convolution_inplace::<F>(scratch, kernel_spectrum.as_ref());
 
         data[0] = x0 + sum_x;
 
-        // Permute result back into data using g_inv_pow
-        // We need to write a[q] to data[g_inv_pow[q]]. However, we can't do this in-place easily
-        // because data[1..N] already holds the result (it was the second argument to convolution,
-        // wait, circular_convolution_inplace overwrites the FIRST argument `a`).
-        // So `scratch` holds the convolved output! data[1..N] is trashed by convolution, which is fine!
-
-        curr_inv = 1;
-        for q in 0..(n - 1) {
-            data[curr_inv] = x0 + scratch[q];
-            curr_inv = (curr_inv * g_inv) % n;
+        for (q, &(_, output_idx)) in permutation.iter().enumerate() {
+            data[output_idx] = x0 + scratch[q];
         }
     });
+}
+
+static RADER_PERMUTATION_CACHE: LazyLock<RwLock<HashMap<(usize, usize, usize), Arc<[(usize, usize)]>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+fn cached_permutation(n: usize, g: usize, g_inv: usize) -> Arc<[(usize, usize)]> {
+    let key = (n, g, g_inv);
+    if let Some(permutation) = RADER_PERMUTATION_CACHE.read().get(&key).cloned() {
+        return permutation;
+    }
+
+    let mut pairs = Vec::with_capacity(n - 1);
+    let mut input_idx = 1;
+    let mut output_idx = 1;
+    for _ in 0..(n - 1) {
+        pairs.push((input_idx, output_idx));
+        input_idx = (input_idx * g) % n;
+        output_idx = (output_idx * g_inv) % n;
+    }
+    let permutation: Arc<[(usize, usize)]> = Arc::from(pairs.into_boxed_slice());
+    RADER_PERMUTATION_CACHE
+        .write()
+        .entry(key)
+        .or_insert_with(|| Arc::clone(&permutation))
+        .clone()
 }
 
 fn mod_inverse(a: usize, m: usize) -> usize {
@@ -79,51 +89,28 @@ fn mod_inverse(a: usize, m: usize) -> usize {
     x as usize
 }
 
-// Deleted dead allocating function
-
-fn circular_convolution_inplace<F: MixedRadixScalar>(a: &mut [F::Complex], b: &mut [F::Complex]) {
+fn circular_convolution_inplace<F: MixedRadixScalar>(a: &mut [F::Complex], kernel_spectrum: &[F::Complex]) {
     let l = a.len();
-    debug_assert_eq!(l, b.len());
-
-    // For small or highly smooth lengths, we could use the inplace FFT directly.
-    // However, to guarantee O(N log N) performance and avoid recursive Rader on large primes,
-    // we use zero-padded linear convolution with a power-of-two FFT.
-    // M must be >= 2L - 1
-    let m = (2 * l - 1).next_power_of_two();
+    let m = kernel_spectrum.len();
+    debug_assert!(m >= 2 * l - 1);
 
     F::with_rader_padded_scratch(m, |scratch_a| {
-        F::with_rader_padded_scratch(m, |scratch_b| {
-            // Pad a into scratch_a
-            scratch_a[..l].copy_from_slice(a);
-            for i in l..m {
-                scratch_a[i] = F::complex(0.0, 0.0);
-            }
+        scratch_a[..l].copy_from_slice(a);
+        for value in &mut scratch_a[l..m] {
+            *value = F::complex(0.0, 0.0);
+        }
 
-            // Pad b into scratch_b
-            scratch_b[..l].copy_from_slice(b);
-            for i in l..m {
-                scratch_b[i] = F::complex(0.0, 0.0);
-            }
+        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(scratch_a);
+        F::pointwise_mul(&mut scratch_a[..m], kernel_spectrum);
+        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(scratch_a);
 
-            // Forward Stockham FFTs (since M is power of 2)
-            crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(scratch_a);
-            crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(scratch_b);
-
-            // Pointwise multiplication using precision-optimized method
-            F::pointwise_mul(&mut scratch_a[..m], &scratch_b[..m]);
-
-            // Inverse normalized FFT
-            crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(scratch_a);
-
-            // Alias linear convolution back into circular convolution of length L
-            for n in 0..l {
-                let tail = if n + l < m {
-                    scratch_a[n + l]
-                } else {
-                    F::complex(0.0, 0.0)
-                };
-                a[n] = scratch_a[n] + tail;
-            }
-        });
+        for n in 0..l {
+            let tail = if n + l < m {
+                scratch_a[n + l]
+            } else {
+                F::complex(0.0, 0.0)
+            };
+            a[n] = scratch_a[n] + tail;
+        }
     });
 }

@@ -64,13 +64,36 @@ fn allocation_count() -> u64 {
     ALLOCATIONS.load(Ordering::Relaxed)
 }
 
+fn selected_sizes(default: &[usize]) -> Vec<usize> {
+    match std::env::var("APOLLO_FFT_BENCH_N") {
+        Ok(raw) => {
+            let len = raw
+                .parse::<usize>()
+                .expect("APOLLO_FFT_BENCH_N must be a positive integer FFT length");
+            if default.contains(&len) {
+                vec![len]
+            } else {
+                Vec::new()
+            }
+        }
+        Err(std::env::VarError::NotPresent) => default.to_vec(),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            panic!("APOLLO_FFT_BENCH_N must be valid Unicode")
+        }
+    }
+}
+
 fn bench_f64(c: &mut Criterion) {
     const SIZES: &[usize] = &[15, 100, 10_007];
+    let sizes = selected_sizes(SIZES);
+    if sizes.is_empty() {
+        return;
+    }
 
     let mut group = c.benchmark_group("apollo_fft_vs_rustfft_f64");
     group.sample_size(20);
 
-    for &len in SIZES {
+    for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
         let input = signal_f64(len);
 
@@ -225,11 +248,15 @@ fn bench_f64(c: &mut Criterion) {
 
 fn bench_f32(c: &mut Criterion) {
     const SIZES: &[usize] = &[15, 100, 10_007];
+    let sizes = selected_sizes(SIZES);
+    if sizes.is_empty() {
+        return;
+    }
 
     let mut group = c.benchmark_group("apollo_fft_vs_rustfft_f32");
     group.sample_size(20);
 
-    for &len in SIZES {
+    for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
         let input = signal_f32(len);
 
@@ -384,11 +411,15 @@ fn bench_f32(c: &mut Criterion) {
 
 fn bench_six_step_f32(c: &mut Criterion) {
     const SIZES: &[usize] = &[5 * 1024, 7 * 1024, 11 * 512];
+    let sizes = selected_sizes(SIZES);
+    if sizes.is_empty() {
+        return;
+    }
 
     let mut group = c.benchmark_group("apollo_six_step_f32_vs_rustfft");
     group.sample_size(20);
 
-    for &len in SIZES {
+    for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
         let input = Array1::from_vec(signal_f32(len).into_iter().map(|z| z.re).collect());
         let plan = FftPlan1D::with_precision(

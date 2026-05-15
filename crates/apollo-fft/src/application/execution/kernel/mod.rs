@@ -5,12 +5,11 @@
 //! | Module            | Role |
 //! |-------------------|------|
 //! | `direct`          | O(N²) reference DFT; used only for testing. |
-//! | `radix2`          | Twiddle-table builders used by Stockham, Bluestein, and tests. |
-//! | `bluestein`       | O(N log N) chirp-Z FFT for arbitrary-length transforms. |
+//! | `radix2`          | Twiddle-table builders used by Stockham, Rader, and tests. |
 //! | `winograd`        | Short-DFT codelets (DFT-3/5/7/8/N) used by the composite kernel. |
 //! | `radix_composite` | Mixed-radix Stockham autosort FFT for 2/3/5/7-smooth composite lengths. |
 //! | `stockham`        | Radix-2 Stockham autosort FFT for all power-of-two lengths. |
-//! | `mixed_radix`     | Dispatch facade: Stockham for PoT, composite for smooth, Bluestein otherwise. |
+//! | `mixed_radix`     | Dispatch facade: Stockham for PoT, composite/PFA for smooth, Rader for primes. |
 
 pub mod direct;
 pub mod good_thomas;
@@ -41,7 +40,7 @@ use num_complex::{Complex, Complex32, Complex64};
 /// Implementors delegate to the `mixed_radix` facade, which routes to:
 /// - Stockham autosort for power-of-two lengths (no bit-reversal).
 /// - Composite mixed-radix DIT for 2/3/5/7-smooth lengths.
-/// - Bluestein chirp-Z for all other lengths.
+/// - Rader convolution for prime lengths.
 ///
 /// Implemented for `Complex64`, `Complex32`, and `Complex<f16>`.
 pub trait FftPrecision: Sized {

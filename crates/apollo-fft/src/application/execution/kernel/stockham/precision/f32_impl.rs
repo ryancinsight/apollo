@@ -1,13 +1,12 @@
 use super::super::avx::{
+    backend::StockhamAvxBackend,
     generic::{
         base::stage_avx_fma,
         pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
+        triple::{
+            stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
+        },
     },
-    stage32_groups_one_avx_fma, stage_pair32_groups_two_avx_fma,
-    stage_pair32_quarter_groups_two_avx_fma, stage_triple32_avx_fma,
-    stage_triple32_low_live_avx_fma, stage_triple32_quarter_groups_one_avx_fma,
-    stage_triple32_quarter_groups_two_avx_fma, stage_triple32_radix1_avx_fma,
-    stockham_quad_groups_eight32,
 };
 use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
 use super::super::stage::stage_impl;
@@ -17,7 +16,7 @@ use super::super::stage::stockham_f32_stage_is_l1_resident;
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
 use super::traits::F32Stockham;
-use super::traits::{private, StockhamPrecision, StockhamRadix16AvxLeaf};
+use super::traits::{private, StockhamPrecision};
 use crate::application::execution::kernel::radix_stage::normalize_inplace_c32;
 use num_complex::Complex32;
 
@@ -105,32 +104,6 @@ pub(crate) struct F32StockhamAvxFma;
 impl private::Sealed for F32StockhamAvxFma {}
 
 #[cfg(target_arch = "x86_64")]
-impl StockhamRadix16AvxLeaf for F32StockhamAvxFma {
-    #[inline]
-    unsafe fn stage_quad_groups_eight_avx_fma(
-        src: &[Complex32],
-        dst: &mut [Complex32],
-        radix: usize,
-        first_twiddles: &[Complex32],
-        second_twiddles: &[Complex32],
-        third_twiddles: &[Complex32],
-        fourth_twiddles: &[Complex32],
-    ) {
-        unsafe {
-            stockham_quad_groups_eight32(
-                src,
-                dst,
-                radix,
-                first_twiddles,
-                second_twiddles,
-                third_twiddles,
-                fourth_twiddles,
-            )
-        };
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
 impl StockhamPrecision for F32StockhamAvxFma {
     type Real = f32;
     type Complex = Complex32;
@@ -154,7 +127,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
     fn stage(src: &[Complex32], dst: &mut [Complex32], radix: usize, twiddles: &[Complex32]) {
         let groups = src.len() / (radix << 1);
         if groups == 1 && radix >= 2 {
-            unsafe { stage32_groups_one_avx_fma(src, dst, radix, twiddles) };
+            unsafe { <f32 as StockhamAvxBackend>::stage_groups_one(src, dst, radix, twiddles) };
         } else if groups >= 4 {
             unsafe { stage_avx_fma::<f32>(src, dst, radix, twiddles) };
         } else {
@@ -181,7 +154,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
             unsafe { stage_pair_avx_fma::<f32>(src, dst, radix, first_twiddles, second_twiddles) };
         } else if groups == 4 {
             unsafe {
-                stage_pair32_quarter_groups_two_avx_fma(
+                <f32 as StockhamAvxBackend>::stage_pair_quarter_groups_two(
                     src,
                     dst,
                     radix,
@@ -191,7 +164,13 @@ impl StockhamPrecision for F32StockhamAvxFma {
             };
         } else if groups == 2 {
             unsafe {
-                stage_pair32_groups_two_avx_fma(src, dst, radix, first_twiddles, second_twiddles)
+                <f32 as StockhamAvxBackend>::stage_pair_groups_two(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                )
             };
         } else {
             stage_pair_impl(src, dst, radix, first_twiddles, second_twiddles);
@@ -209,11 +188,13 @@ impl StockhamPrecision for F32StockhamAvxFma {
     ) {
         let groups = src.len() / (radix << 1);
         if radix == 1 && groups >= 8 && src.len() >= 32 {
-            unsafe { stage_triple32_radix1_avx_fma(src, dst, second_twiddles, third_twiddles) };
+            unsafe {
+                stage_triple_radix1_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
         } else if groups >= 16 {
             if stockham_f32_stage_is_l1_resident(src.len()) {
                 unsafe {
-                    stage_triple32_low_live_avx_fma(
+                    stage_triple_low_live_avx_fma::<f32>(
                         src,
                         dst,
                         radix,
@@ -225,7 +206,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
                 };
             } else {
                 unsafe {
-                    stage_triple32_avx_fma(
+                    stage_triple_avx_fma::<f32>(
                         src,
                         dst,
                         radix,
@@ -238,7 +219,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
             }
         } else if groups == 8 {
             unsafe {
-                stage_triple32_quarter_groups_two_avx_fma(
+                <f32 as StockhamAvxBackend>::stage_triple_quarter_groups_two(
                     src,
                     dst,
                     radix,
@@ -249,7 +230,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
             };
         } else if groups == 4 {
             unsafe {
-                stage_triple32_quarter_groups_one_avx_fma(
+                <f32 as StockhamAvxBackend>::stage_triple_quarter_groups_one(
                     src,
                     dst,
                     radix,
@@ -283,7 +264,7 @@ impl StockhamPrecision for F32StockhamAvxFma {
         let groups = src.len() / (radix << 1);
         if groups == 8 {
             unsafe {
-                <Self as StockhamRadix16AvxLeaf>::stage_quad_groups_eight_avx_fma(
+                <f32 as StockhamAvxBackend>::stockham_quad_groups_eight(
                     src,
                     dst,
                     radix,

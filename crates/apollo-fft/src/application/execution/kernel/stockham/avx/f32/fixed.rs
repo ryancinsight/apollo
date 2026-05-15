@@ -1,4 +1,4 @@
-use super::triple_1::stage_triple32_radix1_avx_fma;
+use super::super::generic::triple::stage_triple_radix1_avx_fma;
 use super::triple_2::stage_triple32_quarter_groups_one_avx_fma;
 use num_complex::Complex32;
 
@@ -19,7 +19,7 @@ pub(crate) unsafe fn fixed_len64_32_avx_fma(
     let second_second = twiddles.get_unchecked(15..31);
     let second_third = twiddles.get_unchecked(31..63);
 
-    stage_triple32_radix1_avx_fma(data, scratch, first_second, first_third);
+    stage_triple_radix1_avx_fma::<f32>(data, scratch, first_second, first_third);
     stage_triple32_quarter_groups_one_avx_fma(
         scratch,
         data,

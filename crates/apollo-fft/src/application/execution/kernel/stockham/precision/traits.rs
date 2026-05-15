@@ -77,19 +77,6 @@ pub(crate) trait StockhamPrecision: private::Sealed {
     fn scale(data: &mut [Self::Complex], scale: Self::Real);
 }
 
-#[cfg(target_arch = "x86_64")]
-pub(crate) trait StockhamRadix16AvxLeaf: StockhamPrecision {
-    unsafe fn stage_quad_groups_eight_avx_fma(
-        src: &[Self::Complex],
-        dst: &mut [Self::Complex],
-        radix: usize,
-        first_twiddles: &[Self::Complex],
-        second_twiddles: &[Self::Complex],
-        third_twiddles: &[Self::Complex],
-        fourth_twiddles: &[Self::Complex],
-    );
-}
-
 pub(crate) struct StockhamTwiddleCursor<'a, T> {
     ptr: *const T,
     len: usize,

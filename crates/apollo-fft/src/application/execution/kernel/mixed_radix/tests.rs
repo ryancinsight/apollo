@@ -34,6 +34,48 @@ fn mixed_inverse_unnorm_n32_matches_direct() {
 }
 
 #[test]
+fn mixed_forward_prime_n17_matches_direct() {
+    let n = 17usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.31).sin(), (k as f64 * 0.23).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(err < 1.0e-10, "Rader forward mismatch err={err:.2e}");
+}
+
+#[test]
+fn mixed_inverse_prime_n17_matches_direct() {
+    let n = 17usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.37).cos(), (k as f64 * 0.41).sin()))
+        .collect();
+    let mut got = input.clone();
+    inverse_inplace_unnorm::<f64>(&mut got);
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(err < 1.0e-10, "Rader inverse mismatch err={err:.2e}");
+}
+
+#[test]
+fn mixed_forward_prime_n257_matches_direct() {
+    let n = 257usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.013).sin(), (k as f64 * 0.017).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(err < 1.0e-8, "prime forward mismatch err={err:.2e}");
+}
+
+#[test]
 fn mixed_f32_stockham_forward_inverse_roundtrip_n256() {
     let n = 256usize;
     let input: Vec<Complex32> = (0..n)

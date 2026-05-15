@@ -3,9 +3,7 @@
 #[cfg(all(test, target_arch = "x86_64"))]
 use super::fixed::{fixed_len512_32_avx_fma, fixed_len512_avx_fma};
 #[cfg(all(test, target_arch = "x86_64"))]
-use crate::application::execution::kernel::stockham::avx::{
-    stage_triple32_radix1_avx_fma, stage_triple64_radix1_avx_fma,
-};
+use crate::application::execution::kernel::stockham::avx::generic::triple::stage_triple_radix1_avx_fma;
 use num_complex::Complex32;
 #[cfg(all(test, target_arch = "x86_64"))]
 use num_complex::Complex64;
@@ -54,7 +52,7 @@ pub(crate) unsafe fn hybrid_radix8x512_64_avx_fma<const INVERSE: bool>(
     debug_assert!(twiddles.len() >= ROWS * COLS - 1);
 
     let row_twiddles = &twiddles[..COLS - 1];
-    stage_triple64_radix1_avx_fma(data, scratch, &twiddles[1..3], &twiddles[3..7]);
+    stage_triple_radix1_avx_fma::<f64>(data, scratch, &twiddles[1..3], &twiddles[3..7]);
     let mut r = 1;
     while r < ROWS {
         let row_base = r * COLS;
@@ -93,7 +91,7 @@ pub(crate) unsafe fn hybrid_radix8x512_32_avx_fma<const INVERSE: bool>(
     debug_assert!(twiddles.len() >= ROWS * COLS - 1);
 
     let row_twiddles = &twiddles[..COLS - 1];
-    stage_triple32_radix1_avx_fma(data, scratch, &twiddles[1..3], &twiddles[3..7]);
+    stage_triple_radix1_avx_fma::<f32>(data, scratch, &twiddles[1..3], &twiddles[3..7]);
     let mut r = 1;
     while r < ROWS {
         let row_base = r * COLS;

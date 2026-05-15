@@ -6,6 +6,41 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ---
 
+## [0.12.2] - 2026-05-14
+### Added
+- [patch] `apollo-fft`: `dft7_impl` replaced with Winograd constant algorithm.
+  Exploits Hermitian symmetry of the 7-point twiddle matrix: sum/difference
+  decomposition into xr[n]=x[n]+x[7−n] and xi[n]=x[n]−x[7−n], then circulant
+  cosine (c1,c2,c3) and sine (s1,s2,s3) row patterns. Reduces O(N²) naive DFT
+  (49 complex muls) to 18 real multiplications with precomputed constants.
+- [patch] `apollo-fft`: `ShortWinogradScalar::dft7` trait method and `7 =>`
+  dispatch arm in `short_winograd`; N=7 now routes through the hand-coded
+  Winograd codelet rather than the composite path.
+- [patch] `apollo-fft`: winograd test files properly partitioned into domain
+  scopes (`dft_small.rs`, `dft_large.rs`, `boundaries.rs`), eliminating
+  triplication; 185 tests pass.
+
+### Fixed
+- [patch] `apollo-fft`: N=15 performance. Apollo f64 ~82 ns vs RustFFT ~108 ns
+  (24% faster); Apollo f32 ~89 ns vs RustFFT ~105 ns (15% faster).
+
+## [0.12.1] - 2026-05-14
+### Added
+- [patch] `apollo-fft`: `dft100_impl` in `winograd/composite.rs` using
+  Good-Thomas PFA (N=100=4×25, gcd(4,25)=1). CRT input permutation
+  `n=(25·n1+4·n2)%100` eliminates inter-stage twiddles; output mapping
+  `k=(76·k2+25·k1)%100`.
+- [patch] `apollo-fft`: `ShortWinogradScalar::dft100` trait method and
+  `100 =>` dispatch arm in `short_winograd`; N=100 now routes through the
+  hand-coded codelet rather than the generic `pfa_fft` fallback.
+- [patch] `apollo-fft`: five correctness tests for DFT-100
+  (forward/inverse/roundtrip/dc-energy/f32≡f64).
+
+### Fixed
+- [patch] `apollo-fft`: N=100 performance regression. Apollo f64 is now
+  310 ns (−25% vs RustFFT 415 ns); Apollo f32 is now 292 ns (−11% vs
+  RustFFT 327 ns).
+
 ## [Unreleased]
 ### Breaking
 - [major] `apollo-fft`: removed public type-suffixed mixed-radix twiddle

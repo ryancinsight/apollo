@@ -1,4 +1,30 @@
 # Apollo Checklist
+## Closure LXXXV - Winograd DFT-7 and N=15 Optimization [patch]
+Sprint target version: apollo-fft 0.12.2
+
+- [x] Replace O(N²) `dft7_impl` with Winograd constant algorithm (18 real muls
+  vs 196+ naive: Hermitian symmetry, circulant cosine/sine matrix).
+- [x] Add `fn dft7` to `ShortWinogradScalar` trait, both f32/f64 impls, and
+  `7 =>` dispatch arm in `short_winograd`.
+- [x] Partition three identical 534-line winograd test files into domain-scoped
+  modules: `dft_small.rs` (DFT-2..8), `dft_large.rs` (DFT-16..64),
+  `boundaries.rs` (impulse/DC edge cases). 185 tests pass.
+- [x] Bump `apollo-fft` to 0.12.2 and sync CHANGELOG.md.
+- [x] Verified: 185 tests pass; Apollo f64 N=15 **~82 ns** vs RustFFT **~108 ns**
+  (24% faster); Apollo f32 N=15 **~89 ns** vs RustFFT **~105 ns** (15% faster).
+
+## Closure LXXXIV - DFT-100 Good-Thomas Short-Winograd Dispatch [patch]
+Sprint target version: apollo-fft 0.12.1
+
+- [x] Implement `dft100_impl` in `winograd/composite.rs` using Good-Thomas PFA
+  (N=100=4×25, gcd=1, CRT input permutation, no inter-stage twiddles).
+- [x] Add `fn dft100` to `ShortWinogradScalar` trait and both f32/f64 impls.
+- [x] Add `100 =>` case to `short_winograd` match in `mixed_radix/traits.rs`.
+- [x] Add five correctness tests: forward/inverse/roundtrip/dc-energy/f32≡f64.
+- [x] Verified: all 261 tests pass; Apollo f64 N=100 **310 ns** vs RustFFT
+  **415 ns** (−25%); Apollo f32 N=100 **292 ns** vs RustFFT **327 ns** (−11%).
+- [x] Bump `apollo-fft` to 0.12.1 and sync CHANGELOG.md.
+
 ## Closure LXXXIII - Mixed-Radix Wrapper Removal [major]
 Sprint target version: apollo-fft 0.12.0
 

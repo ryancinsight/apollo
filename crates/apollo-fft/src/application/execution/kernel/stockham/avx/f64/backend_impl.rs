@@ -73,4 +73,89 @@ impl StockhamAvxBackend for f64 {
     unsafe fn permute_complex_swap(a: __m256d) -> __m256d {
         unsafe { std::arch::x86_64::_mm256_permute_pd::<0b0101>(a) }
     }
+
+    #[inline(always)]
+    unsafe fn rotate_quarter_turn(v: __m256d, sign: f64) -> __m256d {
+        let mask = unsafe {
+            if sign > 0.0 {
+                std::arch::x86_64::_mm256_set_pd(0.0, -0.0, 0.0, -0.0)
+            } else {
+                std::arch::x86_64::_mm256_set_pd(-0.0, 0.0, -0.0, 0.0)
+            }
+        };
+        unsafe { super::fixed::avx_rotate_quarter_turn(v, mask) }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_groups_one(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        twiddles: &[Complex64],
+    ) {
+        unsafe { super::base::stage64_groups_one_avx_fma(src, dst, radix, twiddles) }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_pair_groups_two(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+    ) {
+        unsafe {
+            super::pair::stage_pair64_groups_two_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stage_triple_quarter_groups_one(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+    ) {
+        unsafe {
+            super::triple_1::stage_triple64_quarter_groups_one_avx_fma(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+            )
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn stockham_quad_groups_eight_low_live(
+        src: &[Complex64],
+        dst: &mut [Complex64],
+        radix: usize,
+        first_twiddles: &[Complex64],
+        second_twiddles: &[Complex64],
+        third_twiddles: &[Complex64],
+        fourth_twiddles: &[Complex64],
+    ) {
+        unsafe {
+            super::quad::stockham_quad_groups_eight64_low_live(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+                third_twiddles,
+                fourth_twiddles,
+            )
+        }
+    }
 }

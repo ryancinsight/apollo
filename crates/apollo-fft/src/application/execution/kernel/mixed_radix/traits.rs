@@ -6,11 +6,14 @@ use num_complex::{Complex32, Complex64};
 pub(crate) trait ShortWinogradScalar: winograd::WinogradScalar {
     fn dft2(a: &mut num_complex::Complex<Self>, b: &mut num_complex::Complex<Self>);
     fn dft4(data: &mut [num_complex::Complex<Self>; 4], inverse: bool);
+    fn dft7(data: &mut [num_complex::Complex<Self>; 7], inverse: bool);
     fn dft8(data: &mut [num_complex::Complex<Self>; 8], inverse: bool);
     fn dft15(data: &mut [num_complex::Complex<Self>; 15], inverse: bool);
     fn dft16(data: &mut [num_complex::Complex<Self>; 16], inverse: bool);
+    fn dft25(data: &mut [num_complex::Complex<Self>; 25], inverse: bool);
     fn dft32(data: &mut [num_complex::Complex<Self>; 32], inverse: bool);
     fn dft64(data: &mut [num_complex::Complex<Self>; 64], inverse: bool);
+    fn dft100(data: &mut [num_complex::Complex<Self>; 100], inverse: bool);
 }
 
 impl ShortWinogradScalar for f64 {
@@ -22,6 +25,11 @@ impl ShortWinogradScalar for f64 {
     #[inline]
     fn dft4(data: &mut [Complex64; 4], inverse: bool) {
         winograd::dft4_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft7(data: &mut [Complex64; 7], inverse: bool) {
+        winograd::dft7_impl(data, inverse);
     }
 
     #[inline]
@@ -40,6 +48,11 @@ impl ShortWinogradScalar for f64 {
     }
 
     #[inline]
+    fn dft25(data: &mut [Complex64; 25], inverse: bool) {
+        winograd::dft25_impl(data, inverse);
+    }
+
+    #[inline]
     fn dft32(data: &mut [Complex64; 32], inverse: bool) {
         winograd::dft32_impl(data, inverse);
     }
@@ -47,6 +60,11 @@ impl ShortWinogradScalar for f64 {
     #[inline]
     fn dft64(data: &mut [Complex64; 64], inverse: bool) {
         winograd::dft64_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft100(data: &mut [Complex64; 100], inverse: bool) {
+        winograd::dft100_impl(data, inverse);
     }
 }
 
@@ -59,6 +77,11 @@ impl ShortWinogradScalar for f32 {
     #[inline]
     fn dft4(data: &mut [Complex32; 4], inverse: bool) {
         winograd::dft4_impl(data, inverse);
+    }
+
+    #[inline]
+    fn dft7(data: &mut [Complex32; 7], inverse: bool) {
+        winograd::dft7_impl(data, inverse);
     }
 
     #[inline]
@@ -77,6 +100,11 @@ impl ShortWinogradScalar for f32 {
     }
 
     #[inline]
+    fn dft25(data: &mut [Complex32; 25], inverse: bool) {
+        winograd::dft25_impl(data, inverse);
+    }
+
+    #[inline]
     fn dft32(data: &mut [Complex32; 32], inverse: bool) {
         winograd::dft32_impl(data, inverse);
     }
@@ -85,16 +113,21 @@ impl ShortWinogradScalar for f32 {
     fn dft64(data: &mut [Complex32; 64], inverse: bool) {
         winograd::dft64_impl(data, inverse);
     }
+
+    #[inline]
+    fn dft100(data: &mut [Complex32; 100], inverse: bool) {
+        winograd::dft100_impl(data, inverse);
+    }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn forward_short_winograd<F: ShortWinogradScalar>(
     data: &mut [num_complex::Complex<F>],
 ) -> bool {
     short_winograd(data, false, false)
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn inverse_short_winograd<F: ShortWinogradScalar>(
     data: &mut [num_complex::Complex<F>],
     normalize: bool,
@@ -102,7 +135,7 @@ pub(crate) fn inverse_short_winograd<F: ShortWinogradScalar>(
     short_winograd(data, true, normalize)
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn short_winograd<F: ShortWinogradScalar>(
     data: &mut [num_complex::Complex<F>],
     inverse: bool,
@@ -114,11 +147,14 @@ pub(crate) fn short_winograd<F: ShortWinogradScalar>(
             F::dft2(&mut left[0], &mut right[0]);
         }
         4 => F::dft4(data.try_into().expect("length checked"), inverse),
+        7 => F::dft7(data.try_into().expect("length checked"), inverse),
         8 => F::dft8(data.try_into().expect("length checked"), inverse),
         15 => F::dft15(data.try_into().expect("length checked"), inverse),
         16 => F::dft16(data.try_into().expect("length checked"), inverse),
+        25 => F::dft25(data.try_into().expect("length checked"), inverse),
         32 => F::dft32(data.try_into().expect("length checked"), inverse),
         64 => F::dft64(data.try_into().expect("length checked"), inverse),
+        100 => F::dft100(data.try_into().expect("length checked"), inverse),
         _ => return false,
     }
     if normalize {

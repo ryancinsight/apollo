@@ -1,4 +1,8 @@
-use super::radix::dft8_impl;
+mod good_thomas;
+
+pub(crate) use good_thomas::dft100_impl;
+
+use super::radix::{dft5_array_impl, dft8_impl};
 use super::traits::{apply_twiddle_impl, WinogradScalar};
 use num_complex::Complex64;
 /// Precomputed forward twiddle factors for the 16-point DFT stage.
@@ -203,5 +207,118 @@ pub(crate) fn dft64_impl<F: WinogradScalar>(
         let o = apply_twiddle_impl(odd[k], twiddle64(k, inverse));
         data[k] = even[k] + o;
         data[k + 32] = even[k] - o;
+    }
+}
+
+// ── DFT-25 butterfly ─────────────────────────────────────────────────────────
+
+/// `W_25^k = exp(-2πik/25)` for `k = 0..16` (forward convention).
+///
+/// Only k=0..16 are needed: the 5×5 Cooley-Tukey twiddle grid has exponents
+/// n1·k2 for n1,k2 ∈ 0..4, giving max exponent 16.
+/// Values: `(cos(2πk/25), -sin(2πk/25))`.
+const TWIDDLE25_FWD: [Complex64; 17] = [
+    Complex64::new(1.0, 0.0),
+    Complex64::new(0.9685831611286311, -0.2486898871648548),
+    Complex64::new(0.8763066800438636, -0.48175367410171534),
+    Complex64::new(0.7289686274214116, -0.6845471059286886),
+    Complex64::new(0.5358267949789967, -0.8443279255020151),
+    Complex64::new(0.30901699437494742, -0.9510565162951535),
+    Complex64::new(0.06279051952931337, -0.9980267284282716),
+    Complex64::new(-0.18374951781657033, -0.9829730996839018),
+    Complex64::new(-0.42577929156507266, -0.9048270524660195),
+    Complex64::new(-0.6374239897486896, -0.7705132427757894),
+    Complex64::new(-0.8090169943749474, -0.5877852522924731),
+    Complex64::new(-0.9297765375436513, -0.36812455268467784),
+    Complex64::new(-0.9921147013144779, -0.12533323356430426),
+    Complex64::new(-0.9921147013144779, 0.12533323356430426),
+    Complex64::new(-0.9297765375436513, 0.36812455268467784),
+    Complex64::new(-0.8090169943749474, 0.5877852522924731),
+    Complex64::new(-0.6374239897486896, 0.7705132427757894),
+];
+
+#[inline(always)]
+fn twiddle25_exp<F: WinogradScalar, const INVERSE: bool>(exp: usize) -> num_complex::Complex<F> {
+    debug_assert!(exp < TWIDDLE25_FWD.len());
+    let w = TWIDDLE25_FWD[exp];
+    let w = if INVERSE {
+        Complex64::new(w.re, -w.im)
+    } else {
+        w
+    };
+    cast_twiddle(w)
+}
+
+#[inline(always)]
+fn apply_twiddle25_exp<F: WinogradScalar, const INVERSE: bool>(
+    v: num_complex::Complex<F>,
+    exp: usize,
+) -> num_complex::Complex<F> {
+    if exp == 0 {
+        v
+    } else {
+        apply_twiddle_impl(v, twiddle25_exp::<F, INVERSE>(exp))
+    }
+}
+
+#[inline(always)]
+fn dft25_column_exp<F: WinogradScalar, const INVERSE: bool>(
+    rows: &[[num_complex::Complex<F>; 5]; 5],
+    data: &mut [num_complex::Complex<F>; 25],
+    k2: usize,
+) {
+    let mut col = [
+        rows[0][k2],
+        apply_twiddle25_exp::<F, INVERSE>(rows[1][k2], k2),
+        apply_twiddle25_exp::<F, INVERSE>(rows[2][k2], 2 * k2),
+        apply_twiddle25_exp::<F, INVERSE>(rows[3][k2], 3 * k2),
+        apply_twiddle25_exp::<F, INVERSE>(rows[4][k2], 4 * k2),
+    ];
+    dft5_array_impl(&mut col, INVERSE);
+    data[k2] = col[0];
+    data[5 + k2] = col[1];
+    data[10 + k2] = col[2];
+    data[15 + k2] = col[3];
+    data[20 + k2] = col[4];
+}
+
+/// In-place DFT-25.
+///
+/// **Decomposition**: radix-5 DIT (decimation in time).
+/// Split x into 5 stride-5 sub-sequences: sub[n1] = {x[n1+5n2]}_{n2=0..4}.
+/// Apply DFT-5 to each → G[n1,k2]. Multiply by W_25^{n1·k2} twiddle.
+/// Apply DFT-5 along columns (n1 dim, k2 fixed) → Y[k1,k2].
+/// Output: data[k1·5+k2] = Y[k1,k2] = y[k] (natural DFT output order).
+#[inline]
+pub(crate) fn dft25_impl<F: WinogradScalar>(
+    data: &mut [num_complex::Complex<F>; 25],
+    inverse: bool,
+) {
+    if inverse {
+        dft25_impl_const::<F, true>(data);
+    } else {
+        dft25_impl_const::<F, false>(data);
+    }
+}
+
+#[inline(always)]
+pub(super) fn dft25_impl_const<F: WinogradScalar, const INVERSE: bool>(
+    data: &mut [num_complex::Complex<F>; 25],
+) {
+    let mut rows = [
+        [data[0], data[5], data[10], data[15], data[20]],
+        [data[1], data[6], data[11], data[16], data[21]],
+        [data[2], data[7], data[12], data[17], data[22]],
+        [data[3], data[8], data[13], data[18], data[23]],
+        [data[4], data[9], data[14], data[19], data[24]],
+    ];
+    dft5_array_impl(&mut rows[0], INVERSE);
+    dft5_array_impl(&mut rows[1], INVERSE);
+    dft5_array_impl(&mut rows[2], INVERSE);
+    dft5_array_impl(&mut rows[3], INVERSE);
+    dft5_array_impl(&mut rows[4], INVERSE);
+
+    for k2 in 0..5 {
+        dft25_column_exp::<F, INVERSE>(&rows, data, k2);
     }
 }

@@ -16,14 +16,16 @@ pub trait CompositeCache: WinogradScalar {
 }
 
 thread_local! {
-    static TL_SCRATCH_64: RefCell<Vec<num_complex::Complex64>> = const { RefCell::new(Vec::new()) };
-    static TL_SCRATCH_32: RefCell<Vec<num_complex::Complex32>> = const { RefCell::new(Vec::new()) };
-
     static TL_TWIDDLES_FWD_64: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex64>>> = const { RefCell::new(Vec::new()) };
     static TL_TWIDDLES_INV_64: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex64>>> = const { RefCell::new(Vec::new()) };
 
     static TL_TWIDDLES_FWD_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
     static TL_TWIDDLES_INV_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
+
+    static TL_COMPOSITE_SCRATCH_64: RefCell<Vec<Vec<num_complex::Complex64>>> =
+        const { RefCell::new(Vec::new()) };
+    static TL_COMPOSITE_SCRATCH_32: RefCell<Vec<Vec<num_complex::Complex32>>> =
+        const { RefCell::new(Vec::new()) };
 }
 
 fn build_composite_twiddles<F: WinogradScalar>(
@@ -70,15 +72,16 @@ fn build_composite_twiddles<F: WinogradScalar>(
 impl CompositeCache for f64 {
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
-        TL_SCRATCH_64.with(|scratch| {
-            let mut scratch = scratch.borrow_mut();
-            if scratch.len() < n {
-                let cur = scratch.len();
-                scratch.reserve(n.saturating_sub(cur));
-                unsafe { scratch.set_len(n) };
-            }
-            f(&mut scratch[..n])
-        })
+        let mut scratch =
+            TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
+        if scratch.len() < n {
+            let cur = scratch.len();
+            scratch.reserve(n.saturating_sub(cur));
+            unsafe { scratch.set_len(n) };
+        }
+        let res = f(&mut scratch[..n]);
+        TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().push(scratch));
+        res
     }
 
     #[inline]
@@ -114,15 +117,16 @@ impl CompositeCache for f64 {
 impl CompositeCache for f32 {
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
-        TL_SCRATCH_32.with(|scratch| {
-            let mut scratch = scratch.borrow_mut();
-            if scratch.len() < n {
-                let cur = scratch.len();
-                scratch.reserve(n.saturating_sub(cur));
-                unsafe { scratch.set_len(n) };
-            }
-            f(&mut scratch[..n])
-        })
+        let mut scratch =
+            TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
+        if scratch.len() < n {
+            let cur = scratch.len();
+            scratch.reserve(n.saturating_sub(cur));
+            unsafe { scratch.set_len(n) };
+        }
+        let res = f(&mut scratch[..n]);
+        TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
+        res
     }
 
     #[inline]
