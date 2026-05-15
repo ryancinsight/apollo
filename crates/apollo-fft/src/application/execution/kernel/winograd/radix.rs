@@ -305,6 +305,9 @@ pub(crate) use dft13::dft13_impl;
 pub(crate) mod dft17;
 pub(crate) use dft17::{dft17_impl, dft17_inline_impl};
 
+pub(crate) mod dft23;
+pub(crate) use dft23::{dft23_impl, dft23_inline_impl};
+
 pub(crate) mod dft3;
 pub(crate) use dft3::dft3_impl;
 

@@ -16,7 +16,9 @@
 //! Input permutation:  X[i1, i2] = x[(n2·i1 + n1·i2) mod N]
 //! Output permutation: y[k] where k = n2·(n2⁻¹ mod n1)·k1 + n1·(n1⁻¹ mod n2)·k2  (mod N)
 
-use super::super::radix::{dft3_impl, dft4_array_impl, dft5_array_impl, dft5_impl, dft7_impl, dft11_impl};
+use super::super::radix::{
+    dft11_impl, dft3_impl, dft4_array_impl, dft5_array_impl, dft5_impl, dft7_impl,
+};
 use super::super::traits::WinogradScalar;
 
 /// In-place DFT-6 via Good-Thomas PFA (2×3, gcd=1).

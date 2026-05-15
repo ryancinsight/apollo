@@ -20,9 +20,12 @@
 //! Input permutation:  X[i1, i2] = x[(n2·i1 + n1·i2) mod N]
 //! Output permutation: k = n2·(n2⁻¹ mod n1)·k1 + n1·(n1⁻¹ mod n2)·k2  (mod N)
 
-use super::super::radix::{dft3_impl, dft4_array_impl, dft5_array_impl, dft7_impl, dft11_impl};
+use super::super::radix::{dft11_impl, dft3_impl, dft4_array_impl, dft5_array_impl, dft7_impl};
 use super::super::traits::WinogradScalar;
 use super::small::{dft6_impl, dft9_impl};
+
+mod tail;
+pub(crate) use tail::{dft48_impl, dft63_impl};
 
 // ── N=18: Good-Thomas 2×9 ─────────────────────────────────────────────────────
 //
@@ -59,12 +62,24 @@ pub(crate) fn dft18_impl<F: WinogradScalar>(
     let mut diffs = [d0, d1, d2, d3, d4, d5, d6, d7, d8];
     dft9_impl(&mut sums, inverse);
     dft9_impl(&mut diffs, inverse);
-    data[0] = sums[0]; data[10] = sums[1]; data[2] = sums[2];
-    data[12] = sums[3]; data[4] = sums[4]; data[14] = sums[5];
-    data[6] = sums[6]; data[16] = sums[7]; data[8] = sums[8];
-    data[9] = diffs[0]; data[1] = diffs[1]; data[11] = diffs[2];
-    data[3] = diffs[3]; data[13] = diffs[4]; data[5] = diffs[5];
-    data[15] = diffs[6]; data[7] = diffs[7]; data[17] = diffs[8];
+    data[0] = sums[0];
+    data[10] = sums[1];
+    data[2] = sums[2];
+    data[12] = sums[3];
+    data[4] = sums[4];
+    data[14] = sums[5];
+    data[6] = sums[6];
+    data[16] = sums[7];
+    data[8] = sums[8];
+    data[9] = diffs[0];
+    data[1] = diffs[1];
+    data[11] = diffs[2];
+    data[3] = diffs[3];
+    data[13] = diffs[4];
+    data[5] = diffs[5];
+    data[15] = diffs[6];
+    data[7] = diffs[7];
+    data[17] = diffs[8];
 }
 
 // ── N=22: Good-Thomas 2×11 ────────────────────────────────────────────────────
@@ -79,27 +94,54 @@ pub(crate) fn dft22_impl<F: WinogradScalar>(
     data: &mut [num_complex::Complex<F>; 22],
     inverse: bool,
 ) {
-    let s0 = data[0] + data[11];  let d0 = data[0] - data[11];
-    let s1 = data[2] + data[13];  let d1 = data[2] - data[13];
-    let s2 = data[4] + data[15];  let d2 = data[4] - data[15];
-    let s3 = data[6] + data[17];  let d3 = data[6] - data[17];
-    let s4 = data[8] + data[19];  let d4 = data[8] - data[19];
-    let s5 = data[10] + data[21]; let d5 = data[10] - data[21];
-    let s6 = data[12] + data[1];  let d6 = data[12] - data[1];
-    let s7 = data[14] + data[3];  let d7 = data[14] - data[3];
-    let s8 = data[16] + data[5];  let d8 = data[16] - data[5];
-    let s9 = data[18] + data[7];  let d9 = data[18] - data[7];
-    let s10 = data[20] + data[9]; let d10 = data[20] - data[9];
+    let s0 = data[0] + data[11];
+    let d0 = data[0] - data[11];
+    let s1 = data[2] + data[13];
+    let d1 = data[2] - data[13];
+    let s2 = data[4] + data[15];
+    let d2 = data[4] - data[15];
+    let s3 = data[6] + data[17];
+    let d3 = data[6] - data[17];
+    let s4 = data[8] + data[19];
+    let d4 = data[8] - data[19];
+    let s5 = data[10] + data[21];
+    let d5 = data[10] - data[21];
+    let s6 = data[12] + data[1];
+    let d6 = data[12] - data[1];
+    let s7 = data[14] + data[3];
+    let d7 = data[14] - data[3];
+    let s8 = data[16] + data[5];
+    let d8 = data[16] - data[5];
+    let s9 = data[18] + data[7];
+    let d9 = data[18] - data[7];
+    let s10 = data[20] + data[9];
+    let d10 = data[20] - data[9];
     let mut sums = [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10];
     let mut diffs = [d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10];
     dft11_impl(&mut sums, inverse);
     dft11_impl(&mut diffs, inverse);
-    data[0]=sums[0]; data[12]=sums[1]; data[2]=sums[2]; data[14]=sums[3];
-    data[4]=sums[4]; data[16]=sums[5]; data[6]=sums[6]; data[18]=sums[7];
-    data[8]=sums[8]; data[20]=sums[9]; data[10]=sums[10];
-    data[11]=diffs[0]; data[1]=diffs[1]; data[13]=diffs[2]; data[3]=diffs[3];
-    data[15]=diffs[4]; data[5]=diffs[5]; data[17]=diffs[6]; data[7]=diffs[7];
-    data[19]=diffs[8]; data[9]=diffs[9]; data[21]=diffs[10];
+    data[0] = sums[0];
+    data[12] = sums[1];
+    data[2] = sums[2];
+    data[14] = sums[3];
+    data[4] = sums[4];
+    data[16] = sums[5];
+    data[6] = sums[6];
+    data[18] = sums[7];
+    data[8] = sums[8];
+    data[20] = sums[9];
+    data[10] = sums[10];
+    data[11] = diffs[0];
+    data[1] = diffs[1];
+    data[13] = diffs[2];
+    data[3] = diffs[3];
+    data[15] = diffs[4];
+    data[5] = diffs[5];
+    data[17] = diffs[6];
+    data[7] = diffs[7];
+    data[19] = diffs[8];
+    data[9] = diffs[9];
+    data[21] = diffs[10];
 }
 
 // ── N=28: Good-Thomas 4×7 ─────────────────────────────────────────────────────
@@ -120,24 +162,57 @@ pub(crate) fn dft28_impl<F: WinogradScalar>(
     let mut col4 = [data[16], data[23], data[2], data[9]];
     let mut col5 = [data[20], data[27], data[6], data[13]];
     let mut col6 = [data[24], data[3], data[10], data[17]];
-    dft4_array_impl(&mut col0, inverse); dft4_array_impl(&mut col1, inverse);
-    dft4_array_impl(&mut col2, inverse); dft4_array_impl(&mut col3, inverse);
-    dft4_array_impl(&mut col4, inverse); dft4_array_impl(&mut col5, inverse);
+    dft4_array_impl(&mut col0, inverse);
+    dft4_array_impl(&mut col1, inverse);
+    dft4_array_impl(&mut col2, inverse);
+    dft4_array_impl(&mut col3, inverse);
+    dft4_array_impl(&mut col4, inverse);
+    dft4_array_impl(&mut col5, inverse);
     dft4_array_impl(&mut col6, inverse);
-    let mut r0 = [col0[0], col1[0], col2[0], col3[0], col4[0], col5[0], col6[0]];
-    let mut r1 = [col0[1], col1[1], col2[1], col3[1], col4[1], col5[1], col6[1]];
-    let mut r2 = [col0[2], col1[2], col2[2], col3[2], col4[2], col5[2], col6[2]];
-    let mut r3 = [col0[3], col1[3], col2[3], col3[3], col4[3], col5[3], col6[3]];
-    dft7_impl(&mut r0, inverse); dft7_impl(&mut r1, inverse);
-    dft7_impl(&mut r2, inverse); dft7_impl(&mut r3, inverse);
-    data[0]=r0[0]; data[8]=r0[1]; data[16]=r0[2]; data[24]=r0[3];
-    data[4]=r0[4]; data[12]=r0[5]; data[20]=r0[6];
-    data[21]=r1[0]; data[1]=r1[1]; data[9]=r1[2]; data[17]=r1[3];
-    data[25]=r1[4]; data[5]=r1[5]; data[13]=r1[6];
-    data[14]=r2[0]; data[22]=r2[1]; data[2]=r2[2]; data[10]=r2[3];
-    data[18]=r2[4]; data[26]=r2[5]; data[6]=r2[6];
-    data[7]=r3[0]; data[15]=r3[1]; data[23]=r3[2]; data[3]=r3[3];
-    data[11]=r3[4]; data[19]=r3[5]; data[27]=r3[6];
+    let mut r0 = [
+        col0[0], col1[0], col2[0], col3[0], col4[0], col5[0], col6[0],
+    ];
+    let mut r1 = [
+        col0[1], col1[1], col2[1], col3[1], col4[1], col5[1], col6[1],
+    ];
+    let mut r2 = [
+        col0[2], col1[2], col2[2], col3[2], col4[2], col5[2], col6[2],
+    ];
+    let mut r3 = [
+        col0[3], col1[3], col2[3], col3[3], col4[3], col5[3], col6[3],
+    ];
+    dft7_impl(&mut r0, inverse);
+    dft7_impl(&mut r1, inverse);
+    dft7_impl(&mut r2, inverse);
+    dft7_impl(&mut r3, inverse);
+    data[0] = r0[0];
+    data[8] = r0[1];
+    data[16] = r0[2];
+    data[24] = r0[3];
+    data[4] = r0[4];
+    data[12] = r0[5];
+    data[20] = r0[6];
+    data[21] = r1[0];
+    data[1] = r1[1];
+    data[9] = r1[2];
+    data[17] = r1[3];
+    data[25] = r1[4];
+    data[5] = r1[5];
+    data[13] = r1[6];
+    data[14] = r2[0];
+    data[22] = r2[1];
+    data[2] = r2[2];
+    data[10] = r2[3];
+    data[18] = r2[4];
+    data[26] = r2[5];
+    data[6] = r2[6];
+    data[7] = r3[0];
+    data[15] = r3[1];
+    data[23] = r3[2];
+    data[3] = r3[3];
+    data[11] = r3[4];
+    data[19] = r3[5];
+    data[27] = r3[6];
 }
 
 // ── N=30: Good-Thomas 5×6 ─────────────────────────────────────────────────────
@@ -158,22 +233,52 @@ pub(crate) fn dft30_impl<F: WinogradScalar>(
     let mut col3 = [data[15], data[21], data[27], data[3], data[9]];
     let mut col4 = [data[20], data[26], data[2], data[8], data[14]];
     let mut col5 = [data[25], data[1], data[7], data[13], data[19]];
-    dft5_array_impl(&mut col0, inverse); dft5_array_impl(&mut col1, inverse);
-    dft5_array_impl(&mut col2, inverse); dft5_array_impl(&mut col3, inverse);
-    dft5_array_impl(&mut col4, inverse); dft5_array_impl(&mut col5, inverse);
+    dft5_array_impl(&mut col0, inverse);
+    dft5_array_impl(&mut col1, inverse);
+    dft5_array_impl(&mut col2, inverse);
+    dft5_array_impl(&mut col3, inverse);
+    dft5_array_impl(&mut col4, inverse);
+    dft5_array_impl(&mut col5, inverse);
     let mut r0 = [col0[0], col1[0], col2[0], col3[0], col4[0], col5[0]];
     let mut r1 = [col0[1], col1[1], col2[1], col3[1], col4[1], col5[1]];
     let mut r2 = [col0[2], col1[2], col2[2], col3[2], col4[2], col5[2]];
     let mut r3 = [col0[3], col1[3], col2[3], col3[3], col4[3], col5[3]];
     let mut r4 = [col0[4], col1[4], col2[4], col3[4], col4[4], col5[4]];
-    dft6_impl(&mut r0, inverse); dft6_impl(&mut r1, inverse);
-    dft6_impl(&mut r2, inverse); dft6_impl(&mut r3, inverse);
+    dft6_impl(&mut r0, inverse);
+    dft6_impl(&mut r1, inverse);
+    dft6_impl(&mut r2, inverse);
+    dft6_impl(&mut r3, inverse);
     dft6_impl(&mut r4, inverse);
-    data[0]=r0[0]; data[25]=r0[1]; data[20]=r0[2]; data[15]=r0[3]; data[10]=r0[4]; data[5]=r0[5];
-    data[6]=r1[0]; data[1]=r1[1]; data[26]=r1[2]; data[21]=r1[3]; data[16]=r1[4]; data[11]=r1[5];
-    data[12]=r2[0]; data[7]=r2[1]; data[2]=r2[2]; data[27]=r2[3]; data[22]=r2[4]; data[17]=r2[5];
-    data[18]=r3[0]; data[13]=r3[1]; data[8]=r3[2]; data[3]=r3[3]; data[28]=r3[4]; data[23]=r3[5];
-    data[24]=r4[0]; data[19]=r4[1]; data[14]=r4[2]; data[9]=r4[3]; data[4]=r4[4]; data[29]=r4[5];
+    data[0] = r0[0];
+    data[25] = r0[1];
+    data[20] = r0[2];
+    data[15] = r0[3];
+    data[10] = r0[4];
+    data[5] = r0[5];
+    data[6] = r1[0];
+    data[1] = r1[1];
+    data[26] = r1[2];
+    data[21] = r1[3];
+    data[16] = r1[4];
+    data[11] = r1[5];
+    data[12] = r2[0];
+    data[7] = r2[1];
+    data[2] = r2[2];
+    data[27] = r2[3];
+    data[22] = r2[4];
+    data[17] = r2[5];
+    data[18] = r3[0];
+    data[13] = r3[1];
+    data[8] = r3[2];
+    data[3] = r3[3];
+    data[28] = r3[4];
+    data[23] = r3[5];
+    data[24] = r4[0];
+    data[19] = r4[1];
+    data[14] = r4[2];
+    data[9] = r4[3];
+    data[4] = r4[4];
+    data[29] = r4[5];
 }
 
 // ── N=36: Good-Thomas 4×9 ─────────────────────────────────────────────────────
@@ -192,13 +297,23 @@ pub(crate) fn dft36_impl<F: WinogradScalar>(
     inverse: bool,
 ) {
     let mut rows = [
-        [data[0],data[4],data[8],data[12],data[16],data[20],data[24],data[28],data[32]],
-        [data[9],data[13],data[17],data[21],data[25],data[29],data[33],data[1],data[5]],
-        [data[18],data[22],data[26],data[30],data[34],data[2],data[6],data[10],data[14]],
-        [data[27],data[31],data[35],data[3],data[7],data[11],data[15],data[19],data[23]],
+        [
+            data[0], data[4], data[8], data[12], data[16], data[20], data[24], data[28], data[32],
+        ],
+        [
+            data[9], data[13], data[17], data[21], data[25], data[29], data[33], data[1], data[5],
+        ],
+        [
+            data[18], data[22], data[26], data[30], data[34], data[2], data[6], data[10], data[14],
+        ],
+        [
+            data[27], data[31], data[35], data[3], data[7], data[11], data[15], data[19], data[23],
+        ],
     ];
-    dft9_impl(&mut rows[0], inverse); dft9_impl(&mut rows[1], inverse);
-    dft9_impl(&mut rows[2], inverse); dft9_impl(&mut rows[3], inverse);
+    dft9_impl(&mut rows[0], inverse);
+    dft9_impl(&mut rows[1], inverse);
+    dft9_impl(&mut rows[2], inverse);
+    dft9_impl(&mut rows[3], inverse);
     for k2 in 0..9usize {
         let mut col = [rows[0][k2], rows[1][k2], rows[2][k2], rows[3][k2]];
         dft4_array_impl(&mut col, inverse);
@@ -228,20 +343,31 @@ pub(crate) fn dft42_impl<F: WinogradScalar>(
     inverse: bool,
 ) {
     let mut rows = [
-        [data[0],data[7],data[14],data[21],data[28],data[35]],
-        [data[6],data[13],data[20],data[27],data[34],data[41]],
-        [data[12],data[19],data[26],data[33],data[40],data[5]],
-        [data[18],data[25],data[32],data[39],data[4],data[11]],
-        [data[24],data[31],data[38],data[3],data[10],data[17]],
-        [data[30],data[37],data[2],data[9],data[16],data[23]],
-        [data[36],data[1],data[8],data[15],data[22],data[29]],
+        [data[0], data[7], data[14], data[21], data[28], data[35]],
+        [data[6], data[13], data[20], data[27], data[34], data[41]],
+        [data[12], data[19], data[26], data[33], data[40], data[5]],
+        [data[18], data[25], data[32], data[39], data[4], data[11]],
+        [data[24], data[31], data[38], data[3], data[10], data[17]],
+        [data[30], data[37], data[2], data[9], data[16], data[23]],
+        [data[36], data[1], data[8], data[15], data[22], data[29]],
     ];
-    dft6_impl(&mut rows[0], inverse); dft6_impl(&mut rows[1], inverse);
-    dft6_impl(&mut rows[2], inverse); dft6_impl(&mut rows[3], inverse);
-    dft6_impl(&mut rows[4], inverse); dft6_impl(&mut rows[5], inverse);
+    dft6_impl(&mut rows[0], inverse);
+    dft6_impl(&mut rows[1], inverse);
+    dft6_impl(&mut rows[2], inverse);
+    dft6_impl(&mut rows[3], inverse);
+    dft6_impl(&mut rows[4], inverse);
+    dft6_impl(&mut rows[5], inverse);
     dft6_impl(&mut rows[6], inverse);
     for k2 in 0..6usize {
-        let mut col = [rows[0][k2],rows[1][k2],rows[2][k2],rows[3][k2],rows[4][k2],rows[5][k2],rows[6][k2]];
+        let mut col = [
+            rows[0][k2],
+            rows[1][k2],
+            rows[2][k2],
+            rows[3][k2],
+            rows[4][k2],
+            rows[5][k2],
+            rows[6][k2],
+        ];
         dft7_impl(&mut col, inverse);
         let base = (7 * k2) % 42;
         data[base] = col[0];
@@ -273,24 +399,37 @@ pub(crate) fn dft45_impl<F: WinogradScalar>(
     inverse: bool,
 ) {
     let mut rows = [
-        [data[0],data[9],data[18],data[27],data[36]],
-        [data[5],data[14],data[23],data[32],data[41]],
-        [data[10],data[19],data[28],data[37],data[1]],
-        [data[15],data[24],data[33],data[42],data[6]],
-        [data[20],data[29],data[38],data[2],data[11]],
-        [data[25],data[34],data[43],data[7],data[16]],
-        [data[30],data[39],data[3],data[12],data[21]],
-        [data[35],data[44],data[8],data[17],data[26]],
-        [data[40],data[4],data[13],data[22],data[31]],
+        [data[0], data[9], data[18], data[27], data[36]],
+        [data[5], data[14], data[23], data[32], data[41]],
+        [data[10], data[19], data[28], data[37], data[1]],
+        [data[15], data[24], data[33], data[42], data[6]],
+        [data[20], data[29], data[38], data[2], data[11]],
+        [data[25], data[34], data[43], data[7], data[16]],
+        [data[30], data[39], data[3], data[12], data[21]],
+        [data[35], data[44], data[8], data[17], data[26]],
+        [data[40], data[4], data[13], data[22], data[31]],
     ];
-    dft5_array_impl(&mut rows[0], inverse); dft5_array_impl(&mut rows[1], inverse);
-    dft5_array_impl(&mut rows[2], inverse); dft5_array_impl(&mut rows[3], inverse);
-    dft5_array_impl(&mut rows[4], inverse); dft5_array_impl(&mut rows[5], inverse);
-    dft5_array_impl(&mut rows[6], inverse); dft5_array_impl(&mut rows[7], inverse);
+    dft5_array_impl(&mut rows[0], inverse);
+    dft5_array_impl(&mut rows[1], inverse);
+    dft5_array_impl(&mut rows[2], inverse);
+    dft5_array_impl(&mut rows[3], inverse);
+    dft5_array_impl(&mut rows[4], inverse);
+    dft5_array_impl(&mut rows[5], inverse);
+    dft5_array_impl(&mut rows[6], inverse);
+    dft5_array_impl(&mut rows[7], inverse);
     dft5_array_impl(&mut rows[8], inverse);
     for k2 in 0..5usize {
-        let mut col = [rows[0][k2],rows[1][k2],rows[2][k2],rows[3][k2],rows[4][k2],
-                       rows[5][k2],rows[6][k2],rows[7][k2],rows[8][k2]];
+        let mut col = [
+            rows[0][k2],
+            rows[1][k2],
+            rows[2][k2],
+            rows[3][k2],
+            rows[4][k2],
+            rows[5][k2],
+            rows[6][k2],
+            rows[7][k2],
+            rows[8][k2],
+        ];
         dft9_impl(&mut col, inverse);
         let base = (36 * k2) % 45;
         data[base] = col[0];
@@ -302,90 +441,5 @@ pub(crate) fn dft45_impl<F: WinogradScalar>(
         data[(base + 15) % 45] = col[6];
         data[(base + 25) % 45] = col[7];
         data[(base + 35) % 45] = col[8];
-    }
-}
-
-// ── N=48: Good-Thomas 3×16 ────────────────────────────────────────────────────
-//
-// n1=3, n2=16. Input: X[i1,i2] = data[(16·i1 + 3·i2) % 48].
-//   row 0: data[0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45]
-//   row 1: data[16,19,22,25,28,31,34,37,40,43,46,1,4,7,10,13]
-//   row 2: data[32,35,38,41,44,47,2,5,8,11,14,17,20,23,26,29]
-// N2⁻¹ mod N1 = 16⁻¹ mod 3 = 1; N1⁻¹ mod N2 = 3⁻¹ mod 16 = 11.
-// Output: k = (16·k1 + 33·k2) % 48.
-#[inline(always)]
-pub(crate) fn dft48_impl<F: WinogradScalar>(
-    data: &mut [num_complex::Complex<F>; 48],
-    inverse: bool,
-) {
-    let mut row0: [num_complex::Complex<F>; 16] = [
-        data[0],data[3],data[6],data[9],data[12],data[15],data[18],data[21],
-        data[24],data[27],data[30],data[33],data[36],data[39],data[42],data[45],
-    ];
-    let mut row1: [num_complex::Complex<F>; 16] = [
-        data[16],data[19],data[22],data[25],data[28],data[31],data[34],data[37],
-        data[40],data[43],data[46],data[1],data[4],data[7],data[10],data[13],
-    ];
-    let mut row2: [num_complex::Complex<F>; 16] = [
-        data[32],data[35],data[38],data[41],data[44],data[47],data[2],data[5],
-        data[8],data[11],data[14],data[17],data[20],data[23],data[26],data[29],
-    ];
-    super::dft16_impl(&mut row0, inverse);
-    super::dft16_impl(&mut row1, inverse);
-    super::dft16_impl(&mut row2, inverse);
-    for k2 in 0..16usize {
-        let mut col = [row0[k2], row1[k2], row2[k2]];
-        dft3_impl(&mut col, inverse);
-        let base = (33 * k2) % 48;
-        data[base] = col[0];
-        data[(base + 16) % 48] = col[1];
-        data[(base + 32) % 48] = col[2];
-    }
-}
-
-// ── N=63: Good-Thomas 7×9 ─────────────────────────────────────────────────────
-//
-// n1=7, n2=9. Input: X[i1,i2] = data[(9·i1 + 7·i2) % 63].
-//   row 0: data[0,7,14,21,28,35,42,49,56]  row 1: data[9,16,23,30,37,44,51,58,2]
-//   row 2: data[18,25,32,39,46,53,60,4,11] row 3: data[27,34,41,48,55,62,6,13,20]
-//   row 4: data[36,43,50,57,1,8,15,22,29]  row 5: data[45,52,59,3,10,17,24,31,38]
-//   row 6: data[54,61,5,12,19,26,33,40,47]
-// N2⁻¹ mod N1 = 9⁻¹ mod 7 = 4; N1⁻¹ mod N2 = 7⁻¹ mod 9 = 4.
-// Output: k = (36·k1 + 28·k2) % 63.
-//   k2=0: data[0,36,9,45,18,54,27]  k2=1: data[28,1,37,10,46,19,55]
-//   k2=2: data[56,29,2,38,11,47,20] k2=3: data[21,57,30,3,39,12,48]
-//   k2=4: data[49,22,58,31,4,40,13] k2=5: data[14,50,23,59,32,5,41]
-//   k2=6: data[42,15,51,24,60,33,6] k2=7: data[7,43,16,52,25,61,34]
-//   k2=8: data[35,8,44,17,53,26,62]
-#[inline(always)]
-pub(crate) fn dft63_impl<F: WinogradScalar>(
-    data: &mut [num_complex::Complex<F>; 63],
-    inverse: bool,
-) {
-    let mut rows = [
-        [data[0],data[7],data[14],data[21],data[28],data[35],data[42],data[49],data[56]],
-        [data[9],data[16],data[23],data[30],data[37],data[44],data[51],data[58],data[2]],
-        [data[18],data[25],data[32],data[39],data[46],data[53],data[60],data[4],data[11]],
-        [data[27],data[34],data[41],data[48],data[55],data[62],data[6],data[13],data[20]],
-        [data[36],data[43],data[50],data[57],data[1],data[8],data[15],data[22],data[29]],
-        [data[45],data[52],data[59],data[3],data[10],data[17],data[24],data[31],data[38]],
-        [data[54],data[61],data[5],data[12],data[19],data[26],data[33],data[40],data[47]],
-    ];
-    dft9_impl(&mut rows[0], inverse); dft9_impl(&mut rows[1], inverse);
-    dft9_impl(&mut rows[2], inverse); dft9_impl(&mut rows[3], inverse);
-    dft9_impl(&mut rows[4], inverse); dft9_impl(&mut rows[5], inverse);
-    dft9_impl(&mut rows[6], inverse);
-    for k2 in 0..9usize {
-        let mut col = [rows[0][k2],rows[1][k2],rows[2][k2],rows[3][k2],
-                       rows[4][k2],rows[5][k2],rows[6][k2]];
-        dft7_impl(&mut col, inverse);
-        let base = (28 * k2) % 63;
-        data[base] = col[0];
-        data[(base + 36) % 63] = col[1];
-        data[(base + 9) % 63] = col[2];
-        data[(base + 45) % 63] = col[3];
-        data[(base + 18) % 63] = col[4];
-        data[(base + 54) % 63] = col[5];
-        data[(base + 27) % 63] = col[6];
     }
 }

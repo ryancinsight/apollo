@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+## Closed in this sprint (Closure LXXXVIII phase)
+- [x] [patch] Add N=23 Winograd pair-symmetry codelet and dispatch coverage.
+  The DFT-23 kernel uses eleven conjugate input pairs, const-generic
+  direction dispatch, direct f64/f32 `FftPrecision` fast paths, and split
+  scalar constant leaves to preserve the 500-line file bound. Apollo N=23
+  latest run: f64 92.341 ns vs RustFFT 116.48 ns; f32 104.80 ns vs RustFFT
+  139.88 ns. The Rader cache cleanup keeps split gather/scatter arrays and
+  restores direction-specific convolution spectra for inverse correctness.
+  `apollo-fft` bumped to 0.12.5.
+
 ## Closed in this sprint (Closure LXXXVII phase)
 - [x] [patch] Add N=17 Winograd pair-symmetry codelet and benchmark coverage.
   The DFT-17 body is shared behind f64/f32 scalar constants and const-generic

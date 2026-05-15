@@ -1,4 +1,20 @@
 # Apollo Checklist
+## Closure LXXXVIII - Winograd DFT-23 Dispatch and Benchmark [patch]
+Sprint target version: apollo-fft 0.12.5
+
+- [x] Add a dedicated N=23 Winograd pair-symmetry codelet with f64/f32 scalar
+  constants and const-generic forward/inverse direction.
+- [x] Route public f64/f32 `FftPrecision` fast paths and
+  `ShortWinogradScalar::dft23` through the N=23 codelet.
+- [x] Split DFT-23 constants into `scalar.rs` and `impls.rs`; generated leaf
+  files remain below 500 lines.
+- [x] Add DFT-23 value-semantic tests for forward, inverse, roundtrip, and f32
+  differential equivalence against the direct DFT reference.
+- [x] Preserve Rader split gather/scatter cache arrays while retaining
+  direction-specific convolution spectra for inverse correctness.
+- [x] Verified: Apollo N=23 f64 **92.341 ns** vs RustFFT **116.48 ns**;
+  Apollo N=23 f32 **104.80 ns** vs RustFFT **139.88 ns**.
+
 ## Closure LXXXVII - Winograd DFT-17 Dispatch and Benchmark [patch]
 Sprint target version: apollo-fft 0.12.4
 

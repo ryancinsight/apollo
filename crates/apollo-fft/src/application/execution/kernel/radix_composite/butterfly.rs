@@ -31,7 +31,9 @@ pub(crate) fn apply_dft_r_impl<F: WinogradScalar>(
             data[..5].copy_from_slice(&b);
         }
         7 => {
-            let mut b = [data[0], data[1], data[2], data[3], data[4], data[5], data[6]];
+            let mut b = [
+                data[0], data[1], data[2], data[3], data[4], data[5], data[6],
+            ];
             dft7_impl(&mut b, inverse);
             data[..7].copy_from_slice(&b);
         }

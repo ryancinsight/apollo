@@ -17,14 +17,16 @@ static TWIDDLE_INV_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Comp
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static COMPOSITE_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+// Key: (n, inverse, g_inv).
 static RADER_SPECTRUM_64_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), Arc<[Complex64]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static RADER_SPECTRUM_32_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), Arc<[Complex32]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+// Value: split (gather_indices, scatter_indices) — contiguous per-pass arrays.
 static RADER_PERM_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize, usize), Arc<[(usize, usize)]>>>,
+    RwLock<HashMap<(usize, usize, usize), (Arc<[usize]>, Arc<[usize]>)>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
@@ -42,7 +44,7 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(8));
     static TL_RADER_SPECTRUM_32: RefCell<HashMap<(usize, usize, usize), Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    static TL_RADER_PERM: RefCell<HashMap<(usize, usize, usize), Arc<[(usize, usize)]>>> =
+    static TL_RADER_PERM: RefCell<HashMap<(usize, usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
         RefCell::new(HashMap::with_capacity(8));
     static TL_STOCKHAM_SCRATCH_64: RefCell<Vec<Complex64>> =
         const { RefCell::new(Vec::new()) };
@@ -123,7 +125,13 @@ pub(crate) fn with_rader_padded_scratch_64<R>(
         unsafe { scratch.set_len(n) };
     }
     let res = f(&mut scratch[..n]);
-    TL_RADER_PADDED_SCRATCH_64.with(|pool| pool.borrow_mut().push(scratch));
+    // Bound pool to 2: one for the outer call, one for a nested Rader sub-call.
+    TL_RADER_PADDED_SCRATCH_64.with(|pool| {
+        let mut p = pool.borrow_mut();
+        if p.len() < 2 {
+            p.push(scratch);
+        }
+    });
     res
 }
 
@@ -140,7 +148,13 @@ pub(crate) fn with_rader_padded_scratch_32<R>(
         unsafe { scratch.set_len(n) };
     }
     let res = f(&mut scratch[..n]);
-    TL_RADER_PADDED_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
+    // Bound pool to 2: one for the outer call, one for a nested Rader sub-call.
+    TL_RADER_PADDED_SCRATCH_32.with(|pool| {
+        let mut p = pool.borrow_mut();
+        if p.len() < 2 {
+            p.push(scratch);
+        }
+    });
     res
 }
 
@@ -239,6 +253,7 @@ pub(crate) fn cached_composite_radices(n: usize) -> Option<Arc<[usize]>> {
     radices
 }
 
+/// Three-key cache helper for the Rader spectrum (key: `(n, inverse, g_inv)`).
 #[inline]
 fn tl_cached_k3<T: Clone>(
     tl: &'static std::thread::LocalKey<RefCell<HashMap<(usize, usize, usize), Arc<[T]>>>>,
@@ -249,7 +264,6 @@ fn tl_cached_k3<T: Clone>(
     if let Some(v) = tl.with(|c| c.borrow().get(&key).cloned()) {
         return v;
     }
-
     let v = {
         let maybe_cached = global.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
@@ -267,12 +281,19 @@ fn tl_cached_k3<T: Clone>(
     v
 }
 
+/// Cached Rader convolution kernel spectrum.
+/// Key: `(n, inverse, g_inv)`.
 #[inline]
 pub(crate) fn cached_rader_spectrum_64(
     key: (usize, usize, usize),
     build_fn: impl FnOnce((usize, usize, usize)) -> Vec<Complex64>,
 ) -> Arc<[Complex64]> {
-    tl_cached_k3(&TL_RADER_SPECTRUM_64, &RADER_SPECTRUM_64_CACHE, key, build_fn)
+    tl_cached_k3(
+        &TL_RADER_SPECTRUM_64,
+        &RADER_SPECTRUM_64_CACHE,
+        key,
+        build_fn,
+    )
 }
 
 #[inline]
@@ -280,13 +301,38 @@ pub(crate) fn cached_rader_spectrum_32(
     key: (usize, usize, usize),
     build_fn: impl FnOnce((usize, usize, usize)) -> Vec<Complex32>,
 ) -> Arc<[Complex32]> {
-    tl_cached_k3(&TL_RADER_SPECTRUM_32, &RADER_SPECTRUM_32_CACHE, key, build_fn)
+    tl_cached_k3(
+        &TL_RADER_SPECTRUM_32,
+        &RADER_SPECTRUM_32_CACHE,
+        key,
+        build_fn,
+    )
 }
 
+/// Cached split permutation arrays `(gather_indices, scatter_indices)`.
+/// Key: `(n, g, g_inv)`.
 #[inline]
 pub(crate) fn cached_rader_perm(
     key: (usize, usize, usize),
-    build_fn: impl FnOnce((usize, usize, usize)) -> Vec<(usize, usize)>,
-) -> Arc<[(usize, usize)]> {
-    tl_cached_k3(&TL_RADER_PERM, &RADER_PERM_CACHE, key, build_fn)
+    build_fn: impl FnOnce((usize, usize, usize)) -> (Vec<usize>, Vec<usize>),
+) -> (Arc<[usize]>, Arc<[usize]>) {
+    if let Some(v) = TL_RADER_PERM.with(|c| c.borrow().get(&key).cloned()) {
+        return v;
+    }
+    let v = {
+        let maybe_cached = RADER_PERM_CACHE.read().get(&key).cloned();
+        if let Some(v) = maybe_cached {
+            v
+        } else {
+            let (gather, scatter) = build_fn(key);
+            let pair: (Arc<[usize]>, Arc<[usize]>) = (Arc::from(gather), Arc::from(scatter));
+            RADER_PERM_CACHE
+                .write()
+                .entry(key)
+                .or_insert_with(|| pair.clone())
+                .clone()
+        }
+    };
+    TL_RADER_PERM.with(|c| c.borrow_mut().insert(key, v.clone()));
+    v
 }

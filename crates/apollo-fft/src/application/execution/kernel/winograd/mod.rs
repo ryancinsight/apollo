@@ -1,4 +1,4 @@
-//! Winograd short-DFT kernels for sizes 2, 3, 4, 5, 7, 8, 11, 13, 16, 17, 32, and 64.
+//! Winograd short-DFT kernels for sizes 2, 3, 4, 5, 7, 8, 11, 13, 16, 17, 23, 32, and 64.
 #![allow(unused_imports)]
 
 pub(crate) mod composite;

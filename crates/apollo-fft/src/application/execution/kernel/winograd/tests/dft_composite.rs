@@ -290,8 +290,10 @@ macro_rules! composite_tests {
                 let input: Vec<Complex64> = (0..$n)
                     .map(|k| Complex64::new((k as f64 * 0.33).cos(), (k as f64 * 0.61).sin()))
                     .collect();
-                let expected: Vec<Complex64> =
-                    dft_inverse(&input).into_iter().map(|x| x * $n as f64).collect();
+                let expected: Vec<Complex64> = dft_inverse(&input)
+                    .into_iter()
+                    .map(|x| x * $n as f64)
+                    .collect();
                 let mut buf: [Complex64; $n] = input.as_slice().try_into().unwrap();
                 $fn(&mut buf, true);
                 let err = max_err(&buf, &expected);
@@ -309,7 +311,10 @@ macro_rules! composite_tests {
                 let recovered: Vec<Complex64> = buf.iter().map(|x| x / $n as f64).collect();
                 let err = max_err(&recovered, &input);
                 let bound = roundoff_bound(&input, $ops * 2);
-                assert!(err <= bound, "roundtrip max_err={err:.2e}, bound={bound:.2e}");
+                assert!(
+                    err <= bound,
+                    "roundtrip max_err={err:.2e}, bound={bound:.2e}"
+                );
             }
             #[test]
             fn dc_energy_in_bin0_only() {

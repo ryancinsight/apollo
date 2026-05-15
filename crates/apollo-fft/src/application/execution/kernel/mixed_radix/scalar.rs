@@ -9,8 +9,8 @@ use super::super::radix_stage::{normalize_inplace_c32, normalize_inplace_c64};
 use super::super::{radix_composite, stockham};
 use super::caches::{
     cached_rader_spectrum_32, cached_rader_spectrum_64, cached_twiddle_fwd_32,
-    cached_twiddle_fwd_64, cached_twiddle_inv_32, cached_twiddle_inv_64,
-    with_stockham_scratch_32, with_stockham_scratch_64,
+    cached_twiddle_fwd_64, cached_twiddle_inv_32, cached_twiddle_inv_64, with_stockham_scratch_32,
+    with_stockham_scratch_64,
 };
 use super::traits::{forward_short_winograd, inverse_short_winograd};
 use num_complex::{Complex32, Complex64};
@@ -52,6 +52,8 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
     fn cached_twiddle_fwd(n: usize) -> Arc<[Self::Complex]>;
     fn cached_twiddle_inv(n: usize) -> Arc<[Self::Complex]>;
 
+    /// Cached Rader convolution kernel spectrum.
+    /// The spectrum sign follows the outer transform direction.
     fn cached_rader_spectrum(
         n: usize,
         inverse: bool,
@@ -137,7 +139,9 @@ impl MixedRadixScalar for f64 {
         generator_inverse: usize,
     ) -> Arc<[Complex64]> {
         let key = (n, inverse as usize, generator_inverse);
-        cached_rader_spectrum_64(key, |_| build_rader_spectrum_vec::<f64>(n, inverse, generator_inverse))
+        cached_rader_spectrum_64(key, |_| {
+            build_rader_spectrum_vec::<f64>(n, inverse, generator_inverse)
+        })
     }
 
     #[inline]
@@ -217,7 +221,9 @@ impl MixedRadixScalar for f32 {
         generator_inverse: usize,
     ) -> Arc<[Complex32]> {
         let key = (n, inverse as usize, generator_inverse);
-        cached_rader_spectrum_32(key, |_| build_rader_spectrum_vec::<f32>(n, inverse, generator_inverse))
+        cached_rader_spectrum_32(key, |_| {
+            build_rader_spectrum_vec::<f32>(n, inverse, generator_inverse)
+        })
     }
 
     #[inline]
@@ -257,15 +263,21 @@ impl MixedRadixScalar for f32 {
     }
 }
 
+/// Builds the Rader convolution kernel spectrum.
+///
+/// - Forward: `H[k] = DFT_{N-1}(W_N^{-g^{-j}})` (`sign = -1`, `angle = -2πk/N`).
+/// - Inverse: `H[k] = DFT_{N-1}(W_N^{+g^{-j}})` (`sign = +1`, `angle = +2πk/N`).
+///
+/// Both are computed once and cached under `(n, direction_bit, g_inv)`.
 fn build_rader_spectrum_vec<F: MixedRadixScalar>(
     n: usize,
     inverse: bool,
     generator_inverse: usize,
 ) -> Vec<F::Complex> {
     let l = n - 1;
-    let sign = if inverse { 1.0 } else { -1.0 };
+    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
     let mut kernel = vec![F::complex(0.0, 0.0); l];
-    let mut curr_inv = 1;
+    let mut curr_inv = 1usize;
     for value in kernel.iter_mut().take(l) {
         let angle = sign * std::f64::consts::TAU * (curr_inv as f64) / (n as f64);
         *value = F::complex(angle.cos(), angle.sin());

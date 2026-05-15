@@ -6,8 +6,8 @@ mod small;
 pub(crate) use good_thomas::dft100_impl;
 pub(crate) use large::{dft33_impl, dft35_impl, dft40_impl, dft49_impl, dft50_impl, dft56_impl};
 pub(crate) use medium::{
-    dft18_impl, dft22_impl, dft28_impl, dft30_impl, dft36_impl, dft42_impl, dft45_impl,
-    dft48_impl, dft63_impl,
+    dft18_impl, dft22_impl, dft28_impl, dft30_impl, dft36_impl, dft42_impl, dft45_impl, dft48_impl,
+    dft63_impl,
 };
 pub(crate) use small::{dft10_impl, dft12_impl, dft14_impl, dft6_impl, dft9_impl};
 
@@ -36,7 +36,11 @@ const TWIDDLE16_FWD: [Complex64; 8] = [
 #[inline(always)]
 fn twiddle16<F: WinogradScalar>(k: usize, inverse: bool) -> num_complex::Complex<F> {
     let w = TWIDDLE16_FWD[k];
-    let w = if inverse { Complex64::new(w.re, -w.im) } else { w };
+    let w = if inverse {
+        Complex64::new(w.re, -w.im)
+    } else {
+        w
+    };
     cast_twiddle(w)
 }
 

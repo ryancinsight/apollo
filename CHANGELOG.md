@@ -6,6 +6,25 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ---
 
+## [0.12.5] - 2026-05-15
+### Added
+- [patch] `apollo-fft`: N=23 now routes through a dedicated Winograd
+  pair-symmetry codelet with f64/f32 scalar constants, direct `FftPrecision`
+  fast paths, and `ShortWinogradScalar::dft23`.
+
+### Changed
+- [patch] `apollo-fft`: DFT-23 constants are split across scalar trait and
+  implementation leaves so generated files remain below the repository
+  structural limit while preserving one shared mathematical kernel body.
+
+### Fixed
+- [patch] `apollo-fft`: N=23 performance against RustFFT. Latest isolated run:
+  Apollo f64 92.341 ns vs RustFFT 116.48 ns; Apollo f32 104.80 ns vs
+  RustFFT 139.88 ns.
+- [patch] `apollo-fft`: Rader permutation caching now uses split contiguous
+  gather/scatter arrays while keeping transform-direction-specific convolution
+  spectra, preserving prime-length inverse correctness.
+
 ## [0.12.4] - 2026-05-15
 ### Added
 - [patch] `apollo-fft`: N=17 now routes through a dedicated Winograd
