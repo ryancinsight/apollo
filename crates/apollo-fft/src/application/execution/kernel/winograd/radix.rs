@@ -148,6 +148,150 @@ pub(crate) fn dft7_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
     data[4] = re3 - d3;
 }
 
+const DFT11_COS: [[f64; 5]; 5] = [
+    [
+        0.8412535328311812,
+        0.41541501300188644,
+        -0.142314838273285,
+        -0.654860733945285,
+        -0.9594929736144974,
+    ],
+    [
+        0.41541501300188644,
+        -0.654860733945285,
+        -0.9594929736144975,
+        -0.14231483827328523,
+        0.8412535328311812,
+    ],
+    [
+        -0.142314838273285,
+        -0.9594929736144975,
+        0.41541501300188605,
+        0.8412535328311815,
+        -0.6548607339452839,
+    ],
+    [
+        -0.654860733945285,
+        -0.14231483827328523,
+        0.8412535328311815,
+        -0.9594929736144974,
+        0.4154150130018866,
+    ],
+    [
+        -0.9594929736144974,
+        0.8412535328311812,
+        -0.6548607339452839,
+        0.4154150130018866,
+        -0.1423148382732854,
+    ],
+];
+
+const DFT11_SIN: [[f64; 5]; 5] = [
+    [
+        0.5406408174555976,
+        0.9096319953545183,
+        0.9898214418809328,
+        0.7557495743542583,
+        0.28173255684142967,
+    ],
+    [
+        0.9096319953545183,
+        0.7557495743542583,
+        -0.2817325568414294,
+        -0.9898214418809327,
+        -0.5406408174555974,
+    ],
+    [
+        0.9898214418809328,
+        -0.2817325568414294,
+        -0.9096319953545186,
+        0.5406408174555971,
+        0.7557495743542594,
+    ],
+    [
+        0.7557495743542583,
+        -0.9898214418809327,
+        0.5406408174555971,
+        0.2817325568414299,
+        -0.9096319953545183,
+    ],
+    [
+        0.28173255684142967,
+        -0.5406408174555974,
+        0.7557495743542594,
+        -0.9096319953545183,
+        0.9898214418809327,
+    ],
+];
+
+/// In-place odd-prime DFT using paired twiddle symmetry.
+///
+/// For `N = 2H + 1`, pairs `(x[m], x[N-m])` share cosine terms and opposite
+/// sine terms. This avoids Rader setup for small primes while keeping a single
+/// monomorphized implementation parameterized by `N` and `H`.
+#[inline(always)]
+fn dft_odd_prime_impl<F: WinogradScalar, const N: usize, const H: usize>(
+    data: &mut [num_complex::Complex<F>],
+    inverse: bool,
+    cos: &[[f64; H]; H],
+    sin: &[[f64; H]; H],
+) {
+    debug_assert!(data.len() >= N);
+    debug_assert_eq!(N, 2 * H + 1);
+    let zero = F::zero();
+    let x0 = data[0];
+    let mut sums = [num_complex::Complex::new(zero, zero); H];
+    let mut idiffs = [num_complex::Complex::new(zero, zero); H];
+
+    let mut m = 0usize;
+    while m < H {
+        let a = data[m + 1];
+        let b = data[N - 1 - m];
+        sums[m] = num_complex::Complex::new(a.re + b.re, a.im + b.im);
+        let diff_re = a.re - b.re;
+        let diff_im = a.im - b.im;
+        idiffs[m] = num_complex::Complex::new(-diff_im, diff_re);
+        m += 1;
+    }
+
+    let mut y0_re = x0.re;
+    let mut y0_im = x0.im;
+    m = 0;
+    while m < H {
+        y0_re = y0_re + sums[m].re;
+        y0_im = y0_im + sums[m].im;
+        m += 1;
+    }
+    data[0] = num_complex::Complex::new(y0_re, y0_im);
+
+    let sign = if inverse { F::cast_f64(1.0) } else { F::cast_f64(-1.0) };
+    let mut k = 0usize;
+    while k < H {
+        let mut even_re = x0.re;
+        let mut even_im = x0.im;
+        let mut odd_re = zero;
+        let mut odd_im = zero;
+        m = 0;
+        while m < H {
+            let c = F::cast_f64(cos[k][m]);
+            let s = F::cast_f64(sin[k][m]) * sign;
+            even_re = even_re + sums[m].re * c;
+            even_im = even_im + sums[m].im * c;
+            odd_re = odd_re + idiffs[m].re * s;
+            odd_im = odd_im + idiffs[m].im * s;
+            m += 1;
+        }
+        data[k + 1] = num_complex::Complex::new(even_re + odd_re, even_im + odd_im);
+        data[N - 1 - k] = num_complex::Complex::new(even_re - odd_re, even_im - odd_im);
+        k += 1;
+    }
+}
+
+#[inline(always)]
+pub(crate) fn dft11_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
+    dft_odd_prime_impl::<F, 11, 5>(data, inverse, &DFT11_COS, &DFT11_SIN);
+}
+
 /// In-place DFT-3.
 ///
 /// ## Mathematical derivation
