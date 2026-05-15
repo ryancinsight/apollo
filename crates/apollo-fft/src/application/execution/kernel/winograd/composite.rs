@@ -4,6 +4,7 @@ mod medium;
 mod small;
 mod xlarge;
 mod xlarge2;
+mod xxlarge;
 
 pub(crate) use good_thomas::dft100_impl;
 pub(crate) use large::{dft33_impl, dft35_impl, dft40_impl, dft49_impl, dft50_impl, dft56_impl};
@@ -18,6 +19,11 @@ pub(crate) use xlarge::{
 };
 pub(crate) use xlarge2::{
     dft96_impl, dft98_impl, dft99_impl, dft105_impl, dft112_impl, dft120_impl, dft126_impl,
+};
+pub(crate) use xxlarge::{
+    dft130_impl, dft143_impl, dft144_impl, dft150_impl, dft154_impl, dft160_impl, dft165_impl,
+    dft168_impl, dft175_impl, dft176_impl, dft180_impl, dft192_impl, dft196_impl, dft198_impl,
+    dft200_impl,
 };
 
 use super::radix::{dft5_array_impl, dft8_impl};
