@@ -66,7 +66,6 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
 
     fn with_pfa_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
-    fn with_rader_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
 
     // ── Vectorized operations ────────────────────────────────────────────────
@@ -128,10 +127,6 @@ impl MixedRadixScalar for f64 {
         super::caches::with_pfa_scratch_64(n, f)
     }
     #[inline]
-    fn with_rader_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        super::caches::with_rader_scratch_64(n, f)
-    }
-    #[inline]
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
         super::caches::with_rader_padded_scratch_64(n, f)
     }
@@ -158,7 +153,7 @@ impl MixedRadixScalar for f64 {
     fn stockham_forward(data: &mut [Complex64], scratch: &mut [Complex64], twiddles: &[Complex64]) {
         <f64 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
     }
-    #[inline]
+    #[inline(always)]
     fn short_winograd(data: &mut [Complex64], inverse: bool, normalize: bool) -> bool {
         if inverse {
             inverse_short_winograd(data, normalize)
@@ -211,10 +206,6 @@ impl MixedRadixScalar for f32 {
         crate::application::execution::kernel::mixed_radix::caches::with_pfa_scratch_32(n, f)
     }
     #[inline]
-    fn with_rader_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        crate::application::execution::kernel::mixed_radix::caches::with_rader_scratch_32(n, f)
-    }
-    #[inline]
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
         crate::application::execution::kernel::mixed_radix::caches::with_rader_padded_scratch_32(
             n, f,
@@ -243,7 +234,7 @@ impl MixedRadixScalar for f32 {
     fn stockham_forward(data: &mut [Complex32], scratch: &mut [Complex32], twiddles: &[Complex32]) {
         <f32 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
     }
-    #[inline]
+    #[inline(always)]
     fn short_winograd(data: &mut [Complex32], inverse: bool, normalize: bool) -> bool {
         if inverse {
             inverse_short_winograd(data, normalize)

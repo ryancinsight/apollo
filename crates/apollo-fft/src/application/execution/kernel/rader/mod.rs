@@ -1,4 +1,20 @@
-//! Rader's Algorithm for prime-length FFTs
+//! Rader's Algorithm for prime-length FFTs.
+//!
+//! ## Permutation-fused convolution
+//!
+//! The standard Rader decomposition rewrites a length-N prime DFT as a
+//! length-(N-1) circular convolution.  The classical implementation uses a
+//! separate permutation pass: gather `data[g^q mod N]` into an intermediate
+//! scratch buffer, then copy that buffer into the zero-padded FFT workspace.
+//! Those two passes round-trip through DRAM/L3 for any N where N-1 ≫ L1.
+//!
+//! This implementation fuses the g^k mod p gather directly into the write of
+//! the padded FFT input buffer, so the complex values travel:
+//!
+//!   data[g^q mod N]  →  padded[q]  →  forward FFT
+//!
+//! in a single sequential write pass — no intermediate rader_scratch buffer,
+//! no copy, no extra cache round-trip.
 
 pub(crate) mod generator;
 
@@ -7,8 +23,10 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-// Rader's algorithm for prime lengths
-/// Rader's Algorithm for prime N
+/// Rader's algorithm for prime N.
+///
+/// # Precondition
+/// `data.len()` must be prime.
 pub(crate) fn rader_fft<F: MixedRadixScalar>(data: &mut [F::Complex], inverse: bool) {
     let n = data.len();
     debug_assert!(crate::application::execution::kernel::radix_shape::is_prime(n));
@@ -16,31 +34,66 @@ pub(crate) fn rader_fft<F: MixedRadixScalar>(data: &mut [F::Complex], inverse: b
     let g = generator::primitive_root(n);
     let g_inv = mod_inverse(g, n);
     let kernel_spectrum = F::cached_rader_spectrum(n, inverse, g_inv);
-    let permutation = cached_permutation(n, g, g_inv);
+    let perm = cached_permutation(n, g, g_inv);
 
     let x0 = data[0];
+    let l = n - 1;
+    let m = kernel_spectrum.len();
+    let zero = F::complex(0.0, 0.0);
 
-    F::with_rader_scratch(n - 1, |scratch| {
-        let mut sum_x = F::complex(0.0, 0.0);
-        for (q, &(input_idx, _)) in permutation.iter().enumerate() {
-            let value = data[input_idx];
-            scratch[q] = value;
-            sum_x = sum_x + value;
+    F::with_rader_padded_scratch(m, |padded| {
+        // Fused gather: read data[g^q mod n] directly into padded[q], accumulating
+        // the sum needed for data[0].  This eliminates the rader_scratch
+        // intermediate buffer and the subsequent copy_from_slice, confining
+        // the gather latency to the registers/L1.
+        let mut sum_x = zero;
+        for (q, &(input_idx, _)) in perm.iter().enumerate() {
+            let v = data[input_idx];
+            padded[q] = v;
+            sum_x = sum_x + v;
         }
 
-        circular_convolution_inplace::<F>(scratch, kernel_spectrum.as_ref());
+        // Zero-fill the linear-convolution guard band padded[l..m].
+        // write_bytes maps to a SIMD memset on modern targets.
+        // SAFETY: padded[l..] is a valid slice of F::Complex (Copy, no drop glue);
+        //         all-zero bytes are a valid representation for Complex<f64/f32>.
+        unsafe {
+            std::ptr::write_bytes(
+                padded[l..].as_mut_ptr().cast::<u8>(),
+                0,
+                (m - l) * std::mem::size_of::<F::Complex>(),
+            );
+        }
 
+        // Forward FFT on the zero-padded chirp sequence.
+        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(padded);
+
+        // Pointwise multiply with the pre-computed kernel spectrum.
+        F::pointwise_mul(&mut padded[..m], kernel_spectrum.as_ref());
+
+        // Inverse normalized FFT: result is the linear convolution via overlap-add.
+        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(padded);
+
+        // Output scatter with inline overlap-add.
+        // padded[q] + padded[q + l] reconstructs the linear convolution output
+        // because the zero-padded forward FFT aliased the tail into [l..2l-1].
         data[0] = x0 + sum_x;
-
-        for (q, &(_, output_idx)) in permutation.iter().enumerate() {
-            data[output_idx] = x0 + scratch[q];
+        for (q, &(_, output_idx)) in perm.iter().enumerate() {
+            let tail = if q + l < m { padded[q + l] } else { zero };
+            data[output_idx] = x0 + padded[q] + tail;
         }
     });
 }
 
+// ── Permutation cache ─────────────────────────────────────────────────────────
+
 static RADER_PERMUTATION_CACHE: LazyLock<RwLock<HashMap<(usize, usize, usize), Arc<[(usize, usize)]>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// Returns cached pairs `(g^q mod n, g_inv^q mod n)` for `q = 0..n-1`.
+///
+/// The first element is the gather index (input permutation) and the second
+/// is the scatter index (output permutation) for the Rader convolution.
 fn cached_permutation(n: usize, g: usize, g_inv: usize) -> Arc<[(usize, usize)]> {
     let key = (n, g, g_inv);
     if let Some(permutation) = RADER_PERMUTATION_CACHE.read().get(&key).cloned() {
@@ -48,8 +101,8 @@ fn cached_permutation(n: usize, g: usize, g_inv: usize) -> Arc<[(usize, usize)]>
     }
 
     let mut pairs = Vec::with_capacity(n - 1);
-    let mut input_idx = 1;
-    let mut output_idx = 1;
+    let mut input_idx = 1usize;
+    let mut output_idx = 1usize;
     for _ in 0..(n - 1) {
         pairs.push((input_idx, output_idx));
         input_idx = (input_idx * g) % n;
@@ -87,30 +140,4 @@ fn mod_inverse(a: usize, m: usize) -> usize {
         x += m as i64;
     }
     x as usize
-}
-
-fn circular_convolution_inplace<F: MixedRadixScalar>(a: &mut [F::Complex], kernel_spectrum: &[F::Complex]) {
-    let l = a.len();
-    let m = kernel_spectrum.len();
-    debug_assert!(m >= 2 * l - 1);
-
-    F::with_rader_padded_scratch(m, |scratch_a| {
-        scratch_a[..l].copy_from_slice(a);
-        for value in &mut scratch_a[l..m] {
-            *value = F::complex(0.0, 0.0);
-        }
-
-        crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(scratch_a);
-        F::pointwise_mul(&mut scratch_a[..m], kernel_spectrum);
-        crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(scratch_a);
-
-        for n in 0..l {
-            let tail = if n + l < m {
-                scratch_a[n + l]
-            } else {
-                F::complex(0.0, 0.0)
-            };
-            a[n] = scratch_a[n] + tail;
-        }
-    });
 }

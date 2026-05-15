@@ -170,18 +170,28 @@ pub(crate) fn dft7_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
 /// **Complex additions**: 6.
 ///
 /// References: Winograd (1978), Blahut (2010) §3.2.
-#[inline]
+#[inline(always)]
 pub(crate) fn dft3_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 3);
     let s = F::cast_f64(0.8660254037844386);
     let w_r = F::cast_f64(-0.5);
-    let w_i = if inverse { s } else { -s };
-    let t1 = data[1] + data[2];
-    let m0 = data[0] + t1 * w_r;
-    let m1 = (data[1] - data[2]) * num_complex::Complex::new(F::cast_f64(0.0), w_i);
-    data[0] += t1;
-    data[1] = m0 + m1;
-    data[2] = m0 - m1;
+    let x0 = data[0];
+    let x1 = data[1];
+    let x2 = data[2];
+    let sum_re = x1.re + x2.re;
+    let sum_im = x1.im + x2.im;
+    let diff_re = x1.re - x2.re;
+    let diff_im = x1.im - x2.im;
+    let m0_re = x0.re + sum_re * w_r;
+    let m0_im = x0.im + sum_im * w_r;
+    let (m1_re, m1_im) = if inverse {
+        (-diff_im * s, diff_re * s)
+    } else {
+        (diff_im * s, -diff_re * s)
+    };
+    data[0] = num_complex::Complex::new(x0.re + sum_re, x0.im + sum_im);
+    data[1] = num_complex::Complex::new(m0_re + m1_re, m0_im + m1_im);
+    data[2] = num_complex::Complex::new(m0_re - m1_re, m0_im - m1_im);
 }
 
 /// In-place Good-Thomas DFT-15.

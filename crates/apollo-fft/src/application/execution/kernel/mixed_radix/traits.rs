@@ -5,6 +5,7 @@ use num_complex::{Complex32, Complex64};
 
 pub(crate) trait ShortWinogradScalar: winograd::WinogradScalar {
     fn dft2(a: &mut num_complex::Complex<Self>, b: &mut num_complex::Complex<Self>);
+    fn dft3(data: &mut [num_complex::Complex<Self>; 3], inverse: bool);
     fn dft4(data: &mut [num_complex::Complex<Self>; 4], inverse: bool);
     fn dft7(data: &mut [num_complex::Complex<Self>; 7], inverse: bool);
     fn dft8(data: &mut [num_complex::Complex<Self>; 8], inverse: bool);
@@ -20,6 +21,11 @@ impl ShortWinogradScalar for f64 {
     #[inline]
     fn dft2(a: &mut Complex64, b: &mut Complex64) {
         winograd::dft2_impl(a, b);
+    }
+
+    #[inline]
+    fn dft3(data: &mut [Complex64; 3], inverse: bool) {
+        winograd::dft3_impl(data, inverse);
     }
 
     #[inline]
@@ -72,6 +78,11 @@ impl ShortWinogradScalar for f32 {
     #[inline]
     fn dft2(a: &mut Complex32, b: &mut Complex32) {
         winograd::dft2_impl(a, b);
+    }
+
+    #[inline]
+    fn dft3(data: &mut [Complex32; 3], inverse: bool) {
+        winograd::dft3_impl(data, inverse);
     }
 
     #[inline]
@@ -146,6 +157,7 @@ pub(crate) fn short_winograd<F: ShortWinogradScalar>(
             let (left, right) = data.split_at_mut(1);
             F::dft2(&mut left[0], &mut right[0]);
         }
+        3 => F::dft3(data.try_into().expect("length checked"), inverse),
         4 => F::dft4(data.try_into().expect("length checked"), inverse),
         7 => F::dft7(data.try_into().expect("length checked"), inverse),
         8 => F::dft8(data.try_into().expect("length checked"), inverse),

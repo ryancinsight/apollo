@@ -37,10 +37,6 @@ thread_local! {
         const { RefCell::new(Vec::new()) };
     static TL_PFA_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
         const { RefCell::new(Vec::new()) };
-    static TL_RADER_SCRATCH_64: RefCell<Vec<Vec<Complex64>>> =
-        const { RefCell::new(Vec::new()) };
-    static TL_RADER_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
-        const { RefCell::new(Vec::new()) };
     static TL_RADER_PADDED_SCRATCH_64: RefCell<Vec<Vec<Complex64>>> =
         const { RefCell::new(Vec::new()) };
     static TL_RADER_PADDED_SCRATCH_32: RefCell<Vec<Vec<Complex32>>> =
@@ -96,32 +92,6 @@ pub(crate) fn with_pfa_scratch_32<R>(n: usize, f: impl FnOnce(&mut [Complex32]) 
     }
     let res = f(&mut scratch[..n]);
     TL_PFA_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
-    res
-}
-
-#[inline]
-pub(crate) fn with_rader_scratch_64<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-    let mut scratch = TL_RADER_SCRATCH_64.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
-    if scratch.len() < n {
-        let cur = scratch.len();
-        scratch.reserve(n.saturating_sub(cur));
-        unsafe { scratch.set_len(n) };
-    }
-    let res = f(&mut scratch[..n]);
-    TL_RADER_SCRATCH_64.with(|pool| pool.borrow_mut().push(scratch));
-    res
-}
-
-#[inline]
-pub(crate) fn with_rader_scratch_32<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-    let mut scratch = TL_RADER_SCRATCH_32.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
-    if scratch.len() < n {
-        let cur = scratch.len();
-        scratch.reserve(n.saturating_sub(cur));
-        unsafe { scratch.set_len(n) };
-    }
-    let res = f(&mut scratch[..n]);
-    TL_RADER_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
     res
 }
 

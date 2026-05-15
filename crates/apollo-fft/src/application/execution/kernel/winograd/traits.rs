@@ -14,27 +14,27 @@ pub trait WinogradScalar:
     fn sq2o2() -> Self;
 }
 impl WinogradScalar for f64 {
-    #[inline]
+    #[inline(always)]
     fn cast_f64(v: f64) -> Self {
         v
     }
-    #[inline]
+    #[inline(always)]
     fn sq2o2() -> Self {
         std::f64::consts::SQRT_2 / 2.0
     }
 }
 impl WinogradScalar for f32 {
-    #[inline]
+    #[inline(always)]
     fn cast_f64(v: f64) -> Self {
         v as f32
     }
-    #[inline]
+    #[inline(always)]
     fn sq2o2() -> Self {
         (std::f64::consts::SQRT_2 / 2.0) as f32
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn dft2_impl<F: WinogradScalar>(
     a: &mut num_complex::Complex<F>,
     b: &mut num_complex::Complex<F>,
