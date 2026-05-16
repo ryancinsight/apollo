@@ -134,3 +134,26 @@ where
         *v *= scale;
     }
 }
+
+pub(crate) trait NormalizeSlice {
+    type Scale: Copy;
+    fn normalize_slice(data: &mut [Self], scale: Self::Scale)
+    where
+        Self: Sized;
+}
+
+impl NormalizeSlice for num_complex::Complex32 {
+    type Scale = f32;
+    #[inline]
+    fn normalize_slice(data: &mut [Self], scale: f32) {
+        normalize_inplace_c32(data, scale);
+    }
+}
+
+impl NormalizeSlice for num_complex::Complex64 {
+    type Scale = f64;
+    #[inline]
+    fn normalize_slice(data: &mut [Self], scale: f64) {
+        normalize_inplace_c64(data, scale);
+    }
+}

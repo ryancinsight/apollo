@@ -6,6 +6,7 @@ mod cache;
 mod core;
 
 use arity::{Compose, FusedStage};
+use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
 use crate::application::execution::policy::ExecutionPolicy;
 pub use cache::CompositeCache;
@@ -17,7 +18,7 @@ pub(crate) type Fused5<A, B, C, D, E> = Compose<A, Fused4<B, C, D, E>>;
 pub(crate) type Fused6<A, B, C, D, E, FS> = Compose<A, Fused5<B, C, D, E, FS>>;
 
 #[inline]
-pub(crate) fn stockham_stage_fused<F: CompositeCache, P: ExecutionPolicy, Node: FusedStage>(
+pub(crate) fn stockham_stage_fused<F: CompositeCache + ShortWinogradScalar, P: ExecutionPolicy, Node: FusedStage>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
@@ -33,12 +34,12 @@ pub(crate) fn stockham_stage_fused<F: CompositeCache, P: ExecutionPolicy, Node: 
 }
 
 #[inline]
-pub fn forward_inplace_with_radices<F: CompositeCache>(data: &mut [Complex<F>], radices: &[usize]) {
+pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar>(data: &mut [Complex<F>], radices: &[usize]) {
     core::composite_core_with_radices(data, false, radices);
 }
 
 #[inline]
-pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache>(
+pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache + ShortWinogradScalar>(
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
@@ -46,7 +47,7 @@ pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache>(
 }
 
 #[inline]
-pub fn inverse_inplace_with_radices<F: CompositeCache>(data: &mut [Complex<F>], radices: &[usize]) {
+pub fn inverse_inplace_with_radices<F: CompositeCache + ShortWinogradScalar>(data: &mut [Complex<F>], radices: &[usize]) {
     core::composite_core_with_radices(data, true, radices);
     normalize_inplace(data, F::cast_f64(1.0 / data.len() as f64));
 }

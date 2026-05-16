@@ -14,14 +14,10 @@
 //! | `inverse_inplace`                | true    | true      |
 
 use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
-use super::super::radix_stage::normalize_inplace_c32;
-use super::super::{radix_composite, stockham};
 use super::caches::{
-    cached_composite_radices, cached_twiddle_fwd_32, cached_twiddle_inv_32,
-    with_stockham_scratch_32,
+    cached_coprime_factors, cached_is_prime, cached_prime23_radices,
 };
 use super::scalar::MixedRadixScalar;
-use super::traits::{forward_short_winograd, inverse_short_winograd};
 
 /// Authoritative single-body FFT dispatch.
 ///
@@ -38,7 +34,16 @@ pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const N
     if F::short_winograd(data, INVERSE, NORMALIZE) {
         return;
     }
+
     if data.len().is_power_of_two() {
+        if data.len() >= crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD {
+            crate::application::execution::kernel::four_step::four_step_fft::<F>(data, INVERSE);
+            if INVERSE && NORMALIZE {
+                F::normalize(data, data.len());
+            }
+            return;
+        }
+
         // Ownership dance: borrow `twiddles` if provided, otherwise materialise
         // from the thread-local cache and hold the Arc alive for the call.
         let owned_tw;
@@ -54,15 +59,14 @@ pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const N
             }
         };
         F::with_scratch(data.len(), |scratch| {
-            F::stockham_forward(data, scratch, tw);
+            if INVERSE && NORMALIZE {
+                F::stockham_forward_normalized(data, scratch, tw, data.len());
+            } else {
+                F::stockham_forward(data, scratch, tw);
+            }
         });
-        // Branch eliminated at compile time when NORMALIZE is false.
-        if INVERSE && NORMALIZE {
-            let n = data.len();
-            F::normalize(data, n);
-        }
     } else {
-        if let Some(radices) = cached_composite_radices(data.len()) {
+        if let Some(radices) = cached_prime23_radices(data.len()) {
             match (INVERSE, NORMALIZE) {
                 (false, _) => F::composite_forward(data, &radices),
                 (true, false) => F::composite_inverse_unnorm(data, &radices),
@@ -71,20 +75,19 @@ pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const N
             return;
         }
 
-        if let Some((n1, n2)) =
-            crate::application::execution::kernel::radix_shape::coprime_factors(data.len())
-        {
+        let n = data.len();
+        if let Some((n1, n2)) = cached_coprime_factors(n) {
             crate::application::execution::kernel::good_thomas::pfa_fft::<F>(data, INVERSE, n1, n2);
             if INVERSE && NORMALIZE {
-                F::normalize(data, data.len());
+                F::normalize(data, n);
             }
             return;
         }
 
-        if crate::application::execution::kernel::radix_shape::is_prime(data.len()) {
+        if cached_is_prime(n) {
             crate::application::execution::kernel::rader::rader_fft::<F>(data, INVERSE);
             if INVERSE && NORMALIZE {
-                F::normalize(data, data.len());
+                F::normalize(data, n);
             }
             return;
         }
@@ -146,68 +149,7 @@ fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMA
     if data.len() <= 1 {
         return;
     }
-    let n = data.len();
-    if n.is_power_of_two() {
-        run_via_complex32(data, |buf| {
-            if INVERSE {
-                if inverse_short_winograd(buf, NORMALIZE) {
-                    return;
-                }
-                let tw = cached_twiddle_inv_32(n);
-                with_stockham_scratch_32(n, |scratch| {
-                    <f32 as stockham::StockhamKernel>::forward_with_scratch(
-                        buf,
-                        scratch,
-                        tw.as_ref(),
-                    );
-                });
-                if NORMALIZE {
-                    normalize_inplace_c32(buf, 1.0f32 / n as f32);
-                }
-            } else {
-                if forward_short_winograd(buf) {
-                    return;
-                }
-                let tw = cached_twiddle_fwd_32(n);
-                with_stockham_scratch_32(n, |scratch| {
-                    <f32 as stockham::StockhamKernel>::forward_with_scratch(
-                        buf,
-                        scratch,
-                        tw.as_ref(),
-                    );
-                });
-            }
-        });
-        return;
-    }
-
-    if let Some(radices) = cached_composite_radices(n) {
-        run_via_complex32(data, |buf| match (INVERSE, NORMALIZE) {
-            (false, _) => radix_composite::forward_inplace_with_radices(buf, &radices),
-            (true, false) => radix_composite::inverse_inplace_unnorm_with_radices(buf, &radices),
-            (true, true) => radix_composite::inverse_inplace_with_radices(buf, &radices),
-        });
-        return;
-    }
-
-    if let Some((n1, n2)) = crate::application::execution::kernel::radix_shape::coprime_factors(n) {
-        run_via_complex32(data, |buf| {
-            crate::application::execution::kernel::good_thomas::pfa_fft::<f32>(
-                buf, INVERSE, n1, n2,
-            );
-            if INVERSE && NORMALIZE {
-                normalize_inplace_c32(buf, 1.0f32 / n as f32);
-            }
-        });
-        return;
-    }
-
-    if crate::application::execution::kernel::radix_shape::is_prime(n) {
-        run_via_complex32(data, |buf| {
-            crate::application::execution::kernel::rader::rader_fft::<f32>(buf, INVERSE);
-            if INVERSE && NORMALIZE {
-                normalize_inplace_c32(buf, 1.0f32 / n as f32);
-            }
-        });
-    }
+    run_via_complex32(data, |buf| {
+        dispatch_inplace::<f32, INVERSE, NORMALIZE>(buf, None);
+    });
 }

@@ -12,6 +12,7 @@
 //! | `mixed_radix`     | Dispatch facade: Stockham for PoT, composite/PFA for smooth, Rader for primes. |
 
 pub mod direct;
+pub(crate) mod four_step;
 pub mod good_thomas;
 pub mod mixed_radix;
 pub(crate) mod precision_bridge;

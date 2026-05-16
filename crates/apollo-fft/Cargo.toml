@@ -34,5 +34,9 @@ harness = false
 name = "vs_rustfft"
 harness = false
 
+[[bench]]
+name = "prime_compose"
+harness = false
+
 [lints]
 workspace = true

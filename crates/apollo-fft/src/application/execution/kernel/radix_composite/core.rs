@@ -1,13 +1,14 @@
 use num_complex::Complex;
 
 use super::arity::Radix;
-use super::butterfly::{stockham_stage, stockham_stage_r};
+use super::butterfly::stockham_stage;
 use super::cache::CompositeCache;
 use super::{Fused2, Fused3, Fused4, Fused5, Fused6, stockham_stage_fused};
+use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
 use crate::application::execution::policy::{ParallelPolicy, SyncPolicy};
 
-pub(super) fn composite_core_with_radices<F: CompositeCache>(
+pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScalar>(
     data: &mut [Complex<F>],
     inverse: bool,
     radices: &[usize],
@@ -28,7 +29,7 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
         while stage_idx < radices.len() {
             let r1 = radices[stage_idx];
             let offset1 = stage_offsets[stage_idx];
-            let tw1 = &all_twiddles[offset1..offset1 + prev_len * (r1 - 1)];
+            let tw1 = &all_twiddles[offset1..offset1 + prev_len];
 
             macro_rules! fuse2 {
                 ($p:literal, $q:literal) => {
@@ -39,7 +40,7 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
                     {
                         let tws: [&[Complex<F>]; 2] = [
                             tw1,
-                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + (prev_len * $p) * ($q - 1)],
+                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + prev_len * $p],
                         ];
                         if src_is_data {
                             stockham_stage_fused::<F, SyncPolicy, Fused2<Radix<$p>, Radix<$q>>>(data, scratch, prev_len, &tws, inverse);
@@ -64,8 +65,8 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
                     {
                         let tws: [&[Complex<F>]; 3] = [
                             tw1,
-                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + (prev_len * $p) * ($q - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + (prev_len * $p * $q) * ($r - 1)],
+                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + prev_len * $p],
+                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + prev_len * $p * $q],
                         ];
                         if src_is_data {
                             stockham_stage_fused::<F, SyncPolicy, Fused3<Radix<$p>, Radix<$q>, Radix<$r>>>(data, scratch, prev_len, &tws, inverse);
@@ -92,9 +93,9 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
                     {
                         let tws: [&[Complex<F>]; 4] = [
                             tw1,
-                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + (prev_len * $p) * ($q - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + (prev_len * $p * $q) * ($r - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + (prev_len * $p * $q * $r) * ($s - 1)],
+                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + prev_len * $p],
+                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + prev_len * $p * $q],
+                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + prev_len * $p * $q * $r],
                         ];
                         if src_is_data {
                             stockham_stage_fused::<F, SyncPolicy, Fused4<Radix<$p>, Radix<$q>, Radix<$r>, Radix<$s>>>(data, scratch, prev_len, &tws, inverse);
@@ -123,10 +124,10 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
                     {
                         let tws: [&[Complex<F>]; 5] = [
                             tw1,
-                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + (prev_len * $p) * ($q - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + (prev_len * $p * $q) * ($r - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + (prev_len * $p * $q * $r) * ($s - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 4]..stage_offsets[stage_idx + 4] + (prev_len * $p * $q * $r * $s) * ($t - 1)],
+                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + prev_len * $p],
+                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + prev_len * $p * $q],
+                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + prev_len * $p * $q * $r],
+                            &all_twiddles[stage_offsets[stage_idx + 4]..stage_offsets[stage_idx + 4] + prev_len * $p * $q * $r * $s],
                         ];
                         if src_is_data {
                             stockham_stage_fused::<F, SyncPolicy, Fused5<Radix<$p>, Radix<$q>, Radix<$r>, Radix<$s>, Radix<$t>>>(data, scratch, prev_len, &tws, inverse);
@@ -157,11 +158,11 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
                     {
                         let tws: [&[Complex<F>]; 6] = [
                             tw1,
-                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + (prev_len * $p) * ($q - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + (prev_len * $p * $q) * ($r - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + (prev_len * $p * $q * $r) * ($s - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 4]..stage_offsets[stage_idx + 4] + (prev_len * $p * $q * $r * $s) * ($t - 1)],
-                            &all_twiddles[stage_offsets[stage_idx + 5]..stage_offsets[stage_idx + 5] + (prev_len * $p * $q * $r * $s * $t) * ($u - 1)],
+                            &all_twiddles[stage_offsets[stage_idx + 1]..stage_offsets[stage_idx + 1] + prev_len * $p],
+                            &all_twiddles[stage_offsets[stage_idx + 2]..stage_offsets[stage_idx + 2] + prev_len * $p * $q],
+                            &all_twiddles[stage_offsets[stage_idx + 3]..stage_offsets[stage_idx + 3] + prev_len * $p * $q * $r],
+                            &all_twiddles[stage_offsets[stage_idx + 4]..stage_offsets[stage_idx + 4] + prev_len * $p * $q * $r * $s],
+                            &all_twiddles[stage_offsets[stage_idx + 5]..stage_offsets[stage_idx + 5] + prev_len * $p * $q * $r * $s * $t],
                         ];
                         if src_is_data {
                             stockham_stage_fused::<F, SyncPolicy, Fused6<Radix<$p>, Radix<$q>, Radix<$r>, Radix<$s>, Radix<$t>, Radix<$u>>>(data, scratch, prev_len, &tws, inverse);
@@ -295,17 +296,7 @@ pub(super) fn composite_core_with_radices<F: CompositeCache>(
 
             macro_rules! dispatch {
                 ($Policy:ty, $src:expr, $dst:expr) => {
-                    match r1 {
-                        2  => stockham_stage_r::<F, $Policy, 2>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        3  => stockham_stage_r::<F, $Policy, 3>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        5  => stockham_stage_r::<F, $Policy, 5>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        7  => stockham_stage_r::<F, $Policy, 7>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        11 => stockham_stage_r::<F, $Policy, 11>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        13 => stockham_stage_r::<F, $Policy, 13>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        17 => stockham_stage_r::<F, $Policy, 17>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        23 => stockham_stage_r::<F, $Policy, 23>($src, $dst, prev_len, groups, stage_len, tw1, inverse),
-                        _  => stockham_stage::<F, $Policy>($src, $dst, r1, prev_len, groups, stage_len, tw1, inverse),
-                    }
+                    stockham_stage::<F, $Policy>($src, $dst, r1, prev_len, groups, stage_len, tw1, inverse)
                 };
             }
 

@@ -1,4 +1,7 @@
 use super::cache::CompositeCache;
+use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::winograd::apply_twiddle_impl;
+use core::mem::MaybeUninit;
 use num_complex::Complex;
 use num_traits::Zero;
 
@@ -6,7 +9,7 @@ pub trait FusedStage {
     const R_TOTAL: usize;
     const DEPTH: usize;
 
-    fn compute_group<F: CompositeCache>(
+    fn compute_group<F: CompositeCache + ShortWinogradScalar>(
         src: &[Complex<F>],
         dst: &mut [Complex<F>],
         prev_len: usize,
@@ -25,7 +28,7 @@ impl<const R: usize> FusedStage for Radix<R> {
     const DEPTH: usize = 1;
 
     #[inline(always)]
-    fn compute_group<F: CompositeCache>(
+    fn compute_group<F: CompositeCache + ShortWinogradScalar>(
         src: &[Complex<F>],
         dst: &mut [Complex<F>],
         prev_len: usize,
@@ -47,10 +50,15 @@ impl<const R: usize> FusedStage for Radix<R> {
                 k += 1;
             }
             if j > 0 {
+                // stage_twiddles[j] = W_N^j; twiddle buf[k] by W_N^{j*k} via iterative multiply.
+                let base_tw = *unsafe { stage_twiddles.get_unchecked(j) };
+                let mut tw_k = base_tw;
                 let mut k = 1;
                 while k < R {
-                    let tw = *unsafe { stage_twiddles.get_unchecked(j * (R - 1) + (k - 1)) };
-                    buf[k] = crate::application::execution::kernel::winograd::apply_twiddle_impl(buf[k], tw);
+                    buf[k] = apply_twiddle_impl(buf[k], tw_k);
+                    if k + 1 < R {
+                        tw_k = apply_twiddle_impl(tw_k, base_tw);
+                    }
                     k += 1;
                 }
             }
@@ -82,7 +90,7 @@ impl<Inner: FusedStage, Outer: FusedStage> FusedStage for Compose<Inner, Outer> 
     const DEPTH: usize = Inner::DEPTH + Outer::DEPTH;
 
     #[inline(always)]
-    fn compute_group<F: CompositeCache>(
+    fn compute_group<F: CompositeCache + ShortWinogradScalar>(
         src: &[Complex<F>],
         dst: &mut [Complex<F>],
         prev_len: usize,
@@ -94,7 +102,15 @@ impl<Inner: FusedStage, Outer: FusedStage> FusedStage for Compose<Inner, Outer> 
     ) {
         let inner_out_len = Inner::R_TOTAL * prev_len;
         let inner_groups_out = Outer::R_TOTAL * groups_out;
-        let mut mid = [Complex::<F>::zero(); 256];
+        let total_mid = Outer::R_TOTAL * inner_out_len;
+        // SAFETY: Inner::compute_group writes every element of each segment before
+        // Outer::compute_group reads from mid. MaybeUninit avoids the 4 KiB memset
+        // that [Complex::zero(); 256] would emit for f64 precision.
+        let mut mid_uninit: [MaybeUninit<Complex<F>>; 256] =
+            unsafe { MaybeUninit::uninit().assume_init() };
+        let mid: &mut [Complex<F>] = unsafe {
+            core::slice::from_raw_parts_mut(mid_uninit.as_mut_ptr().cast::<Complex<F>>(), total_mid)
+        };
         let mut b_inner = 0;
         while b_inner < Outer::R_TOTAL {
             let b_inner_global = b_out + b_inner * groups_out;
@@ -111,7 +127,7 @@ impl<Inner: FusedStage, Outer: FusedStage> FusedStage for Compose<Inner, Outer> 
             b_inner += 1;
         }
         Outer::compute_group::<F>(
-            &mid[..Outer::R_TOTAL * inner_out_len],
+            mid,
             dst,
             inner_out_len,
             0,
