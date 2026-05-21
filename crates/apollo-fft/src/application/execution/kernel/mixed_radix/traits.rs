@@ -77,7 +77,9 @@ impl ShortWinogradScalar for f32 {
 }
 
 #[inline]
-pub(crate) fn forward_short_winograd<F: ShortWinogradScalar>(data: &mut [num_complex::Complex<F>]) -> bool {
+pub(crate) fn forward_short_winograd<F: ShortWinogradScalar>(
+    data: &mut [num_complex::Complex<F>],
+) -> bool {
     short_winograd(data, false, false)
 }
 
@@ -112,4 +114,3 @@ pub(crate) fn short_winograd<F: ShortWinogradScalar>(
     }
     true
 }
-

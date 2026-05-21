@@ -80,6 +80,7 @@ pub(crate) fn dft8_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
 }
 
 #[inline]
+#[allow(clippy::needless_range_loop)]
 pub(crate) fn dft7_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>], inverse: bool) {
     debug_assert!(data.len() >= 7);
     let sign = if inverse {
@@ -202,4 +203,3 @@ pub(crate) fn dft5_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>],
     data[2] = s2_add + m4;
     data[3] = s2_add - m4;
 }
-

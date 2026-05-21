@@ -1,4 +1,3 @@
-
 pub(crate) mod private {
     pub trait Sealed {}
 }
@@ -124,7 +123,11 @@ impl<'a, T> StockhamTwiddleCursor<'a, T> {
 }
 
 #[inline]
-pub(crate) unsafe fn stockham_twiddle_subslice<T>(twiddles: &[T], start: usize, len: usize) -> &[T] {
+pub(crate) unsafe fn stockham_twiddle_subslice<T>(
+    twiddles: &[T],
+    start: usize,
+    len: usize,
+) -> &[T] {
     debug_assert!(start + len <= twiddles.len());
     unsafe { std::slice::from_raw_parts(twiddles.as_ptr().add(start), len) }
 }

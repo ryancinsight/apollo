@@ -1,9 +1,10 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-use num_complex::{Complex32, Complex64};
-use super::super::precision::*;
+#![allow(clippy::wildcard_imports)]
 use super::super::avx::*;
+use super::super::precision::*;
 use super::super::transform::*;
+use num_complex::{Complex32, Complex64};
 pub(crate) unsafe fn forward64_avx_with_scratch(
     data: &mut [Complex64],
     scratch: &mut [Complex64],
@@ -384,23 +385,21 @@ unsafe fn fixed_len8_32_avx_fma(
 ) {
     #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
-    // Pass 1: radix 1, groups 4
-    for j in 0..1 {
-        let w = twiddles[j];
+    // Pass 1: radix 1, groups 4 (single j=0 iteration, unrolled)
+    {
+        let w = twiddles[0];
         let w_re = _mm256_set1_ps(w.re);
         let w_im = _mm256_set1_ps(w.im);
-        let src_base = j * 8;
-        let dst_base = j * 4;
         let mut k = 0;
         while k < 4 {
-            let x0 = _mm256_loadu_ps(data.as_ptr().add(src_base + k).cast::<f32>());
-            let x1 = _mm256_loadu_ps(data.as_ptr().add(src_base + 4 + k).cast::<f32>());
+            let x0 = _mm256_loadu_ps(data.as_ptr().add(k).cast::<f32>());
+            let x1 = _mm256_loadu_ps(data.as_ptr().add(4 + k).cast::<f32>());
             let x1_shuf = _mm256_permute_ps(x1, 0b10110001);
             let product = _mm256_fmaddsub_ps(w_re, x1, _mm256_mul_ps(w_im, x1_shuf));
             let s = _mm256_add_ps(x0, product);
             let t = _mm256_sub_ps(x0, product);
-            _mm256_storeu_ps(scratch.as_mut_ptr().add(dst_base + k).cast::<f32>(), s);
-            _mm256_storeu_ps(scratch.as_mut_ptr().add(dst_base + 4 + k).cast::<f32>(), t);
+            _mm256_storeu_ps(scratch.as_mut_ptr().add(k).cast::<f32>(), s);
+            _mm256_storeu_ps(scratch.as_mut_ptr().add(4 + k).cast::<f32>(), t);
             k += 4;
         }
     }
@@ -447,14 +446,12 @@ unsafe fn fixed_len4_32_avx_fma(
 ) {
     #[allow(clippy::wildcard_imports)]
     use std::arch::x86_64::*;
-    // Pass 1: radix 1, groups 2
-    for j in 0..1 {
-        let w = twiddles[j];
+    // Pass 1: radix 1, groups 2 (single j=0 iteration, unrolled)
+    {
+        let w = twiddles[0];
         let w_re = _mm256_set1_ps(w.re);
         let w_im = _mm256_set1_ps(w.im);
-        let src_base = j * 4;
-        let dst_base = j * 2;
-        let src_vec = _mm256_loadu_ps(data.as_ptr().add(src_base).cast::<f32>());
+        let src_vec = _mm256_loadu_ps(data.as_ptr().cast::<f32>());
         let x0 = _mm256_permute2f128_ps(src_vec, src_vec, 0x00);
         let x1 = _mm256_permute2f128_ps(src_vec, src_vec, 0x11);
         let x1_shuf = _mm256_permute_ps(x1, 0b10110001);
@@ -462,11 +459,11 @@ unsafe fn fixed_len4_32_avx_fma(
         let s = _mm256_add_ps(x0, product);
         let t = _mm256_sub_ps(x0, product);
         _mm_storeu_ps(
-            scratch.as_mut_ptr().add(dst_base).cast::<f32>(),
+            scratch.as_mut_ptr().cast::<f32>(),
             _mm256_castps256_ps128(s),
         );
         _mm_storeu_ps(
-            scratch.as_mut_ptr().add(dst_base + 2).cast::<f32>(),
+            scratch.as_mut_ptr().add(2).cast::<f32>(),
             _mm256_castps256_ps128(t),
         );
     }
@@ -481,7 +478,6 @@ unsafe fn fixed_len4_32_avx_fma(
 }
 
 #[inline]
-#[expect(clippy::too_many_arguments, reason = "register-blocked fused codelet")]
 pub(crate) unsafe fn forward32_avx_with_scratch(
     data: &mut [Complex32],
     scratch: &mut [Complex32],

@@ -1,10 +1,11 @@
-use num_complex::Complex64;
-use super::traits::*;
-use super::super::stage::stage_impl;
-use super::super::butterfly::{stage_pair_impl, stage_triple_impl, stage_quad_impl};
-use crate::application::execution::kernel::radix_stage::normalize_inplace_c64;
+#![allow(clippy::wildcard_imports)]
 use super::super::avx::*;
+use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
+use super::super::stage::stage_impl;
 use super::super::stage::stockham_f64_stage_is_l1_resident;
+use super::traits::*;
+use crate::application::execution::kernel::radix_stage::normalize_inplace_c64;
+use num_complex::Complex64;
 
 #[cfg(any(
     test,

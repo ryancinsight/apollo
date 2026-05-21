@@ -1,6 +1,6 @@
-use num_complex::Complex32;
 use super::triple_1::stage_triple32_radix1_avx_fma;
 use super::triple_2::stage_triple32_quarter_groups_one_avx_fma;
+use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -30,7 +30,6 @@ pub(crate) unsafe fn fixed_len64_32_avx_fma(
     );
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
@@ -46,7 +45,6 @@ pub(crate) unsafe fn cmul_vec32(
         _mm256_mul_ps(w_im, _mm256_permute_ps::<0b1011_0001>(value)),
     )
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -64,7 +62,6 @@ pub(crate) unsafe fn cmul_pair32(
     )
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
@@ -73,7 +70,6 @@ pub(crate) unsafe fn store_complex32_low(dst: *mut Complex32, value: std::arch::
     _mm_storel_epi64(dst.cast(), _mm_castps_si128(value));
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
@@ -81,7 +77,6 @@ pub(crate) unsafe fn store_complex32_high(dst: *mut Complex32, value: std::arch:
     use std::arch::x86_64::_mm_movehl_ps;
     store_complex32_low(dst, _mm_movehl_ps(value, value));
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

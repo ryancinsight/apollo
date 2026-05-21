@@ -133,7 +133,7 @@ impl RadixStages {
         inverse: bool,
     ) -> Self {
         use wgpu::util::DeviceExt;
-        debug_assert!(fft_m.is_power_of_two() && (fft_m.trailing_zeros() % 2 == 0));
+        debug_assert!(fft_m.is_power_of_two() && (fft_m.trailing_zeros().is_multiple_of(2)));
         let inv_flag = u32::from(inverse);
         let log4_m = (fft_m.trailing_zeros() / 2) as usize;
         let stage_count = 1 + log4_m + usize::from(inverse);

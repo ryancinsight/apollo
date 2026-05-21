@@ -39,6 +39,7 @@ unsafe fn cmul2_64(a: __m256d, b: __m256d) -> __m256d {
 /// - 2 add/sub (stage 1)
 /// - 5 128-bit ops (extract ×4 + permute ×1 + xor ×1 + add/sub ×4 + insert ×2)
 /// - 2 store
+///
 /// Total: ~17 µops vs ~32 scalar ops.
 ///
 /// # Safety
@@ -155,4 +156,3 @@ pub unsafe fn dft8_avx_fma_64(data: &mut [Complex64; 8], inverse: bool) {
         _mm256_sub_pd(ev23, ot23),
     );
 }
-

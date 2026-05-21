@@ -1,12 +1,11 @@
 //! Generic Stockham transform driver and fixed-size specializations.
 
 use super::precision::{
-    StockhamPrecision, StockhamFusion, StockhamTwiddleCursor, stockham_twiddle_table_len,
-    stockham_twiddle_subslice, fusion_fits, fusion_twiddle_len,
+    fusion_fits, fusion_twiddle_len, stockham_twiddle_subslice, stockham_twiddle_table_len,
+    StockhamFusion, StockhamPrecision, StockhamTwiddleCursor,
 };
 use super::precision::{StockhamFused1, StockhamFused2, StockhamFused3, StockhamFused4};
 // StockhamFused types imported below
-
 
 pub(crate) fn transform<P: StockhamPrecision>(
     data: &mut [P::Complex],

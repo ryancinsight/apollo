@@ -193,7 +193,7 @@ pub fn forward_real_inplace_64(
     //   = exp(-πi)·exp(2πi·l/N) = -conj(post_twiddles[l]).
     // One twiddle read per pair halves post-twiddle cache pressure for large N
     // (N=65536 saves 256 KB of twiddle reads in this loop alone).
-    let pair_end = (m + 1) / 2;
+    let pair_end = m.div_ceil(2);
     for l in 1..pair_end {
         let ml = m - l;
         let zl = output[l]; // Z[l]   — not yet overwritten
@@ -215,7 +215,7 @@ pub fn forward_real_inplace_64(
     // post_twiddles[m/2] = exp(-2πi·(N/4)/N) = exp(-πi/2) = -i.
     // Analytically: a = zmid.re, b = zmid.im (both real); -i·zmid.im = -i·b.
     // xmid = zmid.re + (-i·zmid.im) = zmid.re - i·zmid.im = conj(zmid). No multiply needed.
-    if m % 2 == 0 {
+    if m.is_multiple_of(2) {
         let mid = m / 2;
         let zmid = output[mid];
         output[mid] = zmid.conj(); // X[m/2]  = conj(Z[m/2])

@@ -1,5 +1,5 @@
+use super::fixed::{cmul_pair32, cmul_vec32, store_complex32_low};
 use num_complex::Complex32;
-use super::fixed::{cmul_vec32, cmul_pair32, store_complex32_low};
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -16,7 +16,6 @@ pub(crate) unsafe fn stockham_quad_split_pair32(
     let product = cmul_pair32(_mm_set1_ps(twiddle.re), _mm_set1_ps(twiddle.im), high);
     [_mm_add_ps(low, product), _mm_sub_ps(low, product)]
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

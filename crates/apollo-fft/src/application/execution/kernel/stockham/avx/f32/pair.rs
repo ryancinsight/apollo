@@ -1,5 +1,5 @@
-use num_complex::Complex32;
 use super::fixed::cmul_vec32;
+use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -82,7 +82,6 @@ pub(crate) unsafe fn stage_pair32_avx_fma(
         }
     }
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -212,7 +211,6 @@ pub(crate) unsafe fn stage_pair32_quarter_groups_two_avx_fma(
         );
     }
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

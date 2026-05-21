@@ -5,14 +5,13 @@
 //! as associated methods, allowing a single generic dispatch body to serve all
 //! precisions without cloned algorithm bodies.
 
+use super::super::radix_stage::{normalize_inplace_c32, normalize_inplace_c64};
+use super::super::{bluestein, radix_composite, stockham};
 use super::caches::{
-    cached_twiddle_fwd_32, cached_twiddle_fwd_64,
-    cached_twiddle_inv_32, cached_twiddle_inv_64,
+    cached_twiddle_fwd_32, cached_twiddle_fwd_64, cached_twiddle_inv_32, cached_twiddle_inv_64,
     with_stockham_scratch_32, with_stockham_scratch_64,
 };
 use super::traits::{forward_short_winograd, inverse_short_winograd};
-use super::super::{bluestein, radix_composite, stockham};
-use super::super::radix_stage::{normalize_inplace_c32, normalize_inplace_c64};
 use num_complex::{Complex32, Complex64};
 use std::sync::Arc;
 
@@ -99,11 +98,7 @@ impl MixedRadixScalar for f64 {
         with_stockham_scratch_64(n, f)
     }
     #[inline]
-    fn stockham_forward(
-        data: &mut [Complex64],
-        scratch: &mut [Complex64],
-        twiddles: &[Complex64],
-    ) {
+    fn stockham_forward(data: &mut [Complex64], scratch: &mut [Complex64], twiddles: &[Complex64]) {
         <f64 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
     }
     #[inline]
@@ -162,11 +157,7 @@ impl MixedRadixScalar for f32 {
         with_stockham_scratch_32(n, f)
     }
     #[inline]
-    fn stockham_forward(
-        data: &mut [Complex32],
-        scratch: &mut [Complex32],
-        twiddles: &[Complex32],
-    ) {
+    fn stockham_forward(data: &mut [Complex32], scratch: &mut [Complex32], twiddles: &[Complex32]) {
         <f32 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
     }
     #[inline]

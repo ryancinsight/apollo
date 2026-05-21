@@ -1,5 +1,5 @@
-use num_complex::Complex64;
 use super::fixed::cmul_vec64;
+use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -180,7 +180,6 @@ pub(crate) unsafe fn stage_pair64_groups_two_avx_fma(
         j += 2;
     }
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

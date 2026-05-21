@@ -1,5 +1,5 @@
+use super::fixed::{avx_rotate_quarter_turn32, cmul_vec32};
 use num_complex::Complex32;
-use super::fixed::{cmul_vec32, avx_rotate_quarter_turn32};
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -113,7 +113,6 @@ pub(crate) unsafe fn stage_triple32_radix1_avx_fma(
         k += 4;
     }
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

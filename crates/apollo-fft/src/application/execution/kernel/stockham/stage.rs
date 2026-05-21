@@ -28,6 +28,7 @@ pub(crate) fn stockham_f32_stage_is_l1_resident(n: usize) -> bool {
 }
 
 #[inline]
+#[allow(clippy::needless_range_loop)]
 pub(crate) fn stage_impl<C>(src: &[C], dst: &mut [C], radix: usize, twiddles: &[C])
 where
     C: Copy + std::ops::Add<Output = C> + std::ops::Sub<Output = C> + std::ops::Mul<Output = C>,

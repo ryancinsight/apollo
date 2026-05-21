@@ -1,6 +1,6 @@
 #[cfg(test)]
-mod dft_small;
+mod boundaries;
 #[cfg(test)]
 mod dft_large;
 #[cfg(test)]
-mod boundaries;
+mod dft_small;

@@ -55,19 +55,19 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     let mut count3 = 0u32;
     let mut count5 = 0u32;
     let mut count7 = 0u32;
-    while remaining % 2 == 0 {
+    while remaining.is_multiple_of(2) {
         count2 += 1;
         remaining /= 2;
     }
-    while remaining % 3 == 0 {
+    while remaining.is_multiple_of(3) {
         count3 += 1;
         remaining /= 3;
     }
-    while remaining % 5 == 0 {
+    while remaining.is_multiple_of(5) {
         count5 += 1;
         remaining /= 5;
     }
-    while remaining % 7 == 0 {
+    while remaining.is_multiple_of(7) {
         count7 += 1;
         remaining /= 7;
     }
@@ -131,7 +131,7 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
 /// than Bluestein for the affected sizes). Both failure modes produce correct output.
 #[inline]
 pub(crate) fn should_use_bluestein_instead_of_composite(n: usize) -> bool {
-    if n >= 500 && n <= 2000 {
+    if (500..=2000).contains(&n) {
         let Some(radices) = factorize_composite(n) else {
             return false; // Not composite; Bluestein will handle it
         };

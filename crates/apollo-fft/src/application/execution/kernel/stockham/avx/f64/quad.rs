@@ -1,5 +1,5 @@
-use num_complex::Complex64;
 use super::fixed::cmul_vec64;
+use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 pub(crate) struct StockhamQuadFirstPairs64 {
@@ -42,7 +42,6 @@ pub(crate) unsafe fn stockham_quad_store_pair64(
         _mm256_castpd256_pd128(_mm256_sub_pd(pair, product)),
     );
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -123,7 +122,6 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_first_pairs(
     }
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn stockham_quad_groups_eight64_second_pairs(
@@ -202,7 +200,6 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_second_pairs(
         p14_15,
     }
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

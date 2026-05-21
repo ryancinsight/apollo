@@ -15,7 +15,6 @@ pub(crate) unsafe fn cmul_vec64(
     )
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn avx_cmul_by_pair_twiddle(
@@ -29,7 +28,6 @@ unsafe fn avx_cmul_by_pair_twiddle(
     cmul_vec64(wr, wi, value)
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn avx_rotate_quarter_turn(
@@ -41,7 +39,6 @@ pub(crate) unsafe fn avx_rotate_quarter_turn(
     _mm256_xor_pd(_mm256_permute_pd::<0b0101>(value), sign_mask)
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn avx_butterfly2_pair(
@@ -52,7 +49,6 @@ unsafe fn avx_butterfly2_pair(
 
     [_mm256_add_pd(a, b), _mm256_sub_pd(a, b)]
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -68,7 +64,6 @@ unsafe fn avx_butterfly4_pair(
 
     [out0, out2, out1, out3]
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -93,7 +88,6 @@ unsafe fn avx_butterfly8_pair(
 
     [out0, out2, out4, out6, out1, out3, out5, out7]
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -130,7 +124,6 @@ unsafe fn twiddle_len64_const_unchecked<const EXPONENT: usize>(
     }
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn avx_twiddle_len64_pair_const<
@@ -145,7 +138,6 @@ unsafe fn avx_twiddle_len64_pair_const<
     let second = twiddle_len64_const_unchecked::<SECOND_EXPONENT>(twiddle_ptr);
     _mm256_set_pd(second.im, second.re, first.im, first.re)
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -254,10 +246,10 @@ unsafe fn avx_apply_len64_twiddles_for_column_pair<const COLUMN_PAIR: usize>(
     }
 }
 
-
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx,fma")]
+#[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn fixed_len64_first_phase_column_pair<const COLUMN_PAIR: usize>(
     data_ptr: *mut Complex64,
     scratch_ptr: *mut Complex64,
@@ -294,7 +286,6 @@ pub(crate) unsafe fn fixed_len64_first_phase_column_pair<const COLUMN_PAIR: usiz
     _mm256_storeu_pd(scratch_ptr.add(base + 12).cast::<f64>(), transposed[6]);
     _mm256_storeu_pd(scratch_ptr.add(base + 14).cast::<f64>(), transposed[7]);
 }
-
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

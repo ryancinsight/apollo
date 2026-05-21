@@ -16,9 +16,9 @@
 //! | `inverse_inplace`                | true    | true      |
 //! | `inverse_inplace_with_twiddles`  | true    | true      |
 
+use super::super::radix_shape::should_use_bluestein_instead_of_composite;
 use super::caches::cached_composite_radices;
 use super::scalar::MixedRadixScalar;
-use super::super::radix_shape::should_use_bluestein_instead_of_composite;
 
 /// Authoritative single-body FFT dispatch.
 ///
@@ -85,15 +85,6 @@ pub(crate) fn forward_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
     dispatch_inplace::<F, false, false>(data, None);
 }
 
-/// In-place forward FFT, unnormalized, with optional pre-computed twiddles.
-#[inline]
-pub(crate) fn forward_inplace_with_twiddles<F: MixedRadixScalar>(
-    data: &mut [F::Complex],
-    twiddles: Option<&[F::Complex]>,
-) {
-    dispatch_inplace::<F, false, false>(data, twiddles);
-}
-
 // ── Inverse (unnormalized) ────────────────────────────────────────────────────
 
 /// In-place inverse FFT, unnormalized (no 1/N division).
@@ -102,30 +93,12 @@ pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar>(data: &mut [F::Complex
     dispatch_inplace::<F, true, false>(data, None);
 }
 
-/// In-place inverse FFT, unnormalized, with optional pre-computed twiddles.
-#[inline]
-pub(crate) fn inverse_inplace_unnorm_with_twiddles<F: MixedRadixScalar>(
-    data: &mut [F::Complex],
-    twiddles: Option<&[F::Complex]>,
-) {
-    dispatch_inplace::<F, true, false>(data, twiddles);
-}
-
 // ── Inverse (normalized 1/N) ──────────────────────────────────────────────────
 
 /// In-place inverse FFT, normalized by 1/N.
 #[inline]
 pub(crate) fn inverse_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
     dispatch_inplace::<F, true, true>(data, None);
-}
-
-/// In-place inverse FFT, normalized by 1/N, with optional pre-computed twiddles.
-#[inline]
-pub(crate) fn inverse_inplace_with_twiddles<F: MixedRadixScalar>(
-    data: &mut [F::Complex],
-    twiddles: Option<&[F::Complex]>,
-) {
-    dispatch_inplace::<F, true, true>(data, twiddles);
 }
 
 // ── Backward-compatible concrete aliases ──────────────────────────────────────

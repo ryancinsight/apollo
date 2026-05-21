@@ -32,17 +32,14 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::uninit_vec)]
 
-use super::{radix2, winograd};
-
 pub(crate) mod caches;
 pub(crate) mod dispatch;
 pub(crate) mod dispatch_f16;
 pub(crate) mod scalar;
-pub(crate) mod traits;
 #[cfg(test)]
 mod tests;
+pub(crate) mod traits;
 
 pub(crate) use caches::*;
-pub(crate) use scalar::MixedRadixScalar;
 pub use dispatch::*;
 pub(crate) use dispatch_f16::*;

@@ -1,8 +1,9 @@
-use num_complex::Complex64;
 use super::fixed::cmul_vec64;
+use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
+#[allow(clippy::needless_range_loop)]
 pub(crate) unsafe fn stage64_avx_fma(
     src: &[Complex64],
     dst: &mut [Complex64],

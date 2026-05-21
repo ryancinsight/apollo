@@ -1,9 +1,12 @@
-use super::caches::{cached_composite_radices, cached_twiddle_fwd_32, cached_twiddle_inv_32, with_stockham_scratch_32};
-use super::traits::{forward_short_winograd, inverse_short_winograd};
-use super::super::{bluestein, radix_composite, stockham};
+use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
 use super::super::radix_shape::should_use_bluestein_instead_of_composite;
 use super::super::radix_stage::normalize_inplace_c32;
-use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
+use super::super::{bluestein, radix_composite, stockham};
+use super::caches::{
+    cached_composite_radices, cached_twiddle_fwd_32, cached_twiddle_inv_32,
+    with_stockham_scratch_32,
+};
+use super::traits::{forward_short_winograd, inverse_short_winograd};
 
 /// In-place forward FFT (unnormalized) for compact storage routed through `Complex32`.
 ///
@@ -109,4 +112,3 @@ pub(crate) fn inverse_compact_storage<S: Complex32Bridge>(data: &mut [S]) {
         run_via_complex32(data, bluestein::inverse_inplace_32);
     }
 }
-

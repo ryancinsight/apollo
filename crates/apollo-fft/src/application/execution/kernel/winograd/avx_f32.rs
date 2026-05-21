@@ -134,4 +134,3 @@ pub unsafe fn dft8_avx_fma_32(data: &mut [Complex32; 8], inverse: bool) {
         _mm256_sub_ps(ev, ot),
     );
 }
-

@@ -43,7 +43,7 @@ pub fn ifftshift<T: Copy>(input: &[T]) -> Vec<T> {
     if n <= 1 {
         return input.to_vec();
     }
-    let shift = (n + 1) / 2;
+    let shift = n.div_ceil(2);
     shift_left(input, shift)
 }
 

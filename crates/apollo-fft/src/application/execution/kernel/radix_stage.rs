@@ -33,8 +33,8 @@ unsafe fn normalize_c64_avx(data: &mut [Complex64], scale: f64) {
         _mm256_storeu_pd(ptr.add(off), _mm256_mul_pd(x, s));
     }
     // Scalar tail for odd count.
-    for i in batches * 2..len {
-        data[i] *= scale;
+    for x in &mut data[batches * 2..len] {
+        *x *= scale;
     }
 }
 
@@ -60,8 +60,8 @@ unsafe fn normalize_c32_avx(data: &mut [Complex32], scale: f32) {
         _mm256_storeu_ps(ptr.add(off), _mm256_mul_ps(x, s));
     }
     // Scalar tail for remainder.
-    for i in batches * 4..len {
-        data[i] *= scale;
+    for x in &mut data[batches * 4..len] {
+        *x *= scale;
     }
 }
 

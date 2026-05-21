@@ -1,6 +1,6 @@
-use num_complex::Complex64;
-use super::traits::{WinogradScalar, apply_twiddle_impl};
 use super::radix::dft8_impl;
+use super::traits::{apply_twiddle_impl, WinogradScalar};
+use num_complex::Complex64;
 /// Precomputed forward twiddle factors for the 16-point DFT stage.
 ///
 /// `W_16^k = exp(-2πi·k/16)` for `k = 0..7`.
@@ -205,4 +205,3 @@ pub(crate) fn dft64_impl<F: WinogradScalar>(
         data[k + 32] = even[k] - o;
     }
 }
-

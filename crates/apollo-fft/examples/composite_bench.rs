@@ -37,7 +37,11 @@ fn main() {
             500
         };
 
-        let composite_time = time_fft(n, |buf| mixed_radix::forward_inplace_64_with_twiddles(buf, None), iters);
+        let composite_time = time_fft(
+            n,
+            |buf| mixed_radix::forward_inplace_64_with_twiddles(buf, None),
+            iters,
+        );
         let bluestein_time = time_fft(n, |buf| bluestein::forward_inplace_64(buf), iters);
 
         let speedup = bluestein_time.as_nanos() as f64 / composite_time.as_nanos() as f64;

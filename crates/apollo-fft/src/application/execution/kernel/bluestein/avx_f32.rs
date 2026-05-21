@@ -200,7 +200,7 @@ pub(super) unsafe fn mul_complex_pointwise_32_avx_inplace_inverse_chunk(
         let yw = _mm256_fmaddsub_ps(w_re, x, _mm256_mul_ps(w_im, x_perm));
         _mm256_storeu_ps(dst_f.add(dst_offset), yw);
     }
-    if count % 4 != 0 {
+    if !count.is_multiple_of(4) {
         let base = (count / 4) * 4;
         for k in 0..(count % 4) {
             let out = &mut dst[base + k];

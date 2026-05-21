@@ -28,7 +28,7 @@ pub fn fftfreq(n: usize, d: f64) -> Vec<f64> {
         return Vec::new();
     }
     let nd = n as f64 * d;
-    let half = (n + 1) / 2; // positive bins: 0..half
+    let half = n.div_ceil(2); // positive bins: 0..half
     let mut bins = Vec::with_capacity(n);
     for k in 0..half {
         bins.push(k as f64 / nd);

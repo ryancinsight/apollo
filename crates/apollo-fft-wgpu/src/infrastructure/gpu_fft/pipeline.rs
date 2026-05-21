@@ -452,7 +452,7 @@ impl GpuFft3d {
 
         let axis_fwd_x = match strategy_x {
             AxisStrategy::Radix2 => {
-                if nx.is_power_of_two() && (nx.trailing_zeros() % 2 == 0) {
+                if nx.is_power_of_two() && (nx.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,
@@ -468,7 +468,7 @@ impl GpuFft3d {
         };
         let axis_inv_x = match strategy_x {
             AxisStrategy::Radix2 => {
-                if nx.is_power_of_two() && (nx.trailing_zeros() % 2 == 0) {
+                if nx.is_power_of_two() && (nx.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,
@@ -484,7 +484,7 @@ impl GpuFft3d {
         };
         let axis_fwd_y = match strategy_y {
             AxisStrategy::Radix2 => {
-                if ny.is_power_of_two() && (ny.trailing_zeros() % 2 == 0) {
+                if ny.is_power_of_two() && (ny.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,
@@ -500,7 +500,7 @@ impl GpuFft3d {
         };
         let axis_inv_y = match strategy_y {
             AxisStrategy::Radix2 => {
-                if ny.is_power_of_two() && (ny.trailing_zeros() % 2 == 0) {
+                if ny.is_power_of_two() && (ny.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,
@@ -516,7 +516,7 @@ impl GpuFft3d {
         };
         let axis_fwd_z = match strategy_z {
             AxisStrategy::Radix2 => {
-                if nz.is_power_of_two() && (nz.trailing_zeros() % 2 == 0) {
+                if nz.is_power_of_two() && (nz.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,
@@ -532,7 +532,7 @@ impl GpuFft3d {
         };
         let axis_inv_z = match strategy_z {
             AxisStrategy::Radix2 => {
-                if nz.is_power_of_two() && (nz.trailing_zeros() % 2 == 0) {
+                if nz.is_power_of_two() && (nz.trailing_zeros().is_multiple_of(2)) {
                     RadixStages::precompute_radix4(
                         &device,
                         &params_layout,

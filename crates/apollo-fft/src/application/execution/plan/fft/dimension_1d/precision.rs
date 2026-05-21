@@ -157,7 +157,7 @@ impl FftPlan1D {
         fft_forward(&mut buf);
 
         let mut output = uninit_copy_vec(buf.len());
-        for (slot, value) in output.iter_mut().zip(buf.into_iter()) {
+        for (slot, value) in output.iter_mut().zip(buf) {
             *slot = Complex32::new(value.re.to_f32(), value.im.to_f32());
         }
         Array1::from_vec(output)
@@ -172,7 +172,7 @@ impl FftPlan1D {
         fft_inverse(&mut buf);
 
         let mut output = uninit_copy_vec(buf.len());
-        for (slot, value) in output.iter_mut().zip(buf.into_iter()) {
+        for (slot, value) in output.iter_mut().zip(buf) {
             *slot = value.re;
         }
         Array1::from_vec(output)

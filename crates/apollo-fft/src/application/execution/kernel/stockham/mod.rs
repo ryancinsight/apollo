@@ -25,8 +25,18 @@ pub(crate) mod precision;
 pub(crate) mod stage;
 pub(crate) mod transform;
 
-use butterfly::{forward64_avx_with_scratch, forward32_avx_with_scratch};
+use butterfly::{forward32_avx_with_scratch, forward64_avx_with_scratch};
 use num_complex::{Complex32, Complex64};
+#[cfg(any(
+    test,
+    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
+))]
+use precision::{F32Stockham, F64Stockham};
+#[cfg(any(
+    test,
+    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
+))]
+use transform::transform;
 
 pub(crate) trait StockhamKernel: Sized {
     type Complex;
@@ -60,7 +70,6 @@ impl StockhamKernel for f64 {
         #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
         {
             unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
-            return;
         }
         #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
         {
@@ -94,7 +103,6 @@ impl StockhamKernel for f32 {
         #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
         {
             unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
-            return;
         }
         #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
         {
@@ -109,7 +117,6 @@ impl StockhamKernel for f32 {
         }
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests;

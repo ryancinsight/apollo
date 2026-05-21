@@ -1,9 +1,10 @@
-use num_complex::Complex32;
 use super::fixed::cmul_pair32;
+use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
+#[allow(clippy::needless_range_loop)]
 pub(crate) unsafe fn stage32_avx_fma(
     src: &[Complex32],
     dst: &mut [Complex32],
