@@ -13,23 +13,11 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// the half-size `(n-1)/2`.
 macro_rules! try_winograd_pair_forward_with_pointwise {
     ($F:ty, $data:expr, $kernel_spectrum:expr) => {{
-        try_winograd_pair_forward_with_pointwise!(
+        with_winograd_pair_primes!(try_winograd_pair_forward_with_pointwise!(
             $F,
             $data,
-            $kernel_spectrum,
-            (11, 5),
-            (13, 6),
-            (17, 8),
-            (19, 9),
-            (23, 11),
-            (29, 14),
-            (31, 15),
-            (37, 18),
-            (41, 20),
-            (43, 21),
-            (47, 23),
-            (53, 26),
-        )
+            $kernel_spectrum
+        ))
     }};
     ($F:ty, $data:expr, $kernel_spectrum:expr, $(($n:literal, $h:literal)),+ $(,)?) => {{
         use crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::{
@@ -51,6 +39,28 @@ macro_rules! try_winograd_pair_forward_with_pointwise {
             )+
             _ => false,
         }
+    }};
+}
+
+macro_rules! with_winograd_pair_primes {
+    (try_winograd_pair_forward_with_pointwise!($F:ty, $data:expr, $kernel_spectrum:expr)) => {{
+        try_winograd_pair_forward_with_pointwise!(
+            $F,
+            $data,
+            $kernel_spectrum,
+            (11, 5),
+            (13, 6),
+            (17, 8),
+            (19, 9),
+            (23, 11),
+            (29, 14),
+            (31, 15),
+            (37, 18),
+            (41, 20),
+            (43, 21),
+            (47, 23),
+            (53, 26),
+        )
     }};
 }
 
@@ -95,7 +105,7 @@ pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = num_complex::
     // Covers N = 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53.
     // The forward Winograd DFT is fused with kernel-spectrum multiplication,
     // eliminating the separate pointwise_mul pass.
-    if with_winograd_pair_primes!(try_winograd_pair_forward_with_pointwise!(F, padded, kernel_spectrum)) {
+    if try_winograd_pair_forward_with_pointwise!(F, padded, kernel_spectrum) {
         F::short_winograd::<true, true>(padded); // inverse + 1/N normalize
         return;
     }
@@ -196,7 +206,7 @@ pub(super) fn rader_negacyclic_convolve_inplace<
 
     // --- Cyclic convolution of length m (modulo x^m - 1) ---
     // Dispatch order: Winograd pair (fused) → short Winograd → prime23 composite (fused) → trampoline.
-    if !with_winograd_pair_primes!(try_winograd_pair_forward_with_pointwise!(F, first, kernel_cyc_spectrum)) {
+    if !try_winograd_pair_forward_with_pointwise!(F, first, kernel_cyc_spectrum) {
         if F::short_winograd::<false, false>(first) {
             F::pointwise_mul(first, kernel_cyc_spectrum);
         } else if let Some(radices) =
@@ -217,7 +227,7 @@ pub(super) fn rader_negacyclic_convolve_inplace<
 
     // --- Negacyclic convolution of length m (modulo x^m + 1) ---
     // Dispatch order: Winograd pair (fused) → short Winograd → prime23 composite (fused) → trampoline.
-    if !with_winograd_pair_primes!(try_winograd_pair_forward_with_pointwise!(F, second, kernel_neg_spectrum)) {
+    if !try_winograd_pair_forward_with_pointwise!(F, second, kernel_neg_spectrum) {
         if F::short_winograd::<false, false>(second) {
             F::pointwise_mul(second, kernel_neg_spectrum);
         } else if let Some(radices) =
