@@ -11,17 +11,17 @@ fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
 }
 
 fn forward_inplace_64(data: &mut [Complex64]) {
-    let radices = factorize_composite(data.len()).expect("test length must be 2/3/5/7-smooth");
+    let radices = factorize_composite(data.len()).expect("test length must be prime23-smooth");
     forward_inplace_with_radices(data, &radices);
 }
 
 fn inverse_inplace_unnorm_64(data: &mut [Complex64]) {
-    let radices = factorize_composite(data.len()).expect("test length must be 2/3/5/7-smooth");
+    let radices = factorize_composite(data.len()).expect("test length must be prime23-smooth");
     inverse_inplace_unnorm_with_radices(data, &radices);
 }
 
 fn forward_inplace_32(data: &mut [Complex32]) {
-    let radices = factorize_composite(data.len()).expect("test length must be 2/3/5/7-smooth");
+    let radices = factorize_composite(data.len()).expect("test length must be prime23-smooth");
     forward_inplace_with_radices(data, &radices);
 }
 
@@ -114,7 +114,7 @@ fn factorize_supported_sizes() {
         );
         for &r in &radices {
             assert!(
-                [2, 3, 4, 5, 7, 8].contains(&r),
+                [2, 3, 5, 7, 11, 13, 17, 23].contains(&r),
                 "factorize_composite({n}): unsupported radix {r}"
             );
         }
@@ -135,11 +135,11 @@ fn factorize_pow2_returns_none() {
 #[test]
 fn factorize_non_smooth_returns_none() {
     for &n in &[
-        11usize, 13, 17, 19, 22, 23, 26, 29, 31, 33, 34, 38, 46, 58, 121, 143,
+        19usize, 29, 31, 37, 38, 41, 43, 47, 53, 57, 58, 59, 61, 62, 74, 76,
     ] {
         assert!(
             factorize_composite(n).is_none(),
-            "factorize_composite({n}) should be None (has prime > 7)"
+            "factorize_composite({n}) should be None (has prime > 23)"
         );
     }
 }
@@ -259,17 +259,45 @@ fn twiddle_cache_distinguishes_radix_order_for_same_length() {
     let expected = dft_forward(&input);
 
     let mut radix_3_4 = input.clone();
-    forward_inplace_with_radices(&mut radix_3_4, &[3, 4]);
+    forward_inplace_with_radices(&mut radix_3_4, &[3, 2, 2]);
     assert!(
         max_err(&radix_3_4, &expected) < 1e-12,
-        "radix [3,4] cache path must match direct DFT"
+        "radix [3,2,2] cache path must match direct DFT"
     );
 
     let mut radix_4_3 = input;
-    forward_inplace_with_radices(&mut radix_4_3, &[4, 3]);
+    forward_inplace_with_radices(&mut radix_4_3, &[2, 2, 3]);
     assert!(
         max_err(&radix_4_3, &expected) < 1e-12,
-        "radix [4,3] cache path must not reuse [3,4] twiddles"
+        "radix [2,2,3] cache path must not reuse [3,2,2] twiddles"
+    );
+}
+
+#[test]
+fn forward_lowered_radix4_tail_n12_matches_direct() {
+    let input: Vec<Complex64> = (0..12)
+        .map(|i| Complex64::new((i as f64 * 0.41).sin(), (i as f64 * 0.17).cos()))
+        .collect();
+    let expected = dft_forward(&input);
+    let mut got = input;
+    forward_inplace_with_radices(&mut got, &[3, 4]);
+    assert!(
+        max_err(&got, &expected) < 1e-12,
+        "lowered radix [3,4] path must match direct DFT"
+    );
+}
+
+#[test]
+fn forward_lowered_radix4_tail_n192_matches_direct() {
+    let input: Vec<Complex64> = (0..192)
+        .map(|i| Complex64::new((i as f64 * 0.23).sin(), (i as f64 * 0.31).cos()))
+        .collect();
+    let expected = dft_forward(&input);
+    let mut got = input;
+    forward_inplace_with_radices(&mut got, &[3, 4, 4, 4]);
+    assert!(
+        max_err(&got, &expected) < 1e-10,
+        "lowered radix [3,4,4,4] path must match direct DFT"
     );
 }
 
@@ -341,7 +369,7 @@ fn forward_dc_n1000() {
 }
 
 #[test]
-fn forward_f32_n100_matches_f64_reference() {
+fn forward_reduced_n100_matches_precise_reference() {
     let input: Vec<Complex64> = (0..100usize)
         .map(|k| Complex64::new((k as f64 * 0.29).sin(), (k as f64 * 0.47).cos()))
         .collect();
@@ -359,8 +387,186 @@ fn forward_f32_n100_matches_f64_reference() {
     assert!(err < 1e-4, "f32 forward N=100 max_err={err:.2e}");
 }
 
+// ── Extended prime radix coverage (11, 13, 17, 23) ──────────────────────
+
 #[test]
-fn forward_f32_n1000_matches_f64_reference() {
+fn forward_n11() {
+    check_forward(11, 1e-13);
+}
+#[test]
+fn forward_n22() {
+    check_forward(22, 1e-13);
+}
+#[test]
+fn forward_n33() {
+    check_forward(33, 1e-12);
+}
+#[test]
+fn forward_n34() {
+    check_forward(34, 1e-12);
+}
+#[test]
+fn forward_n46() {
+    check_forward(46, 1e-12);
+}
+#[test]
+fn forward_n121() {
+    check_forward(121, 1e-11);
+}
+#[test]
+fn forward_n143() {
+    check_forward(143, 1e-11);
+}
+#[test]
+fn forward_n352() {
+    check_forward(352, 1e-10);
+}
+#[test]
+fn roundtrip_n22() {
+    check_roundtrip(22, 1e-13);
+}
+#[test]
+fn roundtrip_n121() {
+    check_roundtrip(121, 1e-11);
+}
+#[test]
+fn roundtrip_n143() {
+    check_roundtrip(143, 1e-11);
+}
+#[test]
+fn roundtrip_n352() {
+    check_roundtrip(352, 1e-10);
+}
+#[test]
+fn inverse_n34() {
+    check_inverse(34, 1e-12);
+}
+#[test]
+fn inverse_n143() {
+    check_inverse(143, 1e-11);
+}
+
+// ── 17 and 23 coverage ────────────────────────────────────────────────────
+
+#[test]
+fn forward_n17() {
+    check_forward(17, 1e-13);
+}
+#[test]
+fn forward_n23() {
+    check_forward(23, 1e-13);
+}
+#[test]
+fn forward_n34_via_17() {
+    check_forward(34, 1e-12);
+}
+#[test]
+fn forward_n46_via_23() {
+    check_forward(46, 1e-12);
+}
+#[test]
+fn forward_n51() {
+    check_forward(51, 1e-12);
+} // 17×3
+#[test]
+fn forward_n69() {
+    check_forward(69, 1e-12);
+} // 23×3
+#[test]
+fn forward_n242() {
+    check_forward(242, 1e-10);
+} // 11²×2
+#[test]
+fn forward_n264() {
+    check_forward(264, 1e-10);
+} // 11×3×8
+#[test]
+fn forward_n289() {
+    check_forward(289, 1e-10);
+} // 17²
+#[test]
+fn forward_n2200() {
+    check_forward(2200, 1e-8);
+} // 11×5²×8
+#[test]
+fn roundtrip_n242() {
+    check_roundtrip(242, 1e-11);
+}
+#[test]
+fn roundtrip_n2200() {
+    check_roundtrip(2200, 1e-9);
+}
+#[test]
+fn inverse_n242() {
+    check_inverse(242, 1e-10);
+}
+
+// ── Three-odd-prime + radix-4 tail coverage ──────────────────────────────
+
+#[test]
+fn forward_n108() {
+    check_forward(108, 1e-11);
+} // 3³×4
+#[test]
+fn forward_n180() {
+    check_forward(180, 1e-11);
+} // 5×3²×4
+#[test]
+fn forward_n252() {
+    check_forward(252, 1e-11);
+} // 7×3²×4
+#[test]
+fn forward_n420() {
+    check_forward(420, 1e-10);
+} // 7×5×3×4
+#[test]
+fn roundtrip_n108() {
+    check_roundtrip(108, 1e-11);
+}
+#[test]
+fn roundtrip_n420() {
+    check_roundtrip(420, 1e-10);
+}
+#[test]
+fn inverse_n252() {
+    check_inverse(252, 1e-11);
+}
+
+#[test]
+fn forward_n36() {
+    check_forward(36, 1e-12);
+} // 3²×4
+#[test]
+fn forward_n60() {
+    check_forward(60, 1e-12);
+} // 5×3×4
+#[test]
+fn forward_n84() {
+    check_forward(84, 1e-12);
+} // 7×3×4
+#[test]
+fn forward_n140() {
+    check_forward(140, 1e-11);
+} // 7×5×4
+#[test]
+fn forward_n196() {
+    check_forward(196, 1e-11);
+} // 7²×4
+#[test]
+fn forward_n144() {
+    check_forward(144, 1e-11);
+} // 3²×16
+#[test]
+fn roundtrip_n60() {
+    check_roundtrip(60, 1e-12);
+}
+#[test]
+fn roundtrip_n144() {
+    check_roundtrip(144, 1e-11);
+}
+
+#[test]
+fn forward_reduced_n1000_matches_precise_reference() {
     let input: Vec<Complex64> = (0..1000usize)
         .map(|k| Complex64::new((k as f64 * 0.13).sin(), (k as f64 * 0.31).cos()))
         .collect();

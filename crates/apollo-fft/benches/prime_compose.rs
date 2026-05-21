@@ -27,14 +27,18 @@ fn bench_sizes(c: &mut Criterion, label: &str, sizes: &[usize]) {
         let input = signal(n);
 
         // In-place on pre-allocated buffer — measures the kernel cost only.
-        group.bench_with_input(BenchmarkId::new("radix_composite_inplace", n), &input, |b, inp| {
-            let mut buf = inp.clone();
-            b.iter(|| {
-                Complex64::fft_forward(black_box(&mut buf));
-                black_box(&buf);
-                buf.copy_from_slice(inp);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("radix_composite_inplace", n),
+            &input,
+            |b, inp| {
+                let mut buf = inp.clone();
+                b.iter(|| {
+                    Complex64::fft_forward(black_box(&mut buf));
+                    black_box(&buf);
+                    buf.copy_from_slice(inp);
+                });
+            },
+        );
 
         // Clone-inclusive — measures allocation + kernel.
         group.bench_with_input(
@@ -61,9 +65,19 @@ fn bench_smooth(c: &mut Criterion) {
     bench_sizes(
         c,
         "radix_composite_smooth_composites",
-        &[6, 9, 10, 12, 14, 15, 18, 20, 21, 24, 25, 27, 28, 30, 36, 45, 49, 50, 60, 63],
+        &[
+            6, 9, 10, 12, 14, 15, 18, 20, 21, 24, 25, 27, 28, 30, 36, 45, 49, 50, 60, 63,
+        ],
     );
 }
 
-criterion_group!(benches, bench_pot, bench_smooth);
+fn bench_two_by_prime(c: &mut Criterion) {
+    bench_sizes(
+        c,
+        "two_by_prime_coprime_composites",
+        &[38, 58, 62, 74, 82, 86, 94, 106],
+    );
+}
+
+criterion_group!(benches, bench_pot, bench_smooth, bench_two_by_prime);
 criterion_main!(benches);

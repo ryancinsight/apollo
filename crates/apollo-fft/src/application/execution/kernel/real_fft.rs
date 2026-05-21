@@ -51,6 +51,7 @@
 
 use super::mixed_radix::dispatch_inplace;
 
+#[allow(dead_code)]
 pub(crate) trait RealFft:
     crate::application::execution::kernel::mixed_radix::MixedRadixScalar
 {

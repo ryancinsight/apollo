@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.12.5"
+version = "0.12.24"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -8,6 +8,7 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Reusable FFT planning, execution, and cache abstractions for Apollo"
 
 [dependencies]
+apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { version = "2.4", features = ["serde", "use-intrinsics"] }
 nalgebra = { workspace = true }
 ndarray = { version = "0.16", features = ["rayon"] }
@@ -19,12 +20,16 @@ rand = { workspace = true }
 rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 approx = "0.5"
 criterion = { workspace = true }
 proptest = "1.6"
 rustfft = { workspace = true }
+
+[features]
+kernel-strategy-bench = []
 
 [[bench]]
 name = "kernel_strategy"
@@ -36,6 +41,10 @@ harness = false
 
 [[bench]]
 name = "prime_compose"
+harness = false
+
+[[bench]]
+name = "half_cyclic_rader"
 harness = false
 
 [lints]

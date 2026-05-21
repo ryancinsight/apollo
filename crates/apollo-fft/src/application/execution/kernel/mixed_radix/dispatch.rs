@@ -14,107 +14,153 @@
 //! | `inverse_inplace`                | true    | true      |
 
 use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
-use super::caches::{
-    cached_coprime_factors, cached_is_prime, cached_prime23_radices,
-};
+use super::caches::{cached_coprime_factors, cached_is_prime, cached_prime23_radices};
 use super::scalar::MixedRadixScalar;
 
 /// Authoritative single-body FFT dispatch.
 ///
 /// `INVERSE` selects twiddle table direction and algorithm variant.
 /// `NORMALIZE` gates the 1/N scale pass, eliminated at compile time when false.
-#[inline(always)]
-pub(crate) fn dispatch_inplace<F: MixedRadixScalar, const INVERSE: bool, const NORMALIZE: bool>(
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline)]
+pub(crate) fn dispatch_inplace<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
     data: &mut [F::Complex],
     twiddles: Option<&[F::Complex]>,
 ) {
-    if data.len() <= 1 {
+    let n = data.len();
+    if n <= 1 {
         return;
     }
-    if F::short_winograd(data, INVERSE, NORMALIZE) {
+    if try_power_of_two_fast_path::<F, INVERSE, NORMALIZE>(data, twiddles) {
+        return;
+    }
+    if F::short_winograd::<INVERSE, NORMALIZE>(data) {
         return;
     }
 
-    if data.len().is_power_of_two() {
-        if data.len() >= crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD {
-            crate::application::execution::kernel::four_step::four_step_fft::<F>(data, INVERSE);
+    let n = data.len();
+    let coprime_factors = cached_coprime_factors(n);
+    if let Some((n1, n2)) = coprime_factors {
+        if crate::application::execution::kernel::components::good_thomas::has_static_coprime_codelet(n1, n2) {
+            crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(data, INVERSE, n1, n2);
             if INVERSE && NORMALIZE {
-                F::normalize(data, data.len());
+                F::normalize(data, n);
             }
             return;
         }
+    }
 
-        // Ownership dance: borrow `twiddles` if provided, otherwise materialise
-        // from the thread-local cache and hold the Arc alive for the call.
-        let owned_tw;
-        let tw: &[F::Complex] = match twiddles {
-            Some(tw) => tw,
-            None => {
-                owned_tw = if INVERSE {
-                    F::cached_twiddle_inv(data.len())
-                } else {
-                    F::cached_twiddle_fwd(data.len())
-                };
-                owned_tw.as_ref()
-            }
-        };
-        F::with_scratch(data.len(), |scratch| {
+    if let Some(radices) = cached_prime23_radices(n) {
+        match (INVERSE, NORMALIZE) {
+            (false, _) => F::composite_forward(data, &radices),
+            (true, false) => F::composite_inverse_unnorm(data, &radices),
+            (true, true) => F::composite_inverse(data, &radices),
+        }
+        return;
+    }
+
+    if let Some((n1, n2)) = coprime_factors {
+        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(
+            data, INVERSE, n1, n2,
+        );
+        if INVERSE && NORMALIZE {
+            F::normalize(data, n);
+        }
+        return;
+    }
+
+    if cached_is_prime(n) {
+        crate::application::execution::kernel::components::rader::rader_fft::<F, INVERSE>(data);
+        if INVERSE && NORMALIZE {
+            F::normalize(data, n);
+        }
+    }
+}
+
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline)]
+fn try_power_of_two_fast_path<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    data: &mut [F::Complex],
+    twiddles: Option<&[F::Complex]>,
+) -> bool {
+    let n = data.len();
+    if !n.is_power_of_two() || n < 64 {
+        return false;
+    }
+
+    if n >= crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD {
+        let use_four_step = n.trailing_zeros() % 2 == 0;
+        if use_four_step {
+            crate::application::execution::kernel::components::four_step::four_step_fft::<F>(
+                data, INVERSE,
+            );
             if INVERSE && NORMALIZE {
-                F::stockham_forward_normalized(data, scratch, tw, data.len());
+                F::normalize(data, n);
+            }
+            return true;
+        }
+    }
+
+    let owned_tw;
+    let tw: &[F::Complex] = match twiddles {
+        Some(tw) => tw,
+        None => {
+            owned_tw = if INVERSE {
+                F::cached_twiddle_inv(n)
             } else {
-                F::stockham_forward(data, scratch, tw);
-            }
-        });
-    } else {
-        if let Some(radices) = cached_prime23_radices(data.len()) {
-            match (INVERSE, NORMALIZE) {
-                (false, _) => F::composite_forward(data, &radices),
-                (true, false) => F::composite_inverse_unnorm(data, &radices),
-                (true, true) => F::composite_inverse(data, &radices),
-            }
-            return;
+                F::cached_twiddle_fwd(n)
+            };
+            owned_tw.as_ref()
         }
-
-        let n = data.len();
-        if let Some((n1, n2)) = cached_coprime_factors(n) {
-            crate::application::execution::kernel::good_thomas::pfa_fft::<F>(data, INVERSE, n1, n2);
-            if INVERSE && NORMALIZE {
-                F::normalize(data, n);
-            }
-            return;
+    };
+    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+        if INVERSE && NORMALIZE {
+            F::stockham_forward_normalized(data, scratch, tw, n);
+        } else {
+            F::stockham_forward(data, scratch, tw);
         }
-
-        if cached_is_prime(n) {
-            crate::application::execution::kernel::rader::rader_fft::<F>(data, INVERSE);
-            if INVERSE && NORMALIZE {
-                F::normalize(data, n);
-            }
-            return;
-        }
-    }
+    });
+    true
 }
 
 // ── Forward ───────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
-#[inline(always)]
-pub(crate) fn forward_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline)]
+pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+    data: &mut [F::Complex],
+) {
     dispatch_inplace::<F, false, false>(data, None);
 }
 
 // ── Inverse (unnormalized) ────────────────────────────────────────────────────
 
 /// In-place inverse FFT, unnormalized (no 1/N division).
-#[inline(always)]
-pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar>(data: &mut [F::Complex]) {
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline)]
+pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+    data: &mut [F::Complex],
+) {
     dispatch_inplace::<F, true, false>(data, None);
 }
 
 // ── Inverse (normalized 1/N) ──────────────────────────────────────────────────
 
 /// In-place inverse FFT, normalized by 1/N.
-#[inline(always)]
-pub(crate) fn inverse_inplace<F: MixedRadixScalar>(data: &mut [F::Complex]) {
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[cfg_attr(debug_assertions, inline)]
+pub(crate) fn inverse_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+    data: &mut [F::Complex],
+) {
     dispatch_inplace::<F, true, true>(data, None);
 }
 

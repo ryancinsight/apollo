@@ -11,20 +11,173 @@
 //! | `stockham`        | Radix-2 Stockham autosort FFT for all power-of-two lengths. |
 //! | `mixed_radix`     | Dispatch facade: Stockham for PoT, composite/PFA for smooth, Rader for primes. |
 
+pub(crate) mod components;
 pub mod direct;
-pub(crate) mod four_step;
-pub mod good_thomas;
 pub mod mixed_radix;
 pub(crate) mod precision_bridge;
-pub mod rader;
-pub(crate) mod radix_composite;
 pub(crate) mod radix_shape;
 pub(crate) mod radix_stage;
 pub mod real_fft;
-pub(crate) mod stockham;
 pub(crate) mod tuning;
 pub(crate) mod twiddle_table;
-pub mod winograd;
+
+#[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
+#[doc(hidden)]
+pub mod benchmark_kernels {
+    use num_complex::{Complex, Complex32, Complex64};
+
+    macro_rules! dispatch_winograd_pair_prime {
+        ($data:expr, $inverse:expr, [ $(($p:expr, $h:expr)),* $(,)? ]) => {
+            match ($data.len(), $inverse) {
+                $(
+                    ($p, true) => {
+                        use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
+                        dft_pair_impl::<F, $p, $h, true>(
+                            $data.try_into().unwrap(),
+                            <F as PrimePairTable<$p, $h>>::cos_table(),
+                            <F as PrimePairTable<$p, $h>>::sin_table(),
+                        );
+                    }
+                    ($p, false) => {
+                        use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
+                        dft_pair_impl::<F, $p, $h, false>(
+                            $data.try_into().unwrap(),
+                            <F as PrimePairTable<$p, $h>>::cos_table(),
+                            <F as PrimePairTable<$p, $h>>::sin_table(),
+                        );
+                    }
+                )*
+                (n, _) => panic!("unsupported Winograd-pair benchmark length {n}"),
+            }
+        };
+    }
+
+    fn winograd_pair_prime<F: super::components::winograd::WinogradScalar>(
+        data: &mut [Complex<F>],
+        inverse: bool,
+    ) {
+        dispatch_winograd_pair_prime!(
+            data,
+            inverse,
+            [
+                (19, 9),
+                (29, 14),
+                (31, 15),
+                (37, 18),
+                (41, 20),
+                (43, 21),
+                (47, 23),
+                (53, 26)
+            ]
+        );
+    }
+
+    pub fn rader_prime_f64(data: &mut [Complex64], inverse: bool) {
+        if inverse {
+            super::components::rader::rader_fft::<f64, true>(data);
+        } else {
+            super::components::rader::rader_fft::<f64, false>(data);
+        }
+    }
+
+    pub fn rader_full_cyclic_prime_f64(data: &mut [Complex64], inverse: bool) {
+        let strategy = super::components::rader::RaderConvolutionStrategy::FullCyclic;
+        if inverse {
+            super::components::rader::rader_fft_with_convolution_strategy::<f64, true>(
+                data, strategy,
+            );
+        } else {
+            super::components::rader::rader_fft_with_convolution_strategy::<f64, false>(
+                data, strategy,
+            );
+        }
+    }
+
+    pub fn rader_half_cyclic_prime_f64(data: &mut [Complex64], inverse: bool) {
+        let strategy = super::components::rader::RaderConvolutionStrategy::HalfCyclicWinograd;
+        if inverse {
+            super::components::rader::rader_fft_with_convolution_strategy::<f64, true>(
+                data, strategy,
+            );
+        } else {
+            super::components::rader::rader_fft_with_convolution_strategy::<f64, false>(
+                data, strategy,
+            );
+        }
+    }
+
+    pub fn rader_ordered_prime_f64(data: &mut [Complex64], inverse: bool) {
+        match data.len() {
+            29 => {
+                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 29, 15)
+            }
+            31 => {
+                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 31, 21)
+            }
+            37 => {
+                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 37, 19)
+            }
+            n => panic!("unsupported ordered Rader benchmark length {n}"),
+        }
+    }
+
+    pub fn winograd_pair_prime_f64(data: &mut [Complex64], inverse: bool) {
+        winograd_pair_prime::<f64>(data, inverse);
+    }
+
+    pub fn rader_prime_f32(data: &mut [Complex32], inverse: bool) {
+        if inverse {
+            super::components::rader::rader_fft::<f32, true>(data);
+        } else {
+            super::components::rader::rader_fft::<f32, false>(data);
+        }
+    }
+
+    pub fn rader_full_cyclic_prime_f32(data: &mut [Complex32], inverse: bool) {
+        let strategy = super::components::rader::RaderConvolutionStrategy::FullCyclic;
+        if inverse {
+            super::components::rader::rader_fft_with_convolution_strategy::<f32, true>(
+                data, strategy,
+            );
+        } else {
+            super::components::rader::rader_fft_with_convolution_strategy::<f32, false>(
+                data, strategy,
+            );
+        }
+    }
+
+    pub fn rader_half_cyclic_prime_f32(data: &mut [Complex32], inverse: bool) {
+        let strategy = super::components::rader::RaderConvolutionStrategy::HalfCyclicWinograd;
+        if inverse {
+            super::components::rader::rader_fft_with_convolution_strategy::<f32, true>(
+                data, strategy,
+            );
+        } else {
+            super::components::rader::rader_fft_with_convolution_strategy::<f32, false>(
+                data, strategy,
+            );
+        }
+    }
+
+    pub fn rader_ordered_prime_f32(data: &mut [Complex32], inverse: bool) {
+        match data.len() {
+            29 => {
+                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 29, 15)
+            }
+            31 => {
+                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 31, 21)
+            }
+            37 => {
+                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 37, 19)
+            }
+            n => panic!("unsupported ordered Rader benchmark length {n}"),
+        }
+    }
+
+    pub fn winograd_pair_prime_f32(data: &mut [Complex32], inverse: bool) {
+        winograd_pair_prime::<f32>(data, inverse);
+    }
+}
 
 #[cfg(test)]
 pub(crate) mod test_utils;
@@ -79,114 +232,14 @@ pub fn fft_inverse_unnorm<C: FftPrecision>(data: &mut [C]) {
 impl FftPrecision for Complex64 {
     #[inline(always)]
     fn fft_forward(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, false);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, false);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), false);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, false);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f64, false>(data);
-                return;
-            }
-            17 => {
-                winograd::dft17_inline_impl::<f64, false>(data);
-                return;
-            }
-            23 => {
-                winograd::dft23_inline_impl::<f64, false>(data);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::forward_inplace::<f64>(data);
     }
     #[inline(always)]
     fn fft_inverse(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, true);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 3.0);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, true);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 5.0);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), true);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 7.0);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, true);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 11.0);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f64, true>(data);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 13.0);
-                return;
-            }
-            17 => {
-                winograd::dft17_inline_impl::<f64, true>(data);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 17.0);
-                return;
-            }
-            23 => {
-                winograd::dft23_inline_impl::<f64, true>(data);
-                radix_stage::normalize_inplace_c64(data, 1.0 / 23.0);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::inverse_inplace::<f64>(data);
     }
     #[inline(always)]
     fn fft_inverse_unnorm(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, true);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, true);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), true);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, true);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f64, true>(data);
-                return;
-            }
-            17 => {
-                winograd::dft17_inline_impl::<f64, true>(data);
-                return;
-            }
-            23 => {
-                winograd::dft23_inline_impl::<f64, true>(data);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::inverse_inplace_unnorm::<f64>(data);
     }
 }
@@ -194,114 +247,14 @@ impl FftPrecision for Complex64 {
 impl FftPrecision for Complex32 {
     #[inline(always)]
     fn fft_forward(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, false);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, false);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), false);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, false);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f32, false>(data);
-                return;
-            }
-            17 => {
-                winograd::dft17_impl::<f32, false>(data);
-                return;
-            }
-            23 => {
-                winograd::dft23_impl::<f32, false>(data);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::forward_inplace::<f32>(data);
     }
     #[inline(always)]
     fn fft_inverse(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, true);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 3.0);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, true);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 5.0);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), true);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 7.0);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, true);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 11.0);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f32, true>(data);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 13.0);
-                return;
-            }
-            17 => {
-                winograd::dft17_impl::<f32, true>(data);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 17.0);
-                return;
-            }
-            23 => {
-                winograd::dft23_impl::<f32, true>(data);
-                radix_stage::normalize_inplace_c32(data, 1.0 / 23.0);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::inverse_inplace::<f32>(data);
     }
     #[inline(always)]
     fn fft_inverse_unnorm(data: &mut [Self]) {
-        match data.len() {
-            3 => {
-                winograd::dft3_impl(data, true);
-                return;
-            }
-            5 => {
-                winograd::dft5_impl(data, true);
-                return;
-            }
-            7 => {
-                winograd::dft7_impl(data.try_into().expect("len=7"), true);
-                return;
-            }
-            11 => {
-                winograd::dft11_impl(data, true);
-                return;
-            }
-            13 => {
-                winograd::dft13_impl::<f32, true>(data);
-                return;
-            }
-            17 => {
-                winograd::dft17_impl::<f32, true>(data);
-                return;
-            }
-            23 => {
-                winograd::dft23_impl::<f32, true>(data);
-                return;
-            }
-            _ => {}
-        }
         mixed_radix::inverse_inplace_unnorm::<f32>(data);
     }
 }
@@ -345,7 +298,7 @@ mod tests {
             .collect()
     }
 
-    fn max_abs_err_f16(got: &[Complex<f16>], expected: &[Complex<f16>]) -> f32 {
+    fn max_abs_err_half(got: &[Complex<f16>], expected: &[Complex<f16>]) -> f32 {
         got.iter()
             .zip(expected.iter())
             .map(|(x, y)| {
@@ -383,7 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_api_forward_f16_matches_typed() {
+    fn unified_api_forward_half_matches_typed() {
         let n = 45usize;
         let input: Vec<Complex<f16>> = sig32(n)
             .into_iter()
@@ -396,6 +349,6 @@ mod tests {
         let mut typed = input;
         fft_forward(&mut typed);
 
-        assert!(max_abs_err_f16(&generic, &typed) < 2e-3);
+        assert!(max_abs_err_half(&generic, &typed) < 2e-3);
     }
 }

@@ -172,9 +172,9 @@ pub struct NufftPlan3D {
     deconv_x: ndarray::Array1<f64>,
     deconv_y: ndarray::Array1<f64>,
     deconv_z: ndarray::Array1<f64>,
-    fft_x: FftPlan1D,
-    fft_y: FftPlan1D,
-    fft_z: FftPlan1D,
+    fft_x: FftPlan1D<f64>,
+    fft_y: FftPlan1D<f64>,
+    fft_z: FftPlan1D<f64>,
 }
 
 impl std::fmt::Debug for NufftPlan3D {
@@ -204,17 +204,14 @@ impl NufftPlan3D {
         let deconv_y = axis_deconv(grid.ny, my, kernel_width, beta, i0_beta);
         let deconv_z = axis_deconv(grid.nz, mz, kernel_width, beta, i0_beta);
 
-        let fft_x = FftPlan1D::with_precision(
+        let fft_x = FftPlan1D::<f64>::new(
             Shape1D::new(mx).expect("NUFFT oversampled length must be valid"),
-            PrecisionProfile::HIGH_ACCURACY_F64,
         );
-        let fft_y = FftPlan1D::with_precision(
+        let fft_y = FftPlan1D::<f64>::new(
             Shape1D::new(my).expect("NUFFT oversampled length must be valid"),
-            PrecisionProfile::HIGH_ACCURACY_F64,
         );
-        let fft_z = FftPlan1D::with_precision(
+        let fft_z = FftPlan1D::<f64>::new(
             Shape1D::new(mz).expect("NUFFT oversampled length must be valid"),
-            PrecisionProfile::HIGH_ACCURACY_F64,
         );
 
         Self {

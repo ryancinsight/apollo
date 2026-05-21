@@ -29,7 +29,7 @@ pub fn czt_bluestein_forward(
     chirp_n: &[Complex64],
     chirp_k: &[Complex64],
     fft_kernel: &Array1<Complex64>,
-    fft_plan: &FftPlan1D,
+    fft_plan: &FftPlan1D<f64>,
 ) -> Array1<Complex64> {
     let mut output = Array1::<Complex64>::zeros(output_len);
     czt_bluestein_forward_into(
@@ -56,7 +56,7 @@ pub fn czt_bluestein_forward_into(
     chirp_n: &[Complex64],
     chirp_k: &[Complex64],
     fft_kernel: &Array1<Complex64>,
-    fft_plan: &FftPlan1D,
+    fft_plan: &FftPlan1D<f64>,
 ) {
     let mut workspace = vec![Complex64::new(0.0, 0.0); convolution_len];
     czt_bluestein_forward_into_with_workspace(
@@ -88,7 +88,7 @@ pub(crate) fn czt_bluestein_forward_into_with_workspace(
     chirp_n: &[Complex64],
     chirp_k: &[Complex64],
     fft_kernel: &[Complex64],
-    fft_plan: &FftPlan1D,
+    fft_plan: &FftPlan1D<f64>,
 ) {
     assert_eq!(
         output.len(),

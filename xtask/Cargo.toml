@@ -1,0 +1,18 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+apollo-fft = { path = "../crates/apollo-fft", optional = true }
+num-complex = { workspace = true, optional = true }
+rustfft = { workspace = true, optional = true }
+serde_json = { workspace = true }
+
+[features]
+bench-runner = ["dep:apollo-fft", "dep:num-complex", "dep:rustfft"]
+
+[lints]
+workspace = true

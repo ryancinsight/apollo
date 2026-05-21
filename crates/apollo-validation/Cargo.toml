@@ -9,7 +9,7 @@ description = "Validation and benchmark surface for Apollo FFT"
 
 [features]
 default = ["external-references"]
-external-references = ["dep:rustfft", "dep:criterion"]
+external-references = ["dep:rustfft"]
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
@@ -39,12 +39,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 rustfft = { workspace = true, optional = true }
-criterion = { workspace = true, optional = true }
-
-[[bench]]
-name = "vs_rustfft"
-harness = false
-required-features = ["external-references"]
 
 [lints]
 workspace = true

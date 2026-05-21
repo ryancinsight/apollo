@@ -122,8 +122,9 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.12.5"
+version = "0.12.24"
 dependencies = [
+ "apollo-fft-macros",
  "approx",
  "criterion",
  "half",
@@ -139,6 +140,16 @@ dependencies = [
  "rustfft",
  "serde",
  "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "apollo-fft-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -550,7 +561,6 @@ dependencies = [
  "apollo-sht",
  "apollo-stft",
  "apollo-wavelet",
- "criterion",
  "nalgebra",
  "ndarray",
  "num-complex",
@@ -2172,6 +2182,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio"
+version = "1.52.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+dependencies = [
+ "pin-project-lite",
+]
+
+[[package]]
 name = "transpose"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2769,6 +2788,17 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "apollo-fft",
+ "num-complex",
+ "rustfft",
+ "serde_json",
+]
 
 [[package]]
 name = "zerocopy"

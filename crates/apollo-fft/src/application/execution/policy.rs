@@ -39,8 +39,6 @@ impl ExecutionPolicy for SyncPolicy {
 pub struct ParallelPolicy;
 
 impl ExecutionPolicy for ParallelPolicy {
-    // Parallel policy doesn't change the async await behavior here, just computation.
-    // For full compliance, a Tokio threadpool future could be used, but Ready is fine for now.
     type Future<T: Send> = std::future::Ready<T>;
 
     #[inline(always)]
@@ -50,6 +48,45 @@ impl ExecutionPolicy for ParallelPolicy {
         F: Fn(usize, &mut [T]) + Send + Sync,
     {
         data.par_chunks_mut(chunk_size)
+            .enumerate()
+            .for_each(|(i, chunk)| f(i, chunk));
+    }
+}
+
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+/// Wrapper around Tokio's JoinHandle that unwraps the result to fulfill `Future<Output = T>`.
+pub struct AsyncFuture<T>(pub tokio::task::JoinHandle<T>);
+
+impl<T: Send> Future for AsyncFuture<T> {
+    type Output = T;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match Pin::new(&mut self.0).poll(cx) {
+            Poll::Ready(Ok(val)) => Poll::Ready(val),
+            Poll::Ready(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Asynchronous execution policy using native Tokio tasks.
+pub struct AsyncPolicy;
+
+impl ExecutionPolicy for AsyncPolicy {
+    type Future<T: Send> = AsyncFuture<T>;
+
+    #[inline(always)]
+    fn for_each_chunk_mut_enumerated<T, F>(data: &mut [T], chunk_size: usize, f: F)
+    where
+        T: Send + Sync,
+        F: Fn(usize, &mut [T]) + Send + Sync,
+    {
+        // Tokio does not provide a native data-parallel array iterator.
+        // For synchronous mutable chunk processing within an async context,
+        // we execute sequentially since this method cannot `.await`.
+        data.chunks_mut(chunk_size)
             .enumerate()
             .for_each(|(i, chunk)| f(i, chunk));
     }

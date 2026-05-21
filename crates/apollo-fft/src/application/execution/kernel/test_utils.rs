@@ -1,7 +1,7 @@
 //! Shared test utilities for FFT kernel testing.
 //!
 //! Centralizes common assertion and comparison functions used across
-//! radix and Bluestein kernel tests to reduce DRY violations and
+//! radix and Rader kernel tests to reduce DRY violations and
 //! maintain consistent error tolerances.
 
 use num_complex::{Complex32, Complex64};

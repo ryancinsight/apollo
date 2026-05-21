@@ -107,7 +107,7 @@ pub struct NufftPlan1D {
     i0_beta: f64,
     domain: UniformDomain1D,
     deconv: Array1<f64>,
-    fft_plan: FftPlan1D,
+    fft_plan: FftPlan1D<f64>,
 }
 
 impl std::fmt::Debug for NufftPlan1D {
@@ -138,10 +138,8 @@ impl NufftPlan1D {
             1.0 / kb_kernel_ft(xi, kernel_width, beta, i0_beta)
         });
 
-        let fft_plan = FftPlan1D::with_precision(
-            Shape1D::new(m).expect("NUFFT oversampled length must be valid"),
-            PrecisionProfile::HIGH_ACCURACY_F64,
-        );
+        let fft_plan =
+            FftPlan1D::<f64>::new(Shape1D::new(m).expect("NUFFT oversampled length must be valid"));
 
         Self {
             n_out: domain.n,

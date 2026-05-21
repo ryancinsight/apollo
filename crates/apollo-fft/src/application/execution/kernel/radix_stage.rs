@@ -1,25 +1,24 @@
-//! Shared normalization primitive for radix and Bluestein kernel modules.
+//! Shared normalization primitive for radix and Rader kernel modules.
 //!
 //! ## Contents
 //!
-//! - `normalize_inplace`: SSOT 1/N scale pass, used by inverse paths.
-//! - `normalize_inplace_c64`, `normalize_inplace_c32`: AVX fast paths
-//!   used by `normalize_inplace` on x86_64 with AVX support.
+//! - `NormalizeSlice`: sealed trait abstracting the AVX-dispatched scale pass.
+//! - `normalize_inplace`: SSOT 1/N scale pass, used by all inverse paths.
 
 use num_complex::{Complex32, Complex64};
 
-// ── AVX fast paths ─────────────────────────────────────────────────────────────
+// ── Private AVX fast paths ─────────────────────────────────────────────────────
 
 /// Scale a `Complex64` slice in-place by `scale` using AVX broadcast-multiply.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// Caller must ensure AVX is available (gated by `is_x86_feature_detected!`).
 /// The slice must be non-empty.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 #[inline]
-unsafe fn normalize_c64_avx(data: &mut [Complex64], scale: f64) {
+unsafe fn normalize_precise_avx(data: &mut [Complex64], scale: f64) {
     use std::arch::x86_64::{_mm256_loadu_pd, _mm256_mul_pd, _mm256_set1_pd, _mm256_storeu_pd};
 
     let s = _mm256_set1_pd(scale);
@@ -32,7 +31,6 @@ unsafe fn normalize_c64_avx(data: &mut [Complex64], scale: f64) {
         let x = _mm256_loadu_pd(ptr.add(off));
         _mm256_storeu_pd(ptr.add(off), _mm256_mul_pd(x, s));
     }
-    // Scalar tail for odd count.
     for i in batches * 2..len {
         data[i] *= scale;
     }
@@ -40,13 +38,13 @@ unsafe fn normalize_c64_avx(data: &mut [Complex64], scale: f64) {
 
 /// Scale a `Complex32` slice in-place by `scale` using AVX broadcast-multiply.
 ///
-/// ## Safety
+/// # Safety
 ///
 /// Caller must ensure AVX is available (gated by `is_x86_feature_detected!`).
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 #[inline]
-unsafe fn normalize_c32_avx(data: &mut [Complex32], scale: f32) {
+unsafe fn normalize_reduced_avx(data: &mut [Complex32], scale: f32) {
     use std::arch::x86_64::{_mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps};
 
     let s = _mm256_set1_ps(scale);
@@ -59,101 +57,94 @@ unsafe fn normalize_c32_avx(data: &mut [Complex32], scale: f32) {
         let x = _mm256_loadu_ps(ptr.add(off));
         _mm256_storeu_ps(ptr.add(off), _mm256_mul_ps(x, s));
     }
-    // Scalar tail for remainder.
     for i in batches * 4..len {
         data[i] *= scale;
     }
 }
 
-// ── Runtime-dispatched specialisations ────────────────────────────────────────
+// ── Sealed trait ──────────────────────────────────────────────────────────────
 
-/// Normalize a `Complex64` slice using the best available path.
-#[inline]
-pub(crate) fn normalize_inplace_c64(data: &mut [Complex64], scale: f64) {
-    if data.is_empty() {
-        return;
-    }
-    #[cfg(target_arch = "x86_64")]
-    {
-        // Cache the feature query: OnceLock amortises the cpuid overhead.
-        use std::sync::OnceLock;
-        static HAS_AVX: OnceLock<bool> = OnceLock::new();
-        if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
-            // SAFETY: AVX confirmed at runtime above.
-            unsafe { return normalize_c64_avx(data, scale) };
-        }
-    }
-    // Scalar fallback (auto-vectorized by LLVM with -C target-feature=+avx).
-    for v in data.iter_mut() {
-        *v *= scale;
-    }
+mod sealed {
+    pub trait Sealed {}
 }
 
-/// Normalize a `Complex32` slice using the best available path.
-#[inline]
-pub(crate) fn normalize_inplace_c32(data: &mut [Complex32], scale: f32) {
-    if data.is_empty() {
-        return;
-    }
-    #[cfg(target_arch = "x86_64")]
-    {
-        use std::sync::OnceLock;
-        static HAS_AVX: OnceLock<bool> = OnceLock::new();
-        if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
-            // SAFETY: AVX confirmed at runtime above.
-            unsafe { return normalize_c32_avx(data, scale) };
-        }
-    }
-    for v in data.iter_mut() {
-        *v *= scale;
-    }
-}
-
-// ── Generic entry-point ────────────────────────────────────────────────────────
-
-/// Scale every element of `data` in-place by `scale`.
+/// Sealed normalization trait. Implemented only for `Complex32` and `Complex64`.
 ///
-/// ## SSOT role
-///
-/// Single authoritative 1/N normalization pass used by all inverse transform paths
-/// (`rader`, `radix_composite`, `stockham`). Loop bounds and vectorization
-/// contract live here; all callers delegate.
-///
-/// ## Performance
-///
-/// For `Complex64` and `Complex32` this dispatches to explicit AVX2 kernels at
-/// runtime. For all other types the generic scalar loop is used; LLVM
-/// auto-vectorizes it in release builds.
-#[inline]
-pub(crate) fn normalize_inplace<T, S>(data: &mut [T], scale: S)
-where
-    T: std::ops::MulAssign<S>,
-    S: Copy,
-{
-    for v in data.iter_mut() {
-        *v *= scale;
-    }
-}
-
-pub(crate) trait NormalizeSlice {
+/// Dispatches to an AVX broadcast-multiply kernel on x86_64 when AVX is
+/// available at runtime; falls back to the scalar loop otherwise.
+pub(crate) trait NormalizeSlice: sealed::Sealed + Sized {
     type Scale: Copy;
-    fn normalize_slice(data: &mut [Self], scale: Self::Scale)
-    where
-        Self: Sized;
+    fn normalize_slice(data: &mut [Self], scale: Self::Scale);
 }
 
-impl NormalizeSlice for num_complex::Complex32 {
-    type Scale = f32;
-    #[inline]
-    fn normalize_slice(data: &mut [Self], scale: f32) {
-        normalize_inplace_c32(data, scale);
-    }
-}
-
-impl NormalizeSlice for num_complex::Complex64 {
+impl sealed::Sealed for Complex64 {}
+impl NormalizeSlice for Complex64 {
     type Scale = f64;
     #[inline]
     fn normalize_slice(data: &mut [Self], scale: f64) {
-        normalize_inplace_c64(data, scale);
+        if data.is_empty() {
+            return;
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            use std::sync::OnceLock;
+            static HAS_AVX: OnceLock<bool> = OnceLock::new();
+            if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
+                // SAFETY: AVX confirmed at runtime.
+                unsafe { return normalize_precise_avx(data, scale) };
+            }
+        }
+        for v in data.iter_mut() {
+            *v *= scale;
+        }
+    }
+}
+
+impl sealed::Sealed for Complex32 {}
+impl NormalizeSlice for Complex32 {
+    type Scale = f32;
+    #[inline]
+    fn normalize_slice(data: &mut [Self], scale: f32) {
+        if data.is_empty() {
+            return;
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            use std::sync::OnceLock;
+            static HAS_AVX: OnceLock<bool> = OnceLock::new();
+            if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
+                // SAFETY: AVX confirmed at runtime.
+                unsafe { return normalize_reduced_avx(data, scale) };
+            }
+        }
+        for v in data.iter_mut() {
+            *v *= scale;
+        }
+    }
+}
+
+// ── Entry-points ──────────────────────────────────────────────────────────────
+
+/// Scale every element of `data` in-place by `scale`.
+///
+/// Dispatches to the best available implementation via `NormalizeSlice`.
+/// For `Complex32` and `Complex64` this selects the AVX broadcast-multiply
+/// kernel at runtime. Use `normalize_scalar` for generic element types.
+#[inline]
+pub(crate) fn normalize_inplace<T: NormalizeSlice>(data: &mut [T], scale: T::Scale) {
+    T::normalize_slice(data, scale);
+}
+
+/// Scalar fallback for element types without a dedicated SIMD path.
+///
+/// Used by generic callers (e.g. `radix_composite` with `Complex<F>` where `F`
+/// is a type parameter). Autovectorized by LLVM in release builds.
+#[inline]
+pub(crate) fn normalize_scalar<T, S: Copy>(data: &mut [T], scale: S)
+where
+    T: std::ops::MulAssign<S>,
+{
+    for v in data.iter_mut() {
+        *v *= scale;
     }
 }

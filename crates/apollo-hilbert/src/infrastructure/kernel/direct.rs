@@ -8,7 +8,7 @@
 //! `apollo-radon::infrastructure::kernel::filter`.
 
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
-use apollo_fft::{Shape1D, FFT_CACHE_1D};
+use apollo_fft::{FftPlan1D, Shape1D};
 use num_complex::Complex64;
 use std::cell::RefCell;
 
@@ -91,8 +91,11 @@ pub fn analytic_signal_into(signal: &[f64], output: &mut [Complex64]) -> Hilbert
     }
 
     let shape = Shape1D::new(signal.len()).expect("non-empty Hilbert signal length");
-    let plan = FFT_CACHE_1D.get_or_create(shape);
-    plan.forward_real_to_complex_slice_into(signal, output);
+    let plan = FftPlan1D::<f64>::new(shape);
+    for (src, dst) in signal.iter().zip(output.iter_mut()) {
+        *dst = Complex64::new(*src, 0.0);
+    }
+    plan.forward_complex_slice_inplace(output);
     apply_analytic_mask(output);
     plan.inverse_complex_slice_inplace(output);
 

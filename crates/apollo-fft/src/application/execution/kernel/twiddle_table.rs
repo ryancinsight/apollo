@@ -243,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn f32_entries_close_to_f64_reference() {
+    fn single_precision_entries_close_to_double_precision_reference() {
         let n = 64usize;
         let f64_table = build_twiddle_table::<Complex64>(n, -1.0);
         let f32_table = build_twiddle_table::<Complex32>(n, -1.0);

@@ -1,0 +1,142 @@
+use super::super::{ordered_rader_n1_config, pfa_fft_natural_inplace, ORDERED_RADER_SKIP_PRIMES};
+use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
+use crate::application::execution::kernel::test_utils::max_abs_err_64;
+use num_complex::Complex64;
+
+#[test]
+fn ordered_rader_pfa_config_selects_rader_primes_only() {
+    // Primes in ORDERED_RADER_SKIP_PRIMES must be rejected.
+    for &n1 in &ORDERED_RADER_SKIP_PRIMES {
+        assert!(
+            ordered_rader_n1_config(n1).is_none(),
+            "n1={n1} (in ORDERED_RADER_SKIP_PRIMES) must be rejected"
+        );
+    }
+    // Non-prime must be rejected.
+    assert!(
+        ordered_rader_n1_config(49).is_none(),
+        "non-prime n1=49 must be rejected"
+    );
+
+    // Sample of primes NOT in the skip set that should use ordered Rader.
+    for n1 in [59usize, 61, 67, 71] {
+        assert!(
+            ordered_rader_n1_config(n1).is_some(),
+            "n1={n1} should use ordered Rader inside PFA"
+        );
+    }
+}
+
+#[test]
+fn natural_pfa_inplace_matches_direct_forward() {
+    let n1 = 5usize;
+    let n2 = 7usize;
+    let n = n1 * n2;
+    let input = signal(n, 0.19, 0.31);
+    let mut got = input.clone();
+
+    pfa_fft_natural_inplace::<f64>(&mut got, false, n1, n2);
+
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-10,
+        "in-place PFA forward N={n}, n1={n1}, n2={n2} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn natural_pfa_inplace_matches_direct_inverse_unnormalized() {
+    let n1 = 5usize;
+    let n2 = 7usize;
+    let n = n1 * n2;
+    let input = signal(n, 0.23, 0.17);
+    let mut got = input.clone();
+
+    pfa_fft_natural_inplace::<f64>(&mut got, true, n1, n2);
+
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-10,
+        "in-place PFA inverse N={n}, n1={n1}, n2={n2} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn natural_pfa_inplace_matches_direct_forward_various_sizes() {
+    // Test multiple coprime factor pairs to verify cycle-following correctness
+    let cases = [
+        (4usize, 5usize), // N=20
+        (3usize, 7usize), // N=21
+        (5usize, 6usize), // N=30
+        (4usize, 9usize), // N=36
+        (6usize, 7usize), // N=42
+        (5usize, 8usize), // N=40
+    ];
+    for (n1, n2) in cases {
+        let n = n1 * n2;
+        let input = signal(n, 0.19, 0.31);
+        let mut got = input.clone();
+
+        pfa_fft_natural_inplace::<f64>(&mut got, false, n1, n2);
+
+        let expected = dft_forward(&input);
+        let err = max_abs_err_64(&got, &expected);
+        assert!(
+            err < 1.0e-10,
+            "in-place PFA forward N={n}, n1={n1}, n2={n2} mismatch err={err:.2e}"
+        );
+    }
+}
+
+#[test]
+fn fixed_exclude_primes_match_canonical_source_arrays() {
+    // Verify FIXED_EXCLUDE_PRIMES in fixed.rs is the union of
+    // two_by_prime::DIRECT_PAIR_PRIMES and three_by_prime::THREE_BY_PRIME_PRIMES.
+    let mut expected: Vec<usize> = super::super::two_by_prime::DIRECT_PAIR_PRIMES
+        .iter()
+        .chain(super::super::three_by_prime::THREE_BY_PRIME_PRIMES)
+        .copied()
+        .collect();
+    expected.sort_unstable();
+    expected.dedup();
+
+    let mut actual: Vec<usize> = super::super::fixed::FIXED_EXCLUDE_PRIMES.to_vec();
+    actual.sort_unstable();
+    actual.dedup();
+
+    assert_eq!(
+        actual, expected,
+        "fixed::FIXED_EXCLUDE_PRIMES must match two_by_prime::DIRECT_PAIR_PRIMES \
+         ∪ three_by_prime::THREE_BY_PRIME_PRIMES"
+    );
+}
+
+#[test]
+fn two_by_prime_direct_pair_const_matches_dispatch() {
+    // Every prime in DIRECT_PAIR_PRIMES must be accepted by
+    // direct_pair_prime().
+    for &p in super::super::two_by_prime::DIRECT_PAIR_PRIMES {
+        assert!(
+            super::super::two_by_prime::direct_pair_prime(p),
+            "{p} in DIRECT_PAIR_PRIMES must be accepted by direct_pair_prime()"
+        );
+    }
+    // Primes NOT in DIRECT_PAIR_PRIMES must be rejected.
+    for p in [2usize, 3, 5, 7, 59, 61] {
+        assert!(
+            !super::super::two_by_prime::direct_pair_prime(p),
+            "{p} not in DIRECT_PAIR_PRIMES must be rejected by direct_pair_prime()"
+        );
+    }
+}
+
+fn signal(n: usize, real_step: f64, imag_step: f64) -> Vec<Complex64> {
+    (0..n)
+        .map(|k| Complex64::new((k as f64 * real_step).sin(), (k as f64 * imag_step).cos()))
+        .collect()
+}

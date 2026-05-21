@@ -8,8 +8,11 @@
 #![allow(missing_docs)]
 
 use apollo_fft::application::execution::kernel::FftPrecision;
-use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use apollo_fft::{PlanCacheProvider, RealFftData, Shape1D};
+use criterion::measurement::WallTime;
+use criterion::{
+    black_box, criterion_group, criterion_main, BenchmarkGroup, BenchmarkId, Criterion, Throughput,
+};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use rustfft::FftPlanner;
@@ -66,16 +69,16 @@ fn allocation_count() -> u64 {
 
 fn selected_sizes(default: &[usize]) -> Vec<usize> {
     match std::env::var("APOLLO_FFT_BENCH_N") {
-        Ok(raw) => {
-            let len = raw
-                .parse::<usize>()
-                .expect("APOLLO_FFT_BENCH_N must be a positive integer FFT length");
-            if default.contains(&len) {
-                vec![len]
-            } else {
-                Vec::new()
-            }
-        }
+        Ok(raw) => raw
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                part.parse::<usize>()
+                    .expect("APOLLO_FFT_BENCH_N entries must be positive integer FFT lengths")
+            })
+            .filter(|len| default.contains(len))
+            .collect(),
         Err(std::env::VarError::NotPresent) => default.to_vec(),
         Err(std::env::VarError::NotUnicode(_)) => {
             panic!("APOLLO_FFT_BENCH_N must be valid Unicode")
@@ -83,12 +86,59 @@ fn selected_sizes(default: &[usize]) -> Vec<usize> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct BenchProfile {
+    sample_size: usize,
+    measurement_time: Duration,
+    warm_up_time: Duration,
+}
+
+impl BenchProfile {
+    const fn quick() -> Self {
+        Self {
+            sample_size: 10,
+            measurement_time: Duration::from_millis(150),
+            warm_up_time: Duration::from_millis(20),
+        }
+    }
+
+    const fn full() -> Self {
+        Self {
+            sample_size: 30,
+            measurement_time: Duration::from_secs(2),
+            warm_up_time: Duration::from_millis(250),
+        }
+    }
+}
+
+fn selected_bench_profile() -> BenchProfile {
+    match std::env::var("APOLLO_FFT_BENCH_PROFILE") {
+        Ok(raw) => match raw.trim().to_ascii_lowercase().as_str() {
+            "" | "quick" => BenchProfile::quick(),
+            "full" => BenchProfile::full(),
+            other => panic!("APOLLO_FFT_BENCH_PROFILE must be `quick` or `full`, got `{other}`"),
+        },
+        Err(std::env::VarError::NotPresent) => BenchProfile::quick(),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            panic!("APOLLO_FFT_BENCH_PROFILE must be valid Unicode")
+        }
+    }
+}
+
+fn configure_group(group: &mut BenchmarkGroup<'_, WallTime>) {
+    let profile = selected_bench_profile();
+    group.sample_size(profile.sample_size);
+    group.measurement_time(profile.measurement_time);
+    group.warm_up_time(profile.warm_up_time);
+}
+
 fn bench_f64(c: &mut Criterion) {
     const SIZES: &[usize] = &[
         3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25, 29, 31, 32, 33, 35, 36,
-        40, 41, 42, 45, 48, 49, 50, 56, 63, 64, 70, 72, 75, 77, 80, 81, 84, 88, 90, 96, 98, 99,
-        100, 105, 108, 112, 120, 125, 126, 128, 130, 135, 143, 144, 150, 154, 160, 165, 168, 175,
-        176, 180, 189, 192, 196, 198, 200, 10_007,
+        37, 38, 40, 41, 42, 43, 44, 45, 47, 48, 49, 50, 53, 56, 58, 59, 61, 63, 64, 67, 70, 71, 72,
+        73, 74, 75, 77, 79, 80, 81, 82, 83, 84, 88, 89, 90, 94, 96, 97, 98, 99, 100, 105, 108, 112,
+        120, 125, 126, 128, 130, 135, 143, 144, 150, 154, 160, 165, 168, 175, 176, 180, 189, 192,
+        196, 198, 200, 10_007, 32_768,
     ];
     let sizes = selected_sizes(SIZES);
     if sizes.is_empty() {
@@ -96,7 +146,7 @@ fn bench_f64(c: &mut Criterion) {
     }
 
     let mut group = c.benchmark_group("apollo_fft_vs_rustfft_f64");
-    group.sample_size(20);
+    configure_group(&mut group);
 
     for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
@@ -254,9 +304,10 @@ fn bench_f64(c: &mut Criterion) {
 fn bench_f32(c: &mut Criterion) {
     const SIZES: &[usize] = &[
         3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25, 29, 31, 32, 33, 35, 36,
-        40, 41, 42, 45, 48, 49, 50, 56, 63, 64, 70, 72, 75, 77, 80, 81, 84, 88, 90, 96, 98, 99,
-        100, 105, 108, 112, 120, 125, 126, 128, 130, 135, 143, 144, 150, 154, 160, 165, 168, 175,
-        176, 180, 189, 192, 196, 198, 200, 10_007,
+        37, 38, 40, 41, 42, 43, 44, 45, 47, 48, 49, 50, 53, 56, 58, 59, 61, 63, 64, 67, 70, 71, 72,
+        73, 74, 75, 77, 79, 80, 81, 82, 83, 84, 88, 89, 90, 94, 96, 97, 98, 99, 100, 105, 108, 112,
+        120, 125, 126, 128, 130, 135, 143, 144, 150, 154, 160, 165, 168, 175, 176, 180, 189, 192,
+        196, 198, 200, 10_007, 32_768,
     ];
     let sizes = selected_sizes(SIZES);
     if sizes.is_empty() {
@@ -264,7 +315,7 @@ fn bench_f32(c: &mut Criterion) {
     }
 
     let mut group = c.benchmark_group("apollo_fft_vs_rustfft_f32");
-    group.sample_size(20);
+    configure_group(&mut group);
 
     for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
@@ -427,22 +478,22 @@ fn bench_six_step_f32(c: &mut Criterion) {
     }
 
     let mut group = c.benchmark_group("apollo_six_step_f32_vs_rustfft");
-    group.sample_size(20);
+    configure_group(&mut group);
 
     for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
         let input = Array1::from_vec(signal_f32(len).into_iter().map(|z| z.re).collect());
-        let plan = FftPlan1D::with_precision(
-            Shape1D::new(len).expect("bench length must be non-zero"),
-            PrecisionProfile::LOW_PRECISION_F32,
-        );
+        let plan = f32::get_1d_plan(Shape1D::new(len).expect("bench length must be non-zero"));
 
         group.bench_with_input(
             BenchmarkId::new("apollo_public_six_step", len),
             &input,
             |b, x| {
                 b.iter(|| {
-                    black_box(plan.forward_typed(black_box(x)));
+                    black_box(<f32 as RealFftData>::forward_1d(
+                        plan.as_ref(),
+                        black_box(x),
+                    ));
                 });
             },
         );
@@ -453,7 +504,11 @@ fn bench_six_step_f32(c: &mut Criterion) {
             &input,
             |b, x| {
                 b.iter(|| {
-                    apollo_output = plan.forward_typed(black_box(x));
+                    <f32 as RealFftData>::forward_1d_into(
+                        plan.as_ref(),
+                        black_box(x),
+                        &mut apollo_output,
+                    );
                     black_box(&apollo_output);
                 });
             },
@@ -461,8 +516,17 @@ fn bench_six_step_f32(c: &mut Criterion) {
 
         group.bench_function(BenchmarkId::new("apollo_zero_alloc_six_step", len), |b| {
             b.iter_custom(|iters| {
+                <f32 as RealFftData>::forward_1d_into(
+                    plan.as_ref(),
+                    black_box(&input),
+                    &mut apollo_output,
+                );
                 let elapsed = measure_zero_alloc(iters, || {
-                    apollo_output = plan.forward_typed(black_box(&input));
+                    <f32 as RealFftData>::forward_1d_into(
+                        plan.as_ref(),
+                        black_box(&input),
+                        &mut apollo_output,
+                    );
                 });
                 assert_eq!(
                     allocation_count(),

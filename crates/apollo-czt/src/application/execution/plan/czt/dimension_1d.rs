@@ -51,7 +51,7 @@ pub struct CztPlan {
     chirp_n: Vec<Complex64>,
     chirp_k: Vec<Complex64>,
     fft_kernel: Array1<Complex64>,
-    fft_plan: FftPlan1D,
+    fft_plan: FftPlan1D<f64>,
     forward_workspace: Mutex<Vec<Complex64>>,
     inverse_nodes: Option<Vec<Complex64>>,
 }
@@ -70,9 +70,8 @@ impl CztPlan {
         }
 
         let convolution_len = (n + m - 1).next_power_of_two();
-        let fft_plan = FftPlan1D::with_precision(
+        let fft_plan = FftPlan1D::<f64>::new(
             Shape1D::new(convolution_len).expect("CZT convolution length must be valid"),
-            PrecisionProfile::HIGH_ACCURACY_F64,
         );
 
         let mut chirp_n = Vec::with_capacity(n);

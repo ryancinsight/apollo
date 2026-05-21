@@ -6,8 +6,9 @@
 //!
 //! | Input length       | Kernel selected |
 //! |--------------------|-----------------|
-//! | Power of two >= 2  | **Stockham autosort** — out-of-place ping-pong FFT using a thread-local scratch buffer; no bit-reversal. AVX/FMA SIMD codelets for N=4,8,64,4096 (f32); N=64 (f64). Falls back to generic `transform<P>` for other PoT sizes. |
-//! | Short composite    | **Winograd/Good-Thomas codelets** — monomorphized stack-resident DFTs. |
+//! | Power of two < 64  | **Winograd/Good-Thomas codelets** — monomorphized stack-resident DFTs while they remain faster than the generic power route. |
+//! | Power of two >= 64 | **Stockham autosort / four-step** — out-of-place ping-pong FFT using a thread-local scratch buffer, with square four-step retained for large even-exponent powers. |
+//! | Short non-power composite | **Winograd/Good-Thomas codelets** — monomorphized stack-resident DFTs. |
 //! | 2/3/5/7-smooth     | **Composite mixed-radix** — Cooley-Tukey DIT with digit-reversal. |
 //! | Coprime composite  | **Good-Thomas PFA** — CRT remapping without inter-stage twiddles. |
 //! | Prime              | **Rader convolution** — N-1 cyclic convolution with cached spectrum/permutation. |
@@ -41,6 +42,5 @@ pub(crate) mod scalar;
 mod tests;
 pub(crate) mod traits;
 
-pub(crate) use caches::*;
 pub(crate) use dispatch::*;
 pub(crate) use scalar::MixedRadixScalar;

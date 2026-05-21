@@ -16,9 +16,9 @@ use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 pub struct CpuBackend;
 
 impl FftBackend for CpuBackend {
-    type Plan1D = FftPlan1D;
-    type Plan2D = FftPlan2D;
-    type Plan3D = FftPlan3D;
+    type Plan1D = FftPlan1D<f64>;
+    type Plan2D = FftPlan2D<f64>;
+    type Plan3D = FftPlan3D<f64>;
 
     fn backend_kind(&self) -> BackendKind {
         BackendKind::Cpu
@@ -43,24 +43,15 @@ impl FftBackend for CpuBackend {
     }
 
     fn plan_1d(&self, shape: Shape1D) -> ApolloResult<Self::Plan1D> {
-        Ok(FftPlan1D::with_precision(
-            shape,
-            PrecisionProfile::HIGH_ACCURACY_F64,
-        ))
+        Ok(FftPlan1D::<f64>::new(shape))
     }
 
     fn plan_2d(&self, shape: Shape2D) -> ApolloResult<Self::Plan2D> {
-        Ok(FftPlan2D::with_precision(
-            shape,
-            PrecisionProfile::HIGH_ACCURACY_F64,
-        ))
+        Ok(FftPlan2D::<f64>::new(shape))
     }
 
     fn plan_3d(&self, shape: Shape3D) -> ApolloResult<Self::Plan3D> {
-        Ok(FftPlan3D::with_precision(
-            shape,
-            PrecisionProfile::HIGH_ACCURACY_F64,
-        ))
+        Ok(FftPlan3D::<f64>::new(shape))
     }
 }
 
@@ -71,6 +62,7 @@ mod tests {
     use crate::domain::metadata::precision::BackendKind;
     use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
     use ndarray::{Array1, Array2, Array3};
+    use num_complex::Complex64;
 
     #[test]
     fn default_produces_cpu_backend() {
@@ -95,8 +87,9 @@ mod tests {
         let shape = Shape1D::new(8).expect("valid shape");
         let plan = backend.plan_1d(shape).expect("plan_1d succeeded");
         let input = Array1::from_iter((0..8usize).map(|i| (i as f64 * 0.7).sin()));
-        let spectrum = plan.forward(&input);
-        let recovered = plan.inverse(&spectrum);
+        let complex = input.mapv(|value| Complex64::new(value, 0.0));
+        let spectrum = plan.forward_complex(&complex);
+        let recovered = plan.inverse_complex(&spectrum).mapv(|value| value.re);
         for (a, b) in input.iter().zip(recovered.iter()) {
             let err = (a - b).abs();
             assert!(err < 1e-10, "1D roundtrip err={err:.2e}");
@@ -109,8 +102,10 @@ mod tests {
         let shape = Shape2D::new(4, 4).expect("valid shape");
         let plan = backend.plan_2d(shape).expect("plan_2d succeeded");
         let input = Array2::from_shape_fn((4, 4), |(i, j)| (i as f64 * 0.3 + j as f64 * 0.5).sin());
-        let spectrum = plan.forward(&input);
-        let recovered = plan.inverse(&spectrum);
+        let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));
+        plan.forward_complex_inplace(&mut spectrum);
+        plan.inverse_complex_inplace(&mut spectrum);
+        let recovered = spectrum.mapv(|value| value.re);
         for (a, b) in input.iter().zip(recovered.iter()) {
             let err = (a - b).abs();
             assert!(err < 1e-10, "2D roundtrip err={err:.2e}");
@@ -125,8 +120,10 @@ mod tests {
         let input = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
             (i as f64 * 0.3 + j as f64 * 0.2 + k as f64 * 0.5).sin()
         });
-        let spectrum = plan.forward(&input);
-        let recovered = plan.inverse(&spectrum);
+        let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));
+        plan.forward_complex_inplace(&mut spectrum);
+        plan.inverse_complex_inplace(&mut spectrum);
+        let recovered = spectrum.mapv(|value| value.re);
         for (a, b) in input.iter().zip(recovered.iter()) {
             let err = (a - b).abs();
             assert!(err < 1e-10, "3D roundtrip err={err:.2e}");

@@ -20,7 +20,7 @@ use apollo_dht::DhtPlan;
 use apollo_fft::f16;
 use apollo_fft::{
     fft_1d_array, fft_1d_array_typed, fft_3d_array, ifft_1d_array, ifft_1d_array_typed,
-    ifft_3d_array, ifft_3d_array_typed, FftBackend, PrecisionProfile, Shape3D,
+    ifft_3d_array, ifft_3d_array_typed, FftBackend, Shape3D,
 };
 use apollo_frft::UnitaryFrftPlan;
 use apollo_fwht::FwhtPlan;
@@ -587,13 +587,12 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
                 profile: "low_precision".to_string(),
                 forward_ms: Some(elapsed_ms(|| {
                     let input = signal.mapv(|value| value as f32);
-                    let _ = fft_1d_array_typed(&input, PrecisionProfile::LOW_PRECISION_F32);
+                    let _ = fft_1d_array_typed(&input);
                 })),
                 inverse_ms: Some(elapsed_ms(|| {
                     let input = signal.mapv(|value| value as f32);
-                    let spectrum = fft_1d_array_typed(&input, PrecisionProfile::LOW_PRECISION_F32);
-                    let _ =
-                        ifft_1d_array_typed::<f32>(&spectrum, PrecisionProfile::LOW_PRECISION_F32);
+                    let spectrum = fft_1d_array_typed(&input);
+                    let _ = ifft_1d_array_typed::<f32>(&spectrum);
                 })),
                 note: None,
             },
@@ -601,16 +600,12 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
                 profile: "mixed_precision".to_string(),
                 forward_ms: Some(elapsed_ms(|| {
                     let input = signal.mapv(|value| f16::from_f32(value as f32));
-                    let _ = fft_1d_array_typed(&input, PrecisionProfile::MIXED_PRECISION_F16_F32);
+                    let _ = fft_1d_array_typed(&input);
                 })),
                 inverse_ms: Some(elapsed_ms(|| {
                     let input = signal.mapv(|value| f16::from_f32(value as f32));
-                    let spectrum =
-                        fft_1d_array_typed(&input, PrecisionProfile::MIXED_PRECISION_F16_F32);
-                    let _ = ifft_1d_array_typed::<f16>(
-                        &spectrum,
-                        PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    );
+                    let spectrum = fft_1d_array_typed(&input);
+                    let _ = ifft_1d_array_typed::<f16>(&spectrum);
                 })),
                 note: None,
             },
@@ -619,7 +614,6 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
 }
 
 fn precision_profile_reports() -> Vec<PrecisionRunReport> {
-    let shape = Shape3D::new(4, 4, 4).expect("valid shape");
     let reference = representative_field_3d((4, 4, 4));
 
     // f64 high-accuracy path — the authoritative reference for forward error comparisons.
@@ -629,9 +623,7 @@ fn precision_profile_reports() -> Vec<PrecisionRunReport> {
 
     // f32 low-precision path.
     let low_input = reference.mapv(|value| value as f32);
-    let low_plan =
-        apollo_fft::FftPlan3D::with_precision(shape, PrecisionProfile::LOW_PRECISION_F32);
-    let low_spectrum: Array3<Complex32> = low_plan.forward_typed(&low_input);
+    let low_spectrum: Array3<Complex32> = apollo_fft::fft_3d_array_typed(&low_input);
     // Forward error: max |f32 spectrum - f64 reference spectrum|.
     let low_forward_error = low_spectrum
         .iter()
@@ -640,15 +632,13 @@ fn precision_profile_reports() -> Vec<PrecisionRunReport> {
             ((f64::from(lv.re) - hv.re).powi(2) + (f64::from(lv.im) - hv.im).powi(2)).sqrt()
         })
         .fold(0.0_f64, f64::max);
-    let low_recovered = low_plan.inverse_typed::<f32>(&low_spectrum).mapv(f64::from);
+    let low_recovered = apollo_fft::ifft_3d_array_typed::<f32>(&low_spectrum).mapv(f64::from);
     let low_reference = low_input.mapv(f64::from);
     let low_error = max_real_abs_delta_3d(&low_reference, &low_recovered);
 
     // f16/f32 mixed-precision path — compare spectrum against f64 FFT of the f16-represented input.
     let mixed_input = reference.mapv(|value| f16::from_f32(value as f32));
-    let mixed_plan =
-        apollo_fft::FftPlan3D::with_precision(shape, PrecisionProfile::MIXED_PRECISION_F16_F32);
-    let mixed_spectrum: Array3<Complex32> = mixed_plan.forward_typed(&mixed_input);
+    let mixed_spectrum: Array3<Complex32> = apollo_fft::fft_3d_array_typed(&mixed_input);
     // Use f64 FFT of the quantized input as the mixed-precision forward reference.
     let mixed_input_f64 = mixed_input.mapv(|v| f64::from(v.to_f32()));
     let mixed_reference_spectrum = fft_3d_array(&mixed_input_f64);
@@ -660,8 +650,7 @@ fn precision_profile_reports() -> Vec<PrecisionRunReport> {
         })
         .fold(0.0_f64, f64::max);
     let mixed_recovered =
-        ifft_3d_array_typed::<f16>(&mixed_spectrum, PrecisionProfile::MIXED_PRECISION_F16_F32)
-            .mapv(|value| f64::from(value.to_f32()));
+        ifft_3d_array_typed::<f16>(&mixed_spectrum).mapv(|value| f64::from(value.to_f32()));
     let mixed_reference = mixed_input.mapv(|value| f64::from(value.to_f32()));
     let mixed_error = max_real_abs_delta_3d(&mixed_reference, &mixed_recovered);
 

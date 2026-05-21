@@ -13,33 +13,29 @@ static FOUR_STEP_TW_32_CACHE: std::sync::LazyLock<
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
-    pub(super) static TL_FOUR_STEP_TW_64: RefCell<HashMap<(usize, usize), Arc<[Complex64]>>> =
+    static TL_FOUR_STEP_TW_64: RefCell<HashMap<(usize, usize), Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(4));
-    pub(super) static TL_FOUR_STEP_TW_32: RefCell<HashMap<(usize, usize), Arc<[Complex32]>>> =
+    static TL_FOUR_STEP_TW_32: RefCell<HashMap<(usize, usize), Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(4));
 }
 
-#[inline]
-fn tl_cached_k2<T: Clone>(
-    tl: &'static std::thread::LocalKey<RefCell<HashMap<(usize, usize), Arc<[T]>>>>,
-    global: &'static std::sync::LazyLock<RwLock<HashMap<(usize, usize), Arc<[T]>>>>,
+declare_cache_store! {
+    sealed_mod: sealed,
+    sealed_trait: FourStepStoreSealed,
+    store_trait: FourStepStore,
+    extra_bounds: [TwiddleOutput, Clone, 'static],
     key: (usize, usize),
-    build_fn: impl FnOnce((usize, usize)) -> Vec<T>,
-) -> Arc<[T]> {
-    if let Some(v) = tl.with(|c| c.borrow().get(&key).cloned()) {
-        return v;
-    }
-    let v = {
-        let maybe = global.read().get(&key).cloned();
-        if let Some(v) = maybe {
-            v
-        } else {
-            let new_v: Arc<[T]> = Arc::from(build_fn(key));
-            global.write().entry(key).or_insert_with(|| Arc::clone(&new_v)).clone()
-        }
-    };
-    tl.with(|c| c.borrow_mut().insert(key, Arc::clone(&v)));
-    v
+    val64: Arc<[Complex64]>,
+    val32: Arc<[Complex32]>,
+    val_self: Arc<[Self]>,
+    tl_get: four_step_tl_get,
+    tl_insert: four_step_tl_insert,
+    global: four_step_global,
+    global_ret_self: RwLock<HashMap<(usize, usize), Arc<[Self]>>>,
+    tl64: TL_FOUR_STEP_TW_64,
+    tl32: TL_FOUR_STEP_TW_32,
+    global64: FOUR_STEP_TW_64_CACHE,
+    global32: FOUR_STEP_TW_32_CACHE,
 }
 
 fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, sign: f64) -> Vec<C> {
@@ -51,7 +47,11 @@ fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, si
         re_tbl[k] = 1.0;
     }
     if n2 == 1 {
-        return re_tbl.iter().zip(im_tbl.iter()).map(|(&r, &i)| C::from_components(r, i)).collect();
+        return re_tbl
+            .iter()
+            .zip(im_tbl.iter())
+            .map(|(&r, &i)| C::from_components(r, i))
+            .collect();
     }
 
     let base_angle = sign * std::f64::consts::TAU / n as f64;
@@ -79,39 +79,38 @@ fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, si
         }
     }
 
-    re_tbl.iter().zip(im_tbl.iter()).map(|(&r, &i)| C::from_components(r, i)).collect()
+    re_tbl
+        .iter()
+        .zip(im_tbl.iter())
+        .map(|(&r, &i)| C::from_components(r, i))
+        .collect()
 }
 
 #[inline]
-pub(crate) fn cached_four_step_twiddles_64(
+pub(crate) fn cached_four_step_twiddles<C: FourStepStore>(
     n: usize,
     n1: usize,
     n2: usize,
     inverse: bool,
-) -> Arc<[Complex64]> {
+) -> Arc<[C]> {
     let key = (n, inverse as usize);
     let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
-    tl_cached_k2(
-        &TL_FOUR_STEP_TW_64,
-        &FOUR_STEP_TW_64_CACHE,
-        key,
-        |_| build_four_step_twiddles::<Complex64>(n, n1, n2, sign),
-    )
-}
-
-#[inline]
-pub(crate) fn cached_four_step_twiddles_32(
-    n: usize,
-    n1: usize,
-    n2: usize,
-    inverse: bool,
-) -> Arc<[Complex32]> {
-    let key = (n, inverse as usize);
-    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
-    tl_cached_k2(
-        &TL_FOUR_STEP_TW_32,
-        &FOUR_STEP_TW_32_CACHE,
-        key,
-        |_| build_four_step_twiddles::<Complex32>(n, n1, n2, sign),
-    )
+    if let Some(v) = C::four_step_tl_get(key) {
+        return v;
+    }
+    let v = {
+        let maybe = C::four_step_global().read().get(&key).cloned();
+        if let Some(v) = maybe {
+            v
+        } else {
+            let new_v: Arc<[C]> = Arc::from(build_four_step_twiddles::<C>(n, n1, n2, sign));
+            C::four_step_global()
+                .write()
+                .entry(key)
+                .or_insert_with(|| Arc::clone(&new_v))
+                .clone()
+        }
+    };
+    C::four_step_tl_insert(key, Arc::clone(&v));
+    v
 }

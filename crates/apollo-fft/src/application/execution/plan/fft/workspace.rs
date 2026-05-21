@@ -21,7 +21,7 @@ mod sealed {
 /// This trait is sealed so the uninitialized workspace allocation contract
 /// cannot be extended outside this module to types with stricter validity
 /// invariants.
-pub(crate) trait UninitWorkspaceElement: Copy + sealed::Sealed {}
+pub trait UninitWorkspaceElement: Copy + sealed::Sealed {}
 
 impl UninitWorkspaceElement for f32 {}
 impl UninitWorkspaceElement for f64 {}

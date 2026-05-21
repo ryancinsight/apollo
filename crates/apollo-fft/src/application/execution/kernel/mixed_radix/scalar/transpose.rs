@@ -2,7 +2,7 @@ use num_complex::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
-unsafe fn transpose_avx_c64(src: &[Complex64], dst: &mut [Complex64], n1: usize, n2: usize) {
+unsafe fn transpose_avx_precise(src: &[Complex64], dst: &mut [Complex64], n1: usize, n2: usize) {
     use std::arch::x86_64::*;
     const TILE: usize = 16;
     for i_base in (0..n1).step_by(TILE) {
@@ -40,7 +40,7 @@ unsafe fn transpose_avx_c64(src: &[Complex64], dst: &mut [Complex64], n1: usize,
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
-unsafe fn transpose_avx_c32(src: &[Complex32], dst: &mut [Complex32], n1: usize, n2: usize) {
+unsafe fn transpose_avx_reduced(src: &[Complex32], dst: &mut [Complex32], n1: usize, n2: usize) {
     use std::arch::x86_64::*;
     const TILE: usize = 16;
     for i_base in (0..n1).step_by(TILE) {
@@ -67,18 +67,9 @@ unsafe fn transpose_avx_c32(src: &[Complex32], dst: &mut [Complex32], n1: usize,
                     let o2 = _mm256_permute2x128_si256(t0, t2, 0x31);
                     let o3 = _mm256_permute2x128_si256(t1, t3, 0x31);
                     _mm256_storeu_si256(dst.as_mut_ptr().add(j * n1 + i) as *mut __m256i, o0);
-                    _mm256_storeu_si256(
-                        dst.as_mut_ptr().add((j + 1) * n1 + i) as *mut __m256i,
-                        o1,
-                    );
-                    _mm256_storeu_si256(
-                        dst.as_mut_ptr().add((j + 2) * n1 + i) as *mut __m256i,
-                        o2,
-                    );
-                    _mm256_storeu_si256(
-                        dst.as_mut_ptr().add((j + 3) * n1 + i) as *mut __m256i,
-                        o3,
-                    );
+                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 1) * n1 + i) as *mut __m256i, o1);
+                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 2) * n1 + i) as *mut __m256i, o2);
+                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 3) * n1 + i) as *mut __m256i, o3);
                     j += 4;
                 }
                 while j < j_end {
@@ -117,26 +108,40 @@ pub(crate) fn transpose_tiled_scalar<C: Copy>(src: &[C], dst: &mut [C], n1: usiz
 }
 
 #[inline]
-pub(super) fn transpose_matrix_c64(src: &[Complex64], dst: &mut [Complex64], n1: usize, n2: usize) {
+pub(super) fn transpose_matrix_precise(
+    src: &[Complex64],
+    dst: &mut [Complex64],
+    n1: usize,
+    n2: usize,
+) {
     #[cfg(target_arch = "x86_64")]
     {
         static HAS_AVX: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
             // SAFETY: AVX confirmed at runtime.
-            unsafe { return transpose_avx_c64(src, dst, n1, n2); }
+            unsafe {
+                return transpose_avx_precise(src, dst, n1, n2);
+            }
         }
     }
     transpose_tiled_scalar(src, dst, n1, n2);
 }
 
 #[inline]
-pub(super) fn transpose_matrix_c32(src: &[Complex32], dst: &mut [Complex32], n1: usize, n2: usize) {
+pub(super) fn transpose_matrix_reduced(
+    src: &[Complex32],
+    dst: &mut [Complex32],
+    n1: usize,
+    n2: usize,
+) {
     #[cfg(target_arch = "x86_64")]
     {
         static HAS_AVX: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         if *HAS_AVX.get_or_init(|| std::is_x86_feature_detected!("avx")) {
             // SAFETY: AVX confirmed at runtime.
-            unsafe { return transpose_avx_c32(src, dst, n1, n2); }
+            unsafe {
+                return transpose_avx_reduced(src, dst, n1, n2);
+            }
         }
     }
     transpose_tiled_scalar(src, dst, n1, n2);

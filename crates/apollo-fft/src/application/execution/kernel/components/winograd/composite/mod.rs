@@ -1,0 +1,49 @@
+pub(crate) mod power;
+mod small;
+
+pub(crate) use power::{dft128_impl, dft16_impl, dft32_impl, dft64_impl};
+pub(crate) use small::{
+    dft10_impl,
+    dft12_impl,
+    dft14_impl,
+    dft18_impl,
+    // Phase 3: coprime composites
+    dft20_impl,
+    dft21_impl,
+    dft22_impl,
+    dft24_impl,
+    dft25_impl,
+    // Phase 2: 2×prime twiddle-free WGT codelets (primes 13–23, N ≤ 46)
+    dft26_impl,
+    dft27_impl,
+    dft28_impl,
+    dft30_impl,
+    dft33_impl,
+    dft34_impl,
+    dft35_impl,
+    dft36_impl,
+    dft38_impl,
+    dft39_impl,
+    dft40_impl,
+    dft42_impl,
+    dft44_impl,
+    dft45_impl,
+    dft46_impl,
+    dft48_impl,
+    // N 49–63: coprime WGT + 49=7² Cooley-Tukey
+    dft49_impl,
+    dft50_impl,
+    dft51_impl,
+    dft52_impl,
+    dft54_impl,
+    dft55_impl,
+    dft56_impl,
+    dft58_impl,
+    dft60_impl,
+    dft62_impl,
+    dft63_impl,
+    // Original composites
+    dft6_impl,
+    dft81_impl,
+    dft9_impl,
+};

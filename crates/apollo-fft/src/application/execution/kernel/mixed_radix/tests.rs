@@ -1,3 +1,5 @@
+mod good_thomas;
+
 use super::super::test_utils::max_abs_err_64;
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
@@ -63,6 +65,132 @@ fn mixed_inverse_prime_n17_matches_direct() {
 }
 
 #[test]
+fn mixed_forward_mid_primes_use_winograd_pair_and_match_direct() {
+    for n in [19usize, 29, 31, 37, 41, 43, 47, 53] {
+        let input: Vec<Complex64> = (0..n)
+            .map(|k| Complex64::new((k as f64 * 0.31).sin(), (k as f64 * 0.23).cos()))
+            .collect();
+        let mut got = input.clone();
+        forward_inplace::<f64>(&mut got);
+        let expected = dft_forward(&input);
+        let err = max_abs_err_64(&got, &expected);
+        assert!(
+            err < 1.0e-10,
+            "Winograd-pair dispatch forward N={n} mismatch err={err:.2e}"
+        );
+    }
+}
+
+#[test]
+fn mixed_inverse_mid_primes_use_winograd_pair_and_match_direct() {
+    for n in [19usize, 29, 31, 37, 41, 43, 47, 53] {
+        let input: Vec<Complex64> = (0..n)
+            .map(|k| Complex64::new((k as f64 * 0.37).cos(), (k as f64 * 0.41).sin()))
+            .collect();
+        let mut got = input.clone();
+        inverse_inplace_unnorm::<f64>(&mut got);
+        let expected = dft_inverse(&input)
+            .into_iter()
+            .map(|x| x * n as f64)
+            .collect::<Vec<_>>();
+        let err = max_abs_err_64(&got, &expected);
+        assert!(
+            err < 1.0e-10,
+            "Winograd-pair dispatch inverse N={n} mismatch err={err:.2e}"
+        );
+    }
+}
+
+#[test]
+fn mixed_forward_two_by_prime_uses_winograd_prime_halves_n38() {
+    let n = 38usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.29).sin(), (k as f64 * 0.13).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-10,
+        "two-by-prime Winograd-halves forward N={n} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn mixed_inverse_two_by_prime_uses_winograd_prime_halves_n82() {
+    let n = 82usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.17).cos(), (k as f64 * 0.23).sin()))
+        .collect();
+    let mut got = input.clone();
+    inverse_inplace_unnorm::<f64>(&mut got);
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-9,
+        "two-by-prime Winograd-halves inverse N={n} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn mixed_forward_two_by_prime_uses_winograd_prime_halves_n58() {
+    let n = 58usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.11).sin(), (k as f64 * 0.19).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-10,
+        "two-by-prime Winograd-halves forward N={n} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn mixed_inverse_two_by_prime_uses_winograd_prime_halves_n74() {
+    let n = 74usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.07).cos(), (k as f64 * 0.29).sin()))
+        .collect();
+    let mut got = input.clone();
+    inverse_inplace_unnorm::<f64>(&mut got);
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-9,
+        "two-by-prime Winograd-halves inverse N={n} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn mixed_inverse_two_by_prime_uses_winograd_prime_halves_n94() {
+    let n = 94usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.07).cos(), (k as f64 * 0.29).sin()))
+        .collect();
+    let mut got = input.clone();
+    inverse_inplace_unnorm::<f64>(&mut got);
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1.0e-9,
+        "two-by-prime Winograd-halves inverse N={n} mismatch err={err:.2e}"
+    );
+}
+
+#[test]
 fn mixed_forward_prime_n257_matches_direct() {
     let n = 257usize;
     let input: Vec<Complex64> = (0..n)
@@ -76,7 +204,7 @@ fn mixed_forward_prime_n257_matches_direct() {
 }
 
 #[test]
-fn mixed_f32_stockham_forward_inverse_roundtrip_n256() {
+fn mixed_reduced_stockham_forward_inverse_roundtrip_n256() {
     let n = 256usize;
     let input: Vec<Complex32> = (0..n)
         .map(|k| Complex32::new((k as f32 * 0.013).sin(), (k as f32 * 0.017).cos()))
@@ -96,7 +224,7 @@ fn mixed_f32_stockham_forward_inverse_roundtrip_n256() {
 }
 
 #[test]
-fn mixed_f32_stockham_forward_inverse_roundtrip_n512() {
+fn mixed_reduced_stockham_forward_inverse_roundtrip_n512() {
     let n = 512usize;
     let input: Vec<Complex32> = (0..n)
         .map(|k| Complex32::new((k as f32 * 0.011).sin(), (k as f32 * 0.019).cos()))
@@ -116,7 +244,7 @@ fn mixed_f32_stockham_forward_inverse_roundtrip_n512() {
 }
 
 #[test]
-fn mixed_f32_stockham_forward_inverse_roundtrip_n4096() {
+fn mixed_reduced_stockham_forward_inverse_roundtrip_n4096() {
     let n = 4096usize;
     let input: Vec<Complex32> = (0..n)
         .map(|k| Complex32::new((k as f32 * 0.007).sin(), (k as f32 * 0.011).cos()))
@@ -137,7 +265,7 @@ fn mixed_f32_stockham_forward_inverse_roundtrip_n4096() {
 }
 
 #[test]
-fn compact_f16_storage_impulse_has_flat_spectrum() {
+fn compact_half_storage_impulse_has_flat_spectrum() {
     let n = 8usize;
     let mut data = vec![Complex::new(f16::ZERO, f16::ZERO); n];
     data[0] = Complex::new(f16::from_f32(1.0), f16::ZERO);
@@ -155,7 +283,7 @@ fn compact_f16_storage_impulse_has_flat_spectrum() {
 }
 
 #[test]
-fn compact_f16_storage_roundtrip_stays_within_storage_error() {
+fn compact_half_storage_roundtrip_stays_within_storage_error() {
     let input: Vec<Complex<f16>> = (0..64)
         .map(|index| {
             let value = (index as f32 * 0.23 - 1.5).tanh();
@@ -177,7 +305,7 @@ fn compact_f16_storage_roundtrip_stays_within_storage_error() {
 }
 
 #[test]
-fn mixed_f64_stockham_forward_inverse_roundtrip_n256() {
+fn mixed_precise_stockham_forward_inverse_roundtrip_n256() {
     let n = 256usize;
     let input: Vec<Complex64> = (0..n)
         .map(|k| Complex64::new((k as f64 * 0.013).sin(), (k as f64 * 0.017).cos()))
@@ -193,7 +321,7 @@ fn mixed_f64_stockham_forward_inverse_roundtrip_n256() {
 }
 
 #[test]
-fn mixed_f64_stockham_forward_inverse_roundtrip_n512() {
+fn mixed_precise_stockham_forward_inverse_roundtrip_n512() {
     let n = 512usize;
     let input: Vec<Complex64> = (0..n)
         .map(|k| Complex64::new((k as f64 * 0.011).sin(), (k as f64 * 0.019).cos()))
@@ -205,5 +333,59 @@ fn mixed_f64_stockham_forward_inverse_roundtrip_n512() {
     assert!(
         err < 1.0e-10,
         "f64 Stockham N=512 roundtrip mismatch err={err:.2e}"
+    );
+}
+
+/// N=8192 = 2^13 exercises an asymmetric power-of-two route.
+#[test]
+fn power_of_two_asymmetric_n8192_forward_inverse_roundtrip() {
+    let n = 8192usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.007).sin(), (k as f64 * 0.011).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    inverse_inplace::<f64>(&mut got);
+    let err = max_abs_err_64(&got, &input);
+    let tol = 8.0 * n as f64 * f64::EPSILON;
+    assert!(
+        err < tol,
+        "power-of-two N=8192 roundtrip max_err={err:.2e} tol={tol:.2e}"
+    );
+}
+
+/// N=32768 = 2^15 exercises the asymmetric power-of-two padding length for N=10007.
+#[test]
+fn power_of_two_asymmetric_n32768_forward_inverse_roundtrip() {
+    let n = 32768usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.003).sin(), (k as f64 * 0.007).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    inverse_inplace::<f64>(&mut got);
+    let err = max_abs_err_64(&got, &input);
+    let tol = 8.0 * n as f64 * f64::EPSILON;
+    assert!(
+        err < tol,
+        "power-of-two N=32768 roundtrip max_err={err:.2e} tol={tol:.2e}"
+    );
+}
+
+#[test]
+fn mixed_precise_power_of_two_n32768_forward_dc_is_not_noop() {
+    let n = 32768usize;
+    let mut got = vec![Complex64::new(1.0, 0.0); n];
+    forward_inplace::<f64>(&mut got);
+    let tol = 8.0 * n as f64 * f64::EPSILON;
+    assert!(
+        (got[0] - Complex64::new(n as f64, 0.0)).norm() < tol,
+        "N=32768 DC bin mismatch: {:?}",
+        got[0]
+    );
+    let tail = got[1..].iter().map(|z| z.norm()).fold(0.0f64, f64::max);
+    assert!(
+        tail < tol,
+        "N=32768 forward DC tail max_err={tail:.2e} tol={tol:.2e}"
     );
 }

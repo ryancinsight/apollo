@@ -58,14 +58,14 @@ pub trait KernelScalar: Copy + Clone + Default {
     /// Return zero.
     fn zero() -> Self;
 
-    /// Convert a normalized real part to the scalar type.
-    fn from_f64(value: f64) -> Self;
+    /// Convert a reference-precision component value to the scalar type.
+    fn from_precise(value: f64) -> Self;
 
-    /// Extract the real part as `f64`.
-    fn to_f64_re(value: Self) -> f64;
+    /// Extract the real part at reference precision.
+    fn precise_re(value: Self) -> f64;
 
-    /// Extract the imaginary part as `f64`.
-    fn to_f64_im(value: Self) -> f64;
+    /// Extract the imaginary part at reference precision.
+    fn precise_im(value: Self) -> f64;
 }
 
 impl KernelScalar for Complex64 {
@@ -90,17 +90,17 @@ impl KernelScalar for Complex64 {
     }
 
     #[inline]
-    fn from_f64(value: f64) -> Self {
+    fn from_precise(value: f64) -> Self {
         Self::new(value, 0.0)
     }
 
     #[inline]
-    fn to_f64_re(value: Self) -> f64 {
+    fn precise_re(value: Self) -> f64 {
         value.re
     }
 
     #[inline]
-    fn to_f64_im(value: Self) -> f64 {
+    fn precise_im(value: Self) -> f64 {
         value.im
     }
 }
@@ -127,17 +127,17 @@ impl KernelScalar for Complex32 {
     }
 
     #[inline]
-    fn from_f64(value: f64) -> Self {
+    fn from_precise(value: f64) -> Self {
         Self::new(value as f32, 0.0)
     }
 
     #[inline]
-    fn to_f64_re(value: Self) -> f64 {
+    fn precise_re(value: Self) -> f64 {
         f64::from(value.re)
     }
 
     #[inline]
-    fn to_f64_im(value: Self) -> f64 {
+    fn precise_im(value: Self) -> f64 {
         f64::from(value.im)
     }
 }
@@ -156,7 +156,7 @@ pub fn dft_forward<T: KernelScalar>(input: &[T]) -> Vec<T> {
         let mut sum = T::zero();
         for (n_idx, &value) in input.iter().enumerate() {
             let angle = -tau * k_f64 * (n_idx as f64) / n_f64;
-            let twiddle = T::complex(T::from_f64(angle.cos()), T::from_f64(angle.sin()));
+            let twiddle = T::complex(T::from_precise(angle.cos()), T::from_precise(angle.sin()));
             sum = T::add(sum, T::mul(value, twiddle));
         }
         *slot = sum;
@@ -183,12 +183,15 @@ pub fn dft_inverse<T: KernelScalar>(input: &[T]) -> Vec<T> {
             let angle = tau * (k as f64) * n_idx_f64 / n_f64;
             let c = angle.cos();
             let s = angle.sin();
-            let re = T::to_f64_re(value);
-            let im = T::to_f64_im(value);
+            let re = T::precise_re(value);
+            let im = T::precise_im(value);
             sum_re += re * c - im * s;
             sum_im += re * s + im * c;
         }
-        *slot = T::complex(T::from_f64(sum_re * scale), T::from_f64(sum_im * scale));
+        *slot = T::complex(
+            T::from_precise(sum_re * scale),
+            T::from_precise(sum_im * scale),
+        );
     }
 
     output

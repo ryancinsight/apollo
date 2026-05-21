@@ -1,4 +1,6 @@
+use super::super::traits::ShortWinogradScalar;
 use super::transpose::transpose_tiled_scalar;
+use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use std::sync::Arc;
 
 pub(crate) mod private {
@@ -7,7 +9,15 @@ pub(crate) mod private {
     impl Sealed for f32 {}
 }
 
-pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
+pub trait MixedRadixScalar:
+    private::Sealed + Sized + Copy + 'static + ShortWinogradScalar + CompositeCache
+{
+    /// Minimum Rader convolution length `N - 1` for the half-cyclic CRT split.
+    ///
+    /// `usize::MAX` disables automatic production routing while retaining the
+    /// strategy for forced benchmark and equivalence tests.
+    const HALF_CYCLIC_RADER_THRESHOLD: usize;
+
     type Complex: Copy
         + Send
         + Sync
@@ -27,6 +37,18 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
         generator_inverse: usize,
     ) -> Arc<[Self::Complex]>;
 
+    /// Return precomputed negacyclic Rader convolution spectra for prime length `n`.
+    ///
+    /// Returns `(cyclic_spectrum, negacyclic_spectrum)` each of length `(n-1)/2`.
+    fn cached_rader_negacyclic_spectra(
+        n: usize,
+        inverse: bool,
+        generator_inverse: usize,
+    ) -> (Arc<[Self::Complex]>, Arc<[Self::Complex]>);
+
+    /// Return precomputed twist twiddles `e^{i*pi*j/m}` for negacyclic convolution.
+    fn cached_rader_neg_twiddles(m: usize) -> Arc<[Self::Complex]>;
+
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_pfa_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
@@ -39,6 +61,8 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
     ) -> Arc<[Self::Complex]>;
 
     fn pointwise_mul(a: &mut [Self::Complex], b: &[Self::Complex]);
+
+    fn pointwise_mul_conj(a: &mut [Self::Complex], b: &[Self::Complex]);
 
     fn stockham_forward(
         data: &mut [Self::Complex],
@@ -57,9 +81,16 @@ pub(crate) trait MixedRadixScalar: private::Sealed + Sized + Copy + 'static {
         Self::normalize(data, n);
     }
 
-    fn short_winograd(data: &mut [Self::Complex], inverse: bool, normalize: bool) -> bool;
+    fn short_winograd<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Self::Complex],
+    ) -> bool;
 
     fn composite_forward(data: &mut [Self::Complex], radices: &[usize]);
+    fn composite_forward_with_pointwise(
+        data: &mut [Self::Complex],
+        radices: &[usize],
+        pointwise_spectrum: &[Self::Complex],
+    );
     fn composite_inverse_unnorm(data: &mut [Self::Complex], radices: &[usize]);
     fn composite_inverse(data: &mut [Self::Complex], radices: &[usize]);
 

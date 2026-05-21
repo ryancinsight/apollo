@@ -39,7 +39,7 @@ pub struct StftPlan {
     frame_len: usize,
     hop_len: usize,
     window: Array1<f64>,
-    fft_plan: FftPlan1D,
+    fft_plan: FftPlan1D<f64>,
 }
 
 impl StftPlan {
@@ -58,8 +58,9 @@ impl StftPlan {
             return Err(StftError::HopExceedsFrame);
         }
         let window = hann_window(frame_len);
-        let fft_plan =
-            FftPlan1D::new(Shape1D::new(frame_len).expect("STFT frame length must be valid"));
+        let fft_plan = FftPlan1D::<f64>::new(
+            Shape1D::new(frame_len).expect("STFT frame length must be valid"),
+        );
         Ok(Self {
             frame_len,
             hop_len,
