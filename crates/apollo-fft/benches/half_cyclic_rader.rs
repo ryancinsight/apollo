@@ -47,7 +47,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_full_cyclic_prime_f64(black_box(&mut buf), false);
+                    benchmark_kernels::rader_full_cyclic_prime::<f64>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -59,7 +59,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_half_cyclic_prime_f64(black_box(&mut buf), false);
+                    benchmark_kernels::rader_half_cyclic_prime::<f64>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -71,7 +71,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_f64(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime::<f64>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -85,7 +85,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_full_cyclic_prime_f32(black_box(&mut buf), false);
+                    benchmark_kernels::rader_full_cyclic_prime::<f32>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -97,7 +97,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_half_cyclic_prime_f32(black_box(&mut buf), false);
+                    benchmark_kernels::rader_half_cyclic_prime::<f32>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -109,7 +109,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_f32(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime::<f32>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },

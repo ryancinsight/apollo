@@ -62,7 +62,7 @@ fn mixed_three_by_prime_composites_use_fused_crt_codelets_and_match_direct() {
 }
 
 #[test]
-fn mixed_three_by_prime_n33_matches_direct_for_f32() {
+fn mixed_three_by_prime_n33_matches_direct_reduced_precision() {
     let n = 33usize;
     let input: Vec<Complex32> = (0..n)
         .map(|k| Complex32::new((k as f32 * 0.23).sin(), (k as f32 * 0.31).cos()))
@@ -143,7 +143,7 @@ fn mixed_fixed_coprime_good_thomas_codelets_match_direct() {
 }
 
 #[test]
-fn mixed_fixed_good_thomas_n77_matches_direct_for_f32() {
+fn mixed_fixed_good_thomas_n77_matches_direct_reduced_precision() {
     let n = 77usize;
     let input: Vec<Complex32> = (0..n)
         .map(|k| Complex32::new((k as f32 * 0.17).sin(), (k as f32 * 0.29).cos()))

@@ -3,7 +3,10 @@ use super::super::traits::WinogradScalar;
 /// Canonical catalog of odd-prime Winograd-pair (N, H) sizes.
 /// Each `(N, H)` pair satisfies `N = 2*H + 1`. The `PrimePairTable<N, H>`
 /// trait impls and `impl_prime_pair_table!` calls must mirror this array.
-#[allow(dead_code)] // referenced by tests; also serves as documentation
+/// Canonical inventory of supported odd-prime Winograd-pair sizes; the
+/// constant is consumed by the in-file invariant tests and serves as the
+/// single authoritative pair table.
+#[cfg(test)]
 pub(crate) const ODD_PRIME_PAIR_SIZES: &[(usize, usize)] = &[
     (11, 5),
     (13, 6),
@@ -123,6 +126,80 @@ pub(crate) fn dft_pair_impl<
     }
 }
 
+#[inline(always)]
+pub(crate) fn dft_pair_impl_reduced<
+    F: WinogradScalar,
+    const N: usize,
+    const H: usize,
+    const INVERSE: bool,
+>(
+    data: &mut [num_complex::Complex<F>; N],
+    cos: &[[F; H]; H],
+    sin: &[[F; H]; H],
+) {
+    debug_assert_eq!(N, 2 * H + 1);
+    let zero = F::zero();
+    let x0 = data[0];
+    let mut sums_re = [zero; H];
+    let mut sums_im = [zero; H];
+    let mut idiffs_re = [zero; H];
+    let mut idiffs_im = [zero; H];
+
+    let sign = if INVERSE { F::one() } else { -F::one() };
+    let mut y0_re = x0.re;
+    let mut y0_im = x0.im;
+
+    for m in 0..H {
+        let a = unsafe { *data.get_unchecked(m + 1) };
+        let b = unsafe { *data.get_unchecked(N - 1 - m) };
+        let sum_re = a.re + b.re;
+        let sum_im = a.im + b.im;
+        y0_re += sum_re;
+        y0_im += sum_im;
+        unsafe {
+            *sums_re.get_unchecked_mut(m) = sum_re;
+            *sums_im.get_unchecked_mut(m) = sum_im;
+            let diff_re = a.re - b.re;
+            let diff_im = a.im - b.im;
+            *idiffs_re.get_unchecked_mut(m) = -diff_im * sign;
+            *idiffs_im.get_unchecked_mut(m) = diff_re * sign;
+        }
+    }
+
+    data[0] = num_complex::Complex::new(y0_re, y0_im);
+
+    for k in 0..H {
+        let mut base_re = x0.re;
+        let mut base_im = x0.im;
+        let mut delta_re = zero;
+        let mut delta_im = zero;
+
+        let cos_row = unsafe { cos.get_unchecked(k) };
+        let sin_row = unsafe { sin.get_unchecked(k) };
+
+        for m in 0..H {
+            let sr = unsafe { *sums_re.get_unchecked(m) };
+            let si = unsafe { *sums_im.get_unchecked(m) };
+            let ir = unsafe { *idiffs_re.get_unchecked(m) };
+            let ii = unsafe { *idiffs_im.get_unchecked(m) };
+            let c = unsafe { *cos_row.get_unchecked(m) };
+            let s = unsafe { *sin_row.get_unchecked(m) };
+
+            base_re += sr * c;
+            base_im += si * c;
+            delta_re += ir * s;
+            delta_im += ii * s;
+        }
+
+        unsafe {
+            *data.get_unchecked_mut(k + 1) =
+                num_complex::Complex::new(base_re + delta_re, base_im + delta_im);
+            *data.get_unchecked_mut(N - 1 - k) =
+                num_complex::Complex::new(base_re - delta_re, base_im - delta_im);
+        }
+    }
+}
+
 /// Forward Winograd-pair DFT with fused kernel-spectrum pointwise multiplication.
 ///
 /// Identical to `dft_pair_impl::<..., INVERSE=false>` but each output bin is
@@ -132,11 +209,7 @@ pub(crate) fn dft_pair_impl<
 ///
 /// `N` must equal `2*H + 1` (odd prime). `kernel_spectrum` must have length `N`.
 #[inline(always)]
-pub(crate) fn dft_pair_forward_with_pointwise<
-    F: WinogradScalar,
-    const N: usize,
-    const H: usize,
->(
+pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize, const H: usize>(
     data: &mut [num_complex::Complex<F>; N],
     kernel_spectrum: &[num_complex::Complex<F>; N],
     cos: &[[F; H]; H],

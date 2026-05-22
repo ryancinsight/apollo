@@ -51,6 +51,13 @@
 
 use super::mixed_radix::dispatch_inplace;
 
+/// Kernel-level real-FFT trait. `build_forward_twiddle_table` and
+/// `build_inverse_twiddle_table` are consumed by the active twiddle cache;
+/// `build_real_fwd_post_twiddles`, `forward_real_inplace`, and
+/// `inverse_real_inplace` provide a complete length-`n` real input
+/// Cooley-Tukey pack/unpack path that is not currently wired into the
+/// `RealFftData` plan dispatch. The methods are retained as a verified
+/// alternative pathway; the `dead_code` allow scopes only the unused subset.
 #[allow(dead_code)]
 pub(crate) trait RealFft:
     crate::application::execution::kernel::mixed_radix::MixedRadixScalar

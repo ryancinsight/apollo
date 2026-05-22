@@ -16,6 +16,58 @@ fn signal(n: usize) -> Vec<Complex64> {
         .collect()
 }
 
+fn assert_short_forward_precise<const N: usize>(kernel: impl FnOnce(&mut [Complex64; N])) {
+    let input = signal(N);
+    let expected = dft_forward(&input);
+    let mut buf: [Complex64; N] = input.as_slice().try_into().unwrap();
+    kernel(&mut buf);
+    let err = max_err(&buf, &expected);
+    let tol = 512.0 * N as f64 * f64::EPSILON;
+    assert!(
+        err < tol,
+        "DFT-{N} f64 forward max_err={err:.2e}, tol={tol:.2e}"
+    );
+}
+
+fn assert_short_forward_reduced<const N: usize>(kernel: impl FnOnce(&mut [Complex32; N])) {
+    let input = signal(N);
+    let expected = dft_forward(&input);
+    let mut buf: [Complex32; N] =
+        core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
+    kernel(&mut buf);
+    let got: Vec<Complex64> = buf
+        .iter()
+        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .collect();
+    let err = max_err(&got, &expected);
+    let tol = 32.0 * N as f64 * f32::EPSILON as f64;
+    assert!(
+        err < tol,
+        "DFT-{N} f32 forward max_err={err:.2e}, tol={tol:.2e}"
+    );
+}
+
+fn assert_short_inverse_reduced<const N: usize>(kernel: impl FnOnce(&mut [Complex32; N])) {
+    let input = signal(N);
+    let expected: Vec<_> = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * N as f64)
+        .collect();
+    let mut buf: [Complex32; N] =
+        core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
+    kernel(&mut buf);
+    let got: Vec<Complex64> = buf
+        .iter()
+        .map(|x| Complex64::new(x.re as f64, x.im as f64))
+        .collect();
+    let err = max_err(&got, &expected);
+    let tol = 32.0 * N as f64 * f32::EPSILON as f64;
+    assert!(
+        err < tol,
+        "DFT-{N} f32 inverse max_err={err:.2e}, tol={tol:.2e}"
+    );
+}
+
 #[test]
 fn generated_rader_primes_match_direct_forward_and_inverse() {
     for n in [
@@ -155,6 +207,38 @@ fn dft23_f32_forward_matches_direct() {
         .collect();
     let err = max_err(&got, &expected);
     assert!(err < 4e-5, "DFT-23 f32 forward max_err={err:.2e}");
+}
+
+#[test]
+fn promoted_short_odd_prime_f64_routes_match_direct() {
+    assert_short_forward_precise::<29>(<f64 as ShortWinogradScalar>::dft29::<false>);
+    assert_short_forward_precise::<31>(<f64 as ShortWinogradScalar>::dft31::<false>);
+    assert_short_forward_precise::<37>(<f64 as ShortWinogradScalar>::dft37::<false>);
+    assert_short_forward_precise::<41>(<f64 as ShortWinogradScalar>::dft41::<false>);
+    assert_short_forward_precise::<43>(<f64 as ShortWinogradScalar>::dft43::<false>);
+    assert_short_forward_precise::<47>(<f64 as ShortWinogradScalar>::dft47::<false>);
+    assert_short_forward_precise::<53>(<f64 as ShortWinogradScalar>::dft53::<false>);
+}
+
+#[test]
+fn short_odd_prime_f32_routes_match_direct() {
+    assert_short_forward_reduced::<11>(<f32 as ShortWinogradScalar>::dft11::<false>);
+    assert_short_forward_reduced::<13>(<f32 as ShortWinogradScalar>::dft13::<false>);
+    assert_short_forward_reduced::<17>(<f32 as ShortWinogradScalar>::dft17::<false>);
+    assert_short_forward_reduced::<19>(<f32 as ShortWinogradScalar>::dft19::<false>);
+    assert_short_forward_reduced::<23>(<f32 as ShortWinogradScalar>::dft23::<false>);
+    assert_short_forward_reduced::<29>(<f32 as ShortWinogradScalar>::dft29::<false>);
+    assert_short_forward_reduced::<31>(<f32 as ShortWinogradScalar>::dft31::<false>);
+    assert_short_forward_reduced::<37>(<f32 as ShortWinogradScalar>::dft37::<false>);
+    assert_short_forward_reduced::<41>(<f32 as ShortWinogradScalar>::dft41::<false>);
+    assert_short_forward_reduced::<43>(<f32 as ShortWinogradScalar>::dft43::<false>);
+    assert_short_forward_reduced::<47>(<f32 as ShortWinogradScalar>::dft47::<false>);
+    assert_short_forward_reduced::<53>(<f32 as ShortWinogradScalar>::dft53::<false>);
+}
+
+#[test]
+fn reduced_short_odd_prime_f32_inverse_route_matches_direct() {
+    assert_short_inverse_reduced::<31>(<f32 as ShortWinogradScalar>::dft31::<true>);
 }
 
 /// Rader's algorithm for N=10007 (large prime, recursive chain 10007→5003→{41,61}).

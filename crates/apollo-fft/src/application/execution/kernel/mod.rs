@@ -24,26 +24,79 @@ pub(crate) mod twiddle_table;
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
 #[doc(hidden)]
 pub mod benchmark_kernels {
-    use num_complex::{Complex, Complex32, Complex64};
+    //! Precision-generic kernel entry points exposed for benchmarks and tests.
+    //!
+    //! Each function is parameterized over `F: MixedRadixScalar + ShortWinogradScalar`,
+    //! so callers monomorphize at the call site with the desired precision:
+    //! `benchmark_kernels::rader_prime::<f64>(&mut data, inverse)`.
+    //!
+    //! Concrete-type wrapper functions (`*_f32` / `*_f64`) are intentionally
+    //! absent: the type-suffix naming convention is prohibited by the CLAUDE.md
+    //! canonical-implementation policy.
+
+    use super::components::rader::{
+        rader_fft, rader_fft_with_convolution_strategy, RaderConvolutionStrategy,
+    };
+    use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
+    use super::components::winograd::WinogradScalar;
+    use super::mixed_radix::traits::ShortWinogradScalar;
+    use super::mixed_radix::MixedRadixScalar;
+    use num_complex::Complex;
+
+    /// In-place forward/inverse Rader FFT with automatic convolution strategy.
+    pub fn rader_prime<F>(data: &mut [Complex<F>], inverse: bool)
+    where
+        F: MixedRadixScalar<Complex = Complex<F>> + ShortWinogradScalar,
+    {
+        if inverse {
+            rader_fft::<F, true>(data);
+        } else {
+            rader_fft::<F, false>(data);
+        }
+    }
+
+    /// In-place Rader FFT forced onto the full-cyclic convolution strategy.
+    pub fn rader_full_cyclic_prime<F>(data: &mut [Complex<F>], inverse: bool)
+    where
+        F: MixedRadixScalar<Complex = Complex<F>> + ShortWinogradScalar,
+    {
+        let strategy = RaderConvolutionStrategy::FullCyclic;
+        if inverse {
+            rader_fft_with_convolution_strategy::<F, true>(data, strategy);
+        } else {
+            rader_fft_with_convolution_strategy::<F, false>(data, strategy);
+        }
+    }
+
+    /// In-place Rader FFT forced onto the half-cyclic Winograd convolution strategy.
+    pub fn rader_half_cyclic_prime<F>(data: &mut [Complex<F>], inverse: bool)
+    where
+        F: MixedRadixScalar<Complex = Complex<F>> + ShortWinogradScalar,
+    {
+        let strategy = RaderConvolutionStrategy::HalfCyclicWinograd;
+        if inverse {
+            rader_fft_with_convolution_strategy::<F, true>(data, strategy);
+        } else {
+            rader_fft_with_convolution_strategy::<F, false>(data, strategy);
+        }
+    }
 
     macro_rules! dispatch_winograd_pair_prime {
-        ($data:expr, $inverse:expr, [ $(($p:expr, $h:expr)),* $(,)? ]) => {
+        ($F:ty, $data:expr, $inverse:expr, [ $(($p:expr, $h:expr)),* $(,)? ]) => {
             match ($data.len(), $inverse) {
                 $(
                     ($p, true) => {
-                        use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
-                        dft_pair_impl::<F, $p, $h, true>(
+                        dft_pair_impl::<$F, $p, $h, true>(
                             $data.try_into().unwrap(),
-                            <F as PrimePairTable<$p, $h>>::cos_table(),
-                            <F as PrimePairTable<$p, $h>>::sin_table(),
+                            <$F as PrimePairTable<$p, $h>>::cos_table(),
+                            <$F as PrimePairTable<$p, $h>>::sin_table(),
                         );
                     }
                     ($p, false) => {
-                        use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
-                        dft_pair_impl::<F, $p, $h, false>(
+                        dft_pair_impl::<$F, $p, $h, false>(
                             $data.try_into().unwrap(),
-                            <F as PrimePairTable<$p, $h>>::cos_table(),
-                            <F as PrimePairTable<$p, $h>>::sin_table(),
+                            <$F as PrimePairTable<$p, $h>>::cos_table(),
+                            <$F as PrimePairTable<$p, $h>>::sin_table(),
                         );
                     }
                 )*
@@ -52,11 +105,10 @@ pub mod benchmark_kernels {
         };
     }
 
-    fn winograd_pair_prime<F: super::components::winograd::WinogradScalar>(
-        data: &mut [Complex<F>],
-        inverse: bool,
-    ) {
+    /// In-place forward/inverse Winograd-pair short-prime FFT for canonical lengths.
+    pub fn winograd_pair_prime<F: WinogradScalar>(data: &mut [Complex<F>], inverse: bool) {
         dispatch_winograd_pair_prime!(
+            F,
             data,
             inverse,
             [
@@ -70,112 +122,6 @@ pub mod benchmark_kernels {
                 (53, 26)
             ]
         );
-    }
-
-    pub fn rader_prime_f64(data: &mut [Complex64], inverse: bool) {
-        if inverse {
-            super::components::rader::rader_fft::<f64, true>(data);
-        } else {
-            super::components::rader::rader_fft::<f64, false>(data);
-        }
-    }
-
-    pub fn rader_full_cyclic_prime_f64(data: &mut [Complex64], inverse: bool) {
-        let strategy = super::components::rader::RaderConvolutionStrategy::FullCyclic;
-        if inverse {
-            super::components::rader::rader_fft_with_convolution_strategy::<f64, true>(
-                data, strategy,
-            );
-        } else {
-            super::components::rader::rader_fft_with_convolution_strategy::<f64, false>(
-                data, strategy,
-            );
-        }
-    }
-
-    pub fn rader_half_cyclic_prime_f64(data: &mut [Complex64], inverse: bool) {
-        let strategy = super::components::rader::RaderConvolutionStrategy::HalfCyclicWinograd;
-        if inverse {
-            super::components::rader::rader_fft_with_convolution_strategy::<f64, true>(
-                data, strategy,
-            );
-        } else {
-            super::components::rader::rader_fft_with_convolution_strategy::<f64, false>(
-                data, strategy,
-            );
-        }
-    }
-
-    pub fn rader_ordered_prime_f64(data: &mut [Complex64], inverse: bool) {
-        match data.len() {
-            29 => {
-                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 29, 15)
-            }
-            31 => {
-                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 31, 21)
-            }
-            37 => {
-                super::components::rader::ordered::rader_ordered_impl::<f64>(data, inverse, 37, 19)
-            }
-            n => panic!("unsupported ordered Rader benchmark length {n}"),
-        }
-    }
-
-    pub fn winograd_pair_prime_f64(data: &mut [Complex64], inverse: bool) {
-        winograd_pair_prime::<f64>(data, inverse);
-    }
-
-    pub fn rader_prime_f32(data: &mut [Complex32], inverse: bool) {
-        if inverse {
-            super::components::rader::rader_fft::<f32, true>(data);
-        } else {
-            super::components::rader::rader_fft::<f32, false>(data);
-        }
-    }
-
-    pub fn rader_full_cyclic_prime_f32(data: &mut [Complex32], inverse: bool) {
-        let strategy = super::components::rader::RaderConvolutionStrategy::FullCyclic;
-        if inverse {
-            super::components::rader::rader_fft_with_convolution_strategy::<f32, true>(
-                data, strategy,
-            );
-        } else {
-            super::components::rader::rader_fft_with_convolution_strategy::<f32, false>(
-                data, strategy,
-            );
-        }
-    }
-
-    pub fn rader_half_cyclic_prime_f32(data: &mut [Complex32], inverse: bool) {
-        let strategy = super::components::rader::RaderConvolutionStrategy::HalfCyclicWinograd;
-        if inverse {
-            super::components::rader::rader_fft_with_convolution_strategy::<f32, true>(
-                data, strategy,
-            );
-        } else {
-            super::components::rader::rader_fft_with_convolution_strategy::<f32, false>(
-                data, strategy,
-            );
-        }
-    }
-
-    pub fn rader_ordered_prime_f32(data: &mut [Complex32], inverse: bool) {
-        match data.len() {
-            29 => {
-                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 29, 15)
-            }
-            31 => {
-                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 31, 21)
-            }
-            37 => {
-                super::components::rader::ordered::rader_ordered_impl::<f32>(data, inverse, 37, 19)
-            }
-            n => panic!("unsupported ordered Rader benchmark length {n}"),
-        }
-    }
-
-    pub fn winograd_pair_prime_f32(data: &mut [Complex32], inverse: bool) {
-        winograd_pair_prime::<f32>(data, inverse);
     }
 }
 

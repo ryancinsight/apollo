@@ -20,6 +20,22 @@ macro_rules! impl_short_winograd_prime_pair {
     };
 }
 
+macro_rules! impl_short_winograd_prime_pair_reduced {
+    ($(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
+        $(
+            #[inline(always)]
+            fn $method<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+                use winograd::radix::odd_prime_pair::{dft_pair_impl_reduced, PrimePairTable};
+                dft_pair_impl_reduced::<f32, $n, $h, INVERSE>(
+                    data,
+                    <f32 as PrimePairTable<$n, $h>>::cos_table(),
+                    <f32 as PrimePairTable<$n, $h>>::sin_table(),
+                );
+            }
+        )+
+    };
+}
+
 pub trait ShortWinogradScalar: winograd::WinogradScalar {
     fn dft2(data: &mut [num_complex::Complex<Self>; 2]);
     fn dft3<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 3]);
@@ -78,39 +94,15 @@ impl ShortWinogradScalar for f64 {
         winograd::dft16_impl::<f64, INVERSE>(data);
     }
 
-    #[inline]
-    fn dft11<const INVERSE: bool>(data: &mut [Complex64; 11]) {
-        super::super::components::rader::static_rader::rader_fft_11::<f64, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft13<const INVERSE: bool>(data: &mut [Complex64; 13]) {
-        super::super::components::rader::static_rader::rader_fft_13::<f64, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft17<const INVERSE: bool>(data: &mut [Complex64; 17]) {
-        super::super::components::rader::static_rader::rader_fft_17::<f64, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft19<const INVERSE: bool>(data: &mut [Complex64; 19]) {
-        super::super::components::rader::static_rader::rader_fft_19::<f64, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft23<const INVERSE: bool>(data: &mut [Complex64; 23]) {
-        super::super::components::rader::static_rader::rader_fft_23::<f64, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft31<const INVERSE: bool>(data: &mut [Complex64; 31]) {
-        super::super::components::rader::static_rader::rader_fft_31::<f64, INVERSE>(data);
-    }
-
     impl_short_winograd_prime_pair!(
         f64,
+        (dft11, 11, 5),
+        (dft13, 13, 6),
+        (dft17, 17, 8),
+        (dft19, 19, 9),
+        (dft23, 23, 11),
         (dft29, 29, 14),
+        (dft31, 31, 15),
         (dft37, 37, 18),
         (dft41, 41, 20),
         (dft43, 43, 21),
@@ -155,38 +147,13 @@ impl ShortWinogradScalar for f32 {
         winograd::dft16_impl::<f32, INVERSE>(data);
     }
 
-    #[inline]
-    fn dft11<const INVERSE: bool>(data: &mut [Complex32; 11]) {
-        super::super::components::rader::static_rader::rader_fft_11::<f32, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft13<const INVERSE: bool>(data: &mut [Complex32; 13]) {
-        super::super::components::rader::static_rader::rader_fft_13::<f32, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft17<const INVERSE: bool>(data: &mut [Complex32; 17]) {
-        super::super::components::rader::static_rader::rader_fft_17::<f32, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft19<const INVERSE: bool>(data: &mut [Complex32; 19]) {
-        super::super::components::rader::static_rader::rader_fft_19::<f32, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft23<const INVERSE: bool>(data: &mut [Complex32; 23]) {
-        super::super::components::rader::static_rader::rader_fft_23::<f32, INVERSE>(data);
-    }
-
-    #[inline]
-    fn dft31<const INVERSE: bool>(data: &mut [Complex32; 31]) {
-        super::super::components::rader::static_rader::rader_fft_31::<f32, INVERSE>(data);
-    }
-
     impl_short_winograd_prime_pair!(
         f32,
+        (dft11, 11, 5),
+        (dft13, 13, 6),
+        (dft17, 17, 8),
+        (dft19, 19, 9),
+        (dft23, 23, 11),
         (dft29, 29, 14),
         (dft37, 37, 18),
         (dft41, 41, 20),
@@ -194,6 +161,8 @@ impl ShortWinogradScalar for f32 {
         (dft47, 47, 23),
         (dft53, 53, 26),
     );
+
+    impl_short_winograd_prime_pair_reduced!((dft31, 31, 15));
 }
 
 /// Canonical catalog of sizes with dedicated Winograd short-DFT codelets.

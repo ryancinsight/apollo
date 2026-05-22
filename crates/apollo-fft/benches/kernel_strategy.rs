@@ -122,7 +122,7 @@ fn bench_prime_strategy(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_f64(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime::<f64>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -134,7 +134,7 @@ fn bench_prime_strategy(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::winograd_pair_prime_f64(black_box(&mut buf), false);
+                    benchmark_kernels::winograd_pair_prime::<f64>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -148,7 +148,7 @@ fn bench_prime_strategy(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_f32(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime::<f32>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },
@@ -160,7 +160,7 @@ fn bench_prime_strategy(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::winograd_pair_prime_f32(black_box(&mut buf), false);
+                    benchmark_kernels::winograd_pair_prime::<f32>(black_box(&mut buf), false);
                     black_box(&buf);
                 });
             },

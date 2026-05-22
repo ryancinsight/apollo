@@ -1,5 +1,4 @@
-mod f32_impl;
-mod f64_impl;
+mod impls;
 mod rader;
 pub(crate) mod simd;
 mod trait_def;
