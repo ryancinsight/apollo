@@ -344,7 +344,7 @@ pub(crate) unsafe fn fixed_len64_second_phase_column_pair<const COLUMN_PAIR: usi
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len64_avx_fma(
+pub(crate) unsafe fn fixed_len64_precise_avx_fma(
     data: &mut [Complex64],
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
@@ -601,7 +601,7 @@ pub(crate) unsafe fn fixed_len32_second_phase_row_pair<const ROW_PAIR: usize>(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len32_avx_fma(
+pub(crate) unsafe fn fixed_len32_precise_avx_fma(
     data: &mut [Complex64],
     scratch: &mut [Complex64],
     twiddles: &[Complex64],

@@ -83,7 +83,7 @@ impl StockhamAvxBackend for f32 {
                 std::arch::x86_64::_mm256_set_ps(-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0)
             }
         };
-        unsafe { super::fixed::avx_rotate_quarter_turn32(v, mask) }
+        unsafe { super::fixed::avx_rotate_quarter_turn_reduced(v, mask) }
     }
 
     #[inline(always)]
@@ -93,7 +93,7 @@ impl StockhamAvxBackend for f32 {
         radix: usize,
         twiddles: &[Complex32],
     ) {
-        unsafe { super::base::stage32_groups_one_avx_fma(src, dst, radix, twiddles) }
+        unsafe { super::base::stage_reduced_groups_one_avx_fma(src, dst, radix, twiddles) }
     }
 
     #[inline(always)]
@@ -105,7 +105,7 @@ impl StockhamAvxBackend for f32 {
         second_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::pair::stage_pair32_groups_two_avx_fma(
+            super::pair::stage_pair_groups_two_reduced_avx_fma(
                 src,
                 dst,
                 radix,
@@ -124,7 +124,7 @@ impl StockhamAvxBackend for f32 {
         second_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::pair::stage_pair32_quarter_groups_two_avx_fma(
+            super::pair::stage_pair_quarter_groups_two_reduced_avx_fma(
                 src,
                 dst,
                 radix,
@@ -144,7 +144,7 @@ impl StockhamAvxBackend for f32 {
         third_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::triple_2::stage_triple32_quarter_groups_one_avx_fma(
+            super::triple_2::stage_triple_quarter_groups_one_reduced_avx_fma(
                 src,
                 dst,
                 radix,
@@ -165,7 +165,7 @@ impl StockhamAvxBackend for f32 {
         third_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::triple_2::stage_triple32_quarter_groups_two_avx_fma(
+            super::triple_2::stage_triple_quarter_groups_two_reduced_avx_fma(
                 src,
                 dst,
                 radix,
@@ -187,7 +187,7 @@ impl StockhamAvxBackend for f32 {
         fourth_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::quad::stockham_quad_groups_eight32(
+            super::quad::stockham_quad_groups_eight_reduced(
                 src,
                 dst,
                 radix,
@@ -210,7 +210,7 @@ impl StockhamAvxBackend for f32 {
         fourth_twiddles: &[Complex32],
     ) {
         unsafe {
-            super::quad::stockham_quad_groups_eight32(
+            super::quad::stockham_quad_groups_eight_reduced(
                 src,
                 dst,
                 radix,

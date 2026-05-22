@@ -36,8 +36,7 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
 ) {
     debug_assert!(data.len() >= 84);
 
-    let mut scratch = std::mem::MaybeUninit::<[num_complex::Complex<F>; 84]>::uninit();
-    let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 84];
 
     // Stage 1: Load with input permutation and perform DFT-7 row transforms
     for i1 in 0..4 {
@@ -59,15 +58,13 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             }
             row_arr = dft7_values::<F, INVERSE>(row_arr);
             let row_start = (i1 * 3 + i2) * 7;
-            unsafe {
-                scratch_ptr.add(row_start).write(row_arr[0]);
-                scratch_ptr.add(row_start + 1).write(row_arr[1]);
-                scratch_ptr.add(row_start + 2).write(row_arr[2]);
-                scratch_ptr.add(row_start + 3).write(row_arr[3]);
-                scratch_ptr.add(row_start + 4).write(row_arr[4]);
-                scratch_ptr.add(row_start + 5).write(row_arr[5]);
-                scratch_ptr.add(row_start + 6).write(row_arr[6]);
-            }
+            scratch[row_start] = row_arr[0];
+            scratch[row_start + 1] = row_arr[1];
+            scratch[row_start + 2] = row_arr[2];
+            scratch[row_start + 3] = row_arr[3];
+            scratch[row_start + 4] = row_arr[4];
+            scratch[row_start + 5] = row_arr[5];
+            scratch[row_start + 6] = row_arr[6];
         }
     }
 
@@ -79,16 +76,11 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 7;
             let idx2 = idx0 + 14;
 
-            unsafe {
-                let (y0, y1, y2) = dft3_values::<F, INVERSE>(
-                    *scratch_ptr.add(idx0),
-                    *scratch_ptr.add(idx1),
-                    *scratch_ptr.add(idx2),
-                );
-                *scratch_ptr.add(idx0) = y0;
-                *scratch_ptr.add(idx1) = y1;
-                *scratch_ptr.add(idx2) = y2;
-            }
+            let (y0, y1, y2) =
+                dft3_values::<F, INVERSE>(scratch[idx0], scratch[idx1], scratch[idx2]);
+            scratch[idx0] = y0;
+            scratch[idx1] = y1;
+            scratch[idx2] = y2;
         }
     }
 
@@ -102,37 +94,35 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx2 = idx0 + 42;
             let idx3 = idx0 + 63;
 
-            unsafe {
-                let (y0, y1, y2, y3) = dft4_values::<F, INVERSE>(
-                    *scratch_ptr.add(idx0),
-                    *scratch_ptr.add(idx1),
-                    *scratch_ptr.add(idx2),
-                    *scratch_ptr.add(idx3),
-                );
+            let (y0, y1, y2, y3) = dft4_values::<F, INVERSE>(
+                scratch[idx0],
+                scratch[idx1],
+                scratch[idx2],
+                scratch[idx3],
+            );
 
-                let dest_idx_base = dest_idx2_base + i3 * 36;
-                let dest_idx0 = dest_idx_base % 84;
+            let dest_idx_base = dest_idx2_base + i3 * 36;
+            let dest_idx0 = dest_idx_base % 84;
 
-                let mut dest_idx1 = dest_idx0 + 21;
-                if dest_idx1 >= 84 {
-                    dest_idx1 -= 84;
-                }
-
-                let mut dest_idx2 = dest_idx0 + 42;
-                if dest_idx2 >= 84 {
-                    dest_idx2 -= 84;
-                }
-
-                let mut dest_idx3 = dest_idx0 + 63;
-                if dest_idx3 >= 84 {
-                    dest_idx3 -= 84;
-                }
-
-                data[dest_idx0] = y0;
-                data[dest_idx1] = y1;
-                data[dest_idx2] = y2;
-                data[dest_idx3] = y3;
+            let mut dest_idx1 = dest_idx0 + 21;
+            if dest_idx1 >= 84 {
+                dest_idx1 -= 84;
             }
+
+            let mut dest_idx2 = dest_idx0 + 42;
+            if dest_idx2 >= 84 {
+                dest_idx2 -= 84;
+            }
+
+            let mut dest_idx3 = dest_idx0 + 63;
+            if dest_idx3 >= 84 {
+                dest_idx3 -= 84;
+            }
+
+            data[dest_idx0] = y0;
+            data[dest_idx1] = y1;
+            data[dest_idx2] = y2;
+            data[dest_idx3] = y3;
         }
     }
 }
@@ -146,8 +136,7 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
 ) {
     debug_assert!(data.len() >= 60);
 
-    let mut scratch = std::mem::MaybeUninit::<[num_complex::Complex<F>; 60]>::uninit();
-    let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 60];
 
     // Stage 1: Load with input permutation and perform DFT-5 row transforms
     for i1 in 0..4 {
@@ -169,13 +158,11 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             }
             row_arr = dft5_values::<F, INVERSE>(row_arr);
             let row_start = (i1 * 3 + i2) * 5;
-            unsafe {
-                scratch_ptr.add(row_start).write(row_arr[0]);
-                scratch_ptr.add(row_start + 1).write(row_arr[1]);
-                scratch_ptr.add(row_start + 2).write(row_arr[2]);
-                scratch_ptr.add(row_start + 3).write(row_arr[3]);
-                scratch_ptr.add(row_start + 4).write(row_arr[4]);
-            }
+            scratch[row_start] = row_arr[0];
+            scratch[row_start + 1] = row_arr[1];
+            scratch[row_start + 2] = row_arr[2];
+            scratch[row_start + 3] = row_arr[3];
+            scratch[row_start + 4] = row_arr[4];
         }
     }
 
@@ -187,16 +174,11 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 5;
             let idx2 = idx0 + 10;
 
-            unsafe {
-                let (y0, y1, y2) = dft3_values::<F, INVERSE>(
-                    *scratch_ptr.add(idx0),
-                    *scratch_ptr.add(idx1),
-                    *scratch_ptr.add(idx2),
-                );
-                *scratch_ptr.add(idx0) = y0;
-                *scratch_ptr.add(idx1) = y1;
-                *scratch_ptr.add(idx2) = y2;
-            }
+            let (y0, y1, y2) =
+                dft3_values::<F, INVERSE>(scratch[idx0], scratch[idx1], scratch[idx2]);
+            scratch[idx0] = y0;
+            scratch[idx1] = y1;
+            scratch[idx2] = y2;
         }
     }
 
@@ -210,37 +192,35 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx2 = idx0 + 30;
             let idx3 = idx0 + 45;
 
-            unsafe {
-                let (y0, y1, y2, y3) = dft4_values::<F, INVERSE>(
-                    *scratch_ptr.add(idx0),
-                    *scratch_ptr.add(idx1),
-                    *scratch_ptr.add(idx2),
-                    *scratch_ptr.add(idx3),
-                );
+            let (y0, y1, y2, y3) = dft4_values::<F, INVERSE>(
+                scratch[idx0],
+                scratch[idx1],
+                scratch[idx2],
+                scratch[idx3],
+            );
 
-                let dest_idx_base = dest_idx2_base + i3 * 36;
-                let dest_idx0 = dest_idx_base % 60;
+            let dest_idx_base = dest_idx2_base + i3 * 36;
+            let dest_idx0 = dest_idx_base % 60;
 
-                let mut dest_idx1 = dest_idx0 + 45;
-                if dest_idx1 >= 60 {
-                    dest_idx1 -= 60;
-                }
-
-                let mut dest_idx2 = dest_idx0 + 30;
-                if dest_idx2 >= 60 {
-                    dest_idx2 -= 60;
-                }
-
-                let mut dest_idx3 = dest_idx0 + 15;
-                if dest_idx3 >= 60 {
-                    dest_idx3 -= 60;
-                }
-
-                data[dest_idx0] = y0;
-                data[dest_idx1] = y1;
-                data[dest_idx2] = y2;
-                data[dest_idx3] = y3;
+            let mut dest_idx1 = dest_idx0 + 45;
+            if dest_idx1 >= 60 {
+                dest_idx1 -= 60;
             }
+
+            let mut dest_idx2 = dest_idx0 + 30;
+            if dest_idx2 >= 60 {
+                dest_idx2 -= 60;
+            }
+
+            let mut dest_idx3 = dest_idx0 + 15;
+            if dest_idx3 >= 60 {
+                dest_idx3 -= 60;
+            }
+
+            data[dest_idx0] = y0;
+            data[dest_idx1] = y1;
+            data[dest_idx2] = y2;
+            data[dest_idx3] = y3;
         }
     }
 }
@@ -249,13 +229,12 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
 ///
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
-pub(crate) unsafe fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
+pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>],
 ) {
     debug_assert!(data.len() >= 90);
 
-    let mut scratch = std::mem::MaybeUninit::<[num_complex::Complex<F>; 90]>::uninit();
-    let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 90];
 
     // Stage 1: Load with input permutation and perform DFT-5 row transforms
     for i1 in 0..2 {
@@ -277,11 +256,11 @@ pub(crate) unsafe fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             }
             row_arr = dft5_values::<F, INVERSE>(row_arr);
             let row_start = (i1 * 9 + i2) * 5;
-            scratch_ptr.add(row_start).write(row_arr[0]);
-            scratch_ptr.add(row_start + 1).write(row_arr[1]);
-            scratch_ptr.add(row_start + 2).write(row_arr[2]);
-            scratch_ptr.add(row_start + 3).write(row_arr[3]);
-            scratch_ptr.add(row_start + 4).write(row_arr[4]);
+            scratch[row_start] = row_arr[0];
+            scratch[row_start + 1] = row_arr[1];
+            scratch[row_start + 2] = row_arr[2];
+            scratch[row_start + 3] = row_arr[3];
+            scratch[row_start + 4] = row_arr[4];
         }
     }
 
@@ -291,26 +270,26 @@ pub(crate) unsafe fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
         for i3 in 0..5 {
             let offset = offset1 + i3;
             let mut col = [
-                *scratch_ptr.add(offset),
-                *scratch_ptr.add(offset + 5),
-                *scratch_ptr.add(offset + 10),
-                *scratch_ptr.add(offset + 15),
-                *scratch_ptr.add(offset + 20),
-                *scratch_ptr.add(offset + 25),
-                *scratch_ptr.add(offset + 30),
-                *scratch_ptr.add(offset + 35),
-                *scratch_ptr.add(offset + 40),
+                scratch[offset],
+                scratch[offset + 5],
+                scratch[offset + 10],
+                scratch[offset + 15],
+                scratch[offset + 20],
+                scratch[offset + 25],
+                scratch[offset + 30],
+                scratch[offset + 35],
+                scratch[offset + 40],
             ];
             dft9_impl::<F, INVERSE>(&mut col);
-            *scratch_ptr.add(offset) = col[0];
-            *scratch_ptr.add(offset + 5) = col[1];
-            *scratch_ptr.add(offset + 10) = col[2];
-            *scratch_ptr.add(offset + 15) = col[3];
-            *scratch_ptr.add(offset + 20) = col[4];
-            *scratch_ptr.add(offset + 25) = col[5];
-            *scratch_ptr.add(offset + 30) = col[6];
-            *scratch_ptr.add(offset + 35) = col[7];
-            *scratch_ptr.add(offset + 40) = col[8];
+            scratch[offset] = col[0];
+            scratch[offset + 5] = col[1];
+            scratch[offset + 10] = col[2];
+            scratch[offset + 15] = col[3];
+            scratch[offset + 20] = col[4];
+            scratch[offset + 25] = col[5];
+            scratch[offset + 30] = col[6];
+            scratch[offset + 35] = col[7];
+            scratch[offset + 40] = col[8];
         }
     }
 
@@ -322,7 +301,7 @@ pub(crate) unsafe fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx0 = offset + i3;
             let idx1 = idx0 + 45;
 
-            let mut col = [*scratch_ptr.add(idx0), *scratch_ptr.add(idx1)];
+            let mut col = [scratch[idx0], scratch[idx1]];
             F::dft2(&mut col);
 
             let dest_idx_base = dest_idx2_base + i3 * 36;
@@ -343,14 +322,12 @@ pub(crate) unsafe fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
 ///
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
-#[allow(dead_code)]
-pub(crate) unsafe fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
+pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>],
 ) {
     debug_assert!(data.len() >= 150);
 
-    let mut scratch = std::mem::MaybeUninit::<[num_complex::Complex<F>; 150]>::uninit();
-    let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 150];
 
     // Stage 1: Load with input permutation and perform DFT-25 row transforms
     for i1 in 0..2 {
@@ -370,10 +347,12 @@ pub(crate) unsafe fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                     src_idx -= 150;
                 }
             }
-            dft25_impl::<F, INVERSE>(&mut row_arr);
+            unsafe {
+                dft25_impl::<F, INVERSE>(&mut row_arr);
+            }
             let row_start = (i1 * 3 + i2) * 25;
             for i3 in 0..25 {
-                scratch_ptr.add(row_start + i3).write(row_arr[i3]);
+                scratch[row_start + i3] = row_arr[i3];
             }
         }
     }
@@ -386,14 +365,11 @@ pub(crate) unsafe fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 25;
             let idx2 = idx0 + 50;
 
-            let (y0, y1, y2) = dft3_values::<F, INVERSE>(
-                *scratch_ptr.add(idx0),
-                *scratch_ptr.add(idx1),
-                *scratch_ptr.add(idx2),
-            );
-            *scratch_ptr.add(idx0) = y0;
-            *scratch_ptr.add(idx1) = y1;
-            *scratch_ptr.add(idx2) = y2;
+            let (y0, y1, y2) =
+                dft3_values::<F, INVERSE>(scratch[idx0], scratch[idx1], scratch[idx2]);
+            scratch[idx0] = y0;
+            scratch[idx1] = y1;
+            scratch[idx2] = y2;
         }
     }
 
@@ -405,7 +381,7 @@ pub(crate) unsafe fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx0 = offset + i3;
             let idx1 = idx0 + 75;
 
-            let mut col = [*scratch_ptr.add(idx0), *scratch_ptr.add(idx1)];
+            let mut col = [scratch[idx0], scratch[idx1]];
             F::dft2(&mut col);
 
             let dest_idx_base = dest_idx2_base + i3 * 126;
@@ -470,24 +446,16 @@ pub(crate) fn try_fft<F: ShortWinogradScalar>(
         true
     } else if match_90 {
         if inverse {
-            unsafe {
-                dft90_impl::<F, true>(data);
-            }
+            dft90_impl::<F, true>(data);
         } else {
-            unsafe {
-                dft90_impl::<F, false>(data);
-            }
+            dft90_impl::<F, false>(data);
         }
         true
     } else if match_150 {
         if inverse {
-            unsafe {
-                dft150_impl::<F, true>(data);
-            }
+            dft150_impl::<F, true>(data);
         } else {
-            unsafe {
-                dft150_impl::<F, false>(data);
-            }
+            dft150_impl::<F, false>(data);
         }
         true
     } else {

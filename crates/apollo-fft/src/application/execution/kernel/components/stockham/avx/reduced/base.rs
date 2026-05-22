@@ -1,13 +1,13 @@
 use super::fixed::cmul_pair_reduced;
 use num_complex::Complex32;
 
-/// AVX/FMA Stockham f32 stage over two independent complex instances per vector
+/// AVX/FMA Stockham reduced stage over two independent complex instances per vector
 /// for `groups == 1`.
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
-pub(crate) unsafe fn stage32_groups_one_avx_fma(
+pub(crate) unsafe fn stage_reduced_groups_one_avx_fma(
     src: &[Complex32],
     dst: &mut [Complex32],
     radix: usize,

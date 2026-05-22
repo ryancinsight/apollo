@@ -315,10 +315,14 @@ fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::C
 pub(crate) fn dft64_impl<F: WinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>; 64],
 ) {
-    let mut even = core::array::from_fn(|i| data[2 * i]);
-    let mut odd = core::array::from_fn(|i| data[2 * i + 1]);
-    dft32_impl::<F, INVERSE>(&mut even);
-    dft32_impl::<F, INVERSE>(&mut odd);
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 64];
+    for i in 0..32 {
+        scratch[i] = data[2 * i];
+        scratch[i + 32] = data[2 * i + 1];
+    }
+    let (even, odd) = scratch.split_at_mut(32);
+    dft32_impl::<F, INVERSE>(even.try_into().unwrap());
+    dft32_impl::<F, INVERSE>(odd.try_into().unwrap());
     for k in 0..32 {
         let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
         data[k] = even[k] + o;
@@ -346,10 +350,14 @@ fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::
 pub(crate) fn dft128_impl<F: WinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>; 128],
 ) {
-    let mut even = core::array::from_fn(|i| data[2 * i]);
-    let mut odd = core::array::from_fn(|i| data[2 * i + 1]);
-    dft64_impl::<F, INVERSE>(&mut even);
-    dft64_impl::<F, INVERSE>(&mut odd);
+    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 128];
+    for i in 0..64 {
+        scratch[i] = data[2 * i];
+        scratch[i + 64] = data[2 * i + 1];
+    }
+    let (even, odd) = scratch.split_at_mut(64);
+    dft64_impl::<F, INVERSE>(even.try_into().unwrap());
+    dft64_impl::<F, INVERSE>(odd.try_into().unwrap());
     for k in 0..64 {
         let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
         data[k] = even[k] + o;

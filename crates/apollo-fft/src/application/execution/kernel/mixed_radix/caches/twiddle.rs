@@ -4,23 +4,23 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-static TWIDDLE_FWD_64_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
+static TWIDDLE_FWD_PRECISE_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static TWIDDLE_INV_64_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
+static TWIDDLE_INV_PRECISE_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static TWIDDLE_FWD_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
+static TWIDDLE_FWD_REDUCED_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static TWIDDLE_INV_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
+static TWIDDLE_INV_REDUCED_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
-    static TL_FWD_64: RefCell<HashMap<usize, Arc<[Complex64]>>> =
+    static TL_FWD_PRECISE: RefCell<HashMap<usize, Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    static TL_INV_64: RefCell<HashMap<usize, Arc<[Complex64]>>> =
+    static TL_INV_PRECISE: RefCell<HashMap<usize, Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    static TL_FWD_32: RefCell<HashMap<usize, Arc<[Complex32]>>> =
+    static TL_FWD_REDUCED: RefCell<HashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    static TL_INV_32: RefCell<HashMap<usize, Arc<[Complex32]>>> =
+    static TL_INV_REDUCED: RefCell<HashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
 }
 
@@ -30,17 +30,17 @@ declare_cache_store! {
     store_trait: TwiddleFwdStore,
     extra_bounds: [Clone, 'static],
     key: usize,
-    val64: Arc<[Complex64]>,
-    val32: Arc<[Complex32]>,
+    val_precise: Arc<[Complex64]>,
+    val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: twiddle_tl_fwd_get,
     tl_insert: twiddle_tl_fwd_insert,
     global: twiddle_global_fwd,
     global_ret_self: RwLock<HashMap<usize, Arc<[Self]>>>,
-    tl64: TL_FWD_64,
-    tl32: TL_FWD_32,
-    global64: TWIDDLE_FWD_64_CACHE,
-    global32: TWIDDLE_FWD_32_CACHE,
+    tl_precise: TL_FWD_PRECISE,
+    tl_reduced: TL_FWD_REDUCED,
+    global_precise: TWIDDLE_FWD_PRECISE_CACHE,
+    global_reduced: TWIDDLE_FWD_REDUCED_CACHE,
 }
 
 declare_cache_store! {
@@ -49,17 +49,17 @@ declare_cache_store! {
     store_trait: TwiddleInvStore,
     extra_bounds: [Clone, 'static],
     key: usize,
-    val64: Arc<[Complex64]>,
-    val32: Arc<[Complex32]>,
+    val_precise: Arc<[Complex64]>,
+    val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: twiddle_tl_inv_get,
     tl_insert: twiddle_tl_inv_insert,
     global: twiddle_global_inv,
     global_ret_self: RwLock<HashMap<usize, Arc<[Self]>>>,
-    tl64: TL_INV_64,
-    tl32: TL_INV_32,
-    global64: TWIDDLE_INV_64_CACHE,
-    global32: TWIDDLE_INV_32_CACHE,
+    tl_precise: TL_INV_PRECISE,
+    tl_reduced: TL_INV_REDUCED,
+    global_precise: TWIDDLE_INV_PRECISE_CACHE,
+    global_reduced: TWIDDLE_INV_REDUCED_CACHE,
 }
 
 /// Combined twiddle-cache trait: inherits fwd+inv cache dispatch and adds

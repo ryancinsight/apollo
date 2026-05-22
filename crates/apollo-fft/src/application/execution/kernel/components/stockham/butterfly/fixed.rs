@@ -1,9 +1,11 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::too_many_arguments)]
-use super::super::avx::{f32, fixed_len64_32_avx_fma};
+use super::super::avx::fixed_len64_reduced_avx_fma;
 #[cfg(all(test, target_arch = "x86_64"))]
-use super::super::avx::{stage32_groups_one_avx_fma, stage_pair32_quarter_groups_two_avx_fma};
-use super::super::precision::F32StockhamAvxFma;
+use super::super::avx::{
+    stage_pair_quarter_groups_two_reduced_avx_fma, stage_reduced_groups_one_avx_fma,
+};
+use super::super::precision::ReducedStockhamAvxFma;
 use super::super::transform::{transform, transform_len4096_four_triples};
 use num_complex::Complex32;
 #[cfg(all(test, target_arch = "x86_64"))]
@@ -12,11 +14,11 @@ use num_complex::Complex64;
 /// Power-of-two sizes that have hand-unrolled AVX fixed-length codelets for
 /// f32. Each size dispatches to a dedicated `fixed_len*_32_avx_fma` kernel
 /// before the generic Stockham loop.
-pub(crate) const FIXED_LEN_F32_AVX_SIZES: &[usize] = &[4, 8, 64];
+pub(crate) const FIXED_LEN_REDUCED_AVX_SIZES: &[usize] = &[4, 8, 64];
 
 #[cfg(all(test, target_arch = "x86_64"))]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len512_avx_fma(
+pub(crate) unsafe fn fixed_len512_precise_avx_fma(
     data: &mut [Complex64],
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
@@ -221,7 +223,7 @@ pub(crate) unsafe fn fixed_len512_avx_fma(
 
 #[cfg(all(test, target_arch = "x86_64"))]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len512_32_avx_fma(
+pub(crate) unsafe fn fixed_len512_reduced_avx_fma(
     data: &mut [Complex32],
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
@@ -358,7 +360,7 @@ pub(crate) unsafe fn fixed_len512_32_avx_fma(
         }
     }
     // Passes 7-8: radix 64 then radix 128.
-    stage_pair32_quarter_groups_two_avx_fma(
+    stage_pair_quarter_groups_two_reduced_avx_fma(
         data,
         scratch,
         64,
@@ -366,12 +368,12 @@ pub(crate) unsafe fn fixed_len512_32_avx_fma(
         &twiddles[127..255],
     );
     // Pass 9: radix 256, groups 1.
-    stage32_groups_one_avx_fma(scratch, data, 256, &twiddles[255..511]);
+    stage_reduced_groups_one_avx_fma(scratch, data, 256, &twiddles[255..511]);
 }
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-unsafe fn fixed_len8_32_avx_fma(
+unsafe fn fixed_len8_reduced_avx_fma(
     data: &mut [Complex32],
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
@@ -434,7 +436,7 @@ unsafe fn fixed_len8_32_avx_fma(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-unsafe fn fixed_len4_32_avx_fma(
+unsafe fn fixed_len4_reduced_avx_fma(
     data: &mut [Complex32],
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
@@ -481,20 +483,20 @@ pub(crate) unsafe fn forward32_avx_with_scratch(
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
 ) {
-    if FIXED_LEN_F32_AVX_SIZES.contains(&data.len()) {
+    if FIXED_LEN_REDUCED_AVX_SIZES.contains(&data.len()) {
         match data.len() {
-            4 => fixed_len4_32_avx_fma(data, scratch, twiddles),
-            8 => fixed_len8_32_avx_fma(data, scratch, twiddles),
-            64 => fixed_len64_32_avx_fma(data, scratch, twiddles),
-            _ => unreachable!("FIXED_LEN_F32_AVX_SIZES guard passed"),
+            4 => fixed_len4_reduced_avx_fma(data, scratch, twiddles),
+            8 => fixed_len8_reduced_avx_fma(data, scratch, twiddles),
+            64 => fixed_len64_reduced_avx_fma(data, scratch, twiddles),
+            _ => unreachable!("FIXED_LEN_REDUCED_AVX_SIZES guard passed"),
         }
         return;
     }
     if data.len() == 4096 {
-        transform_len4096_four_triples::<F32StockhamAvxFma>(data, scratch, twiddles);
+        transform_len4096_four_triples::<ReducedStockhamAvxFma>(data, scratch, twiddles);
         return;
     }
-    transform::<F32StockhamAvxFma>(data, scratch, twiddles, None);
+    transform::<ReducedStockhamAvxFma>(data, scratch, twiddles, None);
 }
 
 #[cfg(test)]
@@ -503,20 +505,20 @@ mod tests {
 
     #[test]
     fn fixed_len_f32_avx_sizes_are_powers_of_two() {
-        for &n in FIXED_LEN_F32_AVX_SIZES {
+        for &n in FIXED_LEN_REDUCED_AVX_SIZES {
             assert!(
                 n.is_power_of_two(),
-                "FIXED_LEN_F32_AVX_SIZES entry {n} must be a power of two"
+                "FIXED_LEN_REDUCED_AVX_SIZES entry {n} must be a power of two"
             );
         }
     }
 
     #[test]
     fn fixed_len_f32_avx_sizes_below_4096() {
-        for &n in FIXED_LEN_F32_AVX_SIZES {
+        for &n in FIXED_LEN_REDUCED_AVX_SIZES {
             assert!(
                 n < 4096,
-                "FIXED_LEN_F32_AVX_SIZES entry {n} must be below 4096 (the four-triple threshold)"
+                "FIXED_LEN_REDUCED_AVX_SIZES entry {n} must be below 4096 (the four-triple threshold)"
             );
         }
     }
@@ -526,6 +528,6 @@ mod tests {
         // 64 has a fixed-len AVX codelet for both f64 and f32 precisions.
         // f64 sizes: [32, 64] — verified as literal constants since the constant was removed.
         assert!([32usize, 64].contains(&64));
-        assert!(FIXED_LEN_F32_AVX_SIZES.contains(&64));
+        assert!(FIXED_LEN_REDUCED_AVX_SIZES.contains(&64));
     }
 }

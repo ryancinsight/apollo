@@ -93,7 +93,7 @@ impl StockhamAvxBackend for f64 {
         radix: usize,
         twiddles: &[Complex64],
     ) {
-        unsafe { super::base::stage64_groups_one_avx_fma(src, dst, radix, twiddles) }
+        unsafe { super::base::stage_precise_groups_one_avx_fma(src, dst, radix, twiddles) }
     }
 
     #[inline(always)]
@@ -105,7 +105,7 @@ impl StockhamAvxBackend for f64 {
         second_twiddles: &[Complex64],
     ) {
         unsafe {
-            super::pair::stage_pair64_groups_two_avx_fma(
+            super::pair::stage_pair_groups_two_precise_avx_fma(
                 src,
                 dst,
                 radix,
@@ -125,7 +125,7 @@ impl StockhamAvxBackend for f64 {
         third_twiddles: &[Complex64],
     ) {
         unsafe {
-            super::triple_1::stage_triple64_quarter_groups_one_avx_fma(
+            super::triple_1::stage_triple_quarter_groups_one_precise_avx_fma(
                 src,
                 dst,
                 radix,
@@ -147,7 +147,7 @@ impl StockhamAvxBackend for f64 {
         fourth_twiddles: &[Complex64],
     ) {
         unsafe {
-            super::quad::stockham_quad_groups_eight64_low_live(
+            super::quad::stockham_quad_groups_eight_precise(
                 src,
                 dst,
                 radix,

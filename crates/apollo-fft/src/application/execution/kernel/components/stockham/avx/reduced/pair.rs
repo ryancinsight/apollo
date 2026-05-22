@@ -3,7 +3,7 @@ use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stage_pair32_quarter_groups_two_avx_fma(
+pub(crate) unsafe fn stage_pair_quarter_groups_two_reduced_avx_fma(
     src: &[Complex32],
     dst: &mut [Complex32],
     radix: usize,
@@ -82,7 +82,7 @@ pub(crate) unsafe fn stage_pair32_quarter_groups_two_avx_fma(
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]
-pub(crate) unsafe fn stage_pair32_groups_two_avx_fma(
+pub(crate) unsafe fn stage_pair_groups_two_reduced_avx_fma(
     src: &[Complex32],
     dst: &mut [Complex32],
     radix: usize,

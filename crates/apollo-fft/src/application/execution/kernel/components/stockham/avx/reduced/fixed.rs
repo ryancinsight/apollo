@@ -1,10 +1,10 @@
 use super::super::generic::triple::stage_triple_radix1_avx_fma;
-use super::triple_2::stage_triple32_quarter_groups_one_avx_fma;
+use super::triple_2::stage_triple_quarter_groups_one_reduced_avx_fma;
 use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len64_32_avx_fma(
+pub(crate) unsafe fn fixed_len64_reduced_avx_fma(
     data: &mut [Complex32],
     scratch: &mut [Complex32],
     twiddles: &[Complex32],
@@ -20,7 +20,7 @@ pub(crate) unsafe fn fixed_len64_32_avx_fma(
     let second_third = twiddles.get_unchecked(31..63);
 
     stage_triple_radix1_avx_fma::<f32>(data, scratch, first_second, first_third);
-    stage_triple32_quarter_groups_one_avx_fma(
+    stage_triple_quarter_groups_one_reduced_avx_fma(
         scratch,
         data,
         8,
@@ -80,7 +80,7 @@ pub(crate) unsafe fn store_reduced_high(dst: *mut Complex32, value: std::arch::x
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn avx_rotate_quarter_turn32(
+pub(crate) unsafe fn avx_rotate_quarter_turn_reduced(
     value: std::arch::x86_64::__m256,
     sign_mask: std::arch::x86_64::__m256,
 ) -> std::arch::x86_64::__m256 {

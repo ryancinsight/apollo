@@ -3,9 +3,9 @@ use num_complex::Complex32;
 use std::arch::x86_64::*;
 
 #[derive(Copy, Clone)]
-pub(crate) struct Avx512BackendF32;
+pub(crate) struct Avx512BackendReduced;
 
-impl StockhamAvxBackend for Avx512BackendF32 {
+impl StockhamAvxBackend for Avx512BackendReduced {
     type Real = f32;
     type Complex = Complex32;
     type Vector = __m512;
@@ -263,7 +263,7 @@ impl StockhamAvxBackend for Avx512BackendF32 {
         third_twiddles: &[Complex32],
         fourth_twiddles: &[Complex32],
     ) {
-        crate::application::execution::kernel::components::stockham::avx::f32::quad::stockham_quad_groups_eight32(
+        crate::application::execution::kernel::components::stockham::avx::reduced::quad::stockham_quad_groups_eight_reduced(
             src, dst, radix, first_twiddles, second_twiddles, third_twiddles, fourth_twiddles,
         )
     }

@@ -172,23 +172,9 @@ pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
 
 fn route_kernel(p: usize) -> proc_macro2::TokenStream {
     let route = route_ident(p);
-    let gather_columns = (0..p).map(|col| {
-        let input0 = input_index(0, col, p);
-        let input1 = input_index(1, col, p);
-        let input2 = input_index(2, col, p);
-        quote! {
-            let mut column = [data[#input0], data[#input1], data[#input2]];
-            <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<3>>::dft::<INVERSE>(&mut column);
-            rows[0][#col] = column[0];
-            rows[1][#col] = column[1];
-            rows[2][#col] = column[2];
-        }
-    });
-    let row_dfts = (0..3usize).map(|row| row_codelet(p, row));
-    let stores = linear_output_positions(p)
-        .into_iter()
-        .enumerate()
-        .map(|(dst, (row, col))| quote! { data[#dst] = rows[#row][#col]; });
+    let positions = linear_output_positions(p);
+    let row_tokens: Vec<_> = positions.iter().map(|&(row, _)| quote! { #row }).collect();
+    let col_tokens: Vec<_> = positions.iter().map(|&(_, col)| quote! { #col }).collect();
 
     quote! {
         #[inline(always)]
@@ -201,27 +187,42 @@ fn route_kernel(p: usize) -> proc_macro2::TokenStream {
             data: &mut [F::Complex],
         ) {
             debug_assert_eq!(data.len(), 3 * #p);
+            const SCATTER_ROW: [usize; 3 * #p] = [#(#row_tokens),*];
+            const SCATTER_COL: [usize; 3 * #p] = [#(#col_tokens),*];
+
             let zero = F::complex(0.0, 0.0);
             let mut rows = [[zero; #p]; 3];
-            #(#gather_columns)*
-            #(#row_dfts)*
-            #(#stores)*
-        }
-    }
-}
 
-fn row_codelet(p: usize, row: usize) -> proc_macro2::TokenStream {
-    quote! {
-        <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#p>>::dft::<INVERSE>(&mut rows[#row]);
+            for col in 0..#p {
+                let input0 = 3 * col;
+                let mut input1 = #p + 3 * col;
+                if input1 >= 3 * #p {
+                    input1 -= 3 * #p;
+                }
+                let mut input2 = 2 * #p + 3 * col;
+                if input2 >= 3 * #p {
+                    input2 -= 3 * #p;
+                }
+                let mut column = [data[input0], data[input1], data[input2]];
+                <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<3>>::dft::<INVERSE>(&mut column);
+                rows[0][col] = column[0];
+                rows[1][col] = column[1];
+                rows[2][col] = column[2];
+            }
+
+            for row in 0..3usize {
+                <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#p>>::dft::<INVERSE>(&mut rows[row]);
+            }
+
+            for dst in 0..(3 * #p) {
+                data[dst] = rows[SCATTER_ROW[dst]][SCATTER_COL[dst]];
+            }
+        }
     }
 }
 
 fn route_ident(p: usize) -> Ident {
     format_ident!("__apollo_three_by_prime_fft_{p}")
-}
-
-fn input_index(row: usize, col: usize, p: usize) -> usize {
-    (row * p + 3 * col) % (3 * p)
 }
 
 fn linear_output_positions(p: usize) -> Vec<(usize, usize)> {

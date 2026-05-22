@@ -120,9 +120,7 @@ fn dft90_forward_matches_direct() {
     let input = signal90();
     let expected = dft_forward(&input);
     let mut got = input.clone();
-    unsafe {
-        dft90_impl::<f64, false>(&mut got);
-    }
+    dft90_impl::<f64, false>(&mut got);
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft90 forward mismatch err={}", err);
 }
@@ -132,9 +130,7 @@ fn dft90_inverse_matches_direct_unnormalized() {
     let input = signal90();
     let expected: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 90.0).collect();
     let mut got = input.clone();
-    unsafe {
-        dft90_impl::<f64, true>(&mut got);
-    }
+    dft90_impl::<f64, true>(&mut got);
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft90 inverse mismatch err={}", err);
 }
@@ -143,12 +139,8 @@ fn dft90_inverse_matches_direct_unnormalized() {
 fn dft90_roundtrip() {
     let input = signal90();
     let mut data = input.clone();
-    unsafe {
-        dft90_impl::<f64, false>(&mut data);
-    }
-    unsafe {
-        dft90_impl::<f64, true>(&mut data);
-    }
+    dft90_impl::<f64, false>(&mut data);
+    dft90_impl::<f64, true>(&mut data);
     for x in &mut data {
         *x = *x / 90.0;
     }
@@ -161,9 +153,7 @@ fn dft150_forward_matches_direct() {
     let input = signal150();
     let expected = dft_forward(&input);
     let mut got = input.clone();
-    unsafe {
-        dft150_impl::<f64, false>(&mut got);
-    }
+    dft150_impl::<f64, false>(&mut got);
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft150 forward mismatch err={}", err);
 }
@@ -173,9 +163,7 @@ fn dft150_inverse_matches_direct_unnormalized() {
     let input = signal150();
     let expected: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 150.0).collect();
     let mut got = input.clone();
-    unsafe {
-        dft150_impl::<f64, true>(&mut got);
-    }
+    dft150_impl::<f64, true>(&mut got);
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft150 inverse mismatch err={}", err);
 }
@@ -184,12 +172,8 @@ fn dft150_inverse_matches_direct_unnormalized() {
 fn dft150_roundtrip() {
     let input = signal150();
     let mut data = input.clone();
-    unsafe {
-        dft150_impl::<f64, false>(&mut data);
-    }
-    unsafe {
-        dft150_impl::<f64, true>(&mut data);
-    }
+    dft150_impl::<f64, false>(&mut data);
+    dft150_impl::<f64, true>(&mut data);
     for x in &mut data {
         *x = *x / 150.0;
     }

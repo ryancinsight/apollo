@@ -38,17 +38,17 @@ macro_rules! declare_cache_store {
         store_trait: $store_trait:ident,
         extra_bounds: [$($bound:tt),* $(,)?],
         key: $key_ty:ty,
-        val64: $val64:ty,
-        val32: $val32:ty,
+        val_precise: $val_precise:ty,
+        val_reduced: $val_reduced:ty,
         val_self: $val_self:ty,
         tl_get: $tl_get:ident,
         tl_insert: $tl_insert:ident,
         global: $global:ident,
         global_ret_self: $global_ret_self:ty,
-        tl64: $tl64:ident,
-        tl32: $tl32:ident,
-        global64: $global64:ident,
-        global32: $global32:ident,
+        tl_precise: $tl_precise:ident,
+        tl_reduced: $tl_reduced:ident,
+        global_precise: $global_precise:ident,
+        global_reduced: $global_reduced:ident,
     ) => {
         mod $sealed_mod {
             pub(crate) trait $sealed_trait {}
@@ -63,36 +63,36 @@ macro_rules! declare_cache_store {
         impl $sealed_mod::$sealed_trait for num_complex::Complex64 {}
         impl $store_trait for num_complex::Complex64 {
             #[inline]
-            fn $tl_get(key: $key_ty) -> Option<$val64> {
-                $tl64.with(|c| c.borrow().get(&key).cloned())
+            fn $tl_get(key: $key_ty) -> Option<$val_precise> {
+                $tl_precise.with(|c| c.borrow().get(&key).cloned())
             }
             #[inline]
-            fn $tl_insert(key: $key_ty, v: $val64) {
-                $tl64.with(|c| {
+            fn $tl_insert(key: $key_ty, v: $val_precise) {
+                $tl_precise.with(|c| {
                     c.borrow_mut().insert(key, v);
                 });
             }
             #[inline]
             fn $global() -> &'static $global_ret_self {
-                &$global64
+                &$global_precise
             }
         }
 
         impl $sealed_mod::$sealed_trait for num_complex::Complex32 {}
         impl $store_trait for num_complex::Complex32 {
             #[inline]
-            fn $tl_get(key: $key_ty) -> Option<$val32> {
-                $tl32.with(|c| c.borrow().get(&key).cloned())
+            fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
+                $tl_reduced.with(|c| c.borrow().get(&key).cloned())
             }
             #[inline]
-            fn $tl_insert(key: $key_ty, v: $val32) {
-                $tl32.with(|c| {
+            fn $tl_insert(key: $key_ty, v: $val_reduced) {
+                $tl_reduced.with(|c| {
                     c.borrow_mut().insert(key, v);
                 });
             }
             #[inline]
             fn $global() -> &'static $global_ret_self {
-                &$global32
+                &$global_reduced
             }
         }
     };

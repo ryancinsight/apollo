@@ -10,10 +10,10 @@ use std::sync::Arc;
 
 static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_SPECTRUM_64_CACHE: std::sync::LazyLock<
+static RADER_SPECTRUM_PRECISE_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), Arc<[Complex64]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_SPECTRUM_32_CACHE: std::sync::LazyLock<
+static RADER_SPECTRUM_REDUCED_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), Arc<[Complex32]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<HashMap<(usize, usize), Arc<[usize]>>>> =
@@ -31,23 +31,25 @@ static PFA_CYCLES_CACHE: std::sync::LazyLock<RwLock<HashMap<(usize, usize), Arc<
 /// Negacyclic spectrum cache: (cyclic_spectrum, negacyclic_spectrum) per (n, inverse, g_inv).
 type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
 
-static RADER_NEGACYCLIC_64_CACHE: std::sync::LazyLock<
+static RADER_NEGACYCLIC_PRECISE_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_NEGACYCLIC_32_CACHE: std::sync::LazyLock<
+static RADER_NEGACYCLIC_REDUCED_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_NEG_TWIDDLES_64_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex64]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_NEG_TWIDDLES_32_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<[Complex32]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+static RADER_NEG_TWIDDLES_PRECISE_CACHE: std::sync::LazyLock<
+    RwLock<HashMap<usize, Arc<[Complex64]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+static RADER_NEG_TWIDDLES_REDUCED_CACHE: std::sync::LazyLock<
+    RwLock<HashMap<usize, Arc<[Complex32]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
     pub(super) static TL_PRIME23_RADIX: RefCell<HashMap<usize, Option<Arc<[usize]>>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_SPECTRUM_64: RefCell<HashMap<(usize, usize, usize), Arc<[Complex64]>>> =
+    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<HashMap<(usize, usize, usize), Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_SPECTRUM_32: RefCell<HashMap<(usize, usize, usize), Arc<[Complex32]>>> =
+    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<HashMap<(usize, usize, usize), Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
     pub(super) static TL_RADER_ORDER: RefCell<HashMap<(usize, usize), Arc<[usize]>>> =
         RefCell::new(HashMap::with_capacity(8));
@@ -59,13 +61,13 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(8));
     pub(super) static TL_PFA_CYCLES: RefCell<HashMap<(usize, usize), Arc<[usize]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEGACYCLIC_64: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
+    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEGACYCLIC_32: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
+    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEG_TWIDDLES_64: RefCell<HashMap<usize, Arc<[Complex64]>>> =
+    pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: RefCell<HashMap<usize, Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEG_TWIDDLES_32: RefCell<HashMap<usize, Arc<[Complex32]>>> =
+    pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: RefCell<HashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(8));
 }
 
@@ -75,17 +77,17 @@ declare_cache_store! {
     store_trait: RaderSpectrumStore,
     extra_bounds: [Clone, 'static],
     key: (usize, usize, usize),
-    val64: Arc<[Complex64]>,
-    val32: Arc<[Complex32]>,
+    val_precise: Arc<[Complex64]>,
+    val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: rader_tl_get,
     tl_insert: rader_tl_insert,
     global: rader_global,
     global_ret_self: RwLock<HashMap<(usize, usize, usize), Arc<[Self]>>>,
-    tl64: TL_RADER_SPECTRUM_64,
-    tl32: TL_RADER_SPECTRUM_32,
-    global64: RADER_SPECTRUM_64_CACHE,
-    global32: RADER_SPECTRUM_32_CACHE,
+    tl_precise: TL_RADER_SPECTRUM_PRECISE,
+    tl_reduced: TL_RADER_SPECTRUM_REDUCED,
+    global_precise: RADER_SPECTRUM_PRECISE_CACHE,
+    global_reduced: RADER_SPECTRUM_REDUCED_CACHE,
 }
 
 #[inline]
@@ -331,17 +333,17 @@ declare_cache_store! {
     store_trait: NegacyclicSpectrumStore,
     extra_bounds: [Clone, 'static],
     key: (usize, usize, usize),
-    val64: NegacyclicEntry<Complex64>,
-    val32: NegacyclicEntry<Complex32>,
+    val_precise: NegacyclicEntry<Complex64>,
+    val_reduced: NegacyclicEntry<Complex32>,
     val_self: NegacyclicEntry<Self>,
     tl_get: neg_tl_get,
     tl_insert: neg_tl_insert,
     global: neg_global,
     global_ret_self: RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Self>>>,
-    tl64: TL_RADER_NEGACYCLIC_64,
-    tl32: TL_RADER_NEGACYCLIC_32,
-    global64: RADER_NEGACYCLIC_64_CACHE,
-    global32: RADER_NEGACYCLIC_32_CACHE,
+    tl_precise: TL_RADER_NEGACYCLIC_PRECISE,
+    tl_reduced: TL_RADER_NEGACYCLIC_REDUCED,
+    global_precise: RADER_NEGACYCLIC_PRECISE_CACHE,
+    global_reduced: RADER_NEGACYCLIC_REDUCED_CACHE,
 }
 
 /// Generic negacyclic spectrum cache: dispatches to the correct concrete
@@ -380,17 +382,17 @@ declare_cache_store! {
     store_trait: NegTwiddleStore,
     extra_bounds: [Clone, 'static],
     key: usize,
-    val64: Arc<[Complex64]>,
-    val32: Arc<[Complex32]>,
+    val_precise: Arc<[Complex64]>,
+    val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: neg_tw_tl_get,
     tl_insert: neg_tw_tl_insert,
     global: neg_tw_global,
     global_ret_self: RwLock<HashMap<usize, Arc<[Self]>>>,
-    tl64: TL_RADER_NEG_TWIDDLES_64,
-    tl32: TL_RADER_NEG_TWIDDLES_32,
-    global64: RADER_NEG_TWIDDLES_64_CACHE,
-    global32: RADER_NEG_TWIDDLES_32_CACHE,
+    tl_precise: TL_RADER_NEG_TWIDDLES_PRECISE,
+    tl_reduced: TL_RADER_NEG_TWIDDLES_REDUCED,
+    global_precise: RADER_NEG_TWIDDLES_PRECISE_CACHE,
+    global_reduced: RADER_NEG_TWIDDLES_REDUCED_CACHE,
 }
 
 // Negacyclic twiddle cache: dispatches via the sealed `NegTwiddleStore` trait.

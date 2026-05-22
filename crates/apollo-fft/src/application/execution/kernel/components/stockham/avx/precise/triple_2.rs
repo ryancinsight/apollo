@@ -3,7 +3,7 @@ use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stage_triple64_groups_eight_avx_fma(
+pub(crate) unsafe fn stage_triple_groups_eight_precise_avx_fma(
     src: &[Complex64],
     dst: &mut [Complex64],
     radix: usize,

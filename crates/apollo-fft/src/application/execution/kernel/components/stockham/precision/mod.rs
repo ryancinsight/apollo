@@ -1,9 +1,9 @@
-pub(crate) mod f32_impl;
-pub(crate) mod f64_impl;
 pub(crate) mod fusion;
+pub(crate) mod precise;
+pub(crate) mod reduced;
 pub(crate) mod traits;
 
-pub(crate) use f32_impl::*;
-pub(crate) use f64_impl::*;
 pub(crate) use fusion::*;
+pub(crate) use precise::*;
+pub(crate) use reduced::*;
 pub(crate) use traits::*;

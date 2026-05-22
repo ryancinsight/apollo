@@ -3,7 +3,7 @@ use num_complex::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_split_pair32(
+pub(crate) unsafe fn stockham_quad_split_pair_reduced(
     value: std::arch::x86_64::__m256,
     twiddle: Complex32,
 ) -> [std::arch::x86_64::__m128; 2] {
@@ -19,7 +19,7 @@ pub(crate) unsafe fn stockham_quad_split_pair32(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_store_pair32(
+pub(crate) unsafe fn stockham_quad_store_pair_reduced(
     dst_ptr: *mut Complex32,
     low_index: usize,
     high_index: usize,
@@ -34,23 +34,10 @@ pub(crate) unsafe fn stockham_quad_store_pair32(
     store_reduced_low(dst_ptr.add(high_index), _mm_sub_ps(pair, product));
 }
 
-/// AVX/FMA radix-16 Stockham suffix for f64 when `groups == 8`.
-///
-/// The leaf evaluates four radix-2 Stockham stages for one digit `j` at a time.
-/// The first three stages produce eight YMM pairs; the fourth stage consumes
-/// each pair immediately through `stockham_quad_store_pair64`. This preserves
-/// Stockham autosort order without a bit-reversal permutation and avoids
-/// pairing adjacent digits, which measured as high register pressure in the
-/// rejected contiguous-store candidate.
-///
-/// Algebraically, each stored band is `a ± W*b`, where `a` and `b` are the even
-/// and odd outputs of the first three Stockham stages for the same digit. This
-/// is exactly the fourth radix-2 Stockham recurrence, so direct substitution
-/// proves equality with four scalar Stockham stages.
-
+/// AVX/FMA radix-16 Stockham suffix for f32 when `groups == 8`.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_groups_eight32(
+pub(crate) unsafe fn stockham_quad_groups_eight_reduced(
     src: &[Complex32],
     dst: &mut [Complex32],
     radix: usize,
@@ -114,55 +101,55 @@ pub(crate) unsafe fn stockham_quad_groups_eight32(
         let z89ab = _mm256_sub_ps(y0123, t4567);
         let zcdef = _mm256_sub_ps(y89ab, tcdef);
 
-        let [p01, p89] = stockham_quad_split_pair32(z0123, *third_ptr.add(j));
-        let [p23, p10_11] = stockham_quad_split_pair32(z4567, *third_ptr.add(j + radix));
-        let [p45, p12_13] = stockham_quad_split_pair32(z89ab, *third_ptr.add(j + 2 * radix));
-        let [p67, p14_15] = stockham_quad_split_pair32(zcdef, *third_ptr.add(j + 3 * radix));
+        let [p01, p89] = stockham_quad_split_pair_reduced(z0123, *third_ptr.add(j));
+        let [p23, p10_11] = stockham_quad_split_pair_reduced(z4567, *third_ptr.add(j + radix));
+        let [p45, p12_13] = stockham_quad_split_pair_reduced(z89ab, *third_ptr.add(j + 2 * radix));
+        let [p67, p14_15] = stockham_quad_split_pair_reduced(zcdef, *third_ptr.add(j + 3 * radix));
 
-        stockham_quad_store_pair32(dst_ptr, j, j + 8 * radix, p01, *fourth_ptr.add(j));
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(dst_ptr, j, j + 8 * radix, p01, *fourth_ptr.add(j));
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + radix,
             j + 9 * radix,
             p23,
             *fourth_ptr.add(j + radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 2 * radix,
             j + 10 * radix,
             p45,
             *fourth_ptr.add(j + 2 * radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 3 * radix,
             j + 11 * radix,
             p67,
             *fourth_ptr.add(j + 3 * radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 4 * radix,
             j + 12 * radix,
             p89,
             *fourth_ptr.add(j + 4 * radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 5 * radix,
             j + 13 * radix,
             p10_11,
             *fourth_ptr.add(j + 5 * radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 6 * radix,
             j + 14 * radix,
             p12_13,
             *fourth_ptr.add(j + 6 * radix),
         );
-        stockham_quad_store_pair32(
+        stockham_quad_store_pair_reduced(
             dst_ptr,
             j + 7 * radix,
             j + 15 * radix,

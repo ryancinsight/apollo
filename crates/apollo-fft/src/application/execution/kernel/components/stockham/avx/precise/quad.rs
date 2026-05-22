@@ -2,7 +2,7 @@ use super::fixed::cmul_vec_precise;
 use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
-pub(crate) struct StockhamQuadFirstPairs64 {
+pub(crate) struct StockhamQuadFirstPairsPrecise {
     pub(crate) p01: std::arch::x86_64::__m256d,
     pub(crate) p45: std::arch::x86_64::__m256d,
     pub(crate) p89: std::arch::x86_64::__m256d,
@@ -10,7 +10,7 @@ pub(crate) struct StockhamQuadFirstPairs64 {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub(crate) struct StockhamQuadSecondPairs64 {
+pub(crate) struct StockhamQuadSecondPairsPrecise {
     pub(crate) p23: std::arch::x86_64::__m256d,
     pub(crate) p67: std::arch::x86_64::__m256d,
     pub(crate) p10_11: std::arch::x86_64::__m256d,
@@ -19,7 +19,7 @@ pub(crate) struct StockhamQuadSecondPairs64 {
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_store_pair64(
+pub(crate) unsafe fn stockham_quad_store_pair_precise(
     dst_ptr: *mut Complex64,
     low_index: usize,
     high_index: usize,
@@ -45,14 +45,14 @@ pub(crate) unsafe fn stockham_quad_store_pair64(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_groups_eight64_first_pairs(
+pub(crate) unsafe fn stockham_quad_groups_eight_precise_first_pairs(
     src_ptr: *const Complex64,
     first_ptr: *const Complex64,
     second_ptr: *const Complex64,
     third_ptr: *const Complex64,
     radix: usize,
     j: usize,
-) -> StockhamQuadFirstPairs64 {
+) -> StockhamQuadFirstPairsPrecise {
     use std::arch::x86_64::{_mm256_add_pd, _mm256_loadu_pd, _mm256_set1_pd, _mm256_sub_pd};
 
     let w1 = *first_ptr.add(j);
@@ -114,7 +114,7 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_first_pairs(
     let p45 = _mm256_add_pd(z89, u10_11);
     let p12_13 = _mm256_sub_pd(z89, u10_11);
 
-    StockhamQuadFirstPairs64 {
+    StockhamQuadFirstPairsPrecise {
         p01,
         p45,
         p89,
@@ -124,14 +124,14 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_first_pairs(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_groups_eight64_second_pairs(
+pub(crate) unsafe fn stockham_quad_groups_eight_precise_second_pairs(
     src_ptr: *const Complex64,
     first_ptr: *const Complex64,
     second_ptr: *const Complex64,
     third_ptr: *const Complex64,
     radix: usize,
     j: usize,
-) -> StockhamQuadSecondPairs64 {
+) -> StockhamQuadSecondPairsPrecise {
     use std::arch::x86_64::{_mm256_add_pd, _mm256_loadu_pd, _mm256_set1_pd, _mm256_sub_pd};
 
     let w1 = *first_ptr.add(j);
@@ -193,7 +193,7 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_second_pairs(
     let p67 = _mm256_add_pd(z12_13, u14_15);
     let p14_15 = _mm256_sub_pd(z12_13, u14_15);
 
-    StockhamQuadSecondPairs64 {
+    StockhamQuadSecondPairsPrecise {
         p23,
         p67,
         p10_11,
@@ -203,7 +203,7 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_second_pairs(
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stockham_quad_groups_eight64_low_live(
+pub(crate) unsafe fn stockham_quad_groups_eight_precise(
     src: &[Complex64],
     dst: &mut [Complex64],
     radix: usize,
@@ -228,25 +228,25 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_low_live(
     let fourth_ptr = fourth_twiddles.as_ptr();
 
     for j in 0..radix {
-        let first = stockham_quad_groups_eight64_first_pairs(
+        let first = stockham_quad_groups_eight_precise_first_pairs(
             src_ptr, first_ptr, second_ptr, third_ptr, radix, j,
         );
-        stockham_quad_store_pair64(dst_ptr, j, j + 8 * radix, first.p01, *fourth_ptr.add(j));
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(dst_ptr, j, j + 8 * radix, first.p01, *fourth_ptr.add(j));
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 2 * radix,
             j + 10 * radix,
             first.p45,
             *fourth_ptr.add(j + 2 * radix),
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 4 * radix,
             j + 12 * radix,
             first.p89,
             *fourth_ptr.add(j + 4 * radix),
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 6 * radix,
             j + 14 * radix,
@@ -254,31 +254,31 @@ pub(crate) unsafe fn stockham_quad_groups_eight64_low_live(
             *fourth_ptr.add(j + 6 * radix),
         );
 
-        let second = stockham_quad_groups_eight64_second_pairs(
+        let second = stockham_quad_groups_eight_precise_second_pairs(
             src_ptr, first_ptr, second_ptr, third_ptr, radix, j,
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + radix,
             j + 9 * radix,
             second.p23,
             *fourth_ptr.add(j + radix),
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 3 * radix,
             j + 11 * radix,
             second.p67,
             *fourth_ptr.add(j + 3 * radix),
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 5 * radix,
             j + 13 * radix,
             second.p10_11,
             *fourth_ptr.add(j + 5 * radix),
         );
-        stockham_quad_store_pair64(
+        stockham_quad_store_pair_precise(
             dst_ptr,
             j + 7 * radix,
             j + 15 * radix,

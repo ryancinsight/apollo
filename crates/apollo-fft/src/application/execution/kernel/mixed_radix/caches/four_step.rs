@@ -5,17 +5,17 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-static FOUR_STEP_TW_64_CACHE: std::sync::LazyLock<
+static FOUR_STEP_TW_PRECISE_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize), Arc<[Complex64]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static FOUR_STEP_TW_32_CACHE: std::sync::LazyLock<
+static FOUR_STEP_TW_REDUCED_CACHE: std::sync::LazyLock<
     RwLock<HashMap<(usize, usize), Arc<[Complex32]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 thread_local! {
-    static TL_FOUR_STEP_TW_64: RefCell<HashMap<(usize, usize), Arc<[Complex64]>>> =
+    static TL_FOUR_STEP_TW_PRECISE: RefCell<HashMap<(usize, usize), Arc<[Complex64]>>> =
         RefCell::new(HashMap::with_capacity(4));
-    static TL_FOUR_STEP_TW_32: RefCell<HashMap<(usize, usize), Arc<[Complex32]>>> =
+    static TL_FOUR_STEP_TW_REDUCED: RefCell<HashMap<(usize, usize), Arc<[Complex32]>>> =
         RefCell::new(HashMap::with_capacity(4));
 }
 
@@ -25,17 +25,17 @@ declare_cache_store! {
     store_trait: FourStepStore,
     extra_bounds: [TwiddleOutput, Clone, 'static],
     key: (usize, usize),
-    val64: Arc<[Complex64]>,
-    val32: Arc<[Complex32]>,
+    val_precise: Arc<[Complex64]>,
+    val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: four_step_tl_get,
     tl_insert: four_step_tl_insert,
     global: four_step_global,
     global_ret_self: RwLock<HashMap<(usize, usize), Arc<[Self]>>>,
-    tl64: TL_FOUR_STEP_TW_64,
-    tl32: TL_FOUR_STEP_TW_32,
-    global64: FOUR_STEP_TW_64_CACHE,
-    global32: FOUR_STEP_TW_32_CACHE,
+    tl_precise: TL_FOUR_STEP_TW_PRECISE,
+    tl_reduced: TL_FOUR_STEP_TW_REDUCED,
+    global_precise: FOUR_STEP_TW_PRECISE_CACHE,
+    global_reduced: FOUR_STEP_TW_REDUCED_CACHE,
 }
 
 fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, sign: f64) -> Vec<C> {

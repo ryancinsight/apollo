@@ -60,13 +60,13 @@ impl StockhamKernel for f64 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            transform::<precision::F64StockhamAvx512>(data, scratch, twiddles, None);
+            transform::<precision::PreciseStockhamAvx512>(data, scratch, twiddles, None);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
-                transform::<precision::F64StockhamAvx512>(data, scratch, twiddles, None);
+                transform::<precision::PreciseStockhamAvx512>(data, scratch, twiddles, None);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
@@ -82,12 +82,12 @@ impl StockhamKernel for f64 {
                     unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
-                transform::<precision::F64Stockham>(data, scratch, twiddles, None);
+                transform::<precision::PreciseStockham>(data, scratch, twiddles, None);
             }
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
-            transform::<precision::F64Stockham>(data, scratch, twiddles, None);
+            transform::<precision::PreciseStockham>(data, scratch, twiddles, None);
         }
     }
 }
@@ -109,13 +109,13 @@ impl StockhamKernel for f32 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            transform::<precision::F32StockhamAvx512>(data, scratch, twiddles, None);
+            transform::<precision::ReducedStockhamAvx512>(data, scratch, twiddles, None);
             return;
         }
         #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
         {
             if std::arch::is_x86_feature_detected!("avx512f") {
-                transform::<precision::F32StockhamAvx512>(data, scratch, twiddles, None);
+                transform::<precision::ReducedStockhamAvx512>(data, scratch, twiddles, None);
                 return;
             }
             #[cfg(all(target_feature = "avx", target_feature = "fma"))]
@@ -131,12 +131,12 @@ impl StockhamKernel for f32 {
                     unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
-                transform::<precision::F32Stockham>(data, scratch, twiddles, None);
+                transform::<precision::ReducedStockham>(data, scratch, twiddles, None);
             }
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
-            transform::<precision::F32Stockham>(data, scratch, twiddles, None);
+            transform::<precision::ReducedStockham>(data, scratch, twiddles, None);
         }
     }
 }

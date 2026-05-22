@@ -16,7 +16,7 @@ use num_complex::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn stage64_groups_one_avx_fma(
+pub(crate) unsafe fn stage_precise_groups_one_avx_fma(
     src: &[Complex64],
     dst: &mut [Complex64],
     radix: usize,

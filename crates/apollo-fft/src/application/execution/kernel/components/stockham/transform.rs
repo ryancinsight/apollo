@@ -10,7 +10,7 @@ use super::precision::{StockhamFused1, StockhamFused2, StockhamFused3, StockhamF
 /// Power-of-two sizes that have hand-optimized stage sequences bypassing the
 /// greedy fusion-eligibility loop.  See [`transform_len4096_four_triples`]
 /// (four consecutive triples) and [`transform_len32768`] (pair+3×triple+quad).
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) const SPECIAL_TRANSFORM_SIZES: &[usize] = &[4096, 32768];
 
 pub(crate) fn transform<P: StockhamPrecision>(

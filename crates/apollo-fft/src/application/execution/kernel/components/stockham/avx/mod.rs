@@ -1,11 +1,11 @@
 pub(crate) mod backend;
-pub(crate) mod f32;
-pub(crate) mod f64;
 pub(crate) mod generic;
+pub(crate) mod precise;
+pub(crate) mod reduced;
 
+pub(crate) use precise::fixed::{fixed_len32_precise_avx_fma, fixed_len64_precise_avx_fma};
 #[cfg(test)]
-pub(crate) use f32::base::stage32_groups_one_avx_fma;
-pub(crate) use f32::fixed::fixed_len64_32_avx_fma;
+pub(crate) use reduced::base::stage_reduced_groups_one_avx_fma;
+pub(crate) use reduced::fixed::fixed_len64_reduced_avx_fma;
 #[cfg(test)]
-pub(crate) use f32::pair::stage_pair32_quarter_groups_two_avx_fma;
-pub(crate) use f64::fixed::{fixed_len32_avx_fma, fixed_len64_avx_fma};
+pub(crate) use reduced::pair::stage_pair_quarter_groups_two_reduced_avx_fma;

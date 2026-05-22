@@ -6,23 +6,23 @@ pub(crate) mod private {
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
-pub(crate) struct F64Stockham;
+pub(crate) struct PreciseStockham;
 #[cfg(any(
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
-pub(crate) struct F32Stockham;
+pub(crate) struct ReducedStockham;
 
 #[cfg(any(
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
-impl private::Sealed for F64Stockham {}
+impl private::Sealed for PreciseStockham {}
 #[cfg(any(
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
-impl private::Sealed for F32Stockham {}
+impl private::Sealed for ReducedStockham {}
 
 pub(crate) trait StockhamPrecision: private::Sealed {
     type Real: Copy;
