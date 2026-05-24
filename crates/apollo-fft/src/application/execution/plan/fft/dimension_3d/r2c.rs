@@ -15,6 +15,21 @@ impl FftPlan3D {
         let nz_c = self.nz_c;
         let m = nz / 2;
 
+        if nz > 1 && !nz.is_multiple_of(2) {
+            // The pair-packing split kernel consumes real samples in pairs and is
+            // valid only for even nz. Odd nz has no Nyquist pair, so compute the
+            // full real spectrum and keep the canonical half-spectrum.
+            let full = self.forward_real_to_complex(input);
+            for i in 0..self.nx {
+                for j in 0..self.ny {
+                    for k in 0..nz_c {
+                        output[[i, j, k]] = full[[i, j, k]];
+                    }
+                }
+            }
+            return;
+        }
+
         // -- Step 1: Z-axis R2C pass ------------------------------------------
         //
         // nz == 1: trivial - cast each real sample to complex with zero imaginary
@@ -101,6 +116,33 @@ impl FftPlan3D {
         let nz = self.nz;
         let nz_c = self.nz_c;
         let m = nz / 2;
+
+        if nz > 1 && !nz.is_multiple_of(2) {
+            // Reconstruct the omitted Hermitian modes for odd nz before using
+            // the full inverse. This preserves exact half-spectrum semantics
+            // without applying the even-nz pair-unpack identity outside domain.
+            let mut full = Array3::<Complex64>::zeros((self.nx, self.ny, nz));
+            for i in 0..self.nx {
+                for j in 0..self.ny {
+                    for k in 0..nz_c {
+                        full[[i, j, k]] = scratch[[i, j, k]];
+                    }
+                }
+            }
+            for i in 0..self.nx {
+                let mirror_i = if i == 0 { 0 } else { self.nx - i };
+                for j in 0..self.ny {
+                    let mirror_j = if j == 0 { 0 } else { self.ny - j };
+                    for k in nz_c..nz {
+                        let mirror_k = nz - k;
+                        full[[i, j, k]] = scratch[[mirror_i, mirror_j, mirror_k]].conj();
+                    }
+                }
+            }
+            let recovered = self.inverse_complex_to_real(&full);
+            output.assign(&recovered);
+            return;
+        }
 
         // -- Step 1: X-axis complex IFFT on (nx, ny, nz_c) data --------------
         // r2c_axis0_pass_64 returns trivially when nx == 1.

@@ -167,30 +167,49 @@ fn r2c_roundtrip_non_power_of_two_nz() {
     }
 }
 
+/// R2C for odd z lengths uses the full-spectrum fallback.
+#[test]
+fn r2c_roundtrip_odd_nz() {
+    for (nx, ny, nz) in [(4usize, 4usize, 3usize), (5, 7, 5)] {
+        let shape = Shape3D::new(nx, ny, nz).expect("valid shape");
+        let plan = FftPlan3D::new(shape);
+        let input = make_signal(nx, ny, nz);
+        let spectrum = plan.forward_r2c(&input);
+        assert_eq!(spectrum.dim(), (nx, ny, nz / 2 + 1));
+        let recovered = plan.inverse_c2r(&spectrum);
+        for (a, b) in input.iter().zip(recovered.iter()) {
+            let err = (a - b).abs();
+            assert!(err < 1e-10, "r2c odd-nz ({nx},{ny},{nz}) err={err:.2e}");
+        }
+    }
+}
+
 /// R2C half-spectrum matches the first nz_c rows of the full-complex forward FFT.
 ///
 /// Correctness invariant: `forward_r2c(x)[i,j,k] == forward(x)[i,j,k]` for k = 0..nz_c-1.
 #[test]
 fn r2c_spectrum_matches_full_forward() {
-    let (nx, ny, nz) = (8usize, 6usize, 8usize);
-    let shape = Shape3D::new(nx, ny, nz).expect("valid shape");
-    let plan = FftPlan3D::new(shape);
-    let input = make_signal(nx, ny, nz);
+    for (nx, ny, nz) in [(8usize, 6usize, 8usize), (4, 4, 3)] {
+        let shape = Shape3D::new(nx, ny, nz).expect("valid shape");
+        let plan = FftPlan3D::new(shape);
+        let input = make_signal(nx, ny, nz);
 
-    let full_spectrum = plan.forward(&input);
-    let half_spectrum = plan.forward_r2c(&input);
+        let full_spectrum = plan.forward(&input);
+        let half_spectrum = plan.forward_r2c(&input);
 
-    let nz_c = nz / 2 + 1;
-    for i in 0..nx {
-        for j in 0..ny {
-            for k in 0..nz_c {
-                let full = full_spectrum[[i, j, k]];
-                let half = half_spectrum[[i, j, k]];
-                let err = (full - half).norm();
-                assert!(
-                    err < 1e-10,
-                    "r2c vs full: [{i},{j},{k}] full={full} half={half} err={err:.2e}"
-                );
+        let nz_c = nz / 2 + 1;
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz_c {
+                    let full = full_spectrum[[i, j, k]];
+                    let half = half_spectrum[[i, j, k]];
+                    let err = (full - half).norm();
+                    assert!(
+                        err < 1e-10,
+                        "r2c vs full ({nx},{ny},{nz}): [{i},{j},{k}] \
+                         full={full} half={half} err={err:.2e}"
+                    );
+                }
             }
         }
     }
