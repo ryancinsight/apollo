@@ -2,8 +2,8 @@
 //! across the complex-type caches in this module.
 //!
 //! Every complex-type cache follows the same structure:
-//! 1. Two `static LazyLock<RwLock<HashMap<K, V>>>` globals (one per precision)
-//! 2. Two `thread_local! RefCell<HashMap<K, V>>` statics (one per precision)
+//! 1. Two `static LazyLock<RwLock<FxHashMap<K, V>>>` globals (one per precision)
+//! 2. Two `thread_local! RefCell<FxHashMap<K, V>>` statics (one per precision)
 //! 3. A sealed marker trait + a Store trait with `tl_get`/`tl_insert`/`global`
 //! 4. Identical `impl` blocks for `Complex64` and `Complex32`
 //! 5. A `cached_*` function with TL-then-global-then-build logic
@@ -12,6 +12,8 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
+//!
+//! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 
 /// Generates: the sealed module with marker trait, the `Store` trait with
 /// `tl_get`/`tl_insert`/`global` methods, and both `Complex64`/`Complex32`
@@ -89,6 +91,95 @@ macro_rules! declare_cache_store {
                 $tl_reduced.with(|c| {
                     c.borrow_mut().insert(key, v);
                 });
+            }
+            #[inline]
+            fn $global() -> &'static $global_ret_self {
+                &$global_reduced
+            }
+        }
+    };
+
+    (
+        sealed_mod: $sealed_mod:ident,
+        sealed_trait: $sealed_trait:ident,
+        store_trait: $store_trait:ident,
+        extra_bounds: [$($bound:tt),* $(,)?],
+        key: $key_ty:ty,
+        val_precise: $val_precise:ty,
+        val_reduced: $val_reduced:ty,
+        val_self: $val_self:ty,
+        tl_get: $tl_get:ident,
+        tl_insert: $tl_insert:ident,
+        global: $global:ident,
+        global_ret_self: $global_ret_self:ty,
+        tl_precise: $tl_precise:ident,
+        tl_reduced: $tl_reduced:ident,
+        global_precise: $global_precise:ident,
+        global_reduced: $global_reduced:ident,
+        tl_precise_flat: $tl_precise_flat:ident,
+        tl_reduced_flat: $tl_reduced_flat:ident,
+        flat_check: $flat_check:expr,
+        flat_idx: $flat_idx:expr,
+    ) => {
+        mod $sealed_mod {
+            pub(crate) trait $sealed_trait {}
+        }
+
+        pub(crate) trait $store_trait: $($bound +)* $sealed_mod::$sealed_trait {
+            fn $tl_get(key: $key_ty) -> Option<$val_self>;
+            fn $tl_insert(key: $key_ty, v: $val_self);
+            fn $global() -> &'static $global_ret_self;
+        }
+
+        impl $sealed_mod::$sealed_trait for num_complex::Complex64 {}
+        impl $store_trait for num_complex::Complex64 {
+            #[inline]
+            fn $tl_get(key: $key_ty) -> Option<$val_precise> {
+                if ($flat_check)(key) {
+                    let idx = ($flat_idx)(key);
+                    $tl_precise_flat.with(|c| c.borrow()[idx].clone())
+                } else {
+                    $tl_precise.with(|c| c.borrow().get(&key).cloned())
+                }
+            }
+            #[inline]
+            fn $tl_insert(key: $key_ty, v: $val_precise) {
+                if ($flat_check)(key) {
+                    let idx = ($flat_idx)(key);
+                    $tl_precise_flat.with(|c| c.borrow_mut()[idx] = Some(v));
+                } else {
+                    $tl_precise.with(|c| {
+                        c.borrow_mut().insert(key, v);
+                    });
+                }
+            }
+            #[inline]
+            fn $global() -> &'static $global_ret_self {
+                &$global_precise
+            }
+        }
+
+        impl $sealed_mod::$sealed_trait for num_complex::Complex32 {}
+        impl $store_trait for num_complex::Complex32 {
+            #[inline]
+            fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
+                if ($flat_check)(key) {
+                    let idx = ($flat_idx)(key);
+                    $tl_reduced_flat.with(|c| c.borrow()[idx].clone())
+                } else {
+                    $tl_reduced.with(|c| c.borrow().get(&key).cloned())
+                }
+            }
+            #[inline]
+            fn $tl_insert(key: $key_ty, v: $val_reduced) {
+                if ($flat_check)(key) {
+                    let idx = ($flat_idx)(key);
+                    $tl_reduced_flat.with(|c| c.borrow_mut()[idx] = Some(v));
+                } else {
+                    $tl_reduced.with(|c| {
+                        c.borrow_mut().insert(key, v);
+                    });
+                }
             }
             #[inline]
             fn $global() -> &'static $global_ret_self {

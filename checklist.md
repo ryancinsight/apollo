@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Closure CVXIII - f64 Power-of-Two Sizes 32 and 64 AVX Twiddle Optimization [patch]
+Sprint target version: apollo-fft 0.12.25
+
+- [ ] Replace the half-sized static twiddle tables in `impls.rs` with full-sized versions.
+- [ ] Modify `load_twiddle_pair` to load from `tw_ptr` unconditionally without branches.
+- [ ] Remove tw_ptr offsets (+15 and +31) and reference static twiddle tables directly in sizes 32 and 64.
+- [ ] Verify that all correctness tests pass and ratios in `benchmark_results.md` are < 1.000x.
+
 ## Closure CVXII - Reduced f32 DFT31 Pair Layout [patch]
 Sprint target version: apollo-fft 0.12.24
 

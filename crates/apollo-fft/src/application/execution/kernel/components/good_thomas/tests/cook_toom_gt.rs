@@ -89,7 +89,7 @@ fn try_fft_dispatch_60() {
     let expected = dft_forward(&input);
     let mut got = input.clone();
     // Dispatch with n1=4, n2=15
-    let result = try_fft::<f64>(&mut got, false, 4, 15);
+    let result = try_fft::<f64, false>(&mut got, 4, 15);
     assert!(result, "try_fft should return true for n1=4, n2=15");
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft60 dispatch forward mismatch err={}", err);
@@ -99,7 +99,7 @@ fn try_fft_dispatch_60() {
 fn try_fft_rejects_non_matching() {
     // Try to dispatch with n1=3, n2=20 (not Cook-Toom-GT sizes)
     let mut data = vec![num_complex::Complex::new(1.0, 0.0); 60];
-    let result = try_fft::<f64>(&mut data, false, 3, 20);
+    let result = try_fft::<f64, false>(&mut data, 3, 20);
     assert!(!result, "try_fft should return false for n1=3, n2=20");
 }
 
@@ -186,7 +186,7 @@ fn try_fft_dispatch_90() {
     let input = signal90();
     let expected = dft_forward(&input);
     let mut got = input.clone();
-    let result = try_fft::<f64>(&mut got, false, 9, 10);
+    let result = try_fft::<f64, false>(&mut got, 9, 10);
     assert!(result, "try_fft should return true for n1=9, n2=10");
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "dft90 dispatch forward mismatch err={}", err);
@@ -197,7 +197,7 @@ fn try_fft_dispatch_150() {
     let input = signal150();
     let expected = dft_forward(&input);
     let mut got = input.clone();
-    let result = try_fft::<f64>(&mut got, false, 6, 25);
+    let result = try_fft::<f64, false>(&mut got, 6, 25);
     assert!(result, "try_fft should return true for n1=6, n2=25");
     let err = max_abs_err_64(&got, &expected);
     assert!(
@@ -208,7 +208,7 @@ fn try_fft_dispatch_150() {
 
     let expected_inv: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 150.0).collect();
     let mut got_inv = input.clone();
-    let result_inv = try_fft::<f64>(&mut got_inv, true, 6, 25);
+    let result_inv = try_fft::<f64, true>(&mut got_inv, 6, 25);
     assert!(
         result_inv,
         "try_fft inverse should return true for n1=6, n2=25"

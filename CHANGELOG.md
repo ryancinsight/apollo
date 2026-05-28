@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Changed
+- [patch] `apollo-fft`: Optimized small power-of-two FFT sizes (2, 4, 8, 16, 32, 64) by implementing compile-time sized dispatch (`small_pot_inplace_sized`), eliminating double runtime slice-matching overhead. Sizes 2 and 4 now unconditionally use pure-Rust scalar butterflies allowing optimal compiler register allocation. Sizes 8 and 16 use FMA-driven SSE complex multiplication (`_mm_fmaddsub_pd`) to reduce multiplication latency by 2x.
 - [patch] `apollo-fft`: f32 DFT31 now uses a reduced Winograd-pair layout
   that stores pair sums and imaginary differences in separate scalar arrays;
   the broader reduced route for N=29/37/41/53 was rejected after measurement

@@ -1,5 +1,6 @@
 # Cargo build outputs
 /target/
+**/target/
 
 # Python build outputs
 **/__pycache__/
@@ -40,4 +41,8 @@
 /write_*.py
 /scratch/
 nul
+# Local logs and build artifacts
+/*.txt
+/*.log
+/artifacts/
 gap_audit.pdf

@@ -148,6 +148,21 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     Some(radices)
 }
 
+/// Test if a number is prime23-smooth (only prime factors 2 and 3).
+#[inline]
+pub(crate) fn is_prime23_smooth(mut n: usize) -> bool {
+    if n == 0 {
+        return false;
+    }
+    while n % 2 == 0 {
+        n /= 2;
+    }
+    while n % 3 == 0 {
+        n /= 3;
+    }
+    n == 1
+}
+
 /// Test if a number is prime.
 #[inline]
 pub(crate) fn is_prime(n: usize) -> bool {

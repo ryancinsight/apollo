@@ -126,12 +126,12 @@ pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = num_complex::
     } else if let Some((n1, n2)) =
         crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(len)
     {
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(
-            padded, false, n1, n2,
+        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, false>(
+            padded, n1, n2,
         );
         F::pointwise_mul(padded, kernel_spectrum);
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(
-            padded, true, n1, n2,
+        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, true>(
+            padded, n1, n2,
         );
         F::normalize(padded, len);
     } else {

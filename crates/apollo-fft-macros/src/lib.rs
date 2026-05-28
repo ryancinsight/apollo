@@ -133,8 +133,7 @@ pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
     let match_arms = primes.iter().map(|prime| {
         let route = route_ident(*prime);
         quote! {
-            (#prime, false) => #route::<F, false>(data),
-            (#prime, true) => #route::<F, true>(data),
+            #prime => #route::<F, INVERSE>(data),
         }
     });
 
@@ -150,9 +149,9 @@ pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                 Complex = num_complex::Complex<F>,
             >,
+            const INVERSE: bool,
         >(
             data: &mut [F::Complex],
-            inverse: bool,
             n1: usize,
             n2: usize,
         ) -> bool {
@@ -160,7 +159,7 @@ pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
                 return false;
             }
 
-            match (n1, inverse) {
+            match n1 {
                 #(#match_arms)*
                 _ => return false,
             }

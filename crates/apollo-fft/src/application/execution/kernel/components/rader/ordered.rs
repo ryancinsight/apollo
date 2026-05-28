@@ -18,9 +18,8 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// * `data[1 + q]` is `X[g_inv^q mod N]` for `q in 0..N-1` on return.
 /// Ordered Rader implementation for fused prime paths.
 #[inline(always)]
-pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     n: usize,
     generator_inverse: usize,
 ) {
@@ -34,10 +33,19 @@ pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Comp
     let x0 = head[0];
     let sum_x = sum_ordered::<F>(nonzero);
 
-    if m >= F::HALF_CYCLIC_RADER_THRESHOLD {
+    if m >= super::BLUESTEIN_RADER_THRESHOLD
+        || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
+    {
+        super::bluestein::rader_bluestein_convolve_inplace::<F>(
+            nonzero,
+            n,
+            INVERSE,
+            generator_inverse,
+        );
+    } else if m >= F::HALF_CYCLIC_RADER_THRESHOLD {
         let half_m = m / 2;
         let (kernel_cyc, kernel_neg) =
-            F::cached_rader_negacyclic_spectra(n, inverse, generator_inverse);
+            F::cached_rader_negacyclic_spectra(n, INVERSE, generator_inverse);
         let twiddles = F::cached_rader_neg_twiddles(half_m);
         super::rader_negacyclic_convolve_inplace::<F>(
             nonzero,
@@ -46,7 +54,7 @@ pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Comp
             twiddles.as_ref(),
         );
     } else {
-        let kernel_spectrum = F::cached_rader_spectrum(n, inverse, generator_inverse);
+        let kernel_spectrum = F::cached_rader_spectrum(n, INVERSE, generator_inverse);
         super::rader_convolve_inplace::<F>(nonzero, kernel_spectrum.as_ref());
     }
 
@@ -94,9 +102,7 @@ mod tests {
     /// Look up the primitive root and its modular inverse for a prime N
     /// from the canonical [`super::super::generator::PRIMITIVE_ROOTS`] table.
     fn rader_generator_pair(n: usize) -> (usize, usize) {
-        let g = super::super::generator::primitive_root(n);
-        let g_inv = super::super::generator::inverse_mod(g, n);
-        (g, g_inv)
+        super::super::generator::primitive_root_and_inverse(n)
     }
 
     fn to_ordered_input(input: &[Complex64], n: usize, g: usize) -> Vec<Complex64> {
@@ -128,7 +134,7 @@ mod tests {
         let expected = dft_forward(&input);
         let mut ordered = to_ordered_input(&input, 29, g);
 
-        rader_ordered_impl::<f64>(&mut ordered, false, 29, g_inv);
+        rader_ordered_impl::<f64, false>(&mut ordered, 29, g_inv);
 
         let got = to_natural_output(&ordered, 29, g_inv);
         let err = max_err(&got, &expected);
@@ -142,7 +148,7 @@ mod tests {
         let expected: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 31.0).collect();
         let mut ordered = to_ordered_input(&input, 31, g);
 
-        rader_ordered_impl::<f64>(&mut ordered, true, 31, g_inv);
+        rader_ordered_impl::<f64, true>(&mut ordered, 31, g_inv);
 
         let got = to_natural_output(&ordered, 31, g_inv);
         let err = max_err(&got, &expected);
@@ -156,7 +162,7 @@ mod tests {
         let expected = dft_forward(&input);
         let mut ordered = to_ordered_input(&input, 37, g);
 
-        rader_ordered_impl::<f64>(&mut ordered, false, 37, g_inv);
+        rader_ordered_impl::<f64, false>(&mut ordered, 37, g_inv);
 
         let got = to_natural_output(&ordered, 37, g_inv);
         let err = max_err(&got, &expected);

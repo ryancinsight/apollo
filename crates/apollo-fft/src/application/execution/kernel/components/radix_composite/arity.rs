@@ -20,11 +20,15 @@ pub(super) trait FusedStage {
 
 /// Dispatch the radix-R butterfly for a single column buffer.
 /// Monomorphized per (F, R) at compile time; zero abstraction overhead.
+///
+/// Uses const R in match to enable LLVM to optimize each branch independently.
+/// The match is resolved at compile time for monomorphized R, so this is zero-cost.
 #[inline(always)]
 fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize>(
     buf: &mut [Complex<F>; R],
     inverse: bool,
 ) {
+    // Compile-time branch on const R — LLVM can inline and vectorize each case.
     match R {
         2 => {
             let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 2];
@@ -110,7 +114,7 @@ fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize>(
                 F::dft23::<false>(unsafe { &mut *ptr })
             }
         }
-        _ => unreachable!(),
+        _ => unreachable!("unsupported radix {}", R),
     }
 }
 
@@ -141,19 +145,17 @@ fn load_and_twiddle<F: ShortWinogradScalar, const R: usize>(
     stage_twiddles: &[Complex<F>],
     buf: &mut [Complex<F>; R],
 ) {
-    let mut k = 0;
-    while k < R {
+    // Explicit iteration for better LLVM loop unroll hints with const R.
+    // The compiler sees the exact iteration count from const R and can unroll fully.
+    for k in 0..R {
         buf[k] = *unsafe { src.get_unchecked(k * stride + src_base + j) };
-        k += 1;
     }
     if j > 0 {
         // Read each arm's precomputed twiddle W^{k·j} from the flat table.
         // Arm k is at stage_twiddles[(k-1)*prev_len + j]; all loads are independent.
-        let mut k = 1;
-        while k < R {
+        for k in 1..R {
             let tw = *unsafe { stage_twiddles.get_unchecked((k - 1) * prev_len + j) };
             buf[k] = apply_twiddle_impl(buf[k], tw);
-            k += 1;
         }
     }
 }
@@ -166,10 +168,9 @@ fn store_col<F: Copy, const R: usize>(
     prev_len: usize,
     buf: &[Complex<F>; R],
 ) {
-    let mut k = 0;
-    while k < R {
+    // Explicit iteration with const R enables full unroll by LLVM.
+    for k in 0..R {
         *unsafe { dst.get_unchecked_mut(j + k * prev_len) } = buf[k];
-        k += 1;
     }
 }
 

@@ -67,8 +67,7 @@ pub fn generate_two_by_prime_natural_dispatch(input: CompilerTokenStream) -> Com
         let prime = &pair.prime;
         let half = &pair.half;
         quote! {
-            (#prime, false) => #route::<F, false>(data, <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::cos_table(), <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::sin_table()),
-            (#prime, true) => #route::<F, true>(data, <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::cos_table(), <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::sin_table()),
+            #prime => #route::<F, INVERSE>(data, <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::cos_table(), <F as crate::application::execution::kernel::components::winograd::radix::odd_prime_pair::PrimePairTable<#prime, #half>>::sin_table()),
         }
     });
 
@@ -80,12 +79,12 @@ pub fn generate_two_by_prime_natural_dispatch(input: CompilerTokenStream) -> Com
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                 Complex = num_complex::Complex<F>,
             >,
+            const INVERSE: bool,
         >(
             data: &mut [F::Complex],
-            inverse: bool,
             prime: usize,
         ) -> bool {
-            match (prime, inverse) {
+            match prime {
                 #(#match_arms)*
                 _ => return false,
             }

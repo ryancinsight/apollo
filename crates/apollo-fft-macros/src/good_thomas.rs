@@ -194,13 +194,9 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
         let n = n1 * n2;
         let fn_name = format_ident!("dft{}_impl", n);
         quote! {
-            (#n1, #n2, false) => {
+            (#n1, #n2) => {
                 let arr: &mut [F::Complex; #n] = data.try_into().unwrap();
-                unsafe { #fn_name::<F, false>(arr); }
-            }
-            (#n1, #n2, true) => {
-                let arr: &mut [F::Complex; #n] = data.try_into().unwrap();
-                unsafe { #fn_name::<F, true>(arr); }
+                unsafe { #fn_name::<F, INVERSE>(arr); }
             }
         }
     });
@@ -223,13 +219,13 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                 Complex = num_complex::Complex<F>,
             > #(#trait_bounds)*,
+            const INVERSE: bool,
         >(
             data: &mut [F::Complex],
-            inverse: bool,
             n1: usize,
             n2: usize,
         ) -> bool {
-            match (n1, n2, inverse) {
+            match (n1, n2) {
                 #(#match_arms)*
                 _ => return false,
             }

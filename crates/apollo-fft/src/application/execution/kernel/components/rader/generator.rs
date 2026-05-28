@@ -118,3 +118,28 @@ pub(crate) const fn inverse_mod(a: usize, m: usize) -> usize {
     }
     x as usize
 }
+
+use std::sync::atomic::{AtomicU32, Ordering};
+
+const ATOMIC_ZERO: AtomicU32 = AtomicU32::new(0);
+static RADER_GENERATOR_CACHE: [AtomicU32; 4096] = [ATOMIC_ZERO; 4096];
+
+pub(crate) fn primitive_root_and_inverse(p: usize) -> (usize, usize) {
+    if p < 4096 {
+        let val = RADER_GENERATOR_CACHE[p].load(Ordering::Relaxed);
+        if val != 0 {
+            let g = (val >> 16) as usize;
+            let g_inv = (val & 0xFFFF) as usize;
+            return (g, g_inv);
+        }
+        let g = primitive_root(p);
+        let g_inv = inverse_mod(g, p);
+        let packed = ((g as u32) << 16) | (g_inv as u32);
+        RADER_GENERATOR_CACHE[p].store(packed, Ordering::Relaxed);
+        (g, g_inv)
+    } else {
+        let g = primitive_root(p);
+        let g_inv = inverse_mod(g, p);
+        (g, g_inv)
+    }
+}

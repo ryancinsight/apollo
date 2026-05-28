@@ -137,6 +137,7 @@ dependencies = [
  "proptest",
  "rand 0.8.6",
  "rayon",
+ "rustc-hash 2.1.2",
  "rustfft",
  "serde",
  "thiserror 1.0.69",

@@ -169,6 +169,7 @@ impl ShortWinogradScalar for f32 {
 /// Each entry corresponds to a `ShortDft<N>` impl and a `short_winograd`
 /// match arm. Adding or removing a codelet size must update this array.
 /// The array **must remain sorted** (ascending) for `is_short_winograd_size`.
+#[allow(dead_code)]
 pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
     28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
@@ -181,21 +182,12 @@ pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
 /// ≤ log₂(64) = 6 comparisons. When `n` is a compile-time constant the
 /// compiler resolves the entire search at compile time (zero runtime cost).
 #[inline(always)]
-const fn is_short_winograd_size(n: usize) -> bool {
-    let mut lo = 0usize;
-    let mut hi = SHORT_WINOGRAD_SIZES.len();
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        let mid_val = SHORT_WINOGRAD_SIZES[mid];
-        if mid_val == n {
-            return true;
-        } else if mid_val < n {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
+pub(crate) const fn is_short_winograd_size(n: usize) -> bool {
+    if n <= 56 {
+        n >= 2
+    } else {
+        matches!(n, 58 | 60 | 62 | 63 | 64 | 81 | 128)
     }
-    false
 }
 
 /// Macro-generated dispatch for every size in [`SHORT_WINOGRAD_SIZES`].

@@ -20,6 +20,19 @@ fn mixed_forward_n32_matches_direct() {
 }
 
 #[test]
+fn mixed_forward_n121_matches_direct() {
+    let n = 121usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.29).sin(), (k as f64 * 0.17).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(err < 1e-10, "mixed-radix forward N=121 mismatch err={err:.2e}");
+}
+
+#[test]
 fn mixed_inverse_unnorm_n32_matches_direct() {
     let n = 32usize;
     let input: Vec<Complex64> = (0..n)
@@ -389,3 +402,47 @@ fn mixed_precise_power_of_two_n32768_forward_dc_is_not_noop() {
         "N=32768 forward DC tail max_err={tail:.2e} tol={tol:.2e}"
     );
 }
+
+#[test]
+fn test_small_pot_f64_correctness() {
+    let sizes = [2, 4, 8, 16, 32, 64];
+    for &n in &sizes {
+        let input: Vec<Complex64> = (0..n)
+            .map(|k| Complex64::new((k as f64 * 0.17).sin(), (k as f64 * 0.29).cos()))
+            .collect();
+        let mut got = input.clone();
+        forward_inplace::<f64>(&mut got);
+        inverse_inplace::<f64>(&mut got);
+        let err = max_abs_err_64(&got, &input);
+        assert!(
+            err < 1.0e-12,
+            "f64 small POT N={} roundtrip mismatch err={:e}",
+            n,
+            err
+        );
+    }
+}
+
+#[test]
+fn test_small_pot_f32_correctness() {
+    let sizes = [2, 4, 8, 16, 32, 64];
+    for &n in &sizes {
+        let input: Vec<Complex32> = (0..n)
+            .map(|k| Complex32::new((k as f32 * 0.17).sin(), (k as f32 * 0.29).cos()))
+            .collect();
+        let mut got = input.clone();
+        forward_inplace::<f32>(&mut got);
+        inverse_inplace::<f32>(&mut got);
+        let err = got.iter().zip(input.iter()).map(|(a, b)| (*a - *b).norm()).fold(0.0f32, f32::max);
+        assert!(
+            err < 1.0e-6,
+            "f32 small POT N={} roundtrip mismatch err={:e}",
+            n,
+            err
+        );
+    }
+}
+
+
+
+

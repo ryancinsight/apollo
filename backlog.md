@@ -1,5 +1,8 @@
 # Apollo Backlog
 
+## Open in this sprint (Closure CVXIII phase)
+- [ ] [patch] Optimize AVX/FMA twiddle loading and eliminate indexing offsets/negation branches for f64 sizes 32 and 64 in `impls.rs`.
+
 ## Closed in this sprint (Closure CVXII phase)
 - [x] [patch] Narrow reduced f32 Winograd-pair execution to DFT31 only. A
   broader structure-of-arrays reduced route for N=29/37/41/53 was measured and

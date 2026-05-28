@@ -177,7 +177,7 @@ impl StockhamPrecision for PreciseStockhamAvxFma {
         third_twiddles: &[Complex64],
     ) {
         let groups = src.len() / (radix << 1);
-        if radix == 1 && groups >= 8 && stockham_precise_stage_is_l1_resident(src.len()) {
+        if radix == 1 && groups >= 8 {
             unsafe {
                 stage_triple_radix1_avx_fma::<f64>(src, dst, second_twiddles, third_twiddles)
             };
@@ -318,7 +318,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
                 stage_avx_fma::<crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise>(src, dst, radix, twiddles)
             };
         } else {
-            stage_impl::<_, 512>(src, dst, radix, twiddles);
+            <PreciseStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
         }
     }
 
@@ -337,7 +337,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
                     stage_pair_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise>(src, dst, second_twiddles)
                 };
             } else {
-                stage_pair_impl::<_, 512>(src, dst, radix, first_twiddles, second_twiddles);
+                <PreciseStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
             }
         } else if groups == 4 && radix >= 2 {
             // avx512 pairs require multiples of 4
@@ -355,7 +355,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
                 stage_pair_avx_fma::<crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise>(src, dst, radix, first_twiddles, second_twiddles)
             };
         } else {
-            stage_pair_impl::<_, 512>(src, dst, radix, first_twiddles, second_twiddles);
+            <PreciseStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
         }
     }
 
@@ -369,7 +369,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
         third_twiddles: &[Complex64],
     ) {
         let groups = src.len() / (radix << 1);
-        if radix == 1 && groups >= 16 && stockham_precise_stage_is_l1_resident(src.len()) {
+        if radix == 1 && groups >= 16 {
             unsafe {
                 stage_triple_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::precise::avx512_backend::Avx512BackendPrecise>(src, dst, second_twiddles, third_twiddles)
             };
@@ -400,7 +400,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
                 };
             }
         } else {
-            stage_triple_impl::<_, 512>(
+            <PreciseStockhamAvxFma as StockhamPrecision>::stage_triple(
                 src,
                 dst,
                 radix,
@@ -430,7 +430,7 @@ impl StockhamPrecision for PreciseStockhamAvx512 {
                 )
             }
         } else {
-            stage_quad_impl::<_, 512>(
+            <PreciseStockhamAvxFma as StockhamPrecision>::stage_quad(
                 src,
                 dst,
                 radix,

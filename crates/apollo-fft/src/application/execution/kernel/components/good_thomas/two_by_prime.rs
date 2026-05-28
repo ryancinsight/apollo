@@ -31,9 +31,8 @@ enum TwoByPrimeConfig {
     NaturalPrime,
 }
 
-pub(super) fn try_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(super) fn try_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     n1: usize,
     n2: usize,
 ) -> bool {
@@ -46,10 +45,10 @@ pub(super) fn try_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
             generator,
             generator_inverse,
         } => {
-            two_by_prime_ordered_rader::<F>(data, inverse, n1, generator, generator_inverse);
+            two_by_prime_ordered_rader::<F, INVERSE>(data, n1, generator, generator_inverse);
         }
         TwoByPrimeConfig::NaturalPrime => {
-            two_by_prime_natural_prime::<F>(data, inverse, n1);
+            two_by_prime_natural_prime::<F, INVERSE>(data, n1);
         }
     }
     true
@@ -79,9 +78,8 @@ pub(super) fn direct_pair_prime(prime: usize) -> bool {
     DIRECT_PAIR_PRIMES.contains(&prime)
 }
 
-fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     prime: usize,
     generator: usize,
     generator_inverse: usize,
@@ -89,7 +87,7 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
     let n = prime * 2;
     debug_assert!(data.len() >= n);
 
-    let twiddles = F::cached_four_step_twiddles(n, prime, 2, inverse);
+    let twiddles = F::cached_four_step_twiddles(n, prime, 2, INVERSE);
     let input_order =
         crate::application::execution::kernel::components::rader::cached_generator_order(
             prime, generator,
@@ -99,15 +97,13 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
         let (even, odd) = scratch[..n].split_at_mut(prime);
         load_even_odd_ordered::<F>(data, even, odd, prime, input_order.as_ref());
 
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F>(
+        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F, INVERSE>(
             even,
-            inverse,
             prime,
             generator_inverse,
         );
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F>(
+        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F, INVERSE>(
             odd,
-            inverse,
             prime,
             generator_inverse,
         );
@@ -123,25 +119,24 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
     });
 }
 
-fn two_by_prime_natural_prime<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn two_by_prime_natural_prime<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     prime: usize,
 ) {
     let n = prime * 2;
     debug_assert!(data.len() >= n);
 
-    if fuse_two_prime_natural::<F>(data, inverse, prime) {
+    if fuse_two_prime_natural::<F, INVERSE>(data, prime) {
         return;
     }
 
-    let twiddles = F::cached_four_step_twiddles(n, prime, 2, inverse);
+    let twiddles = F::cached_four_step_twiddles(n, prime, 2, INVERSE);
     F::with_pfa_scratch(prime, |scratch| {
         let even = &mut scratch[..prime];
         load_even_compact_odd_natural(data, even, prime);
 
-        transform_natural_prime_half::<F>(even, inverse, prime);
-        transform_natural_prime_half::<F>(&mut data[..prime], inverse, prime);
+        transform_natural_prime_half::<F, INVERSE>(even, prime);
+        transform_natural_prime_half::<F, INVERSE>(&mut data[..prime], prime);
 
         combine_two_prime_natural_compacted::<F>(
             data,
@@ -161,32 +156,48 @@ fn load_even_odd_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>
     input_order: &[usize],
 ) {
     debug_assert_eq!(input_order.len(), prime - 1);
+    debug_assert!(src.len() >= prime * 2);
+    debug_assert!(even.len() >= prime);
+    debug_assert!(odd.len() >= prime);
 
-    even[0] = src[0];
-    odd[0] = src[1];
+    unsafe {
+        *even.get_unchecked_mut(0) = *src.get_unchecked(0);
+        *odd.get_unchecked_mut(0) = *src.get_unchecked(1);
+    }
     for (q, &j) in input_order.iter().enumerate() {
         let src_base = j * 2;
-        even[1 + q] = src[src_base];
-        odd[1 + q] = src[src_base + 1];
+        debug_assert!(src_base + 1 < src.len());
+        debug_assert!(1 + q < even.len());
+        debug_assert!(1 + q < odd.len());
+        unsafe {
+            *even.get_unchecked_mut(1 + q) = *src.get_unchecked(src_base);
+            *odd.get_unchecked_mut(1 + q) = *src.get_unchecked(src_base + 1);
+        }
     }
 }
 
 #[inline]
 fn load_even_compact_odd_natural<C: Copy>(data: &mut [C], even: &mut [C], prime: usize) {
+    debug_assert!(data.len() >= prime * 2);
+    debug_assert!(even.len() >= prime);
     for j in 0..prime {
         let src_base = j * 2;
-        even[j] = data[src_base];
-        data[j] = data[src_base + 1];
+        debug_assert!(src_base + 1 < data.len());
+        debug_assert!(j < even.len());
+        unsafe {
+            *even.get_unchecked_mut(j) = *data.get_unchecked(src_base);
+            let val = *data.get_unchecked(src_base + 1);
+            *data.get_unchecked_mut(j) = val;
+        }
     }
 }
 
 #[inline(always)]
-fn transform_natural_prime_half<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn transform_natural_prime_half<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     _prime: usize,
 ) {
-    if inverse {
+    if INVERSE {
         crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(data);
     } else {
         crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(data);
@@ -204,10 +215,16 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<
 ) {
     debug_assert_eq!(generator_order.len(), prime - 1);
     debug_assert_eq!(twiddles.len(), prime);
+    debug_assert!(dst.len() >= prime * 2);
+    debug_assert!(even.len() >= prime);
+    debug_assert!(odd.len() >= prime);
 
-    let b0 = odd[0];
-    dst[0] = even[0] + b0;
-    dst[prime] = even[0] - b0;
+    let b0 = unsafe { *odd.get_unchecked(0) };
+    let e0 = unsafe { *even.get_unchecked(0) };
+    unsafe {
+        *dst.get_unchecked_mut(0) = e0 + b0;
+        *dst.get_unchecked_mut(prime) = e0 - b0;
+    }
 
     for q in 0..generator_order.len() {
         let k =
@@ -215,10 +232,16 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<
                 generator_order,
                 q,
             );
-        let wb = twiddles[k] * odd[1 + q];
-        let a = even[1 + q];
-        dst[k] = a + wb;
-        dst[k + prime] = a - wb;
+        debug_assert!(k < twiddles.len());
+        debug_assert!(1 + q < odd.len());
+        debug_assert!(1 + q < even.len());
+        debug_assert!(k + prime < dst.len());
+        unsafe {
+            let wb = *twiddles.get_unchecked(k) * *odd.get_unchecked(1 + q);
+            let a = *even.get_unchecked(1 + q);
+            *dst.get_unchecked_mut(k) = a + wb;
+            *dst.get_unchecked_mut(k + prime) = a - wb;
+        }
     }
 }
 
@@ -230,12 +253,16 @@ fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = num_complex
     prime: usize,
 ) {
     debug_assert_eq!(twiddles.len(), prime);
+    debug_assert!(dst.len() >= prime * 2);
+    debug_assert!(even.len() >= prime);
 
     for k in 0..prime {
-        let wb = twiddles[k] * dst[k];
-        let a = even[k];
-        dst[k] = a + wb;
-        dst[k + prime] = a - wb;
+        unsafe {
+            let wb = *twiddles.get_unchecked(k) * *dst.get_unchecked(k);
+            let a = *even.get_unchecked(k);
+            *dst.get_unchecked_mut(k) = a + wb;
+            *dst.get_unchecked_mut(k + prime) = a - wb;
+        }
     }
 }
 

@@ -136,8 +136,12 @@ pub(super) unsafe fn flat_pass_r3_f64(
         // Uses up to 14 YMM registers (6 data × 2 + 2 twiddle × 2 = 14),
         // enabling dual-FMA-unit parallelism on OOO CPUs.
         // Falls through to the width-2 loop for the remaining 0–3 columns.
+        //
+        // Hoist loop-invariant constants: wr/s are constant for all groups,
+        // and tw_ptr is the base pointer that never changes.
         let wr = _mm256_set1_pd(-0.5);
         let s = _mm256_set1_pd(0.8660254037844386_f64);
+        let tw_ptr = tw.as_ptr();
         for g in 0..g_count {
             let src_base = g * prev_len;
             let dst_base = g * stage_chunk;
@@ -156,12 +160,18 @@ pub(super) unsafe fn flat_pass_r3_f64(
                 let a0_hi = _mm256_loadu_pd(src_ptr.add(off0a + 2) as *const f64);
                 let a1_hi_raw = _mm256_loadu_pd(src_ptr.add(off1a + 2) as *const f64);
                 let a2_hi_raw = _mm256_loadu_pd(src_ptr.add(off2a + 2) as *const f64);
-                // Twiddles for lo/hi:
-                let tw_base = tw.as_ptr();
-                let tw1_lo = _mm256_loadu_pd(tw_base.add(0 * prev_len + j) as *const f64);
-                let tw2_lo = _mm256_loadu_pd(tw_base.add(1 * prev_len + j) as *const f64);
-                let tw1_hi = _mm256_loadu_pd(tw_base.add(0 * prev_len + j + 2) as *const f64);
-                let tw2_hi = _mm256_loadu_pd(tw_base.add(1 * prev_len + j + 2) as *const f64);
+                // Twiddles for lo/hi (tw_ptr hoisted outside loops):
+                let tw1_lo = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j) as *const f64);
+                let tw2_lo = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j) as *const f64);
+                let tw1_hi = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j + 2) as *const f64);
+                let tw2_hi = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j + 2) as *const f64);
+                // Prefetch twiddle data 2 iterations ahead for L1 cache.
+                // Only beneficial when prev_len is large enough to have cache pressure.
+                // Cast to *const i8 as required by _mm_prefetch intrinsic.
+                if prev_len >= 16 {
+                    _mm_prefetch(tw_ptr.add(0 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(1 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                }
                 // Apply twiddles:
                 let a1_lo_tw = cmul(a1_lo, tw1_lo);
                 let a2_lo_tw = cmul(a2_lo, tw2_lo);
@@ -212,9 +222,9 @@ pub(super) unsafe fn flat_pass_r3_f64(
                 let a0 = _mm256_loadu_pd(src_ptr.add(off0) as *const f64);
                 let a1_raw = _mm256_loadu_pd(src_ptr.add(off1) as *const f64);
                 let a2_raw = _mm256_loadu_pd(src_ptr.add(off2) as *const f64);
-                // Twiddles: arm 1 at tw[0*prev_len+j], arm 2 at tw[1*prev_len+j].
-                let tw1 = _mm256_loadu_pd(tw.as_ptr().add(0 * prev_len + j) as *const f64);
-                let tw2 = _mm256_loadu_pd(tw.as_ptr().add(1 * prev_len + j) as *const f64);
+                // Twiddles (tw_ptr hoisted outside loops): arm 1 at tw[0*prev_len+j], arm 2 at tw[1*prev_len+j].
+                let tw1 = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j) as *const f64);
+                let tw2 = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j) as *const f64);
                 let a1 = cmul(a1_raw, tw1);
                 let a2 = cmul(a2_raw, tw2);
 
@@ -502,6 +512,10 @@ pub(super) unsafe fn flat_pass_r4_f64(
         // Both chains together use 14 YMM registers (fits x86's 16 YMM file),
         // enabling dual-FMA-unit parallelism on OOO CPUs.
         // Falls through to width-2 loop for remaining 0–3 columns.
+        //
+        // Hoist invariants from inner loops: tw_ptr never changes, and wr/s
+        // are constant for the DFT-3 butterfly.
+        let tw_ptr = tw.as_ptr();
         for g in 0..g_count {
             let src_base = g * prev_len;
             let dst_base = g * stage_chunk;
@@ -514,7 +528,6 @@ pub(super) unsafe fn flat_pass_r4_f64(
                 let off1 = 1 * stride + src_base + j;
                 let off2 = 2 * stride + src_base + j;
                 let off3 = 3 * stride + src_base + j;
-                let tw_ptr = tw.as_ptr();
                 // lo: cols j, j+1
                 let a0_lo = _mm256_loadu_pd(src_ptr.add(off0) as *const f64);
                 let a1_lo_raw = _mm256_loadu_pd(src_ptr.add(off1) as *const f64);
@@ -525,13 +538,22 @@ pub(super) unsafe fn flat_pass_r4_f64(
                 let a1_hi_raw = _mm256_loadu_pd(src_ptr.add(off1 + 2) as *const f64);
                 let a2_hi_raw = _mm256_loadu_pd(src_ptr.add(off2 + 2) as *const f64);
                 let a3_hi_raw = _mm256_loadu_pd(src_ptr.add(off3 + 2) as *const f64);
-                // Twiddles:
+                // Twiddles (tw_ptr hoisted outside loop):
                 let tw1_lo = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j) as *const f64);
                 let tw2_lo = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j) as *const f64);
                 let tw3_lo = _mm256_loadu_pd(tw_ptr.add(2 * prev_len + j) as *const f64);
                 let tw1_hi = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j + 2) as *const f64);
                 let tw2_hi = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j + 2) as *const f64);
                 let tw3_hi = _mm256_loadu_pd(tw_ptr.add(2 * prev_len + j + 2) as *const f64);
+                // Prefetch twiddle data 2 iterations ahead for L1 cache.
+                // This helps for large prev_len where cache lines may be evicted.
+                // _MM_HINT_T0 loads into L1 dcache, which is what we want for data we'll use shortly.
+                // Cast to *const i8 as required by _mm_prefetch intrinsic.
+                if prev_len >= 16 {
+                    _mm_prefetch(tw_ptr.add(0 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(1 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(2 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                }
                 // Apply twiddles to arms 1,2,3 for lo/hi chains:
                 let a1_lo = cmul(a1_lo_raw, tw1_lo);
                 let a2_lo = cmul(a2_lo_raw, tw2_lo);
@@ -570,9 +592,10 @@ pub(super) unsafe fn flat_pass_r4_f64(
 
                 // Apply twiddles for arms 1, 2, 3. Arm k twiddles at tw[(k-1)*prev_len + j].
                 // tw[0] is 1.0 + i*0.0, so col 0 is correctly multiplied by 1 while col 1 gets W^1.
-                let tw1 = _mm256_loadu_pd(tw.as_ptr().add(0 * prev_len + j) as *const f64);
-                let tw2 = _mm256_loadu_pd(tw.as_ptr().add(1 * prev_len + j) as *const f64);
-                let tw3 = _mm256_loadu_pd(tw.as_ptr().add(2 * prev_len + j) as *const f64);
+                // tw_ptr hoisted outside loops above — use it here for consistency.
+                let tw1 = _mm256_loadu_pd(tw_ptr.add(0 * prev_len + j) as *const f64);
+                let tw2 = _mm256_loadu_pd(tw_ptr.add(1 * prev_len + j) as *const f64);
+                let tw3 = _mm256_loadu_pd(tw_ptr.add(2 * prev_len + j) as *const f64);
                 a1 = cmul(a1, tw1);
                 a2 = cmul(a2, tw2);
                 a3 = cmul(a3, tw3);
@@ -952,6 +975,8 @@ pub(super) unsafe fn flat_pass_r4_f32(
     } else if prev_len >= 4 {
         // Process 4 adjacent columns per AVX2 iteration, 1 group at a time.
         // Twiddle layout matches f64: arm k at tw[(k-1)*prev_len + j].
+        // Hoist tw_ptr outside group loop since it never changes.
+        let tw_ptr = tw.as_ptr();
         for g in 0..g_count {
             let src_base = g * prev_len;
             let dst_base = g * stage_chunk;
@@ -968,9 +993,17 @@ pub(super) unsafe fn flat_pass_r4_f32(
                 let mut a2 = _mm256_loadu_ps(src_ptr.add(off2) as *const f32);
                 let mut a3 = _mm256_loadu_ps(src_ptr.add(off3) as *const f32);
 
-                let tw1 = _mm256_loadu_ps(tw.as_ptr().add(0 * prev_len + j) as *const f32);
-                let tw2 = _mm256_loadu_ps(tw.as_ptr().add(1 * prev_len + j) as *const f32);
-                let tw3 = _mm256_loadu_ps(tw.as_ptr().add(2 * prev_len + j) as *const f32);
+                let tw1 = _mm256_loadu_ps(tw_ptr.add(0 * prev_len + j) as *const f32);
+                let tw2 = _mm256_loadu_ps(tw_ptr.add(1 * prev_len + j) as *const f32);
+                let tw3 = _mm256_loadu_ps(tw_ptr.add(2 * prev_len + j) as *const f32);
+                // Prefetch twiddle data 2 iterations ahead for L1 cache.
+                // Only beneficial when prev_len is large enough to have cache pressure.
+                // Cast to *const i8 as required by _mm_prefetch intrinsic.
+                if prev_len >= 16 {
+                    _mm_prefetch(tw_ptr.add(0 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(1 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(2 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                }
                 a1 = cmul_f32(a1, tw1);
                 a2 = cmul_f32(a2, tw2);
                 a3 = cmul_f32(a3, tw3);
@@ -995,9 +1028,9 @@ pub(super) unsafe fn flat_pass_r4_f32(
                 let mut a1 = _mm_loadu_ps(src_ptr.add(off1) as *const f32);
                 let mut a2 = _mm_loadu_ps(src_ptr.add(off2) as *const f32);
                 let mut a3 = _mm_loadu_ps(src_ptr.add(off3) as *const f32);
-                let tw1 = _mm_loadu_ps(tw.as_ptr().add(0 * prev_len + j) as *const f32);
-                let tw2 = _mm_loadu_ps(tw.as_ptr().add(1 * prev_len + j) as *const f32);
-                let tw3 = _mm_loadu_ps(tw.as_ptr().add(2 * prev_len + j) as *const f32);
+                let tw1 = _mm_loadu_ps(tw_ptr.add(0 * prev_len + j) as *const f32);
+                let tw2 = _mm_loadu_ps(tw_ptr.add(1 * prev_len + j) as *const f32);
+                let tw3 = _mm_loadu_ps(tw_ptr.add(2 * prev_len + j) as *const f32);
                 a1 = cmul_f32_128(a1, tw1);
                 a2 = cmul_f32_128(a2, tw2);
                 a3 = cmul_f32_128(a3, tw3);
@@ -1016,9 +1049,9 @@ pub(super) unsafe fn flat_pass_r4_f32(
                 let mut a1s = *src_ptr.add(1 * stride + src_j);
                 let mut a2s = *src_ptr.add(2 * stride + src_j);
                 let mut a3s = *src_ptr.add(3 * stride + src_j);
-                let tw1 = *tw.as_ptr().add(0 * prev_len + j);
-                let tw2 = *tw.as_ptr().add(1 * prev_len + j);
-                let tw3 = *tw.as_ptr().add(2 * prev_len + j);
+                let tw1 = *tw_ptr.add(0 * prev_len + j);
+                let tw2 = *tw_ptr.add(1 * prev_len + j);
+                let tw3 = *tw_ptr.add(2 * prev_len + j);
                 a1s = Complex {
                     re: a1s.re * tw1.re - a1s.im * tw1.im,
                     im: a1s.re * tw1.im + a1s.im * tw1.re,
@@ -1276,6 +1309,8 @@ pub(super) unsafe fn flat_pass_r3_f32(
         }
     } else if prev_len >= 4 {
         // 4-column AVX2 loop, 1 group at a time.
+        // Hoist tw_ptr outside group loop since it never changes.
+        let tw_ptr = tw.as_ptr();
         for g in 0..g_count {
             let src_base = g * prev_len;
             let dst_base = g * stage_chunk;
@@ -1285,10 +1320,17 @@ pub(super) unsafe fn flat_pass_r3_f32(
                 let off1 = 1 * stride + src_base + j;
                 let off2 = 2 * stride + src_base + j;
                 let a0 = _mm256_loadu_ps(src_ptr.add(off0) as *const f32);
-                let tw1 = _mm256_loadu_ps(tw.as_ptr().add(0 * prev_len + j) as *const f32);
-                let tw2 = _mm256_loadu_ps(tw.as_ptr().add(1 * prev_len + j) as *const f32);
+                let tw1 = _mm256_loadu_ps(tw_ptr.add(0 * prev_len + j) as *const f32);
+                let tw2 = _mm256_loadu_ps(tw_ptr.add(1 * prev_len + j) as *const f32);
                 let a1 = cmul_f32(_mm256_loadu_ps(src_ptr.add(off1) as *const f32), tw1);
                 let a2 = cmul_f32(_mm256_loadu_ps(src_ptr.add(off2) as *const f32), tw2);
+                // Prefetch twiddle data 2 iterations ahead for L1 cache.
+                // Only beneficial when prev_len is large enough to have cache pressure.
+                // Cast to *const i8 as required by _mm_prefetch intrinsic.
+                if prev_len >= 16 {
+                    _mm_prefetch(tw_ptr.add(0 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                    _mm_prefetch(tw_ptr.add(1 * prev_len + j + 8) as *const i8, _MM_HINT_T0);
+                }
                 let (b0, b1, b2) = dft3_256!(a0, a1, a2);
                 let dp = dst_ptr.add(dst_base);
                 _mm256_storeu_ps(dp.add(j + 0 * prev_len) as *mut f32, b0);
@@ -1301,8 +1343,8 @@ pub(super) unsafe fn flat_pass_r3_f32(
                 let off0 = 0 * stride + src_base + j;
                 let off1 = 1 * stride + src_base + j;
                 let off2 = 2 * stride + src_base + j;
-                let tw1 = _mm_loadu_ps(tw.as_ptr().add(0 * prev_len + j) as *const f32);
-                let tw2 = _mm_loadu_ps(tw.as_ptr().add(1 * prev_len + j) as *const f32);
+                let tw1 = _mm_loadu_ps(tw_ptr.add(0 * prev_len + j) as *const f32);
+                let tw2 = _mm_loadu_ps(tw_ptr.add(1 * prev_len + j) as *const f32);
                 let a0 = _mm_loadu_ps(src_ptr.add(off0) as *const f32);
                 let a1 = cmul_f32_128(_mm_loadu_ps(src_ptr.add(off1) as *const f32), tw1);
                 let a2 = cmul_f32_128(_mm_loadu_ps(src_ptr.add(off2) as *const f32), tw2);
@@ -1321,6 +1363,8 @@ pub(super) unsafe fn flat_pass_r3_f32(
         }
     } else {
         // prev_len in {2, 3}: 2-column __m128 loop.
+        // Hoist tw_ptr outside group loop since it never changes.
+        let tw_ptr = tw.as_ptr();
         for g in 0..g_count {
             let src_base = g * prev_len;
             let dst_base = g * stage_chunk;
@@ -1329,8 +1373,8 @@ pub(super) unsafe fn flat_pass_r3_f32(
                 let off0 = 0 * stride + src_base + j;
                 let off1 = 1 * stride + src_base + j;
                 let off2 = 2 * stride + src_base + j;
-                let tw1 = _mm_loadu_ps(tw.as_ptr().add(0 * prev_len + j) as *const f32);
-                let tw2 = _mm_loadu_ps(tw.as_ptr().add(1 * prev_len + j) as *const f32);
+                let tw1 = _mm_loadu_ps(tw_ptr.add(0 * prev_len + j) as *const f32);
+                let tw2 = _mm_loadu_ps(tw_ptr.add(1 * prev_len + j) as *const f32);
                 let a0 = _mm_loadu_ps(src_ptr.add(off0) as *const f32);
                 let a1 = cmul_f32_128(_mm_loadu_ps(src_ptr.add(off1) as *const f32), tw1);
                 let a2 = cmul_f32_128(_mm_loadu_ps(src_ptr.add(off2) as *const f32), tw2);

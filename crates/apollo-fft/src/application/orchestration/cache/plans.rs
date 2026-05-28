@@ -25,30 +25,49 @@ impl PlanCacheProvider for f64 {
     #[inline(always)]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
+            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f64>>)>> = RefCell::new(None);
             static TLS_CACHE: RefCell<HashMap<usize, Arc<FftPlan1D<f64>>>> = RefCell::new(HashMap::new());
         }
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f64>>>>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = shape.n;
+        if let Some(plan) = LAST_PLAN.with(|last| {
+            let borrow = last.borrow();
+            if let Some((n, plan)) = &*borrow {
+                if *n == key {
+                    return Some(Arc::clone(plan));
+                }
+            }
+            None
+        }) {
+            return plan;
+        }
+
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan))));
             return plan;
         }
 
         if let Some(plan) = GLOBAL_CACHE.read().get(&key) {
-            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(plan)));
-            return Arc::clone(plan);
+            let plan_clone = Arc::clone(plan);
+            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan_clone)));
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan_clone))));
+            return plan_clone;
         }
 
         let mut guard = GLOBAL_CACHE.write();
         if let Some(plan) = guard.get(&key) {
-            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(plan)));
-            return Arc::clone(plan);
+            let plan_clone = Arc::clone(plan);
+            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan_clone)));
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan_clone))));
+            return plan_clone;
         }
 
         let plan = Arc::new(FftPlan1D::<f64>::new(shape));
         guard.insert(key, Arc::clone(&plan));
         TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan)));
+        LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan))));
         plan
     }
 
@@ -121,30 +140,49 @@ impl PlanCacheProvider for f32 {
     #[inline(always)]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
+            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f32>>)>> = RefCell::new(None);
             static TLS_CACHE: RefCell<HashMap<usize, Arc<FftPlan1D<f32>>>> = RefCell::new(HashMap::new());
         }
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f32>>>>> =
             std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = shape.n;
+        if let Some(plan) = LAST_PLAN.with(|last| {
+            let borrow = last.borrow();
+            if let Some((n, plan)) = &*borrow {
+                if *n == key {
+                    return Some(Arc::clone(plan));
+                }
+            }
+            None
+        }) {
+            return plan;
+        }
+
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan))));
             return plan;
         }
 
         if let Some(plan) = GLOBAL_CACHE.read().get(&key) {
-            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(plan)));
-            return Arc::clone(plan);
+            let plan_clone = Arc::clone(plan);
+            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan_clone)));
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan_clone))));
+            return plan_clone;
         }
 
         let mut guard = GLOBAL_CACHE.write();
         if let Some(plan) = guard.get(&key) {
-            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(plan)));
-            return Arc::clone(plan);
+            let plan_clone = Arc::clone(plan);
+            TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan_clone)));
+            LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan_clone))));
+            return plan_clone;
         }
 
         let plan = Arc::new(FftPlan1D::<f32>::new(shape));
         guard.insert(key, Arc::clone(&plan));
         TLS_CACHE.with(|cache| cache.borrow_mut().insert(key, Arc::clone(&plan)));
+        LAST_PLAN.with(|last| *last.borrow_mut() = Some((key, Arc::clone(&plan))));
         plan
     }
 

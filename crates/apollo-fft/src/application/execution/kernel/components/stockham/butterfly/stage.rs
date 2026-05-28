@@ -67,6 +67,69 @@ pub(crate) fn stage_triple_scalar_one_impl<C>(
     dst[half_n + quarter_n + eighth_n + out_base] = p6 - q3;
 }
 
+pub(crate) fn stage_triple_scalar_one_j0_impl<C>(
+    src: &[C],
+    dst: &mut [C],
+    src_base: usize,
+    dst_base: usize,
+    quarter_groups: usize,
+    eighth_n: usize,
+    quarter_n: usize,
+    half_n: usize,
+    k: usize,
+    w2b: C,
+    w3b: C,
+    w3c: C,
+    w3d: C,
+) where
+    C: Copy + std::ops::Add<Output = C> + std::ops::Sub<Output = C> + std::ops::Mul<Output = C>,
+{
+    let x0 = src[src_base + k];
+    let x1 = src[src_base + quarter_groups + k];
+    let x2 = src[src_base + 2 * quarter_groups + k];
+    let x3 = src[src_base + 3 * quarter_groups + k];
+    let x4 = src[src_base + 4 * quarter_groups + k];
+    let x5 = src[src_base + 5 * quarter_groups + k];
+    let x6 = src[src_base + 6 * quarter_groups + k];
+    let x7 = src[src_base + 7 * quarter_groups + k];
+
+    let s0 = x0 + x4;
+    let s1 = x1 + x5;
+    let s2 = x2 + x6;
+    let s3 = x3 + x7;
+    let d0 = x0 - x4;
+    let d1 = x1 - x5;
+    let d2 = x2 - x6;
+    let d3 = x3 - x7;
+
+    let t2 = s2;
+    let t3 = s3;
+    let u2 = d2 * w2b;
+    let u3 = d3 * w2b;
+    let p0 = s0 + t2;
+    let p1 = s1 + t3;
+    let p4 = s0 - t2;
+    let p5 = s1 - t3;
+    let p2 = d0 + u2;
+    let p3 = d1 + u3;
+    let p6 = d0 - u2;
+    let p7 = d1 - u3;
+
+    let q0 = p1;
+    let q1 = p3 * w3b;
+    let q2 = p5 * w3c;
+    let q3 = p7 * w3d;
+    let out_base = dst_base + k;
+    dst[out_base] = p0 + q0;
+    dst[half_n + out_base] = p0 - q0;
+    dst[eighth_n + out_base] = p2 + q1;
+    dst[half_n + eighth_n + out_base] = p2 - q1;
+    dst[quarter_n + out_base] = p4 + q2;
+    dst[half_n + quarter_n + out_base] = p4 - q2;
+    dst[quarter_n + eighth_n + out_base] = p6 + q3;
+    dst[half_n + quarter_n + eighth_n + out_base] = p6 - q3;
+}
+
 #[inline]
 pub(crate) fn stage_triple_impl<C, const TILE_SIZE: usize>(
     src: &[C],
@@ -91,25 +154,56 @@ pub(crate) fn stage_triple_impl<C, const TILE_SIZE: usize>(
         for j in 0..radix {
             let src_base = j * groups * 2;
             let dst_base = j * quarter_groups;
-            for k in k_start..k_end {
-                stage_triple_scalar_one_impl(
-                    src,
-                    dst,
-                    src_base,
-                    dst_base,
-                    quarter_groups,
-                    eighth_n,
-                    quarter_n,
-                    half_n,
-                    k,
-                    first_twiddles[j],
-                    second_twiddles[j],
-                    second_twiddles[j + radix],
-                    third_twiddles[j],
-                    third_twiddles[j + radix],
-                    third_twiddles[j + 2 * radix],
-                    third_twiddles[j + 3 * radix],
-                );
+            if j == 0 {
+                let w2b = second_twiddles[radix];
+                let w3b = third_twiddles[radix];
+                let w3c = third_twiddles[2 * radix];
+                let w3d = third_twiddles[3 * radix];
+                for k in k_start..k_end {
+                    stage_triple_scalar_one_j0_impl(
+                        src,
+                        dst,
+                        src_base,
+                        dst_base,
+                        quarter_groups,
+                        eighth_n,
+                        quarter_n,
+                        half_n,
+                        k,
+                        w2b,
+                        w3b,
+                        w3c,
+                        w3d,
+                    );
+                }
+            } else {
+                let w1 = first_twiddles[j];
+                let w2a = second_twiddles[j];
+                let w2b = second_twiddles[j + radix];
+                let w3a = third_twiddles[j];
+                let w3b = third_twiddles[j + radix];
+                let w3c = third_twiddles[j + 2 * radix];
+                let w3d = third_twiddles[j + 3 * radix];
+                for k in k_start..k_end {
+                    stage_triple_scalar_one_impl(
+                        src,
+                        dst,
+                        src_base,
+                        dst_base,
+                        quarter_groups,
+                        eighth_n,
+                        quarter_n,
+                        half_n,
+                        k,
+                        w1,
+                        w2a,
+                        w2b,
+                        w3a,
+                        w3b,
+                        w3c,
+                        w3d,
+                    );
+                }
             }
         }
         k_start += TILE_SIZE;
@@ -380,26 +474,46 @@ pub(crate) fn stage_pair_impl<C, const TILE_SIZE: usize>(
     while k_start < half_groups {
         let k_end = (k_start + TILE_SIZE).min(half_groups);
         for j in 0..radix {
-            let w1 = first_twiddles[j];
-            let w2 = second_twiddles[j];
-            let w3 = second_twiddles[j + radix];
             let src_base = j * groups * 2;
             let dst_base = j * half_groups;
-            for k in k_start..k_end {
-                let x0 = src[src_base + k];
-                let x1 = src[src_base + half_groups + k];
-                let x2 = src[src_base + groups + k] * w1;
-                let x3 = src[src_base + groups + half_groups + k] * w1;
-                let a0 = x0 + x2;
-                let a1 = x1 + x3;
-                let b0 = x0 - x2;
-                let b1 = x1 - x3;
-                let c0 = a1 * w2;
-                let c1 = b1 * w3;
-                dst[dst_base + k] = a0 + c0;
-                dst[dst_base + half_n + k] = a0 - c0;
-                dst[dst_base + quarter_n + k] = b0 + c1;
-                dst[dst_base + half_n + quarter_n + k] = b0 - c1;
+            if j == 0 {
+                let w3 = second_twiddles[radix];
+                for k in k_start..k_end {
+                    let x0 = src[src_base + k];
+                    let x1 = src[src_base + half_groups + k];
+                    let x2 = src[src_base + groups + k];
+                    let x3 = src[src_base + groups + half_groups + k];
+                    let a0 = x0 + x2;
+                    let a1 = x1 + x3;
+                    let b0 = x0 - x2;
+                    let b1 = x1 - x3;
+                    let c0 = a1;
+                    let c1 = b1 * w3;
+                    dst[dst_base + k] = a0 + c0;
+                    dst[dst_base + half_n + k] = a0 - c0;
+                    dst[dst_base + quarter_n + k] = b0 + c1;
+                    dst[dst_base + half_n + quarter_n + k] = b0 - c1;
+                }
+            } else {
+                let w1 = first_twiddles[j];
+                let w2 = second_twiddles[j];
+                let w3 = second_twiddles[j + radix];
+                for k in k_start..k_end {
+                    let x0 = src[src_base + k];
+                    let x1 = src[src_base + half_groups + k];
+                    let x2 = src[src_base + groups + k] * w1;
+                    let x3 = src[src_base + groups + half_groups + k] * w1;
+                    let a0 = x0 + x2;
+                    let a1 = x1 + x3;
+                    let b0 = x0 - x2;
+                    let b1 = x1 - x3;
+                    let c0 = a1 * w2;
+                    let c1 = b1 * w3;
+                    dst[dst_base + k] = a0 + c0;
+                    dst[dst_base + half_n + k] = a0 - c0;
+                    dst[dst_base + quarter_n + k] = b0 + c1;
+                    dst[dst_base + half_n + quarter_n + k] = b0 - c1;
+                }
             }
         }
         k_start += TILE_SIZE;

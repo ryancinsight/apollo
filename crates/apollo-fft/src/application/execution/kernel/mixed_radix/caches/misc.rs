@@ -4,71 +4,102 @@ use super::super::super::radix_shape::{
 };
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<Arc<[usize]>>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+const NONE_ARC_USIZE: Option<Arc<[usize]>> = None;
+const NONE_NONE_ARC_USIZE: Option<Option<Arc<[usize]>>> = None;
+const NONE_ARC_C64: Option<Arc<[Complex64]>> = None;
+const NONE_ARC_C32: Option<Arc<[Complex32]>> = None;
+const NONE_NEGACYCLIC_C64: Option<NegacyclicEntry<Complex64>> = None;
+const NONE_NEGACYCLIC_C32: Option<NegacyclicEntry<Complex32>> = None;
+
+const FLAT_CACHE_LIMIT: usize = 4096;
+
+static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<Arc<[usize]>>>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+
 static RADER_SPECTRUM_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize, usize), Arc<[Complex64]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_SPECTRUM_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize, usize), Arc<[Complex32]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<HashMap<(usize, usize), Arc<[usize]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static COPRIME_FACTORS_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Option<(usize, usize)>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static IS_PRIME_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, bool>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static COPRIME_FACTORS_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<(usize, usize)>>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static IS_PRIME_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, bool>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static PFA_PERM_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static PFA_CYCLES_CACHE: std::sync::LazyLock<RwLock<HashMap<(usize, usize), Arc<[usize]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static PFA_CYCLES_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 /// Negacyclic spectrum cache: (cyclic_spectrum, negacyclic_spectrum) per (n, inverse, g_inv).
 type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
 
 static RADER_NEGACYCLIC_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_NEGACYCLIC_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_NEG_TWIDDLES_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<usize, Arc<[Complex64]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<usize, Arc<[Complex64]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_NEG_TWIDDLES_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<HashMap<usize, Arc<[Complex32]>>>,
-> = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+    RwLock<FxHashMap<usize, Arc<[Complex32]>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 thread_local! {
-    pub(super) static TL_PRIME23_RADIX: RefCell<HashMap<usize, Option<Arc<[usize]>>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<HashMap<(usize, usize, usize), Arc<[Complex64]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<HashMap<(usize, usize, usize), Arc<[Complex32]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_ORDER: RefCell<HashMap<(usize, usize), Arc<[usize]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_COPRIME_FACTORS: RefCell<HashMap<usize, Option<(usize, usize)>>> =
-        RefCell::new(HashMap::with_capacity(16));
-    pub(super) static TL_IS_PRIME: RefCell<HashMap<usize, bool>> =
-        RefCell::new(HashMap::with_capacity(16));
-    pub(super) static TL_PFA_PERM: RefCell<HashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_PFA_CYCLES: RefCell<HashMap<(usize, usize), Arc<[usize]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<HashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: RefCell<HashMap<usize, Arc<[Complex64]>>> =
-        RefCell::new(HashMap::with_capacity(8));
-    pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: RefCell<HashMap<usize, Arc<[Complex32]>>> =
-        RefCell::new(HashMap::with_capacity(8));
+    pub(super) static TL_PRIME23_RADIX: RefCell<FxHashMap<usize, Option<Arc<[usize]>>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_ORDER: RefCell<FxHashMap<(usize, usize), Arc<[usize]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_COPRIME_FACTORS: RefCell<FxHashMap<usize, Option<(usize, usize)>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
+    pub(super) static TL_IS_PRIME: RefCell<FxHashMap<usize, bool>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
+    pub(super) static TL_PFA_PERM: RefCell<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_PFA_CYCLES: RefCell<FxHashMap<(usize, usize), Arc<[usize]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: RefCell<FxHashMap<usize, Arc<[Complex64]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+    pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: RefCell<FxHashMap<usize, Arc<[Complex32]>>> =
+        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
+
+    static TL_COPRIME_FACTORS_FLAT: RefCell<[Option<Option<(usize, usize)>>; 4096]> =
+        RefCell::new([None; 4096]);
+    static TL_IS_PRIME_FLAT: RefCell<[Option<bool>; 4096]> =
+        RefCell::new([None; 4096]);
+    static TL_PRIME23_RADIX_FLAT: RefCell<[Option<Option<Arc<[usize]>>>; 4096]> =
+        RefCell::new([NONE_NONE_ARC_USIZE; 4096]);
+    static TL_RADER_ORDER_FLAT: RefCell<[Option<Arc<[usize]>>; 4096]> =
+        RefCell::new([NONE_ARC_USIZE; 4096]);
+    static TL_RADER_NEG_TWIDDLES_PRECISE_FLAT: RefCell<[Option<Arc<[Complex64]>>; 4096]> =
+        RefCell::new([NONE_ARC_C64; 4096]);
+    static TL_RADER_NEG_TWIDDLES_REDUCED_FLAT: RefCell<[Option<Arc<[Complex32]>>; 4096]> =
+        RefCell::new([NONE_ARC_C32; 4096]);
+    static TL_RADER_SPECTRUM_PRECISE_FLAT: RefCell<[Option<Arc<[Complex64]>>; 8192]> =
+        RefCell::new([NONE_ARC_C64; 8192]);
+    static TL_RADER_SPECTRUM_REDUCED_FLAT: RefCell<[Option<Arc<[Complex32]>>; 8192]> =
+        RefCell::new([NONE_ARC_C32; 8192]);
+    static TL_RADER_NEGACYCLIC_PRECISE_FLAT: RefCell<[Option<NegacyclicEntry<Complex64>>; 8192]> =
+        RefCell::new([NONE_NEGACYCLIC_C64; 8192]);
+    static TL_RADER_NEGACYCLIC_REDUCED_FLAT: RefCell<[Option<NegacyclicEntry<Complex32>>; 8192]> =
+        RefCell::new([NONE_NEGACYCLIC_C32; 8192]);
 }
 
 declare_cache_store! {
@@ -83,23 +114,36 @@ declare_cache_store! {
     tl_get: rader_tl_get,
     tl_insert: rader_tl_insert,
     global: rader_global,
-    global_ret_self: RwLock<HashMap<(usize, usize, usize), Arc<[Self]>>>,
+    global_ret_self: RwLock<FxHashMap<(usize, usize, usize), Arc<[Self]>>>,
     tl_precise: TL_RADER_SPECTRUM_PRECISE,
     tl_reduced: TL_RADER_SPECTRUM_REDUCED,
     global_precise: RADER_SPECTRUM_PRECISE_CACHE,
     global_reduced: RADER_SPECTRUM_REDUCED_CACHE,
+    tl_precise_flat: TL_RADER_SPECTRUM_PRECISE_FLAT,
+    tl_reduced_flat: TL_RADER_SPECTRUM_REDUCED_FLAT,
+    flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
+    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | (if key.1 != 0 { 1 } else { 0 }),
 }
 
 #[inline]
 pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
-    if let Some(radices) = TL_PRIME23_RADIX.with(|c| c.borrow().get(&n).cloned()) {
+    if n < FLAT_CACHE_LIMIT {
+        if let Some(radices) = TL_PRIME23_RADIX_FLAT.with(|c| c.borrow()[n].clone()) {
+            return radices;
+        }
+    } else if let Some(radices) = TL_PRIME23_RADIX.with(|c| c.borrow().get(&n).cloned()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().prime23_radix.tl_hit();
         return radices;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().prime23_radix.global_hit();
     let radices = {
         let maybe_cached = PRIME23_RADIX_CACHE.read().get(&n).cloned();
         if let Some(radices) = maybe_cached {
             radices
         } else {
+            super::profiler::get().prime23_radix.miss();
             let new_radices = factorize_prime23(n).map(lower_and_cache_radices);
             PRIME23_RADIX_CACHE
                 .write()
@@ -111,7 +155,11 @@ pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
                 .clone()
         }
     };
-    TL_PRIME23_RADIX.with(|c| c.borrow_mut().insert(n, radices.clone()));
+    if n < FLAT_CACHE_LIMIT {
+        TL_PRIME23_RADIX_FLAT.with(|c| c.borrow_mut()[n] = Some(radices.clone()));
+    } else {
+        TL_PRIME23_RADIX.with(|c| c.borrow_mut().insert(n, radices.clone()));
+    }
     radices
 }
 
@@ -122,37 +170,65 @@ pub(crate) fn lower_and_cache_radices(radices: Vec<usize>) -> Arc<[usize]> {
 
 #[inline]
 pub(crate) fn cached_coprime_factors(n: usize) -> Option<(usize, usize)> {
-    if let Some(v) = TL_COPRIME_FACTORS.with(|c| c.borrow().get(&n).copied()) {
+    if n < FLAT_CACHE_LIMIT {
+        if let Some(v) = TL_COPRIME_FACTORS_FLAT.with(|c| c.borrow()[n]) {
+            return v;
+        }
+    } else if let Some(v) = TL_COPRIME_FACTORS.with(|c| c.borrow().get(&n).copied()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().coprime_factors.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().coprime_factors.global_hit();
     let v = {
         let maybe = COPRIME_FACTORS_CACHE.read().get(&n).copied();
         if let Some(v) = maybe {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().coprime_factors.miss();
             let result = coprime_factors(n);
             *COPRIME_FACTORS_CACHE.write().entry(n).or_insert(result)
         }
     };
-    TL_COPRIME_FACTORS.with(|c| c.borrow_mut().insert(n, v));
+    if n < FLAT_CACHE_LIMIT {
+        TL_COPRIME_FACTORS_FLAT.with(|c| c.borrow_mut()[n] = Some(v));
+    } else {
+        TL_COPRIME_FACTORS.with(|c| c.borrow_mut().insert(n, v));
+    }
     v
 }
 
 #[inline]
 pub(crate) fn cached_is_prime(n: usize) -> bool {
-    if let Some(v) = TL_IS_PRIME.with(|c| c.borrow().get(&n).copied()) {
+    if n < FLAT_CACHE_LIMIT {
+        if let Some(v) = TL_IS_PRIME_FLAT.with(|c| c.borrow()[n]) {
+            return v;
+        }
+    } else if let Some(v) = TL_IS_PRIME.with(|c| c.borrow().get(&n).copied()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().is_prime.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().is_prime.global_hit();
     let v = {
         let maybe = IS_PRIME_CACHE.read().get(&n).copied();
         if let Some(v) = maybe {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().is_prime.miss();
             let result = is_prime(n);
             *IS_PRIME_CACHE.write().entry(n).or_insert(result)
         }
     };
-    TL_IS_PRIME.with(|c| c.borrow_mut().insert(n, v));
+    if n < FLAT_CACHE_LIMIT {
+        TL_IS_PRIME_FLAT.with(|c| c.borrow_mut()[n] = Some(v));
+    } else {
+        TL_IS_PRIME.with(|c| c.borrow_mut().insert(n, v));
+    }
     v
 }
 
@@ -167,13 +243,19 @@ pub(crate) fn cached_is_prime(n: usize) -> bool {
 pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
     let key = (n1, n2);
     if let Some(v) = TL_PFA_PERM.with(|c| c.borrow().get(&key).cloned()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().pfa_perm.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().pfa_perm.global_hit();
     let v = {
         let maybe_cached = PFA_PERM_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().pfa_perm.miss();
             let pair = build_pfa_perm(n1, n2);
             PFA_PERM_CACHE
                 .write()
@@ -198,13 +280,19 @@ pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize
 pub(crate) fn cached_pfa_input_cycles(n1: usize, n2: usize) -> Arc<[usize]> {
     let key = (n1, n2);
     if let Some(v) = TL_PFA_CYCLES.with(|c| c.borrow().get(&key).cloned()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().pfa_cycles.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().pfa_cycles.global_hit();
     let v = {
         let maybe_cached = PFA_CYCLES_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().pfa_cycles.miss();
             let cycles = build_pfa_input_cycles(n1, n2);
             PFA_CYCLES_CACHE
                 .write()
@@ -305,14 +393,25 @@ pub(crate) fn cached_rader_order(
     key: (usize, usize),
     build_fn: impl FnOnce((usize, usize)) -> Vec<usize>,
 ) -> Arc<[usize]> {
-    if let Some(v) = TL_RADER_ORDER.with(|c| c.borrow().get(&key).cloned()) {
+    let n = key.0;
+    if n < FLAT_CACHE_LIMIT {
+        if let Some(v) = TL_RADER_ORDER_FLAT.with(|c| c.borrow()[n].clone()) {
+            return v;
+        }
+    } else if let Some(v) = TL_RADER_ORDER.with(|c| c.borrow().get(&key).cloned()) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().rader_order.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().rader_order.global_hit();
     let v = {
         let maybe_cached = RADER_ORDER_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().rader_order.miss();
             let order: Arc<[usize]> = Arc::from(build_fn(key));
             RADER_ORDER_CACHE
                 .write()
@@ -321,7 +420,11 @@ pub(crate) fn cached_rader_order(
                 .clone()
         }
     };
-    TL_RADER_ORDER.with(|c| c.borrow_mut().insert(key, Arc::clone(&v)));
+    if n < FLAT_CACHE_LIMIT {
+        TL_RADER_ORDER_FLAT.with(|c| c.borrow_mut()[n] = Some(Arc::clone(&v)));
+    } else {
+        TL_RADER_ORDER.with(|c| c.borrow_mut().insert(key, Arc::clone(&v)));
+    }
     v
 }
 
@@ -339,11 +442,15 @@ declare_cache_store! {
     tl_get: neg_tl_get,
     tl_insert: neg_tl_insert,
     global: neg_global,
-    global_ret_self: RwLock<HashMap<(usize, usize, usize), NegacyclicEntry<Self>>>,
+    global_ret_self: RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Self>>>,
     tl_precise: TL_RADER_NEGACYCLIC_PRECISE,
     tl_reduced: TL_RADER_NEGACYCLIC_REDUCED,
     global_precise: RADER_NEGACYCLIC_PRECISE_CACHE,
     global_reduced: RADER_NEGACYCLIC_REDUCED_CACHE,
+    tl_precise_flat: TL_RADER_NEGACYCLIC_PRECISE_FLAT,
+    tl_reduced_flat: TL_RADER_NEGACYCLIC_REDUCED_FLAT,
+    flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
+    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | (if key.1 != 0 { 1 } else { 0 }),
 }
 
 /// Generic negacyclic spectrum cache: dispatches to the correct concrete
@@ -354,13 +461,19 @@ pub(crate) fn cached_rader_negacyclic_spectra<F: NegacyclicSpectrumStore>(
     build_fn: impl FnOnce((usize, usize, usize)) -> (Vec<F>, Vec<F>),
 ) -> NegacyclicEntry<F> {
     if let Some(v) = F::neg_tl_get(key) {
+        #[cfg(cache_profiling)]
+        super::profiler::get().rader_negacyclic_precise.tl_hit();
         return v;
     }
+    #[cfg(cache_profiling)]
+    super::profiler::get().rader_negacyclic_precise.global_hit();
     let v = {
         let maybe_cached = F::neg_global().read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
+            #[cfg(cache_profiling)]
+            super::profiler::get().rader_negacyclic_precise.miss();
             let (cyc, neg) = build_fn(key);
             let entry: NegacyclicEntry<F> = (Arc::from(cyc), Arc::from(neg));
             F::neg_global()
@@ -388,11 +501,15 @@ declare_cache_store! {
     tl_get: neg_tw_tl_get,
     tl_insert: neg_tw_tl_insert,
     global: neg_tw_global,
-    global_ret_self: RwLock<HashMap<usize, Arc<[Self]>>>,
+    global_ret_self: RwLock<FxHashMap<usize, Arc<[Self]>>>,
     tl_precise: TL_RADER_NEG_TWIDDLES_PRECISE,
     tl_reduced: TL_RADER_NEG_TWIDDLES_REDUCED,
     global_precise: RADER_NEG_TWIDDLES_PRECISE_CACHE,
     global_reduced: RADER_NEG_TWIDDLES_REDUCED_CACHE,
+    tl_precise_flat: TL_RADER_NEG_TWIDDLES_PRECISE_FLAT,
+    tl_reduced_flat: TL_RADER_NEG_TWIDDLES_REDUCED_FLAT,
+    flat_check: |key: usize| key < FLAT_CACHE_LIMIT,
+    flat_idx: |key: usize| key,
 }
 
 // Negacyclic twiddle cache: dispatches via the sealed `NegTwiddleStore` trait.
@@ -403,3 +520,5 @@ cached_fetch_arc! {
     ) -> Arc<[F]>
     using tl_get = neg_tw_tl_get, tl_insert = neg_tw_tl_insert, global = neg_tw_global,
 }
+
+

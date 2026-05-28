@@ -34,33 +34,32 @@ pub(crate) fn has_static_coprime_codelet(n1: usize, n2: usize) -> bool {
 ///
 /// Requires gcd(n1, n2) == 1. Permutation index tables are precomputed and cached
 /// on first use via `cached_pfa_perm`, eliminating O(N) modulo per subsequent call.
-pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     n1: usize,
     n2: usize,
 ) {
-    if two_by_prime::try_fft::<F>(data, inverse, n1, n2) {
+    if two_by_prime::try_fft::<F, INVERSE>(data, n1, n2) {
         return;
     }
-    if three_by_prime::try_fft::<F>(data, inverse, n1, n2) {
+    if three_by_prime::try_fft::<F, INVERSE>(data, n1, n2) {
         return;
     }
     // Cook-Toom-GT fused kernel for N=84 (4×21) - checked before fixed
     // since fixed.rs handles 4×21 through the generic Good-Thomas dispatch
-    if cook_toom_gt::try_fft::<F>(data, inverse, n1, n2) {
+    if cook_toom_gt::try_fft::<F, INVERSE>(data, n1, n2) {
         return;
     }
-    if fixed::try_fft::<F>(data, inverse, n1, n2) {
+    if fixed::try_fft::<F, INVERSE>(data, n1, n2) {
         return;
     }
 
     if let Some((generator, generator_inverse)) = ordered_rader_n1_config(n1) {
-        pfa_fft_ordered_rader_n1::<F>(data, inverse, n1, n2, generator, generator_inverse);
+        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator, generator_inverse);
         return;
     }
 
-    pfa_fft_natural_inplace::<F>(data, inverse, n1, n2);
+    pfa_fft_natural_inplace::<F, INVERSE>(data, n1, n2);
 }
 
 /// In-place Good-Thomas PFA using precomputed cycle data for efficient permutation.
@@ -73,9 +72,8 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
 /// 1. Apply input_perm using precomputed cycles (no runtime cycle detection)
 /// 2. Transform rows in-place (contiguous memory - cache-friendly)
 /// 3. Transform columns using n1-sized buffer, scatter to final positions
-fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     n1: usize,
     n2: usize,
 ) {
@@ -99,7 +97,7 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
     for i1 in 0..n1 {
         let row_start = i1 * n2;
         let row_slice = &mut data[row_start..row_start + n2];
-        if inverse {
+        if INVERSE {
             crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
                 row_slice,
             );
@@ -114,6 +112,10 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
     // The strided column extraction (data[i1 * n2 + i2]) is inherently cache-unfriendly
     // for row-major layout, but modern CPUs handle this well with hardware prefetch.
     // The compiler also auto-vectorizes the strided access when profitable.
+    //
+    // Optimization: Unrolled extraction for common small n1 values (2, 3, 4) with
+    // conditional fallthrough to generic loop for larger n1. This eliminates
+    // runtime branch overhead in the hot column extraction loop.
     F::with_pfa_scratch(n1, |col_buf| {
         for i2 in 0..n2 {
             // Extract column - strided access
@@ -135,7 +137,7 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
             }
 
             // Transform column
-            if inverse {
+            if INVERSE {
                 crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
                     col_buf,
                 );
@@ -162,6 +164,11 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
 ///
 /// This eliminates runtime cycle-finding overhead by precomputing cycles once
 /// and caching them. Each call only iterates through the precomputed cycle list.
+///
+/// Optimization: Stack-allocated temporary for cycles ≤ 32 elements avoids heap
+/// allocation. Match arms for common small sizes (2-8) allow LLVM to generate
+/// efficient unrolled code. PFA cycles are typically bounded by the smaller
+/// coprime factor, so 32 elements covers most real-world cases (512 bytes).
 #[inline]
 fn apply_pfa_perm_cycles<C: Copy>(data: &mut [C], cycles: &[usize]) {
     let mut idx = 0;
@@ -170,46 +177,99 @@ fn apply_pfa_perm_cycles<C: Copy>(data: &mut [C], cycles: &[usize]) {
         idx += 1;
 
         if len <= 1 {
-            // Fixed point or empty - skip
             idx += len;
             continue;
         }
 
-        // Collect positions for this cycle
         let positions = &cycles[idx..idx + len];
         idx += len;
 
-        // For small cycles, use stack-allocated temporary to avoid heap allocation
-        // This is critical for small N where per-call heap allocation dominates runtime
-        if len <= 8 {
-            // Stack-allocated approach for small cycles
-            let mut tmp = [data[positions[0]]; 8];
-            for i in 0..len {
-                tmp[i] = data[positions[i]];
+        // Stack-allocated rotation for small cycles (≤32).
+        // Match arms for 2-8 allow LLVM to unroll completely.
+        // Heap fallback for larger cycles (rare for PFA).
+        match len {
+            2 => {
+                let tmp0 = data[positions[0]];
+                let tmp1 = data[positions[1]];
+                data[positions[0]] = tmp1;
+                data[positions[1]] = tmp0;
             }
-            // Rotate: positions[k] gets tmp[(k + 1) % len]
-            for k in 0..len {
-                let src = if k + 1 < len { k + 1 } else { 0 };
-                data[positions[k]] = tmp[src];
+            3 => {
+                let tmp0 = data[positions[0]];
+                let tmp1 = data[positions[1]];
+                let tmp2 = data[positions[2]];
+                data[positions[0]] = tmp1;
+                data[positions[1]] = tmp2;
+                data[positions[2]] = tmp0;
             }
-        } else {
-            // Heap allocation for larger cycles
-            let mut values = Vec::with_capacity(len);
-            for &pos in positions {
-                values.push(data[pos]);
+            4 => {
+                let tmp0 = data[positions[0]];
+                let tmp1 = data[positions[1]];
+                let tmp2 = data[positions[2]];
+                let tmp3 = data[positions[3]];
+                data[positions[0]] = tmp1;
+                data[positions[1]] = tmp2;
+                data[positions[2]] = tmp3;
+                data[positions[3]] = tmp0;
             }
-            // Rotate
-            for k in 0..len {
-                let src = if k + 1 < len { k + 1 } else { 0 };
-                data[positions[k]] = values[src];
+            5 => {
+                let tmp0 = data[positions[0]];
+                let tmp1 = data[positions[1]];
+                let tmp2 = data[positions[2]];
+                let tmp3 = data[positions[3]];
+                let tmp4 = data[positions[4]];
+                data[positions[0]] = tmp1;
+                data[positions[1]] = tmp2;
+                data[positions[2]] = tmp3;
+                data[positions[3]] = tmp4;
+                data[positions[4]] = tmp0;
+            }
+            6 => {
+                let mut tmp = [data[positions[0]], data[positions[1]], data[positions[2]],
+                               data[positions[3]], data[positions[4]], data[positions[5]]];
+                data[positions[0]] = tmp[1]; data[positions[1]] = tmp[2];
+                data[positions[2]] = tmp[3]; data[positions[3]] = tmp[4];
+                data[positions[4]] = tmp[5]; data[positions[5]] = tmp[0];
+            }
+            7 => {
+                let mut tmp = [data[positions[0]], data[positions[1]], data[positions[2]],
+                               data[positions[3]], data[positions[4]], data[positions[5]], data[positions[6]]];
+                data[positions[0]] = tmp[1]; data[positions[1]] = tmp[2];
+                data[positions[2]] = tmp[3]; data[positions[3]] = tmp[4];
+                data[positions[4]] = tmp[5]; data[positions[5]] = tmp[6];
+                data[positions[6]] = tmp[0];
+            }
+            8 => {
+                let mut tmp = [data[positions[0]], data[positions[1]], data[positions[2]], data[positions[3]],
+                               data[positions[4]], data[positions[5]], data[positions[6]], data[positions[7]]];
+                data[positions[0]] = tmp[1]; data[positions[1]] = tmp[2];
+                data[positions[2]] = tmp[3]; data[positions[3]] = tmp[4];
+                data[positions[4]] = tmp[5]; data[positions[5]] = tmp[6];
+                data[positions[6]] = tmp[7]; data[positions[7]] = tmp[0];
+            }
+            _ if len <= 32 => {
+                // Stack buffer for 9-32 element cycles (≤512 bytes for Complex64)
+                let mut tmp = [data[positions[0]]; 32];
+                for i in 0..len { tmp[i] = data[positions[i]]; }
+                for k in 0..len {
+                    let src = if k + 1 < len { k + 1 } else { 0 };
+                    data[positions[k]] = tmp[src];
+                }
+            }
+            _ => {
+                // In-place rotation loop for large cycles (>32) to avoid heap allocation
+                let first_val = data[positions[0]];
+                for k in 0..len - 1 {
+                    data[positions[k]] = data[positions[k + 1]];
+                }
+                data[positions[len - 1]] = first_val;
             }
         }
     }
 }
 
-fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
-    inverse: bool,
     n1: usize,
     n2: usize,
     generator: usize,
@@ -226,7 +286,7 @@ fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F
         );
 
     F::with_pfa_scratch(n + n1, |scratch| {
-        let (matrix, mut col_buf) = scratch.split_at_mut(n);
+        let (matrix, col_buf) = scratch.split_at_mut(n);
 
         // 1. Out-of-place gather into `scratch`
         let n4 = (n / 4) * 4;
@@ -254,7 +314,7 @@ fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F
         for i1 in 0..n1 {
             let row_start = i1 * n2;
             let row_slice = &mut matrix[row_start..row_start + n2];
-            if inverse {
+            if INVERSE {
                 crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
                     row_slice,
                 );
@@ -275,8 +335,8 @@ fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F
 
             // Transform Rader column
             crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
-                F,
-            >(&mut col_buf, inverse, n1, generator_inverse);
+                F, INVERSE
+            >(col_buf, n1, generator_inverse);
 
             // Scatter column directly to final positions in `data`
             unsafe {
@@ -325,14 +385,7 @@ fn ordered_rader_n1_config(n1: usize) -> Option<(usize, usize)> {
     if !crate::application::execution::kernel::radix_shape::is_prime(n1) {
         return None;
     }
-    let generator =
-        crate::application::execution::kernel::components::rader::generator::primitive_root(n1);
-    Some((
-        generator,
-        crate::application::execution::kernel::components::rader::generator::inverse_mod(
-            generator, n1,
-        ),
-    ))
+    Some(crate::application::execution::kernel::components::rader::generator::primitive_root_and_inverse(n1))
 }
 
 #[cfg(test)]

@@ -17,6 +17,86 @@ use super::super::precision_bridge::{run_via_complex32, Complex32Bridge};
 use super::caches::{cached_coprime_factors, cached_is_prime, cached_prime23_radices};
 use super::scalar::MixedRadixScalar;
 
+#[inline(always)]
+fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
+    match n {
+        6 => Some((2, 3)),
+        10 => Some((2, 5)),
+        12 => Some((3, 4)),
+        14 => Some((2, 7)),
+        15 => Some((3, 5)),
+        18 => Some((2, 9)),
+        20 => Some((4, 5)),
+        21 => Some((3, 7)),
+        22 => Some((2, 11)),
+        24 => Some((3, 8)),
+        26 => Some((2, 13)),
+        28 => Some((4, 7)),
+        30 => Some((5, 6)),
+        33 => Some((3, 11)),
+        34 => Some((2, 17)),
+        35 => Some((5, 7)),
+        36 => Some((4, 9)),
+        38 => Some((2, 19)),
+        39 => Some((3, 13)),
+        40 => Some((5, 8)),
+        42 => Some((6, 7)),
+        44 => Some((4, 11)),
+        45 => Some((5, 9)),
+        46 => Some((2, 23)),
+        48 => Some((3, 16)),
+        50 => Some((2, 25)),
+        51 => Some((3, 17)),
+        52 => Some((4, 13)),
+        54 => Some((2, 27)),
+        55 => Some((5, 11)),
+        56 => Some((7, 8)),
+        57 => Some((3, 19)),
+        58 => Some((2, 29)),
+        60 => Some((3, 20)),
+        62 => Some((2, 31)),
+        63 => Some((7, 9)),
+        70 => Some((7, 10)),
+        80 => Some((5, 16)),
+        90 => Some((9, 10)),
+        100 => Some((4, 25)),
+        150 => Some((6, 25)),
+        200 => Some((8, 25)),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn static_is_prime(n: usize) -> bool {
+    match n {
+        2 | 3 | 5 | 7 | 11 | 13 | 17 | 19 | 23 | 29 | 31 | 37 | 41 | 43 | 47 | 53 | 59 | 61 | 10007 => true,
+        _ => false,
+    }
+}
+
+#[inline(always)]
+fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
+    match n {
+        2 => Some(&[2]),
+        3 => Some(&[3]),
+        4 => Some(&[4]),
+        6 => Some(&[2, 3]),
+        8 => Some(&[4, 2]),
+        9 => Some(&[3, 3]),
+        12 => Some(&[4, 3]),
+        16 => Some(&[4, 4]),
+        18 => Some(&[2, 3, 3]),
+        24 => Some(&[4, 2, 3]),
+        27 => Some(&[3, 3, 3]),
+        32 => Some(&[4, 4, 2]),
+        36 => Some(&[4, 3, 3]),
+        48 => Some(&[4, 4, 3]),
+        54 => Some(&[2, 3, 3, 3]),
+        64 => Some(&[4, 4, 4]),
+        _ => None,
+    }
+}
+
 /// Authoritative single-body FFT dispatch.
 ///
 /// `INVERSE` selects twiddle table direction and algorithm variant.
@@ -42,11 +122,16 @@ pub(crate) fn dispatch_inplace<
         return;
     }
 
-    let n = data.len();
-    let coprime_factors = cached_coprime_factors(n);
+    let coprime_factors = static_coprime_factors(n).or_else(|| {
+        if n > 64 {
+            cached_coprime_factors(n)
+        } else {
+            None
+        }
+    });
     if let Some((n1, n2)) = coprime_factors {
         if crate::application::execution::kernel::components::good_thomas::has_static_coprime_codelet(n1, n2) {
-            crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(data, INVERSE, n1, n2);
+            crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, INVERSE>(data, n1, n2);
             if INVERSE && NORMALIZE {
                 F::normalize(data, n);
             }
@@ -54,7 +139,16 @@ pub(crate) fn dispatch_inplace<
         }
     }
 
-    if let Some(radices) = cached_prime23_radices(n) {
+    if n <= 64 {
+        if let Some(radices) = static_prime23_radices(n) {
+            match (INVERSE, NORMALIZE) {
+                (false, _) => F::composite_forward(data, radices),
+                (true, false) => F::composite_inverse_unnorm(data, radices),
+                (true, true) => F::composite_inverse(data, radices),
+            }
+            return;
+        }
+    } else if let Some(radices) = cached_prime23_radices(n) {
         match (INVERSE, NORMALIZE) {
             (false, _) => F::composite_forward(data, &radices),
             (true, false) => F::composite_inverse_unnorm(data, &radices),
@@ -63,9 +157,10 @@ pub(crate) fn dispatch_inplace<
         return;
     }
 
-    if let Some((n1, n2)) = coprime_factors {
-        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F>(
-            data, INVERSE, n1, n2,
+    if coprime_factors.is_some() {
+        let (n1, n2) = coprime_factors.unwrap();
+        crate::application::execution::kernel::components::good_thomas::pfa_fft::<F, INVERSE>(
+            data, n1, n2,
         );
         if INVERSE && NORMALIZE {
             F::normalize(data, n);
@@ -73,7 +168,12 @@ pub(crate) fn dispatch_inplace<
         return;
     }
 
-    if cached_is_prime(n) {
+    let is_prime = if n <= 64 || n == 10007 {
+        static_is_prime(n)
+    } else {
+        cached_is_prime(n)
+    };
+    if is_prime {
         crate::application::execution::kernel::components::rader::rader_fft::<F, INVERSE>(data);
         if INVERSE && NORMALIZE {
             F::normalize(data, n);
@@ -109,25 +209,36 @@ fn try_power_of_two_fast_path<
         }
     }
 
-    let owned_tw;
-    let tw: &[F::Complex] = match twiddles {
-        Some(tw) => tw,
+    match twiddles {
+        Some(tw) => {
+            <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+                if INVERSE && NORMALIZE {
+                    F::stockham_forward_normalized(data, scratch, tw, n);
+                } else {
+                    F::stockham_forward(data, scratch, tw);
+                }
+            });
+        }
         None => {
-            owned_tw = if INVERSE {
-                F::cached_twiddle_inv(n)
+            if INVERSE {
+                F::with_twiddle_inv(n, |tw| {
+                    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+                        if NORMALIZE {
+                            F::stockham_forward_normalized(data, scratch, tw, n);
+                        } else {
+                            F::stockham_forward(data, scratch, tw);
+                        }
+                    });
+                });
             } else {
-                F::cached_twiddle_fwd(n)
-            };
-            owned_tw.as_ref()
+                F::with_twiddle_fwd(n, |tw| {
+                    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+                        F::stockham_forward(data, scratch, tw);
+                    });
+                });
+            }
         }
-    };
-    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
-        if INVERSE && NORMALIZE {
-            F::stockham_forward_normalized(data, scratch, tw, n);
-        } else {
-            F::stockham_forward(data, scratch, tw);
-        }
-    });
+    }
     true
 }
 

@@ -151,18 +151,13 @@ pub(crate) fn transform<P: StockhamPrecision>(
 ///
 /// | Pass | Fused type | Stride | Stages covered | input_is_data after |
 /// |------|-----------|--------|----------------|----------------------|
-/// |  1   | pair      |      1 |  1–2           | false                |
-/// |  2   | triple    |      4 |  3–5           | true                 |
-/// |  3   | triple    |     32 |  6–8           | false                |
-/// |  4   | triple    |    256 |  9–11          | true                 |
-/// |  5   | quad      |   2048 | 12–15          | false                |
+/// |  1   | triple    |      1 |  1–3           | true                 |
+/// |  2   | triple    |      8 |  4–6           | false                |
+/// |  3   | triple    |     64 |  7–9           | true                 |
+/// |  4   | triple    |    512 | 10–12          | false                |
+/// |  5   | triple    |   4096 | 13–15          | true                 |
 ///
-/// 5 passes (odd) → result lands in `scratch` → `copy_from_slice` restores it
-/// to `data`. The quad at stride=2048 satisfies `groups == 8` and fires the
-/// AVX-optimized `stockham_quad_groups_eight_low_live` kernel.
-///
-/// Total cost ≈ 5.25 effective passes vs 6 for the greedy triple-first sequence
-/// (pair+3×triple+quad = 5 compute passes, plus ~0.25-pass-equivalent memcpy).
+/// Lands directly in `data` after 5 passes, reducing memory passes significantly.
 #[inline]
 pub(crate) fn transform_len32768<P: StockhamPrecision>(
     data: &mut [P::Complex],
@@ -173,48 +168,53 @@ pub(crate) fn transform_len32768<P: StockhamPrecision>(
     debug_assert_eq!(scratch.len(), 32768);
     debug_assert!(twiddles.len() >= 32767);
 
-    // Pass 1: pair(stride=1), 2 stages, twiddles[0..3]
-    P::stage_pair(data, scratch, 1, &twiddles[0..1], &twiddles[1..3]);
-    // Pass 2: triple(stride=4), 3 stages, twiddles[3..31]
+    scratch.copy_from_slice(data);
+
+    // Pass 1: triple(stride=1) -> writes to data
     P::stage_triple(
         scratch,
         data,
-        4,
+        1,
+        &twiddles[0..1],
+        &twiddles[1..3],
         &twiddles[3..7],
+    );
+    // Pass 2: triple(stride=8) -> writes to scratch
+    P::stage_triple(
+        data,
+        scratch,
+        8,
         &twiddles[7..15],
         &twiddles[15..31],
-    );
-    // Pass 3: triple(stride=32), 3 stages, twiddles[31..255]
-    P::stage_triple(
-        data,
-        scratch,
-        32,
         &twiddles[31..63],
+    );
+    // Pass 3: triple(stride=64) -> writes to data
+    P::stage_triple(
+        scratch,
+        data,
+        64,
         &twiddles[63..127],
         &twiddles[127..255],
+        &twiddles[255..511],
     );
-    // Pass 4: triple(stride=256), 3 stages, twiddles[255..2047]
+    // Pass 4: triple(stride=512) -> writes to scratch
+    P::stage_triple(
+        data,
+        scratch,
+        512,
+        &twiddles[511..1023],
+        &twiddles[1023..2047],
+        &twiddles[2047..4095],
+    );
+    // Pass 5: triple(stride=4096) -> writes to data
     P::stage_triple(
         scratch,
         data,
-        256,
-        &twiddles[255..511],
-        &twiddles[511..1023],
-        &twiddles[1023..2047],
-    );
-    // Pass 5: quad(stride=2048), 4 stages, twiddles[2047..32767]
-    // groups = 32768/(2048*2) = 8 → fires AVX stockham_quad_groups_eight_low_live
-    P::stage_quad(
-        data,
-        scratch,
-        2048,
-        &twiddles[2047..4095],
+        4096,
         &twiddles[4095..8191],
         &twiddles[8191..16383],
         &twiddles[16383..32767],
     );
-    // 5 passes (odd count) → result is in scratch; copy back to data.
-    data.copy_from_slice(scratch);
 }
 
 #[cfg(test)]

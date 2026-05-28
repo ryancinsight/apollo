@@ -5,3 +5,4 @@ mod trait_def;
 pub(crate) mod transpose;
 
 pub(crate) use trait_def::MixedRadixScalar;
+pub(crate) use trait_def::{BluesteinEntry, BluesteinKey, BluesteinStore};

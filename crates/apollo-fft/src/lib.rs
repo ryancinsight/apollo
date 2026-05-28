@@ -55,7 +55,7 @@ pub use num_complex::Complex32;
 pub use num_complex::Complex64;
 
 pub use application::utilities::freq::{fftfreq, rfftfreq};
-pub use application::utilities::shift::{fftshift, ifftshift};
+pub use application::utilities::shift::{fftshift, ifftshift, fftshift_inplace, ifftshift_inplace};
 
 use ndarray::{Array1, Array2, Array3, Zip};
 
@@ -287,7 +287,7 @@ pub fn ifft_1d_complex_inplace(data: &mut Array1<Complex64>) {
 /// Forward complex 1D FFT returning a new buffer.
 #[must_use]
 pub fn fft_1d_complex(field: &Array1<Complex64>) -> Array1<Complex64> {
-    let mut output = field.to_owned();
+    let mut output = field.clone();
     fft_1d_complex_inplace(&mut output);
     output
 }
@@ -295,7 +295,7 @@ pub fn fft_1d_complex(field: &Array1<Complex64>) -> Array1<Complex64> {
 /// Inverse complex 1D FFT returning a new buffer.
 #[must_use]
 pub fn ifft_1d_complex(field_hat: &Array1<Complex64>) -> Array1<Complex64> {
-    let mut output = field_hat.to_owned();
+    let mut output = field_hat.clone();
     ifft_1d_complex_inplace(&mut output);
     output
 }
@@ -321,7 +321,7 @@ pub fn ifft_2d_complex_inplace(data: &mut Array2<Complex64>) {
 /// Forward complex 2D FFT returning a new buffer.
 #[must_use]
 pub fn fft_2d_complex(field: &Array2<Complex64>) -> Array2<Complex64> {
-    let mut output = field.to_owned();
+    let mut output = field.clone();
     fft_2d_complex_inplace(&mut output);
     output
 }
@@ -329,7 +329,7 @@ pub fn fft_2d_complex(field: &Array2<Complex64>) -> Array2<Complex64> {
 /// Inverse complex 2D FFT returning a new buffer.
 #[must_use]
 pub fn ifft_2d_complex(field_hat: &Array2<Complex64>) -> Array2<Complex64> {
-    let mut output = field_hat.to_owned();
+    let mut output = field_hat.clone();
     ifft_2d_complex_inplace(&mut output);
     output
 }
@@ -355,7 +355,7 @@ pub fn ifft_3d_complex_inplace(data: &mut Array3<Complex64>) {
 /// Forward complex 3D FFT returning a new buffer.
 #[must_use]
 pub fn fft_3d_complex(field: &Array3<Complex64>) -> Array3<Complex64> {
-    let mut output = field.to_owned();
+    let mut output = field.clone();
     fft_3d_complex_inplace(&mut output);
     output
 }
@@ -363,7 +363,7 @@ pub fn fft_3d_complex(field: &Array3<Complex64>) -> Array3<Complex64> {
 /// Inverse complex 3D FFT returning a new buffer.
 #[must_use]
 pub fn ifft_3d_complex(field_hat: &Array3<Complex64>) -> Array3<Complex64> {
-    let mut output = field_hat.to_owned();
+    let mut output = field_hat.clone();
     ifft_3d_complex_inplace(&mut output);
     output
 }

@@ -326,7 +326,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                 stage_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, radix, twiddles)
             };
         } else {
-            stage_impl::<_, 1024>(src, dst, radix, twiddles);
+            <ReducedStockhamAvxFma as StockhamPrecision>::stage(src, dst, radix, twiddles);
         }
     }
 
@@ -345,7 +345,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                     stage_pair_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles)
                 };
             } else {
-                stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
+                <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
             }
         } else if groups == 8 && radix >= 2 {
             // avx512 pairs require multiples of 8
@@ -363,7 +363,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                 stage_pair_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, radix, first_twiddles, second_twiddles)
             };
         } else {
-            stage_pair_impl::<_, 1024>(src, dst, radix, first_twiddles, second_twiddles);
+            <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
         }
     }
 
@@ -377,7 +377,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
         third_twiddles: &[Complex32],
     ) {
         let groups = src.len() / (radix << 1);
-        if radix == 1 && groups >= 32 && stockham_reduced_stage_is_l1_resident(src.len()) {
+        if radix == 1 && groups >= 32 {
             unsafe {
                 stage_triple_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
             };
@@ -408,7 +408,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                 };
             }
         } else {
-            stage_triple_impl::<_, 1024>(
+            <ReducedStockhamAvxFma as StockhamPrecision>::stage_triple(
                 src,
                 dst,
                 radix,
@@ -438,7 +438,7 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                 )
             }
         } else {
-            stage_quad_impl::<_, 1024>(
+            <ReducedStockhamAvxFma as StockhamPrecision>::stage_quad(
                 src,
                 dst,
                 radix,

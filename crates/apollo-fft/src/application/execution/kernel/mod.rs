@@ -178,30 +178,96 @@ pub fn fft_inverse_unnorm<C: FftPrecision>(data: &mut [C]) {
 impl FftPrecision for Complex64 {
     #[inline(always)]
     fn fft_forward(data: &mut [Self]) {
-        mixed_radix::forward_inplace::<f64>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, false, false>(data); }
+            4 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, false, false>(data); }
+            8 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, false, false>(data); }
+            16 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, false, false>(data); }
+            32 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, false, false>(data); }
+            64 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, false, false>(data); }
+            _ => {
+                mixed_radix::forward_inplace::<f64>(data);
+            }
+        }
     }
     #[inline(always)]
     fn fft_inverse(data: &mut [Self]) {
-        mixed_radix::inverse_inplace::<f64>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, true, true>(data); }
+            4 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, true, true>(data); }
+            8 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, true, true>(data); }
+            16 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, true, true>(data); }
+            32 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, true, true>(data); }
+            64 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, true, true>(data); }
+            _ => {
+                mixed_radix::inverse_inplace::<f64>(data);
+            }
+        }
     }
     #[inline(always)]
     fn fft_inverse_unnorm(data: &mut [Self]) {
-        mixed_radix::inverse_inplace_unnorm::<f64>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, true, false>(data); }
+            4 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, true, false>(data); }
+            8 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, true, false>(data); }
+            16 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, true, false>(data); }
+            32 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, true, false>(data); }
+            64 => unsafe { <f64 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, true, false>(data); }
+            _ => {
+                mixed_radix::inverse_inplace_unnorm::<f64>(data);
+            }
+        }
     }
 }
 
 impl FftPrecision for Complex32 {
     #[inline(always)]
     fn fft_forward(data: &mut [Self]) {
-        mixed_radix::forward_inplace::<f32>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, false, false>(data); }
+            4 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, false, false>(data); }
+            8 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, false, false>(data); }
+            16 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, false, false>(data); }
+            32 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, false, false>(data); }
+            64 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, false, false>(data); }
+            _ => {
+                mixed_radix::forward_inplace::<f32>(data);
+            }
+        }
     }
     #[inline(always)]
     fn fft_inverse(data: &mut [Self]) {
-        mixed_radix::inverse_inplace::<f32>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, true, true>(data); }
+            4 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, true, true>(data); }
+            8 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, true, true>(data); }
+            16 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, true, true>(data); }
+            32 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, true, true>(data); }
+            64 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, true, true>(data); }
+            _ => {
+                mixed_radix::inverse_inplace::<f32>(data);
+            }
+        }
     }
     #[inline(always)]
     fn fft_inverse_unnorm(data: &mut [Self]) {
-        mixed_radix::inverse_inplace_unnorm::<f32>(data);
+        let n = data.len();
+        match n {
+            2 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<2, true, false>(data); }
+            4 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<4, true, false>(data); }
+            8 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<8, true, false>(data); }
+            16 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<16, true, false>(data); }
+            32 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<32, true, false>(data); }
+            64 => unsafe { <f32 as mixed_radix::MixedRadixScalar>::small_pot_inplace_sized::<64, true, false>(data); }
+            _ => {
+                mixed_radix::inverse_inplace_unnorm::<f32>(data);
+            }
+        }
     }
 }
 

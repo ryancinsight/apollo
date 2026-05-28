@@ -22,8 +22,8 @@ const TWIDDLE16_FWD: [Complex64; 8] = [
 ];
 
 #[inline(always)]
-fn twiddle16<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
-    let w = TWIDDLE16_FWD[k];
+fn twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_complex::Complex<F> {
+    let w = TWIDDLE16_FWD[K];
     let w = if INVERSE {
         Complex64::new(w.re, -w.im)
     } else {
@@ -63,7 +63,7 @@ fn apply_twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>(
             let sq2o2 = F::sq2o2();
             num_complex::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
         }
-        _ => o * twiddle16::<F, INVERSE>(K),
+        _ => o * twiddle16::<F, INVERSE, K>(),
     }
 }
 
@@ -189,8 +189,8 @@ const TWIDDLE32_FWD: [Complex64; 16] = [
 ];
 
 #[inline(always)]
-fn twiddle32<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
-    let w = TWIDDLE32_FWD[k];
+fn twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_complex::Complex<F> {
+    let w = TWIDDLE32_FWD[K];
     let w = if INVERSE {
         Complex64::new(w.re, -w.im)
     } else {
@@ -225,7 +225,7 @@ fn apply_twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>(
             let sq2o2 = F::sq2o2();
             num_complex::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
         }
-        _ => o * twiddle32::<F, INVERSE>(K),
+        _ => o * twiddle32::<F, INVERSE, K>(),
     }
 }
 
@@ -296,8 +296,23 @@ pub(crate) fn dft32_impl<F: WinogradScalar, const INVERSE: bool>(
 }
 
 #[inline(always)]
+fn twiddle32_runtime<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
+    let w = TWIDDLE32_FWD[k];
+    let w = if INVERSE {
+        Complex64::new(w.re, -w.im)
+    } else {
+        w
+    };
+    cast_twiddle(w)
+}
+
+/// Twiddle factor W_64^k using half-size table lookup.
+/// For even k (k=2*m), returns W_32^m directly.
+/// For odd k (k=2*m+1), returns W_64^(2m+1) = W_32^m * W_64^1.
+/// LLVM optimizes `k >> 1` and `if (k & 1) == 0` at -O3 for runtime k.
+#[inline(always)]
 fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
-    let base = twiddle32::<F, INVERSE>(k >> 1);
+    let base = twiddle32_runtime::<F, INVERSE>(k >> 1);
     if (k & 1) == 0 {
         base
     } else {
@@ -315,11 +330,15 @@ fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::C
 pub(crate) fn dft64_impl<F: WinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>; 64],
 ) {
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 64];
-    for i in 0..32 {
-        scratch[i] = data[2 * i];
-        scratch[i + 32] = data[2 * i + 1];
-    }
+    let mut scratch = unsafe {
+        let mut arr: std::mem::MaybeUninit<[num_complex::Complex<F>; 64]> = std::mem::MaybeUninit::uninit();
+        let ptr = arr.as_mut_ptr() as *mut num_complex::Complex<F>;
+        for i in 0..32 {
+            std::ptr::write(ptr.add(i), data[2 * i]);
+            std::ptr::write(ptr.add(i + 32), data[2 * i + 1]);
+        }
+        arr.assume_init()
+    };
     let (even, odd) = scratch.split_at_mut(32);
     dft32_impl::<F, INVERSE>(even.try_into().unwrap());
     dft32_impl::<F, INVERSE>(odd.try_into().unwrap());
@@ -330,6 +349,10 @@ pub(crate) fn dft64_impl<F: WinogradScalar, const INVERSE: bool>(
     }
 }
 
+/// Twiddle factor W_128^k using quarter-size table lookup.
+/// For even k (k=2*m), returns W_64^m directly.
+/// For odd k (k=2*m+1), returns W_128^(2m+1) = W_64^m * W_128^1.
+/// LLVM optimizes `k >> 1` and `if (k & 1) == 0` at -O3 for runtime k.
 #[inline(always)]
 fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
     let base = twiddle64::<F, INVERSE>(k >> 1);
@@ -350,11 +373,15 @@ fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::
 pub(crate) fn dft128_impl<F: WinogradScalar, const INVERSE: bool>(
     data: &mut [num_complex::Complex<F>; 128],
 ) {
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 128];
-    for i in 0..64 {
-        scratch[i] = data[2 * i];
-        scratch[i + 64] = data[2 * i + 1];
-    }
+    let mut scratch = unsafe {
+        let mut arr: std::mem::MaybeUninit<[num_complex::Complex<F>; 128]> = std::mem::MaybeUninit::uninit();
+        let ptr = arr.as_mut_ptr() as *mut num_complex::Complex<F>;
+        for i in 0..64 {
+            std::ptr::write(ptr.add(i), data[2 * i]);
+            std::ptr::write(ptr.add(i + 64), data[2 * i + 1]);
+        }
+        arr.assume_init()
+    };
     let (even, odd) = scratch.split_at_mut(64);
     dft64_impl::<F, INVERSE>(even.try_into().unwrap());
     dft64_impl::<F, INVERSE>(odd.try_into().unwrap());

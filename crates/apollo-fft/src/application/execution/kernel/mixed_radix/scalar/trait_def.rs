@@ -9,8 +9,20 @@ pub(crate) mod private {
     impl Sealed for f32 {}
 }
 
+/// Bluestein cache key: (m, inverse_flag, generator_inverse).
+pub(crate) type BluesteinKey = (usize, bool, usize);
+
+pub(crate) type BluesteinEntry<C> = Arc<[C]>;
+
+pub trait BluesteinStore {
+    type Cpx: Copy + Send + Sync + 'static;
+    fn tl_get(key: BluesteinKey) -> Option<BluesteinEntry<Self::Cpx>>;
+    fn tl_insert(key: BluesteinKey, val: BluesteinEntry<Self::Cpx>);
+    fn global() -> &'static parking_lot::RwLock<rustc_hash::FxHashMap<BluesteinKey, BluesteinEntry<Self::Cpx>>>;
+}
+
 pub trait MixedRadixScalar:
-    private::Sealed + Sized + Copy + 'static + ShortWinogradScalar + CompositeCache
+    private::Sealed + Sized + Copy + 'static + ShortWinogradScalar + CompositeCache + BluesteinStore<Cpx = Self::Complex>
 {
     /// Minimum Rader convolution length `N - 1` for the half-cyclic CRT split.
     ///
@@ -30,6 +42,9 @@ pub trait MixedRadixScalar:
 
     fn cached_twiddle_fwd(n: usize) -> Arc<[Self::Complex]>;
     fn cached_twiddle_inv(n: usize) -> Arc<[Self::Complex]>;
+
+    fn with_twiddle_fwd<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
+    fn with_twiddle_inv<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
 
     fn cached_rader_spectrum(
         n: usize,
@@ -52,6 +67,7 @@ pub trait MixedRadixScalar:
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_pfa_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
     fn with_rader_padded_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
+    fn with_bluestein_scratch<R>(n: usize, f: impl FnOnce(&mut [Self::Complex]) -> R) -> R;
 
     fn cached_four_step_twiddles(
         n: usize,
@@ -85,6 +101,22 @@ pub trait MixedRadixScalar:
         data: &mut [Self::Complex],
     ) -> bool;
 
+    /// In-place small transforms (2, 3, 4, 5, 6, 7, 8, 9, 16, 32).
+    ///
+    /// # Safety
+    /// Caller must guarantee `data.len()` matches the expected size.
+    unsafe fn small_pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Self::Complex],
+    ) -> bool;
+
+    /// Sized small power-of-two transforms.
+    ///
+    /// # Safety
+    /// Caller must guarantee `data.len()` matches N.
+    unsafe fn small_pot_inplace_sized<const N: usize, const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Self::Complex],
+    );
+
     fn composite_forward(data: &mut [Self::Complex], radices: &[usize]);
     fn composite_forward_with_pointwise(
         data: &mut [Self::Complex],
@@ -99,4 +131,13 @@ pub trait MixedRadixScalar:
     fn transpose_matrix(src: &[Self::Complex], dst: &mut [Self::Complex], n1: usize, n2: usize) {
         transpose_tiled_scalar(src, dst, n1, n2);
     }
+
+    /// Optimized power-of-two in-place transform.
+    fn pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Self::Complex],
+        twiddles: &[Self::Complex],
+    );
+
+    /// Precomputed twiddles for small power-of-two sizes.
+    fn small_pot_twiddles<const INVERSE: bool>(n: usize) -> &'static [Self::Complex];
 }

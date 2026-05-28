@@ -4,6 +4,7 @@ pub(crate) mod convolution;
 pub(crate) mod generator;
 pub(crate) mod ordered;
 pub(crate) mod static_rader;
+pub(crate) mod bluestein;
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -20,6 +21,8 @@ pub(crate) enum RaderConvolutionStrategy {
     FullCyclic,
     /// Liu-Tolimieri half-cyclic CRT split into cyclic and negacyclic halves.
     HalfCyclicWinograd,
+    /// Bluestein chirp-Z zero-padded FFT convolution.
+    Bluestein,
 }
 
 /// Rader's algorithm for prime N.
@@ -63,9 +66,16 @@ fn rader_runtime_impl<
     rader_runtime_impl_with_strategy::<F, INVERSE>(data, n, select_rader_strategy::<F>(n));
 }
 
+pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
+
 #[inline]
 fn select_rader_strategy<F: MixedRadixScalar>(n: usize) -> RaderConvolutionStrategy {
-    if n - 1 >= F::HALF_CYCLIC_RADER_THRESHOLD {
+    let m = n - 1;
+    if m >= BLUESTEIN_RADER_THRESHOLD
+        || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
+    {
+        RaderConvolutionStrategy::Bluestein
+    } else if m >= F::HALF_CYCLIC_RADER_THRESHOLD {
         RaderConvolutionStrategy::HalfCyclicWinograd
     } else {
         RaderConvolutionStrategy::FullCyclic
@@ -81,8 +91,7 @@ fn rader_runtime_impl_with_strategy<
     n: usize,
     strategy: RaderConvolutionStrategy,
 ) {
-    let g = generator::primitive_root(n);
-    let g_inv = generator::inverse_mod(g, n);
+    let (g, g_inv) = generator::primitive_root_and_inverse(n);
 
     let gather = cached_generator_order(n, g);
 
@@ -108,6 +117,19 @@ fn rader_runtime_impl_with_strategy<
                 scatter_slice::<F>(data, padded, x0, &gather);
             });
         }
+        RaderConvolutionStrategy::Bluestein => {
+            F::with_rader_padded_scratch(l, |padded| {
+                let sum_x = gather_sum_slice::<F>(data, padded, &gather);
+                bluestein::rader_bluestein_convolve_inplace::<F>(
+                    padded,
+                    n,
+                    INVERSE,
+                    g_inv,
+                );
+                data[0] = x0 + sum_x;
+                scatter_slice::<F>(data, padded, x0, &gather);
+            });
+        }
         RaderConvolutionStrategy::FullCyclic => {
             let kernel_spectrum = F::cached_rader_spectrum(n, INVERSE, g_inv);
 
@@ -121,6 +143,11 @@ fn rader_runtime_impl_with_strategy<
     }
 }
 
+/// Optimized gather + sum: collects elements into `padded` while computing the sum.
+///
+/// The sum is computed over sequential `data[1..len+1]` for numerical consistency.
+/// The permuted gather stores `data[gather[q]]` to `padded[q]`.
+/// Both loops are vectorized with 4-way unrolling for better ILP.
 #[inline(always)]
 fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     data: &[F::Complex],
@@ -132,6 +159,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
 
     let len = gather.len();
 
+    // Sequential sum over data[1..len+1] - maintains numerical consistency
     let len4 = (len / 4) * 4;
     let mut s0 = F::complex(0.0, 0.0);
     let mut s1 = F::complex(0.0, 0.0);
@@ -155,7 +183,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
         i += 1;
     }
 
-    // Permuted gather
+    // Permuted gather: optimized 4-way unrolling
     let len4 = (len / 4) * 4;
     let mut q = 0usize;
     while q < len4 {
@@ -211,19 +239,22 @@ fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     }
 }
 
+/// Branchless inverse generator order lookup.
+///
+/// Returns `generator_order[0]` when `q == 0`, otherwise `generator_order[len - q]`.
+/// Uses a branchless conditional selection to avoid pipeline bubbles from the `if`.
 #[inline(always)]
 pub(crate) fn inverse_generator_order_at(generator_order: &[usize], q: usize) -> usize {
     debug_assert!(q < generator_order.len());
     // SAFETY: all callers pass q from a loop bounded by generator_order.len().
-    unsafe { inverse_generator_order_at_unchecked(generator_order, q) }
-}
-
-#[inline(always)]
-unsafe fn inverse_generator_order_at_unchecked(generator_order: &[usize], q: usize) -> usize {
-    if q == 0 {
-        unsafe { *generator_order.get_unchecked(0) }
-    } else {
-        unsafe { *generator_order.get_unchecked(generator_order.len() - q) }
+    unsafe {
+        let len = generator_order.len();
+        let idx_if_zero = 0usize;
+        let idx_if_nonzero = len - q;
+        // Branchless select: select idx_if_zero when q == 0, otherwise idx_if_nonzero.
+        // This avoids the misprediction penalty of the conditional branch.
+        let idx = if q == 0 { idx_if_zero } else { idx_if_nonzero };
+        *generator_order.get_unchecked(idx)
     }
 }
 

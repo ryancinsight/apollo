@@ -388,3 +388,84 @@ fn precise_avx_schedule_roundtrip_holds_for_n8192() {
         "n8192 f64 AVX Stockham roundtrip err={err:.2e}"
     );
 }
+
+#[test]
+fn test_small_sizes_correctness() {
+    // We will test sizes 2, 4, 8, 16 for both f32 (reduced) and f64 (precise)
+    // against a simple scalar DFT.
+    fn dft<T: num_traits::Float>(input: &[num_complex::Complex<T>], inverse: bool) -> Vec<num_complex::Complex<T>> {
+        let n = input.len();
+        let mut output = vec![num_complex::Complex::new(T::zero(), T::zero()); n];
+        let sign = if inverse { T::from(1.0).unwrap() } else { T::from(-1.0).unwrap() };
+        let two_pi = T::from(2.0 * std::f64::consts::PI).unwrap();
+        for k in 0..n {
+            let mut sum = num_complex::Complex::new(T::zero(), T::zero());
+            for j in 0..n {
+                let theta = two_pi * T::from(k * j).unwrap() / T::from(n).unwrap();
+                let w = num_complex::Complex::new(theta.cos(), sign * theta.sin());
+                sum = sum + input[j] * w;
+            }
+            output[k] = sum;
+        }
+        output
+    }
+
+    // Test f32
+    for &n in &[2usize, 4, 8, 16] {
+        let mut data: Vec<Complex32> = (0..n)
+            .map(|k| Complex32::new((k as f32 * 0.123).sin(), (k as f32 * 0.456).cos()))
+            .collect();
+        let twiddles = <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
+        let mut scratch = vec![Complex32::new(0.0, 0.0); n];
+
+        let ref_fwd = dft(&data, false);
+        unsafe {
+            super::butterfly::forward32_avx_with_scratch(&mut data, &mut scratch, &twiddles);
+        }
+        for i in 0..n {
+            let diff = (data[i] - ref_fwd[i]).norm();
+            assert!(diff < 1e-4, "f32 size {n} forward index {i} mismatch: got {:?}, expected {:?}", data[i], ref_fwd[i]);
+        }
+
+        // Test inverse
+        let twiddles_inv = <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
+        let ref_inv = dft(&data, true);
+        unsafe {
+            super::butterfly::forward32_avx_with_scratch(&mut data, &mut scratch, &twiddles_inv);
+        }
+        for i in 0..n {
+            let diff = (data[i] - ref_inv[i]).norm();
+            assert!(diff < 1e-3, "f32 size {n} inverse index {i} mismatch: got {:?}, expected {:?}", data[i], ref_inv[i]);
+        }
+    }
+
+    // Test f64
+    for &n in &[2usize, 4, 8, 16] {
+        let mut data: Vec<Complex64> = (0..n)
+            .map(|k| Complex64::new((k as f64 * 0.123).sin(), (k as f64 * 0.456).cos()))
+            .collect();
+        let twiddles = <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(n);
+        let mut scratch = vec![Complex64::new(0.0, 0.0); n];
+
+        let ref_fwd = dft(&data, false);
+        unsafe {
+            super::butterfly::forward64_avx_with_scratch(&mut data, &mut scratch, &twiddles);
+        }
+        for i in 0..n {
+            let diff = (data[i] - ref_fwd[i]).norm();
+            assert!(diff < 1e-10, "f64 size {n} forward index {i} mismatch: got {:?}, expected {:?}", data[i], ref_fwd[i]);
+        }
+
+        // Test inverse
+        let twiddles_inv = <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(n);
+        let ref_inv = dft(&data, true);
+        unsafe {
+            super::butterfly::forward64_avx_with_scratch(&mut data, &mut scratch, &twiddles_inv);
+        }
+        for i in 0..n {
+            let diff = (data[i] - ref_inv[i]).norm();
+            assert!(diff < 1e-9, "f64 size {n} inverse index {i} mismatch: got {:?}, expected {:?}", data[i], ref_inv[i]);
+        }
+    }
+}
+

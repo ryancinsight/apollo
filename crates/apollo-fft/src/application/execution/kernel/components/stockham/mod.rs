@@ -58,6 +58,28 @@ impl StockhamKernel for f64 {
         if n <= 1 {
             return;
         }
+        #[cfg(target_arch = "x86_64")]
+        {
+            // If the size is one of our hand-optimized FMA/AVX fixed-length sizes,
+            // route to the AVX/FMA path immediately if the CPU supports it,
+            // bypassing the generic AVX-512 Stockham loop.
+            if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 512 | 4096 | 32768) {
+                #[cfg(all(target_feature = "avx", target_feature = "fma"))]
+                {
+                    unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
+                    return;
+                }
+                #[cfg(not(all(target_feature = "avx", target_feature = "fma")))]
+                {
+                    if std::arch::is_x86_feature_detected!("avx")
+                        && std::arch::is_x86_feature_detected!("fma")
+                    {
+                        unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
+                        return;
+                    }
+                }
+            }
+        }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
             transform::<precision::PreciseStockhamAvx512>(data, scratch, twiddles, None);
@@ -106,6 +128,28 @@ impl StockhamKernel for f32 {
         debug_assert!(n.is_power_of_two());
         if n <= 1 {
             return;
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            // If the size is one of our hand-optimized FMA/AVX fixed-length sizes,
+            // route to the AVX/FMA path immediately if the CPU supports it,
+            // bypassing the generic AVX-512 Stockham loop.
+            if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 512 | 4096 | 32768) {
+                #[cfg(all(target_feature = "avx", target_feature = "fma"))]
+                {
+                    unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
+                    return;
+                }
+                #[cfg(not(all(target_feature = "avx", target_feature = "fma")))]
+                {
+                    if std::arch::is_x86_feature_detected!("avx")
+                        && std::arch::is_x86_feature_detected!("fma")
+                    {
+                        unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
+                        return;
+                    }
+                }
+            }
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
