@@ -101,7 +101,11 @@ fn build_bluestein_entry<F>(
 where
     F: MixedRadixScalar<Complex = Complex<F>>,
 {
-    let p = next_7_smooth(2 * m - 1);
+    let p = if std::mem::size_of::<F>() == 4 {
+        (2 * m - 1).next_power_of_two()
+    } else {
+        next_7_smooth(2 * m - 1)
+    };
     debug_assert!(is_7_smooth(p));
 
     // Build Rader time-domain kernel, zero-padded to P.

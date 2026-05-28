@@ -42,6 +42,17 @@ pub(crate) unsafe fn stage_triple_avx_fma<B: StockhamAvxBackend>(
         let w1i = B::set1_real(w1im);
         let w2ar = B::set1_real(w2are);
         let w2ai = B::set1_real(w2aim);
+        let w2br = B::set1_real(w2bre);
+        let w2bi = B::set1_real(w2bim);
+        let w3ar = B::set1_real(w3are);
+        let w3ai = B::set1_real(w3aim);
+        let w3br = B::set1_real(w3bre);
+        let w3bi = B::set1_real(w3bim);
+        let w3cr = B::set1_real(w3cre);
+        let w3ci = B::set1_real(w3cim);
+        let w3dr = B::set1_real(w3dre);
+        let w3di = B::set1_real(w3dim);
+
         let src_base = j * groups * 2;
         let dst_base = j * quarter_groups;
         let mut k = 0usize;
@@ -91,23 +102,21 @@ pub(crate) unsafe fn stage_triple_avx_fma<B: StockhamAvxBackend>(
             let p5 = B::sub(s1, t3);
 
             let out_base = dst_base + k;
-            let q0 = B::cmul(B::set1_real(w3are), B::set1_real(w3aim), p1);
-            let q2 = B::cmul(B::set1_real(w3cre), B::set1_real(w3cim), p5);
+            let q0 = B::cmul(w3ar, w3ai, p1);
+            let q2 = B::cmul(w3cr, w3ci, p5);
             B::storeu_complex(dst_ptr.add(out_base), B::add(p0, q0));
             B::storeu_complex(dst_ptr.add(half_n + out_base), B::sub(p0, q0));
             B::storeu_complex(dst_ptr.add(quarter_n + out_base), B::add(p4, q2));
             B::storeu_complex(dst_ptr.add(half_n + quarter_n + out_base), B::sub(p4, q2));
 
-            let w2br = B::set1_real(w2bre);
-            let w2bi = B::set1_real(w2bim);
             let u2 = B::cmul(w2br, w2bi, d2);
             let u3 = B::cmul(w2br, w2bi, d3);
             let p2 = B::add(d0, u2);
             let p3 = B::add(d1, u3);
             let p6 = B::sub(d0, u2);
             let p7 = B::sub(d1, u3);
-            let q1 = B::cmul(B::set1_real(w3bre), B::set1_real(w3bim), p3);
-            let q3 = B::cmul(B::set1_real(w3dre), B::set1_real(w3dim), p7);
+            let q1 = B::cmul(w3br, w3bi, p3);
+            let q3 = B::cmul(w3dr, w3di, p7);
             B::storeu_complex(dst_ptr.add(eighth_n + out_base), B::add(p2, q1));
             B::storeu_complex(dst_ptr.add(half_n + eighth_n + out_base), B::sub(p2, q1));
             B::storeu_complex(dst_ptr.add(quarter_n + eighth_n + out_base), B::add(p6, q3));

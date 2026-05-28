@@ -520,5 +520,5 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 510 | Good-Thomas | Mixed-Radix | 1811.30 | 1059.89 | 1.709x | 1652.10 | 688.17 | 2.401x | 2026-05-28 10:27 UTC |
 | 511 | Good-Thomas | Mixed-Radix (Rader) | 3341.63 | 2011.41 | 1.661x | 2902.44 | 959.52 | 3.025x | 2026-05-28 10:27 UTC |
 | 512 | Stockham | Butterfly | 479.20 | 454.08 | 1.055x | 346.27 | 233.48 | 1.483x | 2026-05-28 10:27 UTC |
-| 10007 | Rader (Precision Policy) | Bluestein | 212663.15 | 106198.96 | 2.002x | 161243.97 | 53822.01 | 2.996x | 2026-05-28 11:00 UTC |
-| 32768 | Stockham | Mixed-Radix | 154669.64 | 72310.34 | 2.139x | 60775.21 | 35559.90 | 1.709x | 2026-05-28 11:00 UTC |
+| 10007 | Rader (Precision Policy) | Bluestein | 199096.68 | 109657.84 | 1.816x | 128732.36 | 52842.20 | 2.436x | 2026-05-28 15:29 UTC |
+| 32768 | Stockham | Mixed-Radix | 135751.86 | 72600.46 | 1.870x | 66061.58 | 35645.79 | 1.853x | 2026-05-28 15:29 UTC |

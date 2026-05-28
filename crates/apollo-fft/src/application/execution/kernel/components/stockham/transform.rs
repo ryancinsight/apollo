@@ -168,53 +168,53 @@ pub(crate) fn transform_len32768<P: StockhamPrecision>(
     debug_assert_eq!(scratch.len(), 32768);
     debug_assert!(twiddles.len() >= 32767);
 
-    scratch.copy_from_slice(data);
-
-    // Pass 1: triple(stride=1) -> writes to data
+    // Pass 1: triple(stride=1) -> writes to scratch
     P::stage_triple(
-        scratch,
         data,
+        scratch,
         1,
         &twiddles[0..1],
         &twiddles[1..3],
         &twiddles[3..7],
     );
-    // Pass 2: triple(stride=8) -> writes to scratch
+    // Pass 2: triple(stride=8) -> writes to data
     P::stage_triple(
-        data,
         scratch,
+        data,
         8,
         &twiddles[7..15],
         &twiddles[15..31],
         &twiddles[31..63],
     );
-    // Pass 3: triple(stride=64) -> writes to data
+    // Pass 3: triple(stride=64) -> writes to scratch
     P::stage_triple(
-        scratch,
         data,
+        scratch,
         64,
         &twiddles[63..127],
         &twiddles[127..255],
         &twiddles[255..511],
     );
-    // Pass 4: triple(stride=512) -> writes to scratch
+    // Pass 4: triple(stride=512) -> writes to data
     P::stage_triple(
-        data,
         scratch,
+        data,
         512,
         &twiddles[511..1023],
         &twiddles[1023..2047],
         &twiddles[2047..4095],
     );
-    // Pass 5: triple(stride=4096) -> writes to data
+    // Pass 5: triple(stride=4096) -> writes to scratch
     P::stage_triple(
-        scratch,
         data,
+        scratch,
         4096,
         &twiddles[4095..8191],
         &twiddles[8191..16383],
         &twiddles[16383..32767],
     );
+
+    data.copy_from_slice(scratch);
 }
 
 #[cfg(test)]
