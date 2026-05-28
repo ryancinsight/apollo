@@ -87,6 +87,9 @@ fn test_bench_pot_sizes() {
             .collect();
         let mut got = input.clone();
         let start = Instant::now();
+        #[cfg(debug_assertions)]
+        let iters = 1_000;
+        #[cfg(not(debug_assertions))]
         let iters = 1_000_000;
         for _ in 0..iters {
             got.copy_from_slice(&input);
@@ -171,7 +174,52 @@ fn test_debug_twiddles() {
     }
 }
 
-
-
-
-
+#[test]
+fn test_f32_pot_plans_correctness() {
+    use num_complex::Complex32;
+    use crate::PlanCacheProvider;
+    let sizes = [2, 4, 8, 16, 32, 64];
+    for &n in &sizes {
+        let input: Vec<Complex32> = (0..n)
+            .map(|k| Complex32::new((k as f32 * 0.17).sin(), (k as f32 * 0.29).cos()))
+            .collect();
+        
+        let plan = f32::get_1d_plan(crate::Shape1D::new(n).unwrap());
+        let mut got_fwd = input.clone();
+        plan.forward_complex_slice_inplace(&mut got_fwd);
+        
+        // Compare with naive DFT
+        let mut expected_fwd = vec![Complex32::new(0.0, 0.0); n];
+        for k in 0..n {
+            let mut sum = num_complex::Complex64::new(0.0, 0.0);
+            for j in 0..n {
+                let angle = -2.0 * std::f64::consts::PI * j as f64 * k as f64 / n as f64;
+                let w = num_complex::Complex64::new(angle.cos(), angle.sin());
+                sum += num_complex::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
+            }
+            expected_fwd[k] = Complex32::new(sum.re as f32, sum.im as f32);
+        }
+        for k in 0..n {
+            let err = (got_fwd[k] - expected_fwd[k]).norm();
+            assert!(err < 1e-5, "forward: n = {}, k = {}, got_fwd = {:?}, expected = {:?}, err = {}", n, k, got_fwd[k], expected_fwd[k], err);
+        }
+        
+        let mut got_inv = input.clone();
+        plan.inverse_complex_slice_inplace(&mut got_inv);
+        // Naive IDFT (with normalization)
+        let mut expected_inv = vec![Complex32::new(0.0, 0.0); n];
+        for k in 0..n {
+            let mut sum = num_complex::Complex64::new(0.0, 0.0);
+            for j in 0..n {
+                let angle = 2.0 * std::f64::consts::PI * j as f64 * k as f64 / n as f64;
+                let w = num_complex::Complex64::new(angle.cos(), angle.sin());
+                sum += num_complex::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
+            }
+            expected_inv[k] = Complex32::new((sum.re / n as f64) as f32, (sum.im / n as f64) as f32);
+        }
+        for k in 0..n {
+            let err = (got_inv[k] - expected_inv[k]).norm();
+            assert!(err < 1e-5, "inverse: n = {}, k = {}, got_inv = {:?}, expected = {:?}, err = {}", n, k, got_inv[k], expected_inv[k], err);
+        }
+    }
+}

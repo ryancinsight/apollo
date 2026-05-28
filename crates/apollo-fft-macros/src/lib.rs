@@ -19,21 +19,25 @@ pub(crate) mod rader;
 pub(crate) mod two_by_prime;
 pub(crate) mod winograd_composites;
 
+/// Generate static Rader prime-N FFT codelets with compile-time gather/scatter tables.
 #[proc_macro]
 pub fn generate_rader_fft(input: TokenStream) -> TokenStream {
     rader::generate_rader_fft(input)
 }
 
+/// Generate the Good-Thomas PFA dispatch table for fixed coprime `(n1, n2)` pairs.
 #[proc_macro]
 pub fn generate_good_thomas_dispatch(input: TokenStream) -> TokenStream {
     good_thomas::generate_good_thomas_dispatch(input)
 }
 
+/// Generate the natural-layout Winograd-pair `2*p` dispatch table for promoted primes.
 #[proc_macro]
 pub fn generate_two_by_prime_natural_dispatch(input: TokenStream) -> TokenStream {
     two_by_prime::generate_two_by_prime_natural_dispatch(input)
 }
 
+/// Generate the `PrimePairTable<P, H>` trait impls with compile-time twiddle constants.
 #[proc_macro]
 pub fn generate_prime_pair_tables(input: TokenStream) -> TokenStream {
     prime_pair_tables::generate_prime_pair_tables(input)
@@ -117,6 +121,7 @@ pub fn generate_winograd_composites(input: TokenStream) -> TokenStream {
     winograd_composites::generate_winograd_composites(input)
 }
 
+/// Generate compact Good-Thomas `3*p` route kernels for the supplied prime list.
 #[proc_macro]
 pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ThreeByPrimeDispatchInput);

@@ -8,7 +8,7 @@ pub(crate) mod twiddle;
 
 pub(crate) use four_step::cached_four_step_twiddles;
 pub(crate) use misc::{
-    cached_coprime_factors, cached_is_prime, cached_pfa_input_cycles, cached_pfa_perm,
+    cached_coprime_factors, cached_is_prime, cached_pfa_perm,
     cached_prime23_radices, cached_rader_neg_twiddles, cached_rader_negacyclic_spectra,
     cached_rader_order, cached_rader_spectrum,
 };

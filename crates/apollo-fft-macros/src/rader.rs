@@ -21,14 +21,14 @@ impl Parse for RaderInput {
 fn naive_dft_scaled(b: &[ComplexF64], scale: f64) -> Vec<ComplexF64> {
     let m = b.len();
     let mut out = vec![ComplexF64::zero(); m];
-    for k in 0..m {
+    for (k, out_k) in out.iter_mut().enumerate() {
         let mut acc = ComplexF64::zero();
         for (q, &bq) in b.iter().enumerate() {
             let angle = -2.0 * std::f64::consts::PI * (k * q) as f64 / m as f64;
             let w = ComplexF64::new(angle.cos(), angle.sin());
             acc = acc + bq * w;
         }
-        out[k] = acc * ComplexF64::new(scale, 0.0);
+        *out_k = acc * ComplexF64::new(scale, 0.0);
     }
     out
 }

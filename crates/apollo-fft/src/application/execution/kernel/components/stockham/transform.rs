@@ -151,13 +151,14 @@ pub(crate) fn transform<P: StockhamPrecision>(
 ///
 /// | Pass | Fused type | Stride | Stages covered | input_is_data after |
 /// |------|-----------|--------|----------------|----------------------|
-/// |  1   | triple    |      1 |  1–3           | true                 |
-/// |  2   | triple    |      8 |  4–6           | false                |
-/// |  3   | triple    |     64 |  7–9           | true                 |
-/// |  4   | triple    |    512 | 10–12          | false                |
-/// |  5   | triple    |   4096 | 13–15          | true                 |
+/// |  1   | triple    |      1 |  1-3           | scratch              |
+/// |  2   | triple    |      8 |  4-6           | data                 |
+/// |  3   | triple    |     64 |  7-9           | scratch              |
+/// |  4   | triple    |    512 | 10-12          | data                 |
+/// |  5   | triple    |   4096 | 13-15          | scratch              |
 ///
-/// Lands directly in `data` after 5 passes, reducing memory passes significantly.
+/// The all-triple schedule is faster than the shorter quad-heavy schedule on
+/// the current AVX backend despite requiring a terminal full-buffer copy.
 #[inline]
 pub(crate) fn transform_len32768<P: StockhamPrecision>(
     data: &mut [P::Complex],

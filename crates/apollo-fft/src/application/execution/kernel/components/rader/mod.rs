@@ -149,7 +149,7 @@ fn rader_runtime_impl_with_strategy<
 /// The permuted gather stores `data[gather[q]]` to `padded[q]`.
 /// Both loops are vectorized with 4-way unrolling for better ILP.
 #[inline(always)]
-fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     data: &[F::Complex],
     padded: &mut [F::Complex],
     gather: &[usize],
@@ -205,7 +205,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
 }
 
 #[inline(always)]
-fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     data: &mut [F::Complex],
     padded: &[F::Complex],
     x0: F::Complex,

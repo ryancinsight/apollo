@@ -53,7 +53,7 @@ impl Parse for GoodThomasDispatchInput {
                     let content;
                     bracketed!(content in input);
                     short_sizes.extend(
-                        Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?.into_iter(),
+                        Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?,
                     );
                 }
                 "max_n" => {
@@ -300,9 +300,9 @@ fn canonical_coprime_factors(n: usize) -> Option<(usize, usize)> {
     let mut prime_powers = Vec::new();
     let mut p = 2usize;
     while p * p <= remaining {
-        if remaining % p == 0 {
+        if remaining.is_multiple_of(p) {
             let mut power = 1usize;
-            while remaining % p == 0 {
+            while remaining.is_multiple_of(p) {
                 power *= p;
                 remaining /= p;
             }

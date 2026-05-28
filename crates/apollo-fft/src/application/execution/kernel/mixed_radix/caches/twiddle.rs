@@ -259,25 +259,25 @@ pub(crate) fn cached_twiddle_fwd<C: TwiddleStore>(n: usize) -> Arc<[C]> {
         let idx = n.trailing_zeros() as usize;
         if idx < 32 {
             if let Some(tw) = C::twiddle_tl_fwd_get_pow2(idx) {
-                #[cfg(cache_profiling)]
+                #[cfg(feature = "cache-profiling")]
                 super::profiler::get().twiddle_fwd_precise.tl_hit();
                 return tw;
             }
         }
     }
     if let Some(tw) = C::twiddle_tl_fwd_get(n) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().twiddle_fwd_precise.tl_hit();
         return tw;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().twiddle_fwd_precise.global_hit();
     let tw = {
         let maybe = C::twiddle_global_fwd().read().get(&n).cloned();
         if let Some(tw) = maybe {
             tw
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().twiddle_fwd_precise.miss();
             let new_tw: Arc<[C]> = Arc::from(C::build_twiddle_fwd(n));
             C::twiddle_global_fwd()
@@ -303,25 +303,25 @@ pub(crate) fn cached_twiddle_inv<C: TwiddleStore>(n: usize) -> Arc<[C]> {
         let idx = n.trailing_zeros() as usize;
         if idx < 32 {
             if let Some(tw) = C::twiddle_tl_inv_get_pow2(idx) {
-                #[cfg(cache_profiling)]
+                #[cfg(feature = "cache-profiling")]
                 super::profiler::get().twiddle_inv_precise.tl_hit();
                 return tw;
             }
         }
     }
     if let Some(tw) = C::twiddle_tl_inv_get(n) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().twiddle_inv_precise.tl_hit();
         return tw;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().twiddle_inv_precise.global_hit();
     let tw = {
         let maybe = C::twiddle_global_inv().read().get(&n).cloned();
         if let Some(tw) = maybe {
             tw
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().twiddle_inv_precise.miss();
             let new_tw: Arc<[C]> = Arc::from(C::build_twiddle_inv(n));
             C::twiddle_global_inv()

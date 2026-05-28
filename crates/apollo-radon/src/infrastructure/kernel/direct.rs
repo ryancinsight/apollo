@@ -44,7 +44,7 @@ pub fn forward_project_into(
 /// Execute the adjoint of the discrete Radon projection.
 ///
 /// Embarrassingly parallel over the image row dimension: each output row reads
-/// the sinogram immutably (Array2<f64>: Sync) and writes only to its own row
+/// the sinogram immutably (`Array2<f64>`: Sync) and writes only to its own row
 /// of the output image.
 #[must_use]
 pub fn adjoint_backproject(sinogram: &Array2<f64>, geometry: &ParallelBeamGeometry) -> Array2<f64> {

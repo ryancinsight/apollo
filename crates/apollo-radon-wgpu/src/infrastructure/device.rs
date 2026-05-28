@@ -180,7 +180,7 @@ impl RadonWgpuBackend {
     ///
     /// Two-pass GPU execution:
     /// 1. Ram-Lak ramp filter applied to each sinogram projection row (circular convolution
-    ///    with h = IFFT(R), R[k] = 2π·|signed_k|/(N·Δ); Bracewell & Riddle 1967).
+    ///    with h = IFFT(R), `R[k] = 2π·|signed_k|/(N·Δ)`; Bracewell & Riddle 1967).
     /// 2. Adjoint backprojection of the filtered sinogram (Natterer 2001, §II.2).
     ///
     /// Result is scaled by π / angle_count to approximate the continuous FBP integral

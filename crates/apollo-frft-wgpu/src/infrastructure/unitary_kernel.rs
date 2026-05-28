@@ -147,9 +147,9 @@ impl UnitaryFrftGpuKernel {
 
     /// Execute the three-pass unitary DFrFT on GPU using a single command encoder.
     ///
-    /// Pass 0: c[k] = Σ_j V[j,k] · x[j]          (V^T · x)
-    /// Pass 1: c[k] *= exp(−i · order · k · π/2)   (phase multiply)
-    /// Pass 2: y[j] = Σ_k V[j,k] · c[k]            (V · c)
+    /// Pass 0: `c[k] = Σ_j V[j,k] · x[j]`          (V^T · x)
+    /// Pass 1: `c[k] *= exp(−i · order · k · π/2)`   (phase multiply)
+    /// Pass 2: `y[j] = Σ_k V[j,k] · c[k]`            (V · c)
     ///
     /// All three compute passes are encoded in a single command encoder followed
     /// by a buffer copy. WebGPU sequential pass ordering (spec §3.4) guarantees

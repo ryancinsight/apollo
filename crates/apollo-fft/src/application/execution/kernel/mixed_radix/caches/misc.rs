@@ -35,9 +35,6 @@ static IS_PRIME_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, bool>>> =
 static PFA_PERM_CACHE: std::sync::LazyLock<
     RwLock<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>>,
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
-static PFA_CYCLES_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
-
 /// Negacyclic spectrum cache: (cyclic_spectrum, negacyclic_spectrum) per (n, inverse, g_inv).
 type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
 
@@ -68,8 +65,6 @@ thread_local! {
     pub(super) static TL_IS_PRIME: RefCell<FxHashMap<usize, bool>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
     pub(super) static TL_PFA_PERM: RefCell<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
-        RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_PFA_CYCLES: RefCell<FxHashMap<(usize, usize), Arc<[usize]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
     pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
@@ -132,11 +127,11 @@ pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
             return radices;
         }
     } else if let Some(radices) = TL_PRIME23_RADIX.with(|c| c.borrow().get(&n).cloned()) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().prime23_radix.tl_hit();
         return radices;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().prime23_radix.global_hit();
     let radices = {
         let maybe_cached = PRIME23_RADIX_CACHE.read().get(&n).cloned();
@@ -175,18 +170,18 @@ pub(crate) fn cached_coprime_factors(n: usize) -> Option<(usize, usize)> {
             return v;
         }
     } else if let Some(v) = TL_COPRIME_FACTORS.with(|c| c.borrow().get(&n).copied()) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().coprime_factors.tl_hit();
         return v;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().coprime_factors.global_hit();
     let v = {
         let maybe = COPRIME_FACTORS_CACHE.read().get(&n).copied();
         if let Some(v) = maybe {
             v
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().coprime_factors.miss();
             let result = coprime_factors(n);
             *COPRIME_FACTORS_CACHE.write().entry(n).or_insert(result)
@@ -207,18 +202,18 @@ pub(crate) fn cached_is_prime(n: usize) -> bool {
             return v;
         }
     } else if let Some(v) = TL_IS_PRIME.with(|c| c.borrow().get(&n).copied()) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().is_prime.tl_hit();
         return v;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().is_prime.global_hit();
     let v = {
         let maybe = IS_PRIME_CACHE.read().get(&n).copied();
         if let Some(v) = maybe {
             v
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().is_prime.miss();
             let result = is_prime(n);
             *IS_PRIME_CACHE.write().entry(n).or_insert(result)
@@ -243,18 +238,18 @@ pub(crate) fn cached_is_prime(n: usize) -> bool {
 pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
     let key = (n1, n2);
     if let Some(v) = TL_PFA_PERM.with(|c| c.borrow().get(&key).cloned()) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().pfa_perm.tl_hit();
         return v;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().pfa_perm.global_hit();
     let v = {
         let maybe_cached = PFA_PERM_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().pfa_perm.miss();
             let pair = build_pfa_perm(n1, n2);
             PFA_PERM_CACHE
@@ -265,43 +260,6 @@ pub(crate) fn cached_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize
         }
     };
     TL_PFA_PERM.with(|c| c.borrow_mut().insert(key, v.clone()));
-    v
-}
-
-/// Return precomputed Good-Thomas input permutation cycles for in-place
-/// application without runtime cycle-finding.
-///
-/// Returns a flat array of cycle data: [len1, pos1_0, pos1_1, ..., len2, pos2_0, ...]
-/// where each cycle's positions are listed in order. The permutation is applied
-/// by rotating each cycle's values by one position (left rotation).
-///
-/// Tables are computed once on first use and shared across threads via `Arc`.
-#[inline]
-pub(crate) fn cached_pfa_input_cycles(n1: usize, n2: usize) -> Arc<[usize]> {
-    let key = (n1, n2);
-    if let Some(v) = TL_PFA_CYCLES.with(|c| c.borrow().get(&key).cloned()) {
-        #[cfg(cache_profiling)]
-        super::profiler::get().pfa_cycles.tl_hit();
-        return v;
-    }
-    #[cfg(cache_profiling)]
-    super::profiler::get().pfa_cycles.global_hit();
-    let v = {
-        let maybe_cached = PFA_CYCLES_CACHE.read().get(&key).cloned();
-        if let Some(v) = maybe_cached {
-            v
-        } else {
-            #[cfg(cache_profiling)]
-            super::profiler::get().pfa_cycles.miss();
-            let cycles = build_pfa_input_cycles(n1, n2);
-            PFA_CYCLES_CACHE
-                .write()
-                .entry(key)
-                .or_insert_with(|| cycles.clone())
-                .clone()
-        }
-    };
-    TL_PFA_CYCLES.with(|c| c.borrow_mut().insert(key, v.clone()));
     v
 }
 
@@ -340,45 +298,6 @@ fn build_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
     (Arc::from(input_perm), Arc::from(output_perm))
 }
 
-/// Build flat cycle representation for PFA input permutation.
-/// Format: [len1, pos1_0, pos1_1, ..., len2, pos2_0, ...]
-/// Fixed points (len=1) are stored but skipped during application.
-///
-/// Reuses cached_pfa_perm to avoid duplicate computation on first call.
-fn build_pfa_input_cycles(n1: usize, n2: usize) -> Arc<[usize]> {
-    let n = n1 * n2;
-    // Reuse cached permutation to avoid duplicate work on first call
-    let input_perm = cached_pfa_perm(n1, n2).0;
-
-    let mut cycles = Vec::new();
-    let mut visited = vec![false; n];
-
-    for i in 0..n {
-        if visited[i] {
-            continue;
-        }
-
-        // Collect this cycle
-        let mut cycle = Vec::new();
-        let mut j = i;
-        loop {
-            visited[j] = true;
-            cycle.push(j);
-            let target = input_perm[j];
-            if visited[target] {
-                break;
-            }
-            j = target;
-        }
-
-        // Store cycle length followed by all positions
-        cycles.push(cycle.len());
-        cycles.extend(cycle);
-    }
-
-    Arc::from(cycles)
-}
-
 // Rader spectrum cache: dispatches via the sealed `RaderSpectrumStore` trait.
 cached_fetch_arc! {
     fn pub(crate) cached_rader_spectrum<RaderSpectrumStore>(
@@ -399,18 +318,18 @@ pub(crate) fn cached_rader_order(
             return v;
         }
     } else if let Some(v) = TL_RADER_ORDER.with(|c| c.borrow().get(&key).cloned()) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().rader_order.tl_hit();
         return v;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().rader_order.global_hit();
     let v = {
         let maybe_cached = RADER_ORDER_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().rader_order.miss();
             let order: Arc<[usize]> = Arc::from(build_fn(key));
             RADER_ORDER_CACHE
@@ -461,18 +380,18 @@ pub(crate) fn cached_rader_negacyclic_spectra<F: NegacyclicSpectrumStore>(
     build_fn: impl FnOnce((usize, usize, usize)) -> (Vec<F>, Vec<F>),
 ) -> NegacyclicEntry<F> {
     if let Some(v) = F::neg_tl_get(key) {
-        #[cfg(cache_profiling)]
+        #[cfg(feature = "cache-profiling")]
         super::profiler::get().rader_negacyclic_precise.tl_hit();
         return v;
     }
-    #[cfg(cache_profiling)]
+    #[cfg(feature = "cache-profiling")]
     super::profiler::get().rader_negacyclic_precise.global_hit();
     let v = {
         let maybe_cached = F::neg_global().read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
-            #[cfg(cache_profiling)]
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().rader_negacyclic_precise.miss();
             let (cyc, neg) = build_fn(key);
             let entry: NegacyclicEntry<F> = (Arc::from(cyc), Arc::from(neg));

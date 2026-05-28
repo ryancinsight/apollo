@@ -25,10 +25,10 @@ use crate::math::{mod_pow, ComplexF64};
 /// Lifting theorem: test `g^{p-1} mod p²`; if ≡ 1, use `g + p`.
 pub fn primitive_root_mod_p_squared(p: usize, g_mod_p: usize) -> usize {
     let p2 = p * p;
-    if mod_pow(g_mod_p, (p - 1) as u64, p2 as u64) != 1 {
-        g_mod_p
-    } else {
+    if mod_pow(g_mod_p, (p - 1) as u64, p2 as u64) == 1 {
         g_mod_p + p
+    } else {
+        g_mod_p
     }
 }
 
@@ -37,13 +37,13 @@ pub fn primitive_root_mod_p_squared(p: usize, g_mod_p: usize) -> usize {
 fn build_perm_tables(n: usize, phi: usize, g: usize) -> (Vec<usize>, Vec<usize>) {
     let mut perm_in = vec![0usize; phi]; // perm_in[s] = g^s mod N
     let mut pw = 1usize;
-    for s in 0..phi {
-        perm_in[s] = pw;
+    for p in perm_in.iter_mut() {
+        *p = pw;
         pw = (pw * g) % n;
     }
     let mut perm_out = vec![0usize; phi]; // perm_out[k] = g^{-k} mod N
-    for k in 0..phi {
-        perm_out[k] = perm_in[(phi - k) % phi];
+    for (k, out_k) in perm_out.iter_mut().enumerate() {
+        *out_k = perm_in[(phi - k) % phi];
     }
     (perm_in, perm_out)
 }
@@ -171,10 +171,9 @@ pub fn prime_power_winograd_function(
     // 5. Scatter units: data[perm_out[b]] = x0 + a[b] + z[k']
     let gp = g % p;
     let mut unit_scatter = Vec::new();
-    for b in 0..phi {
+    for (b, &dest_idx) in perm_out.iter().enumerate() {
         let bp = b % (p - 1);
-        let kp = mod_pow(gp, (p - 1 - bp) as u64, p as u64) as usize;
-        let dest_idx = perm_out[b];
+        let kp = mod_pow(gp, (p - 1 - bp) as u64, p as u64);
         unit_scatter.push(quote! {
             data[#dest_idx] = num_complex::Complex::new(
                 x0.re + a[#b].re + z[#kp].re,
@@ -244,12 +243,12 @@ fn is_prime(n: usize) -> bool {
     if n == 2 {
         return true;
     }
-    if n % 2 == 0 {
+    if n.is_multiple_of(2) {
         return false;
     }
     let mut i = 3;
     while i * i <= n {
-        if n % i == 0 {
+        if n.is_multiple_of(i) {
             return false;
         }
         i += 2;

@@ -148,7 +148,7 @@ impl SdftWgpuBackend {
     /// Given `plan.bin_count()` complex bins, computes the N-point inverse DFT
     /// and returns `plan.window_len()` real samples.
     ///
-    /// Mathematical contract: x[n] = (1/K) Σ_{b=0}^{K-1} X[b]·exp(+2πi·b·n/K).
+    /// Mathematical contract: `x[n] = (1/K) Σ_{b=0}^{K-1} X[b]·exp(+2πi·b·n/K)`.
     pub fn execute_inverse(&self, plan: &SdftWgpuPlan, bins: &[Complex32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_bins(plan, bins)?;
         self.kernel.execute_inverse(

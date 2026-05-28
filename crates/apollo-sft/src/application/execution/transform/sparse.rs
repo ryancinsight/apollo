@@ -30,8 +30,8 @@
 //!
 //! **Proof sketch.** Parseval's theorem states ‖u - v‖² = (1/N)‖FFT(u) - FFT(v)‖²
 //! for all u, v ∈ ℂ^N. The reconstruction error after zeroing all but the K
-//! retained DFT bins equals (1/N) Σ_{j: not in top-K} |X[j]|². This sum is
-//! minimised by retaining exactly the K coefficients with the largest |X[j]|,
+//! retained DFT bins equals (1/N) Σ_{j: not in top-K} `|X[j]|²`. This sum is
+//! minimised by retaining exactly the K coefficients with the largest `|X[j]|`,
 //! since any other selection of K bins leaves a strictly larger or equal residual
 //! energy. □
 //!
@@ -43,7 +43,7 @@
 //! **Statement.** If x ∈ ℂ^N is exactly K-sparse in the DFT domain (at most K
 //! frequency components are nonzero), then `SparseFftPlan::new(N, K)?.forward(x)`
 //! returns a `SparseSpectrum` containing exactly those K nonzero components, with
-//! values matching FFT(x)[k] to within FFT numerical precision
+//! values matching `FFT(x)[k]` to within FFT numerical precision
 //! (O(N log N · ε_machine)).
 //!
 //! **Proof sketch.** In exact arithmetic the N-K non-support DFT bins are zero.

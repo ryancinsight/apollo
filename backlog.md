@@ -1,7 +1,28 @@
 # Apollo Backlog
 
 ## Open in this sprint (Closure CVXIII phase)
-- [ ] [patch] Optimize AVX/FMA twiddle loading and eliminate indexing offsets/negation branches for f64 sizes 32 and 64 in `impls.rs`.
+- [ ] [patch] Optimize the direct public `FftPrecision::fft_forward` paths for
+  N=32 and N=64 until both f64 and f32 beat RustFFT in `cargo xtask`
+  clone-inclusive rows. The repaired focused direct-runner probe still records
+  misses: N=32 f64 `1.703x`, f32 `2.344x`; N=64 f64 `1.445x`, f32 `1.452x`.
+- [x] [patch] Reject N=32768 four-pass Stockham scheduling for the current
+  AVX backend. The `4+4+4+3` quad/triple schedule is value-correct but
+  regresses optimized `xtask` timing; retain the all-triple schedule while the
+  size-32/64 f64 twiddle-load work remains open.
+- [x] [patch] Reject 32-byte aligned f64 combine-twiddle loads for N=32/64.
+  The aligned static-table probe preserved correctness but worsened focused
+  `xtask` rows to N=32 f64 29.14 ns (`1.422x`) and N=64 f64 58.38 ns
+  (`1.466x`), so the unaligned static table representation remains the
+  measured baseline.
+- [x] [patch] Reject f32 fixed Winograd routing for N=32/64 on AVX/FMA. The
+  existing fixed kernels are value-correct but too slow for this route:
+  focused rows regressed to N=32 f32 46.80 ns (`5.619x`) and N=64 f32
+  143.44 ns (`4.678x`).
+- [x] [patch] Repair `xtask` benchmark semantics so Apollo timing uses the
+  public direct `FftPrecision::fft_forward` transform path rather than
+  `FftPlan1D` dispatch. This removes plan-wrapper overhead from the measured
+  operation and keeps the benchmark aligned with the crate's direct transform
+  API.
 
 ## Closed in this sprint (Closure CVXII phase)
 - [x] [patch] Narrow reduced f32 Winograd-pair execution to DFT31 only. A

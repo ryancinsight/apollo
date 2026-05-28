@@ -1,7 +1,7 @@
 //! WGPU plan descriptors for sliding DFT.
 //!
-//! The GPU direct-bins path evaluates X[b] = sum_{{n=0}}^{{N-1}} x[n] exp(-2*pi*i*b*n/N)
-//! for b = 0..bin_count, matching SdftPlan::direct_bins on the CPU.
+//! The GPU direct-bins path evaluates `X[b] = sum_{n=0}^{N-1} x[n] exp(-2*pi*i*b*n/N)`
+//! for b = 0..bin_count, matching `SdftPlan::direct_bins` on the CPU.
 
 /// Metadata-preserving WGPU SDFT plan descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

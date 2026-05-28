@@ -147,7 +147,7 @@ impl HilbertGpuKernel {
         }
     }
 
-    /// Execute the analytic signal path: x[n] + i H{x}[n].
+    /// Execute the analytic signal path: `x[n] + i H{x}[n]`.
     pub fn execute(
         &self,
         device: &wgpu::Device,
@@ -306,19 +306,19 @@ impl HilbertGpuKernel {
         Ok(output)
     }
 
-    /// Execute the inverse Hilbert transform: recover x[n] from H{x}[n].
+    /// Execute the inverse Hilbert transform: recover `x[n]` from `H{x}[n]`.
     ///
     /// Algorithm (3 GPU passes in one command encoder):
-    ///   1. DFT of quadrature input: Q[k] = M[k] * X[k] where M is the analytic mask
+    ///   1. DFT of quadrature input: `Q[k] = M[k] * X[k]` where M is the analytic mask
     ///   2. Undo the analytic mask: divide positive by 2, reconstruct negative via
     ///      hermitian symmetry. Uses a separate recovered_buffer to avoid in-place
     ///      data races between threads reading positive bins and writing negative bins.
-    ///   3. IDFT of recovered spectrum: gives the original real signal x[n]
+    ///   3. IDFT of recovered spectrum: gives the original real signal `x[n]`
     ///
     /// Mathematical justification: for a real signal x, the DFT coefficients satisfy
-    /// X[N-k] = conj(X[k]). The forward mask M doubles positive frequencies and zeros
-    /// negative frequencies. Since Q[k] = M[k]*X[k], we recover X[k] = Q[k]/M[k]
-    /// for positive frequencies and X[k] = conj(X[N-k]) for negative frequencies.
+    /// `X[N-k] = conj(X[k])`. The forward mask M doubles positive frequencies and zeros
+    /// negative frequencies. Since `Q[k] = M[k]*X[k]`, we recover `X[k] = Q[k]/M[k]`
+    /// for positive frequencies and `X[k] = conj(X[N-k])` for negative frequencies.
     pub fn execute_inverse(
         &self,
         device: &wgpu::Device,

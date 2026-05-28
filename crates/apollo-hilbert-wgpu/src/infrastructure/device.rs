@@ -146,7 +146,7 @@ impl HilbertWgpuBackend {
     /// Execute the inverse Hilbert transform: recover the original real signal from its quadrature component.
     ///
     /// By the Hilbert inversion theorem H(H(x)) = -I, the original signal is
-    /// x[n] = -H{H{x}[n]} = -H{quadrature[n]}.
+    /// `x[n] = -H{H{x}[n]} = -H{quadrature[n]}`.
     pub fn execute_inverse(
         &self,
         plan: &HilbertWgpuPlan,

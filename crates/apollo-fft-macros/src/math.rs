@@ -33,17 +33,17 @@ pub fn find_primitive_root(p: usize) -> usize {
 
 pub fn prime_factors(mut n: usize) -> Vec<usize> {
     let mut factors = Vec::new();
-    if n % 2 == 0 {
+    if n.is_multiple_of(2) {
         factors.push(2);
-        while n % 2 == 0 {
+        while n.is_multiple_of(2) {
             n /= 2;
         }
     }
     let mut i = 3;
     while i * i <= n {
-        if n % i == 0 {
+        if n.is_multiple_of(i) {
             factors.push(i);
-            while n % i == 0 {
+            while n.is_multiple_of(i) {
                 n /= i;
             }
         }
@@ -71,6 +71,7 @@ pub fn mod_pow(base: usize, mut exp: u64, modulus: u64) -> usize {
     result as usize
 }
 
+#[allow(clippy::many_single_char_names)] // standard Bezout (r, s, t) notation
 pub fn extended_gcd(a: isize, b: isize) -> (isize, isize, isize) {
     let (mut old_r, mut r) = (a, b);
     let (mut old_s, mut s) = (1, 0);

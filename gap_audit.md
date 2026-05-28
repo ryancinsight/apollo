@@ -52,6 +52,15 @@
 
 ## Open Gaps
 
+- Closure CVXIII repaired the optimized `xtask` benchmark runner so Apollo
+  timing calls the public direct `FftPrecision::fft_forward` path rather than
+  the 1-D plan wrapper. Focused N=32/64 rows still miss the `< 1.000x`
+  acceptance criterion after reverting rejected probes: N=32 f64 44.09 ns vs
+  25.89 ns (`1.703x`), N=32 f32 26.32 ns vs 11.23 ns (`2.344x`), N=64 f64
+  73.57 ns vs 50.92 ns (`1.445x`), and N=64 f32 53.63 ns vs 36.94 ns
+  (`1.452x`). Rejected variants: aligned f64 combine-twiddle loads regressed
+  f64 focused rows, and f32 fixed Winograd routing regressed N=32/64 f32 rows.
+
 - After Closure CVXII, f32 short odd-prime rows
   N=11/13/17/19/29/31/37/41/53 still trail RustFFT despite improved timings.
   N=23/43/47 beat RustFFT through the generic Winograd-pair route. The
@@ -94,6 +103,13 @@
   0.032/0.061/0.108/0.150 us versus RustFFT 0.032/0.041/0.064/0.106 us, so
   the cutoff improves Apollo's absolute route at 64/128 over the generic
   composite path but does not yet beat RustFFT at those sizes.
+- A 32768 Stockham schedule probe replaced the retained five-triple pass plan
+  with a four-pass `4+4+4+3` quad/triple plan to remove the terminal copy.
+  The value-semantic N=32768 roundtrip passed, but optimized `xtask` evidence
+  regressed from the prior focused row to 465901.45 ns f64 and 279476.74 ns f32
+  versus RustFFT 76468.89 ns f64 and 36617.04 ns f32. The four-pass schedule
+  is rejected for the current AVX backend; the all-triple schedule remains the
+  production route until quad-stage throughput or register pressure is fixed.
 - Criterion/RustFFT benchmark evidence for the restored fused radix-composite
   dispatcher: compile and value-semantic verification pass. Bounded
   `APOLLO_FFT_BENCH_N=96` and `APOLLO_FFT_BENCH_N=192` `vs_rustfft` attempts

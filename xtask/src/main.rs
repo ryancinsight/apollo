@@ -283,6 +283,7 @@ impl PrecisionBenchmark for DoublePrecision {
     type Scalar = f64;
     type Complex = num_complex::Complex64;
 
+    #[inline(always)]
     fn signal(len: usize) -> Vec<Self::Complex> {
         (0..len)
             .map(|i| {
@@ -292,11 +293,13 @@ impl PrecisionBenchmark for DoublePrecision {
             .collect()
     }
 
+    #[inline(always)]
     fn apollo_forward(data: &mut [Self::Complex]) {
         use apollo_fft::application::execution::kernel::FftPrecision;
         num_complex::Complex64::fft_forward(data);
     }
 
+    #[inline(always)]
     fn rustfft_input(input: &[Self::Complex]) -> Vec<rustfft::num_complex::Complex<Self::Scalar>> {
         input
             .iter()
@@ -304,6 +307,7 @@ impl PrecisionBenchmark for DoublePrecision {
             .collect()
     }
 
+    #[inline(always)]
     fn rustfft_zero() -> rustfft::num_complex::Complex<Self::Scalar> {
         rustfft::num_complex::Complex::new(0.0, 0.0)
     }
@@ -314,6 +318,7 @@ impl PrecisionBenchmark for SinglePrecision {
     type Scalar = f32;
     type Complex = num_complex::Complex32;
 
+    #[inline(always)]
     fn signal(len: usize) -> Vec<Self::Complex> {
         (0..len)
             .map(|i| {
@@ -323,11 +328,13 @@ impl PrecisionBenchmark for SinglePrecision {
             .collect()
     }
 
+    #[inline(always)]
     fn apollo_forward(data: &mut [Self::Complex]) {
         use apollo_fft::application::execution::kernel::FftPrecision;
         num_complex::Complex32::fft_forward(data);
     }
 
+    #[inline(always)]
     fn rustfft_input(input: &[Self::Complex]) -> Vec<rustfft::num_complex::Complex<Self::Scalar>> {
         input
             .iter()
@@ -335,12 +342,14 @@ impl PrecisionBenchmark for SinglePrecision {
             .collect()
     }
 
+    #[inline(always)]
     fn rustfft_zero() -> rustfft::num_complex::Complex<Self::Scalar> {
         rustfft::num_complex::Complex::new(0.0, 0.0)
     }
 }
 
 #[cfg(feature = "bench-runner")]
+#[inline(always)]
 fn bench_pair<P: PrecisionBenchmark>(len: usize, profile: BenchmarkProfile) -> (f64, f64) {
     let input = P::signal(len);
     
@@ -833,7 +842,11 @@ fn get_engine_name(n: usize) -> &'static str {
             2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 23, 24, 25, 27, 29, 31,
             32, 36, 37, 41, 43, 47, 53,
         ];
-        if short_sizes.contains(&n1) && short_sizes.contains(&n2) {
+        let has_static = (short_sizes.contains(&n1) && short_sizes.contains(&n2) && n <= 200)
+            || (n1 == 3 && [5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53].contains(&n2))
+            || (n2 == 3 && [5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53].contains(&n1))
+            || n == 84;
+        if has_static {
             return "Good-Thomas (Static)";
         }
     }
@@ -880,7 +893,7 @@ fn get_coprime_factors(n: usize) -> Option<(usize, usize)> {
 
 fn is_prime23_smooth(n: usize) -> bool {
     let mut remaining = n;
-    for &p in &[2, 3, 5, 7] {
+    for &p in &[2, 3, 5, 7, 11, 13, 17, 23] {
         while remaining % p == 0 {
             remaining /= p;
         }

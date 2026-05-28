@@ -1,7 +1,7 @@
 //! Sliding DFT kernel primitives.
 //!
 //! For window length N, the tracked bin is
-//! X_k[n] = sum_{m=0}^{N-1} x[n-N+1+m] exp(-2pi i k m/N).
+//! `X_k[n] = sum_{m=0}^{N-1} x[n-N+1+m] exp(-2pi i k m/N)`.
 //! When x_old leaves and x_new enters at the end, the recurrence is
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
@@ -54,13 +54,13 @@ pub fn direct_bins_into(window: &[f64], bins: &mut [Complex64]) -> SdftResult<()
 ///
 /// ## Invariant
 ///
-/// After each call, bins[k] equals the DFT of the current sliding window:
-/// bins[k] = sum_{j=0}^{N-1} window[(head+j) % N] * exp(-2pi i k j / N)
+/// After each call, `bins[k]` equals the DFT of the current sliding window:
+/// `bins[k] = sum_{j=0}^{N-1} window[(head+j) % N] * exp(-2pi i k j / N)`
 ///
 /// ## Recurrence derivation
 /// When the window advances by one sample (removing x_old, inserting x_new):
-/// DFT_new[k] = DFT_old[k] - x_old + x_new
-/// followed by multiplication by twiddle[k] = exp(2pi i k / N) (phase advance).
+/// `DFT_new[k] = DFT_old[k] - x_old + x_new`
+/// followed by multiplication by `twiddle[k] = exp(2pi i k / N)` (phase advance).
 /// Proof: shifting the window by one sample in time multiplies each DFT bin
 /// by exp(2pi i k / N), as a one-sample time-delay corresponds to multiplication
 /// by exp(-2pi i k / N) in frequency, and the recurrence advances the phase forward.

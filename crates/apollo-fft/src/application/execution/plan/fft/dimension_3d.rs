@@ -14,11 +14,11 @@
 //! For a complex field x in C^(nx x ny x nz), the forward transform is the
 //! separable 3D DFT
 //!
-//! X[kx,ky,kz] = sum x[x,y,z] * exp(-2*pi*i*(kx*x/nx + ky*y/ny + kz*z/nz))
+//! `X[kx,ky,kz] = sum x[x,y,z] * exp(-2*pi*i*(kx*x/nx + ky*y/ny + kz*z/nz))`
 //!
 //! and the inverse transform is
 //!
-//! x[x,y,z] = (1/(nx*ny*nz)) * sum X[kx,ky,kz] * exp(2*pi*i*(kx*x/nx+ky*y/ny+kz*z/nz))
+//! `x[x,y,z] = (1/(nx*ny*nz)) * sum X[kx,ky,kz] * exp(2*pi*i*(kx*x/nx+ky*y/ny+kz*z/nz))`
 //!
 //! Because the transform is separable, the implementation applies the 1D FFT
 //! kernel independently along each axis. This preserves linearity and the

@@ -3,7 +3,7 @@
 //! ## Mathematical contract
 //!
 //! The N-point WHT is defined by the Hadamard matrix H_N where
-//! H_N[k,j] = (-1)^{popcount(k & j)}.
+//! `H_N[k,j] = (-1)^{popcount(k & j)}`.
 //!
 //! H_N is self-inverse up to scaling: H_N^2 = N * I.
 //! Normalization: forward is unnormalized; inverse divides by N.

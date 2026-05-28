@@ -6,6 +6,23 @@ Sprint target version: apollo-fft 0.12.25
 - [ ] Modify `load_twiddle_pair` to load from `tw_ptr` unconditionally without branches.
 - [ ] Remove tw_ptr offsets (+15 and +31) and reference static twiddle tables directly in sizes 32 and 64.
 - [ ] Verify that all correctness tests pass and ratios in `benchmark_results.md` are < 1.000x.
+- [x] Restore the optimized `xtask` runner to benchmark Apollo's direct
+  `FftPrecision::fft_forward` public transform path instead of the 1-D plan
+  wrapper, because the benchmark contract is clone-inclusive transform
+  execution and not plan dispatch overhead.
+- [x] Reject 32-byte aligned f64 combine-twiddle loads for N=32/64 after the
+  focused probe regressed f64 timings to 29.14 ns at N=32 and 58.38 ns at
+  N=64, with ratios still above 1.000x.
+- [x] Reject routing f32 N=32/64 through the existing fixed Winograd kernels
+  on AVX/FMA targets after the focused probe regressed f32 ratios to 5.619x
+  at N=32 and 4.678x at N=64.
+- [x] Record the repaired direct-runner focused result:
+  N=32 f64 44.09 ns vs 25.89 ns (`1.703x`), f32 26.32 ns vs 11.23 ns
+  (`2.344x`); N=64 f64 73.57 ns vs 50.92 ns (`1.445x`), f32 53.63 ns vs
+  36.94 ns (`1.452x`).
+- [x] Reject the N=32768 four-pass `4+4+4+3` Stockham schedule after
+  value-correct optimized probing showed a large regression versus the retained
+  five-triple schedule.
 
 ## Closure CVXII - Reduced f32 DFT31 Pair Layout [patch]
 Sprint target version: apollo-fft 0.12.24

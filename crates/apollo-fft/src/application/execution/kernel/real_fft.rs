@@ -32,14 +32,14 @@
 //!
 //! ## Real-FFT contract
 //!
-//! Theorem (Real-FFT): For real input x[n] of length N (N even and power of two),
+//! Theorem (Real-FFT): For real input `x[n]` of length N (N even and power of two),
 //! the N-point DFT can be evaluated by:
 //!
-//! 1. Pack z[k] = x[2k] + i*x[2k+1]  (M = N/2 complex samples).
-//! 2. Compute the M-point forward complex FFT: Z = FFT_M(z).
-//! 3. Extract X[k] for k = 0..M via the Cooley-Tukey split formula:
-//!    X[k] = (Z[k] + Z[M-k]^*)/2 + i*W_N^k * (Z[k] - Z[M-k]^*)/2i,
-//!    where W_N^k = exp(-2*pi*i*k/N).
+//! 1. Pack `z[k] = x[2k] + i*x[2k+1]`  (M = N/2 complex samples).
+//! 2. Compute the M-point forward complex FFT: `Z = FFT_M(z)`.
+//! 3. Extract `X[k]` for `k = 0..M` via the Cooley-Tukey split formula:
+//!    `X[k] = (Z[k] + Z[M-k]^*)/2 + i*W_N^k * (Z[k] - Z[M-k]^*)/2i`,
+//!    where `W_N^k = exp(-2*pi*i*k/N)`.
 //!
 //! This halves the arithmetic cost vs. a direct N-point complex FFT. QED.
 //!

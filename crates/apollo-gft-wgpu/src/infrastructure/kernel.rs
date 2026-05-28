@@ -1,9 +1,9 @@
 //! GPU execution kernel for the graph Fourier transform.
 //!
-//! Forward (mode 0): X[k] = sum_i U[i,k] * x[i]  (U^T x)
-//! Inverse (mode 1): x[i] = sum_k U[i,k] * X[k]  (U X)
+//! Forward (mode 0): `X[k] = sum_i U[i,k] * x[i]`  (U^T x)
+//! Inverse (mode 1): `x[i] = sum_k U[i,k] * X[k]`  (U X)
 //!
-//! The basis matrix U is column-major: basis[i + k*N] = U[i,k].
+//! The basis matrix U is column-major: `basis[i + k*N] = U[i,k]`.
 
 use std::sync::mpsc;
 

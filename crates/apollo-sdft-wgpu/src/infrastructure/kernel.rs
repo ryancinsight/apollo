@@ -1,9 +1,9 @@
 //! GPU execution for direct SDFT bin computation (forward and inverse).
 //!
-//! Forward: X[b] = sum_{n=0}^{N-1} x[n] * exp(-2*pi*i*b*n/N) for b = 0..K.
-//! Matches SdftPlan::direct_bins on the CPU.
+//! Forward: `X[b] = sum_{n=0}^{N-1} x[n] * exp(-2*pi*i*b*n/N)` for b = 0..K.
+//! Matches `SdftPlan::direct_bins` on the CPU.
 //!
-//! Inverse: x[n] = (1/K) * sum_{b=0}^{K-1} X[b] * exp(+2*pi*i*b*n/K) for n = 0..N.
+//! Inverse: `x[n] = (1/K) * sum_{b=0}^{K-1} X[b] * exp(+2*pi*i*b*n/K)` for n = 0..N.
 //! Reconstructs the real signal from K complex DFT bins.
 
 use std::sync::mpsc;

@@ -19,7 +19,11 @@
 //! ## Sub-theorem 1: DCT-II via 2N-point forward DFT
 //!
 //! Let x ∈ ℝᴺ. Let x̃ ∈ ℂ²ᴺ be x zero-padded to length 2N:
+//!
+//! ```text
 //! x̃[n] = x[n] for n < N, x̃[n] = 0 for n ≥ N.
+//! ```
+//!
 //! Let F = DFT_{2N}(x̃). Then:
 //!
 //! ```text
@@ -27,15 +31,23 @@
 //! ```
 //!
 //! *Proof*: By definition,
+//!
+//! ```text
 //! F[k] = Σ_{n=0}^{N-1} x[n] exp(-2πikn/(2N)).
+//! ```
 //!
 //! Let W_k = exp(-iπk/(2N)). Then:
 //!
+//! ```text
 //! W_k · F[k] = Σ_{n=0}^{N-1} x[n] exp(-iπk/(2N)) exp(-2πikn/(2N))
 //!            = Σ_{n=0}^{N-1} x[n] exp(-iπk(2n+1)/(2N)).
+//! ```
 //!
 //! Taking the real part:
+//!
+//! ```text
 //! Re(W_k · F[k]) = Σ_{n=0}^{N-1} x[n] cos(πk(2n+1)/(2N)) = DCT-II[k]. ∎
+//! ```
 //!
 //! ## Sub-theorem 2: DST-II via the same 2N-point forward DFT
 //!
@@ -47,12 +59,17 @@
 //!
 //! *Proof*: Let W_{k+1} = exp(-iπ(k+1)/(2N)). Then:
 //!
+//! ```text
 //! W_{k+1} · F[k+1] = Σ_{n=0}^{N-1} x[n] exp(-iπ(k+1)(2n+1)/(2N)).
+//! ```
 //!
 //! Taking the negative imaginary part:
-//! -Im(W_{k+1} · F[k+1]) = Σ_{n=0}^{N-1} x[n] sin(π(k+1)(2n+1)/(2N)) = DST-II[k]. ∎
 //!
-//! Note: F[k+1] for k ∈ {0,...,N-1} indexes positions 1..=N in a length-2N array; all
+//! ```text
+//! -Im(W_{k+1} · F[k+1]) = Σ_{n=0}^{N-1} x[n] sin(π(k+1)(2n+1)/(2N)) = DST-II[k]. ∎
+//! ```
+//!
+//! Note: `F[k+1]` for k ∈ {0,...,N-1} indexes positions 1..=N in a length-2N array; all
 //! indices are in bounds.
 //!
 //! ## Sub-theorem 3: DCT-III via 2N-point Hermitian IDFT
@@ -66,7 +83,7 @@
 //! G[2N-k] = conj(G[k])                    for k = 1, ..., N-1
 //! ```
 //!
-//! Let y = IDFT_{2N}(G) (normalized: y[n] = (1/(2N)) Σ G[k] exp(2πikn/(2N))). Then:
+//! Let y = IDFT_{2N}(G) (normalized: `y[n] = (1/(2N)) Σ G[k] exp(2πikn/(2N))`). Then:
 //!
 //! ```text
 //! DCT-III[n] = N · Re(y[n])   for n = 0, ..., N-1
@@ -74,22 +91,26 @@
 //!
 //! *Proof*: By Hermitian symmetry of G, y is real up to floating-point noise. Expanding:
 //!
+//! ```text
 //! (2N) · y[n] = G[0] + Σ_{k=1}^{N-1} G[k] exp(2πikn/(2N))
 //!                     + G[N] exp(πin)
 //!                     + Σ_{k=1}^{N-1} G[2N-k] exp(2πi(2N-k)n/(2N))
+//! ```
 //!
-//! Since G[N] = 0 and G[2N-k] = conj(G[k]):
+//! Since `G[N] = 0` and `G[2N-k] = conj(G[k])`:
 //!
+//! ```text
 //! (2N) · y[n] = X[0] + Σ_{k=1}^{N-1} G[k] exp(2πikn/(2N))
 //!                     + Σ_{k=1}^{N-1} conj(G[k]) exp(-2πikn/(2N))
 //!             = X[0] + 2 · Re(Σ_{k=1}^{N-1} G[k] exp(2πikn/(2N)))
 //!             = X[0] + 2 · Σ_{k=1}^{N-1} X[k] cos(πk(2n+1)/(2N)).
+//! ```
 //!
-//! Therefore: N · y[n] = X[0]/2 + Σ_{k=1}^{N-1} X[k] cos(πk(2n+1)/(2N)) = DCT-III[n]. ∎
+//! Therefore: `N · y[n] = X[0]/2 + Σ_{k=1}^{N-1} X[k] cos(πk(2n+1)/(2N)) = DCT-III[n]`. ∎
 //!
 //! ## Sub-theorem 4: DST-III via 2N-point forward DFT with complex input
 //!
-//! Let X' ∈ ℝᴺ be defined by X'[n] = X[n] for n < N-1, X'[N-1] = X[N-1]/2 (half boundary term).
+//! Let X' ∈ ℝᴺ be defined by `X'[n] = X[n]` for n < N-1, `X'[N-1] = X[N-1]/2` (half boundary term).
 //! Form V ∈ ℂ²ᴺ zero-padded:
 //!
 //! ```text
@@ -103,24 +124,30 @@
 //! DST-III[k] = Im(exp(iπ(2k+1)/(2N)) · conj(G[k]))   for k = 0, ..., N-1
 //! ```
 //!
-//! *Proof*: Since X'[n] ∈ ℝ, conj(V[n]) = X'[n] · exp(+iπn/(2N)). Therefore:
+//! *Proof*: Since `X'[n]` ∈ ℝ, `conj(V[n]) = X'[n] · exp(+iπn/(2N))`. Therefore:
 //!
+//! ```text
 //! conj(G[k]) = Σ_{n=0}^{N-1} conj(V[n]) exp(2πikn/(2N))
 //!            = Σ_{n=0}^{N-1} X'[n] exp(iπn/(2N)) exp(2πikn/(2N))
 //!            = Σ_{n=0}^{N-1} X'[n] exp(iπn(2k+1)/(2N)).
+//! ```
 //!
 //! Multiplying by exp(iπ(2k+1)/(2N)):
 //!
+//! ```text
 //! exp(iπ(2k+1)/(2N)) · conj(G[k]) = Σ_{n=0}^{N-1} X'[n] exp(iπ(n+1)(2k+1)/(2N)).
+//! ```
 //!
 //! Taking the imaginary part:
 //!
+//! ```text
 //! Im[...] = Σ_{n=0}^{N-1} X'[n] sin(π(n+1)(2k+1)/(2N)).
+//! ```
 //!
-//! At n = N-1: X'[N-1] · sin(πN(2k+1)/(2N)) = X[N-1]/2 · sin(π(2k+1)/2) = X[N-1]/2 · (-1)^k.
-//! For n = 0,...,N-2: X[n] · sin(π(n+1)(2k+1)/(2N)).
+//! At n = N-1: `X'[N-1] · sin(πN(2k+1)/(2N)) = X[N-1]/2 · sin(π(2k+1)/2) = X[N-1]/2 · (-1)^k`.
+//! For n = 0,...,N-2: `X[n] · sin(π(n+1)(2k+1)/(2N))`.
 //!
-//! Thus: Im[...] = (-1)^k · X[N-1]/2 + Σ_{n=0}^{N-2} X[n] sin(π(n+1)(2k+1)/(2N)) = DST-III[k]. ∎
+//! Thus: `Im[...] = (-1)^k · X[N-1]/2 + Σ_{n=0}^{N-2} X[n] sin(π(n+1)(2k+1)/(2N)) = DST-III[k]`. ∎
 //!
 //! # References
 //!

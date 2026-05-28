@@ -8,7 +8,7 @@
 //!   S[j,(j+1) mod N]    = 1                           super-diagonal with wrap
 //!   S[(j+1) mod N, j]   = 1                           sub-diagonal with wrap
 //! ```
-//! S is real symmetric with a palindrome diagonal (S[j,j] = S[N−1−j, N−1−j]),
+//! S is real symmetric with a palindrome diagonal (`S[j,j] = S[N−1−j, N−1−j]`),
 //! which causes its eigenvectors to be either symmetric or antisymmetric under
 //! index reversal. The eigendecomposition S = V Λ V^T gives an orthonormal
 //! eigenbasis sorted by decreasing eigenvalue (column 0 = DC-like, column N−1

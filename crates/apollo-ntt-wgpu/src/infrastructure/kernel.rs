@@ -64,9 +64,9 @@ const NTT_PARAMS_BYTE_SIZE: u32 = 16;
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
 pub enum NttMode {
-    /// Forward NTT: X[k] = Σ x[j] · ω^{jk} mod m.
+    /// Forward NTT: `X[k] = Σ x[j] · ω^{jk} mod m`.
     Forward = 0,
-    /// Inverse NTT: x[j] = N⁻¹ · Σ X[k] · ω⁻^{jk} mod m.
+    /// Inverse NTT: `x[j] = N⁻¹ · Σ X[k] · ω⁻^{jk} mod m`.
     Inverse = 1,
 }
 
@@ -353,7 +353,7 @@ impl NttGpuKernel {
 
     /// Allocate temporary buffers, execute, and return the output.
     ///
-    /// For the reusable-buffer hot path use [`execute_with_buffers`] instead.
+    /// For the reusable-buffer hot path use [`Self::execute_with_buffers`] instead.
     pub fn execute(
         &self,
         device: &wgpu::Device,

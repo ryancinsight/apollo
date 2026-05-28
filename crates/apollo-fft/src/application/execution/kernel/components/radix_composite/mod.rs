@@ -75,5 +75,4 @@ pub fn inverse_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
 }
 
 #[cfg(test)]
-#[path = "../../tests_radix_composite.rs"]
 mod tests;

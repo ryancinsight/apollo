@@ -85,7 +85,7 @@ impl GftWgpuBackend {
         GftWgpuPlan::new(len)
     }
 
-    /// Execute the forward GFT: X[k] = sum_i U[i,k] * signal[i]  (U^T x).
+    /// Execute the forward GFT: `X[k] = sum_i U[i,k] * signal[i]`  (U^T x).
     ///
     /// Requires signal.len() == plan.len() and basis.len() == len*len.
     pub fn execute_forward(
@@ -105,7 +105,7 @@ impl GftWgpuBackend {
         )
     }
 
-    /// Execute the inverse GFT: x[i] = sum_k U[i,k] * spectrum[k]  (U X).
+    /// Execute the inverse GFT: `x[i] = sum_k U[i,k] * spectrum[k]`  (U X).
     ///
     /// Requires spectrum.len() == plan.len() and basis.len() == len*len.
     pub fn execute_inverse(

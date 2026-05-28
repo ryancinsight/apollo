@@ -1,7 +1,7 @@
 //! Dense unitary quantum Fourier transform kernel.
 //!
-//! Forward entry M[k,j] = exp(2*pi*i*j*k/n) / sqrt(n).
-//! Inverse entry M[k,j] = exp(-2*pi*i*j*k/n) / sqrt(n).
+//! Forward entry `M[k,j] = exp(2*pi*i*j*k/n) / sqrt(n)`.
+//! Inverse entry `M[k,j] = exp(-2*pi*i*j*k/n) / sqrt(n)`.
 //! Both maps are unitary (norm-preserving) in exact arithmetic.
 
 use num_complex::Complex64;

@@ -13,9 +13,12 @@
 //! cache_profiler::report();
 //! ```
 
+#![allow(dead_code)]
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
+#[allow(dead_code)]
 /// Per-cache statistics
 #[derive(Default, Debug)]
 pub struct CacheStats {
@@ -133,7 +136,6 @@ pub struct Profiler {
     pub coprime_factors: CacheStats,
     pub is_prime: CacheStats,
     pub pfa_perm: CacheStats,
-    pub pfa_cycles: CacheStats,
 }
 
 impl Default for Profiler {
@@ -158,7 +160,6 @@ impl Default for Profiler {
             coprime_factors: CacheStats::default(),
             is_prime: CacheStats::default(),
             pfa_perm: CacheStats::default(),
-            pfa_cycles: CacheStats::default(),
         }
     }
 }
@@ -212,7 +213,6 @@ pub fn report() {
     println!("{}", p.coprime_factors.report_line("coprime_factors"));
     println!("{}", p.is_prime.report_line("is_prime"));
     println!("{}", p.pfa_perm.report_line("pfa_perm"));
-    println!("{}", p.pfa_cycles.report_line("pfa_cycles"));
 
     println!("----------------------------------------------------------------------------------------------------");
 
@@ -237,7 +237,6 @@ pub fn report() {
         ("coprime_factors", p.coprime_factors.hit_rate()),
         ("is_prime", p.is_prime.hit_rate()),
         ("pfa_perm", p.pfa_perm.hit_rate()),
-        ("pfa_cycles", p.pfa_cycles.hit_rate()),
     ];
 
     let poor: Vec<_> = poor_locality.iter()
@@ -277,7 +276,6 @@ pub enum CacheId {
     CoprimeFactors,
     IsPrime,
     PfaPerm,
-    PfaCycles,
 }
 
 impl Profiler {
@@ -302,7 +300,6 @@ impl Profiler {
             CacheId::CoprimeFactors => &self.coprime_factors,
             CacheId::IsPrime => &self.is_prime,
             CacheId::PfaPerm => &self.pfa_perm,
-            CacheId::PfaCycles => &self.pfa_cycles,
         }
     }
 }

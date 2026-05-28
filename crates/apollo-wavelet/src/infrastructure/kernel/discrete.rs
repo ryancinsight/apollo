@@ -2,17 +2,17 @@
 //!
 //! ## Quadrature Mirror Filter (QMF) Identity
 //!
-//! Theorem: For an orthogonal wavelet with lowpass filter h[k], k = 0…L-1,
-//! the highpass decomposition filter is g[k] = (-1)^k · h[L-1-k].
+//! Theorem: For an orthogonal wavelet with lowpass filter `h[k]`, k = 0…L-1,
+//! the highpass decomposition filter is `g[k] = (-1)^k · h[L-1-k]`.
 //!
 //! Proof: The perfect-reconstruction (PR) condition for a two-channel filter
 //! bank requires H(z)·H(z⁻¹) + G(z)·G(z⁻¹) = 2 (Smith-Barnwell condition).
 //! The choice G(z) = z^{-(L-1)} · H(-z⁻¹) satisfies this condition when H is
 //! linear-phase and orthogonal, and in the time domain reduces to
-//! g[k] = (-1)^k · h[L-1-k]. This is confirmed for Haar (L=2) and Daubechies4
+//! `g[k] = (-1)^k · h[L-1-k]`. This is confirmed for Haar (L=2) and Daubechies4
 //! (L=4) coefficients by direct substitution:
-//!   Haar: g[0] = +h[1] = 1/√2, g[1] = -h[0] = -1/√2. ✓
-//!   Daubechies4: g[k] = (-1)^k · h[3-k] matches the published db4 highpass
+//!   Haar: `g[0] = +h[1] = 1/√2`, `g[1] = -h[0] = -1/√2`. ✓
+//!   Daubechies4: `g[k] = (-1)^k · h[3-k]` matches the published db4 highpass
 //!   coefficients (Daubechies, 1992, p. 198). ✓
 //!
 //! Corollary: The g array depends only on filter_index ∈ 0…L-1, not on the

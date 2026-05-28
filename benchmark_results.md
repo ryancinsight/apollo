@@ -15,7 +15,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 5 | Winograd | Butterfly | 8.19 | 10.03 | 0.817x | 10.89 | 8.51 | 1.280x | 2026-05-28 10:27 UTC |
 | 6 | Winograd | Butterfly | 3.60 | 2.17 | 1.659x | 10.67 | 8.12 | 1.313x | 2026-05-28 10:27 UTC |
 | 7 | Winograd | Butterfly | 11.06 | 10.59 | 1.044x | 14.28 | 11.90 | 1.200x | 2026-05-28 10:27 UTC |
-| 8 | Winograd | Butterfly | 3.49 | 2.79 | 1.252x | 9.50 | 1.70 | 5.594x | 2026-05-28 10:27 UTC |
+| 8 | Winograd | Butterfly | 5.05 | 3.14 | 1.605x | 4.25 | 1.81 | 2.340x | 2026-05-28 20:11 UTC |
 | 9 | Winograd | Butterfly | 10.03 | 10.89 | 0.921x | 17.80 | 13.52 | 1.316x | 2026-05-28 10:27 UTC |
 | 10 | Winograd | Mixed-Radix | 5.09 | 24.17 | 0.211x | 13.59 | 21.47 | 0.633x | 2026-05-28 10:27 UTC |
 | 11 | Winograd | Butterfly | 8.04 | 13.01 | 0.618x | 14.75 | 11.56 | 1.276x | 2026-05-28 10:27 UTC |
@@ -23,7 +23,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 13 | Winograd | Butterfly | 7.31 | 14.78 | 0.495x | 17.95 | 14.18 | 1.266x | 2026-05-28 10:27 UTC |
 | 14 | Winograd | Mixed-Radix | 10.61 | 25.51 | 0.416x | 13.73 | 25.90 | 0.530x | 2026-05-28 10:27 UTC |
 | 15 | Winograd | Mixed-Radix | 13.56 | 27.00 | 0.502x | 17.24 | 25.09 | 0.687x | 2026-05-28 10:27 UTC |
-| 16 | Winograd | Butterfly | 9.15 | 5.88 | 1.556x | 14.79 | 2.42 | 6.108x | 2026-05-28 10:27 UTC |
+| 16 | Winograd | Butterfly | 10.31 | 8.04 | 1.281x | 9.12 | 3.15 | 2.896x | 2026-05-28 20:11 UTC |
 | 17 | Winograd | Butterfly | 22.61 | 24.51 | 0.922x | 28.96 | 17.55 | 1.650x | 2026-05-28 10:27 UTC |
 | 18 | Winograd | Butterfly | 20.79 | 12.82 | 1.621x | 32.93 | 22.99 | 1.433x | 2026-05-28 10:27 UTC |
 | 19 | Winograd | Butterfly | 28.57 | 30.89 | 0.925x | 34.46 | 22.74 | 1.516x | 2026-05-28 10:27 UTC |
@@ -31,7 +31,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 21 | Winograd | Mixed-Radix | 19.79 | 32.85 | 0.603x | 27.89 | 29.95 | 0.931x | 2026-05-28 10:27 UTC |
 | 22 | Winograd | Mixed-Radix | 31.97 | 29.80 | 1.073x | 34.30 | 27.33 | 1.255x | 2026-05-28 10:27 UTC |
 | 23 | Winograd | Butterfly | 42.16 | 44.93 | 0.938x | 49.47 | 66.59 | 0.743x | 2026-05-28 10:27 UTC |
-| 24 | Winograd | Butterfly | 15.09 | 18.00 | 0.839x | 26.52 | 6.71 | 3.951x | 2026-05-28 10:27 UTC |
+| 24 | Winograd | Butterfly | 17.13 | 20.95 | 0.818x | 30.37 | 7.73 | 3.927x | 2026-05-28 20:11 UTC |
 | 25 | Winograd | Mixed-Radix | 30.95 | 32.16 | 0.963x | 32.92 | 30.68 | 1.073x | 2026-05-28 10:27 UTC |
 | 26 | Winograd | Mixed-Radix | 31.51 | 43.98 | 0.717x | 48.12 | 36.90 | 1.304x | 2026-05-28 10:27 UTC |
 | 27 | Winograd | Butterfly | 34.78 | 23.08 | 1.507x | 49.26 | 19.18 | 2.568x | 2026-05-28 10:27 UTC |
@@ -79,7 +79,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 69 | Good-Thomas (Static) | Mixed-Radix | 189.76 | 159.86 | 1.187x | 185.42 | 133.95 | 1.384x | 2026-05-28 10:27 UTC |
 | 70 | Good-Thomas (Static) | Mixed-Radix | 107.85 | 91.07 | 1.184x | 101.60 | 82.99 | 1.224x | 2026-05-28 10:27 UTC |
 | 71 | Rader | Rader | 646.89 | 328.59 | 1.969x | 425.97 | 238.34 | 1.787x | 2026-05-28 10:27 UTC |
-| 72 | Good-Thomas (Static) | Butterfly | 126.58 | 56.10 | 2.256x | 144.08 | 27.25 | 5.287x | 2026-05-28 10:27 UTC |
+| 72 | Good-Thomas (Static) | Butterfly | 145.10 | 72.40 | 2.004x | 172.63 | 25.32 | 6.819x | 2026-05-28 20:11 UTC |
 | 73 | Rader | Rader | 414.60 | 267.65 | 1.549x | 399.30 | 122.46 | 3.261x | 2026-05-28 10:27 UTC |
 | 74 | Good-Thomas (Static) | Mixed-Radix (Rader) | 378.52 | 251.00 | 1.508x | 315.84 | 154.81 | 2.040x | 2026-05-28 10:27 UTC |
 | 75 | Good-Thomas (Static) | Mixed-Radix | 164.00 | 105.14 | 1.560x | 147.73 | 90.86 | 1.626x | 2026-05-28 10:27 UTC |
@@ -151,7 +151,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 141 | Good-Thomas (Static) | Mixed-Radix (Rader) | 553.85 | 976.74 | 0.567x | 531.58 | 740.61 | 0.718x | 2026-05-28 10:27 UTC |
 | 142 | Good-Thomas | Mixed-Radix (Rader) | 1317.20 | 700.53 | 1.880x | 861.76 | 500.19 | 1.723x | 2026-05-28 10:27 UTC |
 | 143 | Good-Thomas (Static) | Mixed-Radix | 319.80 | 237.63 | 1.346x | 327.59 | 171.68 | 1.908x | 2026-05-28 10:27 UTC |
-| 144 | Good-Thomas (Static) | Mixed-Radix | 326.44 | 117.50 | 2.778x | 320.55 | 69.12 | 4.637x | 2026-05-28 10:27 UTC |
+| 144 | Good-Thomas (Static) | Mixed-Radix | 375.96 | 153.85 | 2.444x | 370.24 | 81.87 | 4.523x | 2026-05-28 20:11 UTC |
 | 145 | Good-Thomas (Static) | Mixed-Radix | 645.98 | 378.46 | 1.707x | 626.53 | 298.73 | 2.097x | 2026-05-28 10:27 UTC |
 | 146 | Good-Thomas | Mixed-Radix (Rader) | 872.43 | 541.09 | 1.612x | 823.19 | 269.17 | 3.058x | 2026-05-28 10:27 UTC |
 | 147 | Cooley-Tukey | Mixed-Radix | 364.42 | 182.73 | 1.994x | 328.38 | 147.36 | 2.229x | 2026-05-28 10:27 UTC |
