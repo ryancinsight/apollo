@@ -1,14 +1,13 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
 
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
-use ndarray::{Array2, ArrayViewMut1, Axis};
-use rayon::prelude::*;
+use ndarray::Array2;
 
 /// Execute the forward discrete Radon projection.
 ///
 /// Embarrassingly parallel over the angle dimension: each angle writes to a
-/// disjoint sinogram row, so axis_iter_mut(Axis(0)).into_par_iter() provides
-/// data-race-free mutable access without synchronisation.
+/// disjoint, contiguous sinogram row, so chunking the row-major buffer by
+/// `detector_count` provides data-race-free mutable access without synchronisation.
 #[must_use]
 pub fn forward_project(image: &Array2<f64>, geometry: &ParallelBeamGeometry) -> Array2<f64> {
     let mut sinogram = Array2::zeros((geometry.angle_count(), geometry.detector_count()));
@@ -26,19 +25,23 @@ pub fn forward_project_into(
     sinogram: &mut Array2<f64>,
 ) {
     sinogram.fill(0.0);
-    sinogram
-        .axis_iter_mut(Axis(0))
-        .into_par_iter()
-        .enumerate()
-        .for_each(|(angle_index, mut row)| {
+    let ncols = sinogram.ncols();
+    let flat = sinogram
+        .as_slice_mut()
+        .expect("sinogram must be contiguous (standard layout)");
+    moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+        flat,
+        ncols,
+        |angle_index, row| {
             let (sin_theta, cos_theta) = geometry.angles()[angle_index].sin_cos();
             for r in 0..geometry.rows() {
                 for c in 0..geometry.cols() {
                     let det_coord = geometry.x(c) * cos_theta + geometry.y(r) * sin_theta;
-                    deposit(geometry.detector_index(det_coord), image[(r, c)], &mut row);
+                    deposit(geometry.detector_index(det_coord), image[(r, c)], row);
                 }
             }
-        });
+        },
+    );
 }
 
 /// Execute the adjoint of the discrete Radon projection.
@@ -61,29 +64,28 @@ pub fn adjoint_backproject_into(
     image: &mut Array2<f64>,
 ) {
     let cols = geometry.cols();
-    image
-        .axis_iter_mut(Axis(0))
-        .into_par_iter()
-        .enumerate()
-        .for_each(|(r, mut row)| {
-            let y = geometry.y(r);
-            for c in 0..cols {
-                let x = geometry.x(c);
-                let mut value = 0.0_f64;
-                for (angle_index, angle) in geometry.angles().iter().enumerate() {
-                    let (sin_theta, cos_theta) = angle.sin_cos();
-                    let det_coord = x * cos_theta + y * sin_theta;
-                    value +=
-                        sample_linear(geometry.detector_index(det_coord), sinogram, angle_index);
-                }
-                row[c] = value;
+    let ncols = image.ncols();
+    let flat = image
+        .as_slice_mut()
+        .expect("image must be contiguous (standard layout)");
+    moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(flat, ncols, |r, row| {
+        let y = geometry.y(r);
+        for c in 0..cols {
+            let x = geometry.x(c);
+            let mut value = 0.0_f64;
+            for (angle_index, angle) in geometry.angles().iter().enumerate() {
+                let (sin_theta, cos_theta) = angle.sin_cos();
+                let det_coord = x * cos_theta + y * sin_theta;
+                value += sample_linear(geometry.detector_index(det_coord), sinogram, angle_index);
             }
-        });
+            row[c] = value;
+        }
+    });
 }
 
 /// Deposit mass at fractional detector index into a single sinogram row
 /// using linear (nearest-two-bin) weighting.
-fn deposit(index: f64, mass: f64, row: &mut ArrayViewMut1<'_, f64>) {
+fn deposit(index: f64, mass: f64, row: &mut [f64]) {
     let ncols = row.len();
     if ncols == 0 || index < 0.0 || index > (ncols - 1) as f64 {
         return;

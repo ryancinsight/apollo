@@ -47,7 +47,6 @@ dependencies = [
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -72,10 +71,10 @@ version = "0.1.1"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -99,10 +98,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -128,6 +127,7 @@ dependencies = [
  "approx",
  "criterion",
  "half",
+ "moirai",
  "nalgebra",
  "ndarray",
  "num-complex",
@@ -136,12 +136,10 @@ dependencies = [
  "parking_lot",
  "proptest",
  "rand 0.8.6",
- "rayon",
  "rustc-hash 2.1.2",
  "rustfft",
  "serde",
  "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]
@@ -201,10 +199,10 @@ version = "0.1.1"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -281,9 +279,9 @@ version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -305,10 +303,10 @@ dependencies = [
 name = "apollo-ntt"
 version = "0.1.0"
 dependencies = [
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -335,7 +333,6 @@ dependencies = [
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -407,10 +404,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -487,10 +484,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -515,10 +512,10 @@ version = "0.2.1"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -576,10 +573,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",
- "rayon",
  "serde",
  "thiserror 1.0.69",
 ]
@@ -1338,6 +1335,97 @@ dependencies = [
 ]
 
 [[package]]
+name = "moirai"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "moirai-core",
+ "moirai-executor",
+ "moirai-parallel",
+ "moirai-scheduler",
+ "moirai-sync",
+ "moirai-transport",
+ "moirai-utils",
+]
+
+[[package]]
+name = "moirai-core"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "libc",
+ "moirai-utils",
+]
+
+[[package]]
+name = "moirai-executor"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "moirai-core",
+ "moirai-pal",
+ "moirai-scheduler",
+ "moirai-utils",
+]
+
+[[package]]
+name = "moirai-pal"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "js-sys",
+ "libc",
+ "moirai-core",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "windows",
+]
+
+[[package]]
+name = "moirai-parallel"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "moirai-executor",
+]
+
+[[package]]
+name = "moirai-scheduler"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "moirai-core",
+ "moirai-utils",
+ "num_cpus",
+]
+
+[[package]]
+name = "moirai-sync"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "libc",
+ "moirai-core",
+ "moirai-utils",
+]
+
+[[package]]
+name = "moirai-transport"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+dependencies = [
+ "moirai-core",
+ "moirai-scheduler",
+ "moirai-utils",
+]
+
+[[package]]
+name = "moirai-utils"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Moirai.git#b1f259fecf9e1e086f2dd041b029c40e5e52174c"
+
+[[package]]
 name = "naga"
 version = "26.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1463,6 +1551,16 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "num_cpus"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+dependencies = [
+ "hermit-abi",
+ "libc",
 ]
 
 [[package]]
@@ -2180,15 +2278,6 @@ checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "tokio"
-version = "1.52.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
-dependencies = [
- "pin-project-lite",
 ]
 
 [[package]]

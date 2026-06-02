@@ -15,7 +15,6 @@ use crate::infrastructure::kernel::spherical_harmonic::{
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array2;
 use num_complex::{Complex32, Complex64};
-use rayon::prelude::*;
 
 /// Reusable spherical harmonic transform (SHT) plan.
 ///
@@ -115,9 +114,8 @@ impl ShtPlan {
             .collect();
 
         // Parallelize over latitude rows; each row contributes to all modes independently.
-        let contributions: Vec<Vec<Complex64>> = (0..n_lat)
-            .into_par_iter()
-            .map(|lat| {
+        let contributions: Vec<Vec<Complex64>> =
+            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(n_lat, |lat| {
                 let theta = self.theta(lat);
                 let weight = self.theta_weights[lat];
                 all_modes
@@ -133,8 +131,7 @@ impl ShtPlan {
                         lon_sum * (weight * longitude_weight)
                     })
                     .collect()
-            })
-            .collect();
+            });
 
         // Accumulate all latitude contributions into coefficients.
         for lat_contribs in contributions {
@@ -172,9 +169,8 @@ impl ShtPlan {
             .collect();
 
         // Parallelize over latitude rows; each row is computed independently.
-        let row_values: Vec<Vec<Complex64>> = (0..n_lat)
-            .into_par_iter()
-            .map(|lat| {
+        let row_values: Vec<Vec<Complex64>> =
+            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(n_lat, |lat| {
                 let theta = self.theta(lat);
                 (0..n_lon)
                     .map(|lon| {
@@ -188,8 +184,7 @@ impl ShtPlan {
                             .sum()
                     })
                     .collect()
-            })
-            .collect();
+            });
 
         // Assemble into output array.
         let mut samples = Array2::<Complex64>::zeros((n_lat, n_lon));

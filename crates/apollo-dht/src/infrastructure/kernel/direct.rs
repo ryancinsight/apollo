@@ -1,7 +1,7 @@
 //! Direct real-valued DHT kernel.
 
 use crate::domain::contracts::error::{DhtError, DhtResult};
-use rayon::prelude::*;
+use moirai::ParallelSliceMut;
 
 /// Below this length the serial path avoids rayon thread spawn overhead.
 /// The threshold is a conservative empirical heuristic; a benchmark-derived value would replace this.
@@ -31,7 +31,7 @@ pub fn transform_real(input: &[f64], output: &mut [f64]) -> DhtResult<()> {
 
     let factor = std::f64::consts::TAU / len as f64;
     if len >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, value)| {
+        output.par_mut().enumerate(|k, value| {
             *value = coefficient(input, factor, k);
         });
     } else {

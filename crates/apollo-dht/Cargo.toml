@@ -8,7 +8,7 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Discrete Hartley Transform plans for real-to-real Apollo signal analysis"
 
 [dependencies]
-rayon = "1.10"
+moirai = { workspace = true }
 thiserror = "1.0"
 apollo-fft = { path = "../apollo-fft" }
 ndarray = "0.16"

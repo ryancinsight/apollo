@@ -88,14 +88,15 @@ criterion = "0.5"
 quote = "1.0"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
-rayon = "1.10"
+# moirai: data-parallel runtime replacing rayon (default-features off avoids its
+# global allocator; `parallel` provides the data-parallel API).
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full"] }
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
-tokio = { version = "1.0", features = ["sync", "rt"] }
 
 [workspace.lints.rust]
 missing_docs = "warn"

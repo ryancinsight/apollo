@@ -35,7 +35,6 @@ use crate::application::execution::plan::fft::workspace::{
 use crate::domain::metadata::shape::Shape2D;
 use ndarray::{Array2, Axis};
 use num_complex::Complex;
-use rayon::prelude::*;
 use std::sync::Arc;
 
 /// Use rayon parallel iteration when total elements exceed this threshold.
@@ -164,7 +163,9 @@ where
                 }
             };
         if data_slice.len() > RAYON_THRESHOLD {
-            data_slice.par_chunks_mut(self.ny).for_each(lane_fn);
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
+                data_slice, self.ny, lane_fn,
+            );
         } else {
             data_slice.chunks_mut(self.ny).for_each(lane_fn);
         }
@@ -207,7 +208,9 @@ where
                 }
             };
         if scratch.len() > RAYON_THRESHOLD {
-            scratch.par_chunks_mut(self.nx).for_each(lane_fn);
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
+                &mut scratch[..], self.nx, lane_fn,
+            );
         } else {
             scratch.chunks_mut(self.nx).for_each(lane_fn);
         }

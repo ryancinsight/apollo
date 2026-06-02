@@ -8,8 +8,7 @@ use crate::infrastructure::kernel::direct::{
 };
 use crate::infrastructure::kernel::filter::ramp_filter_projection_into;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::{Array2, Axis};
-use rayon::prelude::*;
+use ndarray::Array2;
 
 /// Reusable 2D parallel-beam Radon plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -132,20 +131,23 @@ impl RadonPlan {
         let mut filtered = Array2::zeros(sinogram_values.dim());
         let det_spacing = self.geometry.detector_spacing();
         let det_count = self.geometry.detector_count();
-        // Parallel ramp filter per angle: each row is independent.
-        filtered
-            .axis_iter_mut(Axis(0))
-            .into_par_iter()
-            .enumerate()
-            .for_each(|(angle_idx, mut dest_row)| {
+        // Parallel ramp filter per angle: each row is an independent, contiguous
+        // chunk of the row-major `filtered` buffer.
+        let ncols = filtered.ncols();
+        let flat = filtered
+            .as_slice_mut()
+            .expect("filtered must be contiguous (standard layout)");
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+            flat,
+            ncols,
+            |angle_idx, dest_row| {
                 let source_row = sinogram_values.row(angle_idx);
                 let projection: Vec<f64> = source_row.iter().copied().collect();
                 let mut filtered_buf = vec![0.0_f64; det_count];
                 ramp_filter_projection_into(&projection, det_spacing, &mut filtered_buf);
-                for (dst, src) in dest_row.iter_mut().zip(filtered_buf.iter()) {
-                    *dst = *src;
-                }
-            });
+                dest_row.copy_from_slice(&filtered_buf);
+            },
+        );
         let mut image = adjoint_backproject(&filtered, &self.geometry);
         let scale = std::f64::consts::PI / self.geometry.angle_count() as f64;
         image.iter_mut().for_each(|value| *value *= scale);

@@ -1,5 +1,4 @@
 use crate::domain::contracts::math::{bit_reverse_permute, mod_add, mod_mul, mod_sub};
-use rayon::prelude::*;
 
 const PAR_THRESHOLD: usize = 1024;
 
@@ -15,7 +14,7 @@ pub fn ntt_kernel(data: &mut [u64], twiddles: &[u64], modulus: u64) {
         let layer_twiddles = &twiddles[offset..offset + half];
 
         if len >= PAR_THRESHOLD {
-            data.par_chunks_mut(len).for_each(|chunk| {
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data, len, |chunk| {
                 let (left, right) = chunk.split_at_mut(half);
                 for i in 0..half {
                     let u = left[i];

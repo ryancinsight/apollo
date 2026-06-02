@@ -7,7 +7,7 @@ use crate::infrastructure::kernel::continuous::coefficient;
 use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use ndarray::Array2;
-use rayon::prelude::*;
+use moirai::ParallelSlice;
 
 /// Reusable real-valued 1D CWT plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -69,15 +69,11 @@ impl CwtPlan {
             return Err(WaveletError::LengthMismatch);
         }
         // Parallelize over the scale dimension; each scale row is independent.
-        let rows: Vec<Vec<f64>> = self
-            .scales
-            .par_iter()
-            .map(|&scale| {
-                (0..self.len)
-                    .map(|shift| coefficient(signal, self.wavelet, scale, shift))
-                    .collect()
-            })
-            .collect();
+        let rows: Vec<Vec<f64>> = self.scales.par().map_collect(|&scale| {
+            (0..self.len)
+                .map(|shift| coefficient(signal, self.wavelet, scale, shift))
+                .collect()
+        });
         let values = Array2::from_shape_fn((self.scales.len(), self.len), |(s, b)| rows[s][b]);
         Ok(CwtCoefficients::new(self.scales.clone(), values))
     }
