@@ -5,6 +5,10 @@ use super::super::avx::{
         pair::{stage_pair_avx_fma, stage_pair_radix1_avx_fma},
         triple::{
             stage_triple_avx_fma, stage_triple_low_live_avx_fma, stage_triple_radix1_avx_fma,
+            stage_triple_radix1_n1024_avx_fma, stage_triple_radix1_n128_avx_fma,
+            stage_triple_radix1_n256_avx_fma, stage_triple_radix1_n32768_avx_fma,
+            stage_triple_radix1_n32_avx_fma, stage_triple_radix1_n512_avx_fma,
+            stage_triple_radix1_n64_avx_fma,
         },
     },
 };
@@ -61,6 +65,94 @@ impl StockhamPrecision for ReducedStockham {
         second_twiddles: &[Complex32],
         third_twiddles: &[Complex32],
     ) {
+        let n = src.len();
+        if radix == 1 && n == 32 {
+            // Scalar f32 unroll for len32 (worst PoT): explicit 4x j0 one (same as f64 scalar).
+            let quarter_groups = 4usize;
+            let eighth_n = 4usize;
+            let quarter_n = 8usize;
+            let half_n = 16usize;
+            let w2b = second_twiddles[1];
+            let w3b = third_twiddles[1];
+            let w3c = third_twiddles[2];
+            let w3d = third_twiddles[3];
+            for k in 0..4 {
+                super::super::butterfly::stage_triple_scalar_one_j0_impl(
+                    src,
+                    dst,
+                    0,
+                    0,
+                    quarter_groups,
+                    eighth_n,
+                    quarter_n,
+                    half_n,
+                    k,
+                    w2b,
+                    w3b,
+                    w3c,
+                    w3d,
+                );
+            }
+            return;
+        }
+        if radix == 1 && n == 64 {
+            // Scalar f32 unroll for len64 (PoT worst 64): 8 explicit j0 one (additive to n32).
+            let quarter_groups = 8usize;
+            let eighth_n = 8usize;
+            let quarter_n = 16usize;
+            let half_n = 32usize;
+            let w2b = second_twiddles[1];
+            let w3b = third_twiddles[1];
+            let w3c = third_twiddles[2];
+            let w3d = third_twiddles[3];
+            for k in 0..8 {
+                super::super::butterfly::stage_triple_scalar_one_j0_impl(
+                    src,
+                    dst,
+                    0,
+                    0,
+                    quarter_groups,
+                    eighth_n,
+                    quarter_n,
+                    half_n,
+                    k,
+                    w2b,
+                    w3b,
+                    w3c,
+                    w3d,
+                );
+            }
+            return;
+        }
+        if radix == 1 && n == 128 {
+            // Scalar f32 unroll for len128 (PoT 128 md ~1.27x f32): 16 explicit j0 one (additive).
+            let quarter_groups = 16usize;
+            let eighth_n = 16usize;
+            let quarter_n = 32usize;
+            let half_n = 64usize;
+            let w2b = second_twiddles[1];
+            let w3b = third_twiddles[1];
+            let w3c = third_twiddles[2];
+            let w3d = third_twiddles[3];
+            for k in 0..16 {
+                super::super::butterfly::stage_triple_scalar_one_j0_impl(
+                    src,
+                    dst,
+                    0,
+                    0,
+                    quarter_groups,
+                    eighth_n,
+                    quarter_n,
+                    half_n,
+                    k,
+                    w2b,
+                    w3b,
+                    w3c,
+                    w3d,
+                );
+            }
+            return;
+        }
         stage_triple_impl::<_, 1024>(
             src,
             dst,
@@ -113,7 +205,11 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
     #[inline]
     fn stage_triple_enabled(stride: usize, n: usize, input_is_data: bool) -> bool {
         let groups = n / (stride << 1);
-        groups > 4 || (groups == 4 && !input_is_data)
+        // Enable triples when AVX can process ≥2 full vectors per group.
+        // For f32 AVX (8 complex/vector), groups ≥ 2 gives enough work;
+        // for groups == 2, require the triple writes to scratch (second call
+        // so !input_is_data) to avoid live-range conflicts.
+        groups > 2 || (groups == 2 && !input_is_data)
     }
 
     #[inline]
@@ -184,8 +280,50 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
         second_twiddles: &[Complex32],
         third_twiddles: &[Complex32],
     ) {
-        let groups = src.len() / (radix << 1);
-        if radix == 1 && groups >= 8 && src.len() >= 32 {
+        let n = src.len();
+        let groups = n / (radix << 1);
+        if radix == 1 && n == 32 {
+            // Per-LOG2 unroll for md-worst PoT 32 f32 (len32): n32 special no-loop.
+            unsafe {
+                stage_triple_radix1_n32_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 64 {
+            // Per-LOG2 unroll for md-worst PoT 64 f32 (len64 first pass): n64 special no-loop.
+            // Additive to prior n32 + ZST for 64. Targets controlling 1.97x from benchmark_results.
+            unsafe {
+                stage_triple_radix1_n64_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 128 {
+            // Per-LOG2 unroll for PoT 128 f32 (len128 first pass, current md 1.27x): n128 special no-loop.
+            // Additive to n64 + ZST LOG2=7.
+            unsafe {
+                stage_triple_radix1_n128_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 256 {
+            // Per-LOG2 unroll for n=256 radix1 (len256 first pass + p=256 f32 pads for n113 etc): n256 special.
+            // Targets 256/512/32768 PoT in md (f32 256 1.137x, 32768 2.64x; 32/64 benefit). Additive to 128 + ZST.
+            unsafe {
+                stage_triple_radix1_n256_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 512 {
+            // Per-LOG2 unroll for n=512 radix1 (len512 first pass + p=512 f32 pads for n113/257 etc): n512 special.
+            // Targets 512 f32 (now 0.733x) / f64 1.241x / 32768 PoT in md. Additive to n256 + ZST LOG2=9.
+            unsafe {
+                stage_triple_radix1_n512_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 1024 {
+            // Per-LOG2 unroll for n=1024 radix1 (len1024 first pass + p=1024 f32 pads): n1024 special.
+            // Targets 1024/32768 PoT (md 32768 f64 2.75x); f32 avx sub for rader bluestein pads. Additive to n512 + ZST.
+            unsafe {
+                stage_triple_radix1_n1024_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 32768 {
+            // 4x unrolled k loop for n=32768 radix1 first pass (len32768, md f64 2.75x).
+            // Additive to n1024. 4 do_one/iter for higher ILP. Uniform step (avx f32 step=4 + avx512).
+            unsafe {
+                stage_triple_radix1_n32768_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && groups >= 8 && n >= 32 {
             unsafe {
                 stage_triple_radix1_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
             };
@@ -345,7 +483,13 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                     stage_pair_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles)
                 };
             } else {
-                <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
+                <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
+                    src,
+                    dst,
+                    radix,
+                    first_twiddles,
+                    second_twiddles,
+                );
             }
         } else if groups == 8 && radix >= 2 {
             // avx512 pairs require multiples of 8
@@ -363,7 +507,13 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
                 stage_pair_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, radix, first_twiddles, second_twiddles)
             };
         } else {
-            <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(src, dst, radix, first_twiddles, second_twiddles);
+            <ReducedStockhamAvxFma as StockhamPrecision>::stage_pair(
+                src,
+                dst,
+                radix,
+                first_twiddles,
+                second_twiddles,
+            );
         }
     }
 
@@ -376,8 +526,34 @@ impl StockhamPrecision for ReducedStockhamAvx512 {
         second_twiddles: &[Complex32],
         third_twiddles: &[Complex32],
     ) {
-        let groups = src.len() / (radix << 1);
-        if radix == 1 && groups >= 32 {
+        let n = src.len();
+        let groups = n / (radix << 1);
+        if radix == 1 && n == 32 {
+            unsafe {
+                stage_triple_radix1_n32_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 64 {
+            unsafe {
+                stage_triple_radix1_n64_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 128 {
+            unsafe {
+                stage_triple_radix1_n128_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 512 {
+            unsafe {
+                stage_triple_radix1_n512_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 1024 {
+            unsafe {
+                stage_triple_radix1_n1024_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && n == 32768 {
+            // 4x (upgraded); wired for reduced avx512 backend (f32 step may be 16).
+            unsafe {
+                stage_triple_radix1_n32768_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
+            };
+        } else if radix == 1 && groups >= 32 {
             unsafe {
                 stage_triple_radix1_avx_fma::<crate::application::execution::kernel::components::stockham::avx::reduced::avx512_backend::Avx512BackendReduced>(src, dst, second_twiddles, third_twiddles)
             };

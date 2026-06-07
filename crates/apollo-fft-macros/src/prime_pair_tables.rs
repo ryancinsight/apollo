@@ -141,22 +141,22 @@ pub fn generate_prime_pair_tables(input: CompilerTokenStream) -> CompilerTokenSt
             static #sin_f32_name: [[f32; #h]; #h] = [#(#sin_f32_rows),*];
 
             impl PrimePairTable<#n, #h> for f64 {
-                #[inline(always)]
+                #[inline]
                 fn cos_table() -> &'static [[f64; #h]; #h] {
                     &#cos_f64_name
                 }
-                #[inline(always)]
+                #[inline]
                 fn sin_table() -> &'static [[f64; #h]; #h] {
                     &#sin_f64_name
                 }
             }
 
             impl PrimePairTable<#n, #h> for f32 {
-                #[inline(always)]
+                #[inline]
                 fn cos_table() -> &'static [[f32; #h]; #h] {
                     &#cos_f32_name
                 }
-                #[inline(always)]
+                #[inline]
                 fn sin_table() -> &'static [[f32; #h]; #h] {
                     &#sin_f32_name
                 }

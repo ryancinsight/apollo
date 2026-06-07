@@ -351,13 +351,11 @@ pub(crate) fn with_twiddle_fwd<C: TwiddleStore, R>(n: usize, f: impl FnOnce(&[C]
                 return f(unsafe { &*ptr });
             }
         }
-    } else {
-        if let Some(ptr) = C::twiddle_tl_fwd_get_raw(n) {
-            return f(unsafe { &*ptr });
-        }
+    } else if let Some(ptr) = C::twiddle_tl_fwd_get_raw(n) {
+        return f(unsafe { &*ptr });
     }
     let tw = cached_twiddle_fwd::<C>(n);
-    let ptr = tw.as_ref() as *const [C];
+    let ptr = std::ptr::from_ref::<[C]>(tw.as_ref());
     if n.is_power_of_two() {
         let idx = n.trailing_zeros() as usize;
         if idx < 32 {
@@ -379,13 +377,11 @@ pub(crate) fn with_twiddle_inv<C: TwiddleStore, R>(n: usize, f: impl FnOnce(&[C]
                 return f(unsafe { &*ptr });
             }
         }
-    } else {
-        if let Some(ptr) = C::twiddle_tl_inv_get_raw(n) {
-            return f(unsafe { &*ptr });
-        }
+    } else if let Some(ptr) = C::twiddle_tl_inv_get_raw(n) {
+        return f(unsafe { &*ptr });
     }
     let tw = cached_twiddle_inv::<C>(n);
-    let ptr = tw.as_ref() as *const [C];
+    let ptr = std::ptr::from_ref::<[C]>(tw.as_ref());
     if n.is_power_of_two() {
         let idx = n.trailing_zeros() as usize;
         if idx < 32 {

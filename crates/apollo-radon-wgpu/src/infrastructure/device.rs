@@ -10,6 +10,7 @@ use crate::application::plan::RadonWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::RadonGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -20,46 +21,20 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct RadonWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<RadonGpuKernel>,
 }
 
 impl RadonWgpuBackend {
     /// Create a backend from an existing device and queue.
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> WgpuResult<Self> {
-        Ok(Self {
-            kernel: Arc::new(RadonGpuKernel::new(device.as_ref())),
-            device,
-            queue,
-        })
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(RadonGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| WgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-radon-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                WgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Self::new(Arc::new(device), Arc::new(queue))
+        Self::new(WgpuDevice::try_default("apollo-radon-wgpu")?)
     }
 
     /// Return truthful current capabilities.
@@ -71,13 +46,13 @@ impl RadonWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a metadata-only plan descriptor.
@@ -108,8 +83,8 @@ impl RadonWgpuBackend {
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_inputs(plan, image, angles)?;
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan,
             image,
             angles,
@@ -129,8 +104,8 @@ impl RadonWgpuBackend {
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
         self.kernel.execute_backproject(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan,
             sinogram,
             angles,
@@ -193,8 +168,8 @@ impl RadonWgpuBackend {
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
         self.kernel.execute_filtered_backproject(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan,
             sinogram,
             angles,

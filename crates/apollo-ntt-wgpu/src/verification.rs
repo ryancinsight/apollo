@@ -451,9 +451,8 @@ mod tests {
                     state % DEFAULT_MODULUS
                 }).collect();
 
-                let backend = match NttWgpuBackend::try_default() {
-                    Ok(b) => b,
-                    Err(_) => return Ok(()), // skip if no device
+                let Ok(backend) = NttWgpuBackend::try_default() else {
+                    return Ok(());
                 };
                 let plan = backend.plan(n);
                 let spectrum = backend.execute_forward(&plan, &input)

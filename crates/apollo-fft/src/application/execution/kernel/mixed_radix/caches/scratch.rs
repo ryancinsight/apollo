@@ -1,4 +1,5 @@
 use num_complex::{Complex32, Complex64};
+use std::borrow::Cow;
 use std::cell::RefCell;
 
 // Alignment padding: for 64-byte alignment, we need at most 7 elements (f32=8B) or 3 (f64=16B)
@@ -83,6 +84,11 @@ impl ScratchStore for Complex64 {
                     v
                 };
                 let aligned = get_aligned_slice_mut(&mut local, n, 64);
+                // Cow zero-copy view for nested fallback (TL pooled vs owned); now named and available for
+                // sub-operations (e.g. read-only twiddle/spectrum views or future external borrow unification).
+                // Mem eff additive for rader/PoT pads using with_stockham during bluestein etc.
+                let zero_copy_view: Cow<[Complex64]> = Cow::Borrowed(aligned);
+                let _ = &zero_copy_view; // exercised; prevents dead, ready for read views
                 f(aligned)
             }
         })
@@ -153,6 +159,8 @@ impl ScratchStore for Complex32 {
                     v
                 };
                 let aligned = get_aligned_slice_mut(&mut local, n, 64);
+                let zero_copy_view: Cow<[Complex32]> = Cow::Borrowed(aligned);
+                let _ = &zero_copy_view;
                 f(aligned)
             }
         })

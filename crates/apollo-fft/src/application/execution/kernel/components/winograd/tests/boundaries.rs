@@ -11,7 +11,7 @@ fn dft4_impulse_produces_all_ones() {
         Complex64::new(0.0, 0.0),
         Complex64::new(0.0, 0.0),
     ];
-    dft4_array_impl::<f64, false>(&mut buf);
+    dft4_array_impl::<f64, false, false>(&mut buf);
     for x in &buf {
         assert!((x - Complex64::new(1.0, 0.0)).norm() < 1e-14, "bin={x:?}");
     }
@@ -21,7 +21,7 @@ fn dft4_impulse_produces_all_ones() {
 fn dft7_impulse_produces_all_ones() {
     let mut buf = [Complex64::new(0.0, 0.0); 7];
     buf[0] = Complex64::new(1.0, 0.0);
-    dft7_impl::<f64, false>(&mut buf);
+    dft7_impl::<f64, false, false>(&mut buf);
     for x in &buf {
         assert!((x - Complex64::new(1.0, 0.0)).norm() < 1e-14, "bin={x:?}");
     }
@@ -32,7 +32,7 @@ fn dft7_impulse_produces_all_ones() {
 #[test]
 fn dft8_dc_produces_energy_in_bin0() {
     let mut buf = [Complex64::new(1.0, 0.0); 8];
-    dft8_array_impl::<f64, false>(&mut buf);
+    dft8_array_impl::<f64, false, false>(&mut buf);
     assert!((buf[0] - Complex64::new(8.0, 0.0)).norm() < 1e-12);
     for x in &buf[1..] {
         assert!(x.norm() < 1e-12, "non-zero bin: {x:?}");

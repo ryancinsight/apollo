@@ -21,18 +21,13 @@ generate_rader_fft!(53);
 pub(crate) const STATIC_RADER_PRIMES: &[usize] =
     &[5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 
-#[inline(always)]
-pub(crate) fn try_static_rader<
+#[inline]
+pub(crate) fn try_static_rader<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize) -> bool
+where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
             Complex = num_complex::Complex<F>,
-        > + crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar,
-    const INVERSE: bool,
->(
-    data: &mut [F::Complex],
-    n: usize,
-) -> bool
-where
-    F: crate::application::execution::kernel::mixed_radix::traits::ShortDft<4>
+        > + crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar
+        + crate::application::execution::kernel::mixed_radix::traits::ShortDft<4>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<6>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<10>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<12>

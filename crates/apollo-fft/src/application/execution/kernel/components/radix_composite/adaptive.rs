@@ -42,7 +42,7 @@ impl ComposeArena {
             let cap = (byte_size * 2).next_power_of_two().max(needed);
             self.buf.resize(cap, 0u8);
         }
-        let ptr = self.buf.as_mut_ptr().add(aligned) as *mut Complex<F>;
+        let ptr = self.buf.as_mut_ptr().add(aligned).cast::<Complex<F>>();
         let saved = self.top;
         self.top = needed;
         (ptr, saved)
@@ -78,7 +78,7 @@ fn composite_adaptive_scratch_size_elems(radices: &[usize], prev_len: usize) -> 
         + composite_adaptive_scratch_size_elems(&radices[..radices.len() - 1], prev_len)
 }
 
-fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
+fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     scratch: &mut [Complex<F>],
@@ -88,12 +88,11 @@ fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
     radices: &[usize],
     twiddles: &[&[Complex<F>]],
     pointwise_spectrum: Option<&[Complex<F>]>,
-    inverse: bool,
 ) {
     let n_stages = radices.len();
     debug_assert!(n_stages >= 1);
     if n_stages == 1 {
-        dispatch_single_radix(
+        dispatch_single_radix::<F, INVERSE>(
             src,
             dst,
             prev_len,
@@ -102,7 +101,6 @@ fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
             radices[0],
             twiddles[0],
             pointwise_spectrum,
-            inverse,
         );
         return;
     }
@@ -118,7 +116,7 @@ fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
 
     for (b_inner, mid_chunk) in mid.chunks_exact_mut(inner_out_len).enumerate() {
         let b_inner_global = b_out + b_inner * groups_out;
-        composite_fused_adaptive_inner::<F>(
+        composite_fused_adaptive_inner::<F, INVERSE>(
             src,
             mid_chunk,
             rest,
@@ -128,11 +126,10 @@ fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
             inner_radices,
             &twiddles[..n_stages - 1],
             None,
-            inverse,
         );
     }
 
-    dispatch_single_radix::<F>(
+    dispatch_single_radix::<F, INVERSE>(
         mid,
         dst,
         inner_out_len,
@@ -141,11 +138,13 @@ fn composite_fused_adaptive_inner<F: CompositeCache + ShortWinogradScalar>(
         outer_r,
         twiddles[n_stages - 1],
         pointwise_spectrum,
-        inverse,
     );
 }
 
-pub(super) fn composite_fused_adaptive<F: CompositeCache + ShortWinogradScalar>(
+pub(super) fn composite_fused_adaptive<
+    F: CompositeCache + ShortWinogradScalar,
+    const INVERSE: bool,
+>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
@@ -154,14 +153,13 @@ pub(super) fn composite_fused_adaptive<F: CompositeCache + ShortWinogradScalar>(
     radices: &[usize],
     twiddles: &[&[Complex<F>]],
     pointwise: Option<&[Complex<F>]>,
-    inverse: bool,
 ) {
     debug_assert_eq!(radices.len(), twiddles.len());
     if radices.is_empty() {
         return;
     }
     if radices.len() == 1 {
-        dispatch_single_radix(
+        dispatch_single_radix::<F, INVERSE>(
             src,
             dst,
             prev_len,
@@ -170,7 +168,6 @@ pub(super) fn composite_fused_adaptive<F: CompositeCache + ShortWinogradScalar>(
             radices[0],
             twiddles[0],
             pointwise,
-            inverse,
         );
         return;
     }
@@ -185,7 +182,7 @@ pub(super) fn composite_fused_adaptive<F: CompositeCache + ShortWinogradScalar>(
     let scratch: &mut [Complex<F>] =
         unsafe { core::slice::from_raw_parts_mut(scratch_ptr, scratch_needed) };
 
-    composite_fused_adaptive_inner::<F>(
-        src, dst, scratch, prev_len, b_out, groups_out, radices, twiddles, pointwise, inverse,
+    composite_fused_adaptive_inner::<F, INVERSE>(
+        src, dst, scratch, prev_len, b_out, groups_out, radices, twiddles, pointwise,
     );
 }

@@ -11,6 +11,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+type Plan2Key = (usize, usize);
+type Plan3Key = (usize, usize, usize);
+type Plan2Map<T> = HashMap<Plan2Key, Arc<FftPlan2D<T>>>;
+type Plan3Map<T> = HashMap<Plan3Key, Arc<FftPlan3D<T>>>;
+type SharedPlan2Map<T> = RwLock<Plan2Map<T>>;
+type SharedPlan3Map<T> = RwLock<Plan3Map<T>>;
+
 /// Zero-cost cache resolution trait for real storage types.
 pub trait PlanCacheProvider: RealFftData {
     /// Retrieve or instantiate a generic 1D plan.
@@ -22,7 +29,7 @@ pub trait PlanCacheProvider: RealFftData {
 }
 
 impl PlanCacheProvider for f64 {
-    #[inline(always)]
+    #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
             static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f64>>)>> = RefCell::new(None);
@@ -71,15 +78,14 @@ impl PlanCacheProvider for f64 {
         plan
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
         thread_local! {
-            static TLS_CACHE: RefCell<HashMap<(usize, usize), Arc<FftPlan2D<f64>>>> =
+            static TLS_CACHE: RefCell<Plan2Map<f64>> =
                 RefCell::new(HashMap::new());
         }
-        static GLOBAL_CACHE: std::sync::LazyLock<
-            RwLock<HashMap<(usize, usize), Arc<FftPlan2D<f64>>>>,
-        > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+        static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan2Map<f64>> =
+            std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = (shape.nx, shape.ny);
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
@@ -103,15 +109,14 @@ impl PlanCacheProvider for f64 {
         plan
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
         thread_local! {
-            static TLS_CACHE: RefCell<HashMap<(usize, usize, usize), Arc<FftPlan3D<f64>>>> =
+            static TLS_CACHE: RefCell<Plan3Map<f64>> =
                 RefCell::new(HashMap::new());
         }
-        static GLOBAL_CACHE: std::sync::LazyLock<
-            RwLock<HashMap<(usize, usize, usize), Arc<FftPlan3D<f64>>>>,
-        > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+        static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan3Map<f64>> =
+            std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = (shape.nx, shape.ny, shape.nz);
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
@@ -137,7 +142,7 @@ impl PlanCacheProvider for f64 {
 }
 
 impl PlanCacheProvider for f32 {
-    #[inline(always)]
+    #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
             static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f32>>)>> = RefCell::new(None);
@@ -186,15 +191,14 @@ impl PlanCacheProvider for f32 {
         plan
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
         thread_local! {
-            static TLS_CACHE: RefCell<HashMap<(usize, usize), Arc<FftPlan2D<f32>>>> =
+            static TLS_CACHE: RefCell<Plan2Map<f32>> =
                 RefCell::new(HashMap::new());
         }
-        static GLOBAL_CACHE: std::sync::LazyLock<
-            RwLock<HashMap<(usize, usize), Arc<FftPlan2D<f32>>>>,
-        > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+        static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan2Map<f32>> =
+            std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = (shape.nx, shape.ny);
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
@@ -218,15 +222,14 @@ impl PlanCacheProvider for f32 {
         plan
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
         thread_local! {
-            static TLS_CACHE: RefCell<HashMap<(usize, usize, usize), Arc<FftPlan3D<f32>>>> =
+            static TLS_CACHE: RefCell<Plan3Map<f32>> =
                 RefCell::new(HashMap::new());
         }
-        static GLOBAL_CACHE: std::sync::LazyLock<
-            RwLock<HashMap<(usize, usize, usize), Arc<FftPlan3D<f32>>>>,
-        > = std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+        static GLOBAL_CACHE: std::sync::LazyLock<SharedPlan3Map<f32>> =
+            std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
         let key = (shape.nx, shape.ny, shape.nz);
         if let Some(plan) = TLS_CACHE.with(|cache| cache.borrow().get(&key).map(Arc::clone)) {
@@ -252,17 +255,17 @@ impl PlanCacheProvider for f32 {
 }
 
 impl PlanCacheProvider for f16 {
-    #[inline(always)]
+    #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         <f32 as PlanCacheProvider>::get_1d_plan(shape)
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_2d_plan(shape: Shape2D) -> Arc<FftPlan2D<Self::PlanScalar>> {
         <f32 as PlanCacheProvider>::get_2d_plan(shape)
     }
 
-    #[inline(always)]
+    #[inline]
     fn get_3d_plan(shape: Shape3D) -> Arc<FftPlan3D<Self::PlanScalar>> {
         <f32 as PlanCacheProvider>::get_3d_plan(shape)
     }

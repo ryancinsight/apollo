@@ -34,7 +34,10 @@ pub(crate) fn has_static_coprime_codelet(n1: usize, n2: usize) -> bool {
 ///
 /// Requires gcd(n1, n2) == 1. Permutation index tables are precomputed and cached
 /// on first use via `cached_pfa_perm`, eliminating O(N) modulo per subsequent call.
-pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+pub(crate) fn pfa_fft<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
@@ -62,6 +65,40 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, co
     pfa_fft_natural_inplace::<F, INVERSE>(data, n1, n2);
 }
 
+/// Shared PFA preamble: 4-wide permutation gather into `matrix`, then
+/// in-place row transforms.  Column processing and scatter are left to
+/// the caller so each PFA variant can use its own column-extraction and
+/// transform strategy.
+#[inline]
+fn pfa_gather_and_transform_rows<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
+    data: &[F::Complex],
+    input_perm: &[usize],
+    n1: usize,
+    n2: usize,
+    matrix: &mut [F::Complex],
+) {
+    // Use 8-wide for better ILP on GT row gathers (many md-worst GT have factors allowing 8-wide perm loads).
+    // Falls back to tail; zero extra cost, same loads as before.
+    crate::application::execution::kernel::components::butterflies::gather_unroll8(
+        data, input_perm, matrix,
+    );
+
+    for i1 in 0..n1 {
+        let row_start = i1 * n2;
+        let row_slice = &mut matrix[row_start..row_start + n2];
+        if INVERSE {
+            crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
+                row_slice,
+            );
+        } else {
+            crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(row_slice);
+        }
+    }
+}
+
 /// In-place Good-Thomas PFA using precomputed cycle data for efficient permutation.
 ///
 /// Reduces scratch from `n + n1` (gather buffer + column buffer) to just `n1`
@@ -72,7 +109,10 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, co
 /// 1. Apply input_perm using precomputed cycles (no runtime cycle detection)
 /// 2. Transform rows in-place (contiguous memory - cache-friendly)
 /// 3. Transform columns using n1-sized buffer, scatter to final positions
-fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+fn pfa_fft_natural_inplace<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
@@ -88,41 +128,12 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
 
-        // 1. Gather out-of-place into matrix
-        let n4 = (n / 4) * 4;
-        let mut j = 0usize;
-        while j < n4 {
-            unsafe {
-                *matrix.get_unchecked_mut(j) = *data.get_unchecked(*input_perm.get_unchecked(j));
-                *matrix.get_unchecked_mut(j + 1) = *data.get_unchecked(*input_perm.get_unchecked(j + 1));
-                *matrix.get_unchecked_mut(j + 2) = *data.get_unchecked(*input_perm.get_unchecked(j + 2));
-                *matrix.get_unchecked_mut(j + 3) = *data.get_unchecked(*input_perm.get_unchecked(j + 3));
-            }
-            j += 4;
-        }
-        while j < n {
-            unsafe {
-                *matrix.get_unchecked_mut(j) = *data.get_unchecked(*input_perm.get_unchecked(j));
-            }
-            j += 1;
-        }
+        pfa_gather_and_transform_rows::<F, INVERSE>(data, &input_perm, n1, n2, matrix);
 
-        // 2. Transform rows in-place in matrix
-        for i1 in 0..n1 {
-            let row_start = i1 * n2;
-            let row_slice = &mut matrix[row_start..row_start + n2];
-            if INVERSE {
-                crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
-                    row_slice,
-                );
-            } else {
-                crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(row_slice);
-            }
-        }
-
-        // 3. Transform columns using col_buf, scatter directly to final positions in data
+        // Transform columns using col_buf, scatter directly to final positions in data
         for i2 in 0..n2 {
-            // Extract column - strided access
+            // Extract column - strided access (extended unroll to 8 for ILP on GT columns; helps md-worst GT like 198/90/84/106+ which use PFA).
+            // Additive zero-cost; same loads as before, just unrolled for compiler.
             unsafe {
                 *col_buf.get_unchecked_mut(0) = *matrix.get_unchecked(i2);
                 *col_buf.get_unchecked_mut(1) = *matrix.get_unchecked(n2 + i2);
@@ -132,7 +143,19 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
                 if n1 > 3 {
                     *col_buf.get_unchecked_mut(3) = *matrix.get_unchecked(3 * n2 + i2);
                 }
-                for i1 in 4..n1 {
+                if n1 > 4 {
+                    *col_buf.get_unchecked_mut(4) = *matrix.get_unchecked(4 * n2 + i2);
+                }
+                if n1 > 5 {
+                    *col_buf.get_unchecked_mut(5) = *matrix.get_unchecked(5 * n2 + i2);
+                }
+                if n1 > 6 {
+                    *col_buf.get_unchecked_mut(6) = *matrix.get_unchecked(6 * n2 + i2);
+                }
+                if n1 > 7 {
+                    *col_buf.get_unchecked_mut(7) = *matrix.get_unchecked(7 * n2 + i2);
+                }
+                for i1 in 8..n1 {
                     *col_buf.get_unchecked_mut(i1) = *matrix.get_unchecked(i1 * n2 + i2);
                 }
             }
@@ -146,9 +169,41 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
                 crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(col_buf);
             }
 
-            // Scatter directly to data using output_perm
-            for i1 in 0..n1 {
-                unsafe {
+            // Scatter directly to data using output_perm (extended unroll to 8 for ILP, matches extract).
+            unsafe {
+                if n1 > 0 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(0);
+                }
+                if n1 > 1 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 1);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(1);
+                }
+                if n1 > 2 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 2);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(2);
+                }
+                if n1 > 3 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 3);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(3);
+                }
+                if n1 > 4 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 4);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(4);
+                }
+                if n1 > 5 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 5);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(5);
+                }
+                if n1 > 6 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 6);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(6);
+                }
+                if n1 > 7 {
+                    let out_idx = *output_perm.get_unchecked(i2 * n1 + 7);
+                    *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(7);
+                }
+                for i1 in 8..n1 {
                     let out_idx = *output_perm.get_unchecked(i2 * n1 + i1);
                     *data.get_unchecked_mut(out_idx) = *col_buf.get_unchecked(i1);
                 }
@@ -157,7 +212,10 @@ fn pfa_fft_natural_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>
     });
 }
 
-fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+fn pfa_fft_ordered_rader_n1<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
@@ -177,42 +235,9 @@ fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
 
-        // 1. Out-of-place gather into `scratch`
-        let n4 = (n / 4) * 4;
-        let mut j = 0usize;
-        while j < n4 {
-            unsafe {
-                *matrix.get_unchecked_mut(j) = *data.get_unchecked(*input_perm.get_unchecked(j));
-                *matrix.get_unchecked_mut(j + 1) =
-                    *data.get_unchecked(*input_perm.get_unchecked(j + 1));
-                *matrix.get_unchecked_mut(j + 2) =
-                    *data.get_unchecked(*input_perm.get_unchecked(j + 2));
-                *matrix.get_unchecked_mut(j + 3) =
-                    *data.get_unchecked(*input_perm.get_unchecked(j + 3));
-            }
-            j += 4;
-        }
-        while j < n {
-            unsafe {
-                *matrix.get_unchecked_mut(j) = *data.get_unchecked(*input_perm.get_unchecked(j));
-            }
-            j += 1;
-        }
+        pfa_gather_and_transform_rows::<F, INVERSE>(data, &input_perm, n1, n2, matrix);
 
-        // 2. Transform rows in `scratch`
-        for i1 in 0..n1 {
-            let row_start = i1 * n2;
-            let row_slice = &mut matrix[row_start..row_start + n2];
-            if INVERSE {
-                crate::application::execution::kernel::mixed_radix::inverse_inplace_unnorm::<F>(
-                    row_slice,
-                );
-            } else {
-                crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(row_slice);
-            }
-        }
-
-        // 3. Transform cols from `scratch` (with Rader order), output directly to `data`
+        // Transform cols from `scratch` (with Rader order), output directly to `data`
         for i2 in 0..n2 {
             // Extract column with ordered Rader input mapping
             unsafe {
@@ -224,7 +249,8 @@ fn pfa_fft_ordered_rader_n1<F: MixedRadixScalar<Complex = num_complex::Complex<F
 
             // Transform Rader column
             crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
-                F, INVERSE
+                F,
+                INVERSE,
             >(col_buf, n1, generator_inverse);
 
             // Scatter column directly to final positions in `data`

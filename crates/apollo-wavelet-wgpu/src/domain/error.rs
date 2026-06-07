@@ -1,5 +1,6 @@
 //! WGPU error contracts for the Haar DWT backend.
 
+use apollo_wgpu_helpers::WgpuDeviceError;
 use thiserror::Error;
 
 /// Result alias for Haar DWT WGPU operations.
@@ -32,18 +33,9 @@ pub enum WgpuError {
         /// Error detail from the WGPU runtime.
         message: String,
     },
-    /// No WGPU adapter could be acquired.
-    #[error("wgpu adapter unavailable: {message}")]
-    AdapterUnavailable {
-        /// Error detail from the WGPU runtime.
-        message: String,
-    },
-    /// No WGPU device could be acquired from the selected adapter.
-    #[error("wgpu device unavailable: {message}")]
-    DeviceUnavailable {
-        /// Error detail from the WGPU runtime.
-        message: String,
-    },
+    /// WGPU device acquisition failed.
+    #[error("wgpu device: {0}")]
+    Device(#[from] WgpuDeviceError),
     /// Requested precision profile does not match the typed storage.
     #[error("precision profile does not match typed Haar DWT WGPU storage")]
     InvalidPrecisionProfile,

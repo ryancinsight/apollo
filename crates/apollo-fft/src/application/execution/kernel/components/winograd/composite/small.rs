@@ -1,7 +1,7 @@
 //! Inline fixed-array DFT codelets for small composite lengths.
 //!
 //! Two macro invocations:
-//! 1. `#[inline(always)]` for N ≤ 36 — safe for all stack depths including
+//! 1. `#[inline]` for N ≤ 36 — safe for all stack depths including
 //!    debug-mode test harnesses.
 //! 2. `#[inline]` for 37 ≤ N ≤ 48 — avoids forced inlining that overflows the
 //!    debug stack when codelets are deeply nested.
@@ -16,7 +16,6 @@ apollo_fft_macros::generate_winograd_composites! {
         (2, 7),   // dft14_impl
         (9, 2),   // dft18_impl
         (2, 11),  // dft22_impl
-        (3, 8),   // dft24_impl
         (9, 4),   // dft36_impl
         // Phase 3: N ≤ 36
         (5, 4),   // dft20_impl
@@ -28,6 +27,7 @@ apollo_fft_macros::generate_winograd_composites! {
     ],
     ct_pairs: [
         (3, 9),   // dft27_impl: 3³ Cooley-Tukey
+        (6, 4),   // dft24_impl: 6×4 Cooley-Tukey
         (3, 27),  // dft81_impl: 3⁴ Cooley-Tukey
         (5, 5),   // dft25_impl: 5² Cooley-Tukey
     ],
@@ -46,7 +46,7 @@ apollo_fft_macros::generate_winograd_composites! {
         (7, 6),   // dft42_impl
         (11, 4),  // dft44_impl
         (9, 5),   // dft45_impl
-        (16, 3),  // dft48_impl
+        (3, 16),  // dft48_impl
         // 2×prime ≤ 46
         (2, 13),  // dft26_impl
         (2, 17),  // dft34_impl

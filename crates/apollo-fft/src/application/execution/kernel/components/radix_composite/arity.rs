@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 pub(super) trait FusedStage {
-    fn compute_group<F: CompositeCache + ShortWinogradScalar>(
+    fn compute_group<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
         src: &[Complex<F>],
         dst: &mut [Complex<F>],
         prev_len: usize,
@@ -14,7 +14,6 @@ pub(super) trait FusedStage {
         twiddles: &[&[Complex<F>]],
         tw_idx: usize,
         pointwise: Option<&[Complex<F>]>,
-        inverse: bool,
     );
 }
 
@@ -23,92 +22,91 @@ pub(super) trait FusedStage {
 ///
 /// Uses const R in match to enable LLVM to optimize each branch independently.
 /// The match is resolved at compile time for monomorphized R, so this is zero-cost.
-#[inline(always)]
-fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize>(
+#[inline]
+fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize, const INVERSE: bool>(
     buf: &mut [Complex<F>; R],
-    inverse: bool,
 ) {
     // Compile-time branch on const R — LLVM can inline and vectorize each case.
     match R {
         2 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 2];
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 2]>();
             F::dft2(unsafe { &mut *ptr });
         }
         3 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 3];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 3]>();
+            if INVERSE {
                 F::dft3::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft3::<false>(unsafe { &mut *ptr });
             }
         }
         4 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 4];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 4]>();
+            if INVERSE {
                 F::dft4::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft4::<false>(unsafe { &mut *ptr });
             }
         }
         5 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 5];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 5]>();
+            if INVERSE {
                 F::dft5::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft5::<false>(unsafe { &mut *ptr });
             }
         }
         7 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 7];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 7]>();
+            if INVERSE {
                 F::dft7::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft7::<false>(unsafe { &mut *ptr });
             }
         }
         8 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 8];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 8]>();
+            if INVERSE {
                 F::dft8::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft8::<false>(unsafe { &mut *ptr });
             }
         }
         16 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 16];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 16]>();
+            if INVERSE {
                 F::dft16::<true>(unsafe { &mut *ptr });
             } else {
                 F::dft16::<false>(unsafe { &mut *ptr });
             }
         }
         11 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 11];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 11]>();
+            if INVERSE {
                 F::dft11::<true>(unsafe { &mut *ptr })
             } else {
                 F::dft11::<false>(unsafe { &mut *ptr })
             }
         }
         13 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 13];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 13]>();
+            if INVERSE {
                 F::dft13::<true>(unsafe { &mut *ptr })
             } else {
                 F::dft13::<false>(unsafe { &mut *ptr })
             }
         }
         17 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 17];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 17]>();
+            if INVERSE {
                 F::dft17::<true>(unsafe { &mut *ptr })
             } else {
                 F::dft17::<false>(unsafe { &mut *ptr })
             }
         }
         23 => {
-            let ptr = buf.as_mut_ptr() as *mut [Complex<F>; 23];
-            if inverse {
+            let ptr = buf.as_mut_ptr().cast::<[Complex<F>; 23]>();
+            if INVERSE {
                 F::dft23::<true>(unsafe { &mut *ptr })
             } else {
                 F::dft23::<false>(unsafe { &mut *ptr })
@@ -135,7 +133,7 @@ fn apply_dft_r<F: CompositeCache + ShortWinogradScalar, const R: usize>(
 /// the out-of-order core to issue all arm loads in parallel and eliminates the
 /// (R-2) redundant complex multiplies per column that the previous iterative
 /// `tw_k *= base_tw` approach required for radix R ≥ 3.
-#[inline(always)]
+#[inline]
 fn load_and_twiddle<F: ShortWinogradScalar, const R: usize>(
     src: &[Complex<F>],
     stride: usize,
@@ -161,7 +159,7 @@ fn load_and_twiddle<F: ShortWinogradScalar, const R: usize>(
 }
 
 /// Scatter one butterfly result column to strided dst at column j.
-#[inline(always)]
+#[inline]
 fn store_col<F: Copy, const R: usize>(
     dst: &mut [Complex<F>],
     j: usize,
@@ -177,8 +175,8 @@ fn store_col<F: Copy, const R: usize>(
 pub(super) struct Radix<const R: usize>;
 
 impl<const R: usize> FusedStage for Radix<R> {
-    #[inline(always)]
-    fn compute_group<F: CompositeCache + ShortWinogradScalar>(
+    #[inline]
+    fn compute_group<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
         src: &[Complex<F>],
         dst: &mut [Complex<F>],
         prev_len: usize,
@@ -187,7 +185,6 @@ impl<const R: usize> FusedStage for Radix<R> {
         twiddles: &[&[Complex<F>]],
         tw_idx: usize,
         pointwise: Option<&[Complex<F>]>,
-        inverse: bool,
     ) {
         let stride = groups_out * prev_len;
         let src_base = b_out * prev_len;
@@ -240,10 +237,10 @@ impl<const R: usize> FusedStage for Radix<R> {
                 stage_twiddles,
                 &mut buf3,
             );
-            apply_dft_r::<F, R>(&mut buf0, inverse);
-            apply_dft_r::<F, R>(&mut buf1, inverse);
-            apply_dft_r::<F, R>(&mut buf2, inverse);
-            apply_dft_r::<F, R>(&mut buf3, inverse);
+            apply_dft_r::<F, R, INVERSE>(&mut buf0);
+            apply_dft_r::<F, R, INVERSE>(&mut buf1);
+            apply_dft_r::<F, R, INVERSE>(&mut buf2);
+            apply_dft_r::<F, R, INVERSE>(&mut buf3);
             store_col::<F, R>(dst, j, prev_len, &buf0);
             store_col::<F, R>(dst, j + 1, prev_len, &buf1);
             store_col::<F, R>(dst, j + 2, prev_len, &buf2);
@@ -273,8 +270,8 @@ impl<const R: usize> FusedStage for Radix<R> {
                 stage_twiddles,
                 &mut buf1,
             );
-            apply_dft_r::<F, R>(&mut buf0, inverse);
-            apply_dft_r::<F, R>(&mut buf1, inverse);
+            apply_dft_r::<F, R, INVERSE>(&mut buf0);
+            apply_dft_r::<F, R, INVERSE>(&mut buf1);
             store_col::<F, R>(dst, j, prev_len, &buf0);
             store_col::<F, R>(dst, j + 1, prev_len, &buf1);
             j += 2;
@@ -284,7 +281,7 @@ impl<const R: usize> FusedStage for Radix<R> {
         while j < prev_len {
             let mut buf = [zero; R];
             load_and_twiddle::<F, R>(src, stride, src_base, j, prev_len, stage_twiddles, &mut buf);
-            apply_dft_r::<F, R>(&mut buf, inverse);
+            apply_dft_r::<F, R, INVERSE>(&mut buf);
             store_col::<F, R>(dst, j, prev_len, &buf);
             j += 1;
         }
@@ -313,8 +310,11 @@ impl<const R: usize> FusedStage for Radix<R> {
 /// monomorphizations. The match itself is a single indirect branch amortized
 /// over `prev_len` columns; the per-column cost is dominated by butterfly
 /// arithmetic, not branch overhead.
-#[inline(always)]
-pub(super) fn dispatch_single_radix<F: CompositeCache + ShortWinogradScalar>(
+#[inline]
+pub(super) fn dispatch_single_radix<
+    F: CompositeCache + ShortWinogradScalar,
+    const INVERSE: bool,
+>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
@@ -323,56 +323,58 @@ pub(super) fn dispatch_single_radix<F: CompositeCache + ShortWinogradScalar>(
     r: usize,
     twiddles: &[Complex<F>],
     pointwise: Option<&[Complex<F>]>,
-    inverse: bool,
 ) {
     let tw = &[twiddles];
     match r {
-        2 => Radix::<2>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        2 => Radix::<2>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        3 => Radix::<3>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        3 => Radix::<3>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        4 => Radix::<4>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        4 => Radix::<4>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        5 => Radix::<5>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        5 => Radix::<5>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        7 => Radix::<7>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        7 => Radix::<7>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        8 => Radix::<8>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        8 => Radix::<8>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        16 => Radix::<16>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        16 => Radix::<16>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        11 => Radix::<11>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        11 => Radix::<11>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        13 => Radix::<13>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        13 => Radix::<13>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        17 => Radix::<17>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        17 => Radix::<17>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
-        23 => Radix::<23>::compute_group::<F>(
-            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise, inverse,
+        23 => Radix::<23>::compute_group::<F, INVERSE>(
+            src, dst, prev_len, b_out, groups_out, tw, 0, pointwise,
         ),
         _ => unreachable!("unsupported radix {r}"),
     }
 }
 
-#[inline(always)]
-fn dispatch_stage_const<F: CompositeCache + ShortWinogradScalar, const R: usize>(
+#[inline]
+fn dispatch_stage_const<
+    F: CompositeCache + ShortWinogradScalar,
+    const R: usize,
+    const INVERSE: bool,
+>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
     groups_out: usize,
     twiddles: &[Complex<F>],
     pointwise: Option<&[Complex<F>]>,
-    inverse: bool,
 ) {
     debug_assert!(pointwise.is_none() || groups_out == 1);
     let tw = &[twiddles];
@@ -382,14 +384,14 @@ fn dispatch_stage_const<F: CompositeCache + ShortWinogradScalar, const R: usize>
         .chunks_exact_mut(stage_chunk)
         .enumerate()
     {
-        Radix::<R>::compute_group::<F>(
-            src, dst_block, prev_len, g, groups_out, tw, 0, pointwise, inverse,
+        Radix::<R>::compute_group::<F, INVERSE>(
+            src, dst_block, prev_len, g, groups_out, tw, 0, pointwise,
         );
     }
 }
 
-#[inline(always)]
-pub(super) fn dispatch_radix_stage<F: CompositeCache + ShortWinogradScalar>(
+#[inline]
+pub(super) fn dispatch_radix_stage<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
@@ -397,41 +399,40 @@ pub(super) fn dispatch_radix_stage<F: CompositeCache + ShortWinogradScalar>(
     r: usize,
     twiddles: &[Complex<F>],
     pointwise: Option<&[Complex<F>]>,
-    inverse: bool,
 ) {
     match r {
-        2 => dispatch_stage_const::<F, 2>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        2 => dispatch_stage_const::<F, 2, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        3 => dispatch_stage_const::<F, 3>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        3 => dispatch_stage_const::<F, 3, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        4 => dispatch_stage_const::<F, 4>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        4 => dispatch_stage_const::<F, 4, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        5 => dispatch_stage_const::<F, 5>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        5 => dispatch_stage_const::<F, 5, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        7 => dispatch_stage_const::<F, 7>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        7 => dispatch_stage_const::<F, 7, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        8 => dispatch_stage_const::<F, 8>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        8 => dispatch_stage_const::<F, 8, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        11 => dispatch_stage_const::<F, 11>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        11 => dispatch_stage_const::<F, 11, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        13 => dispatch_stage_const::<F, 13>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        13 => dispatch_stage_const::<F, 13, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        16 => dispatch_stage_const::<F, 16>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        16 => dispatch_stage_const::<F, 16, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        17 => dispatch_stage_const::<F, 17>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        17 => dispatch_stage_const::<F, 17, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
-        23 => dispatch_stage_const::<F, 23>(
-            src, dst, prev_len, groups_out, twiddles, pointwise, inverse,
+        23 => dispatch_stage_const::<F, 23, INVERSE>(
+            src, dst, prev_len, groups_out, twiddles, pointwise,
         ),
         _ => unreachable!("unsupported radix {r}"),
     }

@@ -12,6 +12,7 @@ use crate::application::plan::ShtWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::{GridPod, ShtGpuKernel};
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -22,47 +23,20 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct ShtWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<ShtGpuKernel>,
 }
 
 impl ShtWgpuBackend {
     /// Create a backend from an existing device and queue.
-    #[must_use]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        Self {
-            kernel: Arc::new(ShtGpuKernel::new(device.as_ref())),
-            device,
-            queue,
-        }
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(ShtGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| WgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-sht-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                WgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        Self::new(WgpuDevice::try_default("apollo-sht-wgpu")?)
     }
 
     /// Return truthful current capabilities.
@@ -74,13 +48,13 @@ impl ShtWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a WGPU plan descriptor.
@@ -113,8 +87,8 @@ impl ShtWgpuBackend {
         let grid = grid_samples(plan);
         let input: Vec<Complex32> = samples.iter().copied().collect();
         let raw = self.kernel.execute_forward(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan.mode_count(),
             plan.sample_count(),
             &input,
@@ -139,8 +113,8 @@ impl ShtWgpuBackend {
         let grid = grid_samples(plan);
         let input = modes_from_coefficients(coefficients);
         let raw = self.kernel.execute_inverse(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan.sample_count(),
             plan.mode_count(),
             &input,

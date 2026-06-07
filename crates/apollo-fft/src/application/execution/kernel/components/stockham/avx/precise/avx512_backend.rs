@@ -1,6 +1,10 @@
 use super::super::backend::StockhamAvxBackend;
 use num_complex::Complex64;
-use std::arch::x86_64::*;
+use std::arch::x86_64::{
+    __m512d, _mm512_add_pd, _mm512_fmaddsub_pd, _mm512_loadu_pd, _mm512_mul_pd, _mm512_permute_pd,
+    _mm512_set1_pd, _mm512_set_pd, _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,
+    _mm512_xor_pd,
+};
 
 #[derive(Copy, Clone)]
 pub(crate) struct Avx512BackendPrecise;
@@ -12,72 +16,72 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
 
     const COMPLEX_PER_VECTOR: usize = 4;
 
-    #[inline(always)]
+    #[inline]
     unsafe fn unpack_complex(c: Complex64) -> (f64, f64) {
         (c.re, c.im)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn complex_mul(a: Complex64, b: Complex64) -> Complex64 {
         a * b
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn complex_add(a: Complex64, b: Complex64) -> Complex64 {
         a + b
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn complex_sub(a: Complex64, b: Complex64) -> Complex64 {
         a - b
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn set1_real(val: f64) -> __m512d {
         _mm512_set1_pd(val)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn set1_imag(val: f64) -> __m512d {
         _mm512_set1_pd(val)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn loadu_complex(ptr: *const Complex64) -> __m512d {
         _mm512_loadu_pd(ptr.cast::<f64>())
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn storeu_complex(ptr: *mut Complex64, val: __m512d) {
         _mm512_storeu_pd(ptr.cast::<f64>(), val)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn add(a: __m512d, b: __m512d) -> __m512d {
         _mm512_add_pd(a, b)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn sub(a: __m512d, b: __m512d) -> __m512d {
         _mm512_sub_pd(a, b)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn mul(a: __m512d, b: __m512d) -> __m512d {
         _mm512_mul_pd(a, b)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn fmaddsub(a: __m512d, b: __m512d, c: __m512d) -> __m512d {
         _mm512_fmaddsub_pd(a, b, c)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn permute_complex_swap(a: __m512d) -> __m512d {
         _mm512_permute_pd(a, 0x55)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn rotate_quarter_turn(v: __m512d, sign: f64) -> __m512d {
         let swapped = _mm512_permute_pd(v, 0x55);
         let mask = if sign > 0.0 {
@@ -88,7 +92,7 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
         _mm512_xor_pd(swapped, mask)
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn stage_groups_one(
         src: &[Complex64],
         dst: &mut [Complex64],
@@ -132,7 +136,7 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn stage_pair_groups_two(
         src: &[Complex64],
         dst: &mut [Complex64],
@@ -219,7 +223,7 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn stage_triple_quarter_groups_one(
         src: &[Complex64],
         dst: &mut [Complex64],
@@ -241,7 +245,7 @@ impl StockhamAvxBackend for Avx512BackendPrecise {
         );
     }
 
-    #[inline(always)]
+    #[inline]
     unsafe fn stockham_quad_groups_eight_low_live(
         src: &[Complex64],
         dst: &mut [Complex64],

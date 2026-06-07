@@ -20,10 +20,11 @@
 
 use crate::application::execution::kernel::components::winograd::composite::dft25_impl;
 use crate::application::execution::kernel::components::winograd::composite::dft9_impl;
-use crate::application::execution::kernel::components::winograd::radix::dft3::dft3_values;
-use crate::application::execution::kernel::components::winograd::radix::dft4_values;
-use crate::application::execution::kernel::components::winograd::radix::dft5_values;
-use crate::application::execution::kernel::components::winograd::radix::dft7_values;
+// Use shared canonical small DFTs (moved to butterflies/ for dupe reduction across
+// winograd, GT, rader, etc.). dft9/25 remain winograd-specific for now.
+use crate::application::execution::kernel::components::butterflies::{
+    dft3_impl, dft4_array_impl, dft5_array_impl, dft7_impl,
+};
 use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 
@@ -56,7 +57,7 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
                     src_idx -= 84;
                 }
             }
-            row_arr = dft7_values::<F, INVERSE>(row_arr);
+            dft7_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 7;
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
@@ -78,17 +79,18 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 7;
             let idx2 = idx0 + 14;
 
-            let (y0, y1, y2) = unsafe {
-                dft3_values::<F, INVERSE>(
+            let mut col = unsafe {
+                [
                     *scratch.get_unchecked(idx0),
                     *scratch.get_unchecked(idx1),
                     *scratch.get_unchecked(idx2),
-                )
+                ]
             };
+            dft3_impl::<F, INVERSE, false>(&mut col);
             unsafe {
-                *scratch.get_unchecked_mut(idx0) = y0;
-                *scratch.get_unchecked_mut(idx1) = y1;
-                *scratch.get_unchecked_mut(idx2) = y2;
+                *scratch.get_unchecked_mut(idx0) = col[0];
+                *scratch.get_unchecked_mut(idx1) = col[1];
+                *scratch.get_unchecked_mut(idx2) = col[2];
             }
         }
     }
@@ -103,14 +105,15 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx2 = idx0 + 42;
             let idx3 = idx0 + 63;
 
-            let (y0, y1, y2, y3) = unsafe {
-                dft4_values::<F, INVERSE>(
+            let mut col = unsafe {
+                [
                     *scratch.get_unchecked(idx0),
                     *scratch.get_unchecked(idx1),
                     *scratch.get_unchecked(idx2),
                     *scratch.get_unchecked(idx3),
-                )
+                ]
             };
+            dft4_array_impl::<F, INVERSE, false>(&mut col);
 
             let dest_idx_base = dest_idx2_base + i3 * 36;
             let dest_idx0 = dest_idx_base % 84;
@@ -131,10 +134,10 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             }
 
             unsafe {
-                *data.get_unchecked_mut(dest_idx0) = y0;
-                *data.get_unchecked_mut(dest_idx1) = y1;
-                *data.get_unchecked_mut(dest_idx2) = y2;
-                *data.get_unchecked_mut(dest_idx3) = y3;
+                *data.get_unchecked_mut(dest_idx0) = col[0];
+                *data.get_unchecked_mut(dest_idx1) = col[1];
+                *data.get_unchecked_mut(dest_idx2) = col[2];
+                *data.get_unchecked_mut(dest_idx3) = col[3];
             }
         }
     }
@@ -169,7 +172,7 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
                     src_idx -= 60;
                 }
             }
-            row_arr = dft5_values::<F, INVERSE>(row_arr);
+            dft5_array_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 3 + i2) * 5;
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
@@ -189,17 +192,18 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 5;
             let idx2 = idx0 + 10;
 
-            let (y0, y1, y2) = unsafe {
-                dft3_values::<F, INVERSE>(
+            let mut col = unsafe {
+                [
                     *scratch.get_unchecked(idx0),
                     *scratch.get_unchecked(idx1),
                     *scratch.get_unchecked(idx2),
-                )
+                ]
             };
+            dft3_impl::<F, INVERSE, false>(&mut col);
             unsafe {
-                *scratch.get_unchecked_mut(idx0) = y0;
-                *scratch.get_unchecked_mut(idx1) = y1;
-                *scratch.get_unchecked_mut(idx2) = y2;
+                *scratch.get_unchecked_mut(idx0) = col[0];
+                *scratch.get_unchecked_mut(idx1) = col[1];
+                *scratch.get_unchecked_mut(idx2) = col[2];
             }
         }
     }
@@ -214,14 +218,15 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             let idx2 = idx0 + 30;
             let idx3 = idx0 + 45;
 
-            let (y0, y1, y2, y3) = unsafe {
-                dft4_values::<F, INVERSE>(
+            let mut col = unsafe {
+                [
                     *scratch.get_unchecked(idx0),
                     *scratch.get_unchecked(idx1),
                     *scratch.get_unchecked(idx2),
                     *scratch.get_unchecked(idx3),
-                )
+                ]
             };
+            dft4_array_impl::<F, INVERSE, false>(&mut col);
 
             let dest_idx_base = dest_idx2_base + i3 * 36;
             let dest_idx0 = dest_idx_base % 60;
@@ -242,10 +247,10 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             }
 
             unsafe {
-                *data.get_unchecked_mut(dest_idx0) = y0;
-                *data.get_unchecked_mut(dest_idx1) = y1;
-                *data.get_unchecked_mut(dest_idx2) = y2;
-                *data.get_unchecked_mut(dest_idx3) = y3;
+                *data.get_unchecked_mut(dest_idx0) = col[0];
+                *data.get_unchecked_mut(dest_idx1) = col[1];
+                *data.get_unchecked_mut(dest_idx2) = col[2];
+                *data.get_unchecked_mut(dest_idx3) = col[3];
             }
         }
     }
@@ -280,7 +285,7 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
                     src_idx -= 90;
                 }
             }
-            row_arr = dft5_values::<F, INVERSE>(row_arr);
+            dft5_array_impl::<F, INVERSE, false>(&mut row_arr);
             let row_start = (i1 * 9 + i2) * 5;
             unsafe {
                 *scratch.get_unchecked_mut(row_start) = row_arr[0];
@@ -402,17 +407,18 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             let idx1 = idx0 + 25;
             let idx2 = idx0 + 50;
 
-            let (y0, y1, y2) = unsafe {
-                dft3_values::<F, INVERSE>(
+            let mut col = unsafe {
+                [
                     *scratch.get_unchecked(idx0),
                     *scratch.get_unchecked(idx1),
                     *scratch.get_unchecked(idx2),
-                )
+                ]
             };
+            dft3_impl::<F, INVERSE, false>(&mut col);
             unsafe {
-                *scratch.get_unchecked_mut(idx0) = y0;
-                *scratch.get_unchecked_mut(idx1) = y1;
-                *scratch.get_unchecked_mut(idx2) = y2;
+                *scratch.get_unchecked_mut(idx0) = col[0];
+                *scratch.get_unchecked_mut(idx1) = col[1];
+                *scratch.get_unchecked_mut(idx2) = col[2];
             }
         }
     }

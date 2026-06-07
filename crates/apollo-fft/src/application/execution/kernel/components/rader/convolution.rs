@@ -1,3 +1,4 @@
+use crate::application::execution::kernel::components::butterflies;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 /// Winograd-pair fused forward+pointwise dispatch.
@@ -253,13 +254,13 @@ pub(super) fn rader_negacyclic_convolve_inplace<
     let m4 = (m / 4) * 4;
     while j < m4 {
         let c0 = first[j];
-        let n0 = mul_conj::<F>(second[j], twiddles[j]);
+        let n0 = butterflies::mul_conj::<F>(second[j], twiddles[j]);
         let c1 = first[j + 1];
-        let n1 = mul_conj::<F>(second[j + 1], twiddles[j + 1]);
+        let n1 = butterflies::mul_conj::<F>(second[j + 1], twiddles[j + 1]);
         let c2 = first[j + 2];
-        let n2 = mul_conj::<F>(second[j + 2], twiddles[j + 2]);
+        let n2 = butterflies::mul_conj::<F>(second[j + 2], twiddles[j + 2]);
         let c3 = first[j + 3];
-        let n3 = mul_conj::<F>(second[j + 3], twiddles[j + 3]);
+        let n3 = butterflies::mul_conj::<F>(second[j + 3], twiddles[j + 3]);
         first[j] = (c0 + n0) * half;
         second[j] = (c0 - n0) * half;
         first[j + 1] = (c1 + n1) * half;
@@ -272,22 +273,11 @@ pub(super) fn rader_negacyclic_convolve_inplace<
     }
     while j < m {
         let c = first[j];
-        let n = mul_conj::<F>(second[j], twiddles[j]);
+        let n = butterflies::mul_conj::<F>(second[j], twiddles[j]);
         first[j] = (c + n) * half;
         second[j] = (c - n) * half;
         j += 1;
     }
-}
-
-#[inline(always)]
-fn mul_conj<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
-    value: F::Complex,
-    twiddle: F::Complex,
-) -> F::Complex {
-    num_complex::Complex::new(
-        value.re * twiddle.re + value.im * twiddle.im,
-        value.im * twiddle.re - value.re * twiddle.im,
-    )
 }
 
 /// Trampoline: keep recursive sub-convolution dispatch out of this frame.

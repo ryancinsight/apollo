@@ -14,7 +14,9 @@ type PackedReducedComplex = [Complex32; 4];
 type PackedPreciseComplex = [Complex64; 2];
 
 #[cfg(all(test, target_arch = "x86_64"))]
-pub(crate) fn build_butterfly512_twiddles_reduced(twiddles: &[Complex32]) -> [PackedReducedComplex; 120] {
+pub(crate) fn build_butterfly512_twiddles_reduced(
+    twiddles: &[Complex32],
+) -> [PackedReducedComplex; 120] {
     debug_assert!(twiddles.len() >= 511);
     core::array::from_fn(|index| {
         let row = (index % 15) + 1;
@@ -26,7 +28,9 @@ pub(crate) fn build_butterfly512_twiddles_reduced(twiddles: &[Complex32]) -> [Pa
 }
 
 #[cfg(all(test, target_arch = "x86_64"))]
-pub(crate) fn build_butterfly512_twiddles_precise(twiddles: &[Complex64]) -> [PackedPreciseComplex; 240] {
+pub(crate) fn build_butterfly512_twiddles_precise(
+    twiddles: &[Complex64],
+) -> [PackedPreciseComplex; 240] {
     debug_assert!(twiddles.len() >= 511);
     core::array::from_fn(|index| {
         let row = (index % 15) + 1;

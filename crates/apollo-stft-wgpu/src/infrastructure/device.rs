@@ -12,6 +12,7 @@ use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::buffers::StftGpuBuffers;
 use crate::infrastructure::kernel::StftGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -24,45 +25,20 @@ pub fn wgpu_available() -> bool {
 /// Owns an acquired device/queue pair and a cached kernel pipeline.
 #[derive(Debug, Clone)]
 pub struct StftWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<StftGpuKernel>,
 }
 
 impl StftWgpuBackend {
     /// Create a backend from an existing device and queue.
-    #[must_use]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        let kernel = Arc::new(StftGpuKernel::new(&device));
-        Self {
-            device,
-            queue,
-            kernel,
-        }
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(StftGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|e| WgpuError::AdapterUnavailable {
-            message: e.to_string(),
-        })?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("apollo-stft-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| WgpuError::DeviceUnavailable {
-            message: e.to_string(),
-        })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        Self::new(WgpuDevice::try_default("apollo-stft-wgpu")?)
     }
 
     /// Return truthful forward-and-inverse capability descriptor.
@@ -74,13 +50,13 @@ impl StftWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Execute the forward STFT on `signal` using the supplied plan.
@@ -125,8 +101,8 @@ impl StftWgpuBackend {
         //   1 + signal_len.div_ceil(hop_len)
         let frame_count = 1 + signal.len().div_ceil(plan.hop_len());
         self.kernel.execute_forward_fft(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             signal,
             plan.frame_len(),
             plan.hop_len(),
@@ -181,8 +157,8 @@ impl StftWgpuBackend {
             });
         }
         self.kernel.execute_inverse(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             spectrum,
             plan.frame_len(),
             plan.hop_len(),
@@ -310,7 +286,7 @@ impl StftWgpuBackend {
         }
         let frame_count = 1 + signal_len.div_ceil(plan.hop_len());
         Ok(StftGpuBuffers::new(
-            &self.device,
+            self.device.device(),
             &self.kernel,
             frame_count,
             plan.frame_len(),
@@ -350,8 +326,12 @@ impl StftWgpuBackend {
             buffers.fwd_output_host.copy_from_slice(&result);
             return Ok(());
         }
-        self.kernel
-            .execute_forward_fft_with_buffers(&self.device, &self.queue, signal, buffers)
+        self.kernel.execute_forward_fft_with_buffers(
+            self.device.device(),
+            self.device.queue(),
+            signal,
+            buffers,
+        )
     }
 
     /// Execute the inverse STFT using pre-allocated GPU buffers.
@@ -390,8 +370,8 @@ impl StftWgpuBackend {
             return Ok(());
         }
         self.kernel.execute_inverse_with_buffers(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             spectrum,
             signal_len,
             buffers,

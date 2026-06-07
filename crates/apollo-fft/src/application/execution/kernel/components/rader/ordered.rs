@@ -7,6 +7,7 @@
 //! fused stages can produce and consume that order directly, eliminating the
 //! leaf-local permutation and scratch copy.
 
+use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 /// Rader transform over an ordered nonzero domain.
@@ -17,8 +18,11 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// * `data[0]` is `X[0]` on return.
 /// * `data[1 + q]` is `X[g_inv^q mod N]` for `q in 0..N-1` on return.
 /// Ordered Rader implementation for fused prime paths.
-#[inline(always)]
-pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+#[inline]
+pub(crate) fn rader_ordered_impl<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     n: usize,
     generator_inverse: usize,
@@ -28,48 +32,47 @@ pub(crate) fn rader_ordered_impl<F: MixedRadixScalar<Complex = num_complex::Comp
     debug_assert!(crate::application::execution::kernel::radix_shape::is_prime(n));
 
     let data = &mut data[..n];
-    let m = n - 1;
     let (head, nonzero) = data.split_at_mut(1);
     let x0 = head[0];
     let sum_x = sum_ordered::<F>(nonzero);
 
-    if m >= super::BLUESTEIN_RADER_THRESHOLD
-        || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
-    {
-        super::bluestein::rader_bluestein_convolve_inplace::<F>(
+    if super::prefers_bluestein_for_rader::<F>(n) {
+        rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n, generator_inverse);
+    } else if super::prefers_half_cyclic_for_rader::<F>(n) {
+        rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(
             nonzero,
             n,
-            INVERSE,
             generator_inverse,
         );
-    } else if m >= F::HALF_CYCLIC_RADER_THRESHOLD {
-        let half_m = m / 2;
-        let (kernel_cyc, kernel_neg) =
-            F::cached_rader_negacyclic_spectra(n, INVERSE, generator_inverse);
-        let twiddles = F::cached_rader_neg_twiddles(half_m);
-        super::rader_negacyclic_convolve_inplace::<F>(
-            nonzero,
-            kernel_cyc.as_ref(),
-            kernel_neg.as_ref(),
-            twiddles.as_ref(),
-        );
     } else {
-        let kernel_spectrum = F::cached_rader_spectrum(n, INVERSE, generator_inverse);
-        super::rader_convolve_inplace::<F>(nonzero, kernel_spectrum.as_ref());
+        rader_ordered_convolve::<F, INVERSE, super::FullCyclic>(nonzero, n, generator_inverse);
     }
 
     head[0] = x0 + sum_x;
     add_dc_offset::<F>(nonzero, x0);
 }
 
-#[inline(always)]
+#[inline]
+fn rader_ordered_convolve<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    const INVERSE: bool,
+    B: super::RaderConvolutionBackend,
+>(
+    nonzero: &mut [F::Complex],
+    n: usize,
+    generator_inverse: usize,
+) {
+    B::convolve::<F, INVERSE>(nonzero, n, generator_inverse);
+}
+
+#[inline]
 fn sum_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     nonzero: &[F::Complex],
 ) -> F::Complex {
     nonzero.iter().copied().sum()
 }
 
-#[inline(always)]
+#[inline]
 fn add_dc_offset<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     nonzero: &mut [F::Complex],
     x0: F::Complex,

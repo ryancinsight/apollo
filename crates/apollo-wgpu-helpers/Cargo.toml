@@ -1,0 +1,16 @@
+[package]
+name = "apollo-wgpu-helpers"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
+repository = "https://github.com/ryancinsight/kwavers"
+description = "Shared WGPU device acquisition and error contracts for the Apollo WGPU crate family"
+
+[dependencies]
+pollster = "0.4"
+thiserror = "1.0"
+wgpu = { version = "26.0", features = ["wgsl"] }
+
+[lints]
+workspace = true

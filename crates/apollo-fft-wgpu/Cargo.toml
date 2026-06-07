@@ -13,10 +13,11 @@ native-f16 = []
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
 ndarray = { version = "0.16", features = ["rayon"] }
 num-complex = "0.4"
-pollster = "0.4"
+pollster = { workspace = true }
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]

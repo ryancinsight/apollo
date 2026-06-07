@@ -31,7 +31,10 @@ enum TwoByPrimeConfig {
     NaturalPrime,
 }
 
-pub(super) fn try_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+pub(super) fn try_fft<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
@@ -78,7 +81,10 @@ pub(super) fn direct_pair_prime(prime: usize) -> bool {
     DIRECT_PAIR_PRIMES.contains(&prime)
 }
 
-fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+fn two_by_prime_ordered_rader<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     prime: usize,
     generator: usize,
@@ -87,7 +93,7 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
     let n = prime * 2;
     debug_assert!(data.len() >= n);
 
-    let twiddles = F::cached_four_step_twiddles(n, prime, 2, INVERSE);
+    let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
     let input_order =
         crate::application::execution::kernel::components::rader::cached_generator_order(
             prime, generator,
@@ -97,16 +103,14 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
         let (even, odd) = scratch[..n].split_at_mut(prime);
         load_even_odd_ordered::<F>(data, even, odd, prime, input_order.as_ref());
 
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F, INVERSE>(
-            even,
-            prime,
-            generator_inverse,
-        );
-        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<F, INVERSE>(
-            odd,
-            prime,
-            generator_inverse,
-        );
+        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
+            F,
+            INVERSE,
+        >(even, prime, generator_inverse);
+        crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
+            F,
+            INVERSE,
+        >(odd, prime, generator_inverse);
 
         combine_two_prime_ordered::<F>(
             data,
@@ -119,7 +123,10 @@ fn two_by_prime_ordered_rader<F: MixedRadixScalar<Complex = num_complex::Complex
     });
 }
 
-fn two_by_prime_natural_prime<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+fn two_by_prime_natural_prime<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     prime: usize,
 ) {
@@ -130,7 +137,7 @@ fn two_by_prime_natural_prime<F: MixedRadixScalar<Complex = num_complex::Complex
         return;
     }
 
-    let twiddles = F::cached_four_step_twiddles(n, prime, 2, INVERSE);
+    let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
     F::with_pfa_scratch(prime, |scratch| {
         let even = &mut scratch[..prime];
         load_even_compact_odd_natural(data, even, prime);
@@ -192,8 +199,11 @@ fn load_even_compact_odd_natural<C: Copy>(data: &mut [C], even: &mut [C], prime:
     }
 }
 
-#[inline(always)]
-fn transform_natural_prime_half<F: MixedRadixScalar<Complex = num_complex::Complex<F>>, const INVERSE: bool>(
+#[inline]
+fn transform_natural_prime_half<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
     _prime: usize,
 ) {

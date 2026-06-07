@@ -3,8 +3,7 @@
 //! reference comparisons.
 
 use super::{
-    check_forward, check_inverse, check_roundtrip, forward_inplace_32,
-    forward_inplace_64, max_err,
+    check_forward, check_inverse, check_roundtrip, forward_inplace_32, forward_inplace_64, max_err,
 };
 use crate::application::execution::kernel::components::radix_composite::forward_inplace_with_radices;
 use crate::application::execution::kernel::direct::dft_forward;
@@ -77,17 +76,17 @@ fn twiddle_cache_distinguishes_radix_order_for_same_length() {
     let expected = dft_forward(&input);
 
     let mut radix_3_4 = input.clone();
-    forward_inplace_with_radices(&mut radix_3_4, &[3, 2, 2]);
+    forward_inplace_with_radices(&mut radix_3_4, &[3, 4]);
     assert!(
         max_err(&radix_3_4, &expected) < 1e-12,
-        "radix [3,2,2] cache path must match direct DFT"
+        "radix [3,4] cache path must match direct DFT"
     );
 
     let mut radix_4_3 = input;
-    forward_inplace_with_radices(&mut radix_4_3, &[2, 2, 3]);
+    forward_inplace_with_radices(&mut radix_4_3, &[4, 3]);
     assert!(
         max_err(&radix_4_3, &expected) < 1e-12,
-        "radix [2,2,3] cache path must not reuse [3,2,2] twiddles"
+        "radix [4,3] cache path must not reuse [3,4] twiddles"
     );
 }
 

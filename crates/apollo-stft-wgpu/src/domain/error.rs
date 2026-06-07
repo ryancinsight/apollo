@@ -1,5 +1,6 @@
 //! WGPU error contracts for the STFT backend.
 
+use apollo_wgpu_helpers::WgpuDeviceError;
 use thiserror::Error;
 
 /// Result alias for STFT WGPU operations.
@@ -40,18 +41,9 @@ pub enum WgpuError {
         /// Error detail from the WGPU runtime.
         message: String,
     },
-    /// No WGPU adapter could be acquired.
-    #[error("wgpu adapter unavailable: {message}")]
-    AdapterUnavailable {
-        /// Error detail from the WGPU runtime.
-        message: String,
-    },
-    /// No WGPU device could be acquired.
-    #[error("wgpu device unavailable: {message}")]
-    DeviceUnavailable {
-        /// Error detail from the WGPU runtime.
-        message: String,
-    },
+    /// WGPU device acquisition failed.
+    #[error("wgpu device: {0}")]
+    Device(#[from] WgpuDeviceError),
     /// The requested operation is not implemented.
     #[error("{operation} is unsupported by the current WGPU capability set")]
     UnsupportedExecution {

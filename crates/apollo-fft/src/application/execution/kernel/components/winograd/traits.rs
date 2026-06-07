@@ -20,37 +20,35 @@ pub trait WinogradScalar:
     fn sq2o2() -> Self;
 }
 impl WinogradScalar for f64 {
-    #[inline(always)]
+    #[inline]
     fn from_precise(v: f64) -> Self {
         v
     }
-    #[inline(always)]
+    #[inline]
     fn sq2o2() -> Self {
         std::f64::consts::SQRT_2 / 2.0
     }
 }
 impl WinogradScalar for f32 {
-    #[inline(always)]
+    #[inline]
     fn from_precise(v: f64) -> Self {
         v as f32
     }
-    #[inline(always)]
+    #[inline]
     fn sq2o2() -> Self {
         (std::f64::consts::SQRT_2 / 2.0) as f32
     }
 }
 
-#[inline(always)]
+// Canonical implementation lives in butterflies::dft (shared across GT/Rader/etc).
+#[inline]
 pub(crate) fn dft2_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>; 2]) {
-    let a = data[0];
-    let b = data[1];
-    data[0] = a + b;
-    data[1] = a - b;
+    crate::application::execution::kernel::components::butterflies::dft2_impl::<F>(data);
 }
 
 /// Apply `W_N^{k·j}` twiddle multiplication in-place.
 /// Used by the radix outer loop to apply inter-group twiddles.
-#[inline(always)]
+#[inline]
 pub(crate) fn apply_twiddle_impl<F: WinogradScalar>(
     v: num_complex::Complex<F>,
     tw: num_complex::Complex<F>,

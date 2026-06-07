@@ -9,6 +9,7 @@ use crate::application::plan::WaveletWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::WaveletGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -21,45 +22,20 @@ pub fn wgpu_available() -> bool {
 /// Owns an acquired device/queue pair and a cached kernel pipeline.
 #[derive(Debug, Clone)]
 pub struct WaveletWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<WaveletGpuKernel>,
 }
 
 impl WaveletWgpuBackend {
     /// Create a backend from an existing device and queue.
-    #[must_use]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        let kernel = Arc::new(WaveletGpuKernel::new(&device));
-        Self {
-            device,
-            queue,
-            kernel,
-        }
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(WaveletGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|e| WgpuError::AdapterUnavailable {
-            message: e.to_string(),
-        })?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("apollo-wavelet-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| WgpuError::DeviceUnavailable {
-            message: e.to_string(),
-        })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        Self::new(WgpuDevice::try_default("apollo-wavelet-wgpu")?)
     }
 
     /// Return truthful forward+inverse capability descriptor.
@@ -71,13 +47,13 @@ impl WaveletWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a plan descriptor for the given signal length and decomposition levels.
@@ -101,8 +77,13 @@ impl WaveletWgpuBackend {
                 actual: signal.len(),
             });
         }
-        self.kernel
-            .execute_forward(&self.device, &self.queue, signal, plan.len(), plan.levels())
+        self.kernel.execute_forward(
+            self.device.device(),
+            self.device.queue(),
+            signal,
+            plan.len(),
+            plan.levels(),
+        )
     }
 
     /// Execute the inverse multi-level Haar DWT on .
@@ -124,8 +105,8 @@ impl WaveletWgpuBackend {
             });
         }
         self.kernel.execute_inverse(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             coefficients,
             plan.len(),
             plan.levels(),

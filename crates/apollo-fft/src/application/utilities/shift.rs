@@ -21,7 +21,7 @@
 ///
 /// Implements numpy-compatible `fftshift` for any `Copy` element type.
 /// For `n = 0` returns an empty vec (no allocation); for `n = 1` returns a single-element copy.
-#[inline(always)]
+#[inline]
 pub fn fftshift<T: Copy>(input: &[T]) -> Vec<T> {
     let n = input.len();
     if n <= 1 {
@@ -37,7 +37,7 @@ pub fn fftshift<T: Copy>(input: &[T]) -> Vec<T> {
 /// Reuses the provided buffer `buf` as scratch, moving zero-frequency to center.
 /// Returns a reference to the result (same buffer, re-borrowed).
 /// For `n <= 1` this is a no-op (returns input unchanged).
-#[inline(always)]
+#[inline]
 pub fn fftshift_inplace<T: Copy>(input: &mut [T]) {
     let n = input.len();
     if n <= 1 {
@@ -57,7 +57,7 @@ pub fn fftshift_inplace<T: Copy>(input: &mut [T]) {
 /// For `n = 0` returns an empty vec (no allocation); for `n = 1` returns a single-element copy.
 ///
 /// Property: `ifftshift(fftshift(x)) = x`.
-#[inline(always)]
+#[inline]
 pub fn ifftshift<T: Copy>(input: &[T]) -> Vec<T> {
     let n = input.len();
     if n <= 1 {
@@ -73,7 +73,7 @@ pub fn ifftshift<T: Copy>(input: &[T]) -> Vec<T> {
 /// Reuses the provided buffer `buf` as scratch.
 /// For `n <= 1` this is a no-op.
 /// Note: for even `n`, `ifftshift == fftshift`, so this delegates to `fftshift_inplace`.
-#[inline(always)]
+#[inline]
 pub fn ifftshift_inplace<T: Copy>(input: &mut [T]) {
     let n = input.len();
     if n <= 1 {
@@ -100,7 +100,8 @@ fn shift_left<T: Copy>(input: &[T], shift: usize) -> Vec<T> {
         // First part: input[split..] has n - split elements
         ptr.copy_from_nonoverlapping(input[split..].as_ptr(), n - split);
         // Second part: input[..split] has split elements
-        ptr.add(n - split).copy_from_nonoverlapping(input[..split].as_ptr(), split);
+        ptr.add(n - split)
+            .copy_from_nonoverlapping(input[..split].as_ptr(), split);
         output.set_len(n);
     }
     output

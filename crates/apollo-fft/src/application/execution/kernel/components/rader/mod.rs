@@ -1,10 +1,10 @@
 //! Rader's Algorithm for prime-length FFTs.
 
+pub(crate) mod bluestein;
 pub(crate) mod convolution;
 pub(crate) mod generator;
 pub(crate) mod ordered;
 pub(crate) mod static_rader;
-pub(crate) mod bluestein;
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
@@ -14,15 +14,64 @@ use std::sync::Arc;
 
 pub(crate) use convolution::HALF_CYCLIC_THRESHOLD;
 
-/// Rader convolution backend selected after the primitive-root permutation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RaderConvolutionStrategy {
-    /// Full length-`N-1` cyclic convolution.
-    FullCyclic,
-    /// Liu-Tolimieri half-cyclic CRT split into cyclic and negacyclic halves.
-    HalfCyclicWinograd,
-    /// Bluestein chirp-Z zero-padded FFT convolution.
-    Bluestein,
+pub(crate) trait RaderConvolutionBackend {
+    fn convolve<F, const INVERSE: bool>(
+        data: &mut [F::Complex],
+        n: usize,
+        generator_inverse: usize,
+    ) where
+        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FullCyclic;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct HalfCyclicWinograd;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Bluestein;
+
+impl RaderConvolutionBackend for FullCyclic {
+    #[inline]
+    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
+    where
+        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    {
+        let kernel_spectrum = F::cached_rader_spectrum::<INVERSE>(n, generator_inverse);
+        rader_convolve_inplace::<F>(data, kernel_spectrum.as_ref());
+    }
+}
+
+impl RaderConvolutionBackend for HalfCyclicWinograd {
+    #[inline]
+    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
+    where
+        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    {
+        debug_assert_eq!(data.len() % 2, 0);
+        let m = data.len() / 2;
+        let (kernel_cyc, kernel_neg) =
+            F::cached_rader_negacyclic_spectra::<INVERSE>(n, generator_inverse);
+        let twiddles = F::cached_rader_neg_twiddles(m);
+
+        rader_negacyclic_convolve_inplace::<F>(
+            data,
+            kernel_cyc.as_ref(),
+            kernel_neg.as_ref(),
+            twiddles.as_ref(),
+        );
+    }
+}
+
+impl RaderConvolutionBackend for Bluestein {
+    #[inline]
+    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
+    where
+        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    {
+        bluestein::rader_bluestein_convolve_inplace::<F, INVERSE>(data, n, generator_inverse);
+    }
 }
 
 /// Rader's algorithm for prime N.
@@ -43,16 +92,16 @@ pub(crate) fn rader_fft<
 }
 
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
-pub(crate) fn rader_fft_with_convolution_strategy<
+pub(crate) fn rader_fft_with_convolution_backend<
     F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
+    B: RaderConvolutionBackend,
 >(
     data: &mut [F::Complex],
-    strategy: RaderConvolutionStrategy,
 ) {
     let n = data.len();
     debug_assert!(crate::application::execution::kernel::radix_shape::is_prime(n));
-    rader_runtime_impl_with_strategy::<F, INVERSE>(data, n, strategy);
+    rader_runtime_impl_with_backend::<F, INVERSE, B>(data, n);
 }
 
 #[inline]
@@ -63,33 +112,46 @@ fn rader_runtime_impl<
     data: &mut [F::Complex],
     n: usize,
 ) {
-    rader_runtime_impl_with_strategy::<F, INVERSE>(data, n, select_rader_strategy::<F>(n));
+    if prefers_bluestein_for_rader::<F>(n) {
+        rader_runtime_impl_with_backend::<F, INVERSE, Bluestein>(data, n);
+    } else if prefers_half_cyclic_for_rader::<F>(n) {
+        rader_runtime_impl_with_backend::<F, INVERSE, HalfCyclicWinograd>(data, n);
+    } else {
+        rader_runtime_impl_with_backend::<F, INVERSE, FullCyclic>(data, n);
+    }
 }
 
 pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
 
+/// Returns true when the Rader convolution for length n should prefer the
+/// Bluestein path. For f32 we bias to Bluestein + Stockham PoT for all runtime
+/// primes (post-static): this routes through the most optimized f32 kernels
+/// (AVX fused stockham) and the pooled TL bluestein/rader scratch, avoiding
+/// variable composite/GT sub-dispatch in FullCyclic and reducing recursion risk.
 #[inline]
-fn select_rader_strategy<F: MixedRadixScalar>(n: usize) -> RaderConvolutionStrategy {
+pub(crate) fn prefers_bluestein_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
     let m = n - 1;
-    if m >= BLUESTEIN_RADER_THRESHOLD
+    // f32: bias to Bluestein+Stockham for m>=128 + explicit 113/67 (md f32 rader worst 2-4x+ like 67/113/257/271; see gap
+    // full f32 avx/pot sub with_scratch + dftN heap + pools for stack). Small f32 use FullCyclic (safe).
+    // Targets md rader f32 ratios + mem (pool reuse in bluestein for kernel/convolve). Broadened from 256.
+    (F::PREFER_BLUESTEIN_MID_RADER && (n == 113 || n == 67 || m >= 128))
+        || m >= BLUESTEIN_RADER_THRESHOLD
         || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
-    {
-        RaderConvolutionStrategy::Bluestein
-    } else if m >= F::HALF_CYCLIC_RADER_THRESHOLD {
-        RaderConvolutionStrategy::HalfCyclicWinograd
-    } else {
-        RaderConvolutionStrategy::FullCyclic
-    }
+}
+
+#[inline]
+pub(crate) fn prefers_half_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
+    n > F::HALF_CYCLIC_RADER_THRESHOLD || F::HALF_CYCLIC_RADER_PRIMES.contains(&n)
 }
 
 #[inline(never)]
-fn rader_runtime_impl_with_strategy<
+fn rader_runtime_impl_with_backend<
     F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
+    B: RaderConvolutionBackend,
 >(
     data: &mut [F::Complex],
     n: usize,
-    strategy: RaderConvolutionStrategy,
 ) {
     let (g, g_inv) = generator::primitive_root_and_inverse(n);
 
@@ -98,49 +160,12 @@ fn rader_runtime_impl_with_strategy<
     let x0 = data[0];
     let l = n - 1;
 
-    match strategy {
-        RaderConvolutionStrategy::HalfCyclicWinograd => {
-            debug_assert_eq!(l % 2, 0);
-            let m = l / 2;
-            let (kernel_cyc, kernel_neg) = F::cached_rader_negacyclic_spectra(n, INVERSE, g_inv);
-            let twiddles = F::cached_rader_neg_twiddles(m);
-
-            F::with_rader_padded_scratch(l, |padded| {
-                let sum_x = gather_sum_slice::<F>(data, padded, &gather);
-                rader_negacyclic_convolve_inplace::<F>(
-                    padded,
-                    kernel_cyc.as_ref(),
-                    kernel_neg.as_ref(),
-                    twiddles.as_ref(),
-                );
-                data[0] = x0 + sum_x;
-                scatter_slice::<F>(data, padded, x0, &gather);
-            });
-        }
-        RaderConvolutionStrategy::Bluestein => {
-            F::with_rader_padded_scratch(l, |padded| {
-                let sum_x = gather_sum_slice::<F>(data, padded, &gather);
-                bluestein::rader_bluestein_convolve_inplace::<F>(
-                    padded,
-                    n,
-                    INVERSE,
-                    g_inv,
-                );
-                data[0] = x0 + sum_x;
-                scatter_slice::<F>(data, padded, x0, &gather);
-            });
-        }
-        RaderConvolutionStrategy::FullCyclic => {
-            let kernel_spectrum = F::cached_rader_spectrum(n, INVERSE, g_inv);
-
-            F::with_rader_padded_scratch(l, |padded| {
-                let sum_x = gather_sum_slice::<F>(data, padded, &gather);
-                rader_convolve_inplace::<F>(padded, kernel_spectrum.as_ref());
-                data[0] = x0 + sum_x;
-                scatter_slice::<F>(data, padded, x0, &gather);
-            });
-        }
-    }
+    F::with_rader_padded_scratch(l, |padded| {
+        let sum_x = gather_sum_slice::<F>(data, padded, &gather);
+        B::convolve::<F, INVERSE>(padded, n, g_inv);
+        data[0] = x0 + sum_x;
+        scatter_slice::<F>(data, padded, x0, &gather);
+    });
 }
 
 /// Optimized gather + sum: collects elements into `padded` while computing the sum.
@@ -148,14 +173,14 @@ fn rader_runtime_impl_with_strategy<
 /// The sum is computed over sequential `data[1..len+1]` for numerical consistency.
 /// The permuted gather stores `data[gather[q]]` to `padded[q]`.
 /// Both loops are vectorized with 4-way unrolling for better ILP.
-#[inline(always)]
-pub(crate) fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+#[inline]
+fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     data: &[F::Complex],
     padded: &mut [F::Complex],
     gather: &[usize],
 ) -> F::Complex {
     debug_assert!(padded.len() >= gather.len());
-    debug_assert!(data.len() >= gather.len() + 1);
+    debug_assert!(data.len() > gather.len());
 
     let len = gather.len();
 
@@ -168,71 +193,65 @@ pub(crate) fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Comple
     let mut i = 0usize;
     while i < len4 {
         unsafe {
-            s0 = s0 + *data.get_unchecked(1 + i);
-            s1 = s1 + *data.get_unchecked(2 + i);
-            s2 = s2 + *data.get_unchecked(3 + i);
-            s3 = s3 + *data.get_unchecked(4 + i);
+            s0 += *data.get_unchecked(1 + i);
+            s1 += *data.get_unchecked(2 + i);
+            s2 += *data.get_unchecked(3 + i);
+            s3 += *data.get_unchecked(4 + i);
         }
         i += 4;
     }
     let mut sum_x = (s0 + s1) + (s2 + s3);
     while i < len {
         unsafe {
-            sum_x = sum_x + *data.get_unchecked(1 + i);
+            sum_x += *data.get_unchecked(1 + i);
         }
         i += 1;
     }
 
-    // Permuted gather: optimized 4-way unrolling
-    let len4 = (len / 4) * 4;
-    let mut q = 0usize;
-    while q < len4 {
-        unsafe {
-            *padded.get_unchecked_mut(q) = *data.get_unchecked(*gather.get_unchecked(q));
-            *padded.get_unchecked_mut(q + 1) = *data.get_unchecked(*gather.get_unchecked(q + 1));
-            *padded.get_unchecked_mut(q + 2) = *data.get_unchecked(*gather.get_unchecked(q + 2));
-            *padded.get_unchecked_mut(q + 3) = *data.get_unchecked(*gather.get_unchecked(q + 3));
-        }
-        q += 4;
-    }
-    while q < len {
-        unsafe {
-            *padded.get_unchecked_mut(q) = *data.get_unchecked(*gather.get_unchecked(q));
-        }
-        q += 1;
-    }
+    // Permuted gather: optimized 8-way unrolling via shared (ILP for larger m in rader, helps f32 rader md-worst like 67/271/113/257).
+    crate::application::execution::kernel::components::butterflies::gather_unroll8(
+        data, gather, padded,
+    );
     sum_x
 }
 
-#[inline(always)]
-pub(crate) fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+#[inline]
+fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
     data: &mut [F::Complex],
     padded: &[F::Complex],
     x0: F::Complex,
     generator_order: &[usize],
 ) {
     debug_assert!(padded.len() >= generator_order.len());
-    debug_assert!(data.len() >= generator_order.len() + 1);
+    debug_assert!(data.len() > generator_order.len());
 
     let len = generator_order.len();
-    let len4 = (len / 4) * 4;
-    let mut q = 0usize;
+    if len == 0 {
+        return;
+    }
+
+    unsafe {
+        *data.get_unchecked_mut(*generator_order.get_unchecked(0)) = x0 + *padded.get_unchecked(0);
+    }
+
+    let len4 = 1 + ((len - 1) / 4) * 4;
+    let mut q = 1usize;
     while q < len4 {
         unsafe {
-            *data.get_unchecked_mut(inverse_generator_order_at(generator_order, q)) =
+            *data.get_unchecked_mut(*generator_order.get_unchecked(len - q)) =
                 x0 + *padded.get_unchecked(q);
-            *data.get_unchecked_mut(inverse_generator_order_at(generator_order, q + 1)) =
+            *data.get_unchecked_mut(*generator_order.get_unchecked(len - q - 1)) =
                 x0 + *padded.get_unchecked(q + 1);
-            *data.get_unchecked_mut(inverse_generator_order_at(generator_order, q + 2)) =
+            *data.get_unchecked_mut(*generator_order.get_unchecked(len - q - 2)) =
                 x0 + *padded.get_unchecked(q + 2);
-            *data.get_unchecked_mut(inverse_generator_order_at(generator_order, q + 3)) =
+            *data.get_unchecked_mut(*generator_order.get_unchecked(len - q - 3)) =
                 x0 + *padded.get_unchecked(q + 3);
         }
         q += 4;
     }
     while q < len {
         unsafe {
-            *data.get_unchecked_mut(inverse_generator_order_at(generator_order, q)) =
+            *data.get_unchecked_mut(*generator_order.get_unchecked(len - q)) =
                 x0 + *padded.get_unchecked(q);
         }
         q += 1;
@@ -243,7 +262,7 @@ pub(crate) fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F
 ///
 /// Returns `generator_order[0]` when `q == 0`, otherwise `generator_order[len - q]`.
 /// Uses a branchless conditional selection to avoid pipeline bubbles from the `if`.
-#[inline(always)]
+#[inline]
 pub(crate) fn inverse_generator_order_at(generator_order: &[usize], q: usize) -> usize {
     debug_assert!(q < generator_order.len());
     // SAFETY: all callers pass q from a loop bounded by generator_order.len().
@@ -302,7 +321,7 @@ mod const_consistency_tests {
         // Inverse (unnormalized → result = N·input)
         super::rader_fft::<f64, true>(&mut data);
         for x in &mut data {
-            *x = *x / (n as f64);
+            *x /= n as f64;
         }
         let err = max_abs_err_64(&data, &input);
         assert!(
@@ -321,19 +340,18 @@ mod const_consistency_tests {
         assert!(err < 1.0e-10, "Rader forward N={n} mismatch err={err:.2e}");
     }
 
-    fn assert_rader_strategy_forward_matches_direct(
+    fn assert_rader_backend_forward_matches_direct<B: super::RaderConvolutionBackend>(
         n: usize,
-        strategy: super::RaderConvolutionStrategy,
         tolerance: f64,
     ) {
         let input = signal(n);
         let expected = dft_forward(&input);
-        let mut got = input.clone();
-        super::rader_fft_with_convolution_strategy::<f64, false>(&mut got, strategy);
+        let mut got = input;
+        super::rader_fft_with_convolution_backend::<f64, false, B>(&mut got);
         let err = max_abs_err_64(&got, &expected);
         assert!(
             err < tolerance,
-            "Rader {strategy:?} forward N={n} mismatch err={err:.2e}"
+            "Rader ZST backend forward N={n} mismatch err={err:.2e}"
         );
     }
 
@@ -341,13 +359,9 @@ mod const_consistency_tests {
         let input = signal(n);
         let mut full = input.clone();
         let mut half = input;
-        super::rader_fft_with_convolution_strategy::<f64, false>(
-            &mut full,
-            super::RaderConvolutionStrategy::FullCyclic,
-        );
-        super::rader_fft_with_convolution_strategy::<f64, false>(
+        super::rader_fft_with_convolution_backend::<f64, false, super::FullCyclic>(&mut full);
+        super::rader_fft_with_convolution_backend::<f64, false, super::HalfCyclicWinograd>(
             &mut half,
-            super::RaderConvolutionStrategy::HalfCyclicWinograd,
         );
         let err = max_abs_err_64(&half, &full);
         assert!(
@@ -451,15 +465,38 @@ mod const_consistency_tests {
         std::thread::Builder::new()
             .stack_size(8 * 1024 * 1024)
             .spawn(|| {
-                assert_rader_strategy_forward_matches_direct(
-                    521,
-                    super::RaderConvolutionStrategy::HalfCyclicWinograd,
-                    1.0e-8,
+                assert_rader_backend_forward_matches_direct::<super::HalfCyclicWinograd>(
+                    521, 1.0e-8,
                 );
             })
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    #[test]
+    fn runtime_rader_zst_backends_forward_match_direct() {
+        assert_rader_backend_forward_matches_direct::<super::FullCyclic>(29, 1.0e-10);
+        assert_rader_backend_forward_matches_direct::<super::Bluestein>(67, 1.0e-10);
+        std::thread::Builder::new()
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                assert_rader_backend_forward_matches_direct::<super::HalfCyclicWinograd>(
+                    521, 1.0e-8,
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn rader_bluestein_policy_is_scalar_trait_driven() {
+        assert!(super::prefers_bluestein_for_rader::<f32>(67));
+        assert!(super::prefers_bluestein_for_rader::<f32>(193));
+        assert!(super::prefers_bluestein_for_rader::<f32>(257));
+        assert!(!super::prefers_bluestein_for_rader::<f64>(193));
+        assert!(!super::prefers_bluestein_for_rader::<f64>(257));
     }
 
     #[test]
@@ -474,6 +511,13 @@ mod const_consistency_tests {
     }
 
     // ── Const consistency tests ───────────────────────────────────────────
+
+    #[test]
+    fn rader_convolution_backends_are_zero_sized() {
+        assert_eq!(std::mem::size_of::<super::FullCyclic>(), 0);
+        assert_eq!(std::mem::size_of::<super::HalfCyclicWinograd>(), 0);
+        assert_eq!(std::mem::size_of::<super::Bluestein>(), 0);
+    }
 
     /// Every entry in [`PRIMITIVE_ROOTS`] must agree with the dynamic
     /// general-purpose primitive-root computation.

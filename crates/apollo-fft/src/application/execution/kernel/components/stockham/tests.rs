@@ -2,9 +2,10 @@
 #![allow(unused_imports)]
 
 use super::butterfly::{
-    build_butterfly512_twiddles_reduced, build_butterfly512_twiddles_precise, hybrid_radix8x512_reduced_avx_fma,
-    hybrid_radix8x512_precise_avx_fma, stage_pair_impl, stage_quad_impl, stage_triple_impl,
-    stockham_mixed_twiddle_reduced, stockham_mixed_twiddle_precise,
+    build_butterfly512_twiddles_precise, build_butterfly512_twiddles_reduced,
+    hybrid_radix8x512_precise_avx_fma, hybrid_radix8x512_reduced_avx_fma, stage_pair_impl,
+    stage_quad_impl, stage_triple_impl, stockham_mixed_twiddle_precise,
+    stockham_mixed_twiddle_reduced,
 };
 use super::precision::{
     PreciseStockham, PreciseStockhamAvxFma, ReducedStockham, ReducedStockhamAvxFma,
@@ -92,7 +93,8 @@ fn butterfly512_f32_packed_twiddles_match_separated_column_contract() {
         for row in 1..16 {
             let vector = packed[columnset * 15 + row - 1];
             for lane in 0..4 {
-                let expected = stockham_mixed_twiddle_reduced::<16, 32>(&twiddles, row, col_base + lane);
+                let expected =
+                    stockham_mixed_twiddle_reduced::<16, 32>(&twiddles, row, col_base + lane);
                 assert_eq!(
                     vector[lane],
                     expected,
@@ -117,7 +119,8 @@ fn butterfly512_f64_packed_twiddles_match_separated_column_contract() {
         for row in 1..16 {
             let vector = packed[columnset * 15 + row - 1];
             for lane in 0..2 {
-                let expected = stockham_mixed_twiddle_precise::<16, 32>(&twiddles, row, col_base + lane);
+                let expected =
+                    stockham_mixed_twiddle_precise::<16, 32>(&twiddles, row, col_base + lane);
                 assert_eq!(
                     vector[lane],
                     expected,
@@ -393,10 +396,17 @@ fn precise_avx_schedule_roundtrip_holds_for_n8192() {
 fn test_small_sizes_correctness() {
     // We will test sizes 2, 4, 8, 16 for both f32 (reduced) and f64 (precise)
     // against a simple scalar DFT.
-    fn dft<T: num_traits::Float>(input: &[num_complex::Complex<T>], inverse: bool) -> Vec<num_complex::Complex<T>> {
+    fn dft<T: num_traits::Float>(
+        input: &[num_complex::Complex<T>],
+        inverse: bool,
+    ) -> Vec<num_complex::Complex<T>> {
         let n = input.len();
         let mut output = vec![num_complex::Complex::new(T::zero(), T::zero()); n];
-        let sign = if inverse { T::from(1.0).unwrap() } else { T::from(-1.0).unwrap() };
+        let sign = if inverse {
+            T::from(1.0).unwrap()
+        } else {
+            T::from(-1.0).unwrap()
+        };
         let two_pi = T::from(2.0 * std::f64::consts::PI).unwrap();
         for k in 0..n {
             let mut sum = num_complex::Complex::new(T::zero(), T::zero());
@@ -424,7 +434,12 @@ fn test_small_sizes_correctness() {
         }
         for i in 0..n {
             let diff = (data[i] - ref_fwd[i]).norm();
-            assert!(diff < 1e-4, "f32 size {n} forward index {i} mismatch: got {:?}, expected {:?}", data[i], ref_fwd[i]);
+            assert!(
+                diff < 1e-4,
+                "f32 size {n} forward index {i} mismatch: got {:?}, expected {:?}",
+                data[i],
+                ref_fwd[i]
+            );
         }
 
         // Test inverse
@@ -435,7 +450,12 @@ fn test_small_sizes_correctness() {
         }
         for i in 0..n {
             let diff = (data[i] - ref_inv[i]).norm();
-            assert!(diff < 1e-3, "f32 size {n} inverse index {i} mismatch: got {:?}, expected {:?}", data[i], ref_inv[i]);
+            assert!(
+                diff < 1e-3,
+                "f32 size {n} inverse index {i} mismatch: got {:?}, expected {:?}",
+                data[i],
+                ref_inv[i]
+            );
         }
     }
 
@@ -453,7 +473,12 @@ fn test_small_sizes_correctness() {
         }
         for i in 0..n {
             let diff = (data[i] - ref_fwd[i]).norm();
-            assert!(diff < 1e-10, "f64 size {n} forward index {i} mismatch: got {:?}, expected {:?}", data[i], ref_fwd[i]);
+            assert!(
+                diff < 1e-10,
+                "f64 size {n} forward index {i} mismatch: got {:?}, expected {:?}",
+                data[i],
+                ref_fwd[i]
+            );
         }
 
         // Test inverse
@@ -464,8 +489,12 @@ fn test_small_sizes_correctness() {
         }
         for i in 0..n {
             let diff = (data[i] - ref_inv[i]).norm();
-            assert!(diff < 1e-9, "f64 size {n} inverse index {i} mismatch: got {:?}, expected {:?}", data[i], ref_inv[i]);
+            assert!(
+                diff < 1e-9,
+                "f64 size {n} inverse index {i} mismatch: got {:?}, expected {:?}",
+                data[i],
+                ref_inv[i]
+            );
         }
     }
 }
-

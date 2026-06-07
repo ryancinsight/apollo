@@ -89,7 +89,7 @@ fn factorize_supported_sizes() {
         );
         for &r in &radices {
             assert!(
-                [2, 3, 5, 7, 11, 13, 17, 23].contains(&r),
+                [2, 3, 4, 5, 7, 11, 13, 17, 23].contains(&r),
                 "factorize_composite({n}): unsupported radix {r}"
             );
         }

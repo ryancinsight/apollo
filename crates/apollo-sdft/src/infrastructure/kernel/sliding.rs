@@ -21,8 +21,9 @@ pub fn update_twiddles(window_len: usize, bin_count: usize) -> Vec<Complex64> {
 
 /// Compute direct DFT bins for a real-valued window.
 ///
-/// Returns  if  is empty.
-/// Returns  if .
+/// # Errors
+/// Returns [`SdftError::EmptyWindow`] if `window` is empty.
+/// Returns [`SdftError::BinCountExceedsWindow`] if `bin_count > window.len()`.
 pub fn direct_bins(window: &[f64], bin_count: usize) -> SdftResult<Vec<Complex64>> {
     let mut bins = vec![Complex64::new(0.0, 0.0); bin_count];
     direct_bins_into(window, &mut bins)?;

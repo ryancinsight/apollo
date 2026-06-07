@@ -52,9 +52,8 @@ impl Parse for GoodThomasDispatchInput {
                 "short_sizes" => {
                     let content;
                     bracketed!(content in input);
-                    short_sizes.extend(
-                        Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?,
-                    );
+                    short_sizes
+                        .extend(Punctuated::<LitInt, Token![,]>::parse_terminated(&content)?);
                 }
                 "max_n" => {
                     max_n = Some(input.parse()?);
@@ -189,7 +188,7 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
         .iter()
         .map(|&(n1, n2)| good_thomas_function(n1, n2, quote! { #[inline] }));
 
-    let support_arms = pairs.iter().map(|(n1, n2)| quote! { (#n1, #n2) });
+    let supported_pairs = pairs.iter().map(|(n1, n2)| quote! { (#n1, #n2) });
     let match_arms = pairs.iter().map(|&(n1, n2)| {
         let n = n1 * n2;
         let fn_name = format_ident!("dft{}_impl", n);
@@ -210,9 +209,11 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
     quote! {
         #(#codelets)*
 
+        const SUPPORTED_GOOD_THOMAS_PAIRS: &[(usize, usize)] = &[#(#supported_pairs),*];
+
         #[inline]
         pub(super) fn supports(n1: usize, n2: usize) -> bool {
-            matches!((n1, n2), #(#support_arms)|*)
+            SUPPORTED_GOOD_THOMAS_PAIRS.contains(&(n1, n2))
         }
 
         pub(super) fn try_fft<

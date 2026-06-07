@@ -23,7 +23,7 @@ pub struct SyncPolicy;
 impl ExecutionPolicy for SyncPolicy {
     type Future<T: Send> = std::future::Ready<T>;
 
-    #[inline(always)]
+    #[inline]
     fn for_each_chunk_mut_enumerated<T, F>(data: &mut [T], chunk_size: usize, f: F)
     where
         T: Send + Sync,
@@ -41,7 +41,7 @@ pub struct ParallelPolicy;
 impl ExecutionPolicy for ParallelPolicy {
     type Future<T: Send> = std::future::Ready<T>;
 
-    #[inline(always)]
+    #[inline]
     fn for_each_chunk_mut_enumerated<T, F>(data: &mut [T], chunk_size: usize, f: F)
     where
         T: Send + Sync,
@@ -77,7 +77,7 @@ pub struct AsyncPolicy;
 impl ExecutionPolicy for AsyncPolicy {
     type Future<T: Send> = AsyncFuture<T>;
 
-    #[inline(always)]
+    #[inline]
     fn for_each_chunk_mut_enumerated<T, F>(data: &mut [T], chunk_size: usize, f: F)
     where
         T: Send + Sync,

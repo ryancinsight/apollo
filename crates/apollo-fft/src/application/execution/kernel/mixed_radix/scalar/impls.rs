@@ -14,280 +14,72 @@ use super::rader::{
 use super::simd::{pointwise_mul_precise, pointwise_mul_reduced};
 use super::trait_def::MixedRadixScalar;
 use super::transpose::{transpose_matrix_precise, transpose_matrix_reduced};
+use super::twiddle_constants::{
+    TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_FWD_64, TWIDDLES_COMBINE_INV_32,
+    TWIDDLES_COMBINE_INV_64, TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE,
+    TWIDDLES_INV_REDUCED,
+};
 use crate::application::execution::kernel::components::{radix_composite, stockham};
 use crate::application::execution::kernel::mixed_radix::caches::{
     cached_four_step_twiddles, cached_rader_neg_twiddles, cached_rader_negacyclic_spectra,
-    cached_rader_spectrum, cached_twiddle_fwd, cached_twiddle_inv, with_pfa_scratch,
-    with_rader_padded_scratch, with_stockham_scratch, with_bluestein_scratch,
+    cached_rader_spectrum, cached_twiddle_fwd, cached_twiddle_inv, with_bluestein_scratch,
+    with_pfa_scratch, with_rader_padded_scratch, with_stockham_scratch,
 };
+use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
 use num_complex::{Complex32, Complex64};
 use std::sync::Arc;
 
-
-pub(crate) const TWIDDLES_COMBINE_FWD_32: [Complex64; 24] = [
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.807852804032304306e-01_f64, -1.950903220161282481e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, -3.826834323650897818e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, -8.314696123025452357e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.238795325112867385e-01_f64, -3.826834323650897818e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(6.123233995736766036e-17_f64, -1.000000000000000000e+00_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, -3.826834323650898928e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, -1.950903220161286089e-01_f64),
-    Complex64::new(-9.238795325112868495e-01_f64, 3.826834323650896708e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, 8.314696123025452357e-01_f64)
-];
-
-pub(crate) const TWIDDLES_COMBINE_INV_32: [Complex64; 24] = [
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.807852804032304306e-01_f64, 1.950903220161282481e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, 3.826834323650897818e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, 8.314696123025452357e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.238795325112867385e-01_f64, 3.826834323650897818e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(6.123233995736766036e-17_f64, 1.000000000000000000e+00_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, 3.826834323650898928e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, 1.950903220161286089e-01_f64),
-    Complex64::new(-9.238795325112868495e-01_f64, -3.826834323650896708e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, -8.314696123025452357e-01_f64)
-];
-
-pub(crate) const TWIDDLES_COMBINE_FWD_64: [Complex64; 56] = [
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.951847266721969287e-01_f64, -9.801714032956060363e-02_f64),
-    Complex64::new(9.807852804032304306e-01_f64, -1.950903220161282481e-01_f64),
-    Complex64::new(9.569403357322088244e-01_f64, -2.902846772544623311e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, -3.826834323650897818e-01_f64),
-    Complex64::new(8.819212643483550496e-01_f64, -4.713967368259976420e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(7.730104533627369934e-01_f64, -6.343932841636454878e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.807852804032304306e-01_f64, -1.950903220161282481e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, -3.826834323650897818e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, -8.314696123025452357e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.569403357322088244e-01_f64, -2.902846772544623311e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(6.343932841636454878e-01_f64, -7.730104533627368824e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(9.801714032956077016e-02_f64, -9.951847266721968177e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(-4.713967368259976976e-01_f64, -8.819212643483550496e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(9.238795325112867385e-01_f64, -3.826834323650897818e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(6.123233995736766036e-17_f64, -1.000000000000000000e+00_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, -3.826834323650898928e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(8.819212643483550496e-01_f64, -4.713967368259976420e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, -8.314696123025452357e-01_f64),
-    Complex64::new(9.801714032956077016e-02_f64, -9.951847266721968177e-01_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(-7.730104533627369934e-01_f64, -6.343932841636454878e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, -1.950903220161286089e-01_f64),
-    Complex64::new(-9.569403357322089354e-01_f64, 2.902846772544621090e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(8.314696123025452357e-01_f64, -5.555702330196021776e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, -9.238795325112867385e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, -7.071067811865475727e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, -1.950903220161286089e-01_f64),
-    Complex64::new(-9.238795325112868495e-01_f64, 3.826834323650896708e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, 8.314696123025452357e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, -0.000000000000000000e+00_f64),
-    Complex64::new(7.730104533627369934e-01_f64, -6.343932841636454878e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, -9.807852804032304306e-01_f64),
-    Complex64::new(-4.713967368259976976e-01_f64, -8.819212643483550496e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, -3.826834323650898928e-01_f64),
-    Complex64::new(-9.569403357322089354e-01_f64, 2.902846772544621090e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, 8.314696123025452357e-01_f64),
-    Complex64::new(9.801714032956009015e-02_f64, 9.951847266721969287e-01_f64)
-];
-
-pub(crate) const TWIDDLES_COMBINE_INV_64: [Complex64; 56] = [
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.951847266721969287e-01_f64, 9.801714032956060363e-02_f64),
-    Complex64::new(9.807852804032304306e-01_f64, 1.950903220161282481e-01_f64),
-    Complex64::new(9.569403357322088244e-01_f64, 2.902846772544623311e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, 3.826834323650897818e-01_f64),
-    Complex64::new(8.819212643483550496e-01_f64, 4.713967368259976420e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(7.730104533627369934e-01_f64, 6.343932841636454878e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.807852804032304306e-01_f64, 1.950903220161282481e-01_f64),
-    Complex64::new(9.238795325112867385e-01_f64, 3.826834323650897818e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, 8.314696123025452357e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.569403357322088244e-01_f64, 2.902846772544623311e-01_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(6.343932841636454878e-01_f64, 7.730104533627368824e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(9.801714032956077016e-02_f64, 9.951847266721968177e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(-4.713967368259976976e-01_f64, 8.819212643483550496e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(9.238795325112867385e-01_f64, 3.826834323650897818e-01_f64),
-    Complex64::new(7.071067811865475727e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(6.123233995736766036e-17_f64, 1.000000000000000000e+00_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, 3.826834323650898928e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(8.819212643483550496e-01_f64, 4.713967368259976420e-01_f64),
-    Complex64::new(5.555702330196022887e-01_f64, 8.314696123025452357e-01_f64),
-    Complex64::new(9.801714032956077016e-02_f64, 9.951847266721968177e-01_f64),
-    Complex64::new(-3.826834323650897263e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(-7.730104533627369934e-01_f64, 6.343932841636454878e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, 1.950903220161286089e-01_f64),
-    Complex64::new(-9.569403357322089354e-01_f64, -2.902846772544621090e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(8.314696123025452357e-01_f64, 5.555702330196021776e-01_f64),
-    Complex64::new(3.826834323650898373e-01_f64, 9.238795325112867385e-01_f64),
-    Complex64::new(-1.950903220161281926e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(-7.071067811865474617e-01_f64, 7.071067811865475727e-01_f64),
-    Complex64::new(-9.807852804032304306e-01_f64, 1.950903220161286089e-01_f64),
-    Complex64::new(-9.238795325112868495e-01_f64, -3.826834323650896708e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, -8.314696123025452357e-01_f64),
-    Complex64::new(1.000000000000000000e+00_f64, 0.000000000000000000e+00_f64),
-    Complex64::new(7.730104533627369934e-01_f64, 6.343932841636454878e-01_f64),
-    Complex64::new(1.950903220161283314e-01_f64, 9.807852804032304306e-01_f64),
-    Complex64::new(-4.713967368259976976e-01_f64, 8.819212643483550496e-01_f64),
-    Complex64::new(-9.238795325112867385e-01_f64, 3.826834323650898928e-01_f64),
-    Complex64::new(-9.569403357322089354e-01_f64, -2.902846772544621090e-01_f64),
-    Complex64::new(-5.555702330196021776e-01_f64, -8.314696123025452357e-01_f64),
-    Complex64::new(9.801714032956009015e-02_f64, -9.951847266721969287e-01_f64)
-];
-
-
-static TWIDDLES_FWD_PRECISE: std::sync::LazyLock<[Vec<Complex64>; 7]> = std::sync::LazyLock::new(|| {
-    [
-        Vec::new(),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(2),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(4),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(8),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(16),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(32),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(64),
-    ]
-});
-
-static TWIDDLES_INV_PRECISE: std::sync::LazyLock<[Vec<Complex64>; 7]> = std::sync::LazyLock::new(|| {
-    [
-        Vec::new(),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(2),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(4),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(8),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(16),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(32),
-        <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(64),
-    ]
-});
-
-static TWIDDLES_FWD_REDUCED: std::sync::LazyLock<[Vec<Complex32>; 7]> = std::sync::LazyLock::new(|| {
-    [
-        Vec::new(),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(2),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(4),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(8),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(16),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(32),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(64),
-    ]
-});
-
-static TWIDDLES_INV_REDUCED: std::sync::LazyLock<[Vec<Complex32>; 7]> = std::sync::LazyLock::new(|| {
-    [
-        Vec::new(),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(2),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(4),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(8),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(16),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(32),
-        <f32 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(64),
-    ]
-});
+// ── AVX/SIMD helpers (shared by f32 and f64 impls) ─────────────────────────
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn avx_fft4_reduced(v: std::arch::x86_64::__m256, inverse: bool) -> std::arch::x86_64::__m256 {
-    use std::arch::x86_64::*;
+#[inline]
+unsafe fn avx_fft4_reduced<const INVERSE: bool>(
+    v: std::arch::x86_64::__m256,
+) -> std::arch::x86_64::__m256 {
+    use std::arch::x86_64::{
+        _mm256_add_ps, _mm256_fmadd_ps, _mm256_permute2f128_ps, _mm256_permute_ps, _mm256_set_ps,
+        _mm256_shuffle_ps, _mm256_sub_ps,
+    };
     let v_low = _mm256_permute2f128_ps::<0x00>(v, v);
     let v_high = _mm256_permute2f128_ps::<0x11>(v, v);
-    
+
     let sum = _mm256_add_ps(v_low, v_high);
     let diff = _mm256_sub_ps(v_low, v_high);
-    
+
     let shuf_a0 = _mm256_shuffle_ps::<0b01000100>(sum, sum);
     let shuf_a1 = _mm256_shuffle_ps::<0b11101110>(sum, sum);
-    
+
     let add_res = _mm256_add_ps(shuf_a0, shuf_a1);
     let sub_res = _mm256_sub_ps(shuf_a0, shuf_a1);
-    
+
     let out0_out2 = _mm256_shuffle_ps::<0b11100100>(add_res, sub_res);
-    
+
     let shuf_a2 = _mm256_shuffle_ps::<0b01000100>(diff, diff);
     let perm_diff = _mm256_permute_ps::<0b10110001>(diff);
     let shuf_a3 = _mm256_shuffle_ps::<0b11101110>(perm_diff, perm_diff);
-    
-    let sign_const = if inverse {
+
+    let sign_const = if INVERSE {
         _mm256_set_ps(-1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0)
     } else {
         _mm256_set_ps(1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0)
     };
     let out1_out3 = _mm256_fmadd_ps(shuf_a3, sign_const, shuf_a2);
-    
+
     let low_lane = _mm256_shuffle_ps::<0b01000100>(out0_out2, out1_out3);
     let high_lane = _mm256_shuffle_ps::<0b11101110>(out0_out2, out1_out3);
     _mm256_permute2f128_ps::<0x20>(low_lane, high_lane)
 }
 
-
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn avx_cmul_precise(
     a: std::arch::x86_64::__m256d,
     tw: std::arch::x86_64::__m256d,
 ) -> std::arch::x86_64::__m256d {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_fmaddsub_pd, _mm256_movedup_pd, _mm256_mul_pd, _mm256_permute_pd,
+    };
     let re_a = _mm256_movedup_pd(a);
     let im_a_shuf = _mm256_permute_pd::<0x0F>(a);
     let tw_shuf = _mm256_permute_pd::<0x05>(tw);
@@ -296,47 +88,51 @@ unsafe fn avx_cmul_precise(
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn avx_fft4_precise(
+#[inline]
+unsafe fn avx_fft4_precise<const INVERSE: bool>(
     v0: std::arch::x86_64::__m256d,
     v1: std::arch::x86_64::__m256d,
-    inverse: bool,
 ) -> [std::arch::x86_64::__m256d; 2] {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_pd, _mm256_fmadd_pd, _mm256_permute2f128_pd, _mm256_permute_pd, _mm256_set_pd,
+        _mm256_sub_pd,
+    };
     let sum = _mm256_add_pd(v0, v1);
     let diff = _mm256_sub_pd(v0, v1);
-    
+
     let shuf_a0 = _mm256_permute2f128_pd::<0x00>(sum, sum);
     let shuf_a1 = _mm256_permute2f128_pd::<0x11>(sum, sum);
-    
+
     let add_a01 = _mm256_add_pd(shuf_a0, shuf_a1);
     let sub_a01 = _mm256_sub_pd(shuf_a0, shuf_a1);
-    
+
     let out0_out2 = _mm256_permute2f128_pd::<0x20>(add_a01, sub_a01);
-    
+
     let shuf_a2 = _mm256_permute2f128_pd::<0x00>(diff, diff);
     let perm_diff = _mm256_permute_pd::<0x05>(diff);
     let shuf_a3 = _mm256_permute2f128_pd::<0x11>(perm_diff, perm_diff);
-    
-    let sign_const = if inverse {
+
+    let sign_const = if INVERSE {
         _mm256_set_pd(-1.0, 1.0, 1.0, -1.0)
     } else {
         _mm256_set_pd(1.0, -1.0, -1.0, 1.0)
     };
     let out1_out3 = _mm256_fmadd_pd(shuf_a3, sign_const, shuf_a2);
-    
+
     let reg0 = _mm256_permute2f128_pd::<0x20>(out0_out2, out1_out3);
     let reg1 = _mm256_permute2f128_pd::<0x31>(out0_out2, out1_out3);
     [reg0, reg1]
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn sse_cmul_ps(
     a: std::arch::x86_64::__m128,
     b: std::arch::x86_64::__m128,
 ) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm_addsub_ps, _mm_movehdup_ps, _mm_moveldup_ps, _mm_mul_ps, _mm_shuffle_ps,
+    };
     let re_a = _mm_moveldup_ps(a);
     let im_a = _mm_movehdup_ps(a);
     let b_shuf = _mm_shuffle_ps(b, b, 0xB1);
@@ -346,46 +142,45 @@ unsafe fn sse_cmul_ps(
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn rotate_minus_i_ps(v: std::arch::x86_64::__m128) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{_mm_setr_ps, _mm_shuffle_ps, _mm_xor_ps};
     let perm = _mm_shuffle_ps(v, v, 0xB1);
     _mm_xor_ps(perm, _mm_setr_ps(0.0, -0.0, 0.0, -0.0))
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn rotate_plus_i_ps(v: std::arch::x86_64::__m128) -> std::arch::x86_64::__m128 {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{_mm_setr_ps, _mm_shuffle_ps, _mm_xor_ps};
     let perm = _mm_shuffle_ps(v, v, 0xB1);
     _mm_xor_ps(perm, _mm_setr_ps(-0.0, 0.0, -0.0, 0.0))
 }
 
-
-
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn avx_fft4_parallel_precise(
+#[inline]
+unsafe fn avx_fft4_parallel_precise<const INVERSE: bool>(
     r0: std::arch::x86_64::__m256d,
     r1: std::arch::x86_64::__m256d,
     r2: std::arch::x86_64::__m256d,
     r3: std::arch::x86_64::__m256d,
-    inverse: bool,
 ) -> [std::arch::x86_64::__m256d; 4] {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        _mm256_add_pd, _mm256_mul_pd, _mm256_permute_pd, _mm256_set_pd, _mm256_sub_pd,
+    };
     let a = _mm256_add_pd(r0, r2);
     let b = _mm256_add_pd(r1, r3);
     let c = _mm256_sub_pd(r0, r2);
     let d = _mm256_sub_pd(r1, r3);
-    
+
     let out0 = _mm256_add_pd(a, b);
     let out2 = _mm256_sub_pd(a, b);
-    
+
     let d_shuf = _mm256_permute_pd::<0x05>(d);
     let sign = _mm256_set_pd(-1.0, 1.0, -1.0, 1.0);
     let v = _mm256_mul_pd(d_shuf, sign);
-    
-    let (out1, out3) = if inverse {
+
+    let (out1, out3) = if INVERSE {
         (_mm256_sub_pd(c, v), _mm256_add_pd(c, v))
     } else {
         (_mm256_add_pd(c, v), _mm256_sub_pd(c, v))
@@ -394,8 +189,8 @@ unsafe fn avx_fft4_parallel_precise(
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn avx_fft8_parallel_precise(
+#[inline]
+unsafe fn avx_fft8_parallel_precise<const INVERSE: bool>(
     r0: std::arch::x86_64::__m256d,
     r1: std::arch::x86_64::__m256d,
     r2: std::arch::x86_64::__m256d,
@@ -404,37 +199,38 @@ unsafe fn avx_fft8_parallel_precise(
     r5: std::arch::x86_64::__m256d,
     r6: std::arch::x86_64::__m256d,
     r7: std::arch::x86_64::__m256d,
-    inverse: bool,
 ) -> [std::arch::x86_64::__m256d; 8] {
-    use std::arch::x86_64::*;
-    let [e0, e1, e2, e3] = avx_fft4_parallel_precise(r0, r2, r4, r6, inverse);
-    let [o0, o1, o2, o3] = avx_fft4_parallel_precise(r1, r3, r5, r7, inverse);
-    
+    use std::arch::x86_64::{
+        _mm256_add_pd, _mm256_mul_pd, _mm256_permute_pd, _mm256_set_pd, _mm256_sub_pd,
+    };
+    let [e0, e1, e2, e3] = avx_fft4_parallel_precise::<INVERSE>(r0, r2, r4, r6);
+    let [o0, o1, o2, o3] = avx_fft4_parallel_precise::<INVERSE>(r1, r3, r5, r7);
+
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    let tw1 = if inverse {
+    let tw1 = if INVERSE {
         _mm256_set_pd(c, c, c, c)
     } else {
         _mm256_set_pd(-c, c, -c, c)
     };
-    let tw3 = if inverse {
+    let tw3 = if INVERSE {
         _mm256_set_pd(c, -c, c, -c)
     } else {
         _mm256_set_pd(-c, -c, -c, -c)
     };
-    
+
     let t0 = o0;
     let t1 = avx_cmul_precise(o1, tw1);
-    
+
     let o2_shuf = _mm256_permute_pd::<0x05>(o2);
-    let sign_t2 = if inverse {
+    let sign_t2 = if INVERSE {
         _mm256_set_pd(1.0, -1.0, 1.0, -1.0)
     } else {
         _mm256_set_pd(-1.0, 1.0, -1.0, 1.0)
     };
     let t2 = _mm256_mul_pd(o2_shuf, sign_t2);
-    
+
     let t3 = avx_cmul_precise(o3, tw3);
-    
+
     let res0 = _mm256_add_pd(e0, t0);
     let res1 = _mm256_add_pd(e1, t1);
     let res2 = _mm256_add_pd(e2, t2);
@@ -443,54 +239,54 @@ unsafe fn avx_fft8_parallel_precise(
     let res5 = _mm256_sub_pd(e1, t1);
     let res6 = _mm256_sub_pd(e2, t2);
     let res7 = _mm256_sub_pd(e3, t3);
-    
+
     [res0, res1, res2, res3, res4, res5, res6, res7]
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn avx_fft8_precise(
+#[inline]
+unsafe fn avx_fft8_precise<const INVERSE: bool>(
     r0: std::arch::x86_64::__m256d,
     r1: std::arch::x86_64::__m256d,
     r2: std::arch::x86_64::__m256d,
     r3: std::arch::x86_64::__m256d,
-    inverse: bool,
 ) -> [std::arch::x86_64::__m256d; 4] {
-    use std::arch::x86_64::*;
-    
+    use std::arch::x86_64::{_mm256_add_pd, _mm256_permute2f128_pd, _mm256_set_pd, _mm256_sub_pd};
+
     let even_lo = _mm256_permute2f128_pd::<0x20>(r0, r1);
     let even_hi = _mm256_permute2f128_pd::<0x20>(r2, r3);
     let odd_lo = _mm256_permute2f128_pd::<0x31>(r0, r1);
     let odd_hi = _mm256_permute2f128_pd::<0x31>(r2, r3);
-    
-    let [e_lo, e_hi] = avx_fft4_precise(even_lo, even_hi, inverse);
-    let [o_lo, o_hi] = avx_fft4_precise(odd_lo, odd_hi, inverse);
-    
+
+    let [e_lo, e_hi] = avx_fft4_precise::<INVERSE>(even_lo, even_hi);
+    let [o_lo, o_hi] = avx_fft4_precise::<INVERSE>(odd_lo, odd_hi);
+
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    let tw1_im = if inverse { c } else { -c };
-    let tw3_im = if inverse { c } else { -c };
-    let tw2_im = if inverse { 1.0 } else { -1.0 };
-    
+    let tw1_im = if INVERSE { c } else { -c };
+    let tw3_im = if INVERSE { c } else { -c };
+    let tw2_im = if INVERSE { 1.0 } else { -1.0 };
+
     let tw_lo = _mm256_set_pd(tw1_im, c, 0.0, 1.0);
     let tw_hi = _mm256_set_pd(tw3_im, -c, tw2_im, 0.0);
-    
+
     let t_lo = avx_cmul_precise(o_lo, tw_lo);
     let t_hi = avx_cmul_precise(o_hi, tw_hi);
-    
+
     let res0 = _mm256_add_pd(e_lo, t_lo);
     let res1 = _mm256_add_pd(e_hi, t_hi);
     let res2 = _mm256_sub_pd(e_lo, t_lo);
     let res3 = _mm256_sub_pd(e_hi, t_hi);
-    
+
     [res0, res1, res2, res3]
 }
 
-
-
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
-unsafe fn sse_cmul(a: std::arch::x86_64::__m128d, b: std::arch::x86_64::__m128d) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::*;
+#[inline]
+unsafe fn sse_cmul(
+    a: std::arch::x86_64::__m128d,
+    b: std::arch::x86_64::__m128d,
+) -> std::arch::x86_64::__m128d {
+    use std::arch::x86_64::{_mm_fmaddsub_pd, _mm_movedup_pd, _mm_mul_pd, _mm_permute_pd};
     let re_a = _mm_movedup_pd(a);
     let im_a_shuf = _mm_permute_pd::<0x03>(a);
     let b_shuf = _mm_permute_pd::<0x01>(b);
@@ -499,17 +295,17 @@ unsafe fn sse_cmul(a: std::arch::x86_64::__m128d, b: std::arch::x86_64::__m128d)
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn rotate_minus_i(v: std::arch::x86_64::__m128d) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{_mm_permute_pd, _mm_set_pd, _mm_xor_pd};
     let perm = _mm_permute_pd::<0x01>(v);
     _mm_xor_pd(perm, _mm_set_pd(-0.0, 0.0))
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-#[inline(always)]
+#[inline]
 unsafe fn rotate_plus_i(v: std::arch::x86_64::__m128d) -> std::arch::x86_64::__m128d {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{_mm_permute_pd, _mm_set_pd, _mm_xor_pd};
     let perm = _mm_permute_pd::<0x01>(v);
     _mm_xor_pd(perm, _mm_set_pd(0.0, -0.0))
 }
@@ -517,6 +313,13 @@ unsafe fn rotate_plus_i(v: std::arch::x86_64::__m128d) -> std::arch::x86_64::__m
 impl MixedRadixScalar for f32 {
     const HALF_CYCLIC_RADER_THRESHOLD: usize =
         crate::application::execution::kernel::components::rader::HALF_CYCLIC_THRESHOLD;
+    const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[];
+    const COMPOSITE_RADICES_200: &'static [usize] = &[4, 2, 5, 5];
+    const FORCE_COMPOSITE_63: bool = true;
+    const FORCE_COMPOSITE_72: bool = true;
+    const PREFER_BLUESTEIN_MID_RADER: bool = true;
+    const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
+    const BLUESTEIN_NATIVE_PHASE_TRIG: bool = true;
 
     type Complex = Complex32;
 
@@ -559,26 +362,24 @@ impl MixedRadixScalar for f32 {
     }
 
     #[inline]
-    fn cached_rader_spectrum(
+    fn cached_rader_spectrum<const INVERSE: bool>(
         n: usize,
-        inverse: bool,
         generator_inverse: usize,
     ) -> Arc<[Complex32]> {
-        let key = (n, inverse as usize, generator_inverse);
+        let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_spectrum(key, |_| {
-            build_rader_spectrum_vec::<f32>(n, inverse, generator_inverse)
+            build_rader_spectrum_vec::<f32, INVERSE>(n, generator_inverse)
         })
     }
 
     #[inline]
-    fn cached_rader_negacyclic_spectra(
+    fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
-        inverse: bool,
         generator_inverse: usize,
     ) -> (Arc<[Complex32]>, Arc<[Complex32]>) {
-        let key = (n, inverse as usize, generator_inverse);
+        let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_negacyclic_spectra(key, |_| {
-            build_rader_negacyclic_spectra::<f32>(n, inverse, generator_inverse)
+            build_rader_negacyclic_spectra::<f32, INVERSE>(n, generator_inverse)
         })
     }
 
@@ -588,21 +389,20 @@ impl MixedRadixScalar for f32 {
     }
 
     #[inline]
-    fn cached_four_step_twiddles(
+    fn cached_four_step_twiddles<const INVERSE: bool>(
         n: usize,
         n1: usize,
         n2: usize,
-        inverse: bool,
     ) -> Arc<[Complex32]> {
-        cached_four_step_twiddles(n, n1, n2, inverse)
+        cached_four_step_twiddles::<Complex32, INVERSE>(n, n1, n2)
     }
     #[inline]
     fn pointwise_mul(a: &mut [Complex32], b: &[Complex32]) {
-        pointwise_mul_reduced(a, b, false);
+        pointwise_mul_reduced::<false>(a, b);
     }
     #[inline]
     fn pointwise_mul_conj(a: &mut [Complex32], b: &[Complex32]) {
-        pointwise_mul_reduced(a, b, true);
+        pointwise_mul_reduced::<true>(a, b);
     }
     #[inline]
     fn stockham_forward(data: &mut [Complex32], scratch: &mut [Complex32], twiddles: &[Complex32]) {
@@ -618,7 +418,29 @@ impl MixedRadixScalar for f32 {
         <f32 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
         normalize_inplace(data, 1.0_f32 / n as f32);
     }
-    #[inline(always)]
+
+    #[inline]
+    fn stockham_forward_sized<const LOG2: u32>(
+        data: &mut [Complex32],
+        scratch: &mut [Complex32],
+        twiddles: &[Complex32],
+    ) {
+        <f32 as stockham::StockhamKernel>::forward_with_scratch_sized::<LOG2>(
+            data, scratch, twiddles,
+        );
+    }
+
+    #[inline]
+    fn stockham_forward_normalized_sized<const LOG2: u32>(
+        data: &mut [Complex32],
+        scratch: &mut [Complex32],
+        twiddles: &[Complex32],
+    ) {
+        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
+        normalize_inplace(data, 1.0_f32 / (1usize << LOG2) as f32);
+    }
+
+    #[inline]
     fn short_winograd<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex32]) -> bool {
         crate::application::execution::kernel::mixed_radix::traits::short_winograd::<
             Self,
@@ -626,7 +448,7 @@ impl MixedRadixScalar for f32 {
             NORMALIZE,
         >(data)
     }
-    #[inline(always)]
+    #[inline]
     unsafe fn small_pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
         data: &mut [Complex32],
     ) -> bool {
@@ -635,7 +457,10 @@ impl MixedRadixScalar for f32 {
             2 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_ps, _mm_loadu_ps, _mm_mul_ps, _mm_set1_ps, _mm_shuffle_ps,
+                        _mm_storeu_ps, _mm_sub_ps,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f32>();
                     let reg = _mm_loadu_ps(ptr);
                     let a_reg = _mm_shuffle_ps::<0x44>(reg, reg);
@@ -649,7 +474,11 @@ impl MixedRadixScalar for f32 {
                     }
                     _mm_storeu_ps(ptr, res);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let a = *data.get_unchecked(0);
                     let b = *data.get_unchecked(1);
@@ -665,12 +494,12 @@ impl MixedRadixScalar for f32 {
                 true
             }
             3 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 3]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 3]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<3>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 3.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -678,17 +507,23 @@ impl MixedRadixScalar for f32 {
             4 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f32>();
                     let v = _mm256_loadu_ps(ptr);
-                    let mut res = avx_fft4_reduced(v, INVERSE);
+                    let mut res = avx_fft4_reduced::<INVERSE>(v);
                     if NORMALIZE {
                         let scale = _mm256_set1_ps(0.25);
                         res = _mm256_mul_ps(res, scale);
                     }
                     _mm256_storeu_ps(ptr, res);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let x0 = *data.get_unchecked(0);
                     let x1 = *data.get_unchecked(1);
@@ -725,34 +560,37 @@ impl MixedRadixScalar for f32 {
                 true
             }
             5 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 5]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 5]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<5>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(0.2, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             6 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 6]);
-                crate::application::execution::kernel::components::winograd::dft6_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 6]>();
+                crate::application::execution::kernel::components::winograd::dft6_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 6.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             7 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 7]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 7]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<7>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 7.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -831,45 +669,59 @@ impl MixedRadixScalar for f32 {
                 true
             }
             16 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 16]);
-                crate::application::execution::kernel::components::winograd::dft16_impl::<Self, INVERSE>(data_ref);
+                // Use winograd dft16 for correctness (avx2_dft16_reduced produced wrong spectra
+                // for f32 plans; winograd verified).
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
+                crate::application::execution::kernel::components::winograd::dft16_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(0.0625, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             32 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 32]);
-                crate::application::execution::kernel::components::winograd::dft32_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
+                crate::application::execution::kernel::components::winograd::dft32_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 32.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             64 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 64]);
-                crate::application::execution::kernel::components::winograd::dft64_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
+                crate::application::execution::kernel::components::winograd::dft64_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 64.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             9 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 9]);
-                crate::application::execution::kernel::components::winograd::dft9_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 9]>();
+                crate::application::execution::kernel::components::winograd::dft9_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex32::new(1.0 / 9.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -906,8 +758,12 @@ impl MixedRadixScalar for f32 {
         transpose_matrix_reduced(src, dst, n1, n2);
     }
 
-    #[inline(always)]
-    unsafe fn small_pot_inplace_sized<const N: usize, const INVERSE: bool, const NORMALIZE: bool>(
+    #[inline]
+    unsafe fn small_pot_inplace_sized<
+        const N: usize,
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+    >(
         data: &mut [Complex32],
     ) {
         match N {
@@ -924,42 +780,67 @@ impl MixedRadixScalar for f32 {
                 }
             }
             4 => {
-                let x0 = *data.get_unchecked(0);
-                let x1 = *data.get_unchecked(1);
-                let x2 = *data.get_unchecked(2);
-                let x3 = *data.get_unchecked(3);
-                let a0 = x0 + x2;
-                let a1 = x1 + x3;
-                let a2 = x0 - x2;
-                let a3 = x1 - x3;
-                let i_a3 = Complex32::new(-a3.im, a3.re);
-                if INVERSE && NORMALIZE {
-                    let quarter = Complex32::new(0.25, 0.0);
-                    *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
-                    *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
-                    } else {
-                        *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
-                        *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
+                #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+                {
+                    use std::arch::x86_64::{
+                        _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
+                    };
+                    let ptr = data.as_mut_ptr().cast::<f32>();
+                    let v = _mm256_loadu_ps(ptr);
+                    let mut res = avx_fft4_reduced::<INVERSE>(v);
+                    if NORMALIZE {
+                        let scale = _mm256_set1_ps(0.25);
+                        res = _mm256_mul_ps(res, scale);
                     }
-                } else {
-                    *data.get_unchecked_mut(0) = a0 + a1;
-                    *data.get_unchecked_mut(2) = a0 - a1;
-                    if INVERSE {
-                        *data.get_unchecked_mut(1) = a2 + i_a3;
-                        *data.get_unchecked_mut(3) = a2 - i_a3;
+                    _mm256_storeu_ps(ptr, res);
+                }
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
+                {
+                    let x0 = *data.get_unchecked(0);
+                    let x1 = *data.get_unchecked(1);
+                    let x2 = *data.get_unchecked(2);
+                    let x3 = *data.get_unchecked(3);
+                    let a0 = x0 + x2;
+                    let a1 = x1 + x3;
+                    let a2 = x0 - x2;
+                    let a3 = x1 - x3;
+                    let i_a3 = Complex32::new(-a3.im, a3.re);
+                    if INVERSE && NORMALIZE {
+                        let quarter = Complex32::new(0.25, 0.0);
+                        *data.get_unchecked_mut(0) = (a0 + a1) * quarter;
+                        *data.get_unchecked_mut(2) = (a0 - a1) * quarter;
+                        if INVERSE {
+                            *data.get_unchecked_mut(1) = (a2 + i_a3) * quarter;
+                            *data.get_unchecked_mut(3) = (a2 - i_a3) * quarter;
+                        } else {
+                            *data.get_unchecked_mut(1) = (a2 - i_a3) * quarter;
+                            *data.get_unchecked_mut(3) = (a2 + i_a3) * quarter;
+                        }
                     } else {
-                        *data.get_unchecked_mut(1) = a2 - i_a3;
-                        *data.get_unchecked_mut(3) = a2 + i_a3;
+                        *data.get_unchecked_mut(0) = a0 + a1;
+                        *data.get_unchecked_mut(2) = a0 - a1;
+                        if INVERSE {
+                            *data.get_unchecked_mut(1) = a2 + i_a3;
+                            *data.get_unchecked_mut(3) = a2 - i_a3;
+                        } else {
+                            *data.get_unchecked_mut(1) = a2 - i_a3;
+                            *data.get_unchecked_mut(3) = a2 + i_a3;
+                        }
                     }
                 }
             }
             8 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_ps, _mm_castpd_ps, _mm_castps_pd, _mm_loadu_ps, _mm_mul_ps,
+                        _mm_set1_ps, _mm_setr_ps, _mm_shuffle_pd, _mm_shuffle_ps, _mm_storeu_ps,
+                        _mm_sub_ps,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f32>();
                     let d01 = _mm_loadu_ps(ptr);
                     let d23 = _mm_loadu_ps(ptr.add(4));
@@ -1003,11 +884,27 @@ impl MixedRadixScalar for f32 {
                     let s1_3 = _mm_shuffle_ps(sum3, diff3, 0xE4); // holds [x[3]+x[7], x[3]-x[7]] = [a6, a7]
 
                     // Stage 2: Size-4 butterflies between s1_0, s1_1 and s1_2, s1_3
-                    let s1_1_tw = if INVERSE { rotate_plus_i_ps(s1_1) } else { rotate_minus_i_ps(s1_1) };
-                    let s1_1_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(s1_1), _mm_castps_pd(s1_1_tw), 2)); // holds [a2, a3_rot]
+                    let s1_1_tw = if INVERSE {
+                        rotate_plus_i_ps(s1_1)
+                    } else {
+                        rotate_minus_i_ps(s1_1)
+                    };
+                    let s1_1_mixed = _mm_castpd_ps(_mm_shuffle_pd(
+                        _mm_castps_pd(s1_1),
+                        _mm_castps_pd(s1_1_tw),
+                        2,
+                    )); // holds [a2, a3_rot]
 
-                    let s1_3_tw = if INVERSE { rotate_plus_i_ps(s1_3) } else { rotate_minus_i_ps(s1_3) };
-                    let s1_3_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(s1_3), _mm_castps_pd(s1_3_tw), 2)); // holds [a6, a7_rot]
+                    let s1_3_tw = if INVERSE {
+                        rotate_plus_i_ps(s1_3)
+                    } else {
+                        rotate_minus_i_ps(s1_3)
+                    };
+                    let s1_3_mixed = _mm_castpd_ps(_mm_shuffle_pd(
+                        _mm_castps_pd(s1_3),
+                        _mm_castps_pd(s1_3_tw),
+                        2,
+                    )); // holds [a6, a7_rot]
 
                     let b0_1 = _mm_add_ps(s1_0, s1_1_mixed); // holds [b0, b1]
                     let b2_3 = _mm_sub_ps(s1_0, s1_1_mixed); // holds [b2, b3]
@@ -1048,10 +945,17 @@ impl MixedRadixScalar for f32 {
                     _mm_storeu_ps(ptr.add(8), out4_5);
                     _mm_storeu_ps(ptr.add(12), out6_7);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 8]);
-                    crate::application::execution::kernel::components::winograd::dft8_array_impl::<f32, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft8_array_impl::<
+                        f32,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(0.125, 0.0);
                         for x in data_ref.iter_mut() {
@@ -1061,213 +965,18 @@ impl MixedRadixScalar for f32 {
                 }
             }
             16 => {
-                #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
-                {
-                    use std::arch::x86_64::*;
-                    let ptr = data.as_mut_ptr().cast::<f32>();
-                    let d01 = _mm_loadu_ps(ptr);
-                    let d23 = _mm_loadu_ps(ptr.add(4));
-                    let d45 = _mm_loadu_ps(ptr.add(8));
-                    let d67 = _mm_loadu_ps(ptr.add(12));
-                    let d89 = _mm_loadu_ps(ptr.add(16));
-                    let d1011 = _mm_loadu_ps(ptr.add(20));
-                    let d1213 = _mm_loadu_ps(ptr.add(24));
-                    let d1415 = _mm_loadu_ps(ptr.add(28));
-
-                    let d01_d = _mm_castps_pd(d01);
-                    let d23_d = _mm_castps_pd(d23);
-                    let d45_d = _mm_castps_pd(d45);
-                    let d67_d = _mm_castps_pd(d67);
-                    let d89_d = _mm_castps_pd(d89);
-                    let d1011_d = _mm_castps_pd(d1011);
-                    let d1213_d = _mm_castps_pd(d1213);
-                    let d1415_d = _mm_castps_pd(d1415);
-
-                    // Bit-reversed loading into SSE registers
-                    let r0 = _mm_castpd_ps(_mm_shuffle_pd(d01_d, d45_d, 0)); // holds x[0], x[4]
-                    let r1 = _mm_castpd_ps(_mm_shuffle_pd(d89_d, d1213_d, 0)); // holds x[8], x[12]
-                    let r2 = _mm_castpd_ps(_mm_shuffle_pd(d23_d, d67_d, 0)); // holds x[2], x[6]
-                    let r3 = _mm_castpd_ps(_mm_shuffle_pd(d1011_d, d1415_d, 0)); // holds x[10], x[14]
-                    let r4 = _mm_castpd_ps(_mm_shuffle_pd(d01_d, d45_d, 3)); // holds x[1], x[5]
-                    let r5 = _mm_castpd_ps(_mm_shuffle_pd(d89_d, d1213_d, 3)); // holds x[9], x[13]
-                    let r6 = _mm_castpd_ps(_mm_shuffle_pd(d23_d, d67_d, 3)); // holds x[3], x[7]
-                    let r7 = _mm_castpd_ps(_mm_shuffle_pd(d1011_d, d1415_d, 3)); // holds x[11], x[15]
-
-                    // Stage 1
-                    let a_even0 = _mm_add_ps(r0, r1); // holds a0, a2
-                    let a_odd0 = _mm_sub_ps(r0, r1);  // holds a1, a3
-                    let a_even1 = _mm_add_ps(r2, r3); // holds a4, a6
-                    let a_odd1 = _mm_sub_ps(r2, r3);  // holds a5, a7
-                    let a_even2 = _mm_add_ps(r4, r5); // holds a8, a10
-                    let a_odd2 = _mm_sub_ps(r4, r5);  // holds a9, a11
-                    let a_even3 = _mm_add_ps(r6, r7); // holds a12, a14
-                    let a_odd3 = _mm_sub_ps(r6, r7);  // holds a13, a15
-
-                    // Stage 2
-                    let a_odd0_rot = if INVERSE { rotate_plus_i_ps(a_odd0) } else { rotate_minus_i_ps(a_odd0) };
-                    let a_odd0_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd0), _mm_castps_pd(a_odd0_rot), 2)); // holds a1, a3_rot
-
-                    let a_odd1_rot = if INVERSE { rotate_plus_i_ps(a_odd1) } else { rotate_minus_i_ps(a_odd1) };
-                    let a_odd1_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd1), _mm_castps_pd(a_odd1_rot), 2)); // holds a5, a7_rot
-
-                    let a_odd2_rot = if INVERSE { rotate_plus_i_ps(a_odd2) } else { rotate_minus_i_ps(a_odd2) };
-                    let a_odd2_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd2), _mm_castps_pd(a_odd2_rot), 2)); // holds a9, a11_rot
-
-                    let a_odd3_rot = if INVERSE { rotate_plus_i_ps(a_odd3) } else { rotate_minus_i_ps(a_odd3) };
-                    let a_odd3_mixed = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd3), _mm_castps_pd(a_odd3_rot), 2)); // holds a13, a15_rot
-
-                    let a_even0_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even0), _mm_castps_pd(a_even0), 1));
-                    let a_even0_sum = _mm_add_ps(a_even0, a_even0_swap);
-                    let a_even0_diff = _mm_sub_ps(a_even0, a_even0_swap);
-                    let b0_2 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even0_sum), _mm_castps_pd(a_even0_diff), 0)); // holds b0, b2
-
-                    let a_odd0_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd0_mixed), _mm_castps_pd(a_odd0_mixed), 1));
-                    let a_odd0_sum = _mm_add_ps(a_odd0_mixed, a_odd0_swap);
-                    let a_odd0_diff = _mm_sub_ps(a_odd0_mixed, a_odd0_swap);
-                    let b1_3 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd0_sum), _mm_castps_pd(a_odd0_diff), 0)); // holds b1, b3
-
-                    let a_even1_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even1), _mm_castps_pd(a_even1), 1));
-                    let a_even1_sum = _mm_add_ps(a_even1, a_even1_swap);
-                    let a_even1_diff = _mm_sub_ps(a_even1, a_even1_swap);
-                    let b4_6 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even1_sum), _mm_castps_pd(a_even1_diff), 0)); // holds b4, b6
-
-                    let a_odd1_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd1_mixed), _mm_castps_pd(a_odd1_mixed), 1));
-                    let a_odd1_sum = _mm_add_ps(a_odd1_mixed, a_odd1_swap);
-                    let a_odd1_diff = _mm_sub_ps(a_odd1_mixed, a_odd1_swap);
-                    let b5_7 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd1_sum), _mm_castps_pd(a_odd1_diff), 0)); // holds b5, b7
-
-                    let a_even2_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even2), _mm_castps_pd(a_even2), 1));
-                    let a_even2_sum = _mm_add_ps(a_even2, a_even2_swap);
-                    let a_even2_diff = _mm_sub_ps(a_even2, a_even2_swap);
-                    let b8_10 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even2_sum), _mm_castps_pd(a_even2_diff), 0)); // holds b8, b10
-
-                    let a_odd2_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd2_mixed), _mm_castps_pd(a_odd2_mixed), 1));
-                    let a_odd2_sum = _mm_add_ps(a_odd2_mixed, a_odd2_swap);
-                    let a_odd2_diff = _mm_sub_ps(a_odd2_mixed, a_odd2_swap);
-                    let b9_11 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd2_sum), _mm_castps_pd(a_odd2_diff), 0)); // holds b9, b11
-
-                    let a_even3_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even3), _mm_castps_pd(a_even3), 1));
-                    let a_even3_sum = _mm_add_ps(a_even3, a_even3_swap);
-                    let a_even3_diff = _mm_sub_ps(a_even3, a_even3_swap);
-                    let b12_14 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_even3_sum), _mm_castps_pd(a_even3_diff), 0)); // holds b12, b14
-
-                    let a_odd3_swap = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd3_mixed), _mm_castps_pd(a_odd3_mixed), 1));
-                    let a_odd3_sum = _mm_add_ps(a_odd3_mixed, a_odd3_swap);
-                    let a_odd3_diff = _mm_sub_ps(a_odd3_mixed, a_odd3_swap);
-                    let b13_15 = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(a_odd3_sum), _mm_castps_pd(a_odd3_diff), 0)); // holds b13, b15
-
-                    // Stage 3
-                    let c = std::f32::consts::FRAC_1_SQRT_2;
-                    let w1_3 = if INVERSE {
-                        _mm_setr_ps(c, c, -c, c)
-                    } else {
-                        _mm_setr_ps(c, -c, -c, -c)
-                    };
-
-                    let b5_7_tw = sse_cmul_ps(b5_7, w1_3);
-                    let b4_6_rot = if INVERSE { rotate_plus_i_ps(b4_6) } else { rotate_minus_i_ps(b4_6) };
-                    let b4_6_tw = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(b4_6), _mm_castps_pd(b4_6_rot), 2));
-
-                    let c0_2 = _mm_add_ps(b0_2, b4_6_tw);
-                    let c4_6 = _mm_sub_ps(b0_2, b4_6_tw);
-                    let c1_3 = _mm_add_ps(b1_3, b5_7_tw);
-                    let c5_7 = _mm_sub_ps(b1_3, b5_7_tw);
-
-                    let b13_15_tw = sse_cmul_ps(b13_15, w1_3);
-                    let b12_14_rot = if INVERSE { rotate_plus_i_ps(b12_14) } else { rotate_minus_i_ps(b12_14) };
-                    let b12_14_tw = _mm_castpd_ps(_mm_shuffle_pd(_mm_castps_pd(b12_14), _mm_castps_pd(b12_14_rot), 2));
-
-                    let c8_10 = _mm_add_ps(b8_10, b12_14_tw);
-                    let c12_14 = _mm_sub_ps(b8_10, b12_14_tw);
-                    let c9_11 = _mm_add_ps(b9_11, b13_15_tw);
-                    let c13_15 = _mm_sub_ps(b9_11, b13_15_tw);
-
-                    // Stage 4 twiddles
-                    let cos_pi8 = 0.92387953_f32;
-                    let sin_pi8 = 0.38268343_f32;
-                    let tw0_2 = if INVERSE {
-                        _mm_setr_ps(1.0, 0.0, c, c)
-                    } else {
-                        _mm_setr_ps(1.0, 0.0, c, -c)
-                    };
-                    let tw1_3 = if INVERSE {
-                        _mm_setr_ps(cos_pi8, sin_pi8, sin_pi8, cos_pi8)
-                    } else {
-                        _mm_setr_ps(cos_pi8, -sin_pi8, sin_pi8, -cos_pi8)
-                    };
-                    let tw4_6 = if INVERSE {
-                        _mm_setr_ps(0.0, 1.0, -c, c)
-                    } else {
-                        _mm_setr_ps(0.0, -1.0, -c, -c)
-                    };
-                    let tw5_7 = if INVERSE {
-                        _mm_setr_ps(-sin_pi8, cos_pi8, -cos_pi8, sin_pi8)
-                    } else {
-                        _mm_setr_ps(-sin_pi8, -cos_pi8, -cos_pi8, -sin_pi8)
-                    };
-
-                    let c8_10_tw = sse_cmul_ps(c8_10, tw0_2);
-                    let c9_11_tw = sse_cmul_ps(c9_11, tw1_3);
-                    let c12_14_tw = sse_cmul_ps(c12_14, tw4_6);
-                    let c13_15_tw = sse_cmul_ps(c13_15, tw5_7);
-
-                    let d0_2 = _mm_add_ps(c0_2, c8_10_tw);
-                    let d8_10 = _mm_sub_ps(c0_2, c8_10_tw);
-                    let d1_3 = _mm_add_ps(c1_3, c9_11_tw);
-                    let d9_11 = _mm_sub_ps(c1_3, c9_11_tw);
-                    let d4_6 = _mm_add_ps(c4_6, c12_14_tw);
-                    let d12_14 = _mm_sub_ps(c4_6, c12_14_tw);
-                    let d5_7 = _mm_add_ps(c5_7, c13_15_tw);
-                    let d13_15 = _mm_sub_ps(c5_7, c13_15_tw);
-
-                    let d0_2_d = _mm_castps_pd(d0_2);
-                    let d1_3_d = _mm_castps_pd(d1_3);
-                    let d4_6_d = _mm_castps_pd(d4_6);
-                    let d5_7_d = _mm_castps_pd(d5_7);
-                    let d8_10_d = _mm_castps_pd(d8_10);
-                    let d9_11_d = _mm_castps_pd(d9_11);
-                    let d12_14_d = _mm_castps_pd(d12_14);
-                    let d13_15_d = _mm_castps_pd(d13_15);
-
-                    let mut out0_1 = _mm_castpd_ps(_mm_shuffle_pd(d0_2_d, d1_3_d, 0));
-                    let mut out2_3 = _mm_castpd_ps(_mm_shuffle_pd(d0_2_d, d1_3_d, 3));
-                    let mut out4_5 = _mm_castpd_ps(_mm_shuffle_pd(d4_6_d, d5_7_d, 0));
-                    let mut out6_7 = _mm_castpd_ps(_mm_shuffle_pd(d4_6_d, d5_7_d, 3));
-                    let mut out8_9 = _mm_castpd_ps(_mm_shuffle_pd(d8_10_d, d9_11_d, 0));
-                    let mut out10_11 = _mm_castpd_ps(_mm_shuffle_pd(d8_10_d, d9_11_d, 3));
-                    let mut out12_13 = _mm_castpd_ps(_mm_shuffle_pd(d12_14_d, d13_15_d, 0));
-                    let mut out14_15 = _mm_castpd_ps(_mm_shuffle_pd(d12_14_d, d13_15_d, 3));
-
-                    if INVERSE && NORMALIZE {
-                        let scale = _mm_set1_ps(0.0625);
-                        out0_1 = _mm_mul_ps(out0_1, scale);
-                        out2_3 = _mm_mul_ps(out2_3, scale);
-                        out4_5 = _mm_mul_ps(out4_5, scale);
-                        out6_7 = _mm_mul_ps(out6_7, scale);
-                        out8_9 = _mm_mul_ps(out8_9, scale);
-                        out10_11 = _mm_mul_ps(out10_11, scale);
-                        out12_13 = _mm_mul_ps(out12_13, scale);
-                        out14_15 = _mm_mul_ps(out14_15, scale);
-                    }
-
-                    _mm_storeu_ps(ptr, out0_1);
-                    _mm_storeu_ps(ptr.add(4), out2_3);
-                    _mm_storeu_ps(ptr.add(8), out4_5);
-                    _mm_storeu_ps(ptr.add(12), out6_7);
-                    _mm_storeu_ps(ptr.add(16), out8_9);
-                    _mm_storeu_ps(ptr.add(20), out10_11);
-                    _mm_storeu_ps(ptr.add(24), out12_13);
-                    _mm_storeu_ps(ptr.add(28), out14_15);
-                }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
-                {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 16]);
-                    crate::application::execution::kernel::components::winograd::dft16_impl::<Self, INVERSE>(data_ref);
-                    if INVERSE && NORMALIZE {
-                        let scale = Complex32::new(0.0625, 0.0);
-                        for x in data_ref.iter_mut() {
-                            *x = *x * scale;
-                        }
+                // Use winograd dft16 for correctness (avx2_dft16_reduced path produced wrong spectra
+                // for f32 n=16 plans; winograd dft16 verified in dft_small and other paths).
+                // TODO: repair avx2_dft16_reduced or replace with correct column avx for 16.
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
+                crate::application::execution::kernel::components::winograd::dft16_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
+                if INVERSE && NORMALIZE {
+                    let scale = Complex32::new(0.0625, 0.0);
+                    for x in data_ref.iter_mut() {
+                        *x *= scale;
                     }
                 }
             }
@@ -1285,10 +994,17 @@ impl MixedRadixScalar for f32 {
                         normalize_inplace(data, 1.0 / 32.0);
                     }
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 32]);
-                    crate::application::execution::kernel::components::winograd::dft32_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft32_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(1.0 / 32.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -1311,10 +1027,17 @@ impl MixedRadixScalar for f32 {
                         normalize_inplace(data, 1.0 / 64.0);
                     }
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 64]);
-                    crate::application::execution::kernel::components::winograd::dft64_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft64_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(1.0 / 64.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -1327,25 +1050,83 @@ impl MixedRadixScalar for f32 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
         data: &mut [Self::Complex],
         twiddles: &[Self::Complex],
     ) {
         let n = data.len();
         match n {
-            2 => unsafe { Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data); }
-            4 => unsafe { Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data); }
-            8 => unsafe { Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data); }
-            16 => unsafe { Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data); }
-            32 => unsafe { Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data); }
-            64 => unsafe { Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data); }
+            2 => unsafe {
+                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
+            },
+            4 => unsafe {
+                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
+            },
+            8 => unsafe {
+                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
+            },
+            16 => unsafe {
+                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
+            },
+            32 => unsafe {
+                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
+            },
+            64 => unsafe {
+                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
+            },
             _ => {
                 Self::with_scratch(n, |scratch| {
                     if INVERSE && NORMALIZE {
                         Self::stockham_forward_normalized(data, scratch, twiddles, n);
                     } else {
                         Self::stockham_forward(data, scratch, twiddles);
+                    }
+                });
+            }
+        }
+    }
+
+    fn pot_inplace_sized<
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+        S: PoTStrategy,
+        const LOG2: u32,
+    >(
+        data: &mut [Self::Complex],
+        twiddles: &[Self::Complex],
+        _s: SizedPoT<S, LOG2>,
+    ) {
+        // const LOG2 drives selection (zero-cost monomorph); for <=64 preserve direct small
+        // no-scratch path (memory efficiency + best for 32/64 which have dedicated AVX fixed column);
+        // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
+        // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
+        match LOG2 {
+            1 => unsafe {
+                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
+            },
+            2 => unsafe {
+                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
+            },
+            3 => unsafe {
+                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
+            },
+            4 => unsafe {
+                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
+            },
+            5 => unsafe {
+                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
+            },
+            6 => unsafe {
+                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
+            },
+            _ => {
+                let n = 1usize << LOG2;
+                Self::with_scratch(n, |scratch| {
+                    if INVERSE && NORMALIZE {
+                        Self::stockham_forward_normalized_sized::<LOG2>(data, scratch, twiddles);
+                    } else {
+                        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
                     }
                 });
             }
@@ -1361,10 +1142,22 @@ impl MixedRadixScalar for f32 {
             &TWIDDLES_FWD_REDUCED[idx]
         }
     }
+
+    fn use_generated_codelet_plan(_n: usize) -> bool {
+        // Default; actual policy in higher layers or for f32 reduced.
+        false
+    }
 }
 
 impl MixedRadixScalar for f64 {
     const HALF_CYCLIC_RADER_THRESHOLD: usize = 1024;
+    const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[67];
+    const COMPOSITE_RADICES_200: &'static [usize] = &[4, 5, 5, 2];
+    const FORCE_COMPOSITE_63: bool = false;
+    const FORCE_COMPOSITE_72: bool = false;
+    const PREFER_BLUESTEIN_MID_RADER: bool = false;
+    const BLUESTEIN_PAD_POWER_OF_TWO: bool = false;
+    const BLUESTEIN_NATIVE_PHASE_TRIG: bool = false;
 
     type Complex = Complex64;
 
@@ -1407,26 +1200,24 @@ impl MixedRadixScalar for f64 {
     }
 
     #[inline]
-    fn cached_rader_spectrum(
+    fn cached_rader_spectrum<const INVERSE: bool>(
         n: usize,
-        inverse: bool,
         generator_inverse: usize,
     ) -> Arc<[Complex64]> {
-        let key = (n, inverse as usize, generator_inverse);
+        let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_spectrum(key, |_| {
-            build_rader_spectrum_vec::<f64>(n, inverse, generator_inverse)
+            build_rader_spectrum_vec::<f64, INVERSE>(n, generator_inverse)
         })
     }
 
     #[inline]
-    fn cached_rader_negacyclic_spectra(
+    fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
-        inverse: bool,
         generator_inverse: usize,
     ) -> (Arc<[Complex64]>, Arc<[Complex64]>) {
-        let key = (n, inverse as usize, generator_inverse);
+        let key = (n, INVERSE as usize, generator_inverse);
         cached_rader_negacyclic_spectra(key, |_| {
-            build_rader_negacyclic_spectra::<f64>(n, inverse, generator_inverse)
+            build_rader_negacyclic_spectra::<f64, INVERSE>(n, generator_inverse)
         })
     }
 
@@ -1436,21 +1227,20 @@ impl MixedRadixScalar for f64 {
     }
 
     #[inline]
-    fn cached_four_step_twiddles(
+    fn cached_four_step_twiddles<const INVERSE: bool>(
         n: usize,
         n1: usize,
         n2: usize,
-        inverse: bool,
     ) -> Arc<[Complex64]> {
-        cached_four_step_twiddles(n, n1, n2, inverse)
+        cached_four_step_twiddles::<Complex64, INVERSE>(n, n1, n2)
     }
     #[inline]
     fn pointwise_mul(a: &mut [Complex64], b: &[Complex64]) {
-        pointwise_mul_precise(a, b, false);
+        pointwise_mul_precise::<false>(a, b);
     }
     #[inline]
     fn pointwise_mul_conj(a: &mut [Complex64], b: &[Complex64]) {
-        pointwise_mul_precise(a, b, true);
+        pointwise_mul_precise::<true>(a, b);
     }
     #[inline]
     fn stockham_forward(data: &mut [Complex64], scratch: &mut [Complex64], twiddles: &[Complex64]) {
@@ -1466,7 +1256,29 @@ impl MixedRadixScalar for f64 {
         <f64 as stockham::StockhamKernel>::forward_with_scratch(data, scratch, twiddles);
         normalize_inplace(data, 1.0_f64 / n as f64);
     }
-    #[inline(always)]
+
+    #[inline]
+    fn stockham_forward_sized<const LOG2: u32>(
+        data: &mut [Complex64],
+        scratch: &mut [Complex64],
+        twiddles: &[Complex64],
+    ) {
+        <f64 as stockham::StockhamKernel>::forward_with_scratch_sized::<LOG2>(
+            data, scratch, twiddles,
+        );
+    }
+
+    #[inline]
+    fn stockham_forward_normalized_sized<const LOG2: u32>(
+        data: &mut [Complex64],
+        scratch: &mut [Complex64],
+        twiddles: &[Complex64],
+    ) {
+        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
+        normalize_inplace(data, 1.0_f64 / (1usize << LOG2) as f64);
+    }
+
+    #[inline]
     fn short_winograd<const INVERSE: bool, const NORMALIZE: bool>(data: &mut [Complex64]) -> bool {
         crate::application::execution::kernel::mixed_radix::traits::short_winograd::<
             Self,
@@ -1474,7 +1286,7 @@ impl MixedRadixScalar for f64 {
             NORMALIZE,
         >(data)
     }
-    #[inline(always)]
+    #[inline]
     unsafe fn small_pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
         data: &mut [Complex64],
     ) -> bool {
@@ -1483,7 +1295,10 @@ impl MixedRadixScalar for f64 {
             2 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_add_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd,
+                        _mm256_set1_pd, _mm256_storeu_pd, _mm256_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let reg = _mm256_loadu_pd(ptr);
                     let a_reg = _mm256_permute2f128_pd::<0x00>(reg, reg);
@@ -1497,7 +1312,11 @@ impl MixedRadixScalar for f64 {
                     }
                     _mm256_storeu_pd(ptr, res);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let a = *data.get_unchecked(0);
                     let b = *data.get_unchecked(1);
@@ -1513,12 +1332,12 @@ impl MixedRadixScalar for f64 {
                 true
             }
             3 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 3]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 3]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<3>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex64::new(1.0 / 3.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -1526,47 +1345,55 @@ impl MixedRadixScalar for f64 {
             4 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_add_pd, _mm256_fmadd_pd, _mm256_loadu_pd, _mm256_mul_pd,
+                        _mm256_permute2f128_pd, _mm256_set1_pd, _mm256_set_pd, _mm256_shuffle_pd,
+                        _mm256_storeu_pd, _mm256_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let r0 = _mm256_loadu_pd(ptr);
                     let r1 = _mm256_loadu_pd(ptr.add(4));
-                    
+
                     let sum = _mm256_add_pd(r0, r1);
                     let diff = _mm256_sub_pd(r0, r1);
-                    
+
                     let a0_lane = _mm256_permute2f128_pd::<0x00>(sum, sum);
                     let a1_lane = _mm256_permute2f128_pd::<0x11>(sum, sum);
-                    
+
                     let sum_a0_a1 = _mm256_add_pd(a0_lane, a1_lane);
                     let diff_a0_a1 = _mm256_sub_pd(a0_lane, a1_lane);
-                    
+
                     let out0_out2 = _mm256_permute2f128_pd::<0x20>(sum_a0_a1, diff_a0_a1);
-                    
+
                     let a2_lane = _mm256_permute2f128_pd::<0x00>(diff, diff);
                     let a3_lane = _mm256_permute2f128_pd::<0x11>(diff, diff);
-                    
+
                     let a3_shuf = _mm256_shuffle_pd::<0x05>(a3_lane, a3_lane);
                     let sign_const = if INVERSE {
                         _mm256_set_pd(-1.0, 1.0, 1.0, -1.0)
                     } else {
                         _mm256_set_pd(1.0, -1.0, -1.0, 1.0)
                     };
-                    
+
                     let out1_out3 = _mm256_fmadd_pd(a3_shuf, sign_const, a2_lane);
-                    
+
                     let mut reg0_out = _mm256_permute2f128_pd::<0x20>(out0_out2, out1_out3);
                     let mut reg1_out = _mm256_permute2f128_pd::<0x31>(out0_out2, out1_out3);
-                    
+
                     if NORMALIZE {
                         let scale = _mm256_set1_pd(0.25);
                         reg0_out = _mm256_mul_pd(reg0_out, scale);
                         reg1_out = _mm256_mul_pd(reg1_out, scale);
                     }
-                    
+
                     _mm256_storeu_pd(ptr, reg0_out);
                     _mm256_storeu_pd(ptr.add(4), reg1_out);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let x0 = *data.get_unchecked(0);
                     let x1 = *data.get_unchecked(1);
@@ -1603,34 +1430,37 @@ impl MixedRadixScalar for f64 {
                 true
             }
             5 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 5]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 5]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<5>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex64::new(0.2, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             6 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 6]);
-                crate::application::execution::kernel::components::winograd::dft6_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 6]>();
+                crate::application::execution::kernel::components::winograd::dft6_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex64::new(1.0 / 6.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
             }
             7 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 7]);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 7]>();
                 <Self as crate::application::execution::kernel::mixed_radix::traits::ShortDft<7>>::dft::<INVERSE>(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex64::new(1.0 / 7.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -1638,7 +1468,10 @@ impl MixedRadixScalar for f64 {
             8 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd,
+                        _mm_storeu_pd, _mm_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let mut x0 = _mm_loadu_pd(ptr);
                     let mut x1 = _mm_loadu_pd(ptr.add(2));
@@ -1648,7 +1481,7 @@ impl MixedRadixScalar for f64 {
                     let mut x5 = _mm_loadu_pd(ptr.add(10));
                     let mut x6 = _mm_loadu_pd(ptr.add(12));
                     let mut x7 = _mm_loadu_pd(ptr.add(14));
-                    
+
                     // Stage 1 (radix 2)
                     let a0 = _mm_add_pd(x0, x4);
                     let a4 = _mm_sub_pd(x0, x4);
@@ -1658,20 +1491,24 @@ impl MixedRadixScalar for f64 {
                     let mut a6 = _mm_sub_pd(x2, x6);
                     let a3 = _mm_add_pd(x3, x7);
                     let mut a7 = _mm_sub_pd(x3, x7);
-                    
+
                     // Stage 2 (radix 4)
                     // even branch: size 4 on a0..a3
                     let b0 = _mm_add_pd(a0, a2);
                     let b2 = _mm_sub_pd(a0, a2);
                     let b1 = _mm_add_pd(a1, a3);
                     let b3 = _mm_sub_pd(a1, a3);
-                    let b3_rot = if INVERSE { rotate_plus_i(b3) } else { rotate_minus_i(b3) };
-                    
+                    let b3_rot = if INVERSE {
+                        rotate_plus_i(b3)
+                    } else {
+                        rotate_minus_i(b3)
+                    };
+
                     x0 = _mm_add_pd(b0, b1);
                     x2 = _mm_sub_pd(b0, b1);
                     x1 = _mm_add_pd(b2, b3_rot);
                     x3 = _mm_sub_pd(b2, b3_rot);
-                    
+
                     // odd branch: size 4 on a4..a7, plus twiddles
                     let c = std::f64::consts::FRAC_1_SQRT_2;
                     let (w1, w3) = if INVERSE {
@@ -1679,22 +1516,30 @@ impl MixedRadixScalar for f64 {
                     } else {
                         (_mm_set_pd(-c, c), _mm_set_pd(-c, -c))
                     };
-                    
+
                     a5 = sse_cmul(a5, w1);
-                    a6 = if INVERSE { rotate_plus_i(a6) } else { rotate_minus_i(a6) };
+                    a6 = if INVERSE {
+                        rotate_plus_i(a6)
+                    } else {
+                        rotate_minus_i(a6)
+                    };
                     a7 = sse_cmul(a7, w3);
-                    
+
                     let b4 = _mm_add_pd(a4, a6);
                     let b6 = _mm_sub_pd(a4, a6);
                     let b5 = _mm_add_pd(a5, a7);
                     let b7 = _mm_sub_pd(a5, a7);
-                    let b7_rot = if INVERSE { rotate_plus_i(b7) } else { rotate_minus_i(b7) };
-                    
+                    let b7_rot = if INVERSE {
+                        rotate_plus_i(b7)
+                    } else {
+                        rotate_minus_i(b7)
+                    };
+
                     x4 = _mm_add_pd(b4, b5);
                     x6 = _mm_sub_pd(b4, b5);
                     x5 = _mm_add_pd(b6, b7_rot);
                     x7 = _mm_sub_pd(b6, b7_rot);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm_set1_pd(0.125);
                         x0 = _mm_mul_pd(x0, scale);
@@ -1706,7 +1551,7 @@ impl MixedRadixScalar for f64 {
                         x6 = _mm_mul_pd(x6, scale);
                         x7 = _mm_mul_pd(x7, scale);
                     }
-                    
+
                     _mm_storeu_pd(ptr, x0);
                     _mm_storeu_pd(ptr.add(2), x4);
                     _mm_storeu_pd(ptr.add(4), x1);
@@ -1716,7 +1561,11 @@ impl MixedRadixScalar for f64 {
                     _mm_storeu_pd(ptr.add(12), x3);
                     _mm_storeu_pd(ptr.add(14), x7);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let x0 = *data.get_unchecked(0);
                     let x1 = *data.get_unchecked(1);
@@ -1800,7 +1649,10 @@ impl MixedRadixScalar for f64 {
             16 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd,
+                        _mm_storeu_pd, _mm_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let mut x0 = _mm_loadu_pd(ptr);
                     let mut x1 = _mm_loadu_pd(ptr.add(2));
@@ -1818,7 +1670,7 @@ impl MixedRadixScalar for f64 {
                     let mut x13 = _mm_loadu_pd(ptr.add(26));
                     let mut x14 = _mm_loadu_pd(ptr.add(28));
                     let mut x15 = _mm_loadu_pd(ptr.add(30));
-                    
+
                     // Stage 1 (radix 2, distance 8)
                     let a0 = _mm_add_pd(x0, x8);
                     let a8 = _mm_sub_pd(x0, x8);
@@ -1836,7 +1688,7 @@ impl MixedRadixScalar for f64 {
                     let mut a14 = _mm_sub_pd(x6, x14);
                     let a7 = _mm_add_pd(x7, x15);
                     let mut a15 = _mm_sub_pd(x7, x15);
-                    
+
                     // Twiddle multiplications for Stage 1
                     let c = std::f64::consts::FRAC_1_SQRT_2;
                     let (w1, w2, w3, w5, w6, w7) = if INVERSE {
@@ -1858,15 +1710,19 @@ impl MixedRadixScalar for f64 {
                             _mm_set_pd(-0.38268343236508978, -0.9238795325112867),
                         )
                     };
-                    
+
                     a9 = sse_cmul(a9, w1);
                     a10 = sse_cmul(a10, w2);
                     a11 = sse_cmul(a11, w3);
-                    a12 = if INVERSE { rotate_plus_i(a12) } else { rotate_minus_i(a12) };
+                    a12 = if INVERSE {
+                        rotate_plus_i(a12)
+                    } else {
+                        rotate_minus_i(a12)
+                    };
                     a13 = sse_cmul(a13, w5);
                     a14 = sse_cmul(a14, w6);
                     a15 = sse_cmul(a15, w7);
-                    
+
                     // Stage 2 (radix 2, distance 4)
                     let b0 = _mm_add_pd(a0, a4);
                     let b4 = _mm_sub_pd(a0, a4);
@@ -1876,7 +1732,7 @@ impl MixedRadixScalar for f64 {
                     let mut b6 = _mm_sub_pd(a2, a6);
                     let b3 = _mm_add_pd(a3, a7);
                     let mut b7 = _mm_sub_pd(a3, a7);
-                    
+
                     let b8 = _mm_add_pd(a8, a12);
                     let b12 = _mm_sub_pd(a8, a12);
                     let b9 = _mm_add_pd(a9, a13);
@@ -1885,67 +1741,91 @@ impl MixedRadixScalar for f64 {
                     let mut b14 = _mm_sub_pd(a10, a14);
                     let b11 = _mm_add_pd(a11, a15);
                     let mut b15 = _mm_sub_pd(a11, a15);
-                    
+
                     let (w8_1, w8_3) = if INVERSE {
                         (_mm_set_pd(c, c), _mm_set_pd(c, -c))
                     } else {
                         (_mm_set_pd(-c, c), _mm_set_pd(-c, -c))
                     };
-                    
+
                     b5 = sse_cmul(b5, w8_1);
-                    b6 = if INVERSE { rotate_plus_i(b6) } else { rotate_minus_i(b6) };
+                    b6 = if INVERSE {
+                        rotate_plus_i(b6)
+                    } else {
+                        rotate_minus_i(b6)
+                    };
                     b7 = sse_cmul(b7, w8_3);
-                    
+
                     b13 = sse_cmul(b13, w8_1);
-                    b14 = if INVERSE { rotate_plus_i(b14) } else { rotate_minus_i(b14) };
+                    b14 = if INVERSE {
+                        rotate_plus_i(b14)
+                    } else {
+                        rotate_minus_i(b14)
+                    };
                     b15 = sse_cmul(b15, w8_3);
-                    
+
                     // Stage 3 (radix 2, distance 2)
                     let c0 = _mm_add_pd(b0, b2);
                     let c2 = _mm_sub_pd(b0, b2);
                     let c1 = _mm_add_pd(b1, b3);
                     let mut c3 = _mm_sub_pd(b1, b3);
-                    c3 = if INVERSE { rotate_plus_i(c3) } else { rotate_minus_i(c3) };
-                    
+                    c3 = if INVERSE {
+                        rotate_plus_i(c3)
+                    } else {
+                        rotate_minus_i(c3)
+                    };
+
                     let c4 = _mm_add_pd(b4, b6);
                     let c6 = _mm_sub_pd(b4, b6);
                     let c5 = _mm_add_pd(b5, b7);
                     let mut c7 = _mm_sub_pd(b5, b7);
-                    c7 = if INVERSE { rotate_plus_i(c7) } else { rotate_minus_i(c7) };
-                    
+                    c7 = if INVERSE {
+                        rotate_plus_i(c7)
+                    } else {
+                        rotate_minus_i(c7)
+                    };
+
                     let c8 = _mm_add_pd(b8, b10);
                     let c10 = _mm_sub_pd(b8, b10);
                     let c9 = _mm_add_pd(b9, b11);
                     let mut c11 = _mm_sub_pd(b9, b11);
-                    c11 = if INVERSE { rotate_plus_i(c11) } else { rotate_minus_i(c11) };
-                    
+                    c11 = if INVERSE {
+                        rotate_plus_i(c11)
+                    } else {
+                        rotate_minus_i(c11)
+                    };
+
                     let c12 = _mm_add_pd(b12, b14);
                     let c14 = _mm_sub_pd(b12, b14);
                     let c13 = _mm_add_pd(b13, b15);
                     let mut c15 = _mm_sub_pd(b13, b15);
-                    c15 = if INVERSE { rotate_plus_i(c15) } else { rotate_minus_i(c15) };
-                    
+                    c15 = if INVERSE {
+                        rotate_plus_i(c15)
+                    } else {
+                        rotate_minus_i(c15)
+                    };
+
                     // Stage 4 (radix 2, distance 1)
                     x0 = _mm_add_pd(c0, c1);
                     x8 = _mm_sub_pd(c0, c1);
                     x4 = _mm_add_pd(c2, c3);
                     x12 = _mm_sub_pd(c2, c3);
-                    
+
                     x2 = _mm_add_pd(c4, c5);
                     x10 = _mm_sub_pd(c4, c5);
                     x6 = _mm_add_pd(c6, c7);
                     x14 = _mm_sub_pd(c6, c7);
-                    
+
                     x1 = _mm_add_pd(c8, c9);
                     x9 = _mm_sub_pd(c8, c9);
                     x5 = _mm_add_pd(c10, c11);
                     x13 = _mm_sub_pd(c10, c11);
-                    
+
                     x3 = _mm_add_pd(c12, c13);
                     x11 = _mm_sub_pd(c12, c13);
                     x7 = _mm_add_pd(c14, c15);
                     x15 = _mm_sub_pd(c14, c15);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm_set1_pd(1.0 / 16.0);
                         x0 = _mm_mul_pd(x0, scale);
@@ -1965,7 +1845,7 @@ impl MixedRadixScalar for f64 {
                         x14 = _mm_mul_pd(x14, scale);
                         x15 = _mm_mul_pd(x15, scale);
                     }
-                    
+
                     // Sequential store order since x_k holds J=k:
                     _mm_storeu_pd(ptr, x0);
                     _mm_storeu_pd(ptr.add(2), x1);
@@ -1984,10 +1864,17 @@ impl MixedRadixScalar for f64 {
                     _mm_storeu_pd(ptr.add(28), x14);
                     _mm_storeu_pd(ptr.add(30), x15);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 16]);
-                    crate::application::execution::kernel::components::winograd::dft16_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft16_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.0625, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2000,9 +1887,12 @@ impl MixedRadixScalar for f64 {
             32 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
+                        _mm256_storeu_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
-                    
+
                     let regs = [
                         _mm256_loadu_pd(ptr),
                         _mm256_loadu_pd(ptr.add(4)),
@@ -2021,67 +1911,79 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(56)),
                         _mm256_loadu_pd(ptr.add(60)),
                     ];
-                    
-                    let [c01_0, c01_1, c01_2, c01_3] = avx_fft4_parallel_precise(regs[0], regs[4], regs[8], regs[12], INVERSE);
-                    let [c23_0, c23_1, c23_2, c23_3] = avx_fft4_parallel_precise(regs[1], regs[5], regs[9], regs[13], INVERSE);
-                    let [c45_0, c45_1, c45_2, c45_3] = avx_fft4_parallel_precise(regs[2], regs[6], regs[10], regs[14], INVERSE);
-                    let [c67_0, c67_1, c67_2, c67_3] = avx_fft4_parallel_precise(regs[3], regs[7], regs[11], regs[15], INVERSE);
-                    
-                    let tw_table = if INVERSE { &TWIDDLES_COMBINE_INV_32 } else { &TWIDDLES_COMBINE_FWD_32 };
-                    
+
+                    let [c01_0, c01_1, c01_2, c01_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[0], regs[4], regs[8], regs[12]);
+                    let [c23_0, c23_1, c23_2, c23_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[1], regs[5], regs[9], regs[13]);
+                    let [c45_0, c45_1, c45_2, c45_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[2], regs[6], regs[10], regs[14]);
+                    let [c67_0, c67_1, c67_2, c67_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[3], regs[7], regs[11], regs[15]);
+
+                    let tw_table = if INVERSE {
+                        &TWIDDLES_COMBINE_INV_32
+                    } else {
+                        &TWIDDLES_COMBINE_FWD_32
+                    };
+
                     let mut c01 = [c01_0, c01_1, c01_2, c01_3];
                     let mut c23 = [c23_0, c23_1, c23_2, c23_3];
                     let mut c45 = [c45_0, c45_1, c45_2, c45_3];
                     let mut c67 = [c67_0, c67_1, c67_2, c67_3];
-                    
+
                     let tw_ptr = tw_table.as_ptr().cast::<f64>();
-                    
+
                     // k = 1
-                    let base_1 = 2 * (0 * 8);
-                    c01[1] = avx_cmul_precise(c01[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 0)));
+                    let base_1 = 0usize;
+                    c01[1] = avx_cmul_precise(c01[1], _mm256_loadu_pd(tw_ptr.add(base_1)));
                     c23[1] = avx_cmul_precise(c23[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 4)));
                     c45[1] = avx_cmul_precise(c45[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 8)));
                     c67[1] = avx_cmul_precise(c67[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 12)));
-                    
+
                     // k = 2
-                    let base_2 = 2 * (1 * 8);
-                    c01[2] = avx_cmul_precise(c01[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 0)));
+                    let base_2 = 2 * 8;
+                    c01[2] = avx_cmul_precise(c01[2], _mm256_loadu_pd(tw_ptr.add(base_2)));
                     c23[2] = avx_cmul_precise(c23[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 4)));
                     c45[2] = avx_cmul_precise(c45[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 8)));
                     c67[2] = avx_cmul_precise(c67[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 12)));
-                    
+
                     // k = 3
                     let base_3 = 2 * (2 * 8);
-                    c01[3] = avx_cmul_precise(c01[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 0)));
+                    c01[3] = avx_cmul_precise(c01[3], _mm256_loadu_pd(tw_ptr.add(base_3)));
                     c23[3] = avx_cmul_precise(c23[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 4)));
                     c45[3] = avx_cmul_precise(c45[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 8)));
                     c67[3] = avx_cmul_precise(c67[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 12)));
-                    
-                    let [r0_0, r0_1, r0_2, r0_3] = avx_fft8_precise(c01[0], c23[0], c45[0], c67[0], INVERSE);
-                    let [r1_0, r1_1, r1_2, r1_3] = avx_fft8_precise(c01[1], c23[1], c45[1], c67[1], INVERSE);
-                    let [r2_0, r2_1, r2_2, r2_3] = avx_fft8_precise(c01[2], c23[2], c45[2], c67[2], INVERSE);
-                    let [r3_0, r3_1, r3_2, r3_3] = avx_fft8_precise(c01[3], c23[3], c45[3], c67[3], INVERSE);
-                    
+
+                    let [r0_0, r0_1, r0_2, r0_3] =
+                        avx_fft8_precise::<INVERSE>(c01[0], c23[0], c45[0], c67[0]);
+                    let [r1_0, r1_1, r1_2, r1_3] =
+                        avx_fft8_precise::<INVERSE>(c01[1], c23[1], c45[1], c67[1]);
+                    let [r2_0, r2_1, r2_2, r2_3] =
+                        avx_fft8_precise::<INVERSE>(c01[2], c23[2], c45[2], c67[2]);
+                    let [r3_0, r3_1, r3_2, r3_3] =
+                        avx_fft8_precise::<INVERSE>(c01[3], c23[3], c45[3], c67[3]);
+
                     let mut out0_0 = _mm256_permute2f128_pd::<0x20>(r0_0, r1_0);
                     let mut out0_1 = _mm256_permute2f128_pd::<0x20>(r2_0, r3_0);
                     let mut out1_0 = _mm256_permute2f128_pd::<0x31>(r0_0, r1_0);
                     let mut out1_1 = _mm256_permute2f128_pd::<0x31>(r2_0, r3_0);
-                    
+
                     let mut out2_0 = _mm256_permute2f128_pd::<0x20>(r0_1, r1_1);
                     let mut out2_1 = _mm256_permute2f128_pd::<0x20>(r2_1, r3_1);
                     let mut out3_0 = _mm256_permute2f128_pd::<0x31>(r0_1, r1_1);
                     let mut out3_1 = _mm256_permute2f128_pd::<0x31>(r2_1, r3_1);
-                    
+
                     let mut out4_0 = _mm256_permute2f128_pd::<0x20>(r0_2, r1_2);
                     let mut out4_1 = _mm256_permute2f128_pd::<0x20>(r2_2, r3_2);
                     let mut out5_0 = _mm256_permute2f128_pd::<0x31>(r0_2, r1_2);
                     let mut out5_1 = _mm256_permute2f128_pd::<0x31>(r2_2, r3_2);
-                    
+
                     let mut out6_0 = _mm256_permute2f128_pd::<0x20>(r0_3, r1_3);
                     let mut out6_1 = _mm256_permute2f128_pd::<0x20>(r2_3, r3_3);
                     let mut out7_0 = _mm256_permute2f128_pd::<0x31>(r0_3, r1_3);
                     let mut out7_1 = _mm256_permute2f128_pd::<0x31>(r2_3, r3_3);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm256_set1_pd(1.0 / 32.0);
                         out0_0 = _mm256_mul_pd(out0_0, scale);
@@ -2101,7 +2003,7 @@ impl MixedRadixScalar for f64 {
                         out7_0 = _mm256_mul_pd(out7_0, scale);
                         out7_1 = _mm256_mul_pd(out7_1, scale);
                     }
-                    
+
                     _mm256_storeu_pd(ptr, out0_0);
                     _mm256_storeu_pd(ptr.add(4), out0_1);
                     _mm256_storeu_pd(ptr.add(8), out1_0);
@@ -2119,10 +2021,17 @@ impl MixedRadixScalar for f64 {
                     _mm256_storeu_pd(ptr.add(56), out7_0);
                     _mm256_storeu_pd(ptr.add(60), out7_1);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 32]);
-                    crate::application::execution::kernel::components::winograd::dft32_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft32_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 32.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2135,10 +2044,13 @@ impl MixedRadixScalar for f64 {
             64 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
+                        _mm256_setzero_pd, _mm256_storeu_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
-                    
-                    let mut c0 = avx_fft8_parallel_precise(
+
+                    let mut c0 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr),
                         _mm256_loadu_pd(ptr.add(16)),
                         _mm256_loadu_pd(ptr.add(32)),
@@ -2147,10 +2059,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(80)),
                         _mm256_loadu_pd(ptr.add(96)),
                         _mm256_loadu_pd(ptr.add(112)),
-                        INVERSE
                     );
-                    
-                    let mut c1 = avx_fft8_parallel_precise(
+
+                    let mut c1 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(4)),
                         _mm256_loadu_pd(ptr.add(20)),
                         _mm256_loadu_pd(ptr.add(36)),
@@ -2159,10 +2070,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(84)),
                         _mm256_loadu_pd(ptr.add(100)),
                         _mm256_loadu_pd(ptr.add(116)),
-                        INVERSE
                     );
-                    
-                    let mut c2 = avx_fft8_parallel_precise(
+
+                    let mut c2 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(8)),
                         _mm256_loadu_pd(ptr.add(24)),
                         _mm256_loadu_pd(ptr.add(40)),
@@ -2171,10 +2081,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(88)),
                         _mm256_loadu_pd(ptr.add(104)),
                         _mm256_loadu_pd(ptr.add(120)),
-                        INVERSE
                     );
-                    
-                    let mut c3 = avx_fft8_parallel_precise(
+
+                    let mut c3 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(12)),
                         _mm256_loadu_pd(ptr.add(28)),
                         _mm256_loadu_pd(ptr.add(44)),
@@ -2183,74 +2092,77 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(92)),
                         _mm256_loadu_pd(ptr.add(108)),
                         _mm256_loadu_pd(ptr.add(124)),
-                        INVERSE
                     );
-                    
-                    let tw_table = if INVERSE { &TWIDDLES_COMBINE_INV_64 } else { &TWIDDLES_COMBINE_FWD_64 };
+
+                    let tw_table = if INVERSE {
+                        &TWIDDLES_COMBINE_INV_64
+                    } else {
+                        &TWIDDLES_COMBINE_FWD_64
+                    };
                     let tw_ptr = tw_table.as_ptr().cast::<f64>();
-                    
+
                     // Unrolled twiddle multiplications
                     // k = 1
-                    let base_1 = 2 * (0 * 8);
-                    c0[1] = avx_cmul_precise(c0[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 0)));
+                    let base_1 = 0usize;
+                    c0[1] = avx_cmul_precise(c0[1], _mm256_loadu_pd(tw_ptr.add(base_1)));
                     c1[1] = avx_cmul_precise(c1[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 4)));
                     c2[1] = avx_cmul_precise(c2[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 8)));
                     c3[1] = avx_cmul_precise(c3[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 12)));
-                    
+
                     // k = 2
-                    let base_2 = 2 * (1 * 8);
-                    c0[2] = avx_cmul_precise(c0[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 0)));
+                    let base_2 = 2 * 8;
+                    c0[2] = avx_cmul_precise(c0[2], _mm256_loadu_pd(tw_ptr.add(base_2)));
                     c1[2] = avx_cmul_precise(c1[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 4)));
                     c2[2] = avx_cmul_precise(c2[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 8)));
                     c3[2] = avx_cmul_precise(c3[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 12)));
 
                     // k = 3
                     let base_3 = 2 * (2 * 8);
-                    c0[3] = avx_cmul_precise(c0[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 0)));
+                    c0[3] = avx_cmul_precise(c0[3], _mm256_loadu_pd(tw_ptr.add(base_3)));
                     c1[3] = avx_cmul_precise(c1[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 4)));
                     c2[3] = avx_cmul_precise(c2[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 8)));
                     c3[3] = avx_cmul_precise(c3[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 12)));
 
                     // k = 4
                     let base_4 = 2 * (3 * 8);
-                    c0[4] = avx_cmul_precise(c0[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 0)));
+                    c0[4] = avx_cmul_precise(c0[4], _mm256_loadu_pd(tw_ptr.add(base_4)));
                     c1[4] = avx_cmul_precise(c1[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 4)));
                     c2[4] = avx_cmul_precise(c2[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 8)));
                     c3[4] = avx_cmul_precise(c3[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 12)));
 
                     // k = 5
                     let base_5 = 2 * (4 * 8);
-                    c0[5] = avx_cmul_precise(c0[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 0)));
+                    c0[5] = avx_cmul_precise(c0[5], _mm256_loadu_pd(tw_ptr.add(base_5)));
                     c1[5] = avx_cmul_precise(c1[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 4)));
                     c2[5] = avx_cmul_precise(c2[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 8)));
                     c3[5] = avx_cmul_precise(c3[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 12)));
 
                     // k = 6
                     let base_6 = 2 * (5 * 8);
-                    c0[6] = avx_cmul_precise(c0[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 0)));
+                    c0[6] = avx_cmul_precise(c0[6], _mm256_loadu_pd(tw_ptr.add(base_6)));
                     c1[6] = avx_cmul_precise(c1[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 4)));
                     c2[6] = avx_cmul_precise(c2[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 8)));
                     c3[6] = avx_cmul_precise(c3[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 12)));
 
                     // k = 7
                     let base_7 = 2 * (6 * 8);
-                    c0[7] = avx_cmul_precise(c0[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 0)));
+                    c0[7] = avx_cmul_precise(c0[7], _mm256_loadu_pd(tw_ptr.add(base_7)));
                     c1[7] = avx_cmul_precise(c1[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 4)));
                     c2[7] = avx_cmul_precise(c2[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 8)));
                     c3[7] = avx_cmul_precise(c3[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 12)));
-                    
+
                     let mut r = [[_mm256_setzero_pd(); 4]; 8];
-                    r[0] = avx_fft8_precise(c0[0], c1[0], c2[0], c3[0], INVERSE);
-                    r[1] = avx_fft8_precise(c0[1], c1[1], c2[1], c3[1], INVERSE);
-                    r[2] = avx_fft8_precise(c0[2], c1[2], c2[2], c3[2], INVERSE);
-                    r[3] = avx_fft8_precise(c0[3], c1[3], c2[3], c3[3], INVERSE);
-                    r[4] = avx_fft8_precise(c0[4], c1[4], c2[4], c3[4], INVERSE);
-                    r[5] = avx_fft8_precise(c0[5], c1[5], c2[5], c3[5], INVERSE);
-                    r[6] = avx_fft8_precise(c0[6], c1[6], c2[6], c3[6], INVERSE);
-                    r[7] = avx_fft8_precise(c0[7], c1[7], c2[7], c3[7], INVERSE);
-                    
+                    r[0] = avx_fft8_precise::<INVERSE>(c0[0], c1[0], c2[0], c3[0]);
+                    r[1] = avx_fft8_precise::<INVERSE>(c0[1], c1[1], c2[1], c3[1]);
+                    r[2] = avx_fft8_precise::<INVERSE>(c0[2], c1[2], c2[2], c3[2]);
+                    r[3] = avx_fft8_precise::<INVERSE>(c0[3], c1[3], c2[3], c3[3]);
+                    r[4] = avx_fft8_precise::<INVERSE>(c0[4], c1[4], c2[4], c3[4]);
+                    r[5] = avx_fft8_precise::<INVERSE>(c0[5], c1[5], c2[5], c3[5]);
+                    r[6] = avx_fft8_precise::<INVERSE>(c0[6], c1[6], c2[6], c3[6]);
+                    r[7] = avx_fft8_precise::<INVERSE>(c0[7], c1[7], c2[7], c3[7]);
+
                     let mut out = [_mm256_setzero_pd(); 32];
-                    
+
                     // p = 0
                     out[0] = _mm256_permute2f128_pd::<0x20>(r[0][0], r[1][0]);
                     out[1] = _mm256_permute2f128_pd::<0x20>(r[2][0], r[3][0]);
@@ -2260,7 +2172,7 @@ impl MixedRadixScalar for f64 {
                     out[5] = _mm256_permute2f128_pd::<0x31>(r[2][0], r[3][0]);
                     out[6] = _mm256_permute2f128_pd::<0x31>(r[4][0], r[5][0]);
                     out[7] = _mm256_permute2f128_pd::<0x31>(r[6][0], r[7][0]);
-                    
+
                     // p = 1
                     out[8] = _mm256_permute2f128_pd::<0x20>(r[0][1], r[1][1]);
                     out[9] = _mm256_permute2f128_pd::<0x20>(r[2][1], r[3][1]);
@@ -2270,7 +2182,7 @@ impl MixedRadixScalar for f64 {
                     out[13] = _mm256_permute2f128_pd::<0x31>(r[2][1], r[3][1]);
                     out[14] = _mm256_permute2f128_pd::<0x31>(r[4][1], r[5][1]);
                     out[15] = _mm256_permute2f128_pd::<0x31>(r[6][1], r[7][1]);
-                    
+
                     // p = 2
                     out[16] = _mm256_permute2f128_pd::<0x20>(r[0][2], r[1][2]);
                     out[17] = _mm256_permute2f128_pd::<0x20>(r[2][2], r[3][2]);
@@ -2280,7 +2192,7 @@ impl MixedRadixScalar for f64 {
                     out[21] = _mm256_permute2f128_pd::<0x31>(r[2][2], r[3][2]);
                     out[22] = _mm256_permute2f128_pd::<0x31>(r[4][2], r[5][2]);
                     out[23] = _mm256_permute2f128_pd::<0x31>(r[6][2], r[7][2]);
-                    
+
                     // p = 3
                     out[24] = _mm256_permute2f128_pd::<0x20>(r[0][3], r[1][3]);
                     out[25] = _mm256_permute2f128_pd::<0x20>(r[2][3], r[3][3]);
@@ -2290,22 +2202,29 @@ impl MixedRadixScalar for f64 {
                     out[29] = _mm256_permute2f128_pd::<0x31>(r[2][3], r[3][3]);
                     out[30] = _mm256_permute2f128_pd::<0x31>(r[4][3], r[5][3]);
                     out[31] = _mm256_permute2f128_pd::<0x31>(r[6][3], r[7][3]);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm256_set1_pd(1.0 / 64.0);
                         for i in 0..32 {
                             out[i] = _mm256_mul_pd(out[i], scale);
                         }
                     }
-                    
+
                     for i in 0..32 {
                         _mm256_storeu_pd(ptr.add(i * 4), out[i]);
                     }
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 64]);
-                    crate::application::execution::kernel::components::winograd::dft64_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft64_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 64.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2316,12 +2235,15 @@ impl MixedRadixScalar for f64 {
                 true
             }
             9 => {
-                let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 9]);
-                crate::application::execution::kernel::components::winograd::dft9_impl::<Self, INVERSE>(data_ref);
+                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 9]>();
+                crate::application::execution::kernel::components::winograd::dft9_impl::<
+                    Self,
+                    INVERSE,
+                >(data_ref);
                 if INVERSE && NORMALIZE {
                     let scale = Complex64::new(1.0 / 9.0, 0.0);
                     for x in data_ref.iter_mut() {
-                        *x = *x * scale;
+                        *x *= scale;
                     }
                 }
                 true
@@ -2358,8 +2280,12 @@ impl MixedRadixScalar for f64 {
         transpose_matrix_precise(src, dst, n1, n2);
     }
 
-    #[inline(always)]
-    unsafe fn small_pot_inplace_sized<const N: usize, const INVERSE: bool, const NORMALIZE: bool>(
+    #[inline]
+    unsafe fn small_pot_inplace_sized<
+        const N: usize,
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+    >(
         data: &mut [Complex64],
     ) {
         match N {
@@ -2411,7 +2337,10 @@ impl MixedRadixScalar for f64 {
             8 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd,
+                        _mm_storeu_pd, _mm_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let x0 = _mm_loadu_pd(ptr);
                     let x1 = _mm_loadu_pd(ptr.add(2));
@@ -2443,8 +2372,16 @@ impl MixedRadixScalar for f64 {
                     let a7 = _mm_sub_pd(r6, r7);
 
                     // Stage 2
-                    let a3_rot = if INVERSE { rotate_plus_i(a3) } else { rotate_minus_i(a3) };
-                    let a7_rot = if INVERSE { rotate_plus_i(a7) } else { rotate_minus_i(a7) };
+                    let a3_rot = if INVERSE {
+                        rotate_plus_i(a3)
+                    } else {
+                        rotate_minus_i(a3)
+                    };
+                    let a7_rot = if INVERSE {
+                        rotate_plus_i(a7)
+                    } else {
+                        rotate_minus_i(a7)
+                    };
 
                     let b0 = _mm_add_pd(a0, a2);
                     let b2 = _mm_sub_pd(a0, a2);
@@ -2464,7 +2401,11 @@ impl MixedRadixScalar for f64 {
                     };
 
                     let b5_tw = sse_cmul(b5, w1);
-                    let b6_tw = if INVERSE { rotate_plus_i(b6) } else { rotate_minus_i(b6) };
+                    let b6_tw = if INVERSE {
+                        rotate_plus_i(b6)
+                    } else {
+                        rotate_minus_i(b6)
+                    };
                     let b7_tw = sse_cmul(b7, w3);
 
                     let mut c0 = _mm_add_pd(b0, b4);
@@ -2497,10 +2438,17 @@ impl MixedRadixScalar for f64 {
                     _mm_storeu_pd(ptr.add(12), c6);
                     _mm_storeu_pd(ptr.add(14), c7);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 8]);
-                    crate::application::execution::kernel::components::winograd::dft8_array_impl::<f64, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft8_array_impl::<
+                        f64,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.125, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2512,7 +2460,10 @@ impl MixedRadixScalar for f64 {
             16 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm_add_pd, _mm_loadu_pd, _mm_mul_pd, _mm_set1_pd, _mm_set_pd,
+                        _mm_storeu_pd, _mm_sub_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
                     let mut x0 = _mm_loadu_pd(ptr);
                     let mut x1 = _mm_loadu_pd(ptr.add(2));
@@ -2530,7 +2481,7 @@ impl MixedRadixScalar for f64 {
                     let mut x13 = _mm_loadu_pd(ptr.add(26));
                     let mut x14 = _mm_loadu_pd(ptr.add(28));
                     let mut x15 = _mm_loadu_pd(ptr.add(30));
-                    
+
                     // Stage 1 (radix 2, distance 8)
                     let a0 = _mm_add_pd(x0, x8);
                     let a8 = _mm_sub_pd(x0, x8);
@@ -2548,7 +2499,7 @@ impl MixedRadixScalar for f64 {
                     let mut a14 = _mm_sub_pd(x6, x14);
                     let a7 = _mm_add_pd(x7, x15);
                     let mut a15 = _mm_sub_pd(x7, x15);
-                    
+
                     // Twiddle multiplications for Stage 1
                     let c = std::f64::consts::FRAC_1_SQRT_2;
                     let (w1, w2, w3, w5, w6, w7) = if INVERSE {
@@ -2570,15 +2521,19 @@ impl MixedRadixScalar for f64 {
                             _mm_set_pd(-0.38268343236508978, -0.9238795325112867),
                         )
                     };
-                    
+
                     a9 = sse_cmul(a9, w1);
                     a10 = sse_cmul(a10, w2);
                     a11 = sse_cmul(a11, w3);
-                    a12 = if INVERSE { rotate_plus_i(a12) } else { rotate_minus_i(a12) };
+                    a12 = if INVERSE {
+                        rotate_plus_i(a12)
+                    } else {
+                        rotate_minus_i(a12)
+                    };
                     a13 = sse_cmul(a13, w5);
                     a14 = sse_cmul(a14, w6);
                     a15 = sse_cmul(a15, w7);
-                    
+
                     // Stage 2 (radix 2, distance 4)
                     let b0 = _mm_add_pd(a0, a4);
                     let b4 = _mm_sub_pd(a0, a4);
@@ -2588,7 +2543,7 @@ impl MixedRadixScalar for f64 {
                     let mut b6 = _mm_sub_pd(a2, a6);
                     let b3 = _mm_add_pd(a3, a7);
                     let mut b7 = _mm_sub_pd(a3, a7);
-                    
+
                     let b8 = _mm_add_pd(a8, a12);
                     let b12 = _mm_sub_pd(a8, a12);
                     let b9 = _mm_add_pd(a9, a13);
@@ -2597,67 +2552,91 @@ impl MixedRadixScalar for f64 {
                     let mut b14 = _mm_sub_pd(a10, a14);
                     let b11 = _mm_add_pd(a11, a15);
                     let mut b15 = _mm_sub_pd(a11, a15);
-                    
+
                     let (w8_1, w8_3) = if INVERSE {
                         (_mm_set_pd(c, c), _mm_set_pd(c, -c))
                     } else {
                         (_mm_set_pd(-c, c), _mm_set_pd(-c, -c))
                     };
-                    
+
                     b5 = sse_cmul(b5, w8_1);
-                    b6 = if INVERSE { rotate_plus_i(b6) } else { rotate_minus_i(b6) };
+                    b6 = if INVERSE {
+                        rotate_plus_i(b6)
+                    } else {
+                        rotate_minus_i(b6)
+                    };
                     b7 = sse_cmul(b7, w8_3);
-                    
+
                     b13 = sse_cmul(b13, w8_1);
-                    b14 = if INVERSE { rotate_plus_i(b14) } else { rotate_minus_i(b14) };
+                    b14 = if INVERSE {
+                        rotate_plus_i(b14)
+                    } else {
+                        rotate_minus_i(b14)
+                    };
                     b15 = sse_cmul(b15, w8_3);
-                    
+
                     // Stage 3 (radix 2, distance 2)
                     let c0 = _mm_add_pd(b0, b2);
                     let c2 = _mm_sub_pd(b0, b2);
                     let c1 = _mm_add_pd(b1, b3);
                     let mut c3 = _mm_sub_pd(b1, b3);
-                    c3 = if INVERSE { rotate_plus_i(c3) } else { rotate_minus_i(c3) };
-                    
+                    c3 = if INVERSE {
+                        rotate_plus_i(c3)
+                    } else {
+                        rotate_minus_i(c3)
+                    };
+
                     let c4 = _mm_add_pd(b4, b6);
                     let c6 = _mm_sub_pd(b4, b6);
                     let c5 = _mm_add_pd(b5, b7);
                     let mut c7 = _mm_sub_pd(b5, b7);
-                    c7 = if INVERSE { rotate_plus_i(c7) } else { rotate_minus_i(c7) };
-                    
+                    c7 = if INVERSE {
+                        rotate_plus_i(c7)
+                    } else {
+                        rotate_minus_i(c7)
+                    };
+
                     let c8 = _mm_add_pd(b8, b10);
                     let c10 = _mm_sub_pd(b8, b10);
                     let c9 = _mm_add_pd(b9, b11);
                     let mut c11 = _mm_sub_pd(b9, b11);
-                    c11 = if INVERSE { rotate_plus_i(c11) } else { rotate_minus_i(c11) };
-                    
+                    c11 = if INVERSE {
+                        rotate_plus_i(c11)
+                    } else {
+                        rotate_minus_i(c11)
+                    };
+
                     let c12 = _mm_add_pd(b12, b14);
                     let c14 = _mm_sub_pd(b12, b14);
                     let c13 = _mm_add_pd(b13, b15);
                     let mut c15 = _mm_sub_pd(b13, b15);
-                    c15 = if INVERSE { rotate_plus_i(c15) } else { rotate_minus_i(c15) };
-                    
+                    c15 = if INVERSE {
+                        rotate_plus_i(c15)
+                    } else {
+                        rotate_minus_i(c15)
+                    };
+
                     // Stage 4 (radix 2, distance 1)
                     x0 = _mm_add_pd(c0, c1);
                     x8 = _mm_sub_pd(c0, c1);
                     x4 = _mm_add_pd(c2, c3);
                     x12 = _mm_sub_pd(c2, c3);
-                    
+
                     x2 = _mm_add_pd(c4, c5);
                     x10 = _mm_sub_pd(c4, c5);
                     x6 = _mm_add_pd(c6, c7);
                     x14 = _mm_sub_pd(c6, c7);
-                    
+
                     x1 = _mm_add_pd(c8, c9);
                     x9 = _mm_sub_pd(c8, c9);
                     x5 = _mm_add_pd(c10, c11);
                     x13 = _mm_sub_pd(c10, c11);
-                    
+
                     x3 = _mm_add_pd(c12, c13);
                     x11 = _mm_sub_pd(c12, c13);
                     x7 = _mm_add_pd(c14, c15);
                     x15 = _mm_sub_pd(c14, c15);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm_set1_pd(0.0625);
                         x0 = _mm_mul_pd(x0, scale);
@@ -2677,7 +2656,7 @@ impl MixedRadixScalar for f64 {
                         x14 = _mm_mul_pd(x14, scale);
                         x15 = _mm_mul_pd(x15, scale);
                     }
-                    
+
                     _mm_storeu_pd(ptr, x0);
                     _mm_storeu_pd(ptr.add(2), x1);
                     _mm_storeu_pd(ptr.add(4), x2);
@@ -2695,10 +2674,17 @@ impl MixedRadixScalar for f64 {
                     _mm_storeu_pd(ptr.add(28), x14);
                     _mm_storeu_pd(ptr.add(30), x15);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 16]);
-                    crate::application::execution::kernel::components::winograd::dft16_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft16_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.0625, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2710,9 +2696,12 @@ impl MixedRadixScalar for f64 {
             32 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
+                        _mm256_storeu_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
-                    
+
                     let regs = [
                         _mm256_loadu_pd(ptr),
                         _mm256_loadu_pd(ptr.add(4)),
@@ -2731,67 +2720,79 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(56)),
                         _mm256_loadu_pd(ptr.add(60)),
                     ];
-                    
-                    let [c01_0, c01_1, c01_2, c01_3] = avx_fft4_parallel_precise(regs[0], regs[4], regs[8], regs[12], INVERSE);
-                    let [c23_0, c23_1, c23_2, c23_3] = avx_fft4_parallel_precise(regs[1], regs[5], regs[9], regs[13], INVERSE);
-                    let [c45_0, c45_1, c45_2, c45_3] = avx_fft4_parallel_precise(regs[2], regs[6], regs[10], regs[14], INVERSE);
-                    let [c67_0, c67_1, c67_2, c67_3] = avx_fft4_parallel_precise(regs[3], regs[7], regs[11], regs[15], INVERSE);
-                    
-                    let tw_table = if INVERSE { &TWIDDLES_COMBINE_INV_32 } else { &TWIDDLES_COMBINE_FWD_32 };
-                    
+
+                    let [c01_0, c01_1, c01_2, c01_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[0], regs[4], regs[8], regs[12]);
+                    let [c23_0, c23_1, c23_2, c23_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[1], regs[5], regs[9], regs[13]);
+                    let [c45_0, c45_1, c45_2, c45_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[2], regs[6], regs[10], regs[14]);
+                    let [c67_0, c67_1, c67_2, c67_3] =
+                        avx_fft4_parallel_precise::<INVERSE>(regs[3], regs[7], regs[11], regs[15]);
+
+                    let tw_table = if INVERSE {
+                        &TWIDDLES_COMBINE_INV_32
+                    } else {
+                        &TWIDDLES_COMBINE_FWD_32
+                    };
+
                     let mut c01 = [c01_0, c01_1, c01_2, c01_3];
                     let mut c23 = [c23_0, c23_1, c23_2, c23_3];
                     let mut c45 = [c45_0, c45_1, c45_2, c45_3];
                     let mut c67 = [c67_0, c67_1, c67_2, c67_3];
-                    
+
                     let tw_ptr = tw_table.as_ptr().cast::<f64>();
-                    
+
                     // k = 1
-                    let base_1 = 2 * (0 * 8);
-                    c01[1] = avx_cmul_precise(c01[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 0)));
+                    let base_1 = 0usize;
+                    c01[1] = avx_cmul_precise(c01[1], _mm256_loadu_pd(tw_ptr.add(base_1)));
                     c23[1] = avx_cmul_precise(c23[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 4)));
                     c45[1] = avx_cmul_precise(c45[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 8)));
                     c67[1] = avx_cmul_precise(c67[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 12)));
-                    
+
                     // k = 2
-                    let base_2 = 2 * (1 * 8);
-                    c01[2] = avx_cmul_precise(c01[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 0)));
+                    let base_2 = 2 * 8;
+                    c01[2] = avx_cmul_precise(c01[2], _mm256_loadu_pd(tw_ptr.add(base_2)));
                     c23[2] = avx_cmul_precise(c23[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 4)));
                     c45[2] = avx_cmul_precise(c45[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 8)));
                     c67[2] = avx_cmul_precise(c67[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 12)));
-                    
+
                     // k = 3
                     let base_3 = 2 * (2 * 8);
-                    c01[3] = avx_cmul_precise(c01[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 0)));
+                    c01[3] = avx_cmul_precise(c01[3], _mm256_loadu_pd(tw_ptr.add(base_3)));
                     c23[3] = avx_cmul_precise(c23[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 4)));
                     c45[3] = avx_cmul_precise(c45[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 8)));
                     c67[3] = avx_cmul_precise(c67[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 12)));
-                    
-                    let [r0_0, r0_1, r0_2, r0_3] = avx_fft8_precise(c01[0], c23[0], c45[0], c67[0], INVERSE);
-                    let [r1_0, r1_1, r1_2, r1_3] = avx_fft8_precise(c01[1], c23[1], c45[1], c67[1], INVERSE);
-                    let [r2_0, r2_1, r2_2, r2_3] = avx_fft8_precise(c01[2], c23[2], c45[2], c67[2], INVERSE);
-                    let [r3_0, r3_1, r3_2, r3_3] = avx_fft8_precise(c01[3], c23[3], c45[3], c67[3], INVERSE);
-                    
+
+                    let [r0_0, r0_1, r0_2, r0_3] =
+                        avx_fft8_precise::<INVERSE>(c01[0], c23[0], c45[0], c67[0]);
+                    let [r1_0, r1_1, r1_2, r1_3] =
+                        avx_fft8_precise::<INVERSE>(c01[1], c23[1], c45[1], c67[1]);
+                    let [r2_0, r2_1, r2_2, r2_3] =
+                        avx_fft8_precise::<INVERSE>(c01[2], c23[2], c45[2], c67[2]);
+                    let [r3_0, r3_1, r3_2, r3_3] =
+                        avx_fft8_precise::<INVERSE>(c01[3], c23[3], c45[3], c67[3]);
+
                     let mut out0_0 = _mm256_permute2f128_pd::<0x20>(r0_0, r1_0);
                     let mut out0_1 = _mm256_permute2f128_pd::<0x20>(r2_0, r3_0);
                     let mut out1_0 = _mm256_permute2f128_pd::<0x31>(r0_0, r1_0);
                     let mut out1_1 = _mm256_permute2f128_pd::<0x31>(r2_0, r3_0);
-                    
+
                     let mut out2_0 = _mm256_permute2f128_pd::<0x20>(r0_1, r1_1);
                     let mut out2_1 = _mm256_permute2f128_pd::<0x20>(r2_1, r3_1);
                     let mut out3_0 = _mm256_permute2f128_pd::<0x31>(r0_1, r1_1);
                     let mut out3_1 = _mm256_permute2f128_pd::<0x31>(r2_1, r3_1);
-                    
+
                     let mut out4_0 = _mm256_permute2f128_pd::<0x20>(r0_2, r1_2);
                     let mut out4_1 = _mm256_permute2f128_pd::<0x20>(r2_2, r3_2);
                     let mut out5_0 = _mm256_permute2f128_pd::<0x31>(r0_2, r1_2);
                     let mut out5_1 = _mm256_permute2f128_pd::<0x31>(r2_2, r3_2);
-                    
+
                     let mut out6_0 = _mm256_permute2f128_pd::<0x20>(r0_3, r1_3);
                     let mut out6_1 = _mm256_permute2f128_pd::<0x20>(r2_3, r3_3);
                     let mut out7_0 = _mm256_permute2f128_pd::<0x31>(r0_3, r1_3);
                     let mut out7_1 = _mm256_permute2f128_pd::<0x31>(r2_3, r3_3);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm256_set1_pd(1.0 / 32.0);
                         out0_0 = _mm256_mul_pd(out0_0, scale);
@@ -2811,7 +2812,7 @@ impl MixedRadixScalar for f64 {
                         out7_0 = _mm256_mul_pd(out7_0, scale);
                         out7_1 = _mm256_mul_pd(out7_1, scale);
                     }
-                    
+
                     _mm256_storeu_pd(ptr, out0_0);
                     _mm256_storeu_pd(ptr.add(4), out0_1);
                     _mm256_storeu_pd(ptr.add(8), out1_0);
@@ -2829,10 +2830,17 @@ impl MixedRadixScalar for f64 {
                     _mm256_storeu_pd(ptr.add(56), out7_0);
                     _mm256_storeu_pd(ptr.add(60), out7_1);
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 32]);
-                    crate::application::execution::kernel::components::winograd::dft32_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft32_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 32.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -2844,10 +2852,13 @@ impl MixedRadixScalar for f64 {
             64 => {
                 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
                 {
-                    use std::arch::x86_64::*;
+                    use std::arch::x86_64::{
+                        _mm256_loadu_pd, _mm256_mul_pd, _mm256_permute2f128_pd, _mm256_set1_pd,
+                        _mm256_setzero_pd, _mm256_storeu_pd,
+                    };
                     let ptr = data.as_mut_ptr().cast::<f64>();
-                    
-                    let mut c0 = avx_fft8_parallel_precise(
+
+                    let mut c0 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr),
                         _mm256_loadu_pd(ptr.add(16)),
                         _mm256_loadu_pd(ptr.add(32)),
@@ -2856,10 +2867,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(80)),
                         _mm256_loadu_pd(ptr.add(96)),
                         _mm256_loadu_pd(ptr.add(112)),
-                        INVERSE
                     );
-                    
-                    let mut c1 = avx_fft8_parallel_precise(
+
+                    let mut c1 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(4)),
                         _mm256_loadu_pd(ptr.add(20)),
                         _mm256_loadu_pd(ptr.add(36)),
@@ -2868,10 +2878,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(84)),
                         _mm256_loadu_pd(ptr.add(100)),
                         _mm256_loadu_pd(ptr.add(116)),
-                        INVERSE
                     );
-                    
-                    let mut c2 = avx_fft8_parallel_precise(
+
+                    let mut c2 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(8)),
                         _mm256_loadu_pd(ptr.add(24)),
                         _mm256_loadu_pd(ptr.add(40)),
@@ -2880,10 +2889,9 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(88)),
                         _mm256_loadu_pd(ptr.add(104)),
                         _mm256_loadu_pd(ptr.add(120)),
-                        INVERSE
                     );
-                    
-                    let mut c3 = avx_fft8_parallel_precise(
+
+                    let mut c3 = avx_fft8_parallel_precise::<INVERSE>(
                         _mm256_loadu_pd(ptr.add(12)),
                         _mm256_loadu_pd(ptr.add(28)),
                         _mm256_loadu_pd(ptr.add(44)),
@@ -2892,74 +2900,77 @@ impl MixedRadixScalar for f64 {
                         _mm256_loadu_pd(ptr.add(92)),
                         _mm256_loadu_pd(ptr.add(108)),
                         _mm256_loadu_pd(ptr.add(124)),
-                        INVERSE
                     );
-                    
-                    let tw_table = if INVERSE { &TWIDDLES_COMBINE_INV_64 } else { &TWIDDLES_COMBINE_FWD_64 };
+
+                    let tw_table = if INVERSE {
+                        &TWIDDLES_COMBINE_INV_64
+                    } else {
+                        &TWIDDLES_COMBINE_FWD_64
+                    };
                     let tw_ptr = tw_table.as_ptr().cast::<f64>();
-                    
+
                     // Unrolled twiddle multiplications
                     // k = 1
-                    let base_1 = 2 * (0 * 8);
-                    c0[1] = avx_cmul_precise(c0[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 0)));
+                    let base_1 = 0usize;
+                    c0[1] = avx_cmul_precise(c0[1], _mm256_loadu_pd(tw_ptr.add(base_1)));
                     c1[1] = avx_cmul_precise(c1[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 4)));
                     c2[1] = avx_cmul_precise(c2[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 8)));
                     c3[1] = avx_cmul_precise(c3[1], _mm256_loadu_pd(tw_ptr.add(base_1 + 12)));
-                    
+
                     // k = 2
-                    let base_2 = 2 * (1 * 8);
-                    c0[2] = avx_cmul_precise(c0[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 0)));
+                    let base_2 = 2 * 8;
+                    c0[2] = avx_cmul_precise(c0[2], _mm256_loadu_pd(tw_ptr.add(base_2)));
                     c1[2] = avx_cmul_precise(c1[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 4)));
                     c2[2] = avx_cmul_precise(c2[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 8)));
                     c3[2] = avx_cmul_precise(c3[2], _mm256_loadu_pd(tw_ptr.add(base_2 + 12)));
- 
+
                     // k = 3
                     let base_3 = 2 * (2 * 8);
-                    c0[3] = avx_cmul_precise(c0[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 0)));
+                    c0[3] = avx_cmul_precise(c0[3], _mm256_loadu_pd(tw_ptr.add(base_3)));
                     c1[3] = avx_cmul_precise(c1[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 4)));
                     c2[3] = avx_cmul_precise(c2[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 8)));
                     c3[3] = avx_cmul_precise(c3[3], _mm256_loadu_pd(tw_ptr.add(base_3 + 12)));
- 
+
                     // k = 4
                     let base_4 = 2 * (3 * 8);
-                    c0[4] = avx_cmul_precise(c0[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 0)));
+                    c0[4] = avx_cmul_precise(c0[4], _mm256_loadu_pd(tw_ptr.add(base_4)));
                     c1[4] = avx_cmul_precise(c1[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 4)));
                     c2[4] = avx_cmul_precise(c2[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 8)));
                     c3[4] = avx_cmul_precise(c3[4], _mm256_loadu_pd(tw_ptr.add(base_4 + 12)));
- 
+
                     // k = 5
                     let base_5 = 2 * (4 * 8);
-                    c0[5] = avx_cmul_precise(c0[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 0)));
+                    c0[5] = avx_cmul_precise(c0[5], _mm256_loadu_pd(tw_ptr.add(base_5)));
                     c1[5] = avx_cmul_precise(c1[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 4)));
                     c2[5] = avx_cmul_precise(c2[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 8)));
                     c3[5] = avx_cmul_precise(c3[5], _mm256_loadu_pd(tw_ptr.add(base_5 + 12)));
- 
+
                     // k = 6
                     let base_6 = 2 * (5 * 8);
-                    c0[6] = avx_cmul_precise(c0[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 0)));
+                    c0[6] = avx_cmul_precise(c0[6], _mm256_loadu_pd(tw_ptr.add(base_6)));
                     c1[6] = avx_cmul_precise(c1[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 4)));
                     c2[6] = avx_cmul_precise(c2[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 8)));
                     c3[6] = avx_cmul_precise(c3[6], _mm256_loadu_pd(tw_ptr.add(base_6 + 12)));
- 
+
                     // k = 7
                     let base_7 = 2 * (6 * 8);
-                    c0[7] = avx_cmul_precise(c0[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 0)));
+                    c0[7] = avx_cmul_precise(c0[7], _mm256_loadu_pd(tw_ptr.add(base_7)));
                     c1[7] = avx_cmul_precise(c1[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 4)));
                     c2[7] = avx_cmul_precise(c2[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 8)));
                     c3[7] = avx_cmul_precise(c3[7], _mm256_loadu_pd(tw_ptr.add(base_7 + 12)));
-                    
+
                     let mut r = [[_mm256_setzero_pd(); 4]; 8];
-                    r[0] = avx_fft8_precise(c0[0], c1[0], c2[0], c3[0], INVERSE);
-                    r[1] = avx_fft8_precise(c0[1], c1[1], c2[1], c3[1], INVERSE);
-                    r[2] = avx_fft8_precise(c0[2], c1[2], c2[2], c3[2], INVERSE);
-                    r[3] = avx_fft8_precise(c0[3], c1[3], c2[3], c3[3], INVERSE);
-                    r[4] = avx_fft8_precise(c0[4], c1[4], c2[4], c3[4], INVERSE);
-                    r[5] = avx_fft8_precise(c0[5], c1[5], c2[5], c3[5], INVERSE);
-                    r[6] = avx_fft8_precise(c0[6], c1[6], c2[6], c3[6], INVERSE);
-                    r[7] = avx_fft8_precise(c0[7], c1[7], c2[7], c3[7], INVERSE);
-                    
+                    r[0] = avx_fft8_precise::<INVERSE>(c0[0], c1[0], c2[0], c3[0]);
+                    r[1] = avx_fft8_precise::<INVERSE>(c0[1], c1[1], c2[1], c3[1]);
+                    r[2] = avx_fft8_precise::<INVERSE>(c0[2], c1[2], c2[2], c3[2]);
+                    r[3] = avx_fft8_precise::<INVERSE>(c0[3], c1[3], c2[3], c3[3]);
+                    r[4] = avx_fft8_precise::<INVERSE>(c0[4], c1[4], c2[4], c3[4]);
+                    r[5] = avx_fft8_precise::<INVERSE>(c0[5], c1[5], c2[5], c3[5]);
+                    r[6] = avx_fft8_precise::<INVERSE>(c0[6], c1[6], c2[6], c3[6]);
+                    r[7] = avx_fft8_precise::<INVERSE>(c0[7], c1[7], c2[7], c3[7]);
+
                     let mut out = [_mm256_setzero_pd(); 32];
-                    
+
                     // p = 0
                     out[0] = _mm256_permute2f128_pd::<0x20>(r[0][0], r[1][0]);
                     out[1] = _mm256_permute2f128_pd::<0x20>(r[2][0], r[3][0]);
@@ -2969,7 +2980,7 @@ impl MixedRadixScalar for f64 {
                     out[5] = _mm256_permute2f128_pd::<0x31>(r[2][0], r[3][0]);
                     out[6] = _mm256_permute2f128_pd::<0x31>(r[4][0], r[5][0]);
                     out[7] = _mm256_permute2f128_pd::<0x31>(r[6][0], r[7][0]);
-                    
+
                     // p = 1
                     out[8] = _mm256_permute2f128_pd::<0x20>(r[0][1], r[1][1]);
                     out[9] = _mm256_permute2f128_pd::<0x20>(r[2][1], r[3][1]);
@@ -2979,7 +2990,7 @@ impl MixedRadixScalar for f64 {
                     out[13] = _mm256_permute2f128_pd::<0x31>(r[2][1], r[3][1]);
                     out[14] = _mm256_permute2f128_pd::<0x31>(r[4][1], r[5][1]);
                     out[15] = _mm256_permute2f128_pd::<0x31>(r[6][1], r[7][1]);
-                    
+
                     // p = 2
                     out[16] = _mm256_permute2f128_pd::<0x20>(r[0][2], r[1][2]);
                     out[17] = _mm256_permute2f128_pd::<0x20>(r[2][2], r[3][2]);
@@ -2989,7 +3000,7 @@ impl MixedRadixScalar for f64 {
                     out[21] = _mm256_permute2f128_pd::<0x31>(r[2][2], r[3][2]);
                     out[22] = _mm256_permute2f128_pd::<0x31>(r[4][2], r[5][2]);
                     out[23] = _mm256_permute2f128_pd::<0x31>(r[6][2], r[7][2]);
-                    
+
                     // p = 3
                     out[24] = _mm256_permute2f128_pd::<0x20>(r[0][3], r[1][3]);
                     out[25] = _mm256_permute2f128_pd::<0x20>(r[2][3], r[3][3]);
@@ -2999,22 +3010,29 @@ impl MixedRadixScalar for f64 {
                     out[29] = _mm256_permute2f128_pd::<0x31>(r[2][3], r[3][3]);
                     out[30] = _mm256_permute2f128_pd::<0x31>(r[4][3], r[5][3]);
                     out[31] = _mm256_permute2f128_pd::<0x31>(r[6][3], r[7][3]);
-                    
+
                     if INVERSE && NORMALIZE {
                         let scale = _mm256_set1_pd(1.0 / 64.0);
                         for i in 0..32 {
                             out[i] = _mm256_mul_pd(out[i], scale);
                         }
                     }
-                    
+
                     for i in 0..32 {
                         _mm256_storeu_pd(ptr.add(i * 4), out[i]);
                     }
                 }
-                #[cfg(not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma")))]
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_feature = "avx",
+                    target_feature = "fma"
+                )))]
                 {
                     let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 64]);
-                    crate::application::execution::kernel::components::winograd::dft64_impl::<Self, INVERSE>(data_ref);
+                    crate::application::execution::kernel::components::winograd::dft64_impl::<
+                        Self,
+                        INVERSE,
+                    >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 64.0, 0.0);
                         for x in data_ref.iter_mut() {
@@ -3027,25 +3045,84 @@ impl MixedRadixScalar for f64 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn pot_inplace<const INVERSE: bool, const NORMALIZE: bool>(
         data: &mut [Self::Complex],
         twiddles: &[Self::Complex],
     ) {
         let n = data.len();
         match n {
-            2 => unsafe { Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data); }
-            4 => unsafe { Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data); }
-            8 => unsafe { Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data); }
-            16 => unsafe { Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data); }
-            32 => unsafe { Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data); }
-            64 => unsafe { Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data); }
+            2 => unsafe {
+                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
+            },
+            4 => unsafe {
+                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
+            },
+            8 => unsafe {
+                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
+            },
+            16 => unsafe {
+                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
+            },
+            32 => unsafe {
+                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
+            },
+            64 => unsafe {
+                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
+            },
             _ => {
                 Self::with_scratch(n, |scratch| {
                     if INVERSE && NORMALIZE {
                         Self::stockham_forward_normalized(data, scratch, twiddles, n);
                     } else {
                         Self::stockham_forward(data, scratch, twiddles);
+                    }
+                });
+            }
+        }
+    }
+
+    fn pot_inplace_sized<
+        const INVERSE: bool,
+        const NORMALIZE: bool,
+        S: PoTStrategy,
+        const LOG2: u32,
+    >(
+        data: &mut [Self::Complex],
+        twiddles: &[Self::Complex],
+        _s: SizedPoT<S, LOG2>,
+    ) {
+        // const LOG2 drives selection (zero-cost monomorph); for <=64 preserve direct small
+        // no-scratch path (memory efficiency + best for 32/64 which have dedicated AVX fixed column);
+        // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
+        // kernel forward_with_scratch_sized -> transform_sized / with_strategy / len* bodies.
+        // twiddles passed directly as &[Complex] (zero-copy reference from plan).
+        match LOG2 {
+            1 => unsafe {
+                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
+            },
+            2 => unsafe {
+                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
+            },
+            3 => unsafe {
+                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
+            },
+            4 => unsafe {
+                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
+            },
+            5 => unsafe {
+                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
+            },
+            6 => unsafe {
+                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
+            },
+            _ => {
+                let n = 1usize << LOG2;
+                Self::with_scratch(n, |scratch| {
+                    if INVERSE && NORMALIZE {
+                        Self::stockham_forward_normalized_sized::<LOG2>(data, scratch, twiddles);
+                    } else {
+                        Self::stockham_forward_sized::<LOG2>(data, scratch, twiddles);
                     }
                 });
             }
@@ -3061,14 +3138,28 @@ impl MixedRadixScalar for f64 {
             &TWIDDLES_FWD_PRECISE[idx]
         }
     }
+
+    fn use_generated_codelet_plan(_n: usize) -> bool {
+        false
+    }
 }
 
 static BLUESTEIN_REDUCED_CACHE: std::sync::LazyLock<
-    parking_lot::RwLock<rustc_hash::FxHashMap<super::trait_def::BluesteinKey, super::trait_def::BluesteinEntry<Complex32>>>,
+    parking_lot::RwLock<
+        rustc_hash::FxHashMap<
+            super::trait_def::BluesteinKey,
+            super::trait_def::BluesteinEntry<Complex32>,
+        >,
+    >,
 > = std::sync::LazyLock::new(|| parking_lot::RwLock::new(rustc_hash::FxHashMap::default()));
 
 static BLUESTEIN_PRECISE_CACHE: std::sync::LazyLock<
-    parking_lot::RwLock<rustc_hash::FxHashMap<super::trait_def::BluesteinKey, super::trait_def::BluesteinEntry<Complex64>>>,
+    parking_lot::RwLock<
+        rustc_hash::FxHashMap<
+            super::trait_def::BluesteinKey,
+            super::trait_def::BluesteinEntry<Complex64>,
+        >,
+    >,
 > = std::sync::LazyLock::new(|| parking_lot::RwLock::new(rustc_hash::FxHashMap::default()));
 
 const NONE_BLUESTEIN_C32: Option<super::trait_def::BluesteinEntry<Complex32>> = None;
@@ -3090,32 +3181,44 @@ thread_local! {
 impl super::trait_def::BluesteinStore for f32 {
     type Cpx = Complex32;
     #[inline]
-    fn tl_get(key: super::trait_def::BluesteinKey) -> Option<super::trait_def::BluesteinEntry<Self::Cpx>> {
+    fn tl_get(
+        key: super::trait_def::BluesteinKey,
+    ) -> Option<super::trait_def::BluesteinEntry<Self::Cpx>> {
         let (n, inv, _) = key;
         if n < FLAT_CACHE_LIMIT {
-            let idx = (n << 1) | (if inv { 1 } else { 0 });
+            let idx = (n << 1) | usize::from(inv);
             TL_BLUESTEIN_REDUCED_FLAT.with(|c| c.borrow()[idx].clone())
         } else {
             let result = TL_BLUESTEIN_REDUCED.with(|c| c.borrow().get(&key).cloned());
             #[cfg(feature = "cache-profiling")]
             if result.is_some() {
-                crate::application::execution::kernel::mixed_radix::caches::profiler::get().bluestein_reduced.tl_hit();
+                crate::application::execution::kernel::mixed_radix::caches::profiler::get()
+                    .bluestein_reduced
+                    .tl_hit();
             }
             result
         }
     }
     #[inline]
-    fn tl_insert(key: super::trait_def::BluesteinKey, val: super::trait_def::BluesteinEntry<Self::Cpx>) {
+    fn tl_insert(
+        key: super::trait_def::BluesteinKey,
+        val: super::trait_def::BluesteinEntry<Self::Cpx>,
+    ) {
         let (n, inv, _) = key;
         if n < FLAT_CACHE_LIMIT {
-            let idx = (n << 1) | (if inv { 1 } else { 0 });
+            let idx = (n << 1) | usize::from(inv);
             TL_BLUESTEIN_REDUCED_FLAT.with(|c| c.borrow_mut()[idx] = Some(val));
         } else {
             TL_BLUESTEIN_REDUCED.with(|c| c.borrow_mut().insert(key, val));
         }
     }
     #[inline]
-    fn global() -> &'static parking_lot::RwLock<rustc_hash::FxHashMap<super::trait_def::BluesteinKey, super::trait_def::BluesteinEntry<Self::Cpx>>> {
+    fn global() -> &'static parking_lot::RwLock<
+        rustc_hash::FxHashMap<
+            super::trait_def::BluesteinKey,
+            super::trait_def::BluesteinEntry<Self::Cpx>,
+        >,
+    > {
         &BLUESTEIN_REDUCED_CACHE
     }
 }
@@ -3123,32 +3226,44 @@ impl super::trait_def::BluesteinStore for f32 {
 impl super::trait_def::BluesteinStore for f64 {
     type Cpx = Complex64;
     #[inline]
-    fn tl_get(key: super::trait_def::BluesteinKey) -> Option<super::trait_def::BluesteinEntry<Self::Cpx>> {
+    fn tl_get(
+        key: super::trait_def::BluesteinKey,
+    ) -> Option<super::trait_def::BluesteinEntry<Self::Cpx>> {
         let (n, inv, _) = key;
         if n < FLAT_CACHE_LIMIT {
-            let idx = (n << 1) | (if inv { 1 } else { 0 });
+            let idx = (n << 1) | usize::from(inv);
             TL_BLUESTEIN_PRECISE_FLAT.with(|c| c.borrow()[idx].clone())
         } else {
             let result = TL_BLUESTEIN_PRECISE.with(|c| c.borrow().get(&key).cloned());
             #[cfg(feature = "cache-profiling")]
             if result.is_some() {
-                crate::application::execution::kernel::mixed_radix::caches::profiler::get().bluestein_precise.tl_hit();
+                crate::application::execution::kernel::mixed_radix::caches::profiler::get()
+                    .bluestein_precise
+                    .tl_hit();
             }
             result
         }
     }
     #[inline]
-    fn tl_insert(key: super::trait_def::BluesteinKey, val: super::trait_def::BluesteinEntry<Self::Cpx>) {
+    fn tl_insert(
+        key: super::trait_def::BluesteinKey,
+        val: super::trait_def::BluesteinEntry<Self::Cpx>,
+    ) {
         let (n, inv, _) = key;
         if n < FLAT_CACHE_LIMIT {
-            let idx = (n << 1) | (if inv { 1 } else { 0 });
+            let idx = (n << 1) | usize::from(inv);
             TL_BLUESTEIN_PRECISE_FLAT.with(|c| c.borrow_mut()[idx] = Some(val));
         } else {
             TL_BLUESTEIN_PRECISE.with(|c| c.borrow_mut().insert(key, val));
         }
     }
     #[inline]
-    fn global() -> &'static parking_lot::RwLock<rustc_hash::FxHashMap<super::trait_def::BluesteinKey, super::trait_def::BluesteinEntry<Self::Cpx>>> {
+    fn global() -> &'static parking_lot::RwLock<
+        rustc_hash::FxHashMap<
+            super::trait_def::BluesteinKey,
+            super::trait_def::BluesteinEntry<Self::Cpx>,
+        >,
+    > {
         &BLUESTEIN_PRECISE_CACHE
     }
 }

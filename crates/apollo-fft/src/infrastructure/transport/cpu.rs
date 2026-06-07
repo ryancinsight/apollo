@@ -8,7 +8,7 @@ use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use crate::domain::contracts::backend::{BackendCapabilities, FftBackend};
 use crate::domain::contracts::error::ApolloResult;
-use crate::domain::metadata::precision::{BackendKind, Normalization, PrecisionProfile};
+use crate::domain::metadata::precision::BackendKind;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 
 /// CPU backend backed by Apollo-owned dense FFT implementations.
@@ -25,21 +25,7 @@ impl FftBackend for CpuBackend {
     }
 
     fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            kind: BackendKind::Cpu,
-            normalization: Normalization::FftwCompatible,
-            supports_1d: true,
-            supports_2d: true,
-            supports_3d: true,
-            supports_real_to_complex: true,
-            supports_mixed_precision: true,
-            default_precision_profile: PrecisionProfile::HIGH_ACCURACY_F64,
-            supported_precision_profiles: vec![
-                PrecisionProfile::HIGH_ACCURACY_F64,
-                PrecisionProfile::LOW_PRECISION_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-            ],
-        }
+        BackendCapabilities::CPU
     }
 
     fn plan_1d(&self, shape: Shape1D) -> ApolloResult<Self::Plan1D> {

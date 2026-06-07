@@ -55,9 +55,11 @@ fn transpose_square_inplace<T: Copy>(data: &mut [T], n: usize) {
 const PARALLEL_ROW_THRESHOLD: usize = 65_536;
 
 /// In-place four-step FFT for large power-of-two lengths.
-pub(crate) fn four_step_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn four_step_fft<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     data: &mut [F::Complex],
-    inverse: bool,
 ) {
     let n = data.len();
     debug_assert!(n.is_power_of_two());
@@ -69,19 +71,19 @@ pub(crate) fn four_step_fft<F: MixedRadixScalar<Complex = num_complex::Complex<F
     let n1 = 1usize << k1; // number of columns / length of second set of FFTs
     let n2 = 1usize << k2; // number of rows / length of first set of FFTs
 
-    let tw1 = if inverse {
+    let tw1 = if INVERSE {
         F::cached_twiddle_inv(n1)
     } else {
         F::cached_twiddle_fwd(n1)
     };
-    let tw2 = if inverse {
+    let tw2 = if INVERSE {
         F::cached_twiddle_inv(n2)
     } else {
         F::cached_twiddle_fwd(n2)
     };
 
     // Cached W_N^{j·k} twiddle matrix, row-major N2 × N1.
-    let tw_matrix = F::cached_four_step_twiddles(n, n1, n2, inverse);
+    let tw_matrix = F::cached_four_step_twiddles::<INVERSE>(n, n1, n2);
 
     let parallel = n >= PARALLEL_ROW_THRESHOLD;
 

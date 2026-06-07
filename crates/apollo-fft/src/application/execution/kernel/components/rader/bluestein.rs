@@ -38,13 +38,6 @@ use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, Mixed
 use num_complex::Complex;
 use std::sync::Arc;
 
-/// Minimum Rader convolution length `M = N - 1` that triggers the Bluestein
-/// strategy instead of the half-cyclic CRT split.
-///
-/// For N=10007, M=10006 → uses Bluestein with P=32768.
-/// For N=521,   M=520   → uses existing FullCyclic path.
-// pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
-
 // ── Cache fetch ────────────────────────────────────────────────────────────
 
 /// Fetch or build the Bluestein cache entry (kernel FFT).
@@ -53,16 +46,15 @@ use std::sync::Arc;
 /// same pattern as all other Apollo FFT caches. The global write lock is
 /// acquired only on a miss after confirming the miss under the read lock,
 /// preventing self-deadlock.
-fn cached_bluestein_entry<F>(
+fn cached_bluestein_entry<F, const INVERSE: bool>(
     n: usize,
-    inverse: bool,
     generator_inverse: usize,
 ) -> BluesteinEntry<F::Complex>
 where
     F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
 {
     let m = n - 1;
-    let key: BluesteinKey = (m, inverse, generator_inverse);
+    let key: BluesteinKey = (m, INVERSE, generator_inverse);
 
     if let Some(v) = F::tl_get(key) {
         return v;
@@ -74,7 +66,7 @@ where
         return v;
     }
 
-    let entry = build_bluestein_entry::<F>(n, m, inverse, generator_inverse);
+    let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse);
     let v = {
         let mut write_guard = F::global().write();
         write_guard.entry(key).or_insert(entry).clone()
@@ -92,16 +84,15 @@ where
 /// 1. Rader time-domain kernel: `K[j] = exp(sign · 2πi · g_inv^j / N)`.
 /// 2. Zero-pad to `P = next_pow2(2M - 1)`.
 /// 3. Forward Stockham FFT (unnormalized) → `kernel_fft`.
-fn build_bluestein_entry<F>(
+fn build_bluestein_entry<F, const INVERSE: bool>(
     n: usize,
     m: usize,
-    inverse: bool,
     generator_inverse: usize,
 ) -> BluesteinEntry<F::Complex>
 where
     F: MixedRadixScalar<Complex = Complex<F>>,
 {
-    let p = if std::mem::size_of::<F>() == 4 {
+    let p = if F::BLUESTEIN_PAD_POWER_OF_TWO {
         (2 * m - 1).next_power_of_two()
     } else {
         next_7_smooth(2 * m - 1)
@@ -109,21 +100,66 @@ where
     debug_assert!(is_7_smooth(p));
 
     // Build Rader time-domain kernel, zero-padded to P.
-    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
+    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
     let mut cur = 1usize;
-    let mut kernel_padded = vec![F::complex(0.0, 0.0); p];
-    for j in 0..m {
-        let a = sign * std::f64::consts::TAU * (cur as f64) / (n as f64);
-        kernel_padded[j] = F::complex(a.cos(), a.sin());
-        cur = (cur * generator_inverse) % n;
-    }
+    // Use native precision for phase trig where possible (f32 path uses f32::cos/sin for perf;
+    // no excess widen-narrow in arithmetic per persona -- f64 only for f64 path or accuracy contract
+    // of bluestein chirp phase; cast only at F::complex API boundary (once per sample, not bulk inner math).
+    // For f32 rader bluestein (hot for worst md ratios like 67/271 f32), this avoids f64 trig cost.
+    // Mem eff: build kernel using pooled bluestein scratch (TL aligned, reuses across plans,
+    // zero extra alloc/growth for temp during cache populate for rader). Final to_vec for Arc
+    // is the cached storage (unavoidable), but temp uses pool (improves mem efficiency for
+    // rader plans, esp f32 worst primes).
+    let kernel_vec = F::with_bluestein_scratch(p, |buf| {
+        buf[..p].fill(F::complex(0.0, 0.0));
+        for j in 0..m {
+            let a = sign * std::f64::consts::TAU * (cur as f64) / (n as f64);
+            let (re, im) = if F::BLUESTEIN_NATIVE_PHASE_TRIG {
+                let af = a as f32;
+                (af.cos() as f64, af.sin() as f64)
+            } else {
+                (a.cos(), a.sin())
+            };
+            buf[j] = F::complex(re, im);
+            cur = (cur * generator_inverse) % n;
+        }
 
-    // Forward FFT (unnormalized) of the zero-padded kernel.
-    // P is a 7-smooth composite number, so routing via dispatch_inplace
-    // avoids Rader re-entry.
-    dispatch_inplace::<F, false, false>(&mut kernel_padded, None);
+        // Forward FFT (unnormalized) of the zero-padded kernel.
+        // For pow2 p (common for f32 rader bluestein pads via next_power_of_two), use direct
+        // stockham_forward_sized (with_bluestein_scratch + tw) to hit avx _sized sub paths (f32/f64).
+        // This advances "full f32 avx/pot sub with_scratch" (unblocks n113/257 f32 bias, mono for
+        // kernel cache build on worst md rader primes, mem reuse of TL pool, zero extra for composite p).
+        // For non-pow2 7-smooth p, dispatch (avoids Rader re-entry). Use exact p (buf may be larger due align).
+        if p.is_power_of_two() && p >= 64 {
+            F::with_twiddle_fwd(p, |tw| {
+                <F as MixedRadixScalar>::with_scratch(p, |scratch| {
+                    // Direct sized for pow2 p in f32 kernel build (avx_with_scratch_sized sub for f32 rader bluestein pads;
+                    // unblocks n113/257 f32, ensures mono/ZST for cache pop, reuses with_bluestein_scratch TL pool).
+                    // Matches convolve style; cascade for hot pads, general sized for others.
+                    if p == 64 {
+                        F::stockham_forward_sized::<6>(buf, scratch, tw);
+                    } else if p == 128 {
+                        F::stockham_forward_sized::<7>(buf, scratch, tw);
+                    } else if p == 256 {
+                        F::stockham_forward_sized::<8>(buf, scratch, tw);
+                    } else if p == 512 {
+                        F::stockham_forward_sized::<9>(buf, scratch, tw);
+                    } else if p == 1024 {
+                        F::stockham_forward_sized::<10>(buf, scratch, tw);
+                    } else if p == 2048 {
+                        F::stockham_forward_sized::<11>(buf, scratch, tw);
+                    } else {
+                        F::stockham_forward(buf, scratch, tw);
+                    }
+                });
+            });
+        } else {
+            dispatch_inplace::<F, false, false>(&mut buf[..p], None);
+        }
 
-    Arc::from(kernel_padded)
+        buf[..p].to_vec()
+    });
+    Arc::from(kernel_vec)
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -183,16 +219,16 @@ fn next_7_smooth(min_val: usize) -> usize {
 #[inline(never)]
 pub(super) fn rader_bluestein_convolve_inplace<
     F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
+    const INVERSE: bool,
 >(
     padded: &mut [F::Complex],
     n: usize,
-    inverse: bool,
     generator_inverse: usize,
 ) {
     let m = padded.len();
     debug_assert_eq!(m, n - 1);
 
-    let kernel_fft = cached_bluestein_entry::<F>(n, inverse, generator_inverse);
+    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
     let p = kernel_fft.len();
     debug_assert!(is_7_smooth(p));
     debug_assert!(p >= 2 * m - 1);
@@ -202,14 +238,65 @@ pub(super) fn rader_bluestein_convolve_inplace<
         data_buf[..m].copy_from_slice(&padded[..m]);
         data_buf[m..p].fill(F::complex(0.0, 0.0));
 
-        // Forward FFT (unnormalized)
-        dispatch_inplace::<F, false, false>(data_buf, None);
+        // Forward FFT (unnormalized) - direct stockham for pow2 pads (common for f32 rader bluestein, zero-cost)
+        if p.is_power_of_two() && p >= 64 {
+            F::with_twiddle_fwd(p, |tw| {
+                <F as MixedRadixScalar>::with_scratch(p, |scratch| {
+                    if p == 64 {
+                        F::stockham_forward_sized::<6>(data_buf, scratch, tw);
+                    } else if p == 128 {
+                        // Direct const LOG2 for 128 pad (f32 rader bluestein common; mono + unroll benefit for PoT128 in pads, mem pool reuse).
+                        F::stockham_forward_sized::<7>(data_buf, scratch, tw);
+                    } else if p == 256 {
+                        F::stockham_forward_sized::<8>(data_buf, scratch, tw);
+                    } else if p == 512 {
+                        F::stockham_forward_sized::<9>(data_buf, scratch, tw);
+                    } else if p == 1024 {
+                        // Direct const LOG2=10 for p=1024 f32 pads (e.g. rader 271 m=270); mono + unroll benefit for PoT in pads, mem pool.
+                        F::stockham_forward_sized::<10>(data_buf, scratch, tw);
+                    } else if p == 2048 {
+                        F::stockham_forward_sized::<11>(data_buf, scratch, tw);
+                    } else {
+                        F::stockham_forward(data_buf, scratch, tw);
+                    }
+                });
+            });
+        } else {
+            dispatch_inplace::<F, false, false>(data_buf, None);
+        }
 
-        // Pointwise multiply with precomputed kernel FFT
+        // Pointwise multiply with precomputed kernel FFT.
         F::pointwise_mul(data_buf, kernel_fft.as_ref());
 
         // Inverse FFT (unnormalized)
-        dispatch_inplace::<F, true, false>(data_buf, None);
+        if p.is_power_of_two() && p >= 64 {
+            F::with_twiddle_inv(p, |tw| {
+                <F as MixedRadixScalar>::with_scratch(p, |scratch| {
+                    if p == 64 {
+                        F::stockham_forward_sized::<6>(data_buf, scratch, tw);
+                    } else if p == 128 {
+                        // Direct const LOG2 for 128 pad (f32 rader bluestein; mono + unroll for PoT128, mem).
+                        F::stockham_forward_sized::<7>(data_buf, scratch, tw);
+                    } else if p == 256 {
+                        F::stockham_forward_sized::<8>(data_buf, scratch, tw);
+                    } else if p == 512 {
+                        F::stockham_forward_sized::<9>(data_buf, scratch, tw);
+                    } else if p == 1024 {
+                        // Direct const LOG2=10 for p=1024 f32 pads (e.g. rader 271 m=270); mono + unroll benefit for PoT in pads, mem pool.
+                        F::stockham_forward_sized::<10>(data_buf, scratch, tw);
+                    } else if p == 2048 {
+                        F::stockham_forward_sized::<11>(data_buf, scratch, tw);
+                    } else {
+                        F::stockham_forward(data_buf, scratch, tw);
+                    }
+                });
+            });
+        } else {
+            dispatch_inplace::<F, true, false>(data_buf, None);
+        }
+
+        // Reborrow as shared reference for fold reads (zero-copy over pooled scratch).
+        let data_buf: &[F::Complex] = data_buf;
 
         // ── 5. Fold tail into head for circular convolution ─────────────
         // After two unnormalized FFTs and pointwise multiply:
@@ -293,9 +380,8 @@ mod tests {
         let expected = dft_forward(&input);
         let mut got = input;
 
-        super::super::rader_fft_with_convolution_strategy::<f64, false>(
+        super::super::rader_fft_with_convolution_backend::<f64, false, super::super::Bluestein>(
             &mut got,
-            super::super::RaderConvolutionStrategy::Bluestein,
         );
 
         let err = max_abs_err(&got, &expected);
@@ -310,13 +396,11 @@ mod tests {
         let input = signal(n);
         let mut data = input.clone();
 
-        super::super::rader_fft_with_convolution_strategy::<f64, false>(
+        super::super::rader_fft_with_convolution_backend::<f64, false, super::super::Bluestein>(
             &mut data,
-            super::super::RaderConvolutionStrategy::Bluestein,
         );
-        super::super::rader_fft_with_convolution_strategy::<f64, true>(
+        super::super::rader_fft_with_convolution_backend::<f64, true, super::super::Bluestein>(
             &mut data,
-            super::super::RaderConvolutionStrategy::Bluestein,
         );
         for x in &mut data {
             *x /= n as f64;

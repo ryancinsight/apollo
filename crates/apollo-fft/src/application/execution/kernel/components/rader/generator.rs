@@ -121,8 +121,7 @@ pub(crate) const fn inverse_mod(a: usize, m: usize) -> usize {
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
-const ATOMIC_ZERO: AtomicU32 = AtomicU32::new(0);
-static RADER_GENERATOR_CACHE: [AtomicU32; 4096] = [ATOMIC_ZERO; 4096];
+static RADER_GENERATOR_CACHE: [AtomicU32; 4096] = [const { AtomicU32::new(0) }; 4096];
 
 pub(crate) fn primitive_root_and_inverse(p: usize) -> (usize, usize) {
     if p < 4096 {

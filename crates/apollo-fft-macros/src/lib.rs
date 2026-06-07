@@ -181,7 +181,7 @@ fn route_kernel(p: usize) -> proc_macro2::TokenStream {
     let col_tokens: Vec<_> = positions.iter().map(|&(_, col)| quote! { #col }).collect();
 
     quote! {
-        #[inline(always)]
+        #[inline]
         fn #route<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                 Complex = num_complex::Complex<F>,

@@ -1,0 +1,132 @@
+//! Shared WGPU device acquisition for the Apollo WGPU crate family.
+//!
+//! ## Motivation
+//!
+//! 17 WGPU backend crates (`apollo-*-wgpu`) each duplicated the same ~40-line
+//! `try_default()` adapter/device acquisition boilerplate, the same
+//! `device()`/`queue()` getters, and the same `AdapterUnavailable` /
+//! `DeviceUnavailable` error variants.  This crate factors that common
+//! surface into a single `WgpuDevice` struct so crate authors only carry the
+//! kernel pipeline and domain-specific execution logic.
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use apollo_wgpu_helpers::WgpuDevice;
+//!
+//! pub struct MyWgpuBackend {
+//!     device: WgpuDevice,
+//!     kernel: Arc<MyGpuKernel>,
+//! }
+//!
+//! impl MyWgpuBackend {
+//!     pub fn try_default() -> Result<Self, MyError> {
+//!         let device = WgpuDevice::try_default("apollo-mine-wgpu")?;
+//!         Ok(Self { kernel: Arc::new(MyGpuKernel::new(device.inner())), device })
+//!     }
+//! }
+//! ```
+
+use std::sync::Arc;
+
+pub use error::WgpuDeviceError;
+pub use error::WgpuDeviceResult;
+
+mod error;
+
+// ── WgpuDevice ──────────────────────────────────────────────────────────────
+
+/// An acquired WGPU device + queue pair.
+///
+/// Created via [`WgpuDevice::new`] (with caller-owned `Arc`s) or
+/// [`WgpuDevice::try_default`] (auto-acquire).
+///
+/// `Clone` is cheap (two `Arc` clones); `Debug` shows the label.
+#[derive(Clone, Debug)]
+pub struct WgpuDevice {
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
+}
+
+impl WgpuDevice {
+    /// Wrap an existing device and queue.
+    #[must_use]
+    #[inline]
+    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        Self { device, queue }
+    }
+
+    /// Acquire a default adapter and device.
+    ///
+    /// `label` is used as the WGPU device label (e.g. `"apollo-fft-wgpu"`).
+    /// Uses [`wgpu::Limits::downlevel_defaults`]; for custom limits use
+    /// [`try_default_with_limits`](Self::try_default_with_limits).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WgpuDeviceError::AdapterUnavailable`] or
+    /// [`WgpuDeviceError::DeviceUnavailable`] on failure.
+    #[inline]
+    pub fn try_default(label: &str) -> WgpuDeviceResult<Self> {
+        Self::try_default_with_limits(label, wgpu::Limits::downlevel_defaults())
+    }
+
+    /// Acquire a default adapter and device with custom limits.
+    ///
+    /// Use this when the kernel requires non-default buffer counts (e.g.
+    /// `max_storage_buffers_per_shader_stage`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WgpuDeviceError::AdapterUnavailable`] or
+    /// [`WgpuDeviceError::DeviceUnavailable`] on failure.
+    pub fn try_default_with_limits(
+        label: &str,
+        required_limits: wgpu::Limits,
+    ) -> WgpuDeviceResult<Self> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .map_err(|e| WgpuDeviceError::AdapterUnavailable {
+            message: e.to_string(),
+        })?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some(label),
+            required_features: wgpu::Features::empty(),
+            required_limits,
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        }))
+        .map_err(|e| WgpuDeviceError::DeviceUnavailable {
+            message: e.to_string(),
+        })?;
+        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+    }
+
+    /// Return a reference to the inner WGPU device, for kernel construction.
+    /// Kernel constructors typically take `&wgpu::Device`; use this method
+    /// when you need the raw reference rather than the `Arc` returned by
+    /// [`device()`](Self::device).
+    #[must_use]
+    #[inline]
+    pub fn inner(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// Return a reference to the WGPU device `Arc`.
+    #[must_use]
+    #[inline]
+    pub fn device(&self) -> &Arc<wgpu::Device> {
+        &self.device
+    }
+
+    /// Return a reference to the WGPU queue `Arc`.
+    #[must_use]
+    #[inline]
+    pub fn queue(&self) -> &Arc<wgpu::Queue> {
+        &self.queue
+    }
+}

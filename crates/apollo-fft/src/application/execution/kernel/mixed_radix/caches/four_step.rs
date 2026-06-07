@@ -38,7 +38,11 @@ declare_cache_store! {
     global_reduced: FOUR_STEP_TW_REDUCED_CACHE,
 }
 
-fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, sign: f64) -> Vec<C> {
+fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
+    n: usize,
+    n1: usize,
+    n2: usize,
+) -> Vec<C> {
     let total = n1 * n2;
     let mut re_tbl = vec![0.0f64; total];
     let mut im_tbl = vec![0.0f64; total];
@@ -54,6 +58,7 @@ fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, si
             .collect();
     }
 
+    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
     let base_angle = sign * std::f64::consts::TAU / n as f64;
     let w_re = base_angle.cos();
     let w_im = base_angle.sin();
@@ -87,14 +92,12 @@ fn build_four_step_twiddles<C: TwiddleOutput>(n: usize, n1: usize, n2: usize, si
 }
 
 #[inline]
-pub(crate) fn cached_four_step_twiddles<C: FourStepStore>(
+pub(crate) fn cached_four_step_twiddles<C: FourStepStore, const INVERSE: bool>(
     n: usize,
     n1: usize,
     n2: usize,
-    inverse: bool,
 ) -> Arc<[C]> {
-    let key = (n, inverse as usize);
-    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
+    let key = (n, INVERSE as usize);
     if let Some(v) = C::four_step_tl_get(key) {
         return v;
     }
@@ -103,7 +106,7 @@ pub(crate) fn cached_four_step_twiddles<C: FourStepStore>(
         if let Some(v) = maybe {
             v
         } else {
-            let new_v: Arc<[C]> = Arc::from(build_four_step_twiddles::<C>(n, n1, n2, sign));
+            let new_v: Arc<[C]> = Arc::from(build_four_step_twiddles::<C, INVERSE>(n, n1, n2));
             C::four_step_global()
                 .write()
                 .entry(key)

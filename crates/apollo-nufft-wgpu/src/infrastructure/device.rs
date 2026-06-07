@@ -12,6 +12,7 @@ use crate::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::domain::capabilities::NufftWgpuCapabilities;
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::kernel::{NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel};
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -22,50 +23,31 @@ pub fn nufft_wgpu_available() -> bool {
 /// WGPU NUFFT backend descriptor.
 #[derive(Debug, Clone)]
 pub struct NufftWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<NufftGpuKernel>,
 }
 
 impl NufftWgpuBackend {
     /// Create a NUFFT WGPU backend from an existing device and queue.
     #[must_use]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+    pub fn new(device: WgpuDevice) -> Self {
         Self {
-            kernel: Arc::new(NufftGpuKernel::new(device.as_ref())),
+            kernel: Arc::new(NufftGpuKernel::new(device.inner())),
             device,
-            queue,
         }
     }
 
     /// Create a backend by requesting a default WGPU adapter and device.
     pub fn try_default() -> NufftWgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| NufftWgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-nufft-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits {
+        let device = WgpuDevice::try_default_with_limits(
+            "apollo-nufft-wgpu",
+            wgpu::Limits {
                 max_storage_buffers_per_shader_stage: 8,
                 ..wgpu::Limits::downlevel_defaults()
             },
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                NufftWgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        )
+        .map_err(NufftWgpuError::Device)?;
+        Ok(Self::new(device))
     }
 
     /// Return truthful current capabilities.
@@ -77,13 +59,13 @@ impl NufftWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a 1D plan descriptor.
@@ -119,8 +101,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(plan.domain().n)?;
         validate_usize_to_u32(positions.len())?;
         let output = self.kernel.execute_type1_1d(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan.domain().n,
             plan.domain().length() as f32,
             positions,
@@ -178,8 +160,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(plan.domain().n)?;
         validate_usize_to_u32(positions.len())?;
         let output = self.kernel.execute_type2_1d(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             plan.domain().n,
             plan.domain().length() as f32,
             fourier_coeffs,
@@ -225,8 +207,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
         let output = self.kernel.execute_fast_type1_1d(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             plan.domain().n,
             fast.oversampled_len,
             plan.kernel_width(),
@@ -290,8 +272,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
         let output = self.kernel.execute_fast_type2_1d(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             plan.domain().n,
             fast.oversampled_len,
             plan.kernel_width(),
@@ -353,14 +335,14 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
         let buffers = crate::NufftGpuBuffers1D::new(
-            self.device.as_ref(),
+            self.device.inner(),
             plan.domain().n,
             fast.oversampled_len,
             positions.len(),
         );
         let (output, diagnostics) = self.kernel.execute_fast_type2_1d_with_diagnostics(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             &buffers,
             plan.kernel_width(),
             plan.domain().length() as f32,
@@ -395,8 +377,8 @@ impl NufftWgpuBackend {
         let fast = fast_3d_metadata(plan)?;
         let (lx, ly, lz) = grid.lengths();
         let output = self.kernel.execute_fast_type1_3d(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             (grid.nx, grid.ny, grid.nz),
             (fast.mx, fast.my, fast.mz),
             plan.kernel_width(),
@@ -463,8 +445,8 @@ impl NufftWgpuBackend {
         let (lx, ly, lz) = grid.lengths();
         let flat_modes: Vec<Complex32> = modes.iter().copied().collect();
         let output = self.kernel.execute_fast_type2_3d(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             (grid.nx, grid.ny, grid.nz),
             (fast.mx, fast.my, fast.mz),
             plan.kernel_width(),
@@ -532,14 +514,14 @@ impl NufftWgpuBackend {
         let (lx, ly, lz) = grid.lengths();
         let flat_modes: Vec<Complex32> = modes.iter().copied().collect();
         let buffers = crate::NufftGpuBuffers3D::new(
-            self.device.as_ref(),
+            self.device.inner(),
             (grid.nx, grid.ny, grid.nz),
             (fast.mx, fast.my, fast.mz),
             positions.len(),
         );
         let (output, diagnostics) = self.kernel.execute_fast_type2_3d_with_diagnostics(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             &buffers,
             plan.kernel_width(),
             (lx as f32, ly as f32, lz as f32),
@@ -573,8 +555,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let (lx, ly, lz) = grid.lengths();
         let output = self.kernel.execute_type1_3d(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             positions,
@@ -635,8 +617,8 @@ impl NufftWgpuBackend {
         let (lx, ly, lz) = grid.lengths();
         let coefficients: Vec<Complex32> = modes.iter().copied().collect();
         let output = self.kernel.execute_type2_3d(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             &coefficients,
@@ -690,8 +672,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
         let output = self.kernel.execute_fast_type1_1d_with_buffers(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             buffers,
             plan.kernel_width(),
             plan.domain().length() as f32,
@@ -728,8 +710,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
         let output = self.kernel.execute_fast_type2_1d_with_buffers(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             buffers,
             plan.kernel_width(),
             plan.domain().length() as f32,
@@ -765,8 +747,8 @@ impl NufftWgpuBackend {
         let fast = fast_3d_metadata(plan)?;
         let (lx, ly, lz) = grid.lengths();
         let output = self.kernel.execute_fast_type1_3d_with_buffers(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             buffers,
             plan.kernel_width(),
             (lx as f32, ly as f32, lz as f32),
@@ -812,8 +794,8 @@ impl NufftWgpuBackend {
         let (lx, ly, lz) = grid.lengths();
         let flat_modes: Vec<Complex32> = modes.iter().copied().collect();
         let output = self.kernel.execute_fast_type2_3d_with_buffers(
-            &self.device,
-            &self.queue,
+            self.device.device(),
+            self.device.queue(),
             buffers,
             plan.kernel_width(),
             (lx as f32, ly as f32, lz as f32),

@@ -74,7 +74,7 @@ pub fn generate_two_by_prime_natural_dispatch(input: CompilerTokenStream) -> Com
     quote! {
         #(#route_fns)*
 
-        #[inline(always)]
+        #[inline]
         fn fuse_two_prime_natural<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                 Complex = num_complex::Complex<F>,
@@ -138,7 +138,7 @@ fn two_by_prime_kernel(p: usize, h: usize) -> proc_macro2::TokenStream {
     let scatter_diff_tokens: Vec<_> = scatter_diff.iter().map(|&idx| quote! { #idx }).collect();
 
     quote! {
-        #[inline(always)]
+        #[inline]
         fn #route<
             F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar,
             const INVERSE: bool,

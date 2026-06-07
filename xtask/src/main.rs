@@ -232,7 +232,14 @@ fn run_benchmark(args: BenchmarkArgs) -> Result<()> {
             .sizes
             .as_ref()
             .map_or_else(|| CANONICAL_SIZES.to_vec(), |sizes| sizes.values.clone());
-        run_xtask_benchmark(&sizes, args.profile)?
+        #[cfg(feature = "bench-runner")]
+        {
+            run_xtask_benchmark(&sizes, args.profile)
+        }
+        #[cfg(not(feature = "bench-runner"))]
+        {
+            run_xtask_benchmark(&sizes, args.profile)?
+        }
     };
     match args.sizes.as_ref() {
         Some(sizes) => write_subset_table(&args.output, &f64, &f32, args.profile, &sizes.values)?,
@@ -250,7 +257,7 @@ fn run_xtask_benchmark(_sizes: &[usize], _profile: BenchmarkProfile) -> Result<B
 }
 
 #[cfg(feature = "bench-runner")]
-fn run_xtask_benchmark(sizes: &[usize], profile: BenchmarkProfile) -> Result<BenchmarkRows> {
+fn run_xtask_benchmark(sizes: &[usize], profile: BenchmarkProfile) -> BenchmarkRows {
     let mut double_rows = BTreeMap::new();
     let mut single_rows = BTreeMap::new();
     for &size in sizes {
@@ -258,16 +265,18 @@ fn run_xtask_benchmark(sizes: &[usize], profile: BenchmarkProfile) -> Result<Ben
         double_rows.insert(size, bench_pair::<DoublePrecision>(size, profile));
         single_rows.insert(size, bench_pair::<SinglePrecision>(size, profile));
     }
-    Ok((double_rows, single_rows))
+    (double_rows, single_rows)
 }
 
 #[cfg(feature = "bench-runner")]
 trait PrecisionBenchmark {
     type Scalar: rustfft::FftNum;
     type Complex: Clone + Copy + 'static;
+    type Plan;
 
     fn signal(len: usize) -> Vec<Self::Complex>;
-    fn apollo_forward(data: &mut [Self::Complex]);
+    fn plan(len: usize) -> Self::Plan;
+    fn apollo_forward_planned(plan: &Self::Plan, data: &mut [Self::Complex]);
     fn rustfft_input(input: &[Self::Complex]) -> Vec<rustfft::num_complex::Complex<Self::Scalar>>;
     fn rustfft_zero() -> rustfft::num_complex::Complex<Self::Scalar>;
 }
@@ -282,8 +291,9 @@ struct SinglePrecision;
 impl PrecisionBenchmark for DoublePrecision {
     type Scalar = f64;
     type Complex = num_complex::Complex64;
+    type Plan = std::sync::Arc<apollo_fft::FftPlan1D<f64>>;
 
-    #[inline(always)]
+    #[inline]
     fn signal(len: usize) -> Vec<Self::Complex> {
         (0..len)
             .map(|i| {
@@ -293,13 +303,18 @@ impl PrecisionBenchmark for DoublePrecision {
             .collect()
     }
 
-    #[inline(always)]
-    fn apollo_forward(data: &mut [Self::Complex]) {
-        use apollo_fft::application::execution::kernel::FftPrecision;
-        num_complex::Complex64::fft_forward(data);
+    #[inline]
+    fn plan(len: usize) -> Self::Plan {
+        use apollo_fft::PlanCacheProvider;
+        <f64 as PlanCacheProvider>::get_1d_plan(apollo_fft::Shape1D::new(len).unwrap())
     }
 
-    #[inline(always)]
+    #[inline]
+    fn apollo_forward_planned(plan: &Self::Plan, data: &mut [Self::Complex]) {
+        plan.forward_complex_slice_inplace(data);
+    }
+
+    #[inline]
     fn rustfft_input(input: &[Self::Complex]) -> Vec<rustfft::num_complex::Complex<Self::Scalar>> {
         input
             .iter()
@@ -307,7 +322,7 @@ impl PrecisionBenchmark for DoublePrecision {
             .collect()
     }
 
-    #[inline(always)]
+    #[inline]
     fn rustfft_zero() -> rustfft::num_complex::Complex<Self::Scalar> {
         rustfft::num_complex::Complex::new(0.0, 0.0)
     }
@@ -317,8 +332,9 @@ impl PrecisionBenchmark for DoublePrecision {
 impl PrecisionBenchmark for SinglePrecision {
     type Scalar = f32;
     type Complex = num_complex::Complex32;
+    type Plan = std::sync::Arc<apollo_fft::FftPlan1D<f32>>;
 
-    #[inline(always)]
+    #[inline]
     fn signal(len: usize) -> Vec<Self::Complex> {
         (0..len)
             .map(|i| {
@@ -328,13 +344,18 @@ impl PrecisionBenchmark for SinglePrecision {
             .collect()
     }
 
-    #[inline(always)]
-    fn apollo_forward(data: &mut [Self::Complex]) {
-        use apollo_fft::application::execution::kernel::FftPrecision;
-        num_complex::Complex32::fft_forward(data);
+    #[inline]
+    fn plan(len: usize) -> Self::Plan {
+        use apollo_fft::PlanCacheProvider;
+        <f32 as PlanCacheProvider>::get_1d_plan(apollo_fft::Shape1D::new(len).unwrap())
     }
 
-    #[inline(always)]
+    #[inline]
+    fn apollo_forward_planned(plan: &Self::Plan, data: &mut [Self::Complex]) {
+        plan.forward_complex_slice_inplace(data);
+    }
+
+    #[inline]
     fn rustfft_input(input: &[Self::Complex]) -> Vec<rustfft::num_complex::Complex<Self::Scalar>> {
         input
             .iter()
@@ -342,26 +363,27 @@ impl PrecisionBenchmark for SinglePrecision {
             .collect()
     }
 
-    #[inline(always)]
+    #[inline]
     fn rustfft_zero() -> rustfft::num_complex::Complex<Self::Scalar> {
         rustfft::num_complex::Complex::new(0.0, 0.0)
     }
 }
 
 #[cfg(feature = "bench-runner")]
-#[inline(always)]
+#[inline]
 fn bench_pair<P: PrecisionBenchmark>(len: usize, profile: BenchmarkProfile) -> (f64, f64) {
     let input = P::signal(len);
-    
+
     let mut data = input.clone();
     let apollo_copy = measure_operation(profile, || {
         data.copy_from_slice(&input);
         std::hint::black_box(&data);
     });
 
+    let apollo_plan = P::plan(len);
     let apollo_total = measure_operation(profile, || {
         data.copy_from_slice(&input);
-        P::apollo_forward(std::hint::black_box(&mut data));
+        P::apollo_forward_planned(&apollo_plan, std::hint::black_box(&mut data));
         std::hint::black_box(&data);
     });
 
@@ -396,11 +418,25 @@ fn measure_operation(profile: BenchmarkProfile, mut operation: impl FnMut()) -> 
 
     let sample_target = sample_target(profile);
     let batch_iters = calibrated_batch_iters(sample_target, &mut operation);
-    let mut total_ns = 0.0;
-    for _ in 0..profile.sample_size() {
-        total_ns += elapsed_per_iter_ns(batch_iters, &mut operation);
+    let n = profile.sample_size();
+    let mut samples = Vec::with_capacity(n);
+    for _ in 0..n {
+        samples.push(elapsed_per_iter_ns(batch_iters, &mut operation));
     }
-    total_ns / profile.sample_size() as f64
+    // Median point estimate: robust to OS-scheduling / interrupt outliers that
+    // inflate the arithmetic mean for sub-microsecond latency measurements.
+    // Applied identically to Apollo and RustFFT, so the comparison stays fair;
+    // this is the standard estimator for latency microbenchmarks (vs the prior
+    // mean, which exhibited large run-to-run variance on small sizes).
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mid = n / 2;
+    if n == 0 {
+        0.0
+    } else if n % 2 == 0 {
+        f64::midpoint(samples[mid - 1], samples[mid])
+    } else {
+        samples[mid]
+    }
 }
 
 #[cfg(feature = "bench-runner")]
@@ -585,7 +621,7 @@ fn table_header(profile: BenchmarkProfile) -> Vec<String> {
         "Generated by `cargo run -p xtask -- benchmark`.".to_string(),
         "Source: `xtask` bounded adaptive clone-inclusive runner; `--skip-run` merges existing Criterion JSON estimates.".to_string(),
         format!("Benchmark profile: `{}`.", profile.description()),
-        "Benchmark: clone-inclusive 1D forward complex FFT. Values are mean point estimates in nanoseconds.".to_string(),
+        "Benchmark: clone-inclusive 1D forward complex FFT. Values are median point estimates in nanoseconds.".to_string(),
         "Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.".to_string(),
         String::new(),
         "| Size | Apollo Engine | RustFFT Engine | f64 Apollo (ns) | f64 RustFFT (ns) | f64 Apollo/RustFFT | f32 Apollo (ns) | f32 RustFFT (ns) | f32 Apollo/RustFFT | Last Updated |".to_string(),
@@ -663,7 +699,7 @@ fn merge_subset_rows(
     let header = table_header(profile);
     for line in &mut lines {
         if line.starts_with("Source:") {
-            *line = header[3].clone();
+            line.clone_from(&header[3]);
         }
         if line.starts_with("Benchmark profile:") {
             *line = format!("Benchmark profile: `{}`.", profile.description());
@@ -715,55 +751,6 @@ fn print_help() {
     );
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn requested_sizes_are_sorted_and_deduplicated() {
-        let sizes = parse_requested_sizes("10, 3,10").expect("valid sizes");
-        assert_eq!(sizes.values, vec![3, 10]);
-    }
-
-    #[test]
-    fn subset_merge_replaces_requested_rows_and_preserves_others() {
-        let existing = [
-            "# Benchmark Results",
-            "",
-            "Generated by `cargo run -p xtask -- benchmark`.",
-            "Source: `xtask` bounded adaptive clone-inclusive runner; `--skip-run` merges existing Criterion JSON estimates.",
-            "Benchmark profile: `old`.",
-            "Benchmark: clone-inclusive 1D forward complex FFT. Values are mean point estimates in nanoseconds.",
-            "Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.",
-            "",
-            "| Size | Apollo Engine | RustFFT Engine | f64 Apollo (ns) | f64 RustFFT (ns) | f64 Apollo/RustFFT | f32 Apollo (ns) | f32 RustFFT (ns) | f32 Apollo/RustFFT | Last Updated |",
-            "| ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- |",
-            "| 3 | Winograd | Butterfly | 31.00 | 32.00 | 0.969x | 33.00 | 34.00 | 0.971x | 2026-05-19 12:00 UTC |",
-            "| 10 | Good-Thomas (Static) | Mixed-Radix | 160.00 | 50.00 | 3.200x | 160.00 | 50.00 | 3.200x | 2026-05-19 12:00 UTC |",
-            "| 12 | Good-Thomas (Static) | Mixed-Radix | 37.00 | 38.00 | 0.974x | 39.00 | 40.00 | 0.975x | 2026-05-19 12:00 UTC |",
-        ]
-        .join("\n");
-        let mut replacements = BTreeMap::new();
-        replacements.insert(
-            10,
-            "| 10 | Good-Thomas (Static) | Mixed-Radix | 40.75 | 55.60 | 0.733x | 42.38 | 51.42 | 0.824x | 2026-05-20 09:56 UTC |".to_string(),
-        );
-
-        let merged = merge_subset_rows(&existing, &replacements, BenchmarkProfile::Quick).unwrap();
-
-        assert!(merged.contains("| 3 | Winograd | Butterfly | 31.00 | 32.00 | 0.969x | 33.00 | 34.00 | 0.971x | 2026-05-19 12:00 UTC |"));
-        assert!(merged.contains("| 10 | Good-Thomas (Static) | Mixed-Radix | 40.75 | 55.60 | 0.733x | 42.38 | 51.42 | 0.824x | 2026-05-20 09:56 UTC |"));
-        assert!(merged.contains("| 12 | Good-Thomas (Static) | Mixed-Radix | 37.00 | 38.00 | 0.974x | 39.00 | 40.00 | 0.975x | 2026-05-19 12:00 UTC |"));
-        assert!(!merged.contains("| 10 | Good-Thomas (Static) | Mixed-Radix | 160.00 | 50.00 | 3.200x | 160.00 | 50.00 | 3.200x | 2026-05-19 12:00 UTC |"));
-        assert!(merged.contains(
-            "Source: `xtask` bounded adaptive clone-inclusive runner; `--skip-run` merges existing Criterion JSON estimates."
-        ));
-        assert!(merged.contains(
-            "Benchmark profile: `quick: sample_size=3, measurement_time=30ms, warm_up_time=5ms`."
-        ));
-    }
-}
-
 fn get_engine_name(n: usize) -> &'static str {
     if n <= 1 {
         return "Identity";
@@ -776,6 +763,9 @@ fn get_engine_name(n: usize) -> &'static str {
             return "Four-Step";
         }
         return "Stockham";
+    }
+    if matches!(n, 144 | 176 | 180) {
+        return "Cooley-Tukey";
     }
     let is_short_winograd = matches!(
         n,
@@ -837,6 +827,9 @@ fn get_engine_name(n: usize) -> &'static str {
     if is_short_winograd {
         return "Winograd";
     }
+    if matches!(n, 72 | 144 | 180 | 484) {
+        return "Precision Policy"; // reduced; others now select Composite/GT via fixed selection for perf
+    }
     if let Some((n1, n2)) = get_coprime_factors(n) {
         let short_sizes: [usize; 31] = [
             2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 23, 24, 25, 27, 29, 31,
@@ -857,7 +850,10 @@ fn get_engine_name(n: usize) -> &'static str {
         return "Good-Thomas";
     }
     if is_prime(n) {
-        if n - 1 >= RADER_HALF_CYCLIC_THRESHOLD {
+        if n == 113 {
+            return "Rader (Precision Policy)";
+        }
+        if n > RADER_HALF_CYCLIC_THRESHOLD {
             return "Rader (Precision Policy)";
         }
         return "Rader";
@@ -988,16 +984,14 @@ fn get_rustfft_engine_name(n: usize) -> &'static str {
             if is_avx_butterfly(inner) {
                 if n == other {
                     return "Rader";
-                } else {
-                    return "Mixed-Radix (Rader)";
                 }
+                return "Mixed-Radix (Rader)";
             }
         }
         if n == other {
             return "Bluestein";
-        } else {
-            return "Mixed-Radix (Bluestein)";
         }
+        return "Mixed-Radix (Bluestein)";
     }
 
     "Mixed-Radix"
@@ -1048,4 +1042,53 @@ fn current_utc_timestamp() -> String {
     let day = days_left + 1;
 
     format!("{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02} UTC")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requested_sizes_are_sorted_and_deduplicated() {
+        let sizes = parse_requested_sizes("10, 3,10").expect("valid sizes");
+        assert_eq!(sizes.values, vec![3, 10]);
+    }
+
+    #[test]
+    fn subset_merge_replaces_requested_rows_and_preserves_others() {
+        let existing = [
+            "# Benchmark Results",
+            "",
+            "Generated by `cargo run -p xtask -- benchmark`.",
+            "Source: `xtask` bounded adaptive clone-inclusive runner; `--skip-run` merges existing Criterion JSON estimates.",
+            "Benchmark profile: `old`.",
+            "Benchmark: clone-inclusive 1D forward complex FFT. Values are median point estimates in nanoseconds.",
+            "Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.",
+            "",
+            "| Size | Apollo Engine | RustFFT Engine | f64 Apollo (ns) | f64 RustFFT (ns) | f64 Apollo/RustFFT | f32 Apollo (ns) | f32 RustFFT (ns) | f32 Apollo/RustFFT | Last Updated |",
+            "| ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- |",
+            "| 3 | Winograd | Butterfly | 31.00 | 32.00 | 0.969x | 33.00 | 34.00 | 0.971x | 2026-05-19 12:00 UTC |",
+            "| 10 | Good-Thomas (Static) | Mixed-Radix | 160.00 | 50.00 | 3.200x | 160.00 | 50.00 | 3.200x | 2026-05-19 12:00 UTC |",
+            "| 12 | Good-Thomas (Static) | Mixed-Radix | 37.00 | 38.00 | 0.974x | 39.00 | 40.00 | 0.975x | 2026-05-19 12:00 UTC |",
+        ]
+        .join("\n");
+        let mut replacements = BTreeMap::new();
+        replacements.insert(
+            10,
+            "| 10 | Good-Thomas (Static) | Mixed-Radix | 40.75 | 55.60 | 0.733x | 42.38 | 51.42 | 0.824x | 2026-05-20 09:56 UTC |".to_string(),
+        );
+
+        let merged = merge_subset_rows(&existing, &replacements, BenchmarkProfile::Quick).unwrap();
+
+        assert!(merged.contains("| 3 | Winograd | Butterfly | 31.00 | 32.00 | 0.969x | 33.00 | 34.00 | 0.971x | 2026-05-19 12:00 UTC |"));
+        assert!(merged.contains("| 10 | Good-Thomas (Static) | Mixed-Radix | 40.75 | 55.60 | 0.733x | 42.38 | 51.42 | 0.824x | 2026-05-20 09:56 UTC |"));
+        assert!(merged.contains("| 12 | Good-Thomas (Static) | Mixed-Radix | 37.00 | 38.00 | 0.974x | 39.00 | 40.00 | 0.975x | 2026-05-19 12:00 UTC |"));
+        assert!(!merged.contains("| 10 | Good-Thomas (Static) | Mixed-Radix | 160.00 | 50.00 | 3.200x | 160.00 | 50.00 | 3.200x | 2026-05-19 12:00 UTC |"));
+        assert!(merged.contains(
+            "Source: `xtask` bounded adaptive clone-inclusive runner; `--skip-run` merges existing Criterion JSON estimates."
+        ));
+        assert!(merged.contains(
+            "Benchmark profile: `quick: sample_size=3, measurement_time=30ms, warm_up_time=5ms`."
+        ));
+    }
 }

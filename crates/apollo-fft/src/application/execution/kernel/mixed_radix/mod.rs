@@ -6,7 +6,7 @@
 //!
 //! | Input length       | Kernel selected |
 //! |--------------------|-----------------|
-//! | Power of two < 64  | **Winograd/Good-Thomas codelets** — monomorphized stack-resident DFTs while they remain faster than the generic power route. |
+//! | Power of two < 64  | **Fixed power-of-two codelets / Stockham** — monomorphized stack-resident DFTs while they remain faster than the generic power route. |
 //! | Power of two >= 64 | **Stockham autosort / four-step** — out-of-place ping-pong FFT using a thread-local scratch buffer, with square four-step retained for large even-exponent powers. |
 //! | Short non-power composite | **Winograd/Good-Thomas codelets** — monomorphized stack-resident DFTs. |
 //! | 2/3/5/7-smooth     | **Composite mixed-radix** — Cooley-Tukey DIT with digit-reversal. |

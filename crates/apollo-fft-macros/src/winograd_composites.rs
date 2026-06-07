@@ -22,7 +22,7 @@ use crate::prime_power_winograd::prime_power_winograd_function;
 
 /// Inlining directive for generated codelets.
 ///
-/// - `Always` → `#[inline(always)]`: forced inlining for small N where
+/// - `Always` → `#[inline]`: forced inlining for small N where
 ///   stack depth is safe (N ≤ 36).
 /// - `Hint`   → `#[inline]`:         optimizer hint only; avoids forced
 ///   inlining for larger N where debug-mode stack may overflow.
@@ -35,7 +35,7 @@ enum InlineAttr {
 impl InlineAttr {
     fn to_tokens(self) -> proc_macro2::TokenStream {
         match self {
-            InlineAttr::Always => quote! { #[inline(always)] },
+            InlineAttr::Always => quote! { #[inline] },
             InlineAttr::Hint => quote! { #[inline] },
         }
     }

@@ -5,7 +5,12 @@ use crate::domain::metadata::precision::{BackendKind, Normalization, PrecisionPr
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 
 /// Capability descriptor advertised by a backend.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// All fields are `Copy` and the profile list is a `&'static` reference, making
+/// this struct zero-allocation on every `capabilities()` call. The reference
+/// lifetime ties the struct to the compile-time constant profiles defined
+/// by each backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackendCapabilities {
     /// Backend family.
     pub kind: BackendKind,
@@ -24,7 +29,8 @@ pub struct BackendCapabilities {
     /// Default precision profile selected when a caller does not request one.
     pub default_precision_profile: PrecisionProfile,
     /// Precision profiles truthfully implemented by this backend.
-    pub supported_precision_profiles: Vec<PrecisionProfile>,
+    /// Uses `&'static` reference to avoid heap allocation on every call.
+    pub supported_precision_profiles: &'static [PrecisionProfile],
 }
 
 /// Backend trait used by consumers that want backend selection via dependency inversion.
@@ -55,7 +61,40 @@ pub trait FftBackend {
 impl BackendCapabilities {
     /// Returns true when at least one transform dimensionality is supported.
     #[must_use]
-    pub fn has_any_capability(&self) -> bool {
+    pub const fn has_any_capability(&self) -> bool {
         self.supports_1d || self.supports_2d || self.supports_3d
     }
+
+    /// CPU backend capabilities as a compile-time constant.
+    pub const CPU: Self = Self {
+        kind: BackendKind::Cpu,
+        normalization: Normalization::FftwCompatible,
+        supports_1d: true,
+        supports_2d: true,
+        supports_3d: true,
+        supports_real_to_complex: true,
+        supports_mixed_precision: true,
+        default_precision_profile: PrecisionProfile::HIGH_ACCURACY_F64,
+        supported_precision_profiles: &[
+            PrecisionProfile::HIGH_ACCURACY_F64,
+            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::MIXED_PRECISION_F16_F32,
+        ],
+    };
+
+    /// WGPU backend capabilities as a compile-time constant.
+    pub const WGPU: Self = Self {
+        kind: BackendKind::Wgpu,
+        normalization: Normalization::FftwCompatible,
+        supports_1d: false,
+        supports_2d: false,
+        supports_3d: true,
+        supports_real_to_complex: false,
+        supports_mixed_precision: true,
+        default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
+        supported_precision_profiles: &[
+            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::MIXED_PRECISION_F16_F32,
+        ],
+    };
 }

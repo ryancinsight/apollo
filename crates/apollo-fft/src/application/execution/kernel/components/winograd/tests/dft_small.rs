@@ -40,7 +40,7 @@ fn dft3_forward_matches_direct() {
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex64; 3] = input.as_slice().try_into().unwrap();
-    dft3_impl::<_, false>(&mut buf);
+    dft3_impl::<_, false, false>(&mut buf);
     let err = max_err(&buf, &expected);
     assert!(err < 1e-13, "DFT-3 forward max_err={err:.2e}");
 }
@@ -51,8 +51,8 @@ fn dft3_inverse_roundtrip() {
         .map(|k| Complex64::new((k as f64 * 0.55).cos(), (k as f64 * 0.19).sin()))
         .collect();
     let mut buf: [Complex64; 3] = input.as_slice().try_into().unwrap();
-    dft3_impl::<_, false>(&mut buf);
-    dft3_impl::<_, true>(&mut buf);
+    dft3_impl::<_, false, false>(&mut buf);
+    dft3_impl::<_, true, false>(&mut buf);
     let recovered: Vec<Complex64> = buf.iter().map(|x| x / 3.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-13, "DFT-3 roundtrip max_err={err:.2e}");
@@ -66,7 +66,7 @@ fn dft3_inverse_matches_direct() {
     let expected_unnorm: Vec<Complex64> =
         dft_inverse(&input).into_iter().map(|x| x * 3.0).collect();
     let mut buf: [Complex64; 3] = input.as_slice().try_into().unwrap();
-    dft3_impl::<_, true>(&mut buf);
+    dft3_impl::<_, true, false>(&mut buf);
     let err = max_err(&buf, &expected_unnorm);
     assert!(err < 1e-13, "DFT-3 inverse max_err={err:.2e}");
 }
@@ -74,7 +74,7 @@ fn dft3_inverse_matches_direct() {
 #[test]
 fn dft3_dc_produces_energy_in_bin0() {
     let mut buf = [Complex64::new(1.0, 0.0); 3];
-    dft3_impl::<_, false>(&mut buf);
+    dft3_impl::<_, false, false>(&mut buf);
     assert!((buf[0] - Complex64::new(3.0, 0.0)).norm() < 1e-14);
     for x in &buf[1..] {
         assert!(x.norm() < 1e-14, "non-zero bin: {x:?}");
@@ -200,7 +200,7 @@ fn dft7_forward_matches_direct() {
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex64; 7] = input.as_slice().try_into().unwrap();
-    dft7_impl::<_, false>(&mut buf);
+    dft7_impl::<_, false, false>(&mut buf);
     let err = max_err(&buf, &expected);
     assert!(err < 1e-12, "DFT-7 forward max_err={err:.2e}");
 }
@@ -211,8 +211,8 @@ fn dft7_inverse_roundtrip() {
         .map(|k| Complex64::new((k as f64 * 0.37).cos(), (k as f64 * 0.19).sin()))
         .collect();
     let mut buf: [Complex64; 7] = input.as_slice().try_into().unwrap();
-    dft7_impl::<_, false>(&mut buf);
-    dft7_impl::<_, true>(&mut buf);
+    dft7_impl::<_, false, false>(&mut buf);
+    dft7_impl::<_, true, false>(&mut buf);
     let recovered: Vec<Complex64> = buf.iter().map(|x| x / 7.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-7 roundtrip max_err={err:.2e}");
@@ -226,7 +226,7 @@ fn dft7_inverse_matches_direct() {
     let expected_unnorm: Vec<Complex64> =
         dft_inverse(&input).into_iter().map(|x| x * 7.0).collect();
     let mut buf: [Complex64; 7] = input.as_slice().try_into().unwrap();
-    dft7_impl::<_, true>(&mut buf);
+    dft7_impl::<_, true, false>(&mut buf);
     let err = max_err(&buf, &expected_unnorm);
     assert!(err < 1e-12, "DFT-7 inverse max_err={err:.2e}");
 }
@@ -234,7 +234,7 @@ fn dft7_inverse_matches_direct() {
 #[test]
 fn dft7_dc_produces_energy_in_bin0() {
     let mut buf = [Complex64::new(1.0, 0.0); 7];
-    dft7_impl::<_, false>(&mut buf);
+    dft7_impl::<_, false, false>(&mut buf);
     assert!((buf[0] - Complex64::new(7.0, 0.0)).norm() < 1e-14);
     for x in &buf[1..] {
         assert!(x.norm() < 1e-14, "non-zero bin: {x:?}");
@@ -245,7 +245,7 @@ fn dft7_dc_produces_energy_in_bin0() {
 fn dft7_impulse_produces_all_ones() {
     let mut buf = [Complex64::new(0.0, 0.0); 7];
     buf[0] = Complex64::new(1.0, 0.0);
-    dft7_impl::<_, false>(&mut buf);
+    dft7_impl::<_, false, false>(&mut buf);
     for x in &buf {
         assert!((x - Complex64::new(1.0, 0.0)).norm() < 1e-14, "bin={x:?}");
     }
@@ -259,7 +259,7 @@ fn dft7_f32_forward_matches_direct() {
     let expected = dft_forward(&input);
     let mut buf: [Complex32; 7] =
         core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
-    dft7_impl::<_, false>(&mut buf);
+    dft7_impl::<_, false, false>(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
         .map(|x| Complex64::new(x.re as f64, x.im as f64))

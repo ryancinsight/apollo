@@ -9,11 +9,26 @@ use apollo_fft::{f16, FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use std::cell::RefCell;
-use std::sync::Mutex;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
     static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static FORWARD_WORKSPACE_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Run `f` with a thread-local Bluestein forward-convolution workspace sized to
+/// `len`. Per-thread scratch replaces a per-plan `Mutex<Vec<_>>`: it removes the
+/// lock from every `forward` call and lets concurrent threads transform through
+/// a shared plan without serializing on one workspace. The buffer is grown on
+/// demand and reused across calls on the same thread.
+fn with_forward_workspace<R>(len: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
+    FORWARD_WORKSPACE_SCRATCH.with(|scratch| {
+        let mut scratch = scratch.borrow_mut();
+        if scratch.len() < len {
+            scratch.resize(len, Complex64::new(0.0, 0.0));
+        }
+        f(&mut scratch[..len])
+    })
 }
 
 /// Return whether a CZT input or output length satisfies the non-zero contract.
@@ -52,7 +67,6 @@ pub struct CztPlan {
     chirp_k: Vec<Complex64>,
     fft_kernel: Array1<Complex64>,
     fft_plan: FftPlan1D<f64>,
-    forward_workspace: Mutex<Vec<Complex64>>,
     inverse_nodes: Option<Vec<Complex64>>,
 }
 
@@ -99,7 +113,6 @@ impl CztPlan {
 
         let mut fft_kernel = Array1::from_vec(kernel);
         fft_plan.forward_complex_inplace(&mut fft_kernel);
-        let forward_workspace = Mutex::new(vec![Complex64::new(0.0, 0.0); convolution_len]);
         let inverse_nodes = if n == m {
             Some(czt_inverse_nodes(n, w))
         } else {
@@ -116,7 +129,6 @@ impl CztPlan {
             chirp_k,
             fft_kernel,
             fft_plan,
-            forward_workspace,
             inverse_nodes,
         })
     }
@@ -140,11 +152,8 @@ impl CztPlan {
     }
 
     #[cfg(test)]
-    pub(crate) fn forward_workspace_capacity(&self) -> usize {
-        self.forward_workspace
-            .lock()
-            .expect("CZT forward workspace mutex poisoned")
-            .capacity()
+    pub(crate) fn forward_workspace_capacity() -> usize {
+        FORWARD_WORKSPACE_SCRATCH.with(|scratch| scratch.borrow().capacity())
     }
 
     /// Forward direct CZT evaluation.
@@ -192,22 +201,20 @@ impl CztPlan {
         if input.len() != self.n || output.len() != self.m {
             return Err(CztError::LengthMismatch);
         }
-        let mut workspace = self
-            .forward_workspace
-            .lock()
-            .expect("CZT forward workspace mutex poisoned");
-        czt_bluestein_forward_into_with_workspace(
-            input,
-            output,
-            &mut workspace,
-            self.convolution_len,
-            &self.chirp_n,
-            &self.chirp_k,
-            self.fft_kernel
-                .as_slice()
-                .expect("CZT FFT kernel must be contiguous"),
-            &self.fft_plan,
-        );
+        with_forward_workspace(self.convolution_len, |workspace| {
+            czt_bluestein_forward_into_with_workspace(
+                input,
+                output,
+                workspace,
+                self.convolution_len,
+                &self.chirp_n,
+                &self.chirp_k,
+                self.fft_kernel
+                    .as_slice()
+                    .expect("CZT FFT kernel must be contiguous"),
+                &self.fft_plan,
+            );
+        });
         Ok(())
     }
 
@@ -670,17 +677,21 @@ mod tests {
             Complex64::from_polar(1.0, -std::f64::consts::TAU / 11.0),
         )
         .expect("valid plan");
-        let workspace_capacity = plan.forward_workspace_capacity();
         let mut first = Array1::<Complex64>::zeros(plan.output_len());
         let mut second = Array1::<Complex64>::zeros(plan.output_len());
 
         plan.forward_into(&input, &mut first)
             .expect("first caller-owned fast path");
+        // After the first transform the per-thread workspace is grown to at
+        // least the plan convolution length; a larger capacity is admissible
+        // when a wider plan ran earlier on this thread (shared thread-local).
+        let capacity_after_first = CztPlan::forward_workspace_capacity();
+        assert!(capacity_after_first >= plan.convolution_len());
+
         plan.forward_into(&input, &mut second)
             .expect("second caller-owned fast path");
-
-        assert_eq!(workspace_capacity, plan.convolution_len());
-        assert_eq!(plan.forward_workspace_capacity(), workspace_capacity);
+        // The workspace is reused, not reallocated, across calls.
+        assert_eq!(CztPlan::forward_workspace_capacity(), capacity_after_first);
         for (actual, expected) in second.iter().zip(first.iter()) {
             assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);

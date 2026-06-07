@@ -51,11 +51,10 @@ include!(concat!(
 ///
 /// ## Lowering
 ///
-/// The dispatch layer (`composite_core_with_radices`) applies a subsequent
-/// normalization pass that promotes consecutive `[2, 2]` pairs to `[4]`,
-/// enabling the zero-multiplication radix-4 butterfly.  This factorization
-/// function is intentionally kept at the prime level to preserve a single
-/// authoritative factorization invariant.
+/// The returned sequence is execution-ready: consecutive `[2, 2]` pairs are
+/// lowered to `[4]` before the value leaves this module, enabling the
+/// zero-multiplication radix-4 butterfly without an allocation or normalization
+/// pass in the composite execution core.
 #[inline]
 pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     if n <= 1 {
@@ -139,13 +138,12 @@ pub(crate) fn factorize_composite(n: usize) -> Option<Vec<usize>> {
     for _ in 0..count3 {
         radices.push(3);
     }
-    // Outermost stages: pure radix-2 chain.  The dispatch layer lowers
-    // consecutive [2, 2] pairs to [4] (zero-mul butterfly) before twiddle
-    // computation; see `composite_core_with_radices`.
+    // Outermost stages: pure radix-2 chain. Adjacent pairs are lowered below
+    // so the execution core never needs to allocate a normalized radix list.
     for _ in 0..count2 {
         radices.push(2);
     }
-    Some(radices)
+    Some(lower_radix2_pairs_to_radix4(&radices))
 }
 
 /// Test if a number is prime23-smooth (only prime factors 2 and 3).
@@ -271,7 +269,7 @@ mod tests {
             );
             for &r in &radices {
                 assert!(
-                    [2, 3, 5, 7, 11, 13, 17, 23].contains(&r),
+                    [2, 3, 4, 5, 7, 11, 13, 17, 23].contains(&r),
                     "unsupported radix {r} for n={n}"
                 );
             }
@@ -313,15 +311,14 @@ mod tests {
     }
 
     #[test]
-    fn factorize_emits_only_prime_radices() {
+    fn factorize_emits_only_execution_radices() {
         for &n in &[12usize, 24, 48, 96, 192, 240, 480, 960, 1920] {
             let radices = factorize_composite(n).unwrap();
             for &r in &radices {
                 assert!(
-                    [2usize, 3, 5, 7, 11, 13, 17, 23].contains(&r),
-                    "n={n}: non-prime radix {r} emitted"
+                    [2usize, 3, 4, 5, 7, 11, 13, 17, 23].contains(&r),
+                    "n={n}: unsupported execution radix {r} emitted"
                 );
-                assert_ne!(r, 4, "n={n}: composite radix 4 must not be emitted");
                 assert_ne!(r, 8, "n={n}: composite radix 8 must not be emitted");
                 assert_ne!(r, 8, "composite radix 8 must not be emitted");
             }
@@ -331,10 +328,7 @@ mod tests {
     #[test]
     fn radix2_pair_lowering_preserves_product_and_uses_radix4_tail() {
         let radices = factorize_composite(192).unwrap();
-        assert_eq!(radices, &[3, 2, 2, 2, 2, 2, 2]);
-
-        let lowered = lower_radix2_pairs_to_radix4(&radices);
-        assert_eq!(lowered, &[3, 4, 4, 4]);
-        assert_eq!(lowered.iter().product::<usize>(), 192);
+        assert_eq!(radices, &[3, 4, 4, 4]);
+        assert_eq!(radices.iter().product::<usize>(), 192);
     }
 }

@@ -10,10 +10,8 @@ pub mod domain;
 pub mod infrastructure;
 
 use apollo_fft::domain::contracts::backend::BackendCapabilities;
-use apollo_fft::{
-    ApolloError, ApolloResult, BackendKind, FftBackend, Normalization, PrecisionProfile, Shape1D,
-    Shape2D, Shape3D,
-};
+use apollo_fft::{ApolloError, ApolloResult, BackendKind, FftBackend, Shape1D, Shape2D, Shape3D};
+use apollo_wgpu_helpers::WgpuDevice;
 pub use infrastructure::gpu_fft::{gpu_fft_available, GpuFft3d, GpuFft3dBuffers};
 
 #[cfg(feature = "native-f16")]
@@ -22,44 +20,22 @@ pub use infrastructure::gpu_fft::GpuFft3dF16Native;
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct WgpuBackend {
-    device: std::sync::Arc<wgpu::Device>,
-    queue: std::sync::Arc<wgpu::Queue>,
+    device: WgpuDevice,
 }
 
 impl WgpuBackend {
     /// Create a backend from an existing device and queue.
     #[must_use]
-    pub fn new(device: std::sync::Arc<wgpu::Device>, queue: std::sync::Arc<wgpu::Queue>) -> Self {
-        Self { device, queue }
+    pub fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> ApolloResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| ApolloError::BackendUnavailable {
-            backend: format!("wgpu adapter unavailable: {error}"),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-fft-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                ApolloError::Wgpu {
-                    message: error.to_string(),
-                }
-            })?;
         Ok(Self::new(
-            std::sync::Arc::new(device),
-            std::sync::Arc::new(queue),
+            WgpuDevice::try_default("apollo-fft-wgpu").map_err(|e| ApolloError::Wgpu {
+                message: e.to_string(),
+            })?,
         ))
     }
 }
@@ -74,20 +50,7 @@ impl FftBackend for WgpuBackend {
     }
 
     fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            kind: BackendKind::Wgpu,
-            normalization: Normalization::FftwCompatible,
-            supports_1d: false,
-            supports_2d: false,
-            supports_3d: true,
-            supports_real_to_complex: false,
-            supports_mixed_precision: true,
-            default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
-            supported_precision_profiles: vec![
-                PrecisionProfile::LOW_PRECISION_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-            ],
-        }
+        BackendCapabilities::WGPU
     }
 
     fn plan_1d(&self, _shape: Shape1D) -> ApolloResult<Self::Plan1D> {
@@ -104,8 +67,8 @@ impl FftBackend for WgpuBackend {
 
     fn plan_3d(&self, shape: Shape3D) -> ApolloResult<Self::Plan3D> {
         GpuFft3d::new(
-            std::sync::Arc::clone(&self.device),
-            std::sync::Arc::clone(&self.queue),
+            self.device.device().clone(),
+            self.device.queue().clone(),
             shape.nx,
             shape.ny,
             shape.nz,

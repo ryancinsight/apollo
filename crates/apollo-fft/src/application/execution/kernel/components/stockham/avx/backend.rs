@@ -22,7 +22,7 @@ pub(crate) trait StockhamAvxBackend: Copy + Sized + 'static {
     unsafe fn fmaddsub(a: Self::Vector, b: Self::Vector, c: Self::Vector) -> Self::Vector;
     unsafe fn permute_complex_swap(a: Self::Vector) -> Self::Vector;
 
-    #[inline(always)]
+    #[inline]
     unsafe fn cmul(wr: Self::Vector, wi: Self::Vector, b: Self::Vector) -> Self::Vector {
         let swapped = unsafe { Self::permute_complex_swap(b) };
         unsafe { Self::fmaddsub(wr, b, Self::mul(wi, swapped)) }

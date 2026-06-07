@@ -12,6 +12,7 @@ use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::FrftGpuKernel;
 use crate::infrastructure::unitary_kernel::UnitaryFrftGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -22,48 +23,26 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend for FrFT execution.
 #[derive(Debug, Clone)]
 pub struct FrftWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<FrftGpuKernel>,
     unitary_kernel: Arc<UnitaryFrftGpuKernel>,
 }
 
 impl FrftWgpuBackend {
     /// Create a backend from an existing device and queue.
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> WgpuResult<Self> {
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(FrftGpuKernel::new(device.inner()));
+        let unitary_kernel = Arc::new(UnitaryFrftGpuKernel::new(device.inner()));
         Ok(Self {
-            kernel: Arc::new(FrftGpuKernel::new(device.as_ref())),
-            unitary_kernel: Arc::new(UnitaryFrftGpuKernel::new(device.as_ref())),
             device,
-            queue,
+            kernel,
+            unitary_kernel,
         })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|e| WgpuError::AdapterUnavailable {
-            message: e.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-frft-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|e| {
-                WgpuError::DeviceUnavailable {
-                    message: e.to_string(),
-                }
-            })?;
-        Self::new(Arc::new(device), Arc::new(queue))
+        Self::new(WgpuDevice::try_default("apollo-frft-wgpu")?)
     }
 
     /// Return truthful current capabilities (forward and inverse both implemented).
@@ -75,13 +54,13 @@ impl FrftWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a metadata plan descriptor.
@@ -108,8 +87,8 @@ impl FrftWgpuBackend {
         Self::validate(plan, input)?;
         let (mode, cot, csc, scale_re, scale_im) = mode_params(plan);
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.len(),
             mode,
@@ -130,8 +109,8 @@ impl FrftWgpuBackend {
         Self::validate(&inv_plan, input)?;
         let (mode, cot, csc, scale_re, scale_im) = mode_params(&inv_plan);
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             inv_plan.len(),
             mode,
@@ -156,8 +135,8 @@ impl FrftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_unitary(plan, input)?;
         self.unitary_kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.order(),
         )
@@ -175,8 +154,8 @@ impl FrftWgpuBackend {
         let inv_plan = UnitaryFrftWgpuPlan::new(plan.len(), -plan.order());
         Self::validate_unitary(&inv_plan, input)?;
         self.unitary_kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             inv_plan.order(),
         )

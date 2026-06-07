@@ -8,6 +8,7 @@ use crate::application::plan::NttWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel, NttMode};
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -18,46 +19,20 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct NttWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<NttGpuKernel>,
 }
 
 impl NttWgpuBackend {
     /// Create a backend from an existing device and queue.
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> WgpuResult<Self> {
-        Ok(Self {
-            kernel: Arc::new(NttGpuKernel::new(device.as_ref())),
-            device,
-            queue,
-        })
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(NttGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| WgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-ntt-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                WgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Self::new(Arc::new(device), Arc::new(queue))
+        Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?)
     }
 
     /// Return truthful current capabilities.
@@ -69,13 +44,13 @@ impl NttWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a metadata-only plan descriptor.
@@ -103,15 +78,15 @@ impl NttWgpuBackend {
         }
         let omega = Self::validate_plan_and_len(plan, len)?;
         self.kernel
-            .create_buffers(self.device.as_ref(), len, plan.modulus(), omega)
+            .create_buffers(self.device.inner(), len, plan.modulus(), omega)
     }
 
     /// Execute the direct forward NTT over the configured residue field.
     pub fn execute_forward(&self, plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<Vec<u64>> {
         let omega = Self::validate_plan_and_input(plan, input)?;
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.len(),
             plan.modulus(),
@@ -153,8 +128,8 @@ impl NttWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers(plan, input, buffers)?;
         self.kernel.execute_with_buffers(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             NttMode::Forward,
             buffers,
@@ -165,8 +140,8 @@ impl NttWgpuBackend {
     pub fn execute_inverse(&self, plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<Vec<u64>> {
         let omega = Self::validate_plan_and_input(plan, input)?;
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.len(),
             plan.modulus(),
@@ -204,8 +179,8 @@ impl NttWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers(plan, input, buffers)?;
         self.kernel.execute_with_buffers(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             NttMode::Inverse,
             buffers,
@@ -235,8 +210,8 @@ impl NttWgpuBackend {
         Self::validate_plan_and_len(plan, input.len())?;
         let mut buffers = self.create_buffers(plan)?;
         self.kernel.execute_quantized_with_buffers(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             mode,
             &mut buffers,
@@ -256,8 +231,8 @@ impl NttWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers_len(plan, input.len(), buffers)?;
         self.kernel.execute_quantized_with_buffers(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             mode,
             buffers,

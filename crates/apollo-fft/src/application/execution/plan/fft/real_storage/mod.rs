@@ -11,10 +11,10 @@ use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
 use ndarray::{Array1, Array2, Array3};
 
+mod compact;
 pub(super) mod fill;
 mod precise;
 mod reduced;
-mod compact;
 
 /// Real-domain storage type supported by Apollo FFT plans.
 ///
@@ -51,6 +51,26 @@ pub trait RealFftData: Clone + Send + Sync + 'static {
         output: &mut Array1<Self>,
         scratch: &mut Array1<Self::Spectrum>,
     );
+    /// Inverse 1D transform into caller-owned real storage, reusing the
+    /// mutable spectrum as scratch.
+    fn inverse_1d_spectrum_into(
+        plan: &FftPlan1D<Self::PlanScalar>,
+        spectrum: &mut Array1<Self::Spectrum>,
+        output: &mut Array1<Self>,
+    );
+    /// Forward 1D transform into caller-owned spectrum storage using a
+    /// compile-time-known length and zero-sized static plan.
+    fn forward_1d_static_into<const N: usize>(
+        input: &Array1<Self>,
+        output: &mut Array1<Self::Spectrum>,
+    );
+    /// Inverse 1D transform into caller-owned real storage and scratch spectrum
+    /// using a compile-time-known length and zero-sized static plan.
+    fn inverse_1d_static_into<const N: usize>(
+        input: &Array1<Self::Spectrum>,
+        output: &mut Array1<Self>,
+        scratch: &mut Array1<Self::Spectrum>,
+    );
 
     /// Forward 2D transform dispatch.
     fn forward_2d(
@@ -75,6 +95,26 @@ pub trait RealFftData: Clone + Send + Sync + 'static {
         output: &mut Array2<Self>,
         scratch: &mut Array2<Self::Spectrum>,
     );
+    /// Inverse 2D transform into caller-owned real storage, reusing the
+    /// mutable spectrum as scratch.
+    fn inverse_2d_spectrum_into(
+        plan: &FftPlan2D<Self::PlanScalar>,
+        spectrum: &mut Array2<Self::Spectrum>,
+        output: &mut Array2<Self>,
+    );
+    /// Forward 2D transform into caller-owned spectrum storage using a
+    /// compile-time-known shape and zero-sized static plan.
+    fn forward_2d_static_into<const NX: usize, const NY: usize>(
+        input: &Array2<Self>,
+        output: &mut Array2<Self::Spectrum>,
+    );
+    /// Inverse 2D transform into caller-owned real storage and scratch spectrum
+    /// using a compile-time-known shape and zero-sized static plan.
+    fn inverse_2d_static_into<const NX: usize, const NY: usize>(
+        input: &Array2<Self::Spectrum>,
+        output: &mut Array2<Self>,
+        scratch: &mut Array2<Self::Spectrum>,
+    );
 
     /// Forward 3D transform dispatch.
     fn forward_3d(
@@ -95,6 +135,26 @@ pub trait RealFftData: Clone + Send + Sync + 'static {
     /// Inverse 3D transform into caller-owned real storage and scratch spectrum.
     fn inverse_3d_into(
         plan: &FftPlan3D<Self::PlanScalar>,
+        input: &Array3<Self::Spectrum>,
+        output: &mut Array3<Self>,
+        scratch: &mut Array3<Self::Spectrum>,
+    );
+    /// Inverse 3D transform into caller-owned real storage, reusing the
+    /// mutable spectrum as scratch.
+    fn inverse_3d_spectrum_into(
+        plan: &FftPlan3D<Self::PlanScalar>,
+        spectrum: &mut Array3<Self::Spectrum>,
+        output: &mut Array3<Self>,
+    );
+    /// Forward 3D transform into caller-owned spectrum storage using a
+    /// compile-time-known shape and zero-sized static plan.
+    fn forward_3d_static_into<const NX: usize, const NY: usize, const NZ: usize>(
+        input: &Array3<Self>,
+        output: &mut Array3<Self::Spectrum>,
+    );
+    /// Inverse 3D transform into caller-owned real storage and scratch spectrum
+    /// using a compile-time-known shape and zero-sized static plan.
+    fn inverse_3d_static_into<const NX: usize, const NY: usize, const NZ: usize>(
         input: &Array3<Self::Spectrum>,
         output: &mut Array3<Self>,
         scratch: &mut Array3<Self::Spectrum>,

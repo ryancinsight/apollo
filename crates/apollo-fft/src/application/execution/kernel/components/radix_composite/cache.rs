@@ -15,7 +15,9 @@ pub struct CompositeTwiddleEntry<C> {
 
 pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R;
-    fn cached_twiddles(inverse: bool, radices: &[usize]) -> (Arc<[Complex<Self>]>, Arc<[usize]>);
+    fn cached_twiddles<const INVERSE: bool>(
+        radices: &[usize],
+    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>);
 
     /// Attempt an AVX2-accelerated flat Stockham pass for radix-4.
     ///
@@ -25,8 +27,8 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     ///
     /// Default: returns `false` (scalar path).
     #[allow(unused_variables)]
-    #[inline(always)]
-    fn try_flat_pass_r4(
+    #[inline]
+    fn try_flat_pass_r4<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
         prev_len: usize,
@@ -34,7 +36,6 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-        inverse: bool,
     ) -> bool {
         false
     }
@@ -44,8 +45,8 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     /// Same amortization contract as `try_flat_pass_r4`.
     /// Default: returns `false` (scalar path).
     #[allow(unused_variables)]
-    #[inline(always)]
-    fn try_flat_pass_r3(
+    #[inline]
+    fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
         prev_len: usize,
@@ -53,7 +54,63 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-        inverse: bool,
+    ) -> bool {
+        false
+    }
+
+    /// Attempt an AVX2-accelerated flat Stockham pass for radix-5.
+    ///
+    /// Same amortization contract as `try_flat_pass_r4`. Vectorizes the
+    /// radix-5 stage (previously scalar) shared by every composite with a
+    /// factor of 5 (e.g. N=15, 25, 100, 180, 1000).
+    /// Default: returns `false` (scalar path).
+    #[allow(unused_variables)]
+    #[inline]
+    fn try_flat_pass_r5<const INVERSE: bool>(
+        src: &[Complex<Self>],
+        dst: &mut [Complex<Self>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<Self>],
+        pointwise: Option<&[Complex<Self>]>,
+    ) -> bool {
+        false
+    }
+
+    /// Attempt an AVX2-accelerated flat Stockham pass for radix-7.
+    ///
+    /// Same amortization contract; vectorizes the radix-7 stage (previously
+    /// scalar) shared by every composite with a factor of 7.
+    /// Default: returns `false` (scalar path).
+    #[allow(unused_variables)]
+    #[inline]
+    fn try_flat_pass_r7<const INVERSE: bool>(
+        src: &[Complex<Self>],
+        dst: &mut [Complex<Self>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<Self>],
+        pointwise: Option<&[Complex<Self>]>,
+    ) -> bool {
+        false
+    }
+
+    /// Attempt an AVX2-accelerated flat Stockham pass for radix-2.
+    ///
+    /// Vectorizes the trailing radix-2 stage of odd-power-of-two
+    /// decompositions (previously scalar). Default: returns `false`.
+    #[allow(unused_variables)]
+    #[inline]
+    fn try_flat_pass_r2<const INVERSE: bool>(
+        src: &[Complex<Self>],
+        dst: &mut [Complex<Self>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<Self>],
+        pointwise: Option<&[Complex<Self>]>,
     ) -> bool {
         false
     }
@@ -72,11 +129,10 @@ thread_local! {
         const { RefCell::new(Vec::new()) };
 }
 
-fn build_composite_twiddles<F: WinogradScalar>(
-    inverse: bool,
+fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
     radices: &[usize],
 ) -> (Vec<Complex<F>>, Vec<usize>) {
-    let sign: f64 = if inverse { 1.0 } else { -1.0 };
+    let sign: f64 = if INVERSE { 1.0 } else { -1.0 };
     // Per-arm layout: (R-1)*prev_len entries per stage.
     // Arm k (k=1..R-1) at stage_offset + (k-1)*prev_len: W^{k*j} for j=0..prev_len-1.
     // Radix-2 stages are unchanged ((2-1)*L = L).
@@ -88,12 +144,9 @@ fn build_composite_twiddles<F: WinogradScalar>(
             Some(out)
         })
         .sum();
-    let mut all_twiddles = Vec::with_capacity(total_twiddles);
-    unsafe { all_twiddles.set_len(total_twiddles) };
-    let mut stage_offsets = Vec::with_capacity(radices.len());
-    unsafe { stage_offsets.set_len(radices.len()) };
-
     let one = Complex::new(F::from_precise(1.0), F::from_precise(0.0));
+    let mut all_twiddles = vec![one; total_twiddles];
+    let mut stage_offsets = vec![0usize; radices.len()];
     let mut prev_len = 1usize;
     let mut tw_idx = 0;
     let mut offset_idx = 0;
@@ -132,9 +185,9 @@ fn build_composite_twiddles<F: WinogradScalar>(
 }
 
 impl CompositeCache for f64 {
-    /// AVX2+FMA flat pass for radix-4 f64. Checked once per stage (not per group).
+    /// AVX2+FMA flat pass for radix-2 f64 (trailing stage of odd powers of two).
     #[inline]
-    fn try_flat_pass_r4(
+    fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
         prev_len: usize,
@@ -142,13 +195,18 @@ impl CompositeCache for f64 {
         stage_chunk: usize,
         tw: &[Complex<f64>],
         pointwise: Option<&[Complex<f64>]>,
-        inverse: bool,
     ) -> bool {
+        // Amortization guard: below n=64 the AVX setup (feature check + frame)
+        // exceeds the scalar radix-2 cost (measured regression at N=32). Keep
+        // tiny radix-2 stages on the scalar path.
+        if g_count.saturating_mul(stage_chunk) < 64 {
+            return false;
+        }
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
             // SAFETY: Feature detection above guarantees AVX2+FMA.
             unsafe {
-                super::avx2::flat_pass_r4_f64(
+                super::avx2::flat_pass_r2_f64(
                     src,
                     dst,
                     prev_len,
@@ -156,7 +214,96 @@ impl CompositeCache for f64 {
                     stage_chunk,
                     tw,
                     pointwise,
-                    inverse,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-7 f64. Checked once per stage (not per group).
+    #[inline]
+    fn try_flat_pass_r7<const INVERSE: bool>(
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f64>],
+        pointwise: Option<&[Complex<f64>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r7_f64::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-5 f64. Checked once per stage (not per group).
+    #[inline]
+    fn try_flat_pass_r5<const INVERSE: bool>(
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f64>],
+        pointwise: Option<&[Complex<f64>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r5_f64::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-4 f64. Checked once per stage (not per group).
+    #[inline]
+    fn try_flat_pass_r4<const INVERSE: bool>(
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f64>],
+        pointwise: Option<&[Complex<f64>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r4_f64::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 );
             }
             return true;
@@ -166,7 +313,7 @@ impl CompositeCache for f64 {
 
     /// AVX2+FMA flat pass for radix-3 f64.
     #[inline]
-    fn try_flat_pass_r3(
+    fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
         prev_len: usize,
@@ -174,13 +321,12 @@ impl CompositeCache for f64 {
         stage_chunk: usize,
         tw: &[Complex<f64>],
         pointwise: Option<&[Complex<f64>]>,
-        inverse: bool,
     ) -> bool {
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
             // SAFETY: Feature detection above guarantees AVX2+FMA.
             unsafe {
-                super::avx2::flat_pass_r3_f64(
+                super::avx2::flat_pass_r3_f64::<INVERSE>(
                     src,
                     dst,
                     prev_len,
@@ -188,7 +334,6 @@ impl CompositeCache for f64 {
                     stage_chunk,
                     tw,
                     pointwise,
-                    inverse,
                 );
             }
             return true;
@@ -201,9 +346,7 @@ impl CompositeCache for f64 {
         let mut scratch =
             TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
         if scratch.len() < n {
-            let cur = scratch.len();
-            scratch.reserve(n.saturating_sub(cur));
-            unsafe { scratch.set_len(n) };
+            scratch.resize(n, Complex::new(0.0, 0.0));
         }
         let res = f(&mut scratch[..n]);
         TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().push(scratch));
@@ -211,8 +354,10 @@ impl CompositeCache for f64 {
     }
 
     #[inline]
-    fn cached_twiddles(inverse: bool, radices: &[usize]) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
-        let tl = if inverse {
+    fn cached_twiddles<const INVERSE: bool>(
+        radices: &[usize],
+    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
+        let tl = if INVERSE {
             &TL_TWIDDLES_INV_64
         } else {
             &TL_TWIDDLES_FWD_64
@@ -226,7 +371,7 @@ impl CompositeCache for f64 {
         }) {
             return cached;
         }
-        let (tw, offsets) = build_composite_twiddles::<f64>(inverse, radices);
+        let (tw, offsets) = build_composite_twiddles::<f64, INVERSE>(radices);
         let tw = Arc::from(tw.into_boxed_slice());
         let offsets = Arc::from(offsets.into_boxed_slice());
         tl.with(|c| {
@@ -241,9 +386,9 @@ impl CompositeCache for f64 {
 }
 
 impl CompositeCache for f32 {
-    /// AVX2+FMA flat pass for radix-4 f32. Processes 4 complex per __m256 register.
+    /// AVX2+FMA flat pass for radix-2 f32 (trailing stage of odd powers of two).
     #[inline]
-    fn try_flat_pass_r4(
+    fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
         prev_len: usize,
@@ -251,13 +396,17 @@ impl CompositeCache for f32 {
         stage_chunk: usize,
         tw: &[Complex<f32>],
         pointwise: Option<&[Complex<f32>]>,
-        inverse: bool,
     ) -> bool {
+        // Amortization guard: below n=64 the AVX setup exceeds the scalar
+        // radix-2 cost. Keep tiny radix-2 stages on the scalar path.
+        if g_count.saturating_mul(stage_chunk) < 64 {
+            return false;
+        }
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
             // SAFETY: Feature detection above guarantees AVX2+FMA.
             unsafe {
-                super::avx2::flat_pass_r4_f32(
+                super::avx2::flat_pass_r2_f32(
                     src,
                     dst,
                     prev_len,
@@ -265,7 +414,96 @@ impl CompositeCache for f32 {
                     stage_chunk,
                     tw,
                     pointwise,
-                    inverse,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-7 f32. Processes 4 complex per __m256 register.
+    #[inline]
+    fn try_flat_pass_r7<const INVERSE: bool>(
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f32>],
+        pointwise: Option<&[Complex<f32>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r7_f32::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-5 f32. Processes 4 complex per __m256 register.
+    #[inline]
+    fn try_flat_pass_r5<const INVERSE: bool>(
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f32>],
+        pointwise: Option<&[Complex<f32>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r5_f32::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
+                );
+            }
+            return true;
+        }
+        false
+    }
+
+    /// AVX2+FMA flat pass for radix-4 f32. Processes 4 complex per __m256 register.
+    #[inline]
+    fn try_flat_pass_r4<const INVERSE: bool>(
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        prev_len: usize,
+        g_count: usize,
+        stage_chunk: usize,
+        tw: &[Complex<f32>],
+        pointwise: Option<&[Complex<f32>]>,
+    ) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            // SAFETY: Feature detection above guarantees AVX2+FMA.
+            unsafe {
+                super::avx2::flat_pass_r4_f32::<INVERSE>(
+                    src,
+                    dst,
+                    prev_len,
+                    g_count,
+                    stage_chunk,
+                    tw,
+                    pointwise,
                 );
             }
             return true;
@@ -275,7 +513,7 @@ impl CompositeCache for f32 {
 
     /// AVX2+FMA flat pass for radix-3 f32.
     #[inline]
-    fn try_flat_pass_r3(
+    fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
         prev_len: usize,
@@ -283,13 +521,12 @@ impl CompositeCache for f32 {
         stage_chunk: usize,
         tw: &[Complex<f32>],
         pointwise: Option<&[Complex<f32>]>,
-        inverse: bool,
     ) -> bool {
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
             // SAFETY: Feature detection above guarantees AVX2+FMA.
             unsafe {
-                super::avx2::flat_pass_r3_f32(
+                super::avx2::flat_pass_r3_f32::<INVERSE>(
                     src,
                     dst,
                     prev_len,
@@ -297,7 +534,6 @@ impl CompositeCache for f32 {
                     stage_chunk,
                     tw,
                     pointwise,
-                    inverse,
                 );
             }
             return true;
@@ -310,9 +546,7 @@ impl CompositeCache for f32 {
         let mut scratch =
             TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
         if scratch.len() < n {
-            let cur = scratch.len();
-            scratch.reserve(n.saturating_sub(cur));
-            unsafe { scratch.set_len(n) };
+            scratch.resize(n, Complex::new(0.0, 0.0));
         }
         let res = f(&mut scratch[..n]);
         TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
@@ -320,8 +554,10 @@ impl CompositeCache for f32 {
     }
 
     #[inline]
-    fn cached_twiddles(inverse: bool, radices: &[usize]) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
-        let tl = if inverse {
+    fn cached_twiddles<const INVERSE: bool>(
+        radices: &[usize],
+    ) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
+        let tl = if INVERSE {
             &TL_TWIDDLES_INV_32
         } else {
             &TL_TWIDDLES_FWD_32
@@ -335,7 +571,7 @@ impl CompositeCache for f32 {
         }) {
             return cached;
         }
-        let (tw, offsets) = build_composite_twiddles::<f32>(inverse, radices);
+        let (tw, offsets) = build_composite_twiddles::<f32, INVERSE>(radices);
         let tw = Arc::from(tw.into_boxed_slice());
         let offsets = Arc::from(offsets.into_boxed_slice());
         tl.with(|c| {

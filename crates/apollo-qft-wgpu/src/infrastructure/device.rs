@@ -10,6 +10,7 @@ use crate::application::plan::QftWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::{QftGpuKernel, QftMode};
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -20,47 +21,20 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct QftWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<QftGpuKernel>,
 }
 
 impl QftWgpuBackend {
     /// Create a backend from an existing device and queue.
-    #[must_use]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        Self {
-            kernel: Arc::new(QftGpuKernel::new(device.as_ref())),
-            device,
-            queue,
-        }
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(QftGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| WgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-qft-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                WgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        Self::new(WgpuDevice::try_default("apollo-qft-wgpu")?)
     }
 
     /// Return truthful current capabilities.
@@ -72,13 +46,13 @@ impl QftWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a metadata-only plan descriptor.
@@ -95,8 +69,8 @@ impl QftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_inputs(plan, input)?;
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.len(),
             QftMode::Forward,
@@ -111,8 +85,8 @@ impl QftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_inputs(plan, input)?;
         self.kernel.execute(
-            self.device.as_ref(),
-            self.queue.as_ref(),
+            self.device.inner(),
+            self.device.queue().as_ref(),
             input,
             plan.len(),
             QftMode::Inverse,

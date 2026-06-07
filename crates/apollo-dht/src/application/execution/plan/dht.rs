@@ -8,29 +8,30 @@ use crate::infrastructure::kernel::fast::dht_fast_with_scratch;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::{Array2, Array3};
 use num_complex::Complex64;
-use std::sync::Mutex;
+use std::cell::RefCell;
 
 const FAST_KERNEL_THRESHOLD: usize = 512;
+
+// ── Thread-local scratch buffers ────────────────────────────────────────────
+//
+// The plan previously stored three `Mutex<Vec<_>>` fields (`fast_scratch`,
+// `lane_scratch`, `typed_scratch`) that serialised every call on a mutex even
+// for single-threaded use. Replaced by `thread_local!  RefCell<Vec<_>>` buffers
+// that grow on demand and are reused across calls, matching the CZT and FFT
+// plan scratch precedents.
+
+thread_local! {
+    static FAST_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static LANE_IN_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static LANE_OUT_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_INPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+}
 
 /// Reusable 1D real-to-real DHT plan.
 #[derive(Debug)]
 pub struct DhtPlan {
     length: HartleyLength,
-    fast_scratch: Option<Mutex<Vec<Complex64>>>,
-    lane_scratch: Mutex<LaneScratch>,
-    typed_scratch: Mutex<TypedScratch>,
-}
-
-#[derive(Debug)]
-struct LaneScratch {
-    lane_in: Vec<f64>,
-    lane_out: Vec<f64>,
-}
-
-#[derive(Debug)]
-struct TypedScratch {
-    input: Vec<f64>,
-    output: Vec<f64>,
 }
 
 impl DhtPlan {
@@ -53,33 +54,40 @@ impl DhtPlan {
             });
         }
 
-        let mut lane_scratch = self
-            .lane_scratch
-            .lock()
-            .expect("lane_scratch mutex poisoned");
-        let LaneScratch { lane_in, lane_out } = &mut *lane_scratch;
+        LANE_IN_SCRATCH.with(|in_cell| {
+            LANE_OUT_SCRATCH.with(|out_cell| {
+                let mut lane_in = in_cell.borrow_mut();
+                let mut lane_out = out_cell.borrow_mut();
+                if lane_in.len() < n {
+                    lane_in.resize(n, 0.0);
+                }
+                if lane_out.len() < n {
+                    lane_out.resize(n, 0.0);
+                }
 
-        for r in 0..n {
-            for c in 0..n {
-                lane_in[c] = input[[r, c]];
-            }
-            self.forward_into(lane_in, lane_out)?;
-            for c in 0..n {
-                output[[r, c]] = lane_out[c];
-            }
-        }
+                for r in 0..n {
+                    for c in 0..n {
+                        lane_in[c] = input[[r, c]];
+                    }
+                    self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
+                    for c in 0..n {
+                        output[[r, c]] = lane_out[c];
+                    }
+                }
 
-        for c in 0..n {
-            for r in 0..n {
-                lane_in[r] = output[[r, c]];
-            }
-            self.forward_into(lane_in, lane_out)?;
-            for r in 0..n {
-                output[[r, c]] = lane_out[r];
-            }
-        }
+                for c in 0..n {
+                    for r in 0..n {
+                        lane_in[r] = output[[r, c]];
+                    }
+                    self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
+                    for r in 0..n {
+                        output[[r, c]] = lane_out[r];
+                    }
+                }
 
-        Ok(())
+                Ok(())
+            })
+        })
     }
 
     fn forward_3d_impl(&self, input: &Array3<f64>, output: &mut Array3<f64>) -> DhtResult<()> {
@@ -103,71 +111,62 @@ impl DhtPlan {
             });
         }
 
-        let mut lane_scratch = self
-            .lane_scratch
-            .lock()
-            .expect("lane_scratch mutex poisoned");
-        let LaneScratch { lane_in, lane_out } = &mut *lane_scratch;
-
-        for j in 0..n {
-            for k in 0..n {
-                for i in 0..n {
-                    lane_in[i] = input[[i, j, k]];
+        LANE_IN_SCRATCH.with(|in_cell| {
+            LANE_OUT_SCRATCH.with(|out_cell| {
+                let mut lane_in = in_cell.borrow_mut();
+                let mut lane_out = out_cell.borrow_mut();
+                if lane_in.len() < n {
+                    lane_in.resize(n, 0.0);
                 }
-                self.forward_into(lane_in, lane_out)?;
-                for i in 0..n {
-                    output[[i, j, k]] = lane_out[i];
+                if lane_out.len() < n {
+                    lane_out.resize(n, 0.0);
                 }
-            }
-        }
 
-        for i in 0..n {
-            for k in 0..n {
                 for j in 0..n {
-                    lane_in[j] = output[[i, j, k]];
+                    for k in 0..n {
+                        for i in 0..n {
+                            lane_in[i] = input[[i, j, k]];
+                        }
+                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
+                        for i in 0..n {
+                            output[[i, j, k]] = lane_out[i];
+                        }
+                    }
                 }
-                self.forward_into(lane_in, lane_out)?;
-                for j in 0..n {
-                    output[[i, j, k]] = lane_out[j];
-                }
-            }
-        }
 
-        for i in 0..n {
-            for j in 0..n {
-                for k in 0..n {
-                    lane_in[k] = output[[i, j, k]];
+                for i in 0..n {
+                    for k in 0..n {
+                        for j in 0..n {
+                            lane_in[j] = output[[i, j, k]];
+                        }
+                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
+                        for j in 0..n {
+                            output[[i, j, k]] = lane_out[j];
+                        }
+                    }
                 }
-                self.forward_into(lane_in, lane_out)?;
-                for k in 0..n {
-                    output[[i, j, k]] = lane_out[k];
-                }
-            }
-        }
 
-        Ok(())
+                for i in 0..n {
+                    for j in 0..n {
+                        for k in 0..n {
+                            lane_in[k] = output[[i, j, k]];
+                        }
+                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
+                        for k in 0..n {
+                            output[[i, j, k]] = lane_out[k];
+                        }
+                    }
+                }
+
+                Ok(())
+            })
+        })
     }
 
     /// Create a DHT plan for a non-empty signal length.
     pub fn new(len: usize) -> DhtResult<Self> {
         let length = HartleyLength::new(len)?;
-        let fast_scratch = if length.get() >= FAST_KERNEL_THRESHOLD {
-            Some(Mutex::new(vec![Complex64::new(0.0, 0.0); length.get()]))
-        } else {
-            None
-        };
-        Ok(Self {
-            length,
-            fast_scratch,
-            lane_scratch: Mutex::new(LaneScratch {
-                lane_in: vec![0.0; length.get()],
-                lane_out: vec![0.0; length.get()],
-            }),
-            typed_scratch: Mutex::new(TypedScratch {
-                input: vec![0.0; length.get()],
-                output: vec![0.0; length.get()],
-            }),
-        })
+        Ok(Self { length })
     }
 
     /// Return validated transform length.
@@ -200,9 +199,14 @@ impl DhtPlan {
         if signal.len() != self.len() || output.len() != self.len() {
             return Err(DhtError::LengthMismatch);
         }
-        if let Some(scratch_mu) = &self.fast_scratch {
-            let mut scratch = scratch_mu.lock().expect("fast_scratch mutex poisoned");
-            dht_fast_with_scratch(signal, output, &mut scratch);
+        if self.len() >= FAST_KERNEL_THRESHOLD {
+            FAST_SCRATCH.with(|cell| {
+                let mut scratch = cell.borrow_mut();
+                if scratch.len() < self.len() {
+                    scratch.resize(self.len(), Complex64::new(0.0, 0.0));
+                }
+                dht_fast_with_scratch(signal, output, &mut scratch[..self.len()]);
+            });
             Ok(())
         } else {
             transform_real(signal, output)
@@ -359,22 +363,27 @@ pub trait HartleyStorage: Copy + Send + Sync + 'static {
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DhtError::LengthMismatch);
         }
-        let mut scratch = plan
-            .typed_scratch
-            .lock()
-            .expect("typed_scratch mutex poisoned");
-        for (slot, value) in scratch.input.iter_mut().zip(signal.iter()) {
-            *slot = value.to_f64();
-        }
-        let TypedScratch {
-            input: input64,
-            output: output64,
-        } = &mut *scratch;
-        plan.forward_into(input64, output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.iter()) {
-            *slot = Self::from_f64(*value);
-        }
-        Ok(())
+        let n = plan.len();
+        TYPED_INPUT64_SCRATCH.with(|in_cell| {
+            TYPED_OUTPUT64_SCRATCH.with(|out_cell| {
+                let mut input64 = in_cell.borrow_mut();
+                let mut output64 = out_cell.borrow_mut();
+                if input64.len() < n {
+                    input64.resize(n, 0.0);
+                }
+                if output64.len() < n {
+                    output64.resize(n, 0.0);
+                }
+                for (slot, value) in input64[..n].iter_mut().zip(signal.iter()) {
+                    *slot = value.to_f64();
+                }
+                plan.forward_into(&input64[..n], &mut output64[..n])?;
+                for (slot, value) in output.iter_mut().zip(output64[..n].iter()) {
+                    *slot = Self::from_f64(*value);
+                }
+                Ok(())
+            })
+        })
     }
 
     /// Execute inverse transform into caller-owned storage.
@@ -388,22 +397,27 @@ pub trait HartleyStorage: Copy + Send + Sync + 'static {
         if spectrum.len() != plan.len() || output.len() != plan.len() {
             return Err(DhtError::LengthMismatch);
         }
-        let mut scratch = plan
-            .typed_scratch
-            .lock()
-            .expect("typed_scratch mutex poisoned");
-        for (slot, value) in scratch.input.iter_mut().zip(spectrum.iter()) {
-            *slot = value.to_f64();
-        }
-        let TypedScratch {
-            input: input64,
-            output: output64,
-        } = &mut *scratch;
-        plan.inverse_into(input64, output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.iter()) {
-            *slot = Self::from_f64(*value);
-        }
-        Ok(())
+        let n = plan.len();
+        TYPED_INPUT64_SCRATCH.with(|in_cell| {
+            TYPED_OUTPUT64_SCRATCH.with(|out_cell| {
+                let mut input64 = in_cell.borrow_mut();
+                let mut output64 = out_cell.borrow_mut();
+                if input64.len() < n {
+                    input64.resize(n, 0.0);
+                }
+                if output64.len() < n {
+                    output64.resize(n, 0.0);
+                }
+                for (slot, value) in input64[..n].iter_mut().zip(spectrum.iter()) {
+                    *slot = value.to_f64();
+                }
+                plan.inverse_into(&input64[..n], &mut output64[..n])?;
+                for (slot, value) in output.iter_mut().zip(output64[..n].iter()) {
+                    *slot = Self::from_f64(*value);
+                }
+                Ok(())
+            })
+        })
     }
 }
 

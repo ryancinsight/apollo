@@ -134,7 +134,7 @@ pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
         // Sub-FFTs call ShortDft<p-1>::dft directly — no pow2 check, no
         // short_winograd match, no coprime lookup, no fat-pointer slice overhead.
         // All sub-FFT sizes for static Rader primes live in SHORT_WINOGRAD_SIZES.
-        #[inline(always)]
+        #[inline]
         pub(crate) fn #fn_name<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                     Complex = num_complex::Complex<F>,
@@ -156,7 +156,7 @@ pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
             for i in 0..#p_const {
                 let x = data[#gather_name[i]];
                 rader_in[i] = x;
-                dc = dc + x;
+                dc += x;
             }
             data[0] = dc;
 

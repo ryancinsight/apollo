@@ -3,7 +3,7 @@ use num_complex::{Complex32, Complex64};
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn transpose_avx_precise(src: &[Complex64], dst: &mut [Complex64], n1: usize, n2: usize) {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{_mm256_loadu_pd, _mm256_permute2f128_pd, _mm256_storeu_pd};
     const TILE: usize = 16;
     for i_base in (0..n1).step_by(TILE) {
         for j_base in (0..n2).step_by(TILE) {
@@ -13,12 +13,12 @@ unsafe fn transpose_avx_precise(src: &[Complex64], dst: &mut [Complex64], n1: us
             while i + 2 <= i_end {
                 let mut j = j_base;
                 while j + 2 <= j_end {
-                    let r0 = _mm256_loadu_pd(src.as_ptr().add(i * n2 + j) as *const f64);
-                    let r1 = _mm256_loadu_pd(src.as_ptr().add((i + 1) * n2 + j) as *const f64);
+                    let r0 = _mm256_loadu_pd(src.as_ptr().add(i * n2 + j).cast::<f64>());
+                    let r1 = _mm256_loadu_pd(src.as_ptr().add((i + 1) * n2 + j).cast::<f64>());
                     let top = _mm256_permute2f128_pd(r0, r1, 0x20);
                     let bot = _mm256_permute2f128_pd(r0, r1, 0x31);
-                    _mm256_storeu_pd(dst.as_mut_ptr().add(j * n1 + i) as *mut f64, top);
-                    _mm256_storeu_pd(dst.as_mut_ptr().add((j + 1) * n1 + i) as *mut f64, bot);
+                    _mm256_storeu_pd(dst.as_mut_ptr().add(j * n1 + i).cast::<f64>(), top);
+                    _mm256_storeu_pd(dst.as_mut_ptr().add((j + 1) * n1 + i).cast::<f64>(), bot);
                     j += 2;
                 }
                 while j < j_end {
@@ -41,7 +41,10 @@ unsafe fn transpose_avx_precise(src: &[Complex64], dst: &mut [Complex64], n1: us
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn transpose_avx_reduced(src: &[Complex32], dst: &mut [Complex32], n1: usize, n2: usize) {
-    use std::arch::x86_64::*;
+    use std::arch::x86_64::{
+        __m256i, _mm256_loadu_si256, _mm256_permute2x128_si256, _mm256_storeu_si256,
+        _mm256_unpackhi_epi64, _mm256_unpacklo_epi64,
+    };
     const TILE: usize = 16;
     for i_base in (0..n1).step_by(TILE) {
         for j_base in (0..n2).step_by(TILE) {
@@ -51,13 +54,13 @@ unsafe fn transpose_avx_reduced(src: &[Complex32], dst: &mut [Complex32], n1: us
             while i + 4 <= i_end {
                 let mut j = j_base;
                 while j + 4 <= j_end {
-                    let r0 = _mm256_loadu_si256(src.as_ptr().add(i * n2 + j) as *const __m256i);
+                    let r0 = _mm256_loadu_si256(src.as_ptr().add(i * n2 + j).cast::<__m256i>());
                     let r1 =
-                        _mm256_loadu_si256(src.as_ptr().add((i + 1) * n2 + j) as *const __m256i);
+                        _mm256_loadu_si256(src.as_ptr().add((i + 1) * n2 + j).cast::<__m256i>());
                     let r2 =
-                        _mm256_loadu_si256(src.as_ptr().add((i + 2) * n2 + j) as *const __m256i);
+                        _mm256_loadu_si256(src.as_ptr().add((i + 2) * n2 + j).cast::<__m256i>());
                     let r3 =
-                        _mm256_loadu_si256(src.as_ptr().add((i + 3) * n2 + j) as *const __m256i);
+                        _mm256_loadu_si256(src.as_ptr().add((i + 3) * n2 + j).cast::<__m256i>());
                     let t0 = _mm256_unpacklo_epi64(r0, r1);
                     let t1 = _mm256_unpackhi_epi64(r0, r1);
                     let t2 = _mm256_unpacklo_epi64(r2, r3);
@@ -66,10 +69,19 @@ unsafe fn transpose_avx_reduced(src: &[Complex32], dst: &mut [Complex32], n1: us
                     let o1 = _mm256_permute2x128_si256(t1, t3, 0x20);
                     let o2 = _mm256_permute2x128_si256(t0, t2, 0x31);
                     let o3 = _mm256_permute2x128_si256(t1, t3, 0x31);
-                    _mm256_storeu_si256(dst.as_mut_ptr().add(j * n1 + i) as *mut __m256i, o0);
-                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 1) * n1 + i) as *mut __m256i, o1);
-                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 2) * n1 + i) as *mut __m256i, o2);
-                    _mm256_storeu_si256(dst.as_mut_ptr().add((j + 3) * n1 + i) as *mut __m256i, o3);
+                    _mm256_storeu_si256(dst.as_mut_ptr().add(j * n1 + i).cast::<__m256i>(), o0);
+                    _mm256_storeu_si256(
+                        dst.as_mut_ptr().add((j + 1) * n1 + i).cast::<__m256i>(),
+                        o1,
+                    );
+                    _mm256_storeu_si256(
+                        dst.as_mut_ptr().add((j + 2) * n1 + i).cast::<__m256i>(),
+                        o2,
+                    );
+                    _mm256_storeu_si256(
+                        dst.as_mut_ptr().add((j + 3) * n1 + i).cast::<__m256i>(),
+                        o3,
+                    );
                     j += 4;
                 }
                 while j < j_end {

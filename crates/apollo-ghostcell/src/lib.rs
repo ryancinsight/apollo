@@ -27,7 +27,7 @@ pub struct GhostToken<'brand> {
 
 impl GhostToken<'static> {
     /// Runs `f` with a fresh brand token.
-    #[inline(always)]
+    #[inline]
     pub fn scope<R>(f: impl for<'brand> FnOnce(&mut GhostToken<'brand>) -> R) -> R {
         let mut token = GhostToken { brand: PhantomData };
         f(&mut token)
@@ -48,7 +48,7 @@ pub struct GhostCell<'brand, T> {
 
 impl<'brand, T> GhostCell<'brand, T> {
     /// Creates a branded cell.
-    #[inline(always)]
+    #[inline]
     pub const fn new(value: T) -> Self {
         Self {
             value: UnsafeCell::new(value),
@@ -57,19 +57,19 @@ impl<'brand, T> GhostCell<'brand, T> {
     }
 
     /// Consumes the cell and returns the stored value.
-    #[inline(always)]
+    #[inline]
     pub fn into_inner(self) -> T {
         self.value.into_inner()
     }
 
     /// Returns mutable access through an exclusive borrow of the cell itself.
-    #[inline(always)]
+    #[inline]
     pub fn get_mut(&mut self) -> &mut T {
         self.value.get_mut()
     }
 
     /// Borrows the stored value immutably under the matching brand.
-    #[inline(always)]
+    #[inline]
     pub fn borrow<'a>(&'a self, _token: &'a GhostToken<'brand>) -> &'a T {
         // SAFETY: immutable access is shared and the matching token prevents a
         // simultaneous mutable borrow from existing through this API.
@@ -77,7 +77,7 @@ impl<'brand, T> GhostCell<'brand, T> {
     }
 
     /// Borrows the stored value mutably under the matching brand.
-    #[inline(always)]
+    #[inline]
     pub fn borrow_mut<'a>(&'a self, _token: &'a mut GhostToken<'brand>) -> &'a mut T {
         // SAFETY: the returned mutable reference is tied to the unique mutable
         // borrow of the brand token. A second borrow through the same brand
@@ -109,7 +109,7 @@ pub struct LocalGhostCell<T> {
 
 impl<T> LocalGhostCell<T> {
     /// Creates a local permission cell.
-    #[inline(always)]
+    #[inline]
     pub const fn new(value: T) -> Self {
         Self {
             value: UnsafeCell::new(value),
@@ -128,7 +128,7 @@ impl<T> LocalGhostCell<T> {
     ///
     /// These conditions hold for non-reentrant thread-local execution roots
     /// that borrow their state for one transform and do not expose the token.
-    #[inline(always)]
+    #[inline]
     pub unsafe fn with_token<R>(
         &self,
         f: impl for<'brand> FnOnce(&mut LocalGhostToken<'brand>, &'brand LocalGhostCell<T>) -> R,
@@ -138,7 +138,7 @@ impl<T> LocalGhostCell<T> {
     }
 
     /// Borrows the stored value immutably under the local token.
-    #[inline(always)]
+    #[inline]
     pub fn borrow<'a, 'brand>(&'a self, _token: &'a LocalGhostToken<'brand>) -> &'a T {
         // SAFETY: immutable access is shared and mutation requires a mutable
         // local token borrow.
@@ -146,7 +146,7 @@ impl<T> LocalGhostCell<T> {
     }
 
     /// Borrows the stored value mutably under the local token.
-    #[inline(always)]
+    #[inline]
     pub fn borrow_mut<'a, 'brand>(&'a self, _token: &'a mut LocalGhostToken<'brand>) -> &'a mut T {
         // SAFETY: the unsafe root entry proves non-reentrancy for this local
         // cell, and the mutable token prevents concurrent borrows in the scope.

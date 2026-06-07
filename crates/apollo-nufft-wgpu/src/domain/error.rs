@@ -1,5 +1,6 @@
 //! NUFFT WGPU error contracts.
 
+use apollo_wgpu_helpers::WgpuDeviceError;
 use thiserror::Error;
 
 /// Result alias for NUFFT WGPU operations.
@@ -8,18 +9,9 @@ pub type NufftWgpuResult<T> = Result<T, NufftWgpuError>;
 /// Errors produced by NUFFT WGPU backend operations.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum NufftWgpuError {
-    /// Adapter acquisition failed.
-    #[error("wgpu adapter unavailable: {message}")]
-    AdapterUnavailable {
-        /// Adapter failure context.
-        message: String,
-    },
-    /// Device acquisition failed.
-    #[error("wgpu device unavailable: {message}")]
-    DeviceUnavailable {
-        /// Device failure context.
-        message: String,
-    },
+    /// WGPU device acquisition failed.
+    #[error("wgpu device: {0}")]
+    Device(#[from] WgpuDeviceError),
     /// Plan parameters are invalid for WGPU execution.
     #[error("invalid NUFFT WGPU plan: reason={message}")]
     InvalidPlan {

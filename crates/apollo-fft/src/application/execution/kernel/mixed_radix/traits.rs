@@ -1,179 +1,21 @@
 //! `ShortWinogradScalar` and generic short-DFT dispatch helpers.
+//!
+//! `ShortWinogradScalar` is canonically defined in
+//! `components::winograd::short_winograd` (deep-vertical SSOT next to parent
+//! `WinogradScalar`). This module re-exports it for backward compatibility.
 
-use super::super::components::winograd;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use num_complex::{Complex32, Complex64};
 
-macro_rules! impl_short_winograd_prime_pair {
-    ($ty:ty, $(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
-        $(
-            #[inline(always)]
-            fn $method<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
-                use winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
-                dft_pair_impl::<$ty, $n, $h, INVERSE>(
-                    data,
-                    <$ty as PrimePairTable<$n, $h>>::cos_table(),
-                    <$ty as PrimePairTable<$n, $h>>::sin_table(),
-                );
-            }
-        )+
-    };
-}
-
-macro_rules! impl_short_winograd_prime_pair_reduced {
-    ($(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
-        $(
-            #[inline(always)]
-            fn $method<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
-                use winograd::radix::odd_prime_pair::{dft_pair_impl_reduced, PrimePairTable};
-                dft_pair_impl_reduced::<f32, $n, $h, INVERSE>(
-                    data,
-                    <f32 as PrimePairTable<$n, $h>>::cos_table(),
-                    <f32 as PrimePairTable<$n, $h>>::sin_table(),
-                );
-            }
-        )+
-    };
-}
-
-pub trait ShortWinogradScalar: winograd::WinogradScalar {
-    fn dft2(data: &mut [num_complex::Complex<Self>; 2]);
-    fn dft3<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 3]);
-    fn dft4<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 4]);
-    fn dft5<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 5]);
-    fn dft7<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 7]);
-    fn dft8<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 8]);
-    fn dft16<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 16]);
-    fn dft11<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 11]);
-    fn dft13<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 13]);
-    fn dft17<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 17]);
-    fn dft19<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 19]);
-    fn dft23<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 23]);
-    fn dft29<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 29]);
-    fn dft31<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 31]);
-    fn dft37<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 37]);
-    fn dft41<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 41]);
-    fn dft43<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 43]);
-    fn dft47<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 47]);
-    fn dft53<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 53]);
-}
-
-impl ShortWinogradScalar for f64 {
-    #[inline(always)]
-    fn dft2(data: &mut [Complex64; 2]) {
-        winograd::dft2_impl(data);
-    }
-
-    #[inline(always)]
-    fn dft3<const INVERSE: bool>(data: &mut [Complex64; 3]) {
-        winograd::dft3_impl::<f64, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft4<const INVERSE: bool>(data: &mut [Complex64; 4]) {
-        winograd::dft4_array_impl::<f64, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft5<const INVERSE: bool>(data: &mut [Complex64; 5]) {
-        winograd::dft5_array_impl::<f64, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft7<const INVERSE: bool>(data: &mut [Complex64; 7]) {
-        winograd::dft7_impl::<f64, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft8<const INVERSE: bool>(data: &mut [Complex64; 8]) {
-        winograd::dft8_array_impl::<f64, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft16<const INVERSE: bool>(data: &mut [Complex64; 16]) {
-        winograd::dft16_impl::<f64, INVERSE>(data);
-    }
-
-    impl_short_winograd_prime_pair!(
-        f64,
-        (dft11, 11, 5),
-        (dft13, 13, 6),
-        (dft17, 17, 8),
-        (dft19, 19, 9),
-        (dft23, 23, 11),
-        (dft29, 29, 14),
-        (dft31, 31, 15),
-        (dft37, 37, 18),
-        (dft41, 41, 20),
-        (dft43, 43, 21),
-        (dft47, 47, 23),
-        (dft53, 53, 26),
-    );
-}
-
-impl ShortWinogradScalar for f32 {
-    #[inline(always)]
-    fn dft2(data: &mut [Complex32; 2]) {
-        winograd::dft2_impl(data);
-    }
-
-    #[inline(always)]
-    fn dft3<const INVERSE: bool>(data: &mut [Complex32; 3]) {
-        winograd::dft3_impl::<f32, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft4<const INVERSE: bool>(data: &mut [Complex32; 4]) {
-        winograd::dft4_array_impl::<f32, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft5<const INVERSE: bool>(data: &mut [Complex32; 5]) {
-        winograd::dft5_array_impl::<f32, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft7<const INVERSE: bool>(data: &mut [Complex32; 7]) {
-        winograd::dft7_impl::<f32, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft8<const INVERSE: bool>(data: &mut [Complex32; 8]) {
-        winograd::dft8_array_impl::<f32, INVERSE>(data);
-    }
-
-    #[inline(always)]
-    fn dft16<const INVERSE: bool>(data: &mut [Complex32; 16]) {
-        winograd::dft16_impl::<f32, INVERSE>(data);
-    }
-
-    impl_short_winograd_prime_pair!(
-        f32,
-        (dft11, 11, 5),
-        (dft13, 13, 6),
-        (dft17, 17, 8),
-        (dft19, 19, 9),
-        (dft23, 23, 11),
-        (dft29, 29, 14),
-        (dft37, 37, 18),
-        (dft41, 41, 20),
-        (dft43, 43, 21),
-        (dft47, 47, 23),
-        (dft53, 53, 26),
-    );
-
-    impl_short_winograd_prime_pair_reduced!((dft31, 31, 15));
-}
+pub use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Canonical catalog of sizes with dedicated Winograd short-DFT codelets.
 /// Each entry corresponds to a `ShortDft<N>` impl and a `short_winograd`
 /// match arm. Adding or removing a codelet size must update this array.
 /// The array **must remain sorted** (ascending) for `is_short_winograd_size`.
-#[allow(dead_code)]
 pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
     28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 81, 128,
+    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 128,
 ];
 
 /// O(log N) membership test for `SHORT_WINOGRAD_SIZES` via binary search.
@@ -181,13 +23,23 @@ pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
 /// `SHORT_WINOGRAD_SIZES` is sorted ascending; this `const fn` performs
 /// ≤ log₂(64) = 6 comparisons. When `n` is a compile-time constant the
 /// compiler resolves the entire search at compile time (zero runtime cost).
-#[inline(always)]
+#[inline]
 pub(crate) const fn is_short_winograd_size(n: usize) -> bool {
-    if n <= 56 {
-        n >= 2
-    } else {
-        matches!(n, 58 | 60 | 62 | 63 | 64 | 81 | 128)
+    let mut left = 0;
+    let mut right = SHORT_WINOGRAD_SIZES.len();
+    while left < right {
+        let mid = left + ((right - left) / 2);
+        let candidate = SHORT_WINOGRAD_SIZES[mid];
+        if candidate == n {
+            return true;
+        }
+        if candidate < n {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
     }
+    false
 }
 
 /// Macro-generated dispatch for every size in [`SHORT_WINOGRAD_SIZES`].
@@ -209,7 +61,7 @@ macro_rules! short_winograd_match {
     };
 }
 
-#[inline(always)]
+#[inline]
 pub(crate) fn short_winograd<
     F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
@@ -221,10 +73,17 @@ pub(crate) fn short_winograd<
     if !is_short_winograd_size(data.len()) {
         return false;
     }
+    // For sizes >64, only use short Winograd codelet if the scalar explicitly selects it
+    // via use_generated_codelet_plan (f32 list reduced to drop slow "Precision Policy" sizes).
+    // This fixes suboptimal method selection for many worst benchmark cases; falls through
+    // to composite / GT / Rader which may have better codegen/perf.
+    if data.len() > 64 && !F::use_generated_codelet_plan(data.len()) {
+        return false;
+    }
     let handled = short_winograd_match!(
         data, F, INVERSE, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
         22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 81, 128
+        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 128
     );
 
     if handled && INVERSE && NORMALIZE {
@@ -241,7 +100,7 @@ pub trait ShortDft<const N: usize>: ShortWinogradScalar {
 macro_rules! impl_short_dft {
     ($n:expr, radix_dft2) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
-            #[inline(always)]
+            #[inline]
             fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
                 Self::dft2(data);
             }
@@ -249,7 +108,7 @@ macro_rules! impl_short_dft {
     };
     ($n:expr, $method:ident) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
-            #[inline(always)]
+            #[inline]
             fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
                 Self::$method::<INVERSE>(data);
             }
@@ -257,7 +116,7 @@ macro_rules! impl_short_dft {
     };
     ($n:expr, slice_method, $method:ident) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
-            #[inline(always)]
+            #[inline]
             fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
                 Self::$method::<INVERSE>(data.as_mut_slice());
             }
@@ -265,11 +124,14 @@ macro_rules! impl_short_dft {
     };
     ($n:expr, winograd_impl, $func:ident) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
-            #[inline(always)]
+            #[inline]
             #[allow(unused_unsafe)]
             fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
                 unsafe {
-                    winograd::$func::<Self, INVERSE>(data);
+                    crate::application::execution::kernel::components::butterflies::dft::$func::<
+                        Self,
+                        INVERSE,
+                    >(data);
                 }
             }
         }
@@ -336,8 +198,27 @@ impl_short_dft!(60, winograd_impl, dft60_impl);
 impl_short_dft!(62, winograd_impl, dft62_impl);
 impl_short_dft!(63, winograd_impl, dft63_impl);
 impl_short_dft!(64, winograd_impl, dft64_impl);
+impl_short_dft!(72, winograd_impl, dft72_impl);
 impl_short_dft!(81, winograd_impl, dft81_impl);
+impl_short_dft!(96, winograd_impl, dft96_impl);
+impl_short_dft!(99, winograd_impl, dft99_impl);
+impl_short_dft!(108, winograd_impl, dft108_impl);
+impl_short_dft!(112, winograd_impl, dft112_impl);
+impl_short_dft!(120, winograd_impl, dft120_impl);
+impl_short_dft!(121, winograd_impl, dft121_impl);
+impl_short_dft!(126, winograd_impl, dft126_impl);
 impl_short_dft!(128, winograd_impl, dft128_impl);
+impl_short_dft!(144, winograd_impl, dft144_impl);
+impl_short_dft!(154, winograd_impl, dft154_impl);
+impl_short_dft!(168, winograd_impl, dft168_impl);
+impl_short_dft!(180, winograd_impl, dft180_impl);
+impl_short_dft!(189, winograd_impl, dft189_impl);
+impl_short_dft!(242, winograd_impl, dft242_impl);
+impl_short_dft!(275, winograd_impl, dft275_impl);
+impl_short_dft!(280, winograd_impl, dft280_impl);
+impl_short_dft!(363, winograd_impl, dft363_impl);
+impl_short_dft!(400, winograd_impl, dft400_impl);
+impl_short_dft!(484, winograd_impl, dft484_impl);
 
 #[cfg(test)]
 mod tests {
@@ -370,8 +251,13 @@ mod tests {
 
     #[test]
     fn short_winograd_accepts_sizes_in_array() {
-        // Every size in SHORT_WINOGRAD_SIZES must be handled by the match.
+        // Every size in SHORT_WINOGRAD_SIZES must be handled by the match when the guard in
+        // short_winograd allows (for f64 use_generated always false so >64 rejected here;
+        // f32 policy may accept subset; list+match+impls keep support for when policy enables).
         for &n in SHORT_WINOGRAD_SIZES {
+            if n > 64 {
+                continue;
+            }
             let mut data = make_data(n);
             let result = short_winograd::<f64, false, false>(&mut data);
             assert!(

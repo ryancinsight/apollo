@@ -29,7 +29,7 @@ impl<'a, T: FftSample> FftPlanarMut<'a, T> {
         Self { re, im, rows, cols }
     }
 
-    #[inline(always)]
+    #[inline]
     fn index(&self, row: usize, col: usize) -> usize {
         debug_assert!(row < self.rows);
         debug_assert!(col < self.cols);
@@ -38,27 +38,27 @@ impl<'a, T: FftSample> FftPlanarMut<'a, T> {
 }
 
 impl<T: FftSample> FftStorage<T> for FftPlanarMut<'_, T> {
-    #[inline(always)]
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
 
-    #[inline(always)]
+    #[inline]
     fn cols(&self) -> usize {
         self.cols
     }
 
-    #[inline(always)]
+    #[inline]
     fn load_re(&self, row: usize, col: usize) -> T {
         self.re[self.index(row, col)]
     }
 
-    #[inline(always)]
+    #[inline]
     fn load_im(&self, row: usize, col: usize) -> T {
         self.im[self.index(row, col)]
     }
 
-    #[inline(always)]
+    #[inline]
     fn store(&mut self, row: usize, col: usize, re: T, im: T) {
         let idx = self.index(row, col);
         self.re[idx] = re;
@@ -89,7 +89,7 @@ impl<'a, T: FftSample> FftInterleavedMut<'a, T> {
         Self { data, rows, cols }
     }
 
-    #[inline(always)]
+    #[inline]
     fn index(&self, row: usize, col: usize) -> usize {
         debug_assert!(row < self.rows);
         debug_assert!(col < self.cols);
@@ -98,27 +98,27 @@ impl<'a, T: FftSample> FftInterleavedMut<'a, T> {
 }
 
 impl<T: FftSample> FftStorage<T> for FftInterleavedMut<'_, T> {
-    #[inline(always)]
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
 
-    #[inline(always)]
+    #[inline]
     fn cols(&self) -> usize {
         self.cols
     }
 
-    #[inline(always)]
+    #[inline]
     fn load_re(&self, row: usize, col: usize) -> T {
         self.data[self.index(row, col)].re
     }
 
-    #[inline(always)]
+    #[inline]
     fn load_im(&self, row: usize, col: usize) -> T {
         self.data[self.index(row, col)].im
     }
 
-    #[inline(always)]
+    #[inline]
     fn store(&mut self, row: usize, col: usize, re: T, im: T) {
         let idx = self.index(row, col);
         self.data[idx] = Complex { re, im };

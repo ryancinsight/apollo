@@ -43,7 +43,7 @@ fn dft84_roundtrip() {
     dft84_impl::<f64, true>(&mut data);
     // Inverse is unnormalized, so we need to divide
     for x in &mut data {
-        *x = *x / 84.0;
+        *x /= 84.0;
     }
     let err = max_abs_err_64(&data, &input);
     assert!(err < 1.0e-10, "dft84 roundtrip mismatch err={}", err);
@@ -77,7 +77,7 @@ fn dft60_roundtrip() {
     dft60_impl::<f64, true>(&mut data);
     // Inverse is unnormalized, so we need to divide
     for x in &mut data {
-        *x = *x / 60.0;
+        *x /= 60.0;
     }
     let err = max_abs_err_64(&data, &input);
     assert!(err < 1.0e-10, "dft60 roundtrip mismatch err={}", err);
@@ -142,7 +142,7 @@ fn dft90_roundtrip() {
     dft90_impl::<f64, false>(&mut data);
     dft90_impl::<f64, true>(&mut data);
     for x in &mut data {
-        *x = *x / 90.0;
+        *x /= 90.0;
     }
     let err = max_abs_err_64(&data, &input);
     assert!(err < 1.0e-10, "dft90 roundtrip mismatch err={}", err);
@@ -175,7 +175,7 @@ fn dft150_roundtrip() {
     dft150_impl::<f64, false>(&mut data);
     dft150_impl::<f64, true>(&mut data);
     for x in &mut data {
-        *x = *x / 150.0;
+        *x /= 150.0;
     }
     let err = max_abs_err_64(&data, &input);
     assert!(err < 1.0e-10, "dft150 roundtrip mismatch err={}", err);

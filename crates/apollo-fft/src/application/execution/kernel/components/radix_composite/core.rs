@@ -4,7 +4,6 @@ use super::arity::dispatch_radix_stage;
 use super::cache::CompositeCache;
 use super::stockham_stage_fused_adaptive;
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
-use crate::application::execution::kernel::radix_shape::lower_radix2_pairs_to_radix4;
 use crate::application::execution::kernel::tuning::{
     FUSE_THRESHOLD, RADIX_PARALLEL_CHUNK_THRESHOLD,
 };
@@ -17,9 +16,11 @@ use crate::application::execution::policy::{ParallelPolicy, SyncPolicy};
 /// while keeping the stack-allocated twiddle-pointer array bounded.
 const MAX_FUSE_DEPTH: usize = 16;
 
-pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScalar>(
+pub(super) fn composite_core_with_radices<
+    F: CompositeCache + ShortWinogradScalar,
+    const INVERSE: bool,
+>(
     data: &mut [Complex<F>],
-    inverse: bool,
     radices: &[usize],
     pointwise_spectrum: Option<&[Complex<F>]>,
 ) {
@@ -29,15 +30,12 @@ pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScala
     }
     debug_assert_eq!(radices.iter().product::<usize>(), n);
 
-    let lowered;
-    let radices: &[usize] = if radices.windows(2).any(|w| w[0] == 2 && w[1] == 2) {
-        lowered = lower_radix2_pairs_to_radix4(radices);
-        &lowered
-    } else {
-        radices
-    };
+    debug_assert!(
+        !radices.windows(2).any(|w| w[0] == 2 && w[1] == 2),
+        "composite radices must be lowered before execution"
+    );
 
-    let (all_twiddles, stage_offsets) = F::cached_twiddles(inverse, radices);
+    let (all_twiddles, stage_offsets) = F::cached_twiddles::<INVERSE>(radices);
 
     // When n ≤ FUSE_THRESHOLD every stage is fused into one block (accumulated
     // radix product = n ≤ FUSE_THRESHOLD). Use the flat iterative Stockham path
@@ -64,10 +62,9 @@ pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScala
             stage_prev_len *= radix;
         }
         F::with_scratch(n, |scratch| {
-            flat_stockham_fused(
+            flat_stockham_fused::<F, INVERSE>(
                 data,
                 scratch,
-                inverse,
                 radices,
                 &twiddle_slices[..n_stages],
                 pointwise_spectrum,
@@ -116,41 +113,37 @@ pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScala
             let use_parallel = n >= RADIX_PARALLEL_CHUNK_THRESHOLD && stage_prev_len >= 512;
 
             match (src_is_data, use_parallel) {
-                (true, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy>(
+                (true, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy, INVERSE>(
                     data,
                     scratch,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                    inverse,
                 ),
-                (true, false) => stockham_stage_fused_adaptive::<F, SyncPolicy>(
+                (true, false) => stockham_stage_fused_adaptive::<F, SyncPolicy, INVERSE>(
                     data,
                     scratch,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                    inverse,
                 ),
-                (false, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy>(
+                (false, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy, INVERSE>(
                     scratch,
                     data,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                    inverse,
                 ),
-                (false, false) => stockham_stage_fused_adaptive::<F, SyncPolicy>(
+                (false, false) => stockham_stage_fused_adaptive::<F, SyncPolicy, INVERSE>(
                     scratch,
                     data,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                    inverse,
                 ),
             }
 
@@ -169,7 +162,7 @@ pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScala
 ///
 /// Replaces the recursive `composite_fused_adaptive` path. Performs `n_stages` sequential
 /// passes over the data, each pass processing all `G_s = n / (r_s × P_s)` groups in a flat
-/// outer loop. `dispatch_single_radix` is `#[inline(always)]`, so the match and call frame
+/// outer loop. `dispatch_single_radix` is `#[inline]`, so the match and call frame
 /// collapse into a tight per-group loop body with no call overhead.
 ///
 /// ## Stockham addressing (pass s)
@@ -181,10 +174,9 @@ pub(super) fn composite_core_with_radices<F: CompositeCache + ShortWinogradScala
 /// The last pass always has G=1 (all stages fused → `prev_len_last = n / r_last`), so the
 /// pointwise spectrum (convolution) is applied exactly once to all n elements.
 #[inline]
-fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
+fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
     data: &mut [Complex<F>],
     scratch: &mut [Complex<F>],
-    inverse: bool,
     radices: &[usize],
     twiddles: &[&[Complex<F>]],
     pointwise_spectrum: Option<&[Complex<F>]>,
@@ -207,9 +199,9 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
         // overhead across all g_count groups; O(1) overhead per stage vs O(g_count)).
         // Falls back to the scalar per-group loop when AVX2 is unavailable.
         let avx2_handled = match r {
-            3 => {
+            2 => {
                 if src_is_data {
-                    F::try_flat_pass_r3(
+                    F::try_flat_pass_r2::<INVERSE>(
                         data,
                         scratch,
                         prev_len,
@@ -217,10 +209,9 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
                         stage_chunk,
                         tw,
                         pointwise,
-                        inverse,
                     )
                 } else {
-                    F::try_flat_pass_r3(
+                    F::try_flat_pass_r2::<INVERSE>(
                         scratch,
                         data,
                         prev_len,
@@ -228,13 +219,35 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
                         stage_chunk,
                         tw,
                         pointwise,
-                        inverse,
+                    )
+                }
+            }
+            3 => {
+                if src_is_data {
+                    F::try_flat_pass_r3::<INVERSE>(
+                        data,
+                        scratch,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
+                    )
+                } else {
+                    F::try_flat_pass_r3::<INVERSE>(
+                        scratch,
+                        data,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
                     )
                 }
             }
             4 => {
                 if src_is_data {
-                    F::try_flat_pass_r4(
+                    F::try_flat_pass_r4::<INVERSE>(
                         data,
                         scratch,
                         prev_len,
@@ -242,10 +255,9 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
                         stage_chunk,
                         tw,
                         pointwise,
-                        inverse,
                     )
                 } else {
-                    F::try_flat_pass_r4(
+                    F::try_flat_pass_r4::<INVERSE>(
                         scratch,
                         data,
                         prev_len,
@@ -253,7 +265,52 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
                         stage_chunk,
                         tw,
                         pointwise,
-                        inverse,
+                    )
+                }
+            }
+            5 => {
+                if src_is_data {
+                    F::try_flat_pass_r5::<INVERSE>(
+                        data,
+                        scratch,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
+                    )
+                } else {
+                    F::try_flat_pass_r5::<INVERSE>(
+                        scratch,
+                        data,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
+                    )
+                }
+            }
+            7 => {
+                if src_is_data {
+                    F::try_flat_pass_r7::<INVERSE>(
+                        data,
+                        scratch,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
+                    )
+                } else {
+                    F::try_flat_pass_r7::<INVERSE>(
+                        scratch,
+                        data,
+                        prev_len,
+                        g_count,
+                        stage_chunk,
+                        tw,
+                        pointwise,
                     )
                 }
             }
@@ -266,9 +323,9 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar>(
         }
 
         if src_is_data {
-            dispatch_radix_stage::<F>(data, scratch, prev_len, g_count, r, tw, pointwise, inverse);
+            dispatch_radix_stage::<F, INVERSE>(data, scratch, prev_len, g_count, r, tw, pointwise);
         } else {
-            dispatch_radix_stage::<F>(scratch, data, prev_len, g_count, r, tw, pointwise, inverse);
+            dispatch_radix_stage::<F, INVERSE>(scratch, data, prev_len, g_count, r, tw, pointwise);
         }
 
         src_is_data = !src_is_data;

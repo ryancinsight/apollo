@@ -6,7 +6,7 @@ use super::super::avx::{
     stage_pair_quarter_groups_two_reduced_avx_fma, stage_reduced_groups_one_avx_fma,
 };
 use super::super::precision::ReducedStockhamAvxFma;
-use super::super::transform::{transform, transform_len4096_four_triples};
+use super::super::transform::{transform, transform_len4096_four_triples, transform_sized};
 use num_complex::Complex32;
 #[cfg(all(test, target_arch = "x86_64"))]
 use num_complex::Complex64;
@@ -477,7 +477,6 @@ unsafe fn fixed_len4_reduced_avx_fma(
 }
 
 #[inline]
-#[expect(clippy::too_many_arguments, reason = "register-blocked fused codelet")]
 pub(crate) unsafe fn forward32_avx_with_scratch(
     data: &mut [Complex32],
     scratch: &mut [Complex32],
@@ -497,6 +496,32 @@ pub(crate) unsafe fn forward32_avx_with_scratch(
         return;
     }
     transform::<ReducedStockhamAvxFma>(data, scratch, twiddles, None);
+}
+
+/// Sized variant (const LOG2) to complete ZST/const flow in f32 reduced AVX PoT sized paths.
+/// Avoids runtime len() / transform runtime log2; passes LOG2 to transform_sized.
+#[inline]
+pub(crate) unsafe fn forward32_avx_with_scratch_sized<const LOG2: u32>(
+    data: &mut [Complex32],
+    scratch: &mut [Complex32],
+    twiddles: &[Complex32],
+) {
+    let n = 1usize << LOG2;
+    debug_assert_eq!(data.len(), n);
+    if FIXED_LEN_REDUCED_AVX_SIZES.contains(&n) {
+        match n {
+            4 => fixed_len4_reduced_avx_fma(data, scratch, twiddles),
+            8 => fixed_len8_reduced_avx_fma(data, scratch, twiddles),
+            64 => fixed_len64_reduced_avx_fma(data, scratch, twiddles),
+            _ => unreachable!("FIXED_LEN_REDUCED_AVX_SIZES guard passed"),
+        }
+        return;
+    }
+    if n == 4096 {
+        transform_len4096_four_triples::<ReducedStockhamAvxFma>(data, scratch, twiddles);
+        return;
+    }
+    transform_sized::<ReducedStockhamAvxFma>(data, scratch, twiddles, None, LOG2);
 }
 
 #[cfg(test)]

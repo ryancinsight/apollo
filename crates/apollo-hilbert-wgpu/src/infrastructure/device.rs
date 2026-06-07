@@ -11,6 +11,7 @@ use crate::application::plan::HilbertWgpuPlan;
 use crate::domain::capabilities::WgpuCapabilities;
 use crate::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::kernel::HilbertGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -21,46 +22,20 @@ pub fn wgpu_available() -> bool {
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct HilbertWgpuBackend {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: WgpuDevice,
     kernel: Arc<HilbertGpuKernel>,
 }
 
 impl HilbertWgpuBackend {
     /// Create a backend from an existing device and queue.
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> WgpuResult<Self> {
-        Ok(Self {
-            kernel: Arc::new(HilbertGpuKernel::new(device.as_ref())),
-            device,
-            queue,
-        })
+    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let kernel = Arc::new(HilbertGpuKernel::new(device.inner()));
+        Ok(Self { device, kernel })
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| WgpuError::AdapterUnavailable {
-            message: error.to_string(),
-        })?;
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-hilbert-wgpu"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&descriptor)).map_err(|error| {
-                WgpuError::DeviceUnavailable {
-                    message: error.to_string(),
-                }
-            })?;
-        Self::new(Arc::new(device), Arc::new(queue))
+        Self::new(WgpuDevice::try_default("apollo-hilbert-wgpu")?)
     }
 
     /// Return truthful current capabilities.
@@ -72,13 +47,13 @@ impl HilbertWgpuBackend {
     /// Return the acquired WGPU device.
     #[must_use]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.device.device()
     }
 
     /// Return the acquired WGPU queue.
     #[must_use]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.device.queue()
     }
 
     /// Create a metadata-only plan descriptor.
@@ -95,7 +70,7 @@ impl HilbertWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_plan_input(plan, input)?;
         self.kernel
-            .execute(self.device.as_ref(), self.queue.as_ref(), input)
+            .execute(self.device.inner(), self.device.queue().as_ref(), input)
     }
 
     /// Execute the forward Hilbert quadrature component `H{x}` for a real-valued `f32` signal.
@@ -153,8 +128,11 @@ impl HilbertWgpuBackend {
         quadrature: &[f32],
     ) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, quadrature)?;
-        self.kernel
-            .execute_inverse(self.device.as_ref(), self.queue.as_ref(), quadrature)
+        self.kernel.execute_inverse(
+            self.device.inner(),
+            self.device.queue().as_ref(),
+            quadrature,
+        )
     }
 
     /// Execute the inverse Hilbert transform with typed storage.

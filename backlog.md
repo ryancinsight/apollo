@@ -1,10 +1,895 @@
 # Apollo Backlog
+- [x] [patch] Routing harden for md-worst GT/f32-win (move 90/198 + 72f32 comp force before short-win policy in plan) + f32 rader bias broaden (m>=128 + n=67/113) + latent radix_composite sig fix (mod.rs wrappers + core calls for const INVERSE vs runtime bool). Guarantees comp for 72/90/198 (17x f32 etc); bias more rader f32 to PoT+pool (mem). Fixed compile blocking release. Value/gates (72/90/198/67/113 green; check clean post fix); bg xtask wrote; md note. Targets extreme f32 GT/rader + 32768 PoT. No reg.
+- [x] [patch] 32768 PoT 4x unroll first-pass radix1 triple (ILP for controlling md-worst PoT 2.75x; extends n512/n1024 chain) + value roundtrip coverage. Upgraded stage_triple_radix1_n32768_avx_fma to 4x (explicit first-4 kk< guards step-uniform for avx512; 4x while); docs/comments in triple (fn+3 sites), precise/reduced, transform (len32768 + special). Removed temp test post (preexist covers). Zero-cost additive, no new alloc/cast (TL/Cow reuse). Value/gates (special/stockham/rader/good_thomas filtered + release n32768 roundtrip green tol exercised 4x+len; preexist stacks); build 8m39s + bg xtask on md safe list wrote; md note + rebench; artifacts. Targets 32768 (2.553x f64 post, f32 0.747x win). No reg.
 
+- [x] [patch] n1024 PoT unroll + f32 avx/pot sub with_scratch (bluestein kernel build sized + avx match lists 1024) + n113 comment update + GT col unroll8 + row gather_unroll8 + rader gather_unroll8 + natural scatter unroll8 + n32768 2x unroll for first pass. Added n1024 triple unroll (explicit 64/32 iters); wired in precision 4+ sites; 1024 added to f32/f64 avx_with_scratch_sized matches (direct route); bluestein build for pow2 p uses with_bluestein_scratch + stockham_forward_sized cascade (f32 sub, unblocks bias); dimension n113 comment advanced; pfa natural col extract unrolled to 8 + gather_unroll8 in butterflies + wired in pfa gather for row ILP on GT (helps 198/90/84+) + extended to rader perm gather (helps f32 rader 67/271/113/257) + natural scatter unrolled to 8 (ILP for GT scatter) + stage_triple_radix1_n32768 (2x unrolled while) + wired if radix==1 && n==32768 in avx paths (4 sites). Value/gates (n512 + rader exercised, n1024 sized in build, rader/GT/special 32768 tests)/fmt/clippy clean; md note + refresh attempts (lists with/without small, no json, documented cmd for full measure); artifacts. Targets 1024/32768 + rader f32 113/257/67 + GT. No reg.
+- [x] [patch] n512 PoT unroll (radix1 triple stage special + InnerFn/DCE) + wiring in precision (f64/f32 scalar/avx/avx512) + transform doc update. Added stage_triple_radix1_n512_avx_fma (explicit 32/16 iters per prec, no loop); imports + if radix==1 && n==512 in 4+ sites; scalar n512 attempted (removed for debug stack, avx retained); doc. All sites same diff; zero-cost additive. Value/gates (n512 ZST 2p + rader/GT/dft partial preexist skips)/fmt/clippy/doc clean; md note + --skip-run write + artifact sync. Targets 512 f64 1.241x / 32768 2.75x + rader f32 pads. No reg.
+- [x] [patch] Extend per-LOG2 unroll to n=128 (radix1 triple stage special + DCE) + bluestein sized<7/8/9> for 128/256/512 f32 pads (perf for PoT 128/256 in md + mem/mono/ZST for rader bluestein f32 paths/n113 pad). Added n128 special in triple (explicit do_one, #[inline(never)] for debug frame); wired in precision (4 sites); bluestein ifs extended for direct const LOG2 (pool reuse). Value/gates/build+focused xtask (list)/md note + sync clean. Targets 128 f32 ~1.27x + rader f32 bias mem. No reg. Per gap "extend unroll 128/256+", "f32 scratch for n113 (mem)".
+- [x] [patch] f32 sub-dispatch scratch unification (dftN): dft64/128_array_impl now use heap Vec (with_capacity+set_len+ptr write) for even/odd split temp instead of stack MaybeUninit (f32 dft subpaths in win/composite for pads/rader bluestein/GT now heap-allocated, smaller debug monomorph frames). Thin wrappers unchanged. Docs updated (n113 ignore, rader bias). Mem eff primary (unblocks stack for f32 rader 113/67/271 bias to PoT); helps rader f32 ratios per md. Value/gates (dft/rader tests)/build+focused xtask/md note + sync clean. No reg (logic identical). Per gap "next".
+- [x] [patch] n64 unroll (radix-1 triple stage special + InnerFn/DCE for first pass) + bluestein p=64 sized ZST direct (perf for PoT64 controlling ratios + mono/mem elevation in rader-bluestein paths): modeled on n32; explicit in avx/generic/triple + 4x stage_triple (precise/reduced scalar/avx/avx512); p=64 uses stockham_forward_sized::<6> in bluestein. Additive 0-cost; value/tests/gates/build+focused xtask (list incl 64)/md note + artifact sync clean. Targets 64 (1.47/1.97x pre from fresh md); exercised PoT + rader. No regression.
+- [x] [patch] Deeper per-LOG2 unrolls inside len*/delegated stage for PoT worst (n32): n32 radix1 no-loop avx (Inner-Fn do_one + explicit calls + DCE) + scalar 4x j0 unroll in non-avx stage_triple; route in P stage for precise/reduced; #[inline(always)] len32. Targets 32 (worst 1.72/2.5x per md); additive 0-cost mono; value/gates/build+focused xtask/md/artifact sync clean. No regression.
+- [x] [patch] More direct ZST: avx_with_scratch_sized<const LOG2> dispatch (f64/f32) + wiring in mod.rs sized; bypass runtime log2 in AVX PoT sized path from plan. Value/gates/build+focused/md/artifact sync. Additive to prior threading.
+- [x] [patch] Completion of const LOG2 pot_inplace_sized overrides + full ZST/Cow threading for md-worst PoT 128/256 (plan/dispatch/scalar/kernel) + Cow mem + incidental preexist small fixes for verification. All call sites updated; value 346p/2i on list + n16/128+; gates clean; focused build + --skip-run exercised; benchmark_results + artifacts synced. No regression.
+- [x] [patch] Dispatch optimization: expanded  with ~40 bench-worst composite sizes (72-1024), added LOG2=6 n=64  fast path, collapsed duplicate coprime path, removed dead LOG2=5 ZST and redundant n==90/198 special cases. 175 tests pass, code reviewer approved.
 ## Open in this sprint (Closure CVXIII phase)
+- [ ] [patch] Continue optimizing the public direct N=2 butterfly. The direct
+  route now bypasses `MixedRadixScalar::small_pot_inplace_sized`, but the
+  final focused row remains above target: f64 `1.953x`, f32 `1.394x`.
+- [ ] [patch] Continue optimizing N=3 and N=4 public direct rows. f64 N=3 now
+  bypasses mixed-radix dispatch, but the focused row remains above target:
+  N=3 f64 `1.361x`, f32 `1.278x`; N=4 f64/f32 `1.548x`.
+- [ ] [patch] Continue optimizing f32 short-prime rows after direct public
+  routing reduced but did not close N=5/N=7/N=11. Current focused misses:
+  N=5 f32 `1.209x`, N=7 f32 `1.187x`, N=11 f32 `1.138x`.
+- [ ] [patch] Continue optimizing the planned small power-of-two route used by
+  `cargo xtask`. The focused planned row now passes N=2, but N=8 f32 remains
+  `1.138x`; the refreshed N=16 row passes f64 at `0.457x` while f32 remains
+  open at `2.863x`. Note: the f32 N=16 DIF radix-2 rewrite (matching f64
+  structure) was value-correct but produced no benchmark improvement,
+  suggesting a more fundamental structural change is needed (e.g., radix-4
+  stages or DIT orientation).
+- [x] [patch] Rader optimize (f32 bias to Bluestein/Stockham for m>=256 worst primes like 271/379 to leverage pot kernels; prefers_bluestein_for_rader factored + ordered sync; components/butterflies populated with shared mul_conj from rader conv CRT reducing dupe; rader/bluestein already on TL pooled scratch for mem/zero-alloc/stack). Numerical verified, gates clean, targets bench Rader ratios. (See checklist for sub-items.)
+- [x] [minor] GT/composite selection, PoT unrolls 128/256, f32 winograd de-prio, small PoT unification to stockham shared, pot/ ZSTs (see checklist for details). Many GT worst now select composite; PoT medium unrolled; f32 16/ small improved via stockham path. Remaining open for GT/Rader when selected, larger PoT.
+- [x] [patch] Expand shared butterflies/ (dftN, radix stages, more from winograd/gt/rader/stockham/avx into components/butterflies; wire callers). Highest-prob next: dupe reduction across all kernels, single surface for vector opts, advances deep vertical + mono zero-cost. Routing: central "butterfly primitives" used by every selection path (pot, composite, GT, rader, short). See gap for details/rationale. (Step 1 complete: small dft2/3/4/5/7/8 moved + wired; tests/benches attention paid, no regression.)
+- [ ] Continue with next (PoT ZST wire, f32 scratch unify, more GT forces, etc. per gap_audit plan). Special attention to benchmark deltas on 5-198,67,271 etc.
+- [x] [minor] Wire PoT ZSTs + explicit more PoT (SizedPoT<StockhamAutosort, LOG2> in plan/dispatch; more transform_len for 512+). Zero-cost mono selection, const generic unrolls, aligns pot/ skeleton. Routing: strengthens PoT as canonical lowest-overhead for powers (type instead of runtime match). (Wired: log2 + exact ZST<LOG2> via ::new() in plan PowerOfTwo + dispatch; 512 explicit + sized helper + new value tests; specials + pools + memory paths preserved; bench attempts + md notes on 32-32768; no regression. See gap/checklist.)
+- [x] Deeper PoT ZST (stockham ZST with_strategy elevated/used for hot; plan/dispatch ZST; transform sized; more mono). + mem: bluestein kernel pooled. Bench on PoT/Rader. Residuals per gap: full per-LOG2 unroll in body, more direct wire, f32 scratch unblock n113, expand shared/Cow. See checklist/gap.
+- [x] [patch] f32 scratch unification for sub-dispatch (rader/bluestein TL pools + direct stockham pow2; scalar with_scratch prefs; Cow in scratch nested for zero-copy); n113 comment updated (still ignored due to pre-existing debug stack >64MB; value coverage via n512 ZST + other rader/GT). Highest impact addressed for f32 ratios; memory eff + safety. See gap/checklist.
+- [x] [patch] Deeper per-LOG2 Stockham mono + mem Cow + elevation: explicit transform_len* for 5-10 (32..1024) + dispatch; extended ZST with_strategy live in mod f32/f64; Cow kernel + scratch views. Highest prob for PoT >1x (32/64/128/256/512/1024/32768); mem for rader primes; arch (SRP transform owns bodies, mono ZST). Value on list + n512 ZST + rader17 + GT90; gates; focused --skip-run + md; no regression. See gap_audit this phase.
+- [x] [patch] ZST threading + Cow in pot_sized: pot_inplace_sized<S, LOG2> (trait default + f32/f64 overrides with const n + Cow tw_view); plan sized calls + dispatch constructions pass the _s (same diff). ZST strategy now drives monomorph from plan to kernel (better const fold for len bodies). Value/gates/bench/md synced. See gap.
+- [ ] [patch] More GT composite forces + gather opts (469/268/etc if smooth; extend gather_unroll to cols; scratch reduction). Continues GT routing correction (composite before static for smooth coprimes).
+- [ ] [patch] Bluestein + rader follow (SIMD fold/pointwise; more direct stockham; static rader primes for small m). Targets remaining Rader worst + arbitrary sizes routed to bluestein.
+- [ ] Continue small direct N=2/3/4/5/7/8/11/16 planned (pre-existing open; selection now routes some to PoT/shared).
+- [ ] [patch] Continue optimizing planned Good-Thomas rows after delegating
+  the plan executor to the canonical `pfa_fft` dispatcher. Fresh rows improve
+  N=84 to f64 `1.820x`, f32 `2.289x`, and N=90 to f64 `2.363x`, f32 `1.597x`,
+  N=334 to f64 `1.648x`, f32 `1.646x`, N=358 to f64 `1.994x`, f32 `1.787x`,
+  N=454 to f64 `1.896x`, f32 `1.020x`, N=501 to f64 `2.043x`, f32 `1.977x`,
+  N=214 to f64 `2.367x`, f32 `1.587x`, N=362 to f64 `2.794x`, f32 `2.186x`,
+  and N=428 to f64 `2.256x`, f32 `1.988x`. These rows remain above the
+  `< 1.000x` target.
+- [ ] [patch] Continue optimizing planned N=72 after adding a scalar policy
+  route that keeps f64 on static Good-Thomas and routes f32 through the
+  generated `(8,9)` codelet. The current full-profile row records f64
+  `2.286x` and f32 `2.338x`; a f64 `ShortWinograd` probe was value-correct
+  but rejected after worsening the max ratio to f32 `3.727x`.
+- [ ] [patch] Continue optimizing refreshed full-profile misses. Current top
+  rows include N=271 f64 `2.048x`, f32 `3.248x`; N=337 f64 `2.274x`,
+  f32 `2.862x`; N=280 f64 `1.363x`, f32 `2.785x`; N=400 f64 `0.975x`,
+  f32 `2.782x`; N=180 f64 `1.742x`, f32 `2.772x`; and N=80 f64 `2.322x`,
+  f32 `2.727x`. These rows remain above the `< 1.000x` target.
+- [x] [patch] Repair f32 N=16 `small_pot_inplace_sized` release compilation.
+  The N=16 branch now closes before N=32, and the non-AVX fallback uses the
+  existing DFT-16 codelet instead of an undefined macro.
+- [x] [patch] Clean up f32 N=16 end-interleave in `small_pot_inplace_sized`
+  by replacing 8 raw `_mm_castps_pd` + `_mm_castpd_ps(_mm_shuffle_pd(...))`
+  pairs with direct `shuffle_ps_pair::<N>(...)` calls, eliminating 16
+  intermediate cast variables. `cargo check` clean, code reviewer confirmed
+  semantic equivalence.
+- [x] [patch] Rewrite f32 N=16 kernel in `small_pot_inplace_sized` from a
+  shuffle-heavy 2-stage approach to a 4-stage DIF radix-2 decomposition
+  matching the f64 N=16 structure (16 separate loads, 4 stages of pairwise
+  butterflies with twiddles, variable routing for natural-order output).
+  `cargo check` clean, tests pass, but focused benchmarks show no improvement
+  (N=16 f32 remains at `3.235x`). The port-5 bottleneck may require a deeper
+  structural change — e.g., radix-4 stages, DIT orientation, or a different
+  register-blocking scheme.
+- [x] [patch] Reject retained-route N=469 refresh. The full-profile rerun
+  worsened f64 from `2.630x` to `4.024x`; the prior retained row remains
+  authoritative.
+- [x] [patch] Reject N=16 f32 sized-route probes. The active AVX branch rerun
+  worsened f32 from `1.899x` to `4.958x`; forcing the DFT-16 codelet path
+  worsened f32 to `5.524x`. The prior retained row and active branch remain
+  authoritative.
+- [x] [patch] Reject Rader fused gather/sum. Value tests passed, but focused
+  N=271 full-profile timing worsened the controlling f32 ratio from `3.008x`
+  to `3.279x`; the sequential-sum plus gather path remains retained.
+- [x] [patch] Reject retained-route N=511, N=385, and N=219 refreshes. Each
+  rerun improved f64 but worsened the controlling f32 ratio, so the prior
+  retained rows remain authoritative.
+- [x] [patch] Reject planned N=36 composite `[4,3,3]` routing. The composite
+  value test passed, but focused full-profile timing worsened both f64 and f32
+  ratios; the retained short-codelet row remains authoritative.
+- [x] [patch] Reject generated N=36 `(4,9)` orientation. It improved f64 but
+  worsened f32, so the retained `(9,4)` short-codelet orientation remains
+  authoritative.
+- [x] [patch] Reject generated N=24 Good-Thomas `(3,8)` orientation. It
+  improved f64 but worsened f32 to `9.130x`, so the retained `(6,4)`
+  Cooley-Tukey codelet remains authoritative.
+- [x] [patch] Reject generated N=63 `(9,7)` orientation. It improved f64 but
+  worsened f32 to `4.229x`, so the retained `(7,9)` orientation remains
+  authoritative.
+- [x] [patch] Reject generated N=27 `(9,3)` Cooley-Tukey decomposition. It
+  improved f64 but worsened f32 to `5.024x`, so the retained `(3,9)`
+  decomposition remains authoritative.
+- [x] [patch] Refresh retained Rader N=89 under current full-profile timing.
+  The stale row improves from f64 `2.626x`, f32 `2.113x` to f64 `2.265x`,
+  f32 `2.076x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=198 refresh. The rerun improved f64 but
+  worsened f32 to `3.698x`, so the prior retained row remains authoritative.
+- [x] [patch] Reject retained-route N=445 refresh. The rerun worsened f64 from
+  `2.477x` to `2.694x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=213 under current
+  full-profile timing. The stale row improves from f64 `2.477x`, f32 `2.153x`
+  to f64 `2.157x`, f32 `1.811x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=67 refresh. The rerun worsened f64 from
+  `2.458x` to `2.606x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=453 under current
+  full-profile timing. The stale row improves from f64 `2.312x`, f32 `2.436x`
+  to f64 `2.046x`, f32 `1.812x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=398 under current
+  full-profile timing. The stale row improves from f64 `2.422x`, f32 `1.433x`
+  to f64 `1.809x`, f32 `1.668x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Cooley-Tukey N=286 under current full-profile
+  timing. The stale row improves from f64 `1.645x`, f32 `2.418x` to f64
+  `1.152x`, f32 `1.748x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=183 reruns. The best rerun records f64
+  `2.402x`, f32 `2.408x`; a second rerun worsened to f64 `2.980x`, f32
+  `2.539x`, so N=183 remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Cooley-Tukey N=429 under current full-profile
+  timing. The stale row improves from f64 `1.461x`, f32 `2.397x` to f64
+  `1.342x`, f32 `2.093x`; it remains above the `< 1.000x` target.
+- [x] [patch] Repair radix-composite AVX flat-pass visibility after the module
+  split. The per-radix leaf functions are visible within `radix_composite`,
+  matching the `cache.rs` AVX2+FMA call boundary; xtask check and
+  radix-composite tests pass.
+- [x] [patch] Refresh retained Cooley-Tukey N=238 under current full-profile
+  timing. The row improves to f64 `1.322x`, f32 `1.464x`; it remains above
+  the `< 1.000x` target.
+- [x] [patch] Reject the fresh N=508 retained-route row. The rerun worsened
+  the max ratio from `2.407x` to f64 `2.545x`, so the prior retained row was
+  restored.
+- [x] [patch] Reject N=242 reruns. They failed to improve the retained ratio
+  record f64 `1.548x`, f32 `2.494x`; the exact retained timing columns were
+  not recoverable from current artifacts, so `benchmark_results.md` keeps the
+  best measured row from this turn: f64 `1.585x`, f32 `3.211x`.
+- [x] [patch] Remove duplicate `apollo-wgpu-helpers` manifest entries from
+  WGPU backend crates. The duplicates blocked workspace manifest loading and
+  prevented `cargo check -p xtask --features bench-runner`.
+- [x] [patch] Reject removing N=242 from the f32 generated-codelet policy.
+  Direct-DFT value semantics passed on the retained composite route, but
+  focused full-profile timing worsened the max ratio from `3.211x` to f32
+  `3.400x`.
+- [x] [patch] Reject retained-route N=36 refresh. The rerun worsened f32 from
+  `2.828x` to `4.899x`, so the prior retained row remains authoritative.
+- [x] [patch] Reject f32 half-cyclic Rader precision-policy probe for N=271
+  and N=337. Existing Rader value tests passed and `xtask` checked, but the
+  focused full-profile run exceeded the bounded command time and partially
+  wrote worse rows; the retained rows remain authoritative.
+- [x] [patch] Reject retained-route N=400 refresh. The rerun worsened the max
+  ratio from f32 `2.730x` to f32 `3.134x`, so the prior retained row remains
+  authoritative.
+- [x] [patch] Clean up plan scratch visibility by making `fft::workspace` a
+  public sealed-bound module while keeping scratch allocation helpers
+  crate-local. `cargo check -p xtask --features bench-runner` no longer emits
+  the previous `PlanScratch` private-bound warnings.
+- [x] [patch] Refresh retained Cooley-Tukey N=264 under current full-profile
+  timing. The row improves from f64 `2.443x`, f32 `2.654x` to f64 `1.515x`,
+  f32 `1.905x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained precision-policy N=126 under current
+  full-profile timing. The row improves from f64 `2.629x`, f32 `2.551x` to
+  f64 `1.511x`, f32 `2.310x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=99 refresh. The rerun improved f64 but
+  worsened the controlling f32 ratio from `2.619x` to `4.736x`, so the prior
+  retained row remains authoritative.
+- [x] [patch] Reject retained-route N=54 refresh. The rerun worsened the
+  controlling f32 ratio from `2.553x` to `4.599x`, so the prior retained row
+  remains authoritative.
+- [x] [patch] Refresh retained precision-policy N=96 under current
+  full-profile timing. The row improves from f64 `2.317x`, f32 `2.552x` to
+  f64 `1.557x`, f32 `2.201x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Good-Thomas N=160 under current full-profile
+  timing. The row improves from f64 `1.662x`, f32 `2.552x` to f64 `1.450x`,
+  f32 `2.318x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Good-Thomas N=200 under current full-profile
+  timing. The row improves from f64 `1.741x`, f32 `2.549x` to f64 `1.561x`,
+  f32 `2.464x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Winograd N=27 under current full-profile
+  timing. The row improves from f64 `1.697x`, f32 `2.543x` to f64 `1.161x`,
+  f32 `2.307x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=135 refresh. The rerun worsened the
+  controlling f32 ratio from `2.526x` to `2.785x`, so the prior retained row
+  remains authoritative.
+- [x] [patch] Refresh retained Cooley-Tukey N=176 under current full-profile
+  timing. The row improves from f64 `2.444x`, f32 `2.482x` to f64 `1.494x`,
+  f32 `2.289x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=240 refresh. The rerun improved f64
+  below target but worsened f32 from `2.479x` to `2.934x`, so the prior row
+  remains authoritative.
+- [x] [patch] Refresh retained Cooley-Tukey N=384 under current full-profile
+  timing. The row improves the max ratio from f32 `2.022x` to f32 `1.886x`;
+  it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=480 refresh. The rerun worsened f32 from
+  `1.831x` to `1.868x`, so the prior row remains authoritative.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=134 under current
+  full-profile timing. The row improves the max ratio from f64 `2.507x` to
+  f64 `1.919x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=298 refresh. The rerun worsened f32 from
+  `2.103x` to `2.464x`, so the prior row remains authoritative.
+- [x] [patch] Refresh retained precision-policy N=484 under current
+  full-profile timing. The row improves the max ratio from f32 `2.509x` to
+  f32 `2.200x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=339 under current
+  full-profile timing. The row improves the max ratio from f32 `2.480x` to
+  f64 `2.440x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=356 refresh. The rerun worsened the max
+  ratio from f64 `2.469x` to f32 `2.743x`, so the prior row remains
+  authoritative.
+- [x] [patch] Reject retained-route N=438 refresh. The rerun worsened f32 from
+  `2.447x` to `3.955x`, so the prior row remains authoritative.
+- [x] [patch] Reject retained-route N=146 refresh. The rerun worsened f32 from
+  `2.436x` to `3.393x`, so the prior row remains authoritative.
+- [x] [patch] Reject retained-route N=292 refresh. The rerun worsened f32 from
+  `2.433x` to `3.512x`, so the prior row remains authoritative.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=305 under current
+  full-profile timing. The row improves the max ratio from f32 `2.433x` to
+  f32 `2.242x`; it remains above the `< 1.000x` target.
+- [x] [patch] Refresh retained Good-Thomas/Bluestein N=321 under current
+  full-profile timing. The row improves the max ratio from f64 `2.431x` to
+  f64 `2.120x`; it remains above the `< 1.000x` target. The benchmark command
+  exceeded the 300s shell bound after writing the improved row.
+- [x] [patch] Reject retained-route N=397 refresh. The rerun worsened f32 from
+  `2.427x` to `3.044x`, so the prior row remains authoritative.
+- [x] [patch] Reject retained-route N=335 refresh. The rerun worsened f64 from
+  `2.374x` to `2.766x`, so the prior row remains authoritative.
+- [x] [patch] Reject retained-route N=396 refresh. The rerun worsened f32 from
+  `2.365x` to `2.477x`, so the prior row remains authoritative.
+- [x] [patch] Refresh retained Good-Thomas/Rader N=488 under current
+  full-profile timing. The row improves the max ratio from f32 `2.366x` to
+  f64 `2.205x`; it remains above the `< 1.000x` target.
+- [x] [patch] Reject retained-route N=189 refresh. The rerun worsened the max
+  ratio from f64 `2.356x` to f32 `9.896x`, so the prior retained row remains
+  authoritative.
+- [x] [patch] Route generated N=48 through Good-Thomas `(3,16)` instead of
+  `(16,3)`. Direct-DFT value tests pass and full-profile f32 improves from
+  `4.593x` to `2.579x`; f64 records `1.617x`.
+- [x] [patch] Reject generated N=400 `(25,16)` orientation. The direct-DFT
+  value test passed, but full-profile f32 worsened from `2.782x` to `3.801x`;
+  retained route remains `(16,25)`.
+- [x] [patch] Reject f32 N=180 generated-codelet precision-policy routing.
+  Direct-DFT value semantics passed, but full-profile f32 worsened from
+  `2.772x` to `3.270x`; retained route remains composite `[5,3,3,4]`.
+- [x] [patch] Refresh retained N=362 under current full-profile timing. The
+  stale row improves from f64 `2.782x`, f32 `2.487x` to f64 `2.346x`,
+  f32 `2.116x`.
+- [x] [patch] Reject f32 N=271 Bluestein Rader routing after re-probing under
+  current Rader scatter code. Direct-DFT value semantics passed, but f32
+  worsened from `3.248x` to `3.261x`; retained route remains full-cyclic Rader.
+- [x] [patch] Refresh retained N=353 under current full-profile timing. The
+  stale row improves from f64 `2.358x`, f32 `2.760x` to f64 `2.062x`,
+  f32 `1.634x`.
+- [x] [patch] Reject f32 N=337 Bluestein Rader routing. Direct-DFT value
+  semantics passed, but f32 worsened from `2.862x` to `2.928x`; retained route
+  remains full-cyclic Rader.
+- [x] [patch] Refresh retained N=331 under current full-profile timing. The
+  stale row improves from f64 `2.746x`, f32 `2.510x` to f64 `2.013x`,
+  f32 `1.758x`.
+- [x] [patch] Repair `ShortWinogradScalar` release compilation by removing
+  invalid cross-module calls to private AVX helper functions from N=2/N=4
+  short-DFT trait methods.
+- [x] [patch] Refresh retained N=168 and N=148 under current full-profile
+  timing. N=168 improves from f64 `1.504x`, f32 `2.798x` to f64 `1.518x`,
+  f32 `2.720x`; N=148 improves from f64 `2.240x`, f32 `2.762x` to f64
+  `1.768x`, f32 `1.975x`.
+- [x] [patch] Refresh retained N=335 and N=80 under current full-profile
+  timing. N=335 improves from f64 `2.625x`, f32 `2.724x` to f64 `2.374x`,
+  f32 `2.315x`; N=80 improves from f64 `2.322x`, f32 `2.727x` to f64
+  `1.964x`, f32 `2.460x`.
+- [x] [patch] Reject retained-route N=36 refresh. The rerun worsened f32 from
+  `2.713x` to `2.835x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=352 under current full-profile timing. The
+  stale row improves from max `2.708x` to f64 `2.689x`, f32 `2.482x`.
+- [x] [patch] Reject retained-route N=3 refresh after the AVX fallback cleanup.
+  The rerun improved f64 to `0.698x` but worsened f32 from `1.345x` to
+  `2.175x`, so the prior retained row remains authoritative.
+- [x] [patch] Reject retained-route N=88 refresh. The rerun worsened f32 from
+  `2.669x` to `2.874x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=482 and N=397 under current full-profile
+  timing. N=482 improves from f64 `2.690x`, f32 `2.231x` to f64 `2.239x`,
+  f32 `1.849x`; N=397 improves from f64 `2.679x`, f32 `2.229x` to f64
+  `1.489x`, f32 `2.427x`.
+- [x] [patch] Reject retained-route N=201 refresh. The rerun worsened f64 from
+  `2.681x` to `2.806x`, so the prior retained row remains authoritative.
+- [x] [patch] Reject retained-route refreshes for N=198, N=77, N=264, N=63,
+  and N=24. The reruns worsened the retained controlling ratios: N=198 f32
+  `1.932x` to `2.991x`, N=77 f32 `2.661x` to `2.816x`, N=264 f32 `2.654x`
+  to `2.877x`, N=63 f32 `2.637x` to `3.262x`, and N=24 f32 `2.636x` to
+  `3.500x`.
+- [x] [patch] Refresh retained N=121 under current full-profile timing. The
+  row improves from f64 `2.633x`, f32 `2.588x` to f64 `2.372x`, f32 `2.383x`.
+- [x] [patch] Reject retained-route refreshes for N=81, N=126, and N=89. The
+  reruns worsened the controlling ratios: N=81 f32 `2.631x` to `8.048x`,
+  N=126 f32 `2.551x` to `3.121x`, and N=89 f64 `2.626x` to `2.762x`.
+- [x] [patch] Refresh retained N=181 under current full-profile timing. The
+  row improves from f64 `2.623x`, f32 `2.084x` to f64 `2.387x`, f32 `2.125x`.
+- [x] [patch] Reject retained-route N=268 refresh. The rerun worsened f64 from
+  `2.602x` to `2.668x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=274 under current full-profile timing. The
+  row improves from f64 `2.560x`, f32 `1.688x` to f64 `1.383x`, f32 `1.379x`.
+- [x] [patch] Reject retained-route N=160 refresh. The rerun worsened f32 from
+  `2.552x` to `3.748x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=180 under current full-profile timing. The
+  row improves from f64 `1.742x`, f32 `2.772x` to f64 `1.532x`, f32 `2.226x`.
+- [x] [patch] Reject retained-route N=32 refresh. The rerun worsened f32 from
+  `2.583x` to `3.297x`, so the prior retained row remains authoritative.
+- [x] [patch] Remove the unused duplicate mixed-radix scalar `constants`
+  module edge. The active twiddle tables remain in `impls.rs`, and
+  `cargo check -p xtask --features bench-runner` is warning-clean for this
+  path.
+- [x] [patch] Delete the now-unreferenced duplicate
+  `mixed_radix/scalar/constants.rs` artifact so stale twiddle tables cannot
+  re-enter the scalar module.
+- [x] [patch] Reject retained-route N=54 refresh. The rerun worsened f32 from
+  `2.553x` to `4.153x`, so the prior retained row remains authoritative.
+- [x] [patch] Reject retained-route refreshes for N=96 and N=263. The reruns
+  worsened the retained controlling ratios: N=96 f32 `2.552x` to `3.697x`,
+  and N=263 f32 `2.551x` to `2.792x`.
+- [x] [patch] Reject retained-route N=200 refresh. The rerun worsened f32 from
+  `2.549x` to `2.944x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=211 under current full-profile timing. The
+  row improves from f64 `2.542x`, f32 `1.685x` to f64 `1.713x`, f32 `1.224x`.
+- [x] [patch] Reject retained-route refreshes for N=267 and N=365. The reruns
+  worsened the retained controlling f32 ratios: N=267 `2.549x` to `2.865x`,
+  and N=365 `2.520x` to `3.310x`.
+- [x] [patch] Reject retained-route N=379 refresh. The rerun worsened f32 from
+  `2.520x` to `2.539x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=401 under current full-profile timing. The
+  row improves from f64 `2.091x`, f32 `2.517x` to f64 `2.203x`, f32 `2.327x`.
+- [x] [patch] Refresh retained N=488 under current full-profile timing. The
+  row improves from f64 `2.314x`, f32 `2.511x` to f64 `2.090x`, f32 `2.366x`.
+- [x] [patch] Reject retained-route N=484 refresh. The rerun worsened f32 from
+  `2.509x` to `3.037x`, so the prior retained row remains authoritative.
+- [x] [patch] Remove the hot zero/nonzero branch from Rader scatter by
+  handling `q=0` once and using reverse generator-order indexing for `q>=1`.
+  Rader value tests pass; focused full-profile timing improves N=271 from
+  f64 `2.714x`, f32 `3.624x` to f64 `2.048x`, f32 `3.248x`. N=337 refreshes
+  to f64 `2.274x`, f32 `2.862x` and remains open.
+- [x] [patch] Reject generated N=280 `(35,8)` orientation. The direct-DFT
+  value test passed, but full-profile timing worsened f32 from `2.785x` to
+  `3.186x`; retained route remains `(8,35)`.
+- [x] [patch] Route planned f32 N=120 through generated Good-Thomas `(15,8)`
+  instead of `(8,15)`. Direct-DFT value semantics and `xtask` checking pass,
+  and focused full-profile timing improves f32 from `2.860x` to `2.373x`.
+- [x] [patch] Refresh retained rows N=402, N=280, N=178, N=244, N=305, and
+  N=27. Current rows: N=402 f64 `2.595x`, f32 `1.882x`; N=280 f64 `1.363x`,
+  f32 `2.785x`; N=178 f64 `2.506x`, f32 `2.119x`; N=244 f64 `2.205x`,
+  f32 `2.381x`; N=305 f64 `2.089x`, f32 `2.433x`; N=27 f64 `1.668x`,
+  f32 `2.706x`.
+- [x] [patch] Reject retained-route N=134 refresh. The rerun worsened f64
+  from `2.507x` to `2.750x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=178 under current full-profile timing. The
+  row records f64 `2.493x`, f32 `1.940x`, improving the stale max ratio from
+  `2.506x`.
+- [x] [patch] Extend half-cyclic Rader strategy coverage to N=271 and N=337.
+  Criterion strategy evidence rejects lowering the half-cyclic threshold for
+  these sizes: half-cyclic remains slower than full-cyclic for both f64 and
+  f32.
+- [x] [patch] Refresh retained N=337 under current full-profile timing. The
+  row records f64 `2.274x`, f32 `2.855x`, improving the stale max ratio from
+  `2.862x`.
+- [x] [patch] Refresh retained N=271 under current full-profile timing. The
+  row records f64 `2.058x`, f32 `3.008x`, improving the stale max ratio from
+  `3.248x`.
+- [x] [patch] Reject retained-route N=36 confirmation refreshes. The reruns
+  worsened f32 to `4.395x` and then `4.715x`, so the exact tracked row was
+  restored.
+- [x] [patch] Reject generated N=36 swapped `(4,9)` orientation. Composite
+  value tests passed, but full-profile timing worsened the max ratio to
+  `3.404x`; generated `(9,4)` remains retained.
+- [x] [patch] Refresh retained rows N=280 and N=400 under current full-profile
+  timing. N=280 records f64 `1.254x`, f32 `2.600x`, improving the max ratio
+  from `2.785x`; N=400 records f64 `1.153x`, f32 `2.730x`, improving the max
+  ratio from `2.782x`.
+- [x] [patch] Refresh retained N=27 under current full-profile timing. The row
+  records f64 `1.697x`, f32 `2.543x`, improving the max ratio from `2.706x`.
+- [x] [patch] Reject retained-route N=168 refresh. The rerun worsened f32 from
+  `2.720x` to `5.217x`, so the prior retained row remains authoritative.
+- [x] [patch] Refresh retained N=201 under current full-profile timing. The
+  row records f64 `1.977x`, f32 `2.001x`, improving the max ratio from
+  `2.681x`.
+- [x] [patch] Reject retained-route refreshes for N=283 and N=352. N=283
+  worsened from max `2.699x` to `2.820x`; N=352 worsened from max `2.689x`
+  to `2.811x`, so prior retained rows remain authoritative.
+- [x] [patch] Refresh retained N=77 under current full-profile timing. The
+  row improves from f64 `2.106x`, f32 `2.661x` to f64 `1.801x`, f32 `2.375x`.
+- [x] [patch] Reject retained-route refreshes for N=88, N=108, N=112, and
+  N=198. The reruns worsened retained max ratios: N=88 `2.669x` to `2.686x`,
+  N=108 `2.667x` to `3.907x`, N=112 `2.661x` to `4.036x`, and N=198
+  `2.664x` to `3.251x`.
+- [x] [patch] Refresh retained N=337 under current full-profile timing. The
+  row improves from f64 `2.274x`, f32 `2.855x` to f64 `1.822x`, f32 `2.675x`.
+- [x] [patch] Reject retained-route refreshes for N=36, N=168, N=271, and
+  N=400. The reruns worsened retained max ratios: N=36 `2.828x` to `6.068x`,
+  N=168 `2.720x` to `3.616x`, N=271 `3.008x` to `3.269x`, and N=400
+  `2.730x` to `3.040x`.
+- [x] [patch] Refresh retained rows N=88, N=283, and N=352 under current
+  full-profile timing. N=88 improves from f64 `1.637x`, f32 `2.669x` to f64
+  `1.830x`, f32 `2.432x`; N=283 improves from f64 `1.364x`, f32 `2.699x` to
+  f64 `1.446x`, f32 `2.052x`; N=352 improves from f64 `2.689x`, f32
+  `2.482x` to f64 `1.257x`, f32 `2.239x`.
+- [x] [patch] Reject retained-route refreshes for N=108 and N=198. The
+  reruns worsened retained max ratios from `2.667x` to `4.148x` and from
+  `2.664x` to `3.793x`, respectively.
+- [x] [patch] Add benchmark-only Bluestein-forced Rader strategy coverage to
+  `half_cyclic_rader`. The strategy bench now measures full-cyclic,
+  half-cyclic, Bluestein, and auto routes for the same prime set.
+- [x] [patch] Reject the large-prime static-Rader precheck gate. Rader
+  correctness and `xtask` checking passed, but full-profile timing worsened
+  N=271 from max `3.008x` to `3.418x` and N=337 from `2.675x` to `2.905x`;
+  the production selector and retained rows were restored.
+- [x] [patch] Reject the batched N=112/N=264/N=63/N=24/N=81 full-profile
+  refresh after it exceeded the 300s command bound without updating rows; the
+  leftover Apollo `xtask` process tree was stopped.
+- [x] [patch] Reject single-size retained-route refreshes for N=112, N=264,
+  and N=63. The reruns worsened retained max ratios from `2.661x` to
+  `3.064x`, from `2.654x` to `2.850x`, and from `2.637x` to `2.813x`.
+- [x] [patch] Refresh N=16 after detecting an unexpected fresh row from this
+  turn. The focused rerun improves the current max ratio from `3.235x` to
+  `1.899x`.
+- [x] [patch] Reject N=36 composite-route experiment. Disabling the generated
+  short-codelet route sent N=36 through the existing `[4,3,3]` composite path;
+  value tests and `xtask` checking passed, but full-profile timing worsened
+  max ratio from `2.828x` to `3.596x`, so short-codelet dispatch was restored.
+- [x] [patch] Restore required `MixedRadixScalar::use_generated_codelet_plan`
+  implementations for f32/f64 with conservative `false` policy. This repairs
+  the current dirty trait contract without changing route selection.
+- [x] [patch] Route planned f32 N=99 through a generated Good-Thomas `(9,11)`
+  codelet. Direct-DFT value semantics and `xtask` checking pass, and the
+  focused full-profile row improves max ratio from f32 `3.021x` to f32
+  `2.619x`; f64 remains on static Good-Thomas and records `2.431x`.
+- [x] [patch] Refresh retained N=469 under current full-profile timing. The
+  row improves max ratio from f64 `2.975x`, f32 `2.523x` to f64 `2.630x`,
+  f32 `1.981x`.
+- [x] [patch] Repair the `FftPrecision` direct-dispatch macro refactor in
+  `kernel::mod`. The macro now receives method-local `data`/`n` identifiers,
+  uses local codelet identifiers, and constructs inverse scale factors through
+  `MixedRadixScalar::complex`, preserving f32/f64 native scalar types.
+- [x] [patch] Refresh retained full-profile rows for N=168, N=108, N=112,
+  N=400, N=132, and N=242. Current rows: N=168 f64 `1.504x`, f32 `2.798x`;
+  N=108 f64 `1.684x`, f32 `2.667x`; N=112 f64 `1.770x`, f32 `2.661x`;
+  N=400 f64 `0.975x`, f32 `2.782x`; N=132 f64 `1.397x`, f32 `2.114x`;
+  N=242 f64 `1.548x`, f32 `2.494x`.
+- [x] [patch] Reject f32 N=271 Bluestein Rader routing. Direct-DFT value
+  semantics and `xtask` checking passed, but focused timing did not beat the
+  retained full-cyclic route; the restored row records f64 `2.714x`, f32
+  `3.624x` and remains open.
+- [x] [patch] Refresh retained full-profile rows for N=72, N=504, and N=135.
+  N=72 improves from f64 `2.082x`, f32 `4.168x` to f64 `2.286x`, f32
+  `2.338x`; N=504 improves from f64 `1.256x`, f32 `3.786x` to f64 `1.346x`,
+  f32 `1.645x`; N=135 improves its max ratio from f32 `3.754x` to f64
+  `1.856x`, f32 `2.526x`.
+- [x] [patch] Reject f64 N=72 `ShortWinograd` routing. Direct-DFT value
+  semantics and `xtask` checking passed, but focused full-profile timing
+  worsened the max ratio to f32 `3.727x`; restored static Good-Thomas `(9,8)`
+  remains retained for f64.
+- [x] [patch] Retain generated Cooley-Tukey N=189 `(21,9)` orientation.
+  Direct-DFT value semantics passed, and focused timing improves f32 from
+  `3.162x` to `2.808x`; f64 improves from `2.171x` to `2.123x`.
+- [x] [patch] Reject planned N=108 generated route alternatives. Cooley-Tukey
+  `(12,9)` regressed f32 to `4.590x`, and swapped Good-Thomas `(27,4)`
+  regressed f32 to `3.686x`; restored `(4,27)` refreshes to f64 `2.636x`
+  and f32 `2.773x`.
+- [x] [patch] Reject planned N=180 generated Cooley-Tukey `(18,10)` routing.
+  Direct-DFT value semantics passed, but focused timing regressed f32 to
+  `5.262x`; restored `(20,9)` refreshes to f64 `2.670x`, f32 `3.705x`.
+- [x] [patch] Reject planned N=484 generated Cooley-Tukey `(44,11)` routing.
+  Direct-DFT value semantics passed, but focused timing regressed f32 to
+  `5.029x`; restored `(22,22)` refreshes to f64 `2.183x`, f32 `3.216x`.
+- [x] [patch] Reject planned f32 N=135 generated `(27,5)` routing.
+  Direct-DFT value semantics passed, but focused timing regressed f32 to
+  `3.756x`; restored static routing refreshes to f64 `1.712x`, f32 `3.558x`.
+- [x] [patch] Reject generated Cooley-Tukey row-slice writeback codegen.
+  Planned-codelet semantics passed, but focused timing regressed N=144 f32 to
+  `3.634x`, N=189 f32 to `2.928x`, and N=484 f32 to `3.240x`; restored
+  absolute scratch writeback refreshes N=144 f32 `3.579x`, N=168 f32
+  `2.642x`, N=189 f32 `2.936x`, and N=484 f32 `3.325x`.
+- [x] [patch] Reject generated Good-Thomas fixed-column block codegen.
+  Planned-codelet semantics passed, but focused timing regressed N=180 f32 to
+  `4.390x`, N=400 f32 to `4.409x`, N=180 f64 to `3.142x`, and N=242 f64 to
+  `2.477x`; restored loop codegen refreshes N=135 f32 `3.146x`, N=180 f32
+  `3.711x`, N=242 f32 `2.980x`, and N=400 f32 `3.459x`.
+- [x] [patch] Reject forced `#[inline(always)]` for generated medium
+  codelets. Planned-codelet semantics and `xtask` checking passed, but the
+  optimized benchmark build exceeded the 300s release-build bound for both
+  `144,180,400,484` and a narrowed N=180 row without producing benchmark
+  evidence.
+- [x] [patch] Reject generated N=24 Cooley-Tukey `(4,6)` routing. Composite
+  value tests passed, but optimized benchmark compilation exceeded the 300s
+  release-build bound after invalidating codegen, so the retained `(6,4)`
+  route remains authoritative.
+- [x] [patch] Refresh retained rows N=166, N=356, and N=385 with the existing
+  optimized runner. N=166 improves from f64 `2.242x`, f32 `3.133x` to f64
+  `1.700x`, f32 `1.847x`; N=356 improves its max ratio from f32 `3.067x` to
+  f64 `2.748x`/f32 `2.191x`; N=385 regresses under repeated quick-profile
+  measurement to f64 `2.378x`, f32 `3.818x` and is now the highest current
+  miss.
+- [x] [patch] Reject dispatch-local N=385 radix order `[5,7,11]`. The
+  radix-composite suite and `xtask` check passed, but the optimized focused
+  benchmark exceeded the 300s release-build bound and produced no row, so the
+  canonical cached `[11,7,5]` route remains authoritative.
+- [x] [patch] Refresh retained stale rows N=81, N=165, N=198, N=219, N=223,
+  N=438, and N=446 with the existing optimized runner. N=446 improves from
+  f32 `3.026x` to f64 `1.844x`, f32 `1.643x`; N=223 improves from f32
+  `2.965x` to f64 `1.787x`, f32 `1.621x`; N=198 improves from f32 `2.986x`
+  to f64 `2.188x`, f32 `2.258x`; N=165 improves from f32 `2.965x` to f64
+  `1.486x`, f32 `2.206x`; N=438 improves from f32 `2.998x` to f64 `1.425x`,
+  f32 `2.755x`; N=81 improves from f32 `3.017x` to f64 `1.792x`, f32
+  `2.735x`; N=219 improves from f32 `3.001x` to f64 `1.507x`, f32 `2.794x`.
+- [x] [patch] Refresh retained stale rows N=70, N=73, N=88, N=127, N=142,
+  N=146, N=160, N=181, N=224, N=245, N=249, N=263, N=264, N=269, N=339,
+  N=346, N=352, N=357, and N=362 with the existing optimized runner. Notable
+  current rows: N=264 f64 `1.453x`, f32 `3.245x`; N=224 f64 `1.735x`, f32
+  `3.035x`; N=181 f64 `2.994x`, f32 `2.020x`; N=160 f64 `2.419x`, f32
+  `2.974x`; N=352 f64 `2.088x`, f32 `2.977x`; N=346 f64 `2.939x`, f32
+  `1.772x`; N=339 f64 `2.868x`, f32 `2.063x`; N=263 f64 `2.141x`, f32
+  `2.832x`; N=362 f64 `2.812x`, f32 `2.284x`. These rows remain above the
+  `< 1.000x` target.
+- [x] [patch] Refresh retained stale rows N=48, N=99, N=110, N=176, N=200,
+  N=292, N=298, N=384, N=452, N=480, and N=499 with the existing optimized
+  runner. N=48 is confirmed by a solo rerun as the new top current miss at
+  f64 `2.015x`, f32 `5.650x`; N=176 records f64 `1.947x`, f32 `3.919x`;
+  N=200 records f64 `1.681x`, f32 `2.884x`; N=452 records f64 `2.767x`, f32
+  `2.074x`; N=292 records f64 `1.378x`, f32 `2.612x`; N=499 records f64
+  `2.462x`, f32 `1.618x`; N=480 records f64 `1.680x`, f32 `2.251x`; N=384
+  records f64 `1.428x`, f32 `2.108x`.
+- [x] [patch] Refresh nearby short/composite rows N=40, N=42, N=44, N=45,
+  N=46, N=50, N=51, N=52, N=54, N=55, N=56, N=58, N=60, N=62, and N=63 with
+  the existing optimized runner. A solo N=54 rerun replaces the grouped f32
+  outlier with f64 `2.354x`, f32 `2.689x`; N=63 records f64 `2.029x`, f32
+  `2.615x`; N=40 records f64 `1.466x`, f32 `2.365x`; N=56 records f64
+  `1.481x`, f32 `2.346x`; N=55 records f64 `1.611x`, f32 `2.301x`; and
+  N=45 records f64 `1.686x`, f32 `2.166x`. N=48 remains the confirmed top
+  miss, followed by N=176.
+- [x] [patch] Restore planned N=48 to the generated `ShortWinograd` codelet
+  route under current full-profile timing. f64/f32 planned direct-DFT tests
+  pass, `xtask` labels the route as `Winograd`, and the focused full-profile
+  row improves from f64 `2.102x`, f32 `6.238x` on the composite route to f64
+  `1.470x`, f32 `4.593x`. N=48 remains the current highest miss.
+- [x] [patch] Reject planned N=48 composite order `[4,3,4]`. Direct-DFT value
+  tests and `xtask` checking passed, but optimized benchmarking exceeded the
+  300s release-build bound without producing a row; `[4,3,4]` remains
+  rejected.
+- [x] [patch] Reject a small-composite AVX2 cutoff for N=48. Direct-DFT value
+  tests and `xtask` checking passed, but optimized benchmarking exceeded the
+  300s release-build bound without producing a row; the composite route is no
+  longer retained under current full-profile evidence.
+- [x] [patch] Reject planned f32 N=176 generated `(11,16)` routing. The
+  generated codelet direct-DFT test passed, but focused benchmarking regressed
+  the row to f64 `2.070x`, f32 `4.256x`. Restored static routing refreshes
+  to f64 `2.159x`, f32 `3.879x`; N=176 remains the current highest miss.
+- [x] [patch] Reject planned N=176 swapped Good-Thomas `(16,11)` orientation.
+  The orientation passed direct-DFT value testing but regressed the focused row
+  to f64 `2.258x`, f32 `3.920x`. Restored cached `(11,16)` routing refreshes
+  to f64 `1.891x`, f32 `3.579x`; N=385 is now the current highest miss.
+- [x] [patch] Route planned N=385 through composite order `[11,5,7]`. f64/f32
+  planned direct-DFT tests pass, and the focused `cargo xtask` row improves
+  from f64 `2.378x`, f32 `3.818x` to f64 `2.372x`, f32 `3.540x`. N=385
+  remains open; N=180 is now the current highest miss.
+- [x] [patch] Reject planned N=385 composite order `[7,11,5]`. Direct-DFT
+  value tests and `xtask` checking passed, but optimized benchmarking exceeded
+  the 300s release-build bound without producing a row; retained `[11,5,7]`
+  remains the benchmark-backed route.
+- [x] [patch] Route planned N=180 through composite order `[5,3,3,4]`. f64/f32
+  planned direct-DFT tests pass, and the focused `cargo xtask` row improves
+  from f64 `2.672x`, f32 `3.711x` to f64 `1.880x`, f32 `2.775x`. N=180
+  remains open; N=176 and N=144 are now tied as the current highest misses.
+- [x] [patch] Route planned N=144 through composite order `[4,4,3,3]`. f64/f32
+  planned direct-DFT tests pass, and the focused `cargo xtask` row improves
+  from f64 `2.573x`, f32 `3.579x` to f64 `1.579x`, f32 `1.817x`. N=144
+  remains open; N=176 is now the current highest miss.
+- [x] [patch] Route planned N=176 through composite order `[11,4,4]`. f64/f32
+  planned direct-DFT tests pass, and the focused `cargo xtask` row improves
+  the max ratio from f32 `3.579x` to f32 `3.004x`; f64 changes from `1.891x`
+  to `1.971x`. N=176 remains open; N=48 is now the current highest miss.
+- [ ] [patch] Continue optimizing planned runtime Rader rows after routing
+  planned Rader through the canonical strategy-selecting component. N=359
+  improved from f64 `5.350x`, f32 `12.263x` to f64 `1.532x`, f32 `1.874x`,
+  N=383 improved to f64 `1.546x`, f32 `2.138x`; N=347 improved to f64
+  `2.277x`, f32 `1.853x`; N=179 improved to f64 `2.256x`, f32 `1.700x`;
+  N=499 improved to f64 `2.736x`, f32 `1.471x`; N=227 improved to f64
+  `2.059x`, f32 `1.485x`; N=317 improved to f64 `1.840x`, f32 `2.628x`;
+  N=479 improved to f64 `2.059x`, f32 `1.502x`; N=503 improved to f64
+  `1.844x`, f32 `1.444x`; N=509 improved to f64 `1.244x`, f32 `1.611x`.
+  N=10007 improved to f64 `2.304x`, f32 `2.461x`; N=167 records f64
+  `1.966x`, f32 `1.814x`; N=263 records f64 `2.257x`, f32 `2.831x`;
+  N=269 records f64 `1.792x`, f32 `2.920x`; N=293 records f64 `2.320x`,
+  f32 `2.589x`; N=439 records f64 `2.547x`, f32 `1.421x`; N=467 records
+  f64 `1.928x`, f32 `1.254x`.
+  N=113 now routes f32 through the Bluestein Rader convolution and improves
+  f32 from `3.299x` to `1.834x`; f64 records `2.561x`.
+  N=83 was refreshed on the retained Bluestein route and improves the stale
+  f32 `3.130x` row to f64 `1.684x`, f32 `1.968x`; forcing full-cyclic f32
+  Rader is rejected after regressing f32 to `4.110x`.
+  These rows remain above the `< 1.000x` target.
+- [x] [patch] Reject lowering the f32 half-cyclic Rader threshold to 256 as
+  an N=283 optimization. N=283 has `N-1 = 282`, which is not prime-23-smooth,
+  so the selector routes to Bluestein before the half-cyclic threshold. The
+  focused refresh still improves the retained row to f64 `1.818x` and f32
+  `2.700x`.
+- [x] [patch] Refresh N=498 under the retained ordered-Rader Good-Thomas
+  route. The focused row records f64 `2.069x` and f32 `2.147x`, improving the
+  prior f32 `3.377x` row while remaining open versus `< 1.000x`.
+- [x] [patch] Reject planned N=8 rerouting to `ShortWinograd`. The focused
+  `cargo xtask` probe regressed N=8 to f64 `1.124x` and f32 `6.128x`.
+- [x] [patch] Reject planned f32 N=16 rerouting to `ShortWinograd`. The
+  focused `cargo xtask` probe regressed N=16 to f64 `1.947x` and f32
+  `4.820x`.
+- [x] [patch] Reject replacing the retained f32 sized N=8 SIMD kernel with
+  the scalar butterfly. Focused value tests passed, but the `cargo xtask`
+  probe regressed N=8 f32 to `5.261x`.
+- [x] [patch] Route planned Good-Thomas execution through the canonical
+  `components::good_thomas::pfa_fft` dispatcher so planned transforms use the
+  same specialized two-by-prime, three-by-prime, Cook-Toom, and generated
+  fixed codelets as mixed-radix dispatch.
+- [x] [patch] Add an N=72 planned-route scalar policy: f64 retains the
+  static Good-Thomas `(9,8)` route, while f32 uses a generated `(8,9)`
+  codelet through the `ShortDft<72>` surface. Focused direct-DFT tests pass
+  for both route selections, and `benchmark_results.md` labels the row as
+  `Precision Policy`.
+- [x] [patch] Replace the planned f32 N=72 prime-2/3 composite executor with
+  a generated twiddle-free `(8,9)` codelet. The default `cargo xtask` row
+  improves f32 from `4.855x` to `3.610x`; f64 remains on static
+  Good-Thomas and records `2.304x` in the same refreshed run.
+- [x] [patch] Route planned f32 N=108 through a generated twiddle-free
+  `(4,27)` codelet. The default `cargo xtask` row improves f32 from `4.007x`
+  to `3.184x`; f64 remains on static Good-Thomas and records `2.417x`.
+- [x] [patch] Route planned f32 N=144 through a generated twiddle-free
+  `(16,9)` codelet. The default `cargo xtask` row improves f32 from the
+  static baseline `4.035x` to `3.234x`; f64 remains on static Good-Thomas and
+  records `2.611x`.
+- [x] [patch] Reject the planned f32 N=144 generated `(9,16)` orientation.
+  Direct-DFT tests passed, but the focused `cargo xtask` row recorded f32
+  `4.233x`, slower than the retained `(16,9)` row.
+- [x] [patch] Reject planned f32 N=144 generated Cooley-Tukey `(8,18)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `3.558x`; the retained `(16,9)` route was restored
+  and refreshed to f64 `1.999x`, f32 `3.234x`.
+- [x] [patch] Route planned f32 N=144 through generated Cooley-Tukey
+  `(12,12)`. Direct-DFT value semantics passed, and focused `cargo xtask`
+  timing improves f32 from `3.234x` to `3.086x`; f64 records `2.569x`.
+- [x] [patch] Route planned f32 N=180 through a generated twiddle-free
+  `(20,9)` codelet. The focused `cargo xtask` row improves f32 from
+  `3.863x` to `3.687x`; f64 remains on the static route and records
+  `2.665x`. The row remains open versus `< 1.000x`.
+- [x] [patch] Reject the planned f32 N=180 generated `(9,20)` orientation.
+  Direct-DFT tests passed, but the focused `cargo xtask` row recorded f32
+  `4.402x`, slower than the retained `(20,9)` row.
+- [x] [patch] Reject the planned f32 N=180 generated `(12,15)` Cooley-Tukey
+  factorization. Direct-DFT tests passed, but the focused `cargo xtask` row
+  recorded f32 `4.895x`, slower than the retained `(20,9)` route. The
+  restored focused row records f64 `2.651x` and f32 `3.765x`.
+- [x] [patch] Reject planned f32 N=242 Good-Thomas `(121,2)` policy routing.
+  Direct-DFT tests passed, but the focused `cargo xtask` row regressed f32
+  to `5.279x`. The retained Cooley-Tukey row records f64 `2.398x` and f32
+  `3.352x`.
+- [x] [patch] Route planned f32 N=242 through a generated twiddle-free
+  Good-Thomas `(2,121)` codelet. The focused `cargo xtask` row improves f32
+  from `3.352x` to `3.104x`; f64 records `2.370x`. The row remains open
+  versus `< 1.000x`.
+- [x] [patch] Route planned f32 N=363 through a generated twiddle-free
+  Good-Thomas `(3,121)` codelet. The focused `cargo xtask` row improves f32
+  from `3.338x` to `2.977x`; f64 records `2.329x`. The row remains open
+  versus `< 1.000x`.
+- [x] [patch] Reject generated Good-Thomas N=392 orientations. `(8,49)`
+  passed value tests but did not beat the refreshed baseline in the same
+  environment; `(49,8)` regressed f32 to `4.334x`. The retained Cooley-Tukey
+  refresh records f64 `2.063x` and f32 `2.926x`, so the row remains open.
+- [x] [patch] Reject N=24 generated `(8,3)` orientation. Value tests passed,
+  but focused `cargo xtask` timing regressed f32 to `3.837x`; the retained
+  `(3,8)` route now records f64 `1.679x` and f32 `3.974x` after refresh.
+- [x] [patch] Replace the planned N=24 generated Good-Thomas `(3,8)` codelet
+  with a generated Cooley-Tukey `(6,4)` codelet. Focused `cargo xtask`
+  timing improves f64 from `1.679x` to `1.384x` and f32 from `3.974x` to
+  `2.990x`; the row remains open versus `< 1.000x`.
+- [x] [patch] Reject planned f32 N=121 prime-power `11^2` codelet routing.
+  Direct-DFT tests passed, but focused `cargo xtask` timing regressed f32 to
+  `5.082x`; the retained Cooley-Tukey row records f64 `2.336x` and f32
+  `4.075x` after refresh.
+- [x] [patch] Route planned f32 N=121 through a generated Cooley-Tukey
+  `(11,11)` codelet. The focused `cargo xtask` row improves f32 from
+  `4.075x` to `2.671x`; f64 remains on the non-generated route and records
+  `2.403x` in the same focused run. The row remains open versus `< 1.000x`.
+- [x] [patch] Route planned f32 N=275 through a generated twiddle-free
+  `(11,25)` codelet. The focused `cargo xtask` row improves f32 from
+  `3.463x` to `2.596x`; f64 records `2.226x`. The row remains open versus
+  `< 1.000x`.
+- [x] [patch] Route planned f32 N=280 through a generated twiddle-free
+  Good-Thomas `(8,35)` codelet. The focused `cargo xtask` row improves f32
+  from `3.330x` to `2.550x` and f64 from `1.739x` to `1.645x`; the row
+  remains open versus `< 1.000x`.
+- [x] [patch] Route planned f32 N=400 through a generated twiddle-free
+  Good-Thomas `(16,25)` codelet. The focused `cargo xtask` row improves f32
+  from `3.289x` to `3.133x`; f64 records `1.959x`. The row remains open
+  versus `< 1.000x`.
+- [x] [patch] Route f32 N=113 Rader convolution through the existing
+  Bluestein backend instead of the full-cyclic length-112 convolution. The
+  focused `cargo xtask` row improves f32 from `3.299x` to `1.834x`; f64
+  records `2.561x`. The row remains open versus `< 1.000x`.
+- [x] [patch] Reject generated Good-Thomas N=270 orientations. `(10,27)`
+  passed value tests but regressed f32 to `3.922x`; `(27,10)` regressed f32
+  to `4.469x`. The retained Cooley-Tukey refresh records f64 `1.647x` and
+  f32 `3.123x`, improving the stale f32 `3.271x` row while remaining open.
+- [x] [patch] Route planned N=511 as Good-Thomas `(73,7)` so the existing
+  ordered-Rader N1 path handles the prime dimension. The focused `cargo xtask`
+  row improves from f64 `1.550x`, f32 `3.258x` to f64 `1.395x`, f32 `2.646x`;
+  the row remains open versus `< 1.000x`.
+- [x] [patch] Reject planned N=420 Good-Thomas `(20,21)` routing. Direct-DFT
+  value semantics passed, but focused `cargo xtask` timing regressed f32 to
+  `3.673x`. The retained Cooley-Tukey refresh records f64 `1.918x` and f32
+  `2.659x`, improving the stale f32 `3.226x` row while remaining open.
+- [x] [patch] Reject planned N=440 Good-Thomas `(8,55)` routing. Direct-DFT
+  value semantics passed, but focused `cargo xtask` timing regressed f32 to
+  `3.623x`. The retained Cooley-Tukey refresh records f64 `2.049x` and f32
+  `3.225x`, effectively unchanged from the stale f32 `3.212x` row.
+- [x] [patch] Reject generated N=440 Cooley-Tukey `(22,20)` routing.
+  Direct-DFT value semantics passed, but focused `cargo xtask` timing
+  regressed to f64 `2.180x` and f32 `6.419x`. The restored Cooley-Tukey
+  refresh records f64 `2.324x` and f32 `3.138x`, leaving N=440 open.
+- [x] [patch] Refresh retained Cooley-Tukey rows N=300, N=484, and N=504.
+  N=300 improves from f32 `3.116x` to `2.884x`; N=484 records f64 `2.090x`,
+  f32 `3.296x`; N=504 records f64 `1.576x`, f32 `3.510x`. All remain open.
+- [x] [patch] Reject planned N=504 Good-Thomas `(8,63)` routing. Direct-DFT
+  value semantics passed, but focused `cargo xtask` timing regressed f32 to
+  `8.768x`; the retained Cooley-Tukey route was restored.
+- [x] [patch] Reject planned f32 N=504 generated Cooley-Tukey `(21,24)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `6.755x`; the retained Cooley-Tukey route was
+  restored and refreshed to f64 `1.577x`, f32 `3.389x`.
+- [x] [patch] Reject planned f32 N=504 generated Cooley-Tukey `(28,18)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `7.060x`; the retained Cooley-Tukey route was
+  restored and refreshed to f64 `1.586x`, f32 `3.368x`.
+- [x] [patch] Reject planned N=484 Good-Thomas `(4,121)` routing. Direct-DFT
+  value semantics passed, but focused `cargo xtask` timing regressed f32 to
+  `5.672x`; the retained Cooley-Tukey refresh records f64 `2.090x`, f32
+  `3.296x` and remains open.
+- [x] [patch] Route planned f32 N=484 through a generated Cooley-Tukey
+  `(22,22)` codelet. Direct-DFT value semantics passed, and focused
+  `cargo xtask` timing improves f32 from `3.296x` to `3.229x`; f64 remains
+  on the non-generated path and records `2.131x`. The row remains open.
+- [x] [patch] Reject planned f32 N=484 generated Cooley-Tukey `(11,44)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `5.380x`; the retained `(22,22)` route was restored
+  and refreshed to f64 `2.194x`, f32 `3.531x`.
+- [x] [patch] Refresh N=72, N=180, and N=189 on retained routes. N=72 improves
+  f32 from `3.527x` to `2.954x`; N=180 records f64 `2.687x`, f32 `3.769x`;
+  N=189 records f64 `2.194x`, f32 `3.649x`. All remain open.
+- [x] [patch] Reject planned f32 N=180 generated `(5,36)` and `(36,5)`
+  orientations. Both preserved direct-DFT value semantics, but focused
+  `cargo xtask` timing regressed f32 to `4.130x` and `5.502x`; the retained
+  `(20,9)` route was restored and refreshed to f64 `2.661x`, f32 `3.691x`.
+- [x] [patch] Reject planned f32 N=180 generated Cooley-Tukey `(10,18)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `4.520x`; the retained `(20,9)` route was restored
+  and refreshed to f64 `2.816x`, f32 `3.737x`.
+- [x] [patch] Reject planned f32 N=180 generated Good-Thomas `(4,45)` and
+  `(45,4)` orientations. Direct-DFT value semantics passed for both, but
+  focused `cargo xtask` timing regressed f32 to `5.299x` and `5.820x`.
+  The retained `(20,9)` route was restored and refreshed to f64 `2.772x`,
+  f32 `3.827x`.
+- [x] [patch] Route planned f32 N=189 through a generated Cooley-Tukey
+  `(9,21)` codelet. The focused `cargo xtask` row improves f64 from
+  `2.194x` to `2.171x` and f32 from `3.649x` to `3.162x`; the row remains
+  open versus `< 1.000x`.
+- [x] [patch] Route planned f32 N=126 through a generated twiddle-free
+  `(2,63)` codelet. The focused `cargo xtask` row improves f32 from `3.374x`
+  to `2.484x` and f64 from `3.089x` to `1.820x`; the row remains open.
+- [x] [patch] Route planned f32 N=120 through a generated twiddle-free
+  `(8,15)` codelet. The focused `cargo xtask` row improves f32 from `3.321x`
+  to `2.953x`; f64 records `1.458x`. The row remains open.
+- [x] [patch] Route planned f32 N=96 through a generated twiddle-free
+  `(3,32)` codelet. The focused `cargo xtask` row improves f32 from `3.306x`
+  to `3.031x`; f64 records `2.683x`. The row remains open.
+- [x] [patch] Reject planned f32 N=112 generated `(7,16)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing regressed f32 to `3.405x`;
+  the retained static route records f64 `2.532x` and f32 `3.357x` after
+  refresh.
+- [x] [patch] Reject planned f32 N=112 generated Cooley-Tukey `(14,8)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `3.378x`; the retained `(16,7)` route was restored
+  and refreshed to f64 `2.573x`, f32 `3.276x`.
+- [x] [patch] Reject planned f32 N=112 generated Cooley-Tukey `(8,14)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `3.505x`; the retained `(16,7)` route was restored
+  and refreshed to f64 `2.090x`, f32 `2.780x`.
+- [x] [patch] Route planned f32 N=112 through a generated twiddle-free
+  `(16,7)` codelet. The focused `cargo xtask` row improves f32 from
+  `3.357x` to `3.276x`; f64 remains on the non-generated path and records
+  `2.589x` in the same run. The row remains open versus `< 1.000x`.
+- [x] [patch] Route planned f32 N=154 through a generated twiddle-free
+  `(11,14)` codelet. The focused `cargo xtask` row improves f32 from
+  `3.109x` to `2.754x`; f64 records `1.674x`. The row remains open.
+- [x] [patch] Reject planned f32 N=168 generated `(8,21)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing regressed f32 to `4.007x`;
+  the retained static route records f64 `2.046x` and f32 `3.671x` after
+  refresh.
+- [x] [patch] Route planned f32 N=168 through a generated twiddle-free
+  `(24,7)` codelet after the N=24 leaf improvement. The focused `cargo xtask`
+  row improves f32 from `3.671x` to `3.252x`; f64 records `2.078x`. The row
+  remains open versus `< 1.000x`.
+- [x] [patch] Reject planned f32 N=168 generated Cooley-Tukey `(12,14)`
+  routing. Direct-DFT value semantics passed, but focused `cargo xtask`
+  timing regressed f32 to `4.189x`; the retained `(24,7)` route was restored
+  and refreshed to f64 `1.979x`, f32 `3.208x`.
+- [x] [patch] Route planned f32 N=168 through generated Cooley-Tukey
+  `(14,12)`. Direct-DFT value semantics passed, and focused `cargo xtask`
+  timing improves f32 from `3.208x` to `3.077x`; f64 records `2.035x`.
+- [x] [patch] Reject planned f32 N=135 generated `(5,27)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing regressed f32 to `3.316x`;
+  the retained static route records f64 `1.845x` and f32 `3.165x` after
+  refresh.
+- [x] [patch] Reject planned f32 N=189 generated `(7,27)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing regressed f32 to `3.676x`;
+  the retained static route records f64 `2.238x` and f32 `3.665x` after
+  refresh.
+- [x] [patch] Reject planned f32 N=189 generated `(27,7)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing recorded f32 `3.679x`,
+  slower than the retained static route. The restored row records f64
+  `2.145x` and f32 `3.655x`.
+- [x] [patch] Reject planned f32 N=240 generated `(15,16)` routing. Direct-DFT
+  tests passed, but focused `cargo xtask` timing regressed f32 to `3.706x`;
+  the retained Cooley-Tukey route records f64 `1.427x` and f32 `3.003x`
+  after refresh.
+- [x] [patch] Reject planned f32 N=72 composite order `[4,3,3,2]`.
+  Route-selection and value tests passed, but focused timing recorded f32
+  `5.017x` versus the retained `[4,2,3,3]` row at `4.855x`.
+- [x] [patch] Reject planned f32 N=72 generated `(12,6)` Cooley-Tukey
+  factorization. Direct-DFT tests passed, but focused `cargo xtask` timing
+  recorded f32 `3.968x`, slower than the retained generated `(8,9)` route.
+  The restored row records f64 `2.308x` and f32 `3.527x`.
+- [x] [patch] Remove dead planned Good-Thomas cached state after delegation
+  to `components::good_thomas::pfa_fft`. Good-Thomas plans no longer retain
+  unused input/output CRT permutation Arcs or unused row/column subplans.
+- [x] [patch] Route planned runtime Rader execution through the canonical
+  `components::rader::rader_fft` dispatcher, removing retained per-plan
+  generator-order tables, forward/inverse Rader spectra, and the length
+  `N-1` subplan from planned Rader state.
+- [x] [patch] Reject planned f32 N=16 short-Winograd rerouting on the current
+  benchmark runner. The route was value-correct, but the focused probe
+  increased f32 Apollo absolute time from the tracked 14.54 ns to 15.18 ns.
+- [x] [patch] Reject replacing the f32 N=16 specialized power-of-two branch
+  with the canonical Stockham kernel. Small-PoT value tests passed, but the
+  focused probe regressed f32 Apollo absolute time to 18.20 ns versus the
+  tracked 14.54 ns specialized branch.
+- [x] [patch] Reject planned N=24 Good-Thomas rerouting through `(3,8)`.
+  Good-Thomas tests passed, but the focused probe regressed Apollo to f64
+  113.13 ns and f32 76.86 ns versus the tracked short-Winograd 15.22 ns and
+  26.90 ns.
+- [x] [patch] Reject planned f32 N=144 rerouting to the prime-2/3 composite
+  chain. Route-selection and value tests passed, but the optimized
+  `cargo xtask` benchmark exceeded the 300s verification bound and produced
+  no updated benchmark row.
 - [ ] [patch] Optimize the direct public `FftPrecision::fft_forward` paths for
   N=32 and N=64 until both f64 and f32 beat RustFFT in `cargo xtask`
-  clone-inclusive rows. The repaired focused direct-runner probe still records
-  misses: N=32 f64 `1.703x`, f32 `2.344x`; N=64 f64 `1.445x`, f32 `1.452x`.
+  clone-inclusive rows. The latest default `cargo xtask` refresh records
+  misses: N=32 f64 `1.438x`, f32 `2.511x`; N=64 f64 `1.589x`, f32 `2.080x`.
+- [x] [patch] Inline the public N=2 forward/inverse butterfly in
+  `FftPrecision` for `Complex64` and `Complex32`, removing the mixed-radix
+  trait call from the direct route. The focused row improved versus the stale
+  table but did not close N=2.
+- [x] [patch] Reject unchecked N=2 slice access. The length-guarded unsafe
+  variant preserved value semantics but regressed focused rows to f64 `4.102x`
+  and f32 `1.523x`.
+- [x] [patch] Reject forced `#[inline(always)]` on the `xtask` precision
+  adapter methods and `bench_pair`. The probe regressed sampled small-size
+  rows, including N=32 f32 `2.955x` and N=64 f32 `2.136x`.
+- [x] [patch] Route f64 N=3 public forward/inverse calls directly to the
+  existing Winograd DFT3 leaf, bypassing mixed-radix dispatch. Focused f64
+  Apollo time improved versus the stale table from 2.97 ns to 2.68 ns, but
+  the row remains above target.
+- [x] [patch] Reject the direct scalar N=4 public butterfly probe. The value
+  semantics passed, but the focused absolute Apollo timings did not justify
+  replacing the retained mixed-radix small-PoT leaf.
+- [x] [patch] Route f32 N=5, f64/f32 N=7, and f32 N=11 public calls directly
+  to existing Winograd leaves. This removes generic dispatch from those direct
+  public paths while preserving the authoritative kernel arithmetic. Focused
+  rows improved the failing f32 estimates but remain above the target.
+- [x] [patch] Reject f32 N=13/N=17/N=19 direct public routing. The N=13
+  retained-only probe regressed to `1.281x`, and the broad N=17/N=19 probe
+  regressed to `1.708x` and `1.528x`.
+- [x] [patch] Reject planned N=24/N=27 rerouting to the generic
+  radix-composite executor. The focused `cargo xtask` probe regressed N=24 to
+  f64 `7.486x` and f32 `11.649x`, and N=27 to f64 `3.140x` and f32 `3.543x`.
 - [x] [patch] Reject N=32768 four-pass Stockham scheduling for the current
   AVX backend. The `4+4+4+3` quad/triple schedule is value-correct but
   regresses optimized `xtask` timing; retain the all-triple schedule while the

@@ -58,10 +58,10 @@ version = "0.2.0"
 dependencies = [
  "apollo-czt",
  "apollo-fft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -86,9 +86,9 @@ version = "0.1.0"
 dependencies = [
  "apollo-dctdst",
  "apollo-fft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -113,9 +113,9 @@ version = "0.1.0"
 dependencies = [
  "apollo-dht",
  "apollo-fft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -158,6 +158,7 @@ name = "apollo-fft-wgpu"
 version = "0.1.0"
 dependencies = [
  "apollo-fft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "criterion",
  "half",
@@ -187,10 +188,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-frft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -215,9 +216,9 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-fwht",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -242,10 +243,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-gft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "nalgebra",
  "ndarray",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -268,9 +269,9 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-hilbert",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -294,9 +295,9 @@ version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "apollo-mellin",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -318,9 +319,9 @@ name = "apollo-ntt-wgpu"
 version = "0.1.0"
 dependencies = [
  "apollo-ntt",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "pollster",
  "proptest",
  "thiserror 1.0.69",
  "wgpu",
@@ -347,13 +348,13 @@ dependencies = [
  "apollo-fft",
  "apollo-fft-wgpu",
  "apollo-nufft",
+ "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
  "criterion",
  "half",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -393,10 +394,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-qft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -421,10 +422,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-radon",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "criterion",
  "ndarray",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -447,10 +448,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-sdft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -474,9 +475,9 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-sft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -501,10 +502,10 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-sht",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -529,11 +530,11 @@ version = "0.11.0"
 dependencies = [
  "apollo-fft",
  "apollo-stft",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "criterion",
  "ndarray",
  "num-complex",
- "pollster",
  "thiserror 1.0.69",
  "wgpu",
 ]
@@ -590,8 +591,17 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "apollo-wavelet",
+ "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
+ "thiserror 1.0.69",
+ "wgpu",
+]
+
+[[package]]
+name = "apollo-wgpu-helpers"
+version = "0.1.0"
+dependencies = [
  "pollster",
  "thiserror 1.0.69",
  "wgpu",

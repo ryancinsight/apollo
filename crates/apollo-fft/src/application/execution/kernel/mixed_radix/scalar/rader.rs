@@ -1,12 +1,14 @@
 use super::trait_def::MixedRadixScalar;
 
-pub(super) fn build_rader_spectrum_vec<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(super) fn build_rader_spectrum_vec<
+    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
+>(
     n: usize,
-    inverse: bool,
     generator_inverse: usize,
 ) -> Vec<F::Complex> {
     let l = n - 1;
-    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
+    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
     let mut kernel = vec![F::complex(0.0, 0.0); l];
     let mut curr_inv = 1usize;
     for value in kernel.iter_mut().take(l) {
@@ -36,13 +38,13 @@ pub(super) fn build_rader_spectrum_vec<F: MixedRadixScalar<Complex = num_complex
 /// from `4m` complex values to `2m` complex values.
 pub(super) fn build_rader_negacyclic_spectra<
     F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    const INVERSE: bool,
 >(
     n: usize,
-    inverse: bool,
     generator_inverse: usize,
 ) -> (Vec<F::Complex>, Vec<F::Complex>) {
     let m = (n - 1) / 2;
-    let sign = if inverse { 1.0_f64 } else { -1.0_f64 };
+    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
 
     let mut kernel_cyc = Vec::with_capacity(m);
     let mut curr_inv = 1usize;

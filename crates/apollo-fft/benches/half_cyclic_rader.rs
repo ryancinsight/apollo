@@ -38,7 +38,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
     group.warm_up_time(std::time::Duration::from_millis(150));
     group.measurement_time(std::time::Duration::from_millis(500));
 
-    for len in [257usize, 521, 1031] {
+    for len in [67usize, 101, 257, 271, 337, 521, 1031] {
         let input64 = signal64(len);
         group.bench_with_input(
             BenchmarkId::new("full_cyclic_f64", len),
@@ -47,7 +47,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_full_cyclic_prime::<f64>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_full_cyclic_prime_forward::<f64>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -59,7 +59,19 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_half_cyclic_prime::<f64>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_half_cyclic_prime_forward::<f64>(black_box(&mut buf));
+                    black_box(&buf);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("bluestein_f64", len),
+            &input64,
+            |bench, input| {
+                let mut buf = input.clone();
+                bench.iter(|| {
+                    buf.copy_from_slice(input);
+                    benchmark_kernels::rader_bluestein_prime_forward::<f64>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -71,7 +83,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime::<f64>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime_forward::<f64>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -85,7 +97,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_full_cyclic_prime::<f32>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_full_cyclic_prime_forward::<f32>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -97,7 +109,19 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_half_cyclic_prime::<f32>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_half_cyclic_prime_forward::<f32>(black_box(&mut buf));
+                    black_box(&buf);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("bluestein_f32", len),
+            &input32,
+            |bench, input| {
+                let mut buf = input.clone();
+                bench.iter(|| {
+                    buf.copy_from_slice(input);
+                    benchmark_kernels::rader_bluestein_prime_forward::<f32>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -109,7 +133,7 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
                 let mut buf = input.clone();
                 bench.iter(|| {
                     buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime::<f32>(black_box(&mut buf), false);
+                    benchmark_kernels::rader_prime_forward::<f32>(black_box(&mut buf));
                     black_box(&buf);
                 });
             },
@@ -120,7 +144,66 @@ fn bench_half_cyclic_rader(c: &mut Criterion) {
 }
 
 #[cfg(feature = "kernel-strategy-bench")]
-criterion_group!(benches, bench_half_cyclic_rader);
+fn bench_composite_radix_order(c: &mut Criterion) {
+    let mut group = c.benchmark_group("composite_radix_order");
+    group.warm_up_time(std::time::Duration::from_millis(150));
+    group.measurement_time(std::time::Duration::from_millis(500));
+
+    let candidates: &[(&str, &[usize])] = &[
+        ("r4_2_5_5", &[4, 2, 5, 5]),
+        ("r4_5_5_2", &[4, 5, 5, 2]),
+        ("r5_5_4_2", &[5, 5, 4, 2]),
+        ("r5_4_5_2", &[5, 4, 5, 2]),
+        ("r2_4_5_5", &[2, 4, 5, 5]),
+    ];
+
+    let input64 = signal64(200);
+    for &(name, radices) in candidates {
+        group.bench_with_input(
+            BenchmarkId::new(format!("{name}_f64"), 200),
+            &input64,
+            |bench, input| {
+                let mut buf = input.clone();
+                bench.iter(|| {
+                    buf.copy_from_slice(input);
+                    benchmark_kernels::composite_forward_with_radices::<f64>(
+                        black_box(&mut buf),
+                        radices,
+                    );
+                    black_box(&buf);
+                });
+            },
+        );
+    }
+
+    let input32 = signal32(200);
+    for &(name, radices) in candidates {
+        group.bench_with_input(
+            BenchmarkId::new(format!("{name}_f32"), 200),
+            &input32,
+            |bench, input| {
+                let mut buf = input.clone();
+                bench.iter(|| {
+                    buf.copy_from_slice(input);
+                    benchmark_kernels::composite_forward_with_radices::<f32>(
+                        black_box(&mut buf),
+                        radices,
+                    );
+                    black_box(&buf);
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+#[cfg(feature = "kernel-strategy-bench")]
+criterion_group!(
+    benches,
+    bench_half_cyclic_rader,
+    bench_composite_radix_order
+);
 #[cfg(feature = "kernel-strategy-bench")]
 criterion_main!(benches);
 

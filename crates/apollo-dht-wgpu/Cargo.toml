@@ -10,8 +10,8 @@ description = "WGPU backend boundary for Apollo DHT"
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 apollo-dht = { path = "../apollo-dht" }
+apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
-pollster = "0.4"
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 

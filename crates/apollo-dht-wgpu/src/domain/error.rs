@@ -1,5 +1,6 @@
 //! WGPU error contracts.
 
+use apollo_wgpu_helpers::WgpuDeviceError;
 use thiserror::Error;
 
 /// Result alias for WGPU operations.
@@ -8,18 +9,9 @@ pub type WgpuResult<T> = Result<T, WgpuError>;
 /// Errors produced by WGPU backend operations.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum WgpuError {
-    /// Adapter acquisition failed.
-    #[error("wgpu adapter unavailable: {message}")]
-    AdapterUnavailable {
-        /// Adapter failure context.
-        message: String,
-    },
-    /// Device acquisition failed.
-    #[error("wgpu device unavailable: {message}")]
-    DeviceUnavailable {
-        /// Device failure context.
-        message: String,
-    },
+    /// WGPU device acquisition failed.
+    #[error("wgpu device: {0}")]
+    Device(#[from] WgpuDeviceError),
     /// Plan length is empty.
     #[error("invalid DHT WGPU plan length {len}: {message}")]
     InvalidLength {

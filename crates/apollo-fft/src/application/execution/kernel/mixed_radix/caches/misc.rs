@@ -1,6 +1,5 @@
 use super::super::super::radix_shape::{
     coprime_factors, factorize_composite as factorize_prime23, is_prime,
-    lower_radix2_pairs_to_radix4,
 };
 use num_complex::{Complex32, Complex64};
 use parking_lot::RwLock;
@@ -28,8 +27,9 @@ static RADER_SPECTRUM_REDUCED_CACHE: std::sync::LazyLock<
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
-static COPRIME_FACTORS_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<(usize, usize)>>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
+static COPRIME_FACTORS_CACHE: std::sync::LazyLock<
+    RwLock<FxHashMap<usize, Option<(usize, usize)>>>,
+> = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static IS_PRIME_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, bool>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static PFA_PERM_CACHE: std::sync::LazyLock<
@@ -117,7 +117,7 @@ declare_cache_store! {
     tl_precise_flat: TL_RADER_SPECTRUM_PRECISE_FLAT,
     tl_reduced_flat: TL_RADER_SPECTRUM_REDUCED_FLAT,
     flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
-    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | (if key.1 != 0 { 1 } else { 0 }),
+    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | usize::from(key.1 != 0),
 }
 
 #[inline]
@@ -138,6 +138,7 @@ pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
         if let Some(radices) = maybe_cached {
             radices
         } else {
+            #[cfg(feature = "cache-profiling")]
             super::profiler::get().prime23_radix.miss();
             let new_radices = factorize_prime23(n).map(lower_and_cache_radices);
             PRIME23_RADIX_CACHE
@@ -160,7 +161,7 @@ pub(crate) fn cached_prime23_radices(n: usize) -> Option<Arc<[usize]>> {
 
 #[inline]
 pub(crate) fn lower_and_cache_radices(radices: Vec<usize>) -> Arc<[usize]> {
-    Arc::from(lower_radix2_pairs_to_radix4(&radices).into_boxed_slice())
+    Arc::from(radices.into_boxed_slice())
 }
 
 #[inline]
@@ -369,7 +370,7 @@ declare_cache_store! {
     tl_precise_flat: TL_RADER_NEGACYCLIC_PRECISE_FLAT,
     tl_reduced_flat: TL_RADER_NEGACYCLIC_REDUCED_FLAT,
     flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
-    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | (if key.1 != 0 { 1 } else { 0 }),
+    flat_idx: |key: (usize, usize, usize)| (key.0 << 1) | usize::from(key.1 != 0),
 }
 
 /// Generic negacyclic spectrum cache: dispatches to the correct concrete
@@ -439,5 +440,3 @@ cached_fetch_arc! {
     ) -> Arc<[F]>
     using tl_get = neg_tw_tl_get, tl_insert = neg_tw_tl_insert, global = neg_tw_global,
 }
-
-
