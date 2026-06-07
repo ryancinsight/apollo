@@ -14,7 +14,7 @@
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
 use num_complex::Complex64;
-use rayon::prelude::*;
+use moirai::ParallelSliceMut;
 
 const PAR_THRESHOLD: usize = 256;
 
@@ -71,7 +71,7 @@ pub fn calculate_log_resample(
     };
 
     if samples >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(i, val)| {
+        output.par_mut().enumerate(|i, val| {
             *val = eval(i);
         });
     } else {
@@ -133,7 +133,7 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
             .sum::<Complex64>()
     };
     if len >= PAR_THRESHOLD {
-        (0..len).into_par_iter().map(dft_coeff).collect()
+        moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, dft_coeff)
     } else {
         (0..len).map(dft_coeff).collect()
     }
@@ -195,7 +195,7 @@ pub fn inverse_log_frequency_spectrum(
     };
 
     if len >= PAR_THRESHOLD {
-        (0..len).into_par_iter().map(idft_coeff).collect()
+        moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, idft_coeff)
     } else {
         (0..len).map(idft_coeff).collect()
     }
@@ -250,7 +250,7 @@ pub fn exp_resample(
     };
 
     if out_len >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(i, v)| {
+        output.par_mut().enumerate(|i, v| {
             *v = eval(i);
         });
     } else {

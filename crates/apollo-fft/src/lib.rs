@@ -153,6 +153,21 @@ pub fn fft_1d_array_static_typed_into<T, const N: usize>(
     T::forward_1d_static_into::<N>(field, out);
 }
 
+/// Forward 1D FFT of a real signal slice, returning an owned `Vec` spectrum.
+///
+/// Slice/`Vec`-based wrapper over [`fft_1d_array_typed`] for callers that do not
+/// depend on `ndarray`; the `Array1` is constructed and consumed internally.
+#[must_use]
+pub fn fft_1d_slice_typed<T>(signal: &[T]) -> Vec<T::Spectrum>
+where
+    T: RealFftData + PlanCacheProvider + Clone,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+    T::Spectrum: Clone,
+{
+    fft_1d_array_typed::<T>(&Array1::from_vec(signal.to_vec())).to_vec()
+
+}
+
 /// Forward 2D FFT of a real array.
 #[must_use]
 pub fn fft_2d_array(field: &Array2<f64>) -> Array2<Complex64> {
@@ -458,6 +473,21 @@ pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
     );
     T::inverse_1d_static_into::<N>(field_hat, out, scratch);
 }
+/// Inverse 1D FFT of a complex spectrum slice, returning an owned `Vec` signal.
+///
+/// Slice/`Vec`-based wrapper over [`ifft_1d_array_typed`] for callers that do not
+/// depend on `ndarray`; the `Array1` is constructed and consumed internally.
+#[must_use]
+pub fn ifft_1d_slice_typed<T>(spectrum: &[T::Spectrum]) -> Vec<T>
+where
+    T: RealFftData + PlanCacheProvider + Clone,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+    T::Spectrum: Clone,
+{
+    ifft_1d_array_typed::<T>(&Array1::from_vec(spectrum.to_vec())).to_vec()
+}
+
+
 /// Inverse 2D FFT of a complex array.
 #[must_use]
 pub fn ifft_2d_array(field_hat: &Array2<Complex64>) -> Array2<f64> {

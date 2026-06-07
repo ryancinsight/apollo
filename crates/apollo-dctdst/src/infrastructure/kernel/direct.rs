@@ -1,4 +1,4 @@
-use rayon::prelude::*;
+use moirai::ParallelSliceMut;
 
 /// Parallel dispatch threshold. Below this length, serial iteration avoids rayon spawn overhead.
 const PAR_THRESHOLD: usize = 256;
@@ -41,7 +41,7 @@ pub fn dct2(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / n as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * k as f64).cos();
@@ -103,7 +103,7 @@ pub fn dct3(signal: &[f64], output: &mut [f64]) {
     let x0 = signal[0] * 0.5;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = x0;
             for n_idx in 1..n {
                 sum += signal[n_idx] * (factor * n_idx as f64 * (k as f64 + 0.5)).cos();
@@ -157,7 +157,7 @@ pub fn dst2(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / n as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 1.0)).sin();
@@ -220,7 +220,7 @@ pub fn dst3(signal: &[f64], output: &mut [f64]) {
     let xn = signal[n - 1] * 0.5;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let sign = if k % 2 == 1 { -1.0 } else { 1.0 };
             let mut sum = sign * xn;
             for n_idx in 0..(n - 1) {
@@ -296,7 +296,7 @@ pub fn dct1(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / (n - 1) as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let sign = if k % 2 == 0 { 1.0_f64 } else { -1.0_f64 };
             let mut sum = x0 + sign * xn;
             for n_idx in 1..=(n - 2) {
@@ -361,7 +361,7 @@ pub fn dct4(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / n as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 0.5)).cos();
@@ -425,7 +425,7 @@ pub fn dst1(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / (n + 1) as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 1.0) * (k as f64 + 1.0)).sin();
@@ -488,7 +488,7 @@ pub fn dst4(signal: &[f64], output: &mut [f64]) {
     let factor = std::f64::consts::PI / n as f64;
 
     if n >= PAR_THRESHOLD {
-        output.par_iter_mut().enumerate().for_each(|(k, out)| {
+        output.par_mut().enumerate(|k, out| {
             let mut sum = 0.0;
             for n_idx in 0..n {
                 sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 0.5)).sin();

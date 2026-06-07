@@ -11,7 +11,6 @@ use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::Array1;
 use num_complex::Complex64;
-use rayon::prelude::*;
 use std::cell::RefCell;
 
 thread_local! {
@@ -222,10 +221,10 @@ impl StftPlan {
         if output.len() != frames * self.spectrum_len() {
             return Err(StftError::LengthMismatch);
         }
-        output
-            .par_chunks_mut(self.spectrum_len())
-            .enumerate()
-            .for_each(|(m, out_chunk)| {
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+            output,
+            self.spectrum_len(),
+            |m, out_chunk| {
                 let start = m as isize * self.hop_len as isize - (self.frame_len / 2) as isize;
                 for n in 0..self.frame_len {
                     let signal_index = start + n as isize;
@@ -306,11 +305,11 @@ impl StftPlan {
             self.frame_len,
             signal_len,
             |flat_frames, flat_complex, overlap, weight| {
-                flat_complex
-                    .par_chunks_mut(self.frame_len)
-                    .zip(flat_frames.par_chunks_mut(self.frame_len))
-                    .enumerate()
-                    .for_each(|(m, (frame_complex, frame_out))| {
+                moirai::for_each_chunk_pair_mut_enumerated_with::<moirai::Adaptive, _, _, _>(
+                    flat_complex,
+                    flat_frames,
+                    self.frame_len,
+                    |m, frame_complex, frame_out| {
                         let offset = m * self.spectrum_len();
                         for k in 0..self.spectrum_len() {
                             frame_complex[k] = spectrum[offset + k];

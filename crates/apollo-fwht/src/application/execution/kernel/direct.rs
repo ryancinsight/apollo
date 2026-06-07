@@ -15,7 +15,6 @@
 //! Therefore WHT(WHT(x)) = H_N * (H_N * x) = N * x.
 
 use num_complex::Complex64;
-use rayon::prelude::*;
 use std::ops::{Add, Sub};
 
 const PAR_THRESHOLD: usize = 1024;
@@ -48,7 +47,7 @@ where
     while step < n {
         let block = step * 2;
         if block >= PAR_THRESHOLD {
-            data.par_chunks_mut(block).for_each(|chunk| {
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data, block, |chunk| {
                 let (left, right) = chunk.split_at_mut(step);
                 for i in 0..step {
                     let a = left[i];

@@ -18,7 +18,6 @@
 //! executed via Rayon above a configurable threshold.
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use rayon::prelude::*;
 
 /// Tiled in-place square matrix transpose: swaps element (r, c) with (c, r) for r < c.
 ///
@@ -95,7 +94,7 @@ pub(crate) fn four_step_fft<
         // After step 1, scratch holds the N2×N1 transposed layout.
         // Each row i is scratch[i*n1..(i+1)*n1].  Uses data rows as inner scratch.
         if parallel {
-            scratch.par_chunks_exact_mut(n1).for_each(|row| {
+            moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(scratch, n1, |row| {
                 <F as MixedRadixScalar>::with_scratch(n1, |ts| {
                     F::stockham_forward(row, ts, tw1.as_ref());
                 });
@@ -131,7 +130,7 @@ pub(crate) fn four_step_fft<
         // Step 4: N1 independent FFTs of length N2 on contiguous rows of data.
         // After step 3, data holds N1 rows of N2 elements: row k at data[k*n2..].
         if parallel {
-            data.par_chunks_exact_mut(n2).for_each(|row| {
+            moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(data, n2, |row| {
                 <F as MixedRadixScalar>::with_scratch(n2, |ts| {
                     F::stockham_forward(row, ts, tw2.as_ref());
                 });
