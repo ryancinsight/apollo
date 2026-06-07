@@ -955,6 +955,7 @@ impl MixedRadixScalar for f32 {
                     crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                         f32,
                         INVERSE,
+                        false,
                     >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(0.125, 0.0);
@@ -2448,6 +2449,7 @@ impl MixedRadixScalar for f64 {
                     crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                         f64,
                         INVERSE,
+                        false,
                     >(data_ref);
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.125, 0.0);
