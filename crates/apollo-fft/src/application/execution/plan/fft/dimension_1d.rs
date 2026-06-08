@@ -8,6 +8,7 @@ use crate::domain::metadata::shape::Shape1D;
 use core::marker::PhantomData;
 use ndarray::Array1;
 use num_complex::Complex;
+use std::borrow::Cow;
 use std::sync::Arc;
 
 mod executors;
@@ -27,22 +28,16 @@ use executors::{
     exec_winograd_inverse, exec_winograd_inverse_unnorm,
 };
 
-#[derive(Clone)]
-enum CompositeRadices {
-    Static(&'static [usize]),
-    Shared(Arc<[usize]>),
-}
+/// Zero-copy composite radices: borrowed from a `'static` slice for known sizes,
+/// or owned `Vec` for dynamically computed radices from the factorization cache.
+/// Replaces the prior `CompositeRadices` custom enum with `Cow` (DRY + SSOT).
+type CompositeRadices = Cow<'static, [usize]>;
 
-impl std::ops::Deref for CompositeRadices {
-    type Target = [usize];
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Static(radices) => radices,
-            Self::Shared(radices) => radices,
-        }
-    }
+/// Convert an `Arc<[usize]>` from the cache into an owned `Cow`.
+/// The radices are small (2–6 elements) so the one-time copy is negligible.
+#[inline]
+fn arc_to_cow(arc: Arc<[usize]>) -> CompositeRadices {
+    Cow::Owned(arc.to_vec())
 }
 
 /// Reusable 1D FFT plan strategy generic over `MixedRadixScalar`.
@@ -65,7 +60,7 @@ enum PlanStrategy<F: MixedRadixScalar> {
         n2: usize,
     },
     Composite {
-        radices: CompositeRadices,
+        radices: Cow<'static, [usize]>,
     },
     Rader,
 }
@@ -88,7 +83,7 @@ impl<F: MixedRadixScalar> Clone for PlanStrategy<F> {
             },
             Self::GoodThomas { n1, n2 } => Self::GoodThomas { n1: *n1, n2: *n2 },
             Self::Composite { radices } => Self::Composite {
-                radices: radices.clone(),
+                radices: Cow::clone(radices),
             },
             Self::Rader => Self::Rader,
         }
@@ -104,7 +99,7 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     // Cached variables to completely bypass enum matching in the hot path:
     n1: usize,
     n2: usize,
-    radices: Option<CompositeRadices>,
+    radices: Option<Cow<'static, [usize]>>,
     twiddle_fwd: Option<Arc<[F::Complex]>>,
     twiddle_inv: Option<Arc<[F::Complex]>>,
 
@@ -222,23 +217,23 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             }
         } else if n == 385 {
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[11, 5, 7]),
+                radices: Cow::Borrowed(&[11, 5, 7]),
             }
         } else if n == 180 {
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[5, 3, 3, 4]),
+                radices: Cow::Borrowed(&[5, 3, 3, 4]),
             }
         } else if n == 144 {
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[4, 4, 3, 3]),
+                radices: Cow::Borrowed(&[4, 4, 3, 3]),
             }
         } else if n == 176 {
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[11, 4, 4]),
+                radices: Cow::Borrowed(&[11, 4, 4]),
             }
         } else if n == 200 {
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(F::COMPOSITE_RADICES_200),
+                radices: Cow::Borrowed(F::COMPOSITE_RADICES_200),
             }
         } else if F::use_generated_codelet_plan(n) {
             PlanStrategy::ShortWinograd
@@ -250,13 +245,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             // Force composite [4,3,3] over winograd GT (9×4) for this size — f32 N=36
             // benchmarked 4.974x via scalar winograd codelet vs composite AVX butterflies.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[4, 3, 3]),
+                radices: Cow::Borrowed(&[4, 3, 3]),
             }
         } else if n == 48 {
             // Force composite [4,4,3] over winograd GT (3×16) for this size — f32 N=48
             // benchmarked 2.149x via scalar winograd codelet vs composite AVX butterflies.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[4, 4, 3]),
+                radices: Cow::Borrowed(&[4, 4, 3]),
             }
         } else if n == 63 && F::FORCE_COMPOSITE_63 {
             // Force composite [3,3,7] only for f32 — f32 N=63 benchmarked 1.464x
@@ -264,14 +259,14 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             // Precision-specific routing avoids the universal f64 regression seen when
             // forcing composite for both precisions.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[3, 3, 7]),
+                radices: Cow::Borrowed(&[3, 3, 7]),
             }
         } else if n == 72 && F::FORCE_COMPOSITE_72 {
             // Force composite for f32 (md f32 72 ~17x via GT/Precision Policy / win bad path in fresh benchmark_results).
             // 72 = 2^3*3^2 smooth; use radices from static_prime23 [4,2,3,3] for AVX composite path (better than current GT for f32).
             // This is routing fix per "assume current method selection per size may not be correct" + highest prob for extreme f32 ratio.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[4, 2, 3, 3]),
+                radices: Cow::Borrowed(&[4, 2, 3, 3]),
             }
         } else if n == 72 {
             PlanStrategy::GoodThomas { n1: 9, n2: 8 }
@@ -279,12 +274,12 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             // Force composite over GT static for this historically worst size (f32 ~3.3x, still high in md).
             // 90 = 2*3^2*5 smooth; radices chosen to match factorize_composite lowering. Moved before short_win to guarantee (f32 policy).
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[2, 3, 3, 5]),
+                radices: Cow::Borrowed(&[2, 3, 3, 5]),
             }
         } else if n == 198 {
             // Another persistent GT bad case (smooth 2*3^2*11, high in md). Moved before short_win to guarantee composite route.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Static(&[2, 3, 3, 11]),
+                radices: Cow::Borrowed(&[2, 3, 3, 11]),
             }
         } else if crate::application::execution::kernel::mixed_radix::traits::is_short_winograd_size(n)
             && (n <= 64 || F::use_generated_codelet_plan(n))
@@ -296,7 +291,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if let Some(radices) = crate::application::execution::kernel::mixed_radix::caches::cached_prime23_radices(n) {
             // Prefer composite for smooth (incl coprime splits like 90=9x10) as GT static often slower in practice.
             PlanStrategy::Composite {
-                radices: CompositeRadices::Shared(radices),
+                radices: arc_to_cow(radices),
             }
         } else if let Some((n1, n2)) = crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(n)
             .filter(|&(n1, n2)| crate::application::execution::kernel::components::good_thomas::has_static_coprime_codelet(n1, n2))
@@ -505,7 +500,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 inverse_unnorm_impl = exec_good_thomas_inverse_unnorm::<F>;
             }
             PlanStrategy::Composite { radices } => {
-                radices_field = Some(radices.clone());
+                radices_field = Some(Cow::clone(radices));
                 forward_impl = exec_composite_forward::<F>;
                 inverse_impl = exec_composite_inverse::<F>;
                 inverse_unnorm_impl = exec_composite_inverse_unnorm::<F>;
