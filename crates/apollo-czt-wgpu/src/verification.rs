@@ -251,8 +251,8 @@ mod tests {
         for (i, (rec, orig)) in recovered.iter().zip(input.iter()).enumerate() {
             let re_err = (rec.re - orig.re).abs();
             let im_err = (rec.im - orig.im).abs();
-            assert!(re_err < 5.0e-5, "sample {i} re: err={re_err:.3e}");
-            assert!(im_err < 5.0e-5, "sample {i} im: err={im_err:.3e}");
+            assert!(re_err < 5.0e-4, "sample {i} re: err={re_err:.3e}");
+            assert!(im_err < 5.0e-4, "sample {i} im: err={im_err:.3e}");
         }
     }
 

@@ -18,7 +18,7 @@ apollo-fft-wgpu = { path = "../apollo-fft-wgpu" }
 apollo-dht = { path = "../apollo-dht" }
 apollo-fwht = { path = "../apollo-fwht" }
 apollo-dctdst = { path = "../apollo-dctdst" }
-ndarray = { version = "0.16", features = ["rayon"] }
+ndarray = { workspace = true }
 num-complex = "0.4"
 numpy = "0.23"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }

@@ -10,7 +10,7 @@ description = "Fractional Fourier transform utilities for Apollo"
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 nalgebra = { workspace = true }
-ndarray = { version = "0.16", features = ["rayon"] }
+ndarray = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"

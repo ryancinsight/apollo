@@ -13,7 +13,7 @@ apollo-fft-wgpu = { path = "../apollo-fft-wgpu" }
 apollo-nufft = { path = "../apollo-nufft" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
-ndarray = { version = "0.16", features = ["rayon"] }
+ndarray = { workspace = true }
 num-complex = "0.4"
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }

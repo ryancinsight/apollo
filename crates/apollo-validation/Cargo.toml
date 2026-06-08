@@ -33,10 +33,11 @@ apollo-sft = { path = "../apollo-sft" }
 apollo-sht = { path = "../apollo-sht" }
 apollo-stft = { path = "../apollo-stft" }
 nalgebra = "0.33"
-ndarray = { version = "0.16", features = ["rayon"] }
+ndarray = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+melinoe = { workspace = true }
 
 rustfft = { workspace = true, optional = true }
 

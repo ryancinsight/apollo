@@ -848,4 +848,30 @@ mod tests {
             assert!(external.contains_key(key), "missing external key {key}");
         }
     }
+
+    #[test]
+    fn test_melinoe_zero_copy_boundary_policy_integration() {
+        use melinoe::{brand_scope, Borrowed, CellCowExt, MelinoeCell, Retained};
+        use std::borrow::Cow;
+
+        let input_signal = vec![1.0, 2.0, 3.0, 4.0];
+        brand_scope(|token| {
+            let cells: Vec<MelinoeCell<'_, f64>> = input_signal
+                .iter()
+                .copied()
+                .map(MelinoeCell::new)
+                .collect();
+
+            // Zero-copy borrow boundary
+            let borrowed = cells.borrow_cow_with(&token, Borrowed);
+            assert!(matches!(borrowed, Cow::Borrowed(_)));
+            assert_eq!(borrowed.as_ref(), &input_signal[..]);
+
+            // Cloned retain boundary
+            let retained = cells.borrow_cow_with(&token, Retained);
+            assert!(matches!(retained, Cow::Owned(_)));
+            assert_eq!(retained.as_ref(), &input_signal[..]);
+        });
+    }
 }
+

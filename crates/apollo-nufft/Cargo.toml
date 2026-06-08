@@ -9,7 +9,7 @@ description = "Non-uniform FFT plans and utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
-ndarray = { version = "0.16", features = ["rayon"] }
+ndarray = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
