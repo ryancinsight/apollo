@@ -19,11 +19,8 @@ impl moirai::ExecutionPolicy for RadixCompositePolicy {
 /// Iterates over mutable `chunk_size`-element chunks of `data`, passing
 /// `(index, chunk)` to `f` through the selected dispatch provider.
 #[inline]
-pub fn for_each_chunk_mut_enumerated<P, T, F>(
-    data: &mut [T],
-    chunk_size: usize,
-    f: F,
-) where
+pub fn for_each_chunk_mut_enumerated<P, T, F>(data: &mut [T], chunk_size: usize, f: F)
+where
     P: moirai::ExecutionPolicy,
     T: Send,
     F: Fn(usize, &mut [T]) + Send + Sync,
@@ -47,9 +44,13 @@ mod tests {
         let mut sequential = vec![0usize; 16];
         let mut parallel = vec![0usize; 16];
 
-        for_each_chunk_mut_enumerated::<moirai::Sequential, _, _>(&mut sequential, 4, |i, chunk| {
-            chunk.fill(i);
-        });
+        for_each_chunk_mut_enumerated::<moirai::Sequential, _, _>(
+            &mut sequential,
+            4,
+            |i, chunk| {
+                chunk.fill(i);
+            },
+        );
         for_each_chunk_mut_enumerated::<moirai::Parallel, _, _>(&mut parallel, 4, |i, chunk| {
             chunk.fill(i);
         });

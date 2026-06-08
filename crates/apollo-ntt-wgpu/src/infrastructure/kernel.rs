@@ -180,7 +180,9 @@ impl NttGpuKernel {
         omega: u64,
     ) -> WgpuResult<NttGpuBuffers> {
         if len == 0 {
-            return Err(WgpuError::InvalidBufferLength { len });
+            return Err(WgpuError::InvalidPlan {
+                message: "invalid NTT GPU buffer length 0".to_string(),
+            });
         }
 
         let n = len;

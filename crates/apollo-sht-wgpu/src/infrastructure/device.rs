@@ -77,11 +77,14 @@ impl ShtWgpuBackend {
         validate_plan(plan)?;
         if samples.dim() != (plan.latitudes(), plan.longitudes()) {
             let (actual_latitudes, actual_longitudes) = samples.dim();
-            return Err(WgpuError::SampleShapeMismatch {
-                expected_latitudes: plan.latitudes(),
-                expected_longitudes: plan.longitudes(),
-                actual_latitudes,
-                actual_longitudes,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "samples expected {}x{}, got {}x{}",
+                    plan.latitudes(),
+                    plan.longitudes(),
+                    actual_latitudes,
+                    actual_longitudes
+                ),
             });
         }
         let grid = grid_samples(plan);
@@ -105,9 +108,12 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<Array2<Complex64>> {
         validate_plan(plan)?;
         if coefficients.max_degree() != plan.max_degree() {
-            return Err(WgpuError::CoefficientShapeMismatch {
-                expected: plan.max_degree(),
-                actual: coefficients.max_degree(),
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "coefficient shape mismatch: expected max_degree {}, got {}",
+                    plan.max_degree(),
+                    coefficients.max_degree()
+                ),
             });
         }
         let grid = grid_samples(plan);
@@ -127,11 +133,8 @@ impl ShtWgpuBackend {
                 .collect(),
         )
         .map_err(|_| WgpuError::InvalidPlan {
-            latitudes: plan.latitudes(),
-            longitudes: plan.longitudes(),
-            max_degree: plan.max_degree(),
-            message: "inverse output shape does not match plan",
-        })
+                message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: inverse output shape does not match plan", plan.latitudes(), plan.longitudes(), plan.max_degree()),
+            })
     }
 
     /// Execute forward complex SHT from a flat typed sample slice.
@@ -151,11 +154,13 @@ impl ShtWgpuBackend {
         }
         let expected_len = plan.latitudes() * plan.longitudes();
         if flat_samples.len() != expected_len {
-            return Err(WgpuError::SampleShapeMismatch {
-                expected_latitudes: plan.latitudes(),
-                expected_longitudes: plan.longitudes(),
-                actual_latitudes: flat_samples.len(),
-                actual_longitudes: 1,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "sample shape mismatch: expected ({}, {}), got ({}, 1)",
+                    plan.latitudes(),
+                    plan.longitudes(),
+                    flat_samples.len()
+                ),
             });
         }
         let promoted: Vec<Complex32> = flat_samples
@@ -167,11 +172,8 @@ impl ShtWgpuBackend {
             .collect();
         let samples_2d = Array2::from_shape_vec((plan.latitudes(), plan.longitudes()), promoted)
             .map_err(|_| WgpuError::InvalidPlan {
-                latitudes: plan.latitudes(),
-                longitudes: plan.longitudes(),
-                max_degree: plan.max_degree(),
-                message: "flat sample reshape failed",
-            })?;
+                    message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: flat sample reshape failed", plan.latitudes(), plan.longitudes(), plan.max_degree()),
+                })?;
         self.execute_forward(plan, &samples_2d)
     }
 
@@ -191,11 +193,13 @@ impl ShtWgpuBackend {
         }
         let expected_len = plan.latitudes() * plan.longitudes();
         if output.len() != expected_len {
-            return Err(WgpuError::SampleShapeMismatch {
-                expected_latitudes: plan.latitudes(),
-                expected_longitudes: plan.longitudes(),
-                actual_latitudes: output.len(),
-                actual_longitudes: 1,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "sample shape mismatch: expected ({}, {}), got ({}, 1)",
+                    plan.latitudes(),
+                    plan.longitudes(),
+                    output.len()
+                ),
             });
         }
         let result = self.execute_inverse(plan, coefficients)?;
@@ -209,19 +213,13 @@ impl ShtWgpuBackend {
 fn validate_plan(plan: &ShtWgpuPlan) -> WgpuResult<()> {
     if SphericalGridSpec::new(plan.latitudes(), plan.longitudes(), plan.max_degree()).is_err() {
         return Err(WgpuError::InvalidPlan {
-            latitudes: plan.latitudes(),
-            longitudes: plan.longitudes(),
-            max_degree: plan.max_degree(),
-            message: "grid must be non-empty and satisfy max_degree < latitudes and 2*max_degree+1 <= longitudes",
-        });
+                message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: grid must be non-empty and satisfy max_degree < latitudes and 2*max_degree+1 <= longitudes", plan.latitudes(), plan.longitudes(), plan.max_degree()),
+            });
     }
     if plan.sample_count() > u32::MAX as usize || plan.mode_count() > u32::MAX as usize {
         return Err(WgpuError::InvalidPlan {
-            latitudes: plan.latitudes(),
-            longitudes: plan.longitudes(),
-            max_degree: plan.max_degree(),
-            message: "WGPU dispatch dimensions must fit in u32",
-        });
+                message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: WGPU dispatch dimensions must fit in u32", plan.latitudes(), plan.longitudes(), plan.max_degree()),
+            });
     }
     Ok(())
 }

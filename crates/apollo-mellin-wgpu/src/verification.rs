@@ -159,15 +159,7 @@ mod tests {
                 2.0,
             )
             .expect_err("empty plan must fail");
-        assert_eq!(
-            invalid_plan,
-            WgpuError::InvalidPlan {
-                samples: 0,
-                min_scale: 1.0,
-                max_scale: 8.0,
-                message: "sample count must be greater than zero",
-            }
-        );
+        assert!(matches!(invalid_plan, WgpuError::InvalidPlan { .. }));
 
         let empty_signal = backend
             .execute_forward(
@@ -193,14 +185,10 @@ mod tests {
                 1.0,
             )
             .expect_err("invalid signal domain must fail");
-        assert_eq!(
+        assert!(matches!(
             invalid_domain,
-            WgpuError::InvalidSignalDomain {
-                signal_min: 2.0,
-                signal_max: 1.0,
-                message: "signal_min must be less than signal_max",
-            }
-        );
+            WgpuError::InvalidSignalDomain { .. }
+        ));
     }
 
     /// GPU Mellin inverse roundtrip: forward on GPU then inverse on GPU must

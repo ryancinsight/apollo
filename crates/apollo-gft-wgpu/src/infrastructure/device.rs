@@ -162,8 +162,7 @@ impl GftWgpuBackend {
         let n = plan.len();
         if n == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: 0,
-                message: "length must be greater than zero",
+                message: "invalid plan: length must be greater than zero".to_owned(),
             });
         }
         if signal.len() != n {
@@ -173,9 +172,12 @@ impl GftWgpuBackend {
             });
         }
         if basis.len() != n * n {
-            return Err(WgpuError::BasisLengthMismatch {
-                expected: n * n,
-                actual: basis.len(),
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "basis length mismatch: expected={}, actual={}",
+                    n * n,
+                    basis.len()
+                ),
             });
         }
         Ok(())

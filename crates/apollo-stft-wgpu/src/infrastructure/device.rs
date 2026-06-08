@@ -72,23 +72,29 @@ impl StftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         if plan.frame_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "frame_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() > plan.frame_len() {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must not exceed frame_len",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must not exceed frame_len",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if signal.len() < plan.frame_len() {
@@ -122,30 +128,38 @@ impl StftWgpuBackend {
     ) -> WgpuResult<Vec<f32>> {
         if plan.frame_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "frame_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() > plan.frame_len() {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must not exceed frame_len",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must not exceed frame_len",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if signal_len == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "signal_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: signal_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         let frame_count = 1 + signal_len.div_ceil(plan.hop_len());
@@ -243,10 +257,8 @@ impl StftWgpuBackend {
         let computed = self.execute_forward(plan, &represented)?;
         if output.len() != computed.len() {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "output length does not match computed frame count * frame_len",
-            });
+                    message: format!("invalid plan frame_len={}, hop_len={}: output length does not match computed frame count * frame_len", plan.frame_len(), plan.hop_len()),
+                });
         }
         for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
             *slot = O::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
@@ -272,16 +284,20 @@ impl StftWgpuBackend {
     ) -> WgpuResult<StftGpuBuffers> {
         if plan.frame_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "frame_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         let frame_count = 1 + signal_len.div_ceil(plan.hop_len());
@@ -308,16 +324,20 @@ impl StftWgpuBackend {
     ) -> WgpuResult<()> {
         if plan.frame_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "frame_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         // Non-power-of-two frame_len: delegate to allocating Chirp-Z path.
@@ -352,16 +372,20 @@ impl StftWgpuBackend {
     ) -> WgpuResult<()> {
         if plan.frame_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "frame_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if plan.hop_len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                frame_len: plan.frame_len(),
-                hop_len: plan.hop_len(),
-                message: "hop_len must be non-zero",
+                message: format!(
+                    "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                    plan.frame_len(),
+                    plan.hop_len()
+                ),
             });
         }
         if !plan.frame_len().is_power_of_two() {

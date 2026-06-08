@@ -322,7 +322,7 @@ mod tests {
             .expect_err("output length mismatch must produce an error");
         assert_eq!(
             err,
-            WgpuError::OutputLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 8,
                 actual: 4,
             },
@@ -345,7 +345,7 @@ mod tests {
             .expect_err("buffer length mismatch must produce an error");
         assert_eq!(
             err,
-            WgpuError::BufferLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 8,
                 actual: 4,
             },
@@ -366,14 +366,8 @@ mod tests {
                 &[],
             )
             .expect_err("empty plan must fail");
-        assert_eq!(
-            empty_err,
-            WgpuError::InvalidPlan {
-                len: 0,
-                modulus: DEFAULT_MODULUS,
-                primitive_root: DEFAULT_PRIMITIVE_ROOT,
-                message: "length must be greater than zero",
-            },
+        assert!(
+            matches!(empty_err, WgpuError::InvalidPlan { ref message } if message.contains("length must be greater than zero")),
             "empty plan must report zero length"
         );
 
@@ -384,14 +378,8 @@ mod tests {
                 &[0; 6],
             )
             .expect_err("non-power-of-two plan must fail");
-        assert_eq!(
-            non_pow_err,
-            WgpuError::InvalidPlan {
-                len: 6,
-                modulus: DEFAULT_MODULUS,
-                primitive_root: DEFAULT_PRIMITIVE_ROOT,
-                message: "length must be a power of two",
-            },
+        assert!(
+            matches!(non_pow_err, WgpuError::InvalidPlan { ref message } if message.contains("power of two")),
             "non-power-of-two plan must be rejected"
         );
 

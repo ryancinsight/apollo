@@ -13,7 +13,6 @@ apollo-qft = { path = "../apollo-qft" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
 num-complex = "0.4"
-thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]

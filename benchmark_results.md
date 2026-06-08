@@ -39,7 +39,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 29 | Winograd | Butterfly | 119.74 | 72.46 | 1.653x | 80.72 | 126.10 | 0.640x | 2026-06-05 16:19 UTC |
 | 30 | Winograd | Mixed-Radix | 40.25 | 62.60 | 0.643x | 55.63 | 36.96 | 1.505x | 2026-06-05 16:19 UTC |
 | 31 | Winograd | Butterfly | 115.20 | 119.45 | 0.964x | 78.28 | 124.97 | 0.626x | 2026-06-05 16:19 UTC |
-| 32 | Stockham | Butterfly | 59.91 | 34.71 | 1.726x | 29.78 | 9.56 | 3.115x | 2026-06-05 16:19 UTC |
+| 32 | Stockham | Butterfly | 23.70 | 34.13 | 0.694x | 19.72 | 8.69 | 2.270x | 2026-06-08 21:41 UTC |
 | 33 | Winograd | Mixed-Radix | 70.87 | 65.04 | 1.090x | 100.15 | 54.59 | 1.835x | 2026-06-05 16:19 UTC |
 | 34 | Winograd | Mixed-Radix | 183.52 | 68.74 | 2.670x | 96.57 | 100.50 | 0.961x | 2026-06-05 16:19 UTC |
 | 35 | Winograd | Mixed-Radix | 62.18 | 70.17 | 0.886x | 71.37 | 50.37 | 1.417x | 2026-06-05 16:19 UTC |
@@ -71,7 +71,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 61 | Rader | Rader | 908.70 | 381.94 | 2.379x | 448.66 | 189.66 | 2.366x | 2026-06-05 16:19 UTC |
 | 62 | Winograd | Mixed-Radix | 276.01 | 358.32 | 0.770x | 195.19 | 263.23 | 0.742x | 2026-06-05 16:19 UTC |
 | 63 | Winograd | Mixed-Radix | 156.76 | 112.70 | 1.391x | 120.79 | 102.24 | 1.181x | 2026-06-05 16:19 UTC |
-| 64 | Stockham | Butterfly | 97.53 | 76.99 | 1.267x | 70.90 | 15.63 | 4.537x | 2026-06-05 16:19 UTC |
+| 64 | Stockham | Butterfly | 79.09 | 54.68 | 1.446x | 36.79 | 23.26 | 1.582x | 2026-06-08 21:41 UTC |
 | 65 | Good-Thomas (Static) | Mixed-Radix | 260.57 | 231.68 | 1.125x | 267.44 | 137.88 | 1.940x | 2026-06-05 16:19 UTC |
 | 66 | Good-Thomas (Static) | Mixed-Radix | 274.24 | 136.57 | 2.008x | 253.74 | 95.20 | 2.665x | 2026-06-05 16:19 UTC |
 | 67 | Rader | Rader | 1011.60 | 474.87 | 2.130x | 753.93 | 364.04 | 2.071x | 2026-06-05 16:19 UTC |

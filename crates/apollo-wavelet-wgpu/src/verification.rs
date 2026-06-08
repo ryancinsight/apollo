@@ -58,17 +58,17 @@ mod tests {
         };
         let r = backend.execute_forward(&WaveletWgpuPlan::new(6, 1), &[0.0f32; 6]);
         assert!(
-            matches!(r, Err(WgpuError::InvalidLength { .. })),
+            matches!(r, Err(WgpuError::InvalidPlan { .. })),
             "non-pow2: {r:?}"
         );
         let r = backend.execute_forward(&WaveletWgpuPlan::new(4, 0), &[0.0f32; 4]);
         assert!(
-            matches!(r, Err(WgpuError::InvalidLength { .. })),
+            matches!(r, Err(WgpuError::InvalidPlan { .. })),
             "zero levels: {r:?}"
         );
         let r = backend.execute_forward(&WaveletWgpuPlan::new(4, 3), &[0.0f32; 4]);
         assert!(
-            matches!(r, Err(WgpuError::InvalidLength { .. })),
+            matches!(r, Err(WgpuError::InvalidPlan { .. })),
             "levels too large: {r:?}"
         );
         let r = backend.execute_forward(&WaveletWgpuPlan::new(8, 1), &[0.0f32; 4]);

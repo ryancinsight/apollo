@@ -164,24 +164,12 @@ mod tests {
         let empty_err = backend
             .execute_forward(&FwhtWgpuPlan::new(0), &[])
             .expect_err("empty plan must fail");
-        assert_eq!(
-            empty_err,
-            WgpuError::InvalidLength {
-                len: 0,
-                message: "length must be greater than zero",
-            }
-        );
+        assert!(matches!(empty_err, WgpuError::InvalidPlan { .. }));
 
         let non_power_err = backend
             .execute_forward(&FwhtWgpuPlan::new(6), &[0.0; 6])
             .expect_err("non-power-of-two plan must fail");
-        assert_eq!(
-            non_power_err,
-            WgpuError::InvalidLength {
-                len: 6,
-                message: "length must be a power of two",
-            }
-        );
+        assert!(matches!(non_power_err, WgpuError::InvalidPlan { .. }));
 
         let mismatch_err = backend
             .execute_forward(&FwhtWgpuPlan::new(8), &[0.0; 4])

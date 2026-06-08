@@ -13,7 +13,6 @@ apollo-dctdst = { path = "../apollo-dctdst" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
 ndarray = { workspace = true }
-thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [lints]

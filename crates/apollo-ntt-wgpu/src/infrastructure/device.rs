@@ -74,7 +74,9 @@ impl NttWgpuBackend {
     pub fn create_buffers(&self, plan: &NttWgpuPlan) -> WgpuResult<NttGpuBuffers> {
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidBufferLength { len });
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid buffer length {len}"),
+            });
         }
         let omega = Self::validate_plan_and_len(plan, len)?;
         self.kernel
@@ -202,7 +204,7 @@ impl NttWgpuBackend {
     ) -> WgpuResult<()> {
         let len = plan.len();
         if output.len() != len {
-            return Err(WgpuError::OutputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: len,
                 actual: output.len(),
             });
@@ -254,7 +256,7 @@ impl NttWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_plan_and_len(plan, input_len)?;
         if buffers.len() != plan.len() {
-            return Err(WgpuError::BufferLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: buffers.len(),
             });
@@ -272,43 +274,28 @@ impl NttWgpuBackend {
         let primitive_root = plan.primitive_root();
         if len == 0 {
             return Err(WgpuError::InvalidPlan {
-                len,
-                modulus,
-                primitive_root,
-                message: "length must be greater than zero",
-            });
+                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be greater than zero"),
+                });
         }
         if !len.is_power_of_two() {
             return Err(WgpuError::InvalidPlan {
-                len,
-                modulus,
-                primitive_root,
-                message: "length must be a power of two",
-            });
+                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be a power of two"),
+                });
         }
         if modulus < 2 {
             return Err(WgpuError::InvalidPlan {
-                len,
-                modulus,
-                primitive_root,
-                message: "modulus must be at least 2",
-            });
+                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: modulus must be at least 2"),
+                });
         }
         if modulus > u32::MAX as u64 || primitive_root > u32::MAX as u64 {
             return Err(WgpuError::InvalidPlan {
-                len,
-                modulus,
-                primitive_root,
-                message: "current WGPU NTT surface supports 32-bit modulus and primitive root",
-            });
+                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: current WGPU NTT surface supports 32-bit modulus and primitive root"),
+                });
         }
         if (modulus - 1) % len as u64 != 0 {
             return Err(WgpuError::InvalidPlan {
-                len,
-                modulus,
-                primitive_root,
-                message: "transform length is not supported by the modulus",
-            });
+                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: transform length is not supported by the modulus"),
+                });
         }
         if input_len != len {
             return Err(WgpuError::LengthMismatch {

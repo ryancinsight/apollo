@@ -73,7 +73,7 @@ impl SftWgpuBackend {
     ) -> WgpuResult<SparseSpectrum> {
         Self::validate_plan(plan)?;
         if input.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: input.len(),
             });
@@ -96,7 +96,7 @@ impl SftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_plan(plan)?;
         if spectrum.n != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: spectrum.n,
             });
@@ -152,7 +152,7 @@ impl SftWgpuBackend {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
         if output.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: output.len(),
             });
@@ -167,31 +167,35 @@ impl SftWgpuBackend {
     fn validate_plan(plan: &SftWgpuPlan) -> WgpuResult<()> {
         if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: plan.len(),
-                sparsity: plan.sparsity(),
-                message: "transform length must be greater than zero",
+                message: format!(
+                    "invalid plan len={}, sparsity={}: transform length must be greater than zero",
+                    plan.len(),
+                    plan.sparsity()
+                ),
             });
         }
         if plan.sparsity() == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: plan.len(),
-                sparsity: plan.sparsity(),
-                message: "sparsity must be greater than zero",
+                message: format!(
+                    "invalid plan len={}, sparsity={}: sparsity must be greater than zero",
+                    plan.len(),
+                    plan.sparsity()
+                ),
             });
         }
         if plan.sparsity() > plan.len() {
             return Err(WgpuError::InvalidPlan {
-                len: plan.len(),
-                sparsity: plan.sparsity(),
-                message: "sparsity must not exceed transform length",
+                message: format!(
+                    "invalid plan len={}, sparsity={}: sparsity must not exceed transform length",
+                    plan.len(),
+                    plan.sparsity()
+                ),
             });
         }
         if plan.len() > u32::MAX as usize {
             return Err(WgpuError::InvalidPlan {
-                len: plan.len(),
-                sparsity: plan.sparsity(),
-                message: "transform length must fit in u32 for WGPU dispatch",
-            });
+                    message: format!("invalid plan len={}, sparsity={}: transform length must fit in u32 for WGPU dispatch", plan.len(), plan.sparsity()),
+                });
         }
         Ok(())
     }
@@ -219,10 +223,8 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
         spectrum
             .insert(frequency, Complex64::new(value.re as f64, value.im as f64))
             .map_err(|_| WgpuError::InvalidPlan {
-                len,
-                sparsity,
-                message: "selected support violates sparse spectrum invariants",
-            })?;
+                    message: format!("invalid plan len={len}, sparsity={sparsity}: selected support violates sparse spectrum invariants"),
+                })?;
     }
     Ok(spectrum)
 }

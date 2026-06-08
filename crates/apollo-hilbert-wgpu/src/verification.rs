@@ -124,13 +124,7 @@ mod tests {
         let empty_err = backend
             .execute_forward(&HilbertWgpuPlan::new(0), &[])
             .expect_err("empty plan must fail");
-        assert_eq!(
-            empty_err,
-            WgpuError::InvalidLength {
-                len: 0,
-                message: "length must be greater than zero",
-            }
-        );
+        assert!(matches!(empty_err, WgpuError::InvalidPlan { .. }));
 
         let mismatch_err = backend
             .execute_forward(&HilbertWgpuPlan::new(8), &[0.0; 4])

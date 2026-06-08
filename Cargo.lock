@@ -115,7 +115,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -143,7 +142,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -219,7 +217,6 @@ dependencies = [
  "bytemuck",
  "ndarray",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -247,7 +244,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -275,7 +271,6 @@ dependencies = [
  "bytemuck",
  "nalgebra",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -300,7 +295,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -326,7 +320,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -351,7 +344,6 @@ dependencies = [
  "bytemuck",
  "ndarray",
  "proptest",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -426,7 +418,6 @@ dependencies = [
  "bytemuck",
  "ndarray",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -454,7 +445,6 @@ dependencies = [
  "bytemuck",
  "criterion",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -480,7 +470,6 @@ dependencies = [
  "bytemuck",
  "ndarray",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -506,7 +495,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -534,7 +522,6 @@ dependencies = [
  "bytemuck",
  "ndarray",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -563,7 +550,6 @@ dependencies = [
  "criterion",
  "ndarray",
  "num-complex",
- "thiserror 1.0.69",
  "wgpu",
 ]
 
@@ -624,7 +610,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "ndarray",
- "thiserror 1.0.69",
  "wgpu",
 ]
 

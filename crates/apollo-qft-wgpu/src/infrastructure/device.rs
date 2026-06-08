@@ -103,7 +103,7 @@ impl QftWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_qft_typed_precision::<T>(precision)?;
         if output.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: output.len(),
             });
@@ -132,7 +132,7 @@ impl QftWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_qft_typed_precision::<T>(precision)?;
         if output.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: output.len(),
             });
@@ -162,12 +162,14 @@ impl QftWgpuBackend {
     fn validate_inputs(plan: &QftWgpuPlan, input: &[Complex32]) -> WgpuResult<()> {
         if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: plan.len(),
-                message: "transform length must be greater than zero",
+                message: format!(
+                    "invalid plan len={}: transform length must be greater than zero",
+                    plan.len()
+                ),
             });
         }
         if input.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: input.len(),
             });

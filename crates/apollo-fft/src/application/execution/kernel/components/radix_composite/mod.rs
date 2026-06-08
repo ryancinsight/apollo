@@ -48,7 +48,11 @@ pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
-    core::composite_core_with_radices::<crate::application::execution::policy::RadixCompositePolicy, F, false>(data, radices, None);
+    core::composite_core_with_radices::<
+        crate::application::execution::policy::RadixCompositePolicy,
+        F,
+        false,
+    >(data, radices, None);
 }
 
 #[inline]
@@ -57,7 +61,11 @@ pub fn forward_inplace_with_pointwise<F: CompositeCache + ShortWinogradScalar + 
     radices: &[usize],
     pointwise_spectrum: &[Complex<F>],
 ) {
-    core::composite_core_with_radices::<crate::application::execution::policy::RadixCompositePolicy, F, false>(data, radices, Some(pointwise_spectrum));
+    core::composite_core_with_radices::<
+        crate::application::execution::policy::RadixCompositePolicy,
+        F,
+        false,
+    >(data, radices, Some(pointwise_spectrum));
 }
 
 #[inline]
@@ -65,7 +73,11 @@ pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache + ShortWinogradScal
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
-    core::composite_core_with_radices::<crate::application::execution::policy::RadixCompositePolicy, F, true>(data, radices, None);
+    core::composite_core_with_radices::<
+        crate::application::execution::policy::RadixCompositePolicy,
+        F,
+        true,
+    >(data, radices, None);
 }
 
 #[inline]
@@ -73,7 +85,11 @@ pub fn inverse_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     data: &mut [Complex<F>],
     radices: &[usize],
 ) {
-    core::composite_core_with_radices::<crate::application::execution::policy::RadixCompositePolicy, F, true>(data, radices, None);
+    core::composite_core_with_radices::<
+        crate::application::execution::policy::RadixCompositePolicy,
+        F,
+        true,
+    >(data, radices, None);
     normalize_scalar(data, F::from_precise(1.0 / data.len() as f64));
 }
 

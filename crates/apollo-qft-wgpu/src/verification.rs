@@ -249,13 +249,7 @@ mod tests {
         let invalid_err = backend
             .execute_forward(&QftWgpuPlan::new(0), &[])
             .expect_err("zero-length plan must fail");
-        assert_eq!(
-            invalid_err,
-            WgpuError::InvalidPlan {
-                len: 0,
-                message: "transform length must be greater than zero",
-            }
-        );
+        assert!(matches!(invalid_err, WgpuError::InvalidPlan { .. }));
 
         let mismatch_err = backend
             .execute_forward(
@@ -265,7 +259,7 @@ mod tests {
             .expect_err("length mismatch must fail");
         assert_eq!(
             mismatch_err,
-            WgpuError::InputLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 4,
                 actual: 2,
             }

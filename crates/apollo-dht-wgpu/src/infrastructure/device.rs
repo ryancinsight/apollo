@@ -118,9 +118,8 @@ impl DhtWgpuBackend {
     fn validate_plan_input(plan: &DhtWgpuPlan, input: &[f32]) -> WgpuResult<()> {
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if input.len() != len {
@@ -144,9 +143,8 @@ impl DhtWgpuBackend {
         }
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if input.len() != len {

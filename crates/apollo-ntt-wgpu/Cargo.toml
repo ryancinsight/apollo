@@ -15,7 +15,6 @@ proptest_gpu = []
 apollo-ntt = { path = "../apollo-ntt" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
-thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]

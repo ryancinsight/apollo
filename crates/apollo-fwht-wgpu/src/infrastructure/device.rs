@@ -118,15 +118,13 @@ impl FwhtWgpuBackend {
     fn validate_plan_input(plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<()> {
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if !len.is_power_of_two() {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be a power of two",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be a power of two"),
             });
         }
         if input.len() != len {
@@ -150,15 +148,13 @@ impl FwhtWgpuBackend {
         }
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if !len.is_power_of_two() {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be a power of two",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be a power of two"),
             });
         }
         if input.len() != len {

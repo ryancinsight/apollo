@@ -64,7 +64,7 @@ impl DctDstWgpuBackend {
     /// Execute the unnormalized configured real-to-real transform for a real-valued `f32` signal.
     ///
     /// Supported kinds: DCT-I, DCT-II, DCT-III, DCT-IV, DST-I, DST-II, DST-III, and DST-IV.
-    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidLength`] otherwise.
+    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidPlan`] otherwise.
     pub fn execute_forward(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
         let mode = match plan.kind() {
@@ -74,9 +74,11 @@ impl DctDstWgpuBackend {
             RealTransformKind::DstIII => DctMode::Dst3,
             RealTransformKind::DctI => {
                 if plan.len() < 2 {
-                    return Err(WgpuError::InvalidLength {
-                        len: plan.len(),
-                        message: "DCT-I requires length >= 2",
+                    return Err(WgpuError::InvalidPlan {
+                        message: format!(
+                            "invalid length {}: DCT-I requires length >= 2",
+                            plan.len()
+                        ),
                     });
                 }
                 DctMode::Dct1
@@ -97,7 +99,7 @@ impl DctDstWgpuBackend {
     /// Execute the normalized inverse of the configured real-to-real transform for a real-valued `f32` signal.
     ///
     /// Supported kinds: DCT-I, DCT-II, DCT-III, DCT-IV, DST-I, DST-II, DST-III, and DST-IV.
-    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidLength`] otherwise.
+    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidPlan`] otherwise.
     /// Inverse scales: DCT-I = 1/(2*(N-1)), DCT-IV = 2/N, DST-I = 1/(2*(N+1)), DST-IV = 2/N.
     pub fn execute_inverse(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
@@ -108,9 +110,11 @@ impl DctDstWgpuBackend {
             RealTransformKind::DstIII => (DctMode::Dst2, 2.0 / plan.len() as f32),
             RealTransformKind::DctI => {
                 if plan.len() < 2 {
-                    return Err(WgpuError::InvalidLength {
-                        len: plan.len(),
-                        message: "DCT-I requires length >= 2",
+                    return Err(WgpuError::InvalidPlan {
+                        message: format!(
+                            "invalid length {}: DCT-I requires length >= 2",
+                            plan.len()
+                        ),
                     });
                 }
                 (DctMode::Dct1, 1.0 / (2.0 * (plan.len() - 1) as f32))
@@ -142,9 +146,8 @@ impl DctDstWgpuBackend {
         Self::validate_dct_typed_precision::<T>(precision)?;
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if input.len() != len {
@@ -178,9 +181,8 @@ impl DctDstWgpuBackend {
         Self::validate_dct_typed_precision::<T>(precision)?;
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if input.len() != len {
@@ -216,9 +218,8 @@ impl DctDstWgpuBackend {
     fn validate_plan_input(plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<()> {
         let len = plan.len();
         if len == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                message: "length must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
             });
         }
         if input.len() != len {
@@ -243,9 +244,7 @@ impl DctDstWgpuBackend {
         let (rows, cols) = input.dim();
         if rows != n || cols != n {
             return Err(WgpuError::ShapeMismatch {
-                expected: n,
-                rows,
-                cols,
+                message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
             });
         }
         // Row pass.
@@ -282,9 +281,7 @@ impl DctDstWgpuBackend {
         let (rows, cols) = input.dim();
         if rows != n || cols != n {
             return Err(WgpuError::ShapeMismatch {
-                expected: n,
-                rows,
-                cols,
+                message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
             });
         }
         // Column pass (inverse).
@@ -320,11 +317,8 @@ impl DctDstWgpuBackend {
         let n = plan.len();
         let (d0, d1, d2) = input.dim();
         if d0 != n || d1 != n || d2 != n {
-            return Err(WgpuError::ShapeMismatch3d {
-                expected: n,
-                d0,
-                d1,
-                d2,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
             });
         }
         // Axis-0 pass.
@@ -375,11 +369,8 @@ impl DctDstWgpuBackend {
         let n = plan.len();
         let (d0, d1, d2) = input.dim();
         if d0 != n || d1 != n || d2 != n {
-            return Err(WgpuError::ShapeMismatch3d {
-                expected: n,
-                d0,
-                d1,
-                d2,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
             });
         }
         // Axis-2 pass (inverse).

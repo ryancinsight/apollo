@@ -103,17 +103,13 @@ impl MellinWgpuBackend {
         }
         if !out_min.is_finite() || !out_max.is_finite() || out_min <= 0.0 || out_max <= 0.0 {
             return Err(WgpuError::InvalidSignalDomain {
-                signal_min: out_min,
-                signal_max: out_max,
-                message: "output domain bounds must be finite and positive",
-            });
+                    message: format!("invalid signal domain min={out_min}, max={out_max}: output domain bounds must be finite and positive"),
+                });
         }
         if out_min >= out_max {
             return Err(WgpuError::InvalidSignalDomain {
-                signal_min: out_min,
-                signal_max: out_max,
-                message: "out_min must be less than out_max",
-            });
+                    message: format!("invalid signal domain min={out_min}, max={out_max}: out_min must be less than out_max"),
+                });
         }
         self.kernel.execute_inverse(
             self.device.inner(),
@@ -154,11 +150,8 @@ impl MellinWgpuBackend {
     ) -> WgpuResult<()> {
         if plan.samples() == 0 {
             return Err(WgpuError::InvalidPlan {
-                samples: plan.samples(),
-                min_scale: plan.min_scale(),
-                max_scale: plan.max_scale(),
-                message: "sample count must be greater than zero",
-            });
+                    message: format!("invalid plan samples={}, min_scale={}, max_scale={}: sample count must be greater than zero", plan.samples(), plan.min_scale(), plan.max_scale()),
+                });
         }
         if !plan.min_scale().is_finite()
             || !plan.max_scale().is_finite()
@@ -166,19 +159,13 @@ impl MellinWgpuBackend {
             || plan.max_scale() <= 0.0
         {
             return Err(WgpuError::InvalidPlan {
-                samples: plan.samples(),
-                min_scale: plan.min_scale(),
-                max_scale: plan.max_scale(),
-                message: "plan scales must be finite and positive",
-            });
+                    message: format!("invalid plan samples={}, min_scale={}, max_scale={}: plan scales must be finite and positive", plan.samples(), plan.min_scale(), plan.max_scale()),
+                });
         }
         if plan.min_scale() >= plan.max_scale() {
             return Err(WgpuError::InvalidPlan {
-                samples: plan.samples(),
-                min_scale: plan.min_scale(),
-                max_scale: plan.max_scale(),
-                message: "min_scale must be less than max_scale",
-            });
+                    message: format!("invalid plan samples={}, min_scale={}, max_scale={}: min_scale must be less than max_scale", plan.samples(), plan.min_scale(), plan.max_scale()),
+                });
         }
         if signal.is_empty() {
             return Err(WgpuError::LengthMismatch {
@@ -192,16 +179,16 @@ impl MellinWgpuBackend {
             || signal_max <= 0.0
         {
             return Err(WgpuError::InvalidSignalDomain {
-                signal_min,
-                signal_max,
-                message: "signal bounds must be finite and positive",
+                message: format!(
+                    "signal bounds must be finite and positive: min={signal_min}, max={signal_max}"
+                ),
             });
         }
         if signal_min >= signal_max {
             return Err(WgpuError::InvalidSignalDomain {
-                signal_min,
-                signal_max,
-                message: "signal_min must be less than signal_max",
+                message: format!(
+                    "signal_min must be less than signal_max: min={signal_min}, max={signal_max}"
+                ),
             });
         }
         Ok(())

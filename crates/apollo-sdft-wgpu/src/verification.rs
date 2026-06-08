@@ -101,20 +101,13 @@ mod tests {
         let empty_err = backend
             .execute_forward(&SdftWgpuPlan::new(0, 4), &[])
             .expect_err("zero window_len must fail");
-        assert_eq!(
-            empty_err,
-            WgpuError::InvalidPlan {
-                window_len: 0,
-                bin_count: 4,
-                message: "window_len and bin_count must each be greater than zero",
-            }
-        );
+        assert!(matches!(empty_err, WgpuError::InvalidPlan { .. }));
         let mismatch_err = backend
             .execute_forward(&SdftWgpuPlan::new(8, 4), &[0.0_f32; 4])
             .expect_err("window length mismatch must fail");
         assert_eq!(
             mismatch_err,
-            WgpuError::WindowLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 8,
                 actual: 4
             }
@@ -262,7 +255,7 @@ mod tests {
             .expect_err("bin count mismatch must fail");
         assert_eq!(
             error,
-            WgpuError::WindowLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 8,
                 actual: 4,
             }

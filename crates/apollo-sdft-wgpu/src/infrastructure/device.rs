@@ -105,7 +105,7 @@ impl SdftWgpuBackend {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
         if output.len() != plan.bin_count() {
-            return Err(WgpuError::WindowLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.bin_count(),
                 actual: output.len(),
             });
@@ -155,7 +155,7 @@ impl SdftWgpuBackend {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
         if output.len() != plan.window_len() {
-            return Err(WgpuError::WindowLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.window_len(),
                 actual: output.len(),
             });
@@ -168,20 +168,16 @@ impl SdftWgpuBackend {
     fn validate_plan_window(plan: &SdftWgpuPlan, window: &[f32]) -> WgpuResult<()> {
         if plan.window_len() == 0 || plan.bin_count() == 0 {
             return Err(WgpuError::InvalidPlan {
-                window_len: plan.window_len(),
-                bin_count: plan.bin_count(),
-                message: "window_len and bin_count must each be greater than zero",
-            });
+                    message: format!("invalid plan window_len={}, bin_count={}: window_len and bin_count must each be greater than zero", plan.window_len(), plan.bin_count()),
+                });
         }
         if plan.bin_count() > plan.window_len() {
             return Err(WgpuError::InvalidPlan {
-                window_len: plan.window_len(),
-                bin_count: plan.bin_count(),
-                message: "bin_count must not exceed window_len",
-            });
+                    message: format!("invalid plan window_len={}, bin_count={}: bin_count must not exceed window_len", plan.window_len(), plan.bin_count()),
+                });
         }
         if window.len() != plan.window_len() {
-            return Err(WgpuError::WindowLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.window_len(),
                 actual: window.len(),
             });
@@ -192,13 +188,11 @@ impl SdftWgpuBackend {
     fn validate_plan_bins(plan: &SdftWgpuPlan, bins: &[Complex32]) -> WgpuResult<()> {
         if plan.window_len() == 0 || plan.bin_count() == 0 {
             return Err(WgpuError::InvalidPlan {
-                window_len: plan.window_len(),
-                bin_count: plan.bin_count(),
-                message: "window_len and bin_count must each be greater than zero",
-            });
+                    message: format!("invalid plan window_len={}, bin_count={}: window_len and bin_count must each be greater than zero", plan.window_len(), plan.bin_count()),
+                });
         }
         if bins.len() != plan.bin_count() {
-            return Err(WgpuError::WindowLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.bin_count(),
                 actual: bins.len(),
             });

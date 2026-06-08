@@ -421,14 +421,10 @@ hermes-simd = { workspace = true }
         assert!(rendered.contains("Mnemosyne workspace dependency: no"));
         assert!(rendered.contains("Melinoe workspace dependency: yes"));
         assert!(rendered.contains("Hermes workspace dependency: yes"));
-        assert!(
-            rendered
-                .contains("| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes |")
-        );
-        assert!(
-            rendered
-                .contains("Moirai, Mnemosyne, Melinoe, and Hermes are consumed from Git dependencies")
-        );
+        assert!(rendered
+            .contains("| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes |"));
+        assert!(rendered
+            .contains("Moirai, Mnemosyne, Melinoe, and Hermes are consumed from Git dependencies"));
 
         fs::remove_dir_all(root)?;
         Ok(())

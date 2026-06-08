@@ -174,7 +174,7 @@ impl FrftWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_frft_typed_precision::<T>(precision)?;
         if output.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: output.len(),
             });
@@ -203,7 +203,7 @@ impl FrftWgpuBackend {
     ) -> WgpuResult<()> {
         Self::validate_frft_typed_precision::<T>(precision)?;
         if output.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: output.len(),
             });
@@ -235,15 +235,14 @@ impl FrftWgpuBackend {
     fn validate(plan: &FrftWgpuPlan, input: &[Complex32]) -> WgpuResult<()> {
         if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: 0,
-                message: "length must be greater than zero",
+                message: "invalid plan: length must be greater than zero".to_owned(),
             });
         }
         if !plan.order().is_finite() {
             return Err(WgpuError::NonFiniteOrder);
         }
         if input.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: input.len(),
             });
@@ -254,15 +253,14 @@ impl FrftWgpuBackend {
     fn validate_unitary(plan: &UnitaryFrftWgpuPlan, input: &[Complex32]) -> WgpuResult<()> {
         if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                len: 0,
-                message: "length must be greater than zero",
+                message: "invalid plan: length must be greater than zero".to_owned(),
             });
         }
         if !plan.order().is_finite() {
             return Err(WgpuError::NonFiniteOrder);
         }
         if input.len() != plan.len() {
-            return Err(WgpuError::InputLengthMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.len(),
                 actual: input.len(),
             });

@@ -129,24 +129,21 @@ impl RadonWgpuBackend {
         }
         let expected_len = plan.angle_count() * plan.detector_count();
         if flat_sinogram.len() != expected_len {
-            return Err(WgpuError::SinogramShapeMismatch {
-                expected_angles: plan.angle_count(),
-                expected_detectors: plan.detector_count(),
-                actual_angles: flat_sinogram.len(),
-                actual_detectors: 1,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "sinogram shape mismatch: expected {}x{}, got {}x1",
+                    plan.angle_count(),
+                    plan.detector_count(),
+                    flat_sinogram.len()
+                ),
             });
         }
         let promoted: Vec<f32> = flat_sinogram.iter().map(|v| v.to_f64() as f32).collect();
         let sinogram_2d =
             Array2::from_shape_vec((plan.angle_count(), plan.detector_count()), promoted).map_err(
                 |_| WgpuError::InvalidPlan {
-                    rows: plan.rows(),
-                    cols: plan.cols(),
-                    angle_count: plan.angle_count(),
-                    detector_count: plan.detector_count(),
-                    detector_spacing: plan.detector_spacing(),
-                    message: "flat sinogram reshape failed",
-                },
+                        message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat sinogram reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                    },
             )?;
         self.execute_inverse(plan, &sinogram_2d, angles)
     }
@@ -193,24 +190,21 @@ impl RadonWgpuBackend {
         }
         let expected_len = plan.rows() * plan.cols();
         if flat_image.len() != expected_len {
-            return Err(WgpuError::ImageShapeMismatch {
-                expected_rows: plan.rows(),
-                expected_cols: plan.cols(),
-                actual_rows: flat_image.len(),
-                actual_cols: 1,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "image shape mismatch: expected {}x{}, got {}x1",
+                    plan.rows(),
+                    plan.cols(),
+                    flat_image.len()
+                ),
             });
         }
         let promoted: Vec<f32> = flat_image.iter().map(|v| v.to_f64() as f32).collect();
         let image_2d =
             Array2::from_shape_vec((plan.rows(), plan.cols()), promoted).map_err(|_| {
                 WgpuError::InvalidPlan {
-                    rows: plan.rows(),
-                    cols: plan.cols(),
-                    angle_count: plan.angle_count(),
-                    detector_count: plan.detector_count(),
-                    detector_spacing: plan.detector_spacing(),
-                    message: "flat image reshape failed",
-                }
+                        message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat image reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                    }
             })?;
         self.execute_forward(plan, &image_2d, angles)
     }
@@ -226,35 +220,28 @@ impl RadonWgpuBackend {
             || plan.detector_count() == 0
         {
             return Err(WgpuError::InvalidPlan {
-                rows: plan.rows(),
-                cols: plan.cols(),
-                angle_count: plan.angle_count(),
-                detector_count: plan.detector_count(),
-                detector_spacing: plan.detector_spacing(),
-                message: "geometry dimensions must be greater than zero",
-            });
+                    message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: geometry dimensions must be greater than zero", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                });
         }
         if !plan.detector_spacing().is_finite() || plan.detector_spacing() <= 0.0 {
             return Err(WgpuError::InvalidPlan {
-                rows: plan.rows(),
-                cols: plan.cols(),
-                angle_count: plan.angle_count(),
-                detector_count: plan.detector_count(),
-                detector_spacing: plan.detector_spacing(),
-                message: "detector spacing must be finite and positive",
-            });
+                    message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                });
         }
         let (actual_angles, actual_detectors) = sinogram.dim();
         if (actual_angles, actual_detectors) != (plan.angle_count(), plan.detector_count()) {
-            return Err(WgpuError::SinogramShapeMismatch {
-                expected_angles: plan.angle_count(),
-                expected_detectors: plan.detector_count(),
-                actual_angles,
-                actual_detectors,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "sinogram expected {}x{}, got {}x{}",
+                    plan.angle_count(),
+                    plan.detector_count(),
+                    actual_angles,
+                    actual_detectors
+                ),
             });
         }
         if angles.len() != plan.angle_count() {
-            return Err(WgpuError::AngleCountMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.angle_count(),
                 actual: angles.len(),
             });
@@ -273,35 +260,28 @@ impl RadonWgpuBackend {
             || plan.detector_count() == 0
         {
             return Err(WgpuError::InvalidPlan {
-                rows: plan.rows(),
-                cols: plan.cols(),
-                angle_count: plan.angle_count(),
-                detector_count: plan.detector_count(),
-                detector_spacing: plan.detector_spacing(),
-                message: "geometry dimensions must be greater than zero",
-            });
+                    message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: geometry dimensions must be greater than zero", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                });
         }
         if !plan.detector_spacing().is_finite() || plan.detector_spacing() <= 0.0 {
             return Err(WgpuError::InvalidPlan {
-                rows: plan.rows(),
-                cols: plan.cols(),
-                angle_count: plan.angle_count(),
-                detector_count: plan.detector_count(),
-                detector_spacing: plan.detector_spacing(),
-                message: "detector spacing must be finite and positive",
-            });
+                    message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
+                });
         }
         let (actual_rows, actual_cols) = image.dim();
         if (actual_rows, actual_cols) != (plan.rows(), plan.cols()) {
-            return Err(WgpuError::ImageShapeMismatch {
-                expected_rows: plan.rows(),
-                expected_cols: plan.cols(),
-                actual_rows,
-                actual_cols,
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "image expected {}x{}, got {}x{}",
+                    plan.rows(),
+                    plan.cols(),
+                    actual_rows,
+                    actual_cols
+                ),
             });
         }
         if angles.len() != plan.angle_count() {
-            return Err(WgpuError::AngleCountMismatch {
+            return Err(WgpuError::LengthMismatch {
                 expected: plan.angle_count(),
                 actual: angles.len(),
             });

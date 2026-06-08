@@ -50,14 +50,7 @@ mod tests {
         let error = backend
             .execute_forward(&SftWgpuPlan::new(0, 1), &[])
             .expect_err("zero length must be invalid");
-        assert_eq!(
-            error,
-            WgpuError::InvalidPlan {
-                len: 0,
-                sparsity: 1,
-                message: "transform length must be greater than zero"
-            }
-        );
+        assert!(matches!(error, WgpuError::InvalidPlan { .. }));
     }
 
     #[test]
@@ -70,7 +63,7 @@ mod tests {
             .expect_err("mismatched input length must be invalid");
         assert_eq!(
             error,
-            WgpuError::InputLengthMismatch {
+            WgpuError::LengthMismatch {
                 expected: 8,
                 actual: 4
             }

@@ -180,24 +180,22 @@ impl WaveletWgpuBackend {
         let len = plan.len();
         let levels = plan.levels();
         if len == 0 || !len.is_power_of_two() {
-            return Err(WgpuError::InvalidLength {
-                len,
-                levels,
-                message: "len must be a non-zero power of two",
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid length {len}, levels {levels}: len must be a non-zero power of two"
+                ),
             });
         }
         if levels == 0 {
-            return Err(WgpuError::InvalidLength {
-                len,
-                levels,
-                message: "levels must be non-zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}, levels {levels}: levels must be non-zero"),
             });
         }
         if (1usize << levels) > len {
-            return Err(WgpuError::InvalidLength {
-                len,
-                levels,
-                message: "2^levels must not exceed len",
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid length {len}, levels {levels}: 2^levels must not exceed len"
+                ),
             });
         }
         Ok(())
