@@ -247,11 +247,7 @@ pub fn dct2_dst2_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [
 /// Derived via Sub-theorem 1: `output[k] = Re(exp(-iπk/(2N)) · DFT_{2N}(x̃)[k])`.
 pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
     let n = signal.len();
-    debug_assert_eq!(
-        output.len(),
-        n,
-        "dct2_fast: output length mismatch"
-    );
+    debug_assert_eq!(output.len(), n, "dct2_fast: output length mismatch");
     let two_n = 2 * n;
     let half_cycle = PI / two_n as f64;
 
@@ -291,11 +287,7 @@ pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
 /// Derived via Sub-theorem 2: `output[k] = -Im(exp(-iπ(k+1)/(2N)) · DFT_{2N}(x̃)[k+1])`.
 pub fn dst2_fast(signal: &[f64], output: &mut [f64]) {
     let n = signal.len();
-    debug_assert_eq!(
-        output.len(),
-        n,
-        "dst2_fast: output length mismatch"
-    );
+    debug_assert_eq!(output.len(), n, "dst2_fast: output length mismatch");
     let two_n = 2 * n;
     let half_cycle = PI / two_n as f64;
 

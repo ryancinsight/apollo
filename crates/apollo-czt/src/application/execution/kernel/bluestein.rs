@@ -1,6 +1,11 @@
 use apollo_fft::FftPlan1D;
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::Complex64;
+
+thread_local! {
+    static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
+}
 
 /// Evaluates Bluestein's fast algorithm over precomputed chirp variables
 /// using an optimized invariant `fft_kernel`.
@@ -58,21 +63,24 @@ pub fn czt_bluestein_forward_into(
     fft_kernel: &Array1<Complex64>,
     fft_plan: &FftPlan1D<f64>,
 ) {
-    let mut workspace = vec![Complex64::new(0.0, 0.0); convolution_len];
-    czt_bluestein_forward_into_with_workspace(
-        input.as_slice().expect("CZT input must be contiguous"),
-        output
-            .as_slice_mut()
-            .expect("CZT output must be contiguous"),
-        &mut workspace,
-        convolution_len,
-        chirp_n,
-        chirp_k,
-        fft_kernel
-            .as_slice()
-            .expect("CZT FFT kernel must be contiguous"),
-        fft_plan,
-    );
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(convolution_len, |workspace| {
+            czt_bluestein_forward_into_with_workspace(
+                input.as_slice().expect("CZT input must be contiguous"),
+                output
+                    .as_slice_mut()
+                    .expect("CZT output must be contiguous"),
+                workspace,
+                convolution_len,
+                chirp_n,
+                chirp_k,
+                fft_kernel
+                    .as_slice()
+                    .expect("CZT FFT kernel must be contiguous"),
+                fft_plan,
+            );
+        });
+    });
 }
 
 /// Evaluates Bluestein's fast CZT into caller-owned output using caller-owned workspace.
