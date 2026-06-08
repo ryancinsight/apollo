@@ -362,6 +362,7 @@ version = "0.1.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "mnemosyne",
  "ndarray",
  "num-complex",
  "proptest",

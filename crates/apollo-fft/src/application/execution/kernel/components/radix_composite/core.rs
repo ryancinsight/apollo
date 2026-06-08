@@ -4,10 +4,7 @@ use super::arity::dispatch_radix_stage;
 use super::cache::CompositeCache;
 use super::stockham_stage_fused_adaptive;
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
-use crate::application::execution::kernel::tuning::{
-    FUSE_THRESHOLD, RADIX_PARALLEL_CHUNK_THRESHOLD,
-};
-use crate::application::execution::policy::ChunkDispatch;
+use crate::application::execution::kernel::tuning::FUSE_THRESHOLD;
 
 /// Maximum number of stages that may be folded into one adaptive fused pass.
 ///
@@ -17,6 +14,7 @@ use crate::application::execution::policy::ChunkDispatch;
 const MAX_FUSE_DEPTH: usize = 16;
 
 pub(super) fn composite_core_with_radices<
+    P: moirai::ExecutionPolicy,
     F: CompositeCache + ShortWinogradScalar,
     const INVERSE: bool,
 >(
@@ -110,29 +108,48 @@ pub(super) fn composite_core_with_radices<
             } else {
                 None
             };
-            let dispatch =
-                ChunkDispatch::for_workload(n, stage_prev_len, RADIX_PARALLEL_CHUNK_THRESHOLD, 512);
+            let dispatch_is_parallel = P::parallelize(n) && stage_prev_len >= 512;
 
             if src_is_data {
-                stockham_stage_fused_adaptive::<F, INVERSE>(
-                    data,
-                    scratch,
-                    prev_len,
-                    fused_radices,
-                    twiddles,
-                    pointwise,
-                    dispatch,
-                );
+                if dispatch_is_parallel {
+                    stockham_stage_fused_adaptive::<moirai::Parallel, F, INVERSE>(
+                        data,
+                        scratch,
+                        prev_len,
+                        fused_radices,
+                        twiddles,
+                        pointwise,
+                    );
+                } else {
+                    stockham_stage_fused_adaptive::<moirai::Sequential, F, INVERSE>(
+                        data,
+                        scratch,
+                        prev_len,
+                        fused_radices,
+                        twiddles,
+                        pointwise,
+                    );
+                }
             } else {
-                stockham_stage_fused_adaptive::<F, INVERSE>(
-                    scratch,
-                    data,
-                    prev_len,
-                    fused_radices,
-                    twiddles,
-                    pointwise,
-                    dispatch,
-                );
+                if dispatch_is_parallel {
+                    stockham_stage_fused_adaptive::<moirai::Parallel, F, INVERSE>(
+                        scratch,
+                        data,
+                        prev_len,
+                        fused_radices,
+                        twiddles,
+                        pointwise,
+                    );
+                } else {
+                    stockham_stage_fused_adaptive::<moirai::Sequential, F, INVERSE>(
+                        scratch,
+                        data,
+                        prev_len,
+                        fused_radices,
+                        twiddles,
+                        pointwise,
+                    );
+                }
             }
 
             src_is_data = !src_is_data;

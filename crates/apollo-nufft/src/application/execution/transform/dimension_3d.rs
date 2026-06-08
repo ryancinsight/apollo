@@ -33,8 +33,18 @@
 use apollo_fft::{ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::{Array1, Array3};
 use num_complex::Complex64;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::f64::consts::PI;
+
+thread_local! {
+    static GRID3D_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static MODES3D_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static OUTPUT3D_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static WEIGHT3D_SCRATCH_X: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static WEIGHT3D_SCRATCH_Y: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static WEIGHT3D_SCRATCH_Z: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+}
 
 use crate::application::execution::transform::dimension_1d::{
     validate_profile, write_typed_output, NufftComplexStorage,
@@ -371,21 +381,43 @@ impl NufftPlan3D {
                 ),
             });
         }
-        let values64: Vec<Complex64> = values.iter().copied().map(T::to_complex64).collect();
-        let mut output64 = Array3::<Complex64>::zeros((self.grid.nx, self.grid.ny, self.grid.nz));
-        self.type1_into(
-            positions,
-            &values64,
-            scratch_grid,
-            scratch_wx,
-            scratch_wy,
-            scratch_wz,
-            &mut output64,
-        );
-        for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-            *slot = T::from_complex64(value);
-        }
-        Ok(())
+        let size_vals = values.len();
+        let size_out = self.grid.nx * self.grid.ny * self.grid.nz;
+
+        MODES3D_SCRATCH.with(|vals_cell| {
+            OUTPUT3D_SCRATCH.with(|out_cell| {
+                let mut vals_vec = vals_cell.borrow_mut();
+                if vals_vec.len() < size_vals {
+                    vals_vec.resize(size_vals, Complex64::default());
+                }
+                for (slot, &val) in vals_vec.iter_mut().zip(values.iter()) {
+                    *slot = T::to_complex64(val);
+                }
+
+                let mut out_vec = std::mem::take(&mut *out_cell.borrow_mut());
+                if out_vec.len() < size_out {
+                    out_vec.resize(size_out, Complex64::default());
+                }
+                let mut output64 = Array3::from_shape_vec((self.grid.nx, self.grid.ny, self.grid.nz), out_vec).unwrap();
+
+                self.type1_into(
+                    positions,
+                    &vals_vec[..size_vals],
+                    scratch_grid,
+                    scratch_wx,
+                    scratch_wy,
+                    scratch_wz,
+                    &mut output64,
+                );
+
+                for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+                    *slot = T::from_complex64(value);
+                }
+
+                *out_cell.borrow_mut() = output64.into_raw_vec_and_offset().0;
+                Ok(())
+            })
+        })
     }
 
     fn forward_oversampled_grid_into(
@@ -622,10 +654,67 @@ impl NufftPlan3D {
                 actual: format!("modes {:?}, output {}", modes.dim(), output.len()),
             });
         }
-        let modes64 = modes.mapv(T::to_complex64);
-        let output64 = self.type2(positions, &modes64);
-        write_typed_output(&output64, output);
-        Ok(())
+        let size_grid = self.mx * self.my * self.mz;
+        let size_modes = self.grid.nx * self.grid.ny * self.grid.nz;
+        let size_w = 2 * self.w + 1;
+        let size_out = positions.len();
+
+        GRID3D_SCRATCH.with(|grid_cell| {
+            MODES3D_SCRATCH.with(|modes_cell| {
+                OUTPUT3D_SCRATCH.with(|out_cell| {
+                    WEIGHT3D_SCRATCH_X.with(|wx_cell| {
+                        WEIGHT3D_SCRATCH_Y.with(|wy_cell| {
+                            WEIGHT3D_SCRATCH_Z.with(|wz_cell| {
+                                let mut grid_vec = std::mem::take(&mut *grid_cell.borrow_mut());
+                                if grid_vec.len() < size_grid {
+                                    grid_vec.resize(size_grid, Complex64::default());
+                                }
+                                let mut scratch_grid = Array3::from_shape_vec((self.mx, self.my, self.mz), grid_vec).unwrap();
+
+                                let mut modes_vec = std::mem::take(&mut *modes_cell.borrow_mut());
+                                if modes_vec.len() < size_modes {
+                                    modes_vec.resize(size_modes, Complex64::default());
+                                }
+                                let mut modes64 = Array3::from_shape_vec((self.grid.nx, self.grid.ny, self.grid.nz), modes_vec).unwrap();
+                                for (slot, &val) in modes64.iter_mut().zip(modes.iter()) {
+                                    *slot = T::to_complex64(val);
+                                }
+
+                                let mut out_vec = out_cell.borrow_mut();
+                                if out_vec.len() < size_out {
+                                    out_vec.resize(size_out, Complex64::default());
+                                }
+
+                                let mut wx = wx_cell.borrow_mut();
+                                wx.resize(size_w, 0.0);
+
+                                let mut wy = wy_cell.borrow_mut();
+                                wy.resize(size_w, 0.0);
+
+                                let mut wz = wz_cell.borrow_mut();
+                                wz.resize(size_w, 0.0);
+
+                                self.type2_into(
+                                    positions,
+                                    &modes64,
+                                    &mut scratch_grid,
+                                    &mut wx,
+                                    &mut wy,
+                                    &mut wz,
+                                    &mut out_vec[..size_out],
+                                );
+
+                                write_typed_output(&out_vec[..size_out], output);
+
+                                *grid_cell.borrow_mut() = scratch_grid.into_raw_vec_and_offset().0;
+                                *modes_cell.borrow_mut() = modes64.into_raw_vec_and_offset().0;
+                                Ok(())
+                            })
+                        })
+                    })
+                })
+            })
+        })
     }
 
     fn fft_z_pass(&self, grid: &mut Array3<Complex64>) {

@@ -37,6 +37,11 @@ use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Sh
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use std::f64::consts::PI;
+use mnemosyne::scratch::ScratchPool;
+
+thread_local! {
+    static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
+}
 
 use crate::domain::metadata::grid::UniformDomain1D;
 use crate::infrastructure::kernel::kaiser_bessel::{
@@ -301,10 +306,17 @@ impl NufftPlan1D {
                 actual: format!("scratch {}, output {}", scratch_grid.len(), output.len()),
             });
         }
-        let values64: Vec<Complex64> = values.iter().copied().map(T::to_complex64).collect();
-        let mut output64 = vec![Complex64::new(0.0, 0.0); self.n_out];
-        self.type1_into(positions, &values64, scratch_grid, &mut output64);
-        write_typed_output(&output64, output);
+        COMPLEX_SCRATCH_POOL.with(|pool| {
+            pool.with_scratch(values.len(), |values64| {
+                for (slot, &val) in values64.iter_mut().zip(values.iter()) {
+                    *slot = T::to_complex64(val);
+                }
+                pool.with_scratch(self.n_out, |output64| {
+                    self.type1_into(positions, values64, scratch_grid, output64);
+                    write_typed_output(output64, output);
+                });
+            });
+        });
         Ok(())
     }
 
@@ -337,14 +349,17 @@ impl NufftPlan1D {
                 ),
             });
         }
-        let coeffs64: Vec<Complex64> = fourier_coeffs
-            .iter()
-            .copied()
-            .map(T::to_complex64)
-            .collect();
-        let mut output64 = vec![Complex64::new(0.0, 0.0); positions.len()];
-        self.type2_into(&coeffs64, positions, scratch_spread, &mut output64);
-        write_typed_output(&output64, output);
+        COMPLEX_SCRATCH_POOL.with(|pool| {
+            pool.with_scratch(fourier_coeffs.len(), |coeffs64| {
+                for (slot, &val) in coeffs64.iter_mut().zip(fourier_coeffs.iter()) {
+                    *slot = T::to_complex64(val);
+                }
+                pool.with_scratch(positions.len(), |output64| {
+                    self.type2_into(coeffs64, positions, scratch_spread, output64);
+                    write_typed_output(output64, output);
+                });
+            });
+        });
         Ok(())
     }
 }
