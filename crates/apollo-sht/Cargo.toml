@@ -9,7 +9,7 @@ description = "Spherical harmonic transform plans for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
-ndarray = "0.16"
+ndarray = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

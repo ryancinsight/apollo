@@ -17,7 +17,7 @@ thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]
-ndarray = "0.16"
+ndarray = { workspace = true }
 
 [lints]
 workspace = true

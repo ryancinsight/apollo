@@ -1,5 +1,5 @@
-use num_complex::{Complex32, Complex64};
 use mnemosyne::scratch::{ScratchElement, ScratchPool};
+use num_complex::{Complex32, Complex64};
 
 thread_local! {
     // Stockham scratch pools
@@ -24,7 +24,9 @@ mod sealed {
 }
 
 /// Maps supported complex element types to their thread-local scratch pools.
-pub(crate) trait ScratchDispatch: ScratchElement + sealed::ScratchDispatchSealed + 'static {
+pub(crate) trait ScratchDispatch:
+    ScratchElement + sealed::ScratchDispatchSealed + 'static
+{
     fn with_stockham_impl<R, F: FnOnce(&mut [Self]) -> R>(n: usize, f: F) -> R;
     fn with_pfa_impl<R, F: FnOnce(&mut [Self]) -> R>(n: usize, f: F) -> R;
     fn with_rader_padded_impl<R, F: FnOnce(&mut [Self]) -> R>(n: usize, f: F) -> R;

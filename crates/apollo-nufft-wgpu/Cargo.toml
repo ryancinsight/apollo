@@ -30,7 +30,7 @@ debug-readbacks = []
 approx = "0.5"
 criterion = { version = "0.5", features = ["html_reports"] }
 half = { version = "2.3", features = ["num-traits"] }
-ndarray = "0.16"
+ndarray = { workspace = true }
 
 [[bench]]
 name = "buffer_reuse"

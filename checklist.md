@@ -5,6 +5,8 @@
 - [x] Captured Apollo requirements for Moirai CPU scheduling, Mnemosyne scratch allocation, and Melinoe branded zero-copy/Cow boundaries.
 - [x] Replaced `apollo-fft` composite radix storage with `Cow<'static, [usize]>` so static schedules remain borrowed and dynamic schedules are owned only at the cache boundary.
 - [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `3f4ade87` with the Apollo-facing provider contract tests.
+- [x] Restored `apollo-fft` Mnemosyne scratch dispatch to a sealed static trait implementation for `Complex32`/`Complex64`, removing runtime type inspection and unsafe closure transmutation from the scratch-pool boundary.
+- [x] Replaced repeated per-crate `ndarray = "0.16"` declarations with the workspace dependency in transform and WGPU crates so `matrixmultiply-threading` remains controlled from one manifest location.
 - [ ] [patch] After Moirai, Mnemosyne, and Melinoe provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 

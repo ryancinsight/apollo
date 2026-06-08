@@ -12,14 +12,14 @@ apollo-fft = { path = "../apollo-fft" }
 apollo-stft = { path = "../apollo-stft" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
-ndarray = "0.16"
+ndarray = { workspace = true }
 num-complex = "0.4"
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-ndarray = "0.16"
+ndarray = { workspace = true }
 
 [[bench]]
 name = "stft_bench"
