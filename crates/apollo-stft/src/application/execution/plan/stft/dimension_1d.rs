@@ -235,7 +235,8 @@ impl StftPlan {
                     };
                 }
                 self.fft_plan.forward_complex_slice_inplace(out_chunk);
-            });
+            },
+        );
         Ok(())
     }
 
@@ -318,7 +319,8 @@ impl StftPlan {
                         for n in 0..self.frame_len {
                             frame_out[n] = frame_complex[n].re * window[n];
                         }
-                    });
+                    },
+                );
 
                 // Sequential overlap-add: avoids data races on shared output positions.
                 for (m, frame_vals) in flat_frames.chunks(self.frame_len).enumerate() {

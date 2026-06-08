@@ -6,8 +6,8 @@ use crate::domain::spectrum::coefficients::CwtCoefficients;
 use crate::infrastructure::kernel::continuous::coefficient;
 use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
-use ndarray::Array2;
 use moirai::ParallelSlice;
+use ndarray::Array2;
 
 /// Reusable real-valued 1D CWT plan.
 #[derive(Debug, Clone, PartialEq)]

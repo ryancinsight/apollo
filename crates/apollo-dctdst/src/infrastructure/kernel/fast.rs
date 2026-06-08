@@ -157,8 +157,8 @@
 //! - Makhoul, J. (1980). A fast cosine transform in one and two dimensions. *IEEE Trans.
 //!   Acoust. Speech Signal Process.*, 28(1), 27–34.
 
-use apollo_fft::{fft_1d_complex, ifft_1d_complex, Complex64};
-use ndarray::Array1;
+use apollo_fft::{Complex64, PlanCacheProvider, Shape1D};
+use mnemosyne::scratch::ScratchPool;
 use std::f64::consts::PI;
 
 /// Crossover threshold: for N ≥ `FAST_THRESHOLD`, the 2N-point FFT path (O(N log N))
@@ -168,35 +168,8 @@ use std::f64::consts::PI;
 /// N = 8  → 2N · log₂(2N) = 16 · 4  = 64  < N² = 64. (breakeven; use 16 to be conservative.)
 pub const FAST_THRESHOLD: usize = 16;
 
-fn forward_zero_padded(signal: &[f64]) -> (Array1<Complex64>, f64) {
-    let n = signal.len();
-    let two_n = 2 * n;
-    let half_cycle = PI / two_n as f64;
-
-    let mut buf: Array1<Complex64> = Array1::zeros(two_n);
-    for (i, &x) in signal.iter().enumerate() {
-        buf[i] = Complex64::new(x, 0.0);
-    }
-
-    (fft_1d_complex(&buf), half_cycle)
-}
-
-fn fill_dct2_from_fft(f: &Array1<Complex64>, half_cycle: f64, output: &mut [f64]) {
-    for k in 0..output.len() {
-        let angle = -(half_cycle * k as f64);
-        let (sin_a, cos_a) = angle.sin_cos();
-        let w = Complex64::new(cos_a, sin_a);
-        output[k] = (w * f[k]).re;
-    }
-}
-
-fn fill_dst2_from_fft(f: &Array1<Complex64>, half_cycle: f64, output: &mut [f64]) {
-    for k in 0..output.len() {
-        let angle = -(half_cycle * (k as f64 + 1.0));
-        let (sin_a, cos_a) = angle.sin_cos();
-        let w = Complex64::new(cos_a, sin_a);
-        output[k] = -(w * f[k + 1]).im;
-    }
+thread_local! {
+    static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Shared 2N-point forward DFT kernel for DCT-II and DST-II.
@@ -227,9 +200,38 @@ pub fn dct2_dst2_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [
         "dct2_dst2_fast: dst_output length mismatch"
     );
 
-    let (f, half_cycle) = forward_zero_padded(signal);
-    fill_dct2_from_fft(&f, half_cycle, dct_output);
-    fill_dst2_from_fft(&f, half_cycle, dst_output);
+    let two_n = 2 * n;
+    let half_cycle = PI / two_n as f64;
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            for (i, &x) in signal.iter().enumerate() {
+                buf[i] = Complex64::new(x, 0.0);
+            }
+            for i in n..two_n {
+                buf[i] = Complex64::new(0.0, 0.0);
+            }
+
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            // fill_dct2_from_fft
+            for k in 0..n {
+                let angle = -(half_cycle * k as f64);
+                let (sin_a, cos_a) = angle.sin_cos();
+                let w = Complex64::new(cos_a, sin_a);
+                dct_output[k] = (w * buf[k]).re;
+            }
+
+            // fill_dst2_from_fft
+            for k in 0..n {
+                let angle = -(half_cycle * (k as f64 + 1.0));
+                let (sin_a, cos_a) = angle.sin_cos();
+                let w = Complex64::new(cos_a, sin_a);
+                dst_output[k] = -(w * buf[k + 1]).im;
+            }
+        });
+    });
 }
 
 /// Fast DCT-II via 2N-point forward FFT. Complexity: O(N log N).
@@ -244,13 +246,36 @@ pub fn dct2_dst2_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [
 ///
 /// Derived via Sub-theorem 1: `output[k] = Re(exp(-iπk/(2N)) · DFT_{2N}(x̃)[k])`.
 pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
     debug_assert_eq!(
         output.len(),
-        signal.len(),
+        n,
         "dct2_fast: output length mismatch"
     );
-    let (f, half_cycle) = forward_zero_padded(signal);
-    fill_dct2_from_fft(&f, half_cycle, output);
+    let two_n = 2 * n;
+    let half_cycle = PI / two_n as f64;
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            for (i, &x) in signal.iter().enumerate() {
+                buf[i] = Complex64::new(x, 0.0);
+            }
+            for i in n..two_n {
+                buf[i] = Complex64::new(0.0, 0.0);
+            }
+
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            // fill_dct2_from_fft
+            for k in 0..n {
+                let angle = -(half_cycle * k as f64);
+                let (sin_a, cos_a) = angle.sin_cos();
+                let w = Complex64::new(cos_a, sin_a);
+                output[k] = (w * buf[k]).re;
+            }
+        });
+    });
 }
 
 /// Fast DST-II via 2N-point forward FFT. Complexity: O(N log N).
@@ -265,13 +290,36 @@ pub fn dct2_fast(signal: &[f64], output: &mut [f64]) {
 ///
 /// Derived via Sub-theorem 2: `output[k] = -Im(exp(-iπ(k+1)/(2N)) · DFT_{2N}(x̃)[k+1])`.
 pub fn dst2_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
     debug_assert_eq!(
         output.len(),
-        signal.len(),
+        n,
         "dst2_fast: output length mismatch"
     );
-    let (f, half_cycle) = forward_zero_padded(signal);
-    fill_dst2_from_fft(&f, half_cycle, output);
+    let two_n = 2 * n;
+    let half_cycle = PI / two_n as f64;
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            for (i, &x) in signal.iter().enumerate() {
+                buf[i] = Complex64::new(x, 0.0);
+            }
+            for i in n..two_n {
+                buf[i] = Complex64::new(0.0, 0.0);
+            }
+
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            // fill_dst2_from_fft
+            for k in 0..n {
+                let angle = -(half_cycle * (k as f64 + 1.0));
+                let (sin_a, cos_a) = angle.sin_cos();
+                let w = Complex64::new(cos_a, sin_a);
+                output[k] = -(w * buf[k + 1]).im;
+            }
+        });
+    });
 }
 
 /// Fast DCT-III via 2N-point Hermitian IDFT. Complexity: O(N log N).
@@ -292,35 +340,38 @@ pub fn dct3_fast(signal: &[f64], output: &mut [f64]) {
     // π / (2N): fundamental angular step.
     let half_cycle = PI / two_n as f64;
 
-    // Build Hermitian-symmetric spectrum G of length 2N.
-    //   G[0]    = X[0]                       (real DC)
-    //   G[k]    = X[k] · exp(+iπk/(2N))     for k = 1..N-1
-    //   G[N]    = 0                           (Nyquist; already zero)
-    //   G[2N-k] = conj(G[k])                 for k = 1..N-1
-    let mut g: Array1<Complex64> = Array1::zeros(two_n);
-    g[0] = Complex64::new(signal[0], 0.0);
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |g| {
+            // Build Hermitian-symmetric spectrum G of length 2N.
+            //   G[0]    = X[0]                       (real DC)
+            //   G[k]    = X[k] · exp(+iπk/(2N))     for k = 1..N-1
+            //   G[N]    = 0                           (Nyquist)
+            //   G[2N-k] = conj(G[k])                 for k = 1..N-1
+            g[0] = Complex64::new(signal[0], 0.0);
 
-    for k in 1..n {
-        let angle = half_cycle * k as f64; // +πk/(2N)
-        let (sin_a, cos_a) = angle.sin_cos();
-        let twiddle = Complex64::new(cos_a, sin_a); // exp(+iπk/(2N))
-        g[k] = Complex64::new(signal[k], 0.0) * twiddle;
-    }
-    // G[N] = 0: already set by Array1::zeros.
-    // Hermitian conjugate half: G[2N-k] = conj(G[k]) for k = 1..N-1.
-    for k in 1..n {
-        g[two_n - k] = g[k].conj();
-    }
+            for k in 1..n {
+                let angle = half_cycle * k as f64; // +πk/(2N)
+                let (sin_a, cos_a) = angle.sin_cos();
+                let twiddle = Complex64::new(cos_a, sin_a); // exp(+iπk/(2N))
+                g[k] = Complex64::new(signal[k], 0.0) * twiddle;
+            }
+            g[n] = Complex64::new(0.0, 0.0);
+            // Hermitian conjugate half: G[2N-k] = conj(G[k]) for k = 1..N-1.
+            for k in 1..n {
+                g[two_n - k] = g[k].conj();
+            }
 
-    // y = IDFT_{2N}(G): normalized, y[n] = (1/(2N)) Σ G[k] exp(2πikn/(2N)).
-    let y = ifft_1d_complex(&g);
+            // y = IDFT_{2N}(G): normalized in-place.
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.inverse_complex_slice_inplace(g);
 
-    // DCT-III[n] = N · Re(y[n]).
-    // The imaginary part of y is ≤ O(machine_epsilon) by Hermitian symmetry; .re suffices.
-    let n_f = n as f64;
-    for i in 0..n {
-        output[i] = n_f * y[i].re;
-    }
+            // DCT-III[n] = N · Re(y[n]).
+            let n_f = n as f64;
+            for i in 0..n {
+                output[i] = n_f * g[i].re;
+            }
+        });
+    });
 }
 
 /// Fast DST-III via 2N-point forward FFT with complex input. Complexity: O(N log N).
@@ -342,33 +393,38 @@ pub fn dst3_fast(signal: &[f64], output: &mut [f64]) {
     // π / (2N): fundamental angular step.
     let half_cycle = PI / two_n as f64;
 
-    // Build complex V of length 2N:
-    //   V[i] = X'[i] · exp(-iπi/(2N))   for i = 0,...,N-1
-    //   V[i] = 0                          for i = N,...,2N-1
-    // where X'[i] = X[i] for i < N-1, X'[N-1] = X[N-1]/2 (half boundary term).
-    let mut v: Array1<Complex64> = Array1::zeros(two_n);
-    for i in 0..n {
-        // Half-term at the boundary per Sub-theorem 4.
-        let x_prime = if i < n - 1 {
-            signal[i]
-        } else {
-            signal[i] * 0.5
-        };
-        let angle = -(half_cycle * i as f64); // -πi/(2N)
-        let (sin_a, cos_a) = angle.sin_cos();
-        let twiddle = Complex64::new(cos_a, sin_a); // exp(-iπi/(2N))
-        v[i] = Complex64::new(x_prime, 0.0) * twiddle;
-    }
-    // v[N..2N] = 0: already set by Array1::zeros.
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |v| {
+            // Build complex V of length 2N:
+            //   V[i] = X'[i] · exp(-iπi/(2N))   for i = 0,...,N-1
+            //   V[i] = 0                          for i = N,...,2N-1
+            // where X'[i] = X[i] for i < N-1, X'[N-1] = X[N-1]/2 (half boundary term).
+            for i in 0..n {
+                let x_prime = if i < n - 1 {
+                    signal[i]
+                } else {
+                    signal[i] * 0.5
+                };
+                let angle = -(half_cycle * i as f64); // -πi/(2N)
+                let (sin_a, cos_a) = angle.sin_cos();
+                let twiddle = Complex64::new(cos_a, sin_a); // exp(-iπi/(2N))
+                v[i] = Complex64::new(x_prime, 0.0) * twiddle;
+            }
+            for i in n..two_n {
+                v[i] = Complex64::new(0.0, 0.0);
+            }
 
-    // G = DFT_{2N}(V): unnormalized forward FFT.
-    let g = fft_1d_complex(&v);
+            // G = DFT_{2N}(V): in-place.
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(v);
 
-    // DST-III[k] = Im(exp(iπ(2k+1)/(2N)) · conj(G[k]))
-    for k in 0..n {
-        let angle = half_cycle * (2.0 * k as f64 + 1.0); // π(2k+1)/(2N)
-        let (sin_a, cos_a) = angle.sin_cos();
-        let twiddle = Complex64::new(cos_a, sin_a); // exp(iπ(2k+1)/(2N))
-        output[k] = (twiddle * g[k].conj()).im;
-    }
+            // DST-III[k] = Im(exp(iπ(2k+1)/(2N)) · conj(G[k]))
+            for k in 0..n {
+                let angle = half_cycle * (2.0 * k as f64 + 1.0); // π(2k+1)/(2N)
+                let (sin_a, cos_a) = angle.sin_cos();
+                let twiddle = Complex64::new(cos_a, sin_a); // exp(iπ(2k+1)/(2N))
+                output[k] = (twiddle * v[k].conj()).im;
+            }
+        });
+    });
 }

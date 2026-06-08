@@ -144,11 +144,9 @@ where
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
         };
-        if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, NZ, lane_fn);
-        } else {
-            data_slice.chunks_mut(NZ).for_each(lane_fn);
-        }
+        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+            data_slice, NZ, lane_fn,
+        );
     }
 
     fn axis1_pass_complex<const FORWARD: bool>(data: &mut Array3<F::Complex>) {
@@ -182,11 +180,9 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(scratch, NY, lane_fn);
-            } else {
-                scratch.chunks_mut(NY).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                scratch, NY, lane_fn,
+            );
 
             for i in 0..NX {
                 for j_t in (0..NY).step_by(GATHER_TILE) {
@@ -237,11 +233,9 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(scratch, NX, lane_fn);
-            } else {
-                scratch.chunks_mut(NX).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                scratch, NX, lane_fn,
+            );
 
             for i in 0..NX {
                 let dst_base = i * NY * NZ;
@@ -401,15 +395,11 @@ where
                     }
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    &mut scratch[..],
-                    self.ny,
-                    lane_fn,
-                );
-            } else {
-                scratch.chunks_mut(self.ny).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                &mut scratch[..],
+                self.ny,
+                lane_fn,
+            );
             // Cache-blocked scatter: scratch[i,k,j] -> data[i,j,k].
             for i in 0..self.nx {
                 for j_t in (0..self.ny).step_by(GATHER_TILE) {
@@ -468,15 +458,11 @@ where
                     }
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    &mut scratch[..],
-                    self.nx,
-                    lane_fn,
-                );
-            } else {
-                scratch.chunks_mut(self.nx).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                &mut scratch[..],
+                self.nx,
+                lane_fn,
+            );
             // Cache-blocked scatter: scratch[j,k,i] -> data[i,j,k].
             for i in 0..self.nx {
                 let dst_base = i * self.ny * self.nz;
@@ -519,11 +505,9 @@ where
                     }
                 }
             };
-        if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, self.nz, lane_fn);
-        } else {
-            data_slice.chunks_mut(self.nz).for_each(lane_fn);
-        }
+        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+            data_slice, self.nz, lane_fn,
+        );
     }
 }
 

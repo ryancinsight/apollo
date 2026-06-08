@@ -118,11 +118,9 @@ where
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
         };
-        if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, NY, lane_fn);
-        } else {
-            data_slice.chunks_mut(NY).for_each(lane_fn);
-        }
+        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+            data_slice, NY, lane_fn,
+        );
     }
 
     fn axis0_pass_complex<const FORWARD: bool>(data: &mut Array2<F::Complex>) {
@@ -150,11 +148,9 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(scratch, NX, lane_fn);
-            } else {
-                scratch.chunks_mut(NX).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                scratch, NX, lane_fn,
+            );
 
             for col_t in (0..NY).step_by(TRANSPOSE_TILE) {
                 let col_end = (col_t + TRANSPOSE_TILE).min(NY);
@@ -264,11 +260,9 @@ where
                     }
                 }
             };
-        if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, self.ny, lane_fn);
-        } else {
-            data_slice.chunks_mut(self.ny).for_each(lane_fn);
-        }
+        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+            data_slice, self.ny, lane_fn,
+        );
     }
 
     fn axis0_pass_complex<const FORWARD: bool>(&self, data: &mut Array2<F::Complex>) {
@@ -309,15 +303,11 @@ where
                     }
                 }
             };
-            if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    &mut scratch[..],
-                    self.nx,
-                    lane_fn,
-                );
-            } else {
-                scratch.chunks_mut(self.nx).for_each(lane_fn);
-            }
+            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
+                &mut scratch[..],
+                self.nx,
+                lane_fn,
+            );
             // Cache-blocked scatter: scratch[col, row] → data[row, col]
             for col_t in (0..self.ny).step_by(TRANSPOSE_TILE) {
                 let col_end = (col_t + TRANSPOSE_TILE).min(self.ny);

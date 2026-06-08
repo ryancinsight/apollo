@@ -419,7 +419,8 @@ impl MixedRadixScalar for f32 {
         normalize_inplace(data, 1.0_f32 / n as f32);
     }
 
-    #[inline]
+    #[cfg_attr(debug_assertions, inline(never))]
+    #[cfg_attr(not(debug_assertions), inline)]
     fn stockham_forward_sized<const LOG2: u32>(
         data: &mut [Complex32],
         scratch: &mut [Complex32],
@@ -430,7 +431,8 @@ impl MixedRadixScalar for f32 {
         );
     }
 
-    #[inline]
+    #[cfg_attr(debug_assertions, inline(never))]
+    #[cfg_attr(not(debug_assertions), inline)]
     fn stockham_forward_normalized_sized<const LOG2: u32>(
         data: &mut [Complex32],
         scratch: &mut [Complex32],
@@ -1258,7 +1260,8 @@ impl MixedRadixScalar for f64 {
         normalize_inplace(data, 1.0_f64 / n as f64);
     }
 
-    #[inline]
+    #[cfg_attr(debug_assertions, inline(never))]
+    #[cfg_attr(not(debug_assertions), inline)]
     fn stockham_forward_sized<const LOG2: u32>(
         data: &mut [Complex64],
         scratch: &mut [Complex64],
@@ -1269,7 +1272,8 @@ impl MixedRadixScalar for f64 {
         );
     }
 
-    #[inline]
+    #[cfg_attr(debug_assertions, inline(never))]
+    #[cfg_attr(not(debug_assertions), inline)]
     fn stockham_forward_normalized_sized<const LOG2: u32>(
         data: &mut [Complex64],
         scratch: &mut [Complex64],

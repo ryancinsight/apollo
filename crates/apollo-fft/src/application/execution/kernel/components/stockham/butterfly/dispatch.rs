@@ -39,7 +39,8 @@ pub(crate) unsafe fn forward64_avx_with_scratch(
 /// Sized variant for const LOG2 flow from forward_with_scratch_sized (plan PoT ZST path).
 /// Avoids runtime trailing_zeros() and len() in hot AVX PoT sized path; passes const LOG2
 /// to transform_sized for better monomorph/DCE to len* bodies.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) unsafe fn forward64_avx_with_scratch_sized<const LOG2: u32>(
     data: &mut [Complex64],
     scratch: &mut [Complex64],

@@ -500,7 +500,8 @@ pub(crate) unsafe fn forward32_avx_with_scratch(
 
 /// Sized variant (const LOG2) to complete ZST/const flow in f32 reduced AVX PoT sized paths.
 /// Avoids runtime len() / transform runtime log2; passes LOG2 to transform_sized.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) unsafe fn forward32_avx_with_scratch_sized<const LOG2: u32>(
     data: &mut [Complex32],
     scratch: &mut [Complex32],

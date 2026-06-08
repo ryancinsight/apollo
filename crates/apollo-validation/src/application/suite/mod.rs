@@ -856,11 +856,8 @@ mod tests {
 
         let input_signal = [1.0, 2.0, 3.0, 4.0];
         brand_scope(|token| {
-            let cells: Vec<MelinoeCell<'_, f64>> = input_signal
-                .iter()
-                .copied()
-                .map(MelinoeCell::new)
-                .collect();
+            let cells: Vec<MelinoeCell<'_, f64>> =
+                input_signal.iter().copied().map(MelinoeCell::new).collect();
 
             // Zero-copy borrow boundary
             let borrowed = cells.borrow_cow_with(&token, Borrowed);
@@ -881,11 +878,8 @@ mod tests {
 
         let input_signal = [0.0f64; 16];
         brand_scope(|token| {
-            let mut cells: Vec<MelinoeCell<'_, f64>> = input_signal
-                .iter()
-                .copied()
-                .map(MelinoeCell::new)
-                .collect();
+            let mut cells: Vec<MelinoeCell<'_, f64>> =
+                input_signal.iter().copied().map(MelinoeCell::new).collect();
 
             // Run Moirai's parallel partitioning over the Melinoe cell region
             par_partition_for_each(&mut cells, 4, |start, mut shard| {
@@ -901,4 +895,3 @@ mod tests {
         });
     }
 }
-

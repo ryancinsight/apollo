@@ -1436,41 +1436,31 @@ mod planned_good_thomas_tests {
     }
 
     #[test]
-    #[ignore = "f32 Rader bluestein (n=113, pad~256) debug monomorph frames (stockham-avx + nested) may still exceed thread stack in some envs (pre-existing deep inlining in f32 avx reduced stockham/pot for pad p=256 + sub butterflies). Progress: n512/n1024 unrolls + f32 avx/pot sub with_scratch in bluestein (build kernel + convolve now use stockham_forward_sized for pow2 p + avx _sized route via match lists + with_scratch; dftN heap prior). TL pools + direct sized for pow2 + n512+ unrolls. Release/bench unaffected. Value via f64 rader + f32 67/271 + n512 ZST + GT. See gap (full avx f32 pot sub + more for un-ignore), rader/bluestein (sized)."]
     fn planned_rader_n113_f32_forward_matches_direct() {
-        // N=113 f32 takes bluestein via prefers... ; stack pressure remains in debug despite dftN heap unify
-        // and prior mem eff (pools, Cow, sized). Full sub avx f32 pot unification pending for debug.
-        std::thread::Builder::new()
-            .stack_size(8 * 1024 * 1024)
-            .spawn(|| {
-                let n = 113usize;
-                let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
-                match &plan.strategy {
-                    PlanStrategy::Rader => {}
-                    _ => panic!("f32 N=113 must use the planned Rader route"),
-                }
-                let input: Vec<Complex32> = (0..n)
-                    .map(|k| {
-                        let x = k as f32;
-                        Complex32::new((0.11 * x).sin(), 0.17 * (0.07 * x).cos())
-                    })
-                    .collect();
-                let expected = dft_forward(&input);
-                let mut actual = input;
-                plan.forward_complex_slice_inplace(&mut actual);
-                let max_err = actual
-                    .iter()
-                    .zip(expected.iter())
-                    .map(|(a, b)| f64::from((*a - *b).norm()))
-                    .fold(0.0f64, f64::max);
-                assert!(
-                    max_err <= 3.0e-4,
-                    "planned f32 Rader N=113 forward mismatch max_err={max_err:.2e}"
-                );
+        let n = 113usize;
+        let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
+        match &plan.strategy {
+            PlanStrategy::Rader => {}
+            _ => panic!("f32 N=113 must use the planned Rader route"),
+        }
+        let input: Vec<Complex32> = (0..n)
+            .map(|k| {
+                let x = k as f32;
+                Complex32::new((0.11 * x).sin(), 0.17 * (0.07 * x).cos())
             })
-            .unwrap()
-            .join()
-            .unwrap();
+            .collect();
+        let expected = dft_forward(&input);
+        let mut actual = input;
+        plan.forward_complex_slice_inplace(&mut actual);
+        let max_err = actual
+            .iter()
+            .zip(expected.iter())
+            .map(|(a, b)| f64::from((*a - *b).norm()))
+            .fold(0.0f64, f64::max);
+        assert!(
+            max_err <= 3.0e-4,
+            "planned f32 Rader N=113 forward mismatch max_err={max_err:.2e}"
+        );
     }
 
     /// Exercises the new PoT ZST wiring + explicit 512 (log2=9) arm.

@@ -31,7 +31,8 @@ pub(crate) fn transform<P: StockhamPrecision>(
 /// fusion decisions, unroll factors per PoTStrategy ZST). Callers that know the size
 /// (plan PowerOfTwo log2 match, dispatch PoT, bluestein pow2 pads, rader) hit concrete
 /// <LOG2> instance; unknown fall to <0> runtime generic body (inner-fn pattern to bound bloat).
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_sized<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -72,6 +73,7 @@ pub(crate) fn transform_with_strategy<S: PoTStrategy, const LOG2: u32, P: Stockh
     transform_sized::<P>(data, scratch, twiddles, scale, LOG2);
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -288,7 +290,8 @@ fn transform_impl<const LOG2: u32, P: StockhamPrecision>(
 /// The all-triple schedule is faster than the shorter quad-heavy schedule on
 /// the current AVX backend despite requiring a terminal full-buffer copy.
 /// (Future mem-eff: even-pass schedule to land final write in data, eliding copy.)
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len32768<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -347,7 +350,8 @@ pub(crate) fn transform_len32768<P: StockhamPrecision>(
     data.copy_from_slice(scratch);
 }
 
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len4096_four_triples<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -395,7 +399,8 @@ pub(crate) fn transform_len4096_four_triples<P: StockhamPrecision>(
 /// Sequence (greedy fusion, triple max): triple(1) data->scratch + pair(8) scratch->data. No terminal copy.
 /// First triple radix1 delegates (in P stage) to specialized n32 unrolled (no-loop vector for avx;
 /// explicit 4x scalar j0 for non-avx) via Inner-Fn + per-LOG2 routing. Enables ILP/DCE for this mono.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len32<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -418,7 +423,8 @@ pub(crate) fn transform_len32<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=64 (LOG2=6).
 /// Sequence: triple(1) d->sc + triple(8) sc->d. No copy.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len64<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -448,7 +454,8 @@ pub(crate) fn transform_len64<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=128 (LOG2=7). Direct explicit + first pass (stride=1 triple radix1) unrolled (n128 special, additive to n32/n64).
 /// Sequence: t1 d->sc + t8 sc->d + single(64) d->sc ; terminal copy to data.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len128<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -480,7 +487,8 @@ pub(crate) fn transform_len128<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=256 (LOG2=8).
 /// Sequence: t1 + t8 + pair(64) d->sc ; copy.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len256<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -512,7 +520,8 @@ pub(crate) fn transform_len256<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=512 (LOG2=9). Hot md-worst PoT (ZST wired from plan/dispatch + rader-bluestein f32).
 /// Sequence: t1 + t8 + t64 d->sc ; copy.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len512<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -551,7 +560,8 @@ pub(crate) fn transform_len512<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=1024 (LOG2=10).
 /// Sequence: t1 + t8 + t64 + single(512) sc->d . Ends on data, no copy.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len1024<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -590,7 +600,8 @@ pub(crate) fn transform_len1024<P: StockhamPrecision>(
 
 /// Monomorphized Stockham body for N=2048 (LOG2=11). Fills gap between 1024 and 32768.
 /// Sequence: t1 + t8 + t64 + pair(512) sc->d. No terminal copy.
-#[inline]
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline)]
 pub(crate) fn transform_len2048<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
