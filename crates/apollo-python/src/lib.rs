@@ -522,14 +522,7 @@ fn fft2<'py>(
         require_profile_matches_f64(profile, "fft2")?;
         let owned = input64.as_array().to_owned();
         let result = py.allow_threads(|| apollo_fft::fft_2d_array(&owned));
-        Ok(
-            PyArray2::from_owned_array(
-                py,
-                result,
-            )
-            .into_any()
-            .unbind(),
-        )
+        Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
     } else {
         match profile.storage {
             StoragePrecision::F16 => {
@@ -537,12 +530,7 @@ fn fft2<'py>(
                 require_contiguous_2d(&input32, "fft2 input")?;
                 let owned = input32.as_array().mapv(f16::from_f32);
                 let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
-                Ok(PyArray2::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
@@ -550,12 +538,7 @@ fn fft2<'py>(
                 require_profile_matches_f32(profile, "fft2")?;
                 let owned = input32.as_array().to_owned();
                 let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
-                Ok(PyArray2::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
             }
         }
     }
@@ -575,12 +558,7 @@ fn ifft2<'py>(
         require_profile_matches_f64(profile, "ifft2")?;
         let owned = input64.as_array().to_owned();
         let result = py.allow_threads(|| apollo_fft::ifft_2d_array(&owned));
-        Ok(PyArray2::from_owned_array(
-            py,
-            result,
-        )
-        .into_any()
-        .unbind())
+        Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
     } else {
         let input32 = input.extract::<PyReadonlyArray2<Complex32>>()?;
         require_contiguous_2d(&input32, "ifft2 input")?;
@@ -588,25 +566,14 @@ fn ifft2<'py>(
         match profile.storage {
             StoragePrecision::F16 => {
                 let result = py.allow_threads(|| {
-                    apollo_fft::ifft_2d_array_typed::<f16>(&owned)
-                        .mapv(|value: f16| value.to_f32())
+                    apollo_fft::ifft_2d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
                 });
-                Ok(PyArray2::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft2")?;
                 let result = py.allow_threads(|| apollo_fft::ifft_2d_array_typed::<f32>(&owned));
-                Ok(PyArray2::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
             }
         }
     }
@@ -626,14 +593,7 @@ fn fft3<'py>(
         require_profile_matches_f64(profile, "fft3")?;
         let owned = input64.as_array().to_owned();
         let result = py.allow_threads(|| apollo_fft::fft_3d_array(&owned));
-        Ok(
-            PyArray3::from_owned_array(
-                py,
-                result,
-            )
-            .into_any()
-            .unbind(),
-        )
+        Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
     } else {
         match profile.storage {
             StoragePrecision::F16 => {
@@ -641,12 +601,7 @@ fn fft3<'py>(
                 require_contiguous_3d(&input32, "fft3 input")?;
                 let owned = input32.as_array().mapv(f16::from_f32);
                 let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&owned));
-                Ok(PyArray3::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
@@ -654,12 +609,7 @@ fn fft3<'py>(
                 require_profile_matches_f32(profile, "fft3")?;
                 let owned = input32.as_array().to_owned();
                 let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&owned));
-                Ok(PyArray3::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
             }
         }
     }
@@ -679,12 +629,7 @@ fn ifft3<'py>(
         require_profile_matches_f64(profile, "ifft3")?;
         let owned = input64.as_array().to_owned();
         let result = py.allow_threads(|| apollo_fft::ifft_3d_array(&owned));
-        Ok(PyArray3::from_owned_array(
-            py,
-            result,
-        )
-        .into_any()
-        .unbind())
+        Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
     } else {
         let input32 = input.extract::<PyReadonlyArray3<Complex32>>()?;
         require_contiguous_3d(&input32, "ifft3 input")?;
@@ -692,25 +637,14 @@ fn ifft3<'py>(
         match profile.storage {
             StoragePrecision::F16 => {
                 let result = py.allow_threads(|| {
-                    apollo_fft::ifft_3d_array_typed::<f16>(&owned)
-                        .mapv(|value: f16| value.to_f32())
+                    apollo_fft::ifft_3d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
                 });
-                Ok(PyArray3::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft3")?;
                 let result = py.allow_threads(|| apollo_fft::ifft_3d_array_typed::<f32>(&owned));
-                Ok(PyArray3::from_owned_array(
-                    py,
-                    result,
-                )
-                .into_any()
-                .unbind())
+                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
             }
         }
     }
@@ -779,10 +713,7 @@ fn nufft_type1_1d_py<'py>(
             domain,
         )
     });
-    Ok(PyArray1::from_owned_array(
-        py,
-        result,
-    ))
+    Ok(PyArray1::from_owned_array(py, result))
 }
 
 /// Exact direct 1D type-2 NUFFT.
@@ -854,10 +785,7 @@ fn nufft_type1_3d_py<'py>(
             grid,
         )
     });
-    Ok(PyArray3::from_owned_array(
-        py,
-        result,
-    ))
+    Ok(PyArray3::from_owned_array(py, result))
 }
 
 /// Fast 1D type-1 NUFFT using Kaiser-Bessel spreading.
@@ -887,10 +815,7 @@ fn nufft_type1_1d_fast_py<'py>(
             kernel_width,
         )
     });
-    Ok(PyArray1::from_owned_array(
-        py,
-        result,
-    ))
+    Ok(PyArray1::from_owned_array(py, result))
 }
 
 /// Fast 1D type-2 NUFFT using Kaiser-Bessel spreading.
@@ -968,10 +893,7 @@ fn nufft_type1_3d_fast_py<'py>(
             kernel_width,
         )
     });
-    Ok(PyArray3::from_owned_array(
-        py,
-        result,
-    ))
+    Ok(PyArray3::from_owned_array(py, result))
 }
 
 // ── FFT utility functions ─────────────────────────────────────────────────────
@@ -1334,7 +1256,9 @@ fn dct2_1d<'py>(
     let n = arr.len();
     let signal: Vec<f64> = arr.iter().copied().collect();
     let mut output = vec![0.0_f64; n];
-    dct2(&signal, &mut output);
+    py.allow_threads(|| {
+        dct2(&signal, &mut output);
+    });
     Ok(PyArray1::from_vec(py, output))
 }
 
@@ -1353,9 +1277,11 @@ fn idct2_1d<'py>(
     let mut output = vec![0.0_f64; n];
     // DCT-III is the inverse of DCT-II up to N/2 scaling: DCT-III(DCT-II(x)) = (N/2) * x.
     // Therefore: x = DCT-III(X) * (2 / N).
-    dct3(&signal, &mut output);
-    let scale = 2.0 / n as f64;
-    output.iter_mut().for_each(|v| *v *= scale);
+    py.allow_threads(|| {
+        dct3(&signal, &mut output);
+        let scale = 2.0 / n as f64;
+        output.iter_mut().for_each(|v| *v *= scale);
+    });
     Ok(PyArray1::from_vec(py, output))
 }
 
@@ -1372,7 +1298,9 @@ fn dst2_1d<'py>(
     let n = arr.len();
     let signal: Vec<f64> = arr.iter().copied().collect();
     let mut output = vec![0.0_f64; n];
-    dst2(&signal, &mut output);
+    py.allow_threads(|| {
+        dst2(&signal, &mut output);
+    });
     Ok(PyArray1::from_vec(py, output))
 }
 
@@ -1388,9 +1316,11 @@ fn idst2_1d<'py>(
     let signal: Vec<f64> = arr.iter().copied().collect();
     let mut output = vec![0.0_f64; n];
     // DST-III(DST-II(x)) = (N/2) * x; inverse: x = DST-III(X) * (2 / N).
-    dst3(&signal, &mut output);
-    let scale = 2.0 / n as f64;
-    output.iter_mut().for_each(|v| *v *= scale);
+    py.allow_threads(|| {
+        dst3(&signal, &mut output);
+        let scale = 2.0 / n as f64;
+        output.iter_mut().for_each(|v| *v *= scale);
+    });
     Ok(PyArray1::from_vec(py, output))
 }
 
