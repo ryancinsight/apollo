@@ -4,6 +4,7 @@
 - [x] Documented the Git dependency order in `docs/provider_contract.md`: Moirai/Mnemosyne/Melinoe changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.
 - [x] Captured Apollo requirements for Moirai CPU scheduling, Mnemosyne scratch allocation, and Melinoe branded zero-copy/Cow boundaries.
 - [x] Replaced `apollo-fft` composite radix storage with `Cow<'static, [usize]>` so static schedules remain borrowed and dynamic schedules are owned only at the cache boundary.
+- [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `3f4ade87` with the Apollo-facing provider contract tests.
 - [ ] [patch] After Moirai, Mnemosyne, and Melinoe provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 

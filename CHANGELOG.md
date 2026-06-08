@@ -12,6 +12,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
 - [patch] `apollo-fft` composite plan radices now use `Cow<'static, [usize]>` instead of a custom enum, preserving borrowed static radix plans and using owned dynamic radix vectors only at the cache boundary.
+- [patch] Updated Moirai Git lockfile revision to `3f4ade87` after pushing public provider contract coverage.
 - Method selection prefers composite/mixed-radix for 2/3/5/7-smooth (incl. coprimes like 90,198) over GT static in dispatch and FftPlan1D (perf fix for many >2x GT cases in benchmarks); reduced f32 winograd/generated for slow policy sizes.
 - Stockham has explicit cases for 128/256 (ready for full unroll; currently safe delegate); f32 small PoT (16/32/64) now delegate to shared Stockham + pooled scratch (unify, memory/stack efficiency, perf).
 - Updated tests (strategy asserts relaxed for selection changes; rader n113 f32 wrapped/ignored for debug stack in f32 paths; numerical still verified).
