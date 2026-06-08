@@ -10,7 +10,7 @@
 pub struct RadixCompositePolicy;
 
 impl moirai::ExecutionPolicy for RadixCompositePolicy {
-    #[inline(always)]
+    #[inline]
     fn parallelize(len: usize) -> bool {
         len >= crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD
     }

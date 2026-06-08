@@ -1,7 +1,7 @@
 # Apollo Provider Contract
 
 Apollo consumes provider crates through Git dependencies. Provider changes in
-Moirai, Mnemosyne, or Melinoe must be committed and pushed before Apollo
+Moirai, Mnemosyne, Melinoe, or Hermes must be committed and pushed before Apollo
 updates its dependency revision. Committed Apollo manifests must not use local
 path overrides for provider work.
 
@@ -9,8 +9,12 @@ path overrides for provider work.
 
 - `moirai` is the active data-parallel provider in the Apollo workspace
   dependency table with default features disabled and `parallel` enabled.
-- `mnemosyne` is not yet an Apollo workspace dependency.
-- `melinoe` is not yet an Apollo workspace dependency.
+- `mnemosyne` is the scratch-allocation provider in the Apollo workspace
+  dependency table with default features disabled and `num-complex` enabled.
+- `melinoe` is the branded zero-copy boundary provider in the Apollo workspace
+  dependency table with default features disabled and `alloc` enabled.
+- `hermes-simd` is the SIMD provider in the Apollo workspace dependency table
+  with default features disabled and `std` enabled.
 - `ndarray` still enables `rayon` and `matrixmultiply-threading`; this is an
   audit item because it keeps Rayon-linked parallelism in the dependency graph
   while Moirai is the intended parallel runtime.
@@ -59,10 +63,23 @@ path overrides for provider work.
   Cow surfaces so Apollo can depend on the public contract without reaching
   into provider internals.
 
+## Apollo Requirements for Hermes
+
+- Monomorphized SIMD vector kernels exposed through typed architecture markers
+  such as `PreferredArch`, not runtime-erased hot-path dispatch.
+- Zero-copy `SimdCow` and packed Cow state accessors so Apollo can assert
+  borrowed-versus-owned storage contracts without matching provider internals.
+- Native-precision vector arithmetic for Apollo kernels using Hermes vectors;
+  hidden widen-compute-narrow paths are not acceptable for transform hot paths.
+- Capability surfaces for lane count, alignment, mask, and execution mode that
+  compile away through ZSTs, consts, and associated types.
+- Public facade stability for Apollo's `hermes_simd::{PreferredArch, Vector}`
+  usage in FWHT and future SIMD kernels.
+
 ## GPU Boundary
 
-Moirai, Mnemosyne, and Melinoe optimize CPU scheduling, host memory, and
-branded zero-copy access. WGPU execution remains in `*-wgpu` infrastructure
+Moirai, Mnemosyne, Melinoe, and Hermes optimize CPU scheduling, host memory,
+branded zero-copy access, and host SIMD kernels. WGPU execution remains in `*-wgpu` infrastructure
 crates. GPU buffers, command encoders, pipeline objects, and device futures
 must not leak into pure Apollo domain models or CPU mathematical kernels.
 
@@ -74,7 +91,7 @@ Run:
 cargo run -p xtask -- provider-audit
 ```
 
-The audit reports Moirai, Mnemosyne, Melinoe, Rayon, WGPU, `Arc`, `Mutex`,
+The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Rayon, WGPU, `Arc`, `Mutex`,
 `dyn`, clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is static
 source analysis; performance claims still require Criterion or domain-specific
 benchmarks.

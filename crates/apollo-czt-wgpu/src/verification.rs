@@ -177,14 +177,7 @@ mod tests {
         let empty_err = backend
             .execute_forward(&CztWgpuPlan::new(0, 5, [0, 0], [0, 0]), &[])
             .expect_err("empty plan must fail");
-        assert_eq!(
-            empty_err,
-            WgpuError::InvalidLength {
-                input_len: 0,
-                output_len: 5,
-                message: "lengths must be greater than zero",
-            }
-        );
+        assert!(matches!(empty_err, WgpuError::InvalidPlan { .. }));
 
         let mismatch_err = backend
             .execute_forward(
@@ -216,12 +209,7 @@ mod tests {
                 &[Complex32::new(0.0, 0.0); 4],
             )
             .expect_err("zero a must fail");
-        assert_eq!(
-            invalid_param_err,
-            WgpuError::InvalidParameters {
-                message: "spiral parameters must have finite non-zero magnitude",
-            }
-        );
+        assert!(matches!(invalid_param_err, WgpuError::InvalidPlan { .. }));
     }
 
     /// GPU CZT inverse roundtrip: forward on GPU then inverse on GPU must

@@ -1,13 +1,15 @@
-//! Shared WGPU device acquisition for the Apollo WGPU crate family.
+//! Shared WGPU device acquisition and error contracts for the Apollo WGPU
+//! crate family.
 //!
 //! ## Motivation
 //!
-//! 17 WGPU backend crates (`apollo-*-wgpu`) each duplicated the same ~40-line
+//! 16 WGPU backend crates (`apollo-*-wgpu`) each duplicated the same ~40-line
 //! `try_default()` adapter/device acquisition boilerplate, the same
-//! `device()`/`queue()` getters, and the same `AdapterUnavailable` /
-//! `DeviceUnavailable` error variants.  This crate factors that common
-//! surface into a single `WgpuDevice` struct so crate authors only carry the
-//! kernel pipeline and domain-specific execution logic.
+//! `device()`/`queue()` getters, the same `AdapterUnavailable` /
+//! `DeviceUnavailable` error variants, and a per-crate `WgpuError` enum with
+//! largely identical variants.  This crate factors that common surface into
+//! a single [`WgpuDevice`] struct and a single [`WgpuError`] enum so crate
+//! authors only carry the kernel pipeline and domain-specific execution logic.
 //!
 //! ## Usage
 //!
@@ -29,8 +31,7 @@
 
 use std::sync::Arc;
 
-pub use error::WgpuDeviceError;
-pub use error::WgpuDeviceResult;
+pub use error::{WgpuDeviceError, WgpuDeviceResult, WgpuError, WgpuResult};
 
 mod error;
 

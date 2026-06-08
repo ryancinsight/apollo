@@ -8,4 +8,4 @@ mod contract;
 mod views;
 
 pub use contract::{FftSample, FftStorage};
-pub use views::{FftInterleavedMut, FftPlanarMut};
+pub use views::{FftInterleavedCow, FftInterleavedMut, FftPlanarMut};

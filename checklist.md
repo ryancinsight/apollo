@@ -1,14 +1,16 @@
 # Apollo Checklist
-## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe [patch]
+## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe/Hermes [patch]
 - [x] Added `cargo run -p xtask -- provider-audit` as an Apollo-local static source audit for provider usage, Rayon residue, WGPU surface, `Arc`/`Mutex`/`dyn`, clone-to-`Vec`, and `Cow` signals by crate.
-- [x] Documented the Git dependency order in `docs/provider_contract.md`: Moirai/Mnemosyne/Melinoe changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.
-- [x] Captured Apollo requirements for Moirai CPU scheduling, Mnemosyne scratch allocation, and Melinoe branded zero-copy/Cow boundaries.
+- [x] Documented the Git dependency order in `docs/provider_contract.md`: Moirai/Mnemosyne/Melinoe/Hermes changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.
+- [x] Captured Apollo requirements for Moirai CPU scheduling, Mnemosyne scratch allocation, Melinoe branded zero-copy/Cow boundaries, and Hermes monomorphized SIMD/Cow surfaces.
+- [x] Added `apollo-fft` domain `FftInterleavedCow` storage view: borrowed read paths preserve caller buffer pointer identity, `store` detaches into owned interleaved storage, and the storage contract is compiled through `domain::storage`.
+- [x] Updated Apollo `Cargo.lock` to consume pushed Hermes commit `7eb0b70` with public Cow borrowed/owned state accessors.
 - [x] Replaced `apollo-fft` composite radix storage with `Cow<'static, [usize]>` so static schedules remain borrowed and dynamic schedules are owned only at the cache boundary.
 - [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `3f4ade87` with the Apollo-facing provider contract tests.
 - [x] Restored `apollo-fft` Mnemosyne scratch dispatch to a sealed static trait implementation for `Complex32`/`Complex64`, removing runtime type inspection and unsafe closure transmutation from the scratch-pool boundary.
 - [x] Replaced repeated per-crate `ndarray = "0.16"` declarations with the workspace dependency in transform and WGPU crates so `matrixmultiply-threading` remains controlled from one manifest location.
-- [x] Replaced the `apollo-fft` radix-composite Moirai dispatch boolean with `ChunkDispatch` and value-semantic tests for threshold selection plus sequential/parallel chunk-index equivalence.
-- [ ] [patch] After Moirai, Mnemosyne, and Melinoe provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
+- [x] Replaced the `apollo-fft` radix-composite dispatch boolean with monomorphized Moirai `ExecutionPolicy` type parameters and value-semantic tests for threshold selection plus sequential/parallel chunk-index equivalence.
+- [ ] [patch] After Moirai, Mnemosyne, Melinoe, and Hermes provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 
 ## Routing harden (72/90/198/ f32 comp force before short-win) + f32 rader bias broaden (m>=128 +67/113) + latent radix_composite compile fix [patch]

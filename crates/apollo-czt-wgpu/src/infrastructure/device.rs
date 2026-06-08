@@ -159,10 +159,8 @@ impl CztWgpuBackend {
         }
         let n = plan.input_len();
         if n == 0 {
-            return Err(WgpuError::InvalidLength {
-                input_len: n,
-                output_len: n,
-                message: "lengths must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("CZT lengths input={n}, output={n} must be greater than zero"),
             });
         }
         self.kernel.execute_inverse(
@@ -177,10 +175,8 @@ impl CztWgpuBackend {
         let input_len = plan.input_len();
         let output_len = plan.output_len();
         if input_len == 0 || output_len == 0 {
-            return Err(WgpuError::InvalidLength {
-                input_len,
-                output_len,
-                message: "lengths must be greater than zero",
+            return Err(WgpuError::InvalidPlan {
+                message: format!("CZT lengths input={input_len}, output={output_len} must be greater than zero"),
             });
         }
         if input.len() != input_len {
@@ -194,8 +190,8 @@ impl CztWgpuBackend {
         let a_norm = a.norm();
         let w_norm = w.norm();
         if !a_norm.is_finite() || !w_norm.is_finite() || a_norm == 0.0 || w_norm == 0.0 {
-            return Err(WgpuError::InvalidParameters {
-                message: "spiral parameters must have finite non-zero magnitude",
+            return Err(WgpuError::InvalidPlan {
+                message: "CZT spiral parameters must have finite non-zero magnitude".to_owned(),
             });
         }
         Ok(())
