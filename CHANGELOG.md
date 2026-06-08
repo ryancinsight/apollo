@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `xtask provider-audit` for Apollo-local Moirai/Mnemosyne utilization analysis plus `docs/moirai_mnemosyne_provider_contract.md` documenting provider requirements and Git dependency order.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
 - Method selection prefers composite/mixed-radix for 2/3/5/7-smooth (incl. coprimes like 90,198) over GT static in dispatch and FftPlan1D (perf fix for many >2x GT cases in benchmarks); reduced f32 winograd/generated for slow policy sizes.

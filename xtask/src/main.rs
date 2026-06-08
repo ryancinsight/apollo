@@ -11,6 +11,8 @@ use std::time::SystemTime;
 #[cfg(feature = "bench-runner")]
 use std::time::{Duration, Instant};
 
+mod provider_audit;
+
 const F64_GROUP: &str = "apollo_fft_vs_rustfft_f64";
 const F32_GROUP: &str = "apollo_fft_vs_rustfft_f32";
 const APOLLO_BENCH: &str = "apollo_clone_inclusive";
@@ -51,6 +53,7 @@ fn main() -> Result<()> {
     let mut args = args.into_iter();
     match args.next().as_deref() {
         None | Some("benchmark") => run_benchmark(BenchmarkArgs::parse(args)?),
+        Some("provider-audit") => provider_audit::run(args),
         Some("-h" | "--help" | "help") => {
             print_help();
             Ok(())
@@ -747,7 +750,7 @@ fn ratio(apollo: Option<f64>, rustfft: Option<f64>) -> String {
 
 fn print_help() {
     println!(
-        "Usage:\n  cargo run -p xtask -- benchmark [--sizes 33,38,58] [--skip-run]\n\nOptions:\n  --sizes <csv>       Benchmark these FFT sizes and merge only those rows into the markdown table.\n  --all               Benchmark the full canonical size set and rewrite the markdown table.\n  --profile <name>    Timing profile: quick or full. Defaults to quick.\n  --skip-run          Update the markdown table from existing Criterion JSON without measuring.\n  --output <path>     Markdown output path. Defaults to benchmark_results.md."
+        "Usage:\n  cargo run -p xtask -- benchmark [--sizes 33,38,58] [--skip-run]\n  cargo run -p xtask -- provider-audit [--root <path>]\n\nBenchmark options:\n  --sizes <csv>       Benchmark these FFT sizes and merge only those rows into the markdown table.\n  --all               Benchmark the full canonical size set and rewrite the markdown table.\n  --profile <name>    Timing profile: quick or full. Defaults to quick.\n  --skip-run          Update the markdown table from existing Criterion JSON without measuring.\n  --output <path>     Markdown output path. Defaults to benchmark_results.md.\n\nProvider audit options:\n  --root <path>       Workspace root to inspect. Defaults to the current directory."
     );
 }
 
