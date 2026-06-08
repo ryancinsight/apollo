@@ -7,6 +7,7 @@ use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradSca
 use crate::application::execution::kernel::tuning::{
     FUSE_THRESHOLD, RADIX_PARALLEL_CHUNK_THRESHOLD,
 };
+use crate::application::execution::policy::ChunkDispatch;
 
 /// Maximum number of stages that may be folded into one adaptive fused pass.
 ///
@@ -109,7 +110,8 @@ pub(super) fn composite_core_with_radices<
             } else {
                 None
             };
-            let use_parallel = n >= RADIX_PARALLEL_CHUNK_THRESHOLD && stage_prev_len >= 512;
+            let dispatch =
+                ChunkDispatch::for_workload(n, stage_prev_len, RADIX_PARALLEL_CHUNK_THRESHOLD, 512);
 
             if src_is_data {
                 stockham_stage_fused_adaptive::<F, INVERSE>(
@@ -119,7 +121,7 @@ pub(super) fn composite_core_with_radices<
                     fused_radices,
                     twiddles,
                     pointwise,
-                    use_parallel,
+                    dispatch,
                 );
             } else {
                 stockham_stage_fused_adaptive::<F, INVERSE>(
@@ -129,7 +131,7 @@ pub(super) fn composite_core_with_radices<
                     fused_radices,
                     twiddles,
                     pointwise,
-                    use_parallel,
+                    dispatch,
                 );
             }
 

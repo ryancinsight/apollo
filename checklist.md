@@ -7,6 +7,7 @@
 - [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `3f4ade87` with the Apollo-facing provider contract tests.
 - [x] Restored `apollo-fft` Mnemosyne scratch dispatch to a sealed static trait implementation for `Complex32`/`Complex64`, removing runtime type inspection and unsafe closure transmutation from the scratch-pool boundary.
 - [x] Replaced repeated per-crate `ndarray = "0.16"` declarations with the workspace dependency in transform and WGPU crates so `matrixmultiply-threading` remains controlled from one manifest location.
+- [x] Replaced the `apollo-fft` radix-composite Moirai dispatch boolean with `ChunkDispatch` and value-semantic tests for threshold selection plus sequential/parallel chunk-index equivalence.
 - [ ] [patch] After Moirai, Mnemosyne, and Melinoe provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 

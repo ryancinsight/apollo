@@ -9,14 +9,15 @@ mod core;
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
+use crate::application::execution::policy::ChunkDispatch;
 pub use cache::CompositeCache;
 
 /// Execute a fused multi-stage Stockham composite pass over all output groups.
 ///
-/// Each output group is `prev_len * r_total` elements. When `parallel` is
-/// true, groups are distributed through moirai's work-stealing scheduler;
-/// otherwise execution is sequential. `composite_fused_adaptive` handles the
-/// per-group multi-stage recursion using the thread-local bump arena.
+/// Each output group is `prev_len * r_total` elements. `dispatch` controls
+/// whether groups run sequentially or through Moirai's work-stealing scheduler.
+/// `composite_fused_adaptive` handles the per-group multi-stage recursion using
+/// the thread-local bump arena.
 #[inline]
 pub(super) fn stockham_stage_fused_adaptive<F, const INVERSE: bool>(
     src: &[Complex<F>],
@@ -25,7 +26,7 @@ pub(super) fn stockham_stage_fused_adaptive<F, const INVERSE: bool>(
     radices: &[usize],
     twiddles: &[&[Complex<F>]],
     pointwise_spectrum: Option<&[Complex<F>]>,
-    parallel: bool,
+    dispatch: ChunkDispatch,
 ) where
     F: CompositeCache + ShortWinogradScalar,
 {
@@ -35,7 +36,7 @@ pub(super) fn stockham_stage_fused_adaptive<F, const INVERSE: bool>(
     crate::application::execution::policy::for_each_chunk_mut_enumerated(
         dst,
         stage_len,
-        parallel,
+        dispatch,
         |b, dst_block| {
             let pw = pointwise_spectrum.map(|ps| &ps[b * stage_len..(b + 1) * stage_len]);
             adaptive::composite_fused_adaptive::<F, INVERSE>(
