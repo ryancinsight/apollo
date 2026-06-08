@@ -93,7 +93,7 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
 # moirai: data-parallel runtime replacing rayon (default-features off avoids its
 # global allocator; `parallel` provides the data-parallel API).
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel", "melinoe"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

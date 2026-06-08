@@ -577,6 +577,7 @@ dependencies = [
  "apollo-stft",
  "apollo-wavelet",
  "melinoe",
+ "moirai",
  "nalgebra",
  "ndarray",
  "num-complex",
@@ -1488,8 +1489,9 @@ dependencies = [
 [[package]]
 name = "moirai"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
+ "melinoe",
  "moirai-core",
  "moirai-executor",
  "moirai-parallel",
@@ -1502,7 +1504,7 @@ dependencies = [
 [[package]]
 name = "moirai-core"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "libc",
  "moirai-utils",
@@ -1511,7 +1513,7 @@ dependencies = [
 [[package]]
 name = "moirai-executor"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "moirai-core",
  "moirai-pal",
@@ -1522,7 +1524,7 @@ dependencies = [
 [[package]]
 name = "moirai-pal"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "js-sys",
  "libc",
@@ -1536,15 +1538,16 @@ dependencies = [
 [[package]]
 name = "moirai-parallel"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
+ "melinoe",
  "moirai-executor",
 ]
 
 [[package]]
 name = "moirai-scheduler"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "moirai-core",
  "moirai-utils",
@@ -1554,7 +1557,7 @@ dependencies = [
 [[package]]
 name = "moirai-sync"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "libc",
  "moirai-core",
@@ -1564,7 +1567,7 @@ dependencies = [
 [[package]]
 name = "moirai-transport"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 dependencies = [
  "moirai-core",
  "moirai-scheduler",
@@ -1574,7 +1577,7 @@ dependencies = [
 [[package]]
 name = "moirai-utils"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Moirai.git#3f4ade87ab14874d1e0e724a6905992d4d8d5e6f"
+source = "git+https://github.com/ryancinsight/Moirai.git#0b1258bbe0fa0d189ea0bfd5528bb01a5c14bb16"
 
 [[package]]
 name = "naga"

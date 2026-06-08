@@ -854,7 +854,7 @@ mod tests {
         use melinoe::{brand_scope, Borrowed, CellCowExt, MelinoeCell, Retained};
         use std::borrow::Cow;
 
-        let input_signal = vec![1.0, 2.0, 3.0, 4.0];
+        let input_signal = [1.0, 2.0, 3.0, 4.0];
         brand_scope(|token| {
             let cells: Vec<MelinoeCell<'_, f64>> = input_signal
                 .iter()
@@ -871,6 +871,33 @@ mod tests {
             let retained = cells.borrow_cow_with(&token, Retained);
             assert!(matches!(retained, Cow::Owned(_)));
             assert_eq!(retained.as_ref(), &input_signal[..]);
+        });
+    }
+
+    #[test]
+    fn test_moirai_melinoe_parallel_partitioning() {
+        use melinoe::{brand_scope, MelinoeCell};
+        use moirai::par_partition_for_each;
+
+        let input_signal = [0.0f64; 16];
+        brand_scope(|token| {
+            let mut cells: Vec<MelinoeCell<'_, f64>> = input_signal
+                .iter()
+                .copied()
+                .map(MelinoeCell::new)
+                .collect();
+
+            // Run Moirai's parallel partitioning over the Melinoe cell region
+            par_partition_for_each(&mut cells, 4, |start, mut shard| {
+                for (j, slot) in shard.iter_mut().enumerate() {
+                    *slot = (start + j) as f64;
+                }
+            });
+
+            let snap = token.share();
+            for (i, cell) in cells.iter().enumerate() {
+                assert_eq!(*cell.borrow(snap), i as f64);
+            }
         });
     }
 }
