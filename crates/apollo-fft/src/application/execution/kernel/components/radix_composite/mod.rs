@@ -9,35 +9,40 @@ mod core;
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
-use crate::application::execution::policy::ExecutionPolicy;
 pub use cache::CompositeCache;
 
 /// Execute a fused multi-stage Stockham composite pass over all output groups.
 ///
-/// Each output group is `prev_len * r_total` elements. The parallelism policy
-/// `P` distributes groups; `composite_fused_adaptive` handles the per-group
-/// multi-stage recursion using the thread-local bump arena.
+/// Each output group is `prev_len * r_total` elements. When `parallel` is
+/// true, groups are distributed through moirai's work-stealing scheduler;
+/// otherwise execution is sequential. `composite_fused_adaptive` handles the
+/// per-group multi-stage recursion using the thread-local bump arena.
 #[inline]
-pub(super) fn stockham_stage_fused_adaptive<F, P, const INVERSE: bool>(
+pub(super) fn stockham_stage_fused_adaptive<F, const INVERSE: bool>(
     src: &[Complex<F>],
     dst: &mut [Complex<F>],
     prev_len: usize,
     radices: &[usize],
     twiddles: &[&[Complex<F>]],
     pointwise_spectrum: Option<&[Complex<F>]>,
+    parallel: bool,
 ) where
     F: CompositeCache + ShortWinogradScalar,
-    P: ExecutionPolicy,
 {
     let r_total: usize = radices.iter().product();
     let stage_len = prev_len * r_total;
     let groups = src.len() / stage_len;
-    P::for_each_chunk_mut_enumerated(dst, stage_len, |b, dst_block| {
-        let pw = pointwise_spectrum.map(|ps| &ps[b * stage_len..(b + 1) * stage_len]);
-        adaptive::composite_fused_adaptive::<F, INVERSE>(
-            src, dst_block, prev_len, b, groups, radices, twiddles, pw,
-        );
-    });
+    crate::application::execution::policy::for_each_chunk_mut_enumerated(
+        dst,
+        stage_len,
+        parallel,
+        |b, dst_block| {
+            let pw = pointwise_spectrum.map(|ps| &ps[b * stage_len..(b + 1) * stage_len]);
+            adaptive::composite_fused_adaptive::<F, INVERSE>(
+                src, dst_block, prev_len, b, groups, radices, twiddles, pw,
+            );
+        },
+    );
 }
 
 pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 'static>(

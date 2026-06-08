@@ -7,7 +7,7 @@ use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradSca
 use crate::application::execution::kernel::tuning::{
     FUSE_THRESHOLD, RADIX_PARALLEL_CHUNK_THRESHOLD,
 };
-use crate::application::execution::policy::{ParallelPolicy, SyncPolicy};
+
 
 /// Maximum number of stages that may be folded into one adaptive fused pass.
 ///
@@ -112,39 +112,26 @@ pub(super) fn composite_core_with_radices<
             };
             let use_parallel = n >= RADIX_PARALLEL_CHUNK_THRESHOLD && stage_prev_len >= 512;
 
-            match (src_is_data, use_parallel) {
-                (true, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy, INVERSE>(
+            if src_is_data {
+                stockham_stage_fused_adaptive::<F, INVERSE>(
                     data,
                     scratch,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                ),
-                (true, false) => stockham_stage_fused_adaptive::<F, SyncPolicy, INVERSE>(
-                    data,
-                    scratch,
-                    prev_len,
-                    fused_radices,
-                    twiddles,
-                    pointwise,
-                ),
-                (false, true) => stockham_stage_fused_adaptive::<F, ParallelPolicy, INVERSE>(
+                    use_parallel,
+                );
+            } else {
+                stockham_stage_fused_adaptive::<F, INVERSE>(
                     scratch,
                     data,
                     prev_len,
                     fused_radices,
                     twiddles,
                     pointwise,
-                ),
-                (false, false) => stockham_stage_fused_adaptive::<F, SyncPolicy, INVERSE>(
-                    scratch,
-                    data,
-                    prev_len,
-                    fused_radices,
-                    twiddles,
-                    pointwise,
-                ),
+                    use_parallel,
+                );
             }
 
             src_is_data = !src_is_data;
