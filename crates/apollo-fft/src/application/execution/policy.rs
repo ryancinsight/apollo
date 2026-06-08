@@ -11,12 +11,8 @@
 /// `(index, chunk)` to `f`. When `parallel` is true, dispatches through
 /// moirai's work-stealing scheduler; otherwise runs sequentially.
 #[inline]
-pub fn for_each_chunk_mut_enumerated<T, F>(
-    data: &mut [T],
-    chunk_size: usize,
-    parallel: bool,
-    f: F,
-) where
+pub fn for_each_chunk_mut_enumerated<T, F>(data: &mut [T], chunk_size: usize, parallel: bool, f: F)
+where
     T: Send + Sync,
     F: Fn(usize, &mut [T]) + Send + Sync,
 {

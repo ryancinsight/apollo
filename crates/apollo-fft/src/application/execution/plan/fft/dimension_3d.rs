@@ -145,9 +145,7 @@ where
             }
         };
         if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                data_slice, NZ, lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, NZ, lane_fn);
         } else {
             data_slice.chunks_mut(NZ).for_each(lane_fn);
         }
@@ -185,9 +183,7 @@ where
                 }
             };
             if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    scratch, NY, lane_fn,
-                );
+                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(scratch, NY, lane_fn);
             } else {
                 scratch.chunks_mut(NY).for_each(lane_fn);
             }
@@ -242,9 +238,7 @@ where
                 }
             };
             if scratch.len() > RAYON_THRESHOLD {
-                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    scratch, NX, lane_fn,
-                );
+                moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(scratch, NX, lane_fn);
             } else {
                 scratch.chunks_mut(NX).for_each(lane_fn);
             }
@@ -409,7 +403,9 @@ where
             };
             if scratch.len() > RAYON_THRESHOLD {
                 moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    &mut scratch[..], self.ny, lane_fn,
+                    &mut scratch[..],
+                    self.ny,
+                    lane_fn,
                 );
             } else {
                 scratch.chunks_mut(self.ny).for_each(lane_fn);
@@ -474,7 +470,9 @@ where
             };
             if scratch.len() > RAYON_THRESHOLD {
                 moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                    &mut scratch[..], self.nx, lane_fn,
+                    &mut scratch[..],
+                    self.nx,
+                    lane_fn,
                 );
             } else {
                 scratch.chunks_mut(self.nx).for_each(lane_fn);
@@ -522,9 +520,7 @@ where
                 }
             };
         if data_slice.len() > RAYON_THRESHOLD {
-            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(
-                data_slice, self.nz, lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data_slice, self.nz, lane_fn);
         } else {
             data_slice.chunks_mut(self.nz).for_each(lane_fn);
         }

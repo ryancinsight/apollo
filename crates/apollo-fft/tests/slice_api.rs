@@ -13,7 +13,10 @@ fn slice_fft_roundtrip_f64() {
     let recon = ifft_1d_slice_typed::<f64>(&spectrum);
     assert_eq!(recon.len(), signal.len());
     for (i, (&o, &r)) in signal.iter().zip(&recon).enumerate() {
-        assert!((o - r).abs() < 1e-9, "roundtrip mismatch at {i}: {o} vs {r}");
+        assert!(
+            (o - r).abs() < 1e-9,
+            "roundtrip mismatch at {i}: {o} vs {r}"
+        );
     }
 }
 

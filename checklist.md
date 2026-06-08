@@ -1,9 +1,10 @@
 # Apollo Checklist
-## Provider utilization audit for Apollo -> Moirai/Mnemosyne [patch]
+## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe [patch]
 - [x] Added `cargo run -p xtask -- provider-audit` as an Apollo-local static source audit for provider usage, Rayon residue, WGPU surface, `Arc`/`Mutex`/`dyn`, clone-to-`Vec`, and `Cow` signals by crate.
-- [x] Documented the Git dependency order in `docs/moirai_mnemosyne_provider_contract.md`: Moirai/Mnemosyne changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.
-- [x] Captured Apollo requirements for Moirai CPU scheduling and Mnemosyne scratch allocation without editing dirty provider repositories.
-- [ ] [patch] After Moirai and Mnemosyne provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
+- [x] Documented the Git dependency order in `docs/provider_contract.md`: Moirai/Mnemosyne/Melinoe changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.
+- [x] Captured Apollo requirements for Moirai CPU scheduling, Mnemosyne scratch allocation, and Melinoe branded zero-copy/Cow boundaries.
+- [x] Replaced `apollo-fft` composite radix storage with `Cow<'static, [usize]>` so static schedules remain borrowed and dynamic schedules are owned only at the cache boundary.
+- [ ] [patch] After Moirai, Mnemosyne, and Melinoe provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 
 ## Routing harden (72/90/198/ f32 comp force before short-win) + f32 rader bias broaden (m>=128 +67/113) + latent radix_composite compile fix [patch]

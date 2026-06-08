@@ -1,15 +1,16 @@
-# Moirai and Mnemosyne Provider Contract
+# Apollo Provider Contract
 
 Apollo consumes provider crates through Git dependencies. Provider changes in
-Moirai or Mnemosyne must be committed and pushed before Apollo updates its
-dependency revision. Committed Apollo manifests must not use local path
-overrides for provider work.
+Moirai, Mnemosyne, or Melinoe must be committed and pushed before Apollo
+updates its dependency revision. Committed Apollo manifests must not use local
+path overrides for provider work.
 
 ## Current Surface
 
 - `moirai` is the active data-parallel provider in the Apollo workspace
   dependency table with default features disabled and `parallel` enabled.
 - `mnemosyne` is not yet an Apollo workspace dependency.
+- `melinoe` is not yet an Apollo workspace dependency.
 - `ndarray` still enables `rayon` and `matrixmultiply-threading`; this is an
   audit item because it keeps Rayon-linked parallelism in the dependency graph
   while Moirai is the intended parallel runtime.
@@ -44,12 +45,26 @@ overrides for provider work.
 - No implicit global allocator requirement for Apollo library crates. Any
   global allocator mode must stay behind an opt-in binary or benchmark feature.
 
+## Apollo Requirements for Melinoe
+
+- Branded zero-copy slice views for scratch buffers, validation fixtures, and
+  host-side staging slices.
+- `Cow` boundary APIs that borrow by default and clone exactly once only when a
+  caller needs retained ownership.
+- Zero-sized policy markers for static borrow/retain choices so monomorphized
+  Apollo call sites remove inactive branches.
+- Capability tokens that encode read/write access without runtime flags,
+  locks, or shared mutable state inside mathematical kernels.
+- Deep vertical module ownership for branded cell, region, sync, atomic, and
+  Cow surfaces so Apollo can depend on the public contract without reaching
+  into provider internals.
+
 ## GPU Boundary
 
-Moirai and Mnemosyne optimize CPU scheduling and host memory. WGPU execution
-remains in `*-wgpu` infrastructure crates. GPU buffers, command encoders,
-pipeline objects, and device futures must not leak into pure Apollo domain
-models or CPU mathematical kernels.
+Moirai, Mnemosyne, and Melinoe optimize CPU scheduling, host memory, and
+branded zero-copy access. WGPU execution remains in `*-wgpu` infrastructure
+crates. GPU buffers, command encoders, pipeline objects, and device futures
+must not leak into pure Apollo domain models or CPU mathematical kernels.
 
 ## Verification
 
@@ -59,7 +74,7 @@ Run:
 cargo run -p xtask -- provider-audit
 ```
 
-The audit reports Moirai, Mnemosyne, Rayon, WGPU, `Arc`, `Mutex`, `dyn`,
-clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is static source
-analysis; performance claims still require Criterion or domain-specific
+The audit reports Moirai, Mnemosyne, Melinoe, Rayon, WGPU, `Arc`, `Mutex`,
+`dyn`, clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is static
+source analysis; performance claims still require Criterion or domain-specific
 benchmarks.

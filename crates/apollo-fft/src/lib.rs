@@ -165,7 +165,6 @@ where
     T::Spectrum: Clone,
 {
     fft_1d_array_typed::<T>(&Array1::from_vec(signal.to_vec())).to_vec()
-
 }
 
 /// Forward 2D FFT of a real array.
@@ -486,7 +485,6 @@ where
 {
     ifft_1d_array_typed::<T>(&Array1::from_vec(spectrum.to_vec())).to_vec()
 }
-
 
 /// Inverse 2D FFT of a complex array.
 #[must_use]

@@ -14,6 +14,10 @@ const PROVIDER_REQUIREMENTS: &[(&str, &str)] = &[
         "optional scratch and plan-cache allocation for aligned transform workspaces, reusable thread-local regions, Cow-backed borrowed views, zero-sized allocation policies, and no default global allocator requirement",
     ),
     (
+        "melinoe",
+        "branded zero-copy slice and Cow boundaries for scratch, staging, and validation views with ZST policy markers and no shared mutable state in mathematical kernels",
+    ),
+    (
         "wgpu",
         "GPU kernels keep device buffers behind infrastructure crates while CPU planning, host staging, and verification stay provider-agnostic",
     ),
@@ -22,6 +26,7 @@ const PROVIDER_REQUIREMENTS: &[(&str, &str)] = &[
 const SOURCE_PATTERNS: &[(&str, &str)] = &[
     ("moirai", "moirai"),
     ("mnemosyne", "mnemosyne"),
+    ("melinoe", "melinoe"),
     ("rayon", "rayon"),
     ("arc", "Arc<"),
     ("mutex", "Mutex<"),
@@ -71,6 +76,7 @@ struct ProviderAudit {
 struct WorkspaceAudit {
     moirai_workspace_dep: bool,
     mnemosyne_workspace_dep: bool,
+    melinoe_workspace_dep: bool,
     ndarray_rayon_feature: bool,
 }
 
@@ -86,6 +92,7 @@ struct CrateAudit {
 struct ManifestUsage {
     moirai: bool,
     mnemosyne: bool,
+    melinoe: bool,
     rayon: bool,
     ndarray_rayon_feature: bool,
 }
@@ -126,6 +133,11 @@ impl ProviderAudit {
         );
         push_bool_line(
             &mut output,
+            "Melinoe workspace dependency",
+            self.workspace.melinoe_workspace_dep,
+        );
+        push_bool_line(
+            &mut output,
             "ndarray rayon/matrixmultiply-threading feature",
             self.workspace.ndarray_rayon_feature,
         );
@@ -133,10 +145,10 @@ impl ProviderAudit {
 
         output.push_str("## Crate Usage\n");
         output.push_str(
-            "| Crate | Manifest | Moirai | Mnemosyne | Rayon | ndarray rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
+            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Rayon | ndarray rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
         );
         output.push_str(
-            "| :--- | :--- | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
         );
         for crate_audit in &self.crates {
             let dyn_count = count(&crate_audit.source_usage, "box_dyn")
@@ -145,7 +157,7 @@ impl ProviderAudit {
                 + count(&crate_audit.source_usage, "collect_vec");
             writeln!(
                 &mut output,
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
                 crate_audit.name,
                 crate_audit.manifest.display(),
                 mark(
@@ -155,6 +167,10 @@ impl ProviderAudit {
                 mark(
                     crate_audit.manifest_usage.mnemosyne
                         || count(&crate_audit.source_usage, "mnemosyne") > 0
+                ),
+                mark(
+                    crate_audit.manifest_usage.melinoe
+                        || count(&crate_audit.source_usage, "melinoe") > 0
                 ),
                 mark(
                     crate_audit.manifest_usage.rayon
@@ -179,7 +195,7 @@ impl ProviderAudit {
         }
         output.push_str("\n## Dependency Order\n");
         output.push_str(
-            "- Moirai and Mnemosyne are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
+            "- Moirai, Mnemosyne, and Melinoe are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
         );
         output.push_str(
             "- Apollo must not add a local path override for provider work in committed manifests.\n",
@@ -195,6 +211,7 @@ fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
     Ok(WorkspaceAudit {
         moirai_workspace_dep: text.contains("moirai") && text.contains("github.com"),
         mnemosyne_workspace_dep: text.contains("mnemosyne"),
+        melinoe_workspace_dep: text.contains("melinoe"),
         ndarray_rayon_feature: text.contains("features = [\"rayon\"")
             || text.contains("features = [\"rayon\",")
             || text.contains("features = [\"rayon\","),
@@ -273,6 +290,7 @@ fn manifest_usage(text: &str) -> ManifestUsage {
     ManifestUsage {
         moirai: text.contains("moirai"),
         mnemosyne: text.contains("mnemosyne"),
+        melinoe: text.contains("melinoe"),
         rayon: text.contains("rayon"),
         ndarray_rayon_feature: text.contains("ndarray") && text.contains("rayon"),
     }
@@ -353,6 +371,7 @@ members = ["crates/apollo-demo"]
 
 [workspace.dependencies]
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
+melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 ndarray = { version = "0.16", features = ["rayon","matrixmultiply-threading"] }
 "#,
         )?;
@@ -365,6 +384,7 @@ edition = "2021"
 
 [dependencies]
 moirai = { workspace = true }
+melinoe = { workspace = true }
 "#,
         )?;
         fs::write(
@@ -377,8 +397,13 @@ moirai = { workspace = true }
 
         assert!(rendered.contains("Moirai git workspace dependency: yes"));
         assert!(rendered.contains("Mnemosyne workspace dependency: no"));
-        assert!(rendered.contains("| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no |"));
-        assert!(rendered.contains("Moirai and Mnemosyne are consumed from Git dependencies"));
+        assert!(rendered.contains("Melinoe workspace dependency: yes"));
+        assert!(
+            rendered.contains("| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes |")
+        );
+        assert!(
+            rendered.contains("Moirai, Mnemosyne, and Melinoe are consumed from Git dependencies")
+        );
 
         fs::remove_dir_all(root)?;
         Ok(())

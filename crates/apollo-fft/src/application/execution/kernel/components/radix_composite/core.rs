@@ -8,7 +8,6 @@ use crate::application::execution::kernel::tuning::{
     FUSE_THRESHOLD, RADIX_PARALLEL_CHUNK_THRESHOLD,
 };
 
-
 /// Maximum number of stages that may be folded into one adaptive fused pass.
 ///
 /// With FUSE_THRESHOLD = 65_536 and all-radix-4 after lowering, the worst case
