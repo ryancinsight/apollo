@@ -5,12 +5,10 @@ use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array1;
-use std::cell::RefCell;
-
 thread_local! {
-    static TYPED_INPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_F32_SCRATCH: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    static TYPED_INPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    static TYPED_F32_SCRATCH: mnemosyne::scratch::ScratchPool<f32> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Real storage accepted by typed FWHT paths.
@@ -208,31 +206,19 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Res
 }
 
 fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-            let mut input_scratch = input_scratch.borrow_mut();
-            if input_scratch.len() < n {
-                input_scratch.resize(n, 0.0);
-            }
-
-            let mut output_scratch = output_scratch.borrow_mut();
-            if output_scratch.len() < n {
-                output_scratch.resize(n, 0.0);
-            }
-
-            f(&mut input_scratch[..n], &mut output_scratch[..n])
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        in_pool.with_scratch(n, |input64| {
+            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
+                out_pool.with_scratch(n, |output64| {
+                    f(input64, output64)
+                })
+            })
         })
     })
 }
 
 fn with_f32_workspace<R>(n: usize, f: impl FnOnce(&mut [f32]) -> R) -> R {
-    TYPED_F32_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        if scratch.len() < n {
-            scratch.resize(n, 0.0);
-        }
-        f(&mut scratch[..n])
-    })
+    TYPED_F32_SCRATCH.with(|pool| pool.with_scratch(n, f))
 }
 
 #[cfg(test)]
@@ -241,9 +227,9 @@ pub(crate) fn typed_scratch_capacities() -> (usize, usize, usize) {
         TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
             TYPED_F32_SCRATCH.with(|f32_scratch| {
                 (
-                    input_scratch.borrow().capacity(),
-                    output_scratch.borrow().capacity(),
-                    f32_scratch.borrow().capacity(),
+                    input_scratch.capacity(),
+                    output_scratch.capacity(),
+                    f32_scratch.capacity(),
                 )
             })
         })

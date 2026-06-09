@@ -41,12 +41,11 @@ use crate::domain::contracts::error::FrftError;
 use nalgebra::{DMatrix, SymmetricEigen};
 use ndarray::Array1;
 use num_complex::Complex64;
-use std::cell::RefCell;
 use std::f64::consts::PI;
 use std::sync::Arc;
 
 thread_local! {
-    static UNITARY_COEFF_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static UNITARY_COEFF_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Sorted orthonormal eigenvector basis of the Grünbaum commuting matrix.
@@ -295,18 +294,12 @@ fn apply_unitary_frft(
 
 #[inline]
 fn with_coeff_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-    UNITARY_COEFF_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        if scratch.len() < n {
-            scratch.resize(n, Complex64::new(0.0, 0.0));
-        }
-        f(&mut scratch[..n])
-    })
+    UNITARY_COEFF_SCRATCH.with(|pool| pool.with_scratch(n, f))
 }
 
 #[cfg(test)]
 fn coeff_scratch_capacity() -> usize {
-    UNITARY_COEFF_SCRATCH.with(|scratch| scratch.borrow().capacity())
+    UNITARY_COEFF_SCRATCH.with(|pool| pool.capacity())
 }
 
 #[cfg(test)]

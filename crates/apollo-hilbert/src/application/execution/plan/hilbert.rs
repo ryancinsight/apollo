@@ -8,12 +8,12 @@ use crate::infrastructure::kernel::direct::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use num_complex::Complex64;
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    static TYPED_INPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static OBSERVABLE_ANALYTIC_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static OBSERVABLE_ANALYTIC_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Reusable 1D Hilbert transform plan.
@@ -154,11 +154,7 @@ fn with_typed_signal_workspace<R>(
     len: usize,
     f: impl FnOnce(&mut [f64]) -> HilbertResult<R>,
 ) -> HilbertResult<R> {
-    TYPED_INPUT64_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        scratch.resize(len, 0.0);
-        f(&mut scratch[..len])
-    })
+    TYPED_INPUT64_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
 }
 
 fn with_typed_transform_workspaces<R>(
@@ -166,12 +162,12 @@ fn with_typed_transform_workspaces<R>(
     f: impl FnOnce(&mut [f64], &mut [f64]) -> HilbertResult<R>,
 ) -> HilbertResult<R> {
     TYPED_INPUT64_SCRATCH.with(|input| {
-        TYPED_OUTPUT64_SCRATCH.with(|output| {
-            let mut input = input.borrow_mut();
-            let mut output = output.borrow_mut();
-            input.resize(len, 0.0);
-            output.resize(len, 0.0);
-            f(&mut input[..len], &mut output[..len])
+        input.with_scratch(len, |input64| {
+            TYPED_OUTPUT64_SCRATCH.with(|output| {
+                output.with_scratch(len, |output64| {
+                    f(input64, output64)
+                })
+            })
         })
     })
 }
@@ -180,24 +176,20 @@ fn with_observable_analytic_workspace<R>(
     len: usize,
     f: impl FnOnce(&mut [Complex64]) -> HilbertResult<R>,
 ) -> HilbertResult<R> {
-    OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        scratch.resize(len, Complex64::new(0.0, 0.0));
-        f(&mut scratch[..len])
-    })
+    OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
 }
 
 #[cfg(test)]
 fn typed_workspace_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|input| {
         TYPED_OUTPUT64_SCRATCH
-            .with(|output| (input.borrow().capacity(), output.borrow().capacity()))
+            .with(|output| (input.capacity(), output.capacity()))
     })
 }
 
 #[cfg(test)]
 fn observable_workspace_capacity() -> usize {
-    OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.borrow().capacity())
+    OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.capacity())
 }
 
 /// Real storage accepted by typed Hilbert input and quadrature paths.

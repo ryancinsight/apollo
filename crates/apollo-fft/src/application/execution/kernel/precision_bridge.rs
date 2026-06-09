@@ -4,10 +4,10 @@
 
 use half::f16;
 use num_complex::{Complex, Complex32};
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    static COMPLEX32_BRIDGE_SCRATCH: RefCell<Vec<Complex32>> = const { RefCell::new(Vec::new()) };
+    static COMPLEX32_BRIDGE_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
 }
 
 /// Storage element that can be transformed through a `Complex32` execution buffer.
@@ -38,23 +38,16 @@ where
     S: Complex32Bridge,
     F: FnOnce(&mut [Complex32]),
 {
-    COMPLEX32_BRIDGE_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        let n = data.len();
-        if scratch.capacity() < n {
-            let cap = scratch.capacity();
-            scratch.reserve(n.saturating_sub(cap));
-        }
-        // SAFETY: The kernel will immediately overwrite the entire vector in the loop below.
-        unsafe {
-            scratch.set_len(n);
-        }
-        for (i, v) in data.iter().enumerate() {
-            scratch[i] = v.to_complex32();
-        }
-        kernel(scratch.as_mut_slice());
-        data.iter_mut()
-            .zip(scratch.iter().copied())
-            .for_each(|(dst, src)| *dst = S::from_complex32(src));
+    let n = data.len();
+    COMPLEX32_BRIDGE_SCRATCH.with(|pool| {
+        pool.with_scratch(n, |scratch| {
+            for (i, v) in data.iter().enumerate() {
+                scratch[i] = v.to_complex32();
+            }
+            kernel(scratch);
+            data.iter_mut()
+                .zip(scratch.iter().copied())
+                .for_each(|(dst, src)| *dst = S::from_complex32(src));
+        });
     });
 }

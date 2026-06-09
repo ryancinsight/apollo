@@ -11,12 +11,12 @@ use crate::infrastructure::kernel::sliding::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use num_complex::{Complex32, Complex64};
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 use std::collections::VecDeque;
 
 thread_local! {
-    static TYPED_WINDOW64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_BINS64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_WINDOW64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_BINS64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Reusable SDFT plan.
@@ -123,20 +123,20 @@ fn with_typed_direct_workspaces<R>(
     f: impl FnOnce(&mut [f64], &mut [Complex64]) -> SdftResult<R>,
 ) -> SdftResult<R> {
     TYPED_WINDOW64_SCRATCH.with(|window_cell| {
-        TYPED_BINS64_SCRATCH.with(|bins_cell| {
-            let mut window = window_cell.borrow_mut();
-            let mut bins = bins_cell.borrow_mut();
-            window.resize(window_len, 0.0);
-            bins.resize(bin_count, Complex64::new(0.0, 0.0));
-            f(window.as_mut_slice(), bins.as_mut_slice())
+        window_cell.with_scratch(window_len, |window| {
+            TYPED_BINS64_SCRATCH.with(|bins_cell| {
+                bins_cell.with_scratch(bin_count, |bins| {
+                    f(window, bins)
+                })
+            })
         })
     })
 }
 
 #[cfg(test)]
 fn typed_direct_workspace_capacities() -> (usize, usize) {
-    let window = TYPED_WINDOW64_SCRATCH.with(|cell| cell.borrow().capacity());
-    let bins = TYPED_BINS64_SCRATCH.with(|cell| cell.borrow().capacity());
+    let window = TYPED_WINDOW64_SCRATCH.with(|cell| cell.capacity());
+    let bins = TYPED_BINS64_SCRATCH.with(|cell| cell.capacity());
     (window, bins)
 }
 

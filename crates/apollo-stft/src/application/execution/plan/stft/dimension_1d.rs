@@ -11,17 +11,17 @@ use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::Array1;
 use num_complex::Complex64;
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    static TYPED_SIGNAL64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_SPECTRUM64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_FORWARD_OUTPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_INVERSE_OUTPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static INVERSE_FRAME_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static INVERSE_COMPLEX_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static INVERSE_OVERLAP_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static INVERSE_WEIGHT_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_SIGNAL64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_SPECTRUM64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static TYPED_FORWARD_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static TYPED_INVERSE_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static INVERSE_FRAME_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static INVERSE_COMPLEX_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static INVERSE_OVERLAP_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static INVERSE_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
 /// Return `true` when `n > 0`.
@@ -382,12 +382,12 @@ fn with_forward_typed_workspaces<R>(
     f: impl FnOnce(&mut [f64], &mut [Complex64]) -> StftResult<R>,
 ) -> StftResult<R> {
     TYPED_SIGNAL64_SCRATCH.with(|signal_cell| {
-        TYPED_FORWARD_OUTPUT64_SCRATCH.with(|spectrum_cell| {
-            let mut signal = signal_cell.borrow_mut();
-            let mut spectrum = spectrum_cell.borrow_mut();
-            signal.resize(signal_len, 0.0);
-            spectrum.resize(spectrum_len, Complex64::new(0.0, 0.0));
-            f(signal.as_mut_slice(), spectrum.as_mut_slice())
+        signal_cell.with_scratch(signal_len, |signal| {
+            TYPED_FORWARD_OUTPUT64_SCRATCH.with(|spectrum_cell| {
+                spectrum_cell.with_scratch(spectrum_len, |spectrum| {
+                    f(signal, spectrum)
+                })
+            })
         })
     })
 }
@@ -398,12 +398,12 @@ fn with_inverse_typed_workspaces<R>(
     f: impl FnOnce(&mut [Complex64], &mut [f64]) -> StftResult<R>,
 ) -> StftResult<R> {
     TYPED_SPECTRUM64_SCRATCH.with(|spectrum_cell| {
-        TYPED_INVERSE_OUTPUT64_SCRATCH.with(|signal_cell| {
-            let mut spectrum = spectrum_cell.borrow_mut();
-            let mut signal = signal_cell.borrow_mut();
-            spectrum.resize(spectrum_len, Complex64::new(0.0, 0.0));
-            signal.resize(signal_len, 0.0);
-            f(spectrum.as_mut_slice(), signal.as_mut_slice())
+        spectrum_cell.with_scratch(spectrum_len, |spectrum| {
+            TYPED_INVERSE_OUTPUT64_SCRATCH.with(|signal_cell| {
+                signal_cell.with_scratch(signal_len, |signal| {
+                    f(spectrum, signal)
+                })
+            })
         })
     })
 }
@@ -414,29 +414,22 @@ fn with_inverse_wola_workspaces<R>(
     signal_len: usize,
     f: impl FnOnce(&mut [f64], &mut [Complex64], &mut [f64], &mut [f64]) -> StftResult<R>,
 ) -> StftResult<R> {
+    let frame_work_len = frames * frame_len;
     INVERSE_FRAME_SCRATCH.with(|frame_cell| {
-        INVERSE_COMPLEX_SCRATCH.with(|complex_cell| {
-            INVERSE_OVERLAP_SCRATCH.with(|overlap_cell| {
-                INVERSE_WEIGHT_SCRATCH.with(|weight_cell| {
-                    let frame_work_len = frames * frame_len;
-                    let mut flat_frames = frame_cell.borrow_mut();
-                    let mut flat_complex = complex_cell.borrow_mut();
-                    let mut overlap = overlap_cell.borrow_mut();
-                    let mut weight = weight_cell.borrow_mut();
-
-                    flat_frames.resize(frame_work_len, 0.0);
-                    flat_complex.resize(frame_work_len, Complex64::new(0.0, 0.0));
-                    overlap.resize(signal_len, 0.0);
-                    weight.resize(signal_len, 0.0);
-                    overlap.fill(0.0);
-                    weight.fill(0.0);
-
-                    f(
-                        flat_frames.as_mut_slice(),
-                        flat_complex.as_mut_slice(),
-                        overlap.as_mut_slice(),
-                        weight.as_mut_slice(),
-                    )
+        frame_cell.with_scratch(frame_work_len, |flat_frames| {
+            INVERSE_COMPLEX_SCRATCH.with(|complex_cell| {
+                complex_cell.with_scratch(frame_work_len, |flat_complex| {
+                    INVERSE_OVERLAP_SCRATCH.with(|overlap_cell| {
+                        overlap_cell.with_scratch(signal_len, |overlap| {
+                            INVERSE_WEIGHT_SCRATCH.with(|weight_cell| {
+                                weight_cell.with_scratch(signal_len, |weight| {
+                                    overlap.fill(0.0);
+                                    weight.fill(0.0);
+                                    f(flat_frames, flat_complex, overlap, weight)
+                                })
+                            })
+                        })
+                    })
                 })
             })
         })
@@ -445,19 +438,19 @@ fn with_inverse_wola_workspaces<R>(
 
 #[cfg(test)]
 fn typed_workspace_capacities() -> (usize, usize, usize, usize) {
-    let signal = TYPED_SIGNAL64_SCRATCH.with(|cell| cell.borrow().capacity());
-    let spectrum = TYPED_SPECTRUM64_SCRATCH.with(|cell| cell.borrow().capacity());
-    let forward_output = TYPED_FORWARD_OUTPUT64_SCRATCH.with(|cell| cell.borrow().capacity());
-    let inverse_output = TYPED_INVERSE_OUTPUT64_SCRATCH.with(|cell| cell.borrow().capacity());
+    let signal = TYPED_SIGNAL64_SCRATCH.with(|cell| cell.capacity());
+    let spectrum = TYPED_SPECTRUM64_SCRATCH.with(|cell| cell.capacity());
+    let forward_output = TYPED_FORWARD_OUTPUT64_SCRATCH.with(|cell| cell.capacity());
+    let inverse_output = TYPED_INVERSE_OUTPUT64_SCRATCH.with(|cell| cell.capacity());
     (signal, spectrum, forward_output, inverse_output)
 }
 
 #[cfg(test)]
 fn inverse_wola_workspace_capacities() -> (usize, usize, usize, usize) {
-    let frames = INVERSE_FRAME_SCRATCH.with(|cell| cell.borrow().capacity());
-    let complex = INVERSE_COMPLEX_SCRATCH.with(|cell| cell.borrow().capacity());
-    let overlap = INVERSE_OVERLAP_SCRATCH.with(|cell| cell.borrow().capacity());
-    let weight = INVERSE_WEIGHT_SCRATCH.with(|cell| cell.borrow().capacity());
+    let frames = INVERSE_FRAME_SCRATCH.with(|cell| cell.capacity());
+    let complex = INVERSE_COMPLEX_SCRATCH.with(|cell| cell.capacity());
+    let overlap = INVERSE_OVERLAP_SCRATCH.with(|cell| cell.capacity());
+    let weight = INVERSE_WEIGHT_SCRATCH.with(|cell| cell.capacity());
     (frames, complex, overlap, weight)
 }
 

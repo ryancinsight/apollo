@@ -9,6 +9,7 @@ description = "Quantum Fourier transform utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+mnemosyne = { workspace = true }
 ndarray = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }

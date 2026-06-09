@@ -8,12 +8,12 @@ use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    static TYPED_INPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static FORWARD_WORKSPACE_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static FORWARD_WORKSPACE_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Run `f` with a thread-local Bluestein forward-convolution workspace sized to
@@ -22,13 +22,7 @@ thread_local! {
 /// a shared plan without serializing on one workspace. The buffer is grown on
 /// demand and reused across calls on the same thread.
 fn with_forward_workspace<R>(len: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-    FORWARD_WORKSPACE_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        if scratch.len() < len {
-            scratch.resize(len, Complex64::new(0.0, 0.0));
-        }
-        f(&mut scratch[..len])
-    })
+    FORWARD_WORKSPACE_SCRATCH.with(|pool| pool.with_scratch(len, f))
 }
 
 /// Return whether a CZT input or output length satisfies the non-zero contract.
@@ -153,7 +147,7 @@ impl CztPlan {
 
     #[cfg(test)]
     pub(crate) fn forward_workspace_capacity() -> usize {
-        FORWARD_WORKSPACE_SCRATCH.with(|scratch| scratch.borrow().capacity())
+        FORWARD_WORKSPACE_SCRATCH.with(|pool| pool.capacity())
     }
 
     /// Forward direct CZT evaluation.
@@ -451,33 +445,24 @@ fn with_complex64_workspaces<R>(
     output_len: usize,
     f: impl FnOnce(&mut [Complex64], &mut [Complex64]) -> R,
 ) -> R {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-            let mut input_scratch = input_scratch.borrow_mut();
-            if input_scratch.len() < input_len {
-                input_scratch.resize(input_len, Complex64::new(0.0, 0.0));
-            }
-
-            let mut output_scratch = output_scratch.borrow_mut();
-            if output_scratch.len() < output_len {
-                output_scratch.resize(output_len, Complex64::new(0.0, 0.0));
-            }
-
-            f(
-                &mut input_scratch[..input_len],
-                &mut output_scratch[..output_len],
-            )
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        in_pool.with_scratch(input_len, |input64| {
+            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
+                out_pool.with_scratch(output_len, |output64| {
+                    f(input64, output64)
+                })
+            })
         })
     })
 }
 
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
             (
-                input_scratch.borrow().capacity(),
-                output_scratch.borrow().capacity(),
+                in_pool.capacity(),
+                out_pool.capacity(),
             )
         })
     })

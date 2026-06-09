@@ -9,6 +9,7 @@ description = "Short-time Fourier transform utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+mnemosyne = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }

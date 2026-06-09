@@ -10,10 +10,8 @@
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use apollo_fft::{FftPlan1D, Shape1D};
 use num_complex::Complex64;
-use std::cell::RefCell;
-
 thread_local! {
-    static QUADRATURE_ANALYTIC_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static QUADRATURE_ANALYTIC_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Compute the Hilbert quadrature component of a real signal.
@@ -110,16 +108,12 @@ fn with_quadrature_analytic_workspace<R>(
     len: usize,
     f: impl FnOnce(&mut [Complex64]) -> HilbertResult<R>,
 ) -> HilbertResult<R> {
-    QUADRATURE_ANALYTIC_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        scratch.resize(len, Complex64::new(0.0, 0.0));
-        f(&mut scratch[..len])
-    })
+    QUADRATURE_ANALYTIC_SCRATCH.with(|pool| pool.with_scratch(len, f))
 }
 
 #[cfg(test)]
 fn quadrature_analytic_workspace_capacity() -> usize {
-    QUADRATURE_ANALYTIC_SCRATCH.with(|scratch| scratch.borrow().capacity())
+    QUADRATURE_ANALYTIC_SCRATCH.with(|pool| pool.capacity())
 }
 
 fn apply_analytic_mask(spectrum: &mut [Complex64]) {

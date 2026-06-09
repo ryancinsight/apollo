@@ -5,11 +5,11 @@ use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    static TYPED_INPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
+    static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Complex storage accepted by typed FrFT paths.
@@ -147,30 +147,24 @@ fn with_complex64_workspaces<R>(
     n: usize,
     f: impl FnOnce(&mut [Complex64], &mut [Complex64]) -> R,
 ) -> R {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-            let mut input_scratch = input_scratch.borrow_mut();
-            if input_scratch.len() < n {
-                input_scratch.resize(n, Complex64::new(0.0, 0.0));
-            }
-
-            let mut output_scratch = output_scratch.borrow_mut();
-            if output_scratch.len() < n {
-                output_scratch.resize(n, Complex64::new(0.0, 0.0));
-            }
-
-            f(&mut input_scratch[..n], &mut output_scratch[..n])
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        in_pool.with_scratch(n, |input64| {
+            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
+                out_pool.with_scratch(n, |output64| {
+                    f(input64, output64)
+                })
+            })
         })
     })
 }
 
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
             (
-                input_scratch.borrow().capacity(),
-                output_scratch.borrow().capacity(),
+                in_pool.capacity(),
+                out_pool.capacity(),
             )
         })
     })
