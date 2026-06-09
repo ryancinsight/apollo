@@ -12,7 +12,7 @@ src/
 ```
 
 The plan is the single source of truth for the power-of-two length contract.
-The kernel owns the butterfly schedule and selects Rayon parallel chunks for
+The kernel owns the butterfly schedule and selects Moirai parallel chunks for
 large stages.
 
 ## Mathematical Contract

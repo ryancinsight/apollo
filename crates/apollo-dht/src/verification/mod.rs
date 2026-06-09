@@ -231,7 +231,7 @@ mod tests {
             }
         }
 
-        /// Parallel-range roundtrip: n in [257,512] exercises the rayon parallel path
+        /// Parallel-range roundtrip: n in [257,512] exercises the Moirai parallel path
         /// and (at n=512) the FFT-based fast kernel (FAST_KERNEL_THRESHOLD=512).
         #[test]
         fn dht_roundtrip_parallel_range(

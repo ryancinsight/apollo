@@ -1,6 +1,6 @@
 use moirai::ParallelSliceMut;
 
-/// Parallel dispatch threshold. Below this length, serial iteration avoids rayon spawn overhead.
+/// Parallel dispatch threshold. Below this length, serial iteration avoids parallel task-spawn overhead.
 const PAR_THRESHOLD: usize = 256;
 
 /// Direct O(N²) analytical kernel for the Type-II Discrete Cosine Transform (DCT-II).

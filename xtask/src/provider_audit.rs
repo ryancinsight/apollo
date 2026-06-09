@@ -226,14 +226,16 @@ fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
     let manifest = root.join("Cargo.toml");
     let text = fs::read_to_string(&manifest)
         .with_context(|| format!("failed to read {}", manifest.display()))?;
+    let uncommented = strip_toml_comments(&text);
     Ok(WorkspaceAudit {
-        moirai_workspace_dep: text.contains("moirai") && text.contains("github.com"),
-        mnemosyne_workspace_dep: text.contains("mnemosyne"),
-        melinoe_workspace_dep: text.contains("melinoe"),
-        hermes_workspace_dep: text.contains("hermes-simd") && text.contains("github.com"),
-        ndarray_rayon_feature: text.contains("features = [\"rayon\"")
-            || text.contains("features = [\"rayon\",")
-            || text.contains("features = [\"rayon\","),
+        moirai_workspace_dep: uncommented.contains("moirai") && uncommented.contains("github.com"),
+        mnemosyne_workspace_dep: uncommented.contains("mnemosyne"),
+        melinoe_workspace_dep: uncommented.contains("melinoe"),
+        hermes_workspace_dep: uncommented.contains("hermes-simd")
+            && uncommented.contains("github.com"),
+        ndarray_rayon_feature: uncommented.contains("features = [\"rayon\"")
+            || uncommented.contains("features = [\"rayon\",")
+            || uncommented.contains("features = [\"rayon\","),
     })
 }
 
@@ -306,14 +308,29 @@ fn package_name(text: &str) -> Option<String> {
 }
 
 fn manifest_usage(text: &str) -> ManifestUsage {
+    let uncommented = strip_toml_comments(text);
     ManifestUsage {
-        moirai: text.contains("moirai"),
-        mnemosyne: text.contains("mnemosyne"),
-        melinoe: text.contains("melinoe"),
-        hermes: text.contains("hermes-simd") || text.contains("hermes_simd"),
-        rayon: text.contains("rayon"),
-        ndarray_rayon_feature: text.contains("ndarray") && text.contains("rayon"),
+        moirai: uncommented.contains("moirai"),
+        mnemosyne: uncommented.contains("mnemosyne"),
+        melinoe: uncommented.contains("melinoe"),
+        hermes: uncommented.contains("hermes-simd") || uncommented.contains("hermes_simd"),
+        rayon: uncommented.contains("rayon"),
+        ndarray_rayon_feature: uncommented.contains("ndarray") && uncommented.contains("rayon"),
     }
+}
+
+fn strip_toml_comments(text: &str) -> String {
+    text.lines()
+        .map(|line| line.split_once('#').map_or(line, |(code, _)| code))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn strip_rust_line_comments(text: &str) -> String {
+    text.lines()
+        .map(|line| line.split_once("//").map_or(line, |(code, _)| code))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn source_usage(crate_root: &Path) -> BTreeMap<&'static str, usize> {
@@ -338,8 +355,9 @@ fn collect_source_usage(path: &Path, usage: &mut BTreeMap<&'static str, usize>) 
             collect_source_usage(&path, usage);
         } else if path.extension().is_some_and(|extension| extension == "rs") {
             if let Ok(text) = fs::read_to_string(&path) {
+                let uncommented = strip_rust_line_comments(&text);
                 for (key, pattern) in SOURCE_PATTERNS {
-                    let count = text.match_indices(pattern).count();
+                    let count = uncommented.match_indices(pattern).count();
                     if count > 0 {
                         *usage.entry(key).or_default() += count;
                     }
@@ -434,6 +452,51 @@ hermes-simd = { workspace = true }
     fn provider_audit_rejects_unknown_options() {
         let result = parse_args(["--bad".to_string()].into_iter());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn provider_audit_ignores_comment_only_provider_mentions() -> Result<()> {
+        let root = temp_workspace("provider-audit-comments")?;
+        fs::create_dir_all(root.join("crates/apollo-demo/src"))?;
+        fs::write(
+            root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/apollo-demo"]
+
+[workspace.dependencies]
+# rayon = "1.11"
+# ndarray = { version = "0.16", features = ["rayon"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
+"#,
+        )?;
+        fs::write(
+            root.join("crates/apollo-demo/Cargo.toml"),
+            r#"[package]
+name = "apollo-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+moirai = { workspace = true }
+# rayon = "1.11"
+"#,
+        )?;
+        fs::write(
+            root.join("crates/apollo-demo/src/lib.rs"),
+            "// rayon::join is deliberately mentioned only in a comment\npub fn value() -> usize { 1 }\n",
+        )?;
+
+        let audit = ProviderAudit::collect(&root)?;
+        let rendered = audit.render();
+
+        assert!(rendered.contains("ndarray rayon/matrixmultiply-threading feature: no"));
+        assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no |"));
+        assert!(rendered.contains(
+            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no |"
+        ));
+
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     fn temp_workspace(label: &str) -> Result<PathBuf> {

@@ -29,7 +29,7 @@ power-of-two lengths and Bluestein chirp-Z for arbitrary lengths. The direct
 DFT kernel remains a crate-local reference for verification.
 
 2D and 3D plans execute separable axis passes. Contiguous row/depth-axis passes
-operate directly on backing-slice chunks with Rayon, avoiding full-field
+operate directly on backing-slice chunks through Moirai, avoiding full-field
 lane-copy vectors and scatter copies. Non-contiguous axes still gather one lane
 buffer per lane before scattering because ndarray strides are not contiguous.
 

@@ -33,7 +33,7 @@ use num_complex::{Complex32, Complex64};
 /// | Inverse   | O(N_lat · N_lon · M) | Synthesis sum over all modes for each grid point    |
 ///
 /// Both operations are equivalent to dense matrix–vector products of dimension
-/// `(M) × (N_lat · N_lon)`. Rayon parallelism distributes the `N_lat` latitude rows
+/// `(M) × (N_lat · N_lon)`. Moirai parallelism distributes the `N_lat` latitude rows
 /// across available threads, giving a practical wall-time factor of `1/P` for `P` cores
 /// on the outer loop.
 ///

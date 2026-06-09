@@ -3,7 +3,7 @@
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use moirai::ParallelSliceMut;
 
-/// Below this length the serial path avoids rayon thread spawn overhead.
+/// Below this length the serial path avoids parallel task-spawn overhead.
 /// The threshold is a conservative empirical heuristic; a benchmark-derived value would replace this.
 const PAR_THRESHOLD: usize = 256;
 

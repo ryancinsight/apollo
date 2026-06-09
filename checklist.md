@@ -10,6 +10,8 @@
 - [x] Restored `apollo-fft` Mnemosyne scratch dispatch to a sealed static trait implementation for `Complex32`/`Complex64`, removing runtime type inspection and unsafe closure transmutation from the scratch-pool boundary.
 - [x] Replaced repeated per-crate `ndarray = "0.16"` declarations with the workspace dependency in transform and WGPU crates so `matrixmultiply-threading` remains controlled from one manifest location.
 - [x] Replaced the `apollo-fft` radix-composite dispatch boolean with monomorphized Moirai `ExecutionPolicy` type parameters and value-semantic tests for threshold selection plus sequential/parallel chunk-index equivalence.
+- [x] Hardened `xtask provider-audit` so TOML/Rust line comments do not count as provider usage; added a regression test covering comment-only `rayon` and `ndarray` feature mentions.
+- [x] Renamed stale `RAYON_THRESHOLD`/Rayon wording in Moirai-dispatched FFT/DHT/DCTDST/SHT paths to Moirai/parallel terminology.
 - [ ] [patch] After Moirai, Mnemosyne, Melinoe, and Hermes provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 

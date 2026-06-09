@@ -15,7 +15,7 @@
 //!
 //! Steps 2 and 4 (N1 independent row-FFTs of length N2 and N2 independent
 //! row-FFTs of length N1 respectively) are embarrassingly parallel and are
-//! executed via Rayon above a configurable threshold.
+//! executed via Moirai above a configurable threshold.
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
@@ -50,7 +50,7 @@ fn transpose_square_inplace<T: Copy>(data: &mut [T], n: usize) {
     }
 }
 
-/// N above which the independent row transforms in steps 2 and 4 use Rayon.
+/// N above which the independent row transforms in steps 2 and 4 use Moirai.
 const PARALLEL_ROW_THRESHOLD: usize = 65_536;
 
 /// In-place four-step FFT for large power-of-two lengths.

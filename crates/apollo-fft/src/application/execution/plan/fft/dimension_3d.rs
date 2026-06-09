@@ -42,10 +42,10 @@ use ndarray::{Array3, Axis};
 use num_complex::Complex;
 use std::sync::Arc;
 
-/// Use rayon parallel iteration when total elements exceed this threshold.
-/// Below the threshold, sequential iteration avoids rayon task-spawn overhead
+/// Use Moirai parallel iteration when total elements exceed this threshold.
+/// Below the threshold, sequential iteration avoids parallel task-spawn overhead
 /// that dominates for small volumes (e.g. 8^3 = 512 elements).
-const RAYON_THRESHOLD: usize = 32768;
+const MOIRAI_PARALLEL_THRESHOLD: usize = 32768;
 
 /// Tile size for cache-blocked gather/scatter in axis-1 and axis-0 passes.
 ///
@@ -144,9 +144,11 @@ where
                 lane_plan.inverse_complex_slice_inplace(lane);
             }
         };
-        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-            data_slice, NZ, lane_fn,
-        );
+        moirai::for_each_chunk_mut_with::<
+            moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+            _,
+            _,
+        >(data_slice, NZ, lane_fn);
     }
 
     fn axis1_pass_complex<const FORWARD: bool>(data: &mut Array3<F::Complex>) {
@@ -180,9 +182,11 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-                scratch, NY, lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<
+                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+                _,
+                _,
+            >(scratch, NY, lane_fn);
 
             for i in 0..NX {
                 for j_t in (0..NY).step_by(GATHER_TILE) {
@@ -233,9 +237,11 @@ where
                     lane_plan.inverse_complex_slice_inplace(lane);
                 }
             };
-            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-                scratch, NX, lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<
+                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+                _,
+                _,
+            >(scratch, NX, lane_fn);
 
             for i in 0..NX {
                 let dst_base = i * NY * NZ;
@@ -395,11 +401,11 @@ where
                     }
                 }
             };
-            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-                &mut scratch[..],
-                self.ny,
-                lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<
+                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+                _,
+                _,
+            >(&mut scratch[..], self.ny, lane_fn);
             // Cache-blocked scatter: scratch[i,k,j] -> data[i,j,k].
             for i in 0..self.nx {
                 for j_t in (0..self.ny).step_by(GATHER_TILE) {
@@ -458,11 +464,11 @@ where
                     }
                 }
             };
-            moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-                &mut scratch[..],
-                self.nx,
-                lane_fn,
-            );
+            moirai::for_each_chunk_mut_with::<
+                moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+                _,
+                _,
+            >(&mut scratch[..], self.nx, lane_fn);
             // Cache-blocked scatter: scratch[j,k,i] -> data[i,j,k].
             for i in 0..self.nx {
                 let dst_base = i * self.ny * self.nz;
@@ -505,9 +511,11 @@ where
                     }
                 }
             };
-        moirai::for_each_chunk_mut_with::<moirai::AdaptiveWithThreshold<RAYON_THRESHOLD>, _, _>(
-            data_slice, self.nz, lane_fn,
-        );
+        moirai::for_each_chunk_mut_with::<
+            moirai::AdaptiveWithThreshold<MOIRAI_PARALLEL_THRESHOLD>,
+            _,
+            _,
+        >(data_slice, self.nz, lane_fn);
     }
 }
 

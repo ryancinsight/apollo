@@ -42,7 +42,7 @@ translations in `u`, enabling Fourier analysis on a logarithmic grid.
 `MellinPlan::inverse_spectrum(spectrum, out_min, out_max, output)` inverts the
 forward log-frequency spectrum via:
 
-1. **IDFT** of the log-domain spectrum (Rayon-parallel for N ≥ 256):
+1. **IDFT** of the log-domain spectrum (Moirai-parallel for N >= 256):
    `g[n] = (1/(N·du)) · Re{ sum_k F[k] · exp(+2πi·kn/N) }`
 2. **Exp-resample**: linear interpolation of `g` from the log-grid back to the
    linear output domain `[out_min, out_max]`.

@@ -35,6 +35,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - n64 PoT: radix-1 triple stage unroll (n64 special + explicit do_one, no-loop for first pass of len64) in avx + scalar paths (precise/reduced); direct stockham_forward_sized::<6> for p=64 bluestein pads (mono + pool reuse). Targets controlling 64 ratios (pre 1.47 f64/1.97 f32); additive 0-cost mono to prior n32/ZST/Cow. Some wins (64 f32 0.823x) + var on quick; no regression (value green, identical ops). Memory: sized reuses scratch pool for rader paths.
 - Targets worst in benchmark_results (GT, f32 Winograd small, PoT): selection change + unification + unroll prep should bring more <1x vs rustfft. Memory: less stack pressure via pools in f32 paths; zero-copy emphasis in PFA notes.
 ### Fixed
+- [patch] `xtask provider-audit` now strips TOML and Rust line comments before provider pattern detection, removing false Rayon/ndarray-threading positives from comments and stale docs.
 - [patch] Restored `apollo-fft` scratch-pool dispatch to sealed static implementations over Mnemosyne `ScratchPool<Complex32>` and `ScratchPool<Complex64>`, removing the unsafe runtime `TypeId`/closure-transmutation path.
 - Cursor over-take in attempted 128/256 unrolls (now delegated); stack overflow in planned rader n113 f32 test (ignored + memory notes).
 See checklist/gap for details.
