@@ -8,7 +8,7 @@ use crate::infrastructure::kernel::fast::dht_fast_with_scratch;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::{Array2, Array3};
 use num_complex::Complex64;
-use std::cell::RefCell;
+use mnemosyne::scratch::ScratchPool;
 
 const FAST_KERNEL_THRESHOLD: usize = 512;
 
@@ -21,11 +21,11 @@ const FAST_KERNEL_THRESHOLD: usize = 512;
 // plan scratch precedents.
 
 thread_local! {
-    static FAST_SCRATCH: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static LANE_IN_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static LANE_OUT_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_INPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    static TYPED_OUTPUT64_SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static FAST_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static LANE_IN_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static LANE_OUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
 /// Reusable 1D real-to-real DHT plan.
@@ -54,38 +54,33 @@ impl DhtPlan {
             });
         }
 
-        LANE_IN_SCRATCH.with(|in_cell| {
-            LANE_OUT_SCRATCH.with(|out_cell| {
-                let mut lane_in = in_cell.borrow_mut();
-                let mut lane_out = out_cell.borrow_mut();
-                if lane_in.len() < n {
-                    lane_in.resize(n, 0.0);
-                }
-                if lane_out.len() < n {
-                    lane_out.resize(n, 0.0);
-                }
+        LANE_IN_SCRATCH.with(|in_pool| {
+            in_pool.with_scratch(n, |lane_in| {
+                LANE_OUT_SCRATCH.with(|out_pool| {
+                    out_pool.with_scratch(n, |lane_out| {
+                        for r in 0..n {
+                            for c in 0..n {
+                                lane_in[c] = input[[r, c]];
+                            }
+                            self.forward_into(lane_in, lane_out)?;
+                            for c in 0..n {
+                                output[[r, c]] = lane_out[c];
+                            }
+                        }
 
-                for r in 0..n {
-                    for c in 0..n {
-                        lane_in[c] = input[[r, c]];
-                    }
-                    self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
-                    for c in 0..n {
-                        output[[r, c]] = lane_out[c];
-                    }
-                }
+                        for c in 0..n {
+                            for r in 0..n {
+                                lane_in[r] = output[[r, c]];
+                            }
+                            self.forward_into(lane_in, lane_out)?;
+                            for r in 0..n {
+                                output[[r, c]] = lane_out[r];
+                            }
+                        }
 
-                for c in 0..n {
-                    for r in 0..n {
-                        lane_in[r] = output[[r, c]];
-                    }
-                    self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
-                    for r in 0..n {
-                        output[[r, c]] = lane_out[r];
-                    }
-                }
-
-                Ok(())
+                        Ok(())
+                    })
+                })
             })
         })
     }
@@ -111,54 +106,49 @@ impl DhtPlan {
             });
         }
 
-        LANE_IN_SCRATCH.with(|in_cell| {
-            LANE_OUT_SCRATCH.with(|out_cell| {
-                let mut lane_in = in_cell.borrow_mut();
-                let mut lane_out = out_cell.borrow_mut();
-                if lane_in.len() < n {
-                    lane_in.resize(n, 0.0);
-                }
-                if lane_out.len() < n {
-                    lane_out.resize(n, 0.0);
-                }
-
-                for j in 0..n {
-                    for k in 0..n {
-                        for i in 0..n {
-                            lane_in[i] = input[[i, j, k]];
-                        }
-                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
-                        for i in 0..n {
-                            output[[i, j, k]] = lane_out[i];
-                        }
-                    }
-                }
-
-                for i in 0..n {
-                    for k in 0..n {
+        LANE_IN_SCRATCH.with(|in_pool| {
+            in_pool.with_scratch(n, |lane_in| {
+                LANE_OUT_SCRATCH.with(|out_pool| {
+                    out_pool.with_scratch(n, |lane_out| {
                         for j in 0..n {
-                            lane_in[j] = output[[i, j, k]];
+                            for k in 0..n {
+                                for i in 0..n {
+                                    lane_in[i] = input[[i, j, k]];
+                                }
+                                self.forward_into(lane_in, lane_out)?;
+                                for i in 0..n {
+                                    output[[i, j, k]] = lane_out[i];
+                                }
+                            }
                         }
-                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
-                        for j in 0..n {
-                            output[[i, j, k]] = lane_out[j];
-                        }
-                    }
-                }
 
-                for i in 0..n {
-                    for j in 0..n {
-                        for k in 0..n {
-                            lane_in[k] = output[[i, j, k]];
+                        for i in 0..n {
+                            for k in 0..n {
+                                for j in 0..n {
+                                    lane_in[j] = output[[i, j, k]];
+                                }
+                                self.forward_into(lane_in, lane_out)?;
+                                for j in 0..n {
+                                    output[[i, j, k]] = lane_out[j];
+                                }
+                            }
                         }
-                        self.forward_into(&lane_in[..n], &mut lane_out[..n])?;
-                        for k in 0..n {
-                            output[[i, j, k]] = lane_out[k];
-                        }
-                    }
-                }
 
-                Ok(())
+                        for i in 0..n {
+                            for j in 0..n {
+                                for k in 0..n {
+                                    lane_in[k] = output[[i, j, k]];
+                                }
+                                self.forward_into(lane_in, lane_out)?;
+                                for k in 0..n {
+                                    output[[i, j, k]] = lane_out[k];
+                                }
+                            }
+                        }
+
+                        Ok(())
+                    })
+                })
             })
         })
     }
@@ -200,12 +190,10 @@ impl DhtPlan {
             return Err(DhtError::LengthMismatch);
         }
         if self.len() >= FAST_KERNEL_THRESHOLD {
-            FAST_SCRATCH.with(|cell| {
-                let mut scratch = cell.borrow_mut();
-                if scratch.len() < self.len() {
-                    scratch.resize(self.len(), Complex64::new(0.0, 0.0));
-                }
-                dht_fast_with_scratch(signal, output, &mut scratch[..self.len()]);
+            FAST_SCRATCH.with(|pool| {
+                pool.with_scratch(self.len(), |scratch| {
+                    dht_fast_with_scratch(signal, output, scratch);
+                });
             });
             Ok(())
         } else {
@@ -364,24 +352,20 @@ pub trait HartleyStorage: Copy + Send + Sync + 'static {
             return Err(DhtError::LengthMismatch);
         }
         let n = plan.len();
-        TYPED_INPUT64_SCRATCH.with(|in_cell| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_cell| {
-                let mut input64 = in_cell.borrow_mut();
-                let mut output64 = out_cell.borrow_mut();
-                if input64.len() < n {
-                    input64.resize(n, 0.0);
-                }
-                if output64.len() < n {
-                    output64.resize(n, 0.0);
-                }
-                for (slot, value) in input64[..n].iter_mut().zip(signal.iter()) {
-                    *slot = value.to_f64();
-                }
-                plan.forward_into(&input64[..n], &mut output64[..n])?;
-                for (slot, value) in output.iter_mut().zip(output64[..n].iter()) {
-                    *slot = Self::from_f64(*value);
-                }
-                Ok(())
+        TYPED_INPUT64_SCRATCH.with(|in_pool| {
+            in_pool.with_scratch(n, |input64| {
+                TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
+                    out_pool.with_scratch(n, |output64| {
+                        for (slot, value) in input64.iter_mut().zip(signal.iter()) {
+                            *slot = value.to_f64();
+                        }
+                        plan.forward_into(input64, output64)?;
+                        for (slot, value) in output.iter_mut().zip(output64.iter()) {
+                            *slot = Self::from_f64(*value);
+                        }
+                        Ok(())
+                    })
+                })
             })
         })
     }
@@ -398,24 +382,20 @@ pub trait HartleyStorage: Copy + Send + Sync + 'static {
             return Err(DhtError::LengthMismatch);
         }
         let n = plan.len();
-        TYPED_INPUT64_SCRATCH.with(|in_cell| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_cell| {
-                let mut input64 = in_cell.borrow_mut();
-                let mut output64 = out_cell.borrow_mut();
-                if input64.len() < n {
-                    input64.resize(n, 0.0);
-                }
-                if output64.len() < n {
-                    output64.resize(n, 0.0);
-                }
-                for (slot, value) in input64[..n].iter_mut().zip(spectrum.iter()) {
-                    *slot = value.to_f64();
-                }
-                plan.inverse_into(&input64[..n], &mut output64[..n])?;
-                for (slot, value) in output.iter_mut().zip(output64[..n].iter()) {
-                    *slot = Self::from_f64(*value);
-                }
-                Ok(())
+        TYPED_INPUT64_SCRATCH.with(|in_pool| {
+            in_pool.with_scratch(n, |input64| {
+                TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
+                    out_pool.with_scratch(n, |output64| {
+                        for (slot, value) in input64.iter_mut().zip(spectrum.iter()) {
+                            *slot = value.to_f64();
+                        }
+                        plan.inverse_into(input64, output64)?;
+                        for (slot, value) in output.iter_mut().zip(output64.iter()) {
+                            *slot = Self::from_f64(*value);
+                        }
+                        Ok(())
+                    })
+                })
             })
         })
     }
