@@ -13,7 +13,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
 - [patch] `apollo-fft` composite plan radices now use `Cow<'static, [usize]>` instead of a custom enum, preserving borrowed static radix plans and using owned dynamic radix vectors only at the cache boundary.
-- [patch] Updated Moirai Git lockfile revision to `3f4ade87` after pushing public provider contract coverage.
+- [patch] Updated Moirai Git lockfile revision to `7aab036` after pushing public provider contract coverage and follow-up provider improvements.
+- [patch] Updated Mnemosyne Git lockfile revision to `477a3fa` after pushing provider-side scratch and memory-boundary improvements consumed by Apollo.
 - [patch] Updated Hermes Git lockfile revision to `7eb0b70` after pushing public Cow state accessors for zero-copy boundary verification.
 - [patch] Consolidated repeated `ndarray = "0.16"` crate declarations onto the Apollo workspace dependency so matrixmultiply threading remains controlled from the root manifest.
 - [patch] `apollo-fft` radix-composite Moirai dispatch now uses monomorphized `ExecutionPolicy` type parameters instead of a bare boolean.

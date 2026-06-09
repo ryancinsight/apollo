@@ -6,13 +6,13 @@
 - [x] Added `apollo-fft` domain `FftInterleavedCow` storage view: borrowed read paths preserve caller buffer pointer identity, `store` detaches into owned interleaved storage, and the storage contract is compiled through `domain::storage`.
 - [x] Updated Apollo `Cargo.lock` to consume pushed Hermes commit `7eb0b70` with public Cow borrowed/owned state accessors.
 - [x] Replaced `apollo-fft` composite radix storage with `Cow<'static, [usize]>` so static schedules remain borrowed and dynamic schedules are owned only at the cache boundary.
-- [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `3f4ade87` with the Apollo-facing provider contract tests.
+- [x] Updated Apollo `Cargo.lock` to consume pushed Moirai commit `7aab036` with the Apollo-facing provider contract tests and follow-up provider improvements.
 - [x] Restored `apollo-fft` Mnemosyne scratch dispatch to a sealed static trait implementation for `Complex32`/`Complex64`, removing runtime type inspection and unsafe closure transmutation from the scratch-pool boundary.
 - [x] Replaced repeated per-crate `ndarray = "0.16"` declarations with the workspace dependency in transform and WGPU crates so `matrixmultiply-threading` remains controlled from one manifest location.
 - [x] Replaced the `apollo-fft` radix-composite dispatch boolean with monomorphized Moirai `ExecutionPolicy` type parameters and value-semantic tests for threshold selection plus sequential/parallel chunk-index equivalence.
 - [x] Hardened `xtask provider-audit` so TOML/Rust line comments do not count as provider usage; added a regression test covering comment-only `rayon` and `ndarray` feature mentions.
 - [x] Renamed stale `RAYON_THRESHOLD`/Rayon wording in Moirai-dispatched FFT/DHT/DCTDST/SHT paths to Moirai/parallel terminology.
-- [ ] [patch] After Moirai, Mnemosyne, Melinoe, and Hermes provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus the relevant performance gates.
+- [x] [patch] After Moirai, Mnemosyne, Melinoe, and Hermes provider commits are pushed, update Apollo dependency revisions and rerun the provider audit plus relevant focused gates. Apollo now resolves Mnemosyne `477a3fa` and Moirai `7aab036`; provider audit reports no direct Rayon usage in the workspace or CPU transform crates.
 - Evidence: static source analysis, unit tests for the audit parser/report, xtask run output, documentation sync.
 
 ## Routing harden (72/90/198/ f32 comp force before short-win) + f32 rader bias broaden (m>=128 +67/113) + latent radix_composite compile fix [patch]
