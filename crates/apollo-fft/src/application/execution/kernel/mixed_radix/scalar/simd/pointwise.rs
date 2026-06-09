@@ -1,5 +1,101 @@
+use hermes_simd::{PreferredArch, SimdKernel, Vector};
 use num_complex::{Complex32, Complex64};
 use std::sync::OnceLock;
+
+const PRECISE_LANES: usize = <PreferredArch as SimdKernel<f64>>::LANE_COUNT;
+const REDUCED_LANES: usize = <PreferredArch as SimdKernel<f32>>::LANE_COUNT;
+
+#[inline]
+fn mul_pair_precise<const CONJ_B: bool>(ar: f64, ai: f64, br: f64, bi: f64) -> (f64, f64) {
+    let bi = if CONJ_B { -bi } else { bi };
+    (ar * br - ai * bi, ar * bi + ai * br)
+}
+
+#[inline]
+fn mul_pair_reduced<const CONJ_B: bool>(ar: f32, ai: f32, br: f32, bi: f32) -> (f32, f32) {
+    let bi = if CONJ_B { -bi } else { bi };
+    (ar * br - ai * bi, ar * bi + ai * br)
+}
+
+#[inline]
+fn pointwise_mul_precise_hermes<const CONJ_B: bool>(a: &mut [Complex64], b: &[Complex64]) {
+    let scalar_len = a.len() * 2;
+    let pair_lanes = PRECISE_LANES & !1;
+    let a_ptr = a.as_mut_ptr().cast::<f64>();
+    let b_ptr = b.as_ptr().cast::<f64>();
+    let mut offset = 0usize;
+
+    while pair_lanes > 0 && offset + pair_lanes <= scalar_len {
+        // SAFETY: offset + PRECISE_LANES is bounded by scalar_len, and Complex64 is
+        // represented as two adjacent f64 lanes by num_complex.
+        let av = unsafe { Vector::<f64, PreferredArch>::load_unaligned(a_ptr.add(offset)) };
+        // SAFETY: same bound as `av`; `b` has the same length as `a`.
+        let bv = unsafe { Vector::<f64, PreferredArch>::load_unaligned(b_ptr.add(offset)) };
+        let mut ax = av.to_array::<PRECISE_LANES>();
+        let bx = bv.to_array::<PRECISE_LANES>();
+        let mut lane = 0usize;
+        while lane < pair_lanes {
+            let (re, im) =
+                mul_pair_precise::<CONJ_B>(ax[lane], ax[lane + 1], bx[lane], bx[lane + 1]);
+            ax[lane] = re;
+            ax[lane + 1] = im;
+            lane += 2;
+        }
+        // SAFETY: offset + PRECISE_LANES is bounded by scalar_len.
+        unsafe {
+            Vector::<f64, PreferredArch>::from_array::<PRECISE_LANES>(ax)
+                .store_unaligned(a_ptr.add(offset));
+        }
+        offset += pair_lanes;
+    }
+
+    let mut i = offset / 2;
+    while i < a.len() {
+        let (re, im) = mul_pair_precise::<CONJ_B>(a[i].re, a[i].im, b[i].re, b[i].im);
+        a[i] = Complex64::new(re, im);
+        i += 1;
+    }
+}
+
+#[inline]
+fn pointwise_mul_reduced_hermes<const CONJ_B: bool>(a: &mut [Complex32], b: &[Complex32]) {
+    let scalar_len = a.len() * 2;
+    let pair_lanes = REDUCED_LANES & !1;
+    let a_ptr = a.as_mut_ptr().cast::<f32>();
+    let b_ptr = b.as_ptr().cast::<f32>();
+    let mut offset = 0usize;
+
+    while pair_lanes > 0 && offset + pair_lanes <= scalar_len {
+        // SAFETY: offset + REDUCED_LANES is bounded by scalar_len, and Complex32 is
+        // represented as two adjacent f32 lanes by num_complex.
+        let av = unsafe { Vector::<f32, PreferredArch>::load_unaligned(a_ptr.add(offset)) };
+        // SAFETY: same bound as `av`; `b` has the same length as `a`.
+        let bv = unsafe { Vector::<f32, PreferredArch>::load_unaligned(b_ptr.add(offset)) };
+        let mut ax = av.to_array::<REDUCED_LANES>();
+        let bx = bv.to_array::<REDUCED_LANES>();
+        let mut lane = 0usize;
+        while lane < pair_lanes {
+            let (re, im) =
+                mul_pair_reduced::<CONJ_B>(ax[lane], ax[lane + 1], bx[lane], bx[lane + 1]);
+            ax[lane] = re;
+            ax[lane + 1] = im;
+            lane += 2;
+        }
+        // SAFETY: offset + REDUCED_LANES is bounded by scalar_len.
+        unsafe {
+            Vector::<f32, PreferredArch>::from_array::<REDUCED_LANES>(ax)
+                .store_unaligned(a_ptr.add(offset));
+        }
+        offset += pair_lanes;
+    }
+
+    let mut i = offset / 2;
+    while i < a.len() {
+        let (re, im) = mul_pair_reduced::<CONJ_B>(a[i].re, a[i].im, b[i].re, b[i].im);
+        a[i] = Complex32::new(re, im);
+        i += 1;
+    }
+}
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
@@ -32,13 +128,10 @@ unsafe fn pointwise_mul_precise_fma<const CONJ_B: bool>(a: &mut [Complex64], b: 
         let av = *a_ptr.add(i * 2);
         let ai = *a_ptr.add(i * 2 + 1);
         let bv = *b_ptr.add(i * 2);
-        let bi = if CONJ_B {
-            -*b_ptr.add(i * 2 + 1)
-        } else {
-            *b_ptr.add(i * 2 + 1)
-        };
-        *a_ptr.add(i * 2) = av * bv - ai * bi;
-        *a_ptr.add(i * 2 + 1) = av * bi + ai * bv;
+        let bi = *b_ptr.add(i * 2 + 1);
+        let (re, im) = mul_pair_precise::<CONJ_B>(av, ai, bv, bi);
+        *a_ptr.add(i * 2) = re;
+        *a_ptr.add(i * 2 + 1) = im;
     }
 }
 
@@ -75,13 +168,10 @@ unsafe fn pointwise_mul_reduced_fma<const CONJ_B: bool>(a: &mut [Complex32], b: 
         let av = *a_ptr.add(i * 2);
         let ai = *a_ptr.add(i * 2 + 1);
         let bv = *b_ptr.add(i * 2);
-        let bi = if CONJ_B {
-            -*b_ptr.add(i * 2 + 1)
-        } else {
-            *b_ptr.add(i * 2 + 1)
-        };
-        *a_ptr.add(i * 2) = av * bv - ai * bi;
-        *a_ptr.add(i * 2 + 1) = av * bi + ai * bv;
+        let bi = *b_ptr.add(i * 2 + 1);
+        let (re, im) = mul_pair_reduced::<CONJ_B>(av, ai, bv, bi);
+        *a_ptr.add(i * 2) = re;
+        *a_ptr.add(i * 2 + 1) = im;
     }
 }
 
@@ -105,17 +195,7 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) fn pointwise_
             }
         }
     }
-    if CONJ_B {
-        for (x, y) in a.iter_mut().zip(b.iter()) {
-            let xr = x.re;
-            let xi = x.im;
-            *x = Complex64::new(xr * y.re + xi * y.im, xi * y.re - xr * y.im);
-        }
-    } else {
-        for (x, y) in a.iter_mut().zip(b.iter()) {
-            *x *= *y;
-        }
-    }
+    pointwise_mul_precise_hermes::<CONJ_B>(a, b);
 }
 
 #[inline]
@@ -138,15 +218,5 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) fn pointwise_
             }
         }
     }
-    if CONJ_B {
-        for (x, y) in a.iter_mut().zip(b.iter()) {
-            let xr = x.re;
-            let xi = x.im;
-            *x = Complex32::new(xr * y.re + xi * y.im, xi * y.re - xr * y.im);
-        }
-    } else {
-        for (x, y) in a.iter_mut().zip(b.iter()) {
-            *x *= *y;
-        }
-    }
+    pointwise_mul_reduced_hermes::<CONJ_B>(a, b);
 }

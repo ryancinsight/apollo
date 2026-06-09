@@ -14,6 +14,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [patch] `apollo-fft` mixed-radix pointwise fallback now uses Hermes `PreferredArch` vector chunks for precise and reduced complex multiplication, while preserving the existing runtime-gated x86 AVX/FMA hot kernel.
 - [patch] `apollo-fft` f64 Stockham AVX fixed length-32 and length-64 transforms now use full-sized static twiddle tables (`TWIDDLES_32_FWD`/`TWIDDLES_32_INV`/`TWIDDLES_64_FWD`/`TWIDDLES_64_INV`) and const-generic index lookups, completely removing twiddle index branches, negations, and pointer offset math.
 - [minor] `xtask provider-audit` now reports Leto workspace/crate usage and `docs/provider_contract.md` documents Leto requirements plus `ndarray`'s role as validation oracle.
 - [patch] `apollo-fft` 1D runtime and static plans now share tiny direct dispatch for N=2/3/4; N=3 plans call the canonical `butterflies::dft3_impl` codelet directly with fused normalization instead of entering the generic short-Winograd dispatcher.

@@ -77,7 +77,7 @@ local path overrides for provider work.
 - Capability surfaces for lane count, alignment, mask, and execution mode that
   compile away through ZSTs, consts, and associated types.
 - Public facade stability for Apollo's `hermes_simd::{PreferredArch, Vector}`
-  usage in FWHT and future SIMD kernels.
+  usage in FWHT and FFT mixed-radix pointwise fallback kernels.
 
 ## Apollo Requirements for Leto
 

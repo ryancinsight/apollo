@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Apollo FFT Hermes pointwise fallback [patch]
+- [x] Added `hermes-simd` as an `apollo-fft` workspace dependency so FFT kernels consume the SIMD provider directly.
+- [x] Routed the mixed-radix pointwise fallback through `Vector<f64, PreferredArch>` and `Vector<f32, PreferredArch>` chunk load/store paths, while preserving the runtime-gated AVX/FMA hot kernel.
+- [x] Consolidated precise/reduced scalar tail and fallback formulas into shared const-generic pair helpers for `CONJ_B` branch elimination.
+- [x] Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft --lib rader -- --nocapture`; `cargo test -p apollo-fft --test slice_api -- --nocapture`; `cargo run -p xtask -- provider-audit`.
+- Evidence: type-level provider routing through Hermes ZST architecture selection plus value-semantic Rader/slice tests. No benchmark claim is made for this increment.
+
 ## Stockham AVX fixed-size twiddle optimizations [patch]
 - [x] Optimized power-of-two (N=32 and N=64) transforms in `apollo-fft` by replacing partial, half-sized twiddle tables with full-sized ones (`TWIDDLES_32_FWD`, `TWIDDLES_32_INV`, `TWIDDLES_64_FWD`, `TWIDDLES_64_INV`).
 - [x] Removed twiddle index branches/negations, pointer offsets (+15 and +31) by routing through direct compile-time const-generic static array lookups.

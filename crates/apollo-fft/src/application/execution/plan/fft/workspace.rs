@@ -1,9 +1,6 @@
 //! Plan-owned FFT workspace allocation helpers.
 
-#![allow(clippy::uninit_vec)]
-
 use num_complex::{Complex32, Complex64};
-use std::cell::RefCell;
 
 mod sealed {
     pub trait Sealed {}
@@ -21,12 +18,12 @@ mod sealed {
 // `mixed_radix/caches/scratch.rs`.
 
 thread_local! {
-    static TL_2D_SCRATCH_64: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TL_2D_SCRATCH_32: RefCell<Vec<Complex32>> = const { RefCell::new(Vec::new()) };
-    static TL_3D_SCRATCH_Y_64: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TL_3D_SCRATCH_Y_32: RefCell<Vec<Complex32>> = const { RefCell::new(Vec::new()) };
-    static TL_3D_SCRATCH_X_64: RefCell<Vec<Complex64>> = const { RefCell::new(Vec::new()) };
-    static TL_3D_SCRATCH_X_32: RefCell<Vec<Complex32>> = const { RefCell::new(Vec::new()) };
+    static TL_2D_SCRATCH_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
+    static TL_2D_SCRATCH_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
+    static TL_3D_SCRATCH_Y_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
+    static TL_3D_SCRATCH_Y_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
+    static TL_3D_SCRATCH_X_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
+    static TL_3D_SCRATCH_X_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
 }
 
 /// Sealed trait providing thread-local plan scratch buffer access per complex type.
@@ -42,100 +39,34 @@ pub trait PlanScratch: sealed::Sealed + 'static {
 impl PlanScratch for Complex64 {
     #[inline]
     fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_2D_SCRATCH_64.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                // SAFETY: the caller's gather loop overwrites every element
-                // before any read; zero-fill is unnecessary (matching the
-                // Matching the kernel scratch contract: the gather loop
-                // overwrites every element before any read.
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_2D_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
     fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_3D_SCRATCH_Y_64.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_3D_SCRATCH_Y_64.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_3D_SCRATCH_X_64.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_3D_SCRATCH_X_64.with(|pool| pool.with_scratch(n, f))
     }
 }
 
 impl PlanScratch for Complex32 {
     #[inline]
     fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_2D_SCRATCH_32.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                // SAFETY: the caller's gather loop overwrites every element
-                // before any read; zero-fill is unnecessary.
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_2D_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
     fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_3D_SCRATCH_Y_32.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_3D_SCRATCH_Y_32.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_3D_SCRATCH_X_32.with(|cell| {
-            let mut scratch = cell.borrow_mut();
-            let need = n.saturating_sub(scratch.len());
-            if need > 0 {
-                scratch.reserve(need);
-                unsafe {
-                    scratch.set_len(n);
-                }
-            }
-            f(&mut scratch[..n])
-        })
+        TL_3D_SCRATCH_X_32.with(|pool| pool.with_scratch(n, f))
     }
 }
 

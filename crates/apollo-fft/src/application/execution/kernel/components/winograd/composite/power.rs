@@ -380,41 +380,33 @@ fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::C
 pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [num_complex::Complex<F>; 64],
 ) {
-    // f32 sub-dispatch scratch unification for mem efficiency: for f32 (the controlling precision
-    // for rader/GT worst in benchmark_results.md and debug stack issues for n113 etc), allocate
-    // the even/odd split temp via heap Vec (from capacity) rather than stack MaybeUninit array.
-    // This keeps the dft64 frame small (only Vec header ~ ptr+len+cap), temp data on heap (or TL
-    // pool in future callers), reducing peak debug monomorph stack frames when dft64 is nested
-    // in f32 avx/stockham/pot subpaths for bluestein/rader pads. f64 keeps similar but Vec is
-    // fine/unifying. Matches "enhancements of memory efficiency" + "f32 dftN paths".
-    // No behavior change (same writes/reads), zero-cost in release (vec small + inline).
-    let mut scratch: Vec<num_complex::Complex<F>> =
-        vec![num_complex::Complex::new(F::zero(), F::zero()); 64];
-    let ptr = scratch.as_mut_ptr();
-    for i in 0..32 {
-        unsafe {
-            std::ptr::write(ptr.add(i), data[2 * i]);
-            std::ptr::write(ptr.add(i + 32), data[2 * i + 1]);
+    F::with_winograd_scratch(64, |scratch| {
+        let ptr = scratch.as_mut_ptr();
+        for i in 0..32 {
+            unsafe {
+                std::ptr::write(ptr.add(i), data[2 * i]);
+                std::ptr::write(ptr.add(i + 32), data[2 * i + 1]);
+            }
         }
-    }
-    let (even, odd) = scratch.split_at_mut(32);
-    dft32_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
-    dft32_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
-    if NORMALIZE {
-        let q = F::from_precise(1.0 / 64.0);
-        for k in 0..32 {
-            let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
-            data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
-            data[k + 32] =
-                num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+        let (even, odd) = scratch.split_at_mut(32);
+        dft32_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
+        dft32_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
+        if NORMALIZE {
+            let q = F::from_precise(1.0 / 64.0);
+            for k in 0..32 {
+                let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
+                data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k + 32] =
+                    num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+            }
+        } else {
+            for k in 0..32 {
+                let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
+                data[k] = even[k] + o;
+                data[k + 32] = even[k] - o;
+            }
         }
-    } else {
-        for k in 0..32 {
-            let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
-            data[k] = even[k] + o;
-            data[k + 32] = even[k] - o;
-        }
-    }
+    });
 }
 
 /// In-place Winograd DFT-64 (public API).
@@ -452,38 +444,33 @@ fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::
 pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
     data: &mut [num_complex::Complex<F>; 128],
 ) {
-    // f32 sub-dispatch scratch unification for mem efficiency (see dft64_array for rationale):
-    // heap Vec temp for the 128 split (even/odd + sub dft64 temps via recursion) instead of stack
-    // MaybeUninit. Reduces debug frame bloat for f32 paths involving dft128 (e.g. win factors
-    // in pads or composites for rader bluestein n113 etc). Unblocks stack pressure for ignored
-    // f32 rader tests + broader bias. Heap (or pool in callers) unifies mem for f32 sub-dispatch.
-    let mut scratch: Vec<num_complex::Complex<F>> =
-        vec![num_complex::Complex::new(F::zero(), F::zero()); 128];
-    let ptr = scratch.as_mut_ptr();
-    for i in 0..64 {
-        unsafe {
-            std::ptr::write(ptr.add(i), data[2 * i]);
-            std::ptr::write(ptr.add(i + 64), data[2 * i + 1]);
+    F::with_winograd_scratch(128, |scratch| {
+        let ptr = scratch.as_mut_ptr();
+        for i in 0..64 {
+            unsafe {
+                std::ptr::write(ptr.add(i), data[2 * i]);
+                std::ptr::write(ptr.add(i + 64), data[2 * i + 1]);
+            }
         }
-    }
-    let (even, odd) = scratch.split_at_mut(64);
-    dft64_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
-    dft64_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
-    if NORMALIZE {
-        let q = F::from_precise(1.0 / 128.0);
-        for k in 0..64 {
-            let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
-            data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
-            data[k + 64] =
-                num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+        let (even, odd) = scratch.split_at_mut(64);
+        dft64_array_impl::<F, INVERSE, false>(even.try_into().unwrap());
+        dft64_array_impl::<F, INVERSE, false>(odd.try_into().unwrap());
+        if NORMALIZE {
+            let q = F::from_precise(1.0 / 128.0);
+            for k in 0..64 {
+                let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
+                data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k + 64] =
+                    num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+            }
+        } else {
+            for k in 0..64 {
+                let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
+                data[k] = even[k] + o;
+                data[k + 64] = even[k] - o;
+            }
         }
-    } else {
-        for k in 0..64 {
-            let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
-            data[k] = even[k] + o;
-            data[k + 64] = even[k] - o;
-        }
-    }
+    });
 }
 
 /// In-place Winograd DFT-128 (public API).
