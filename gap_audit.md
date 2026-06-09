@@ -1,5 +1,12 @@
 # Apollo Gap Audit
 
+## Stockham AVX fixed-size twiddle optimizations [patch]
+- Performed: Optimized power-of-two (N=32 and N=64) transforms in `apollo-fft` by replacing partial, half-sized twiddle tables with full-sized ones (`TWIDDLES_32_FWD`, `TWIDDLES_32_INV`, `TWIDDLES_64_FWD`, `TWIDDLES_64_INV`).
+- Implementation: Removed twiddle index branches/negations and pointer offsets (+15 and +31) by routing through direct compile-time const-generic static array lookups. Also exposed the `twiddle_constants` module as `pub(crate)` and routed `small_pot_inplace` transforms to compile-time sized counterparts.
+- Verification: `cargo test -p apollo-fft` (all 385 tests pass), and quick benchmark verification.
+- Evidence tier: type-level/compile-time branch separation plus value-semantic direct/roundtrip FFT tests. Verified timing ratios.
+- Residuals: The twiddle constants are fully integrated into the compile-time sized kernels. Future optimizations could target other sizes.
+
 ## Leto ndarray-validated provider integration [minor]
 - Performed in Leto: added an Apollo-facing `ndarray-compat` contract test covering constructors, C-order storage, transpose, broadcast, axis iteration, mutable view mutation, owned ndarray round trips, negative-stride views, slice metadata, mutable broadcast rejection, and storage-bound rejection. The test uses `ndarray` as the validation oracle.
 - Leto behavior change: `SliceArg::range` now matches `ndarray` retained single-element range metadata by setting that output stride to `0`; empty ranges keep their computed stride. Existing core slicing and layout property tests pass.

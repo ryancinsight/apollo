@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Stockham AVX fixed-size twiddle optimizations [patch]
+- [x] Optimized power-of-two (N=32 and N=64) transforms in `apollo-fft` by replacing partial, half-sized twiddle tables with full-sized ones (`TWIDDLES_32_FWD`, `TWIDDLES_32_INV`, `TWIDDLES_64_FWD`, `TWIDDLES_64_INV`).
+- [x] Removed twiddle index branches/negations, pointer offsets (+15 and +31) by routing through direct compile-time const-generic static array lookups.
+- [x] Exposed `twiddle_constants` module as `pub(crate)` and routed `small_pot_inplace` transforms to compile-time sized counterparts.
+- [x] Verification: `cargo test -p apollo-fft` (all 385 tests pass), and quick benchmark verification.
+- Evidence: type-level/compile-time branch separation plus value-semantic FFT tests. Verified timing ratios.
+
 ## Leto ndarray-validated provider integration [minor]
 - [x] Added Leto to the Apollo workspace dependency surface with `std` and `ndarray-compat` enabled.
 - [x] Added `leto` to `apollo-validation` and a validation-boundary test that compares contiguous Leto ownership/conversion against `ndarray`.

@@ -109,7 +109,7 @@ unsafe fn avx_transpose8_pairs(
 }
 
 #[inline]
-unsafe fn twiddle_len64_const_unchecked<const EXPONENT: usize>(
+unsafe fn twiddle_len64_const_unchecked<const EXPONENT: usize, const INVERSE: bool>(
     twiddle_ptr: *const Complex64,
 ) -> Complex64 {
     debug_assert!(EXPONENT < 64);
@@ -129,117 +129,145 @@ unsafe fn twiddle_len64_const_unchecked<const EXPONENT: usize>(
 unsafe fn avx_twiddle_len64_pair_const<
     const FIRST_EXPONENT: usize,
     const SECOND_EXPONENT: usize,
+    const INVERSE: bool,
 >(
     twiddle_ptr: *const Complex64,
 ) -> std::arch::x86_64::__m256d {
     use std::arch::x86_64::_mm256_set_pd;
 
-    let first = twiddle_len64_const_unchecked::<FIRST_EXPONENT>(twiddle_ptr);
-    let second = twiddle_len64_const_unchecked::<SECOND_EXPONENT>(twiddle_ptr);
+    let first = twiddle_len64_const_unchecked::<FIRST_EXPONENT, INVERSE>(twiddle_ptr);
+    let second = twiddle_len64_const_unchecked::<SECOND_EXPONENT, INVERSE>(twiddle_ptr);
     _mm256_set_pd(second.im, second.re, first.im, first.re)
 }
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-unsafe fn avx_apply_len64_twiddles_for_column_pair<const COLUMN_PAIR: usize>(
+unsafe fn avx_apply_len64_twiddles_for_column_pair<
+    const COLUMN_PAIR: usize,
+    const INVERSE: bool,
+>(
     mid: &mut [std::arch::x86_64::__m256d; 8],
     twiddle_ptr: *const Complex64,
 ) {
     match COLUMN_PAIR {
         0 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len64_pair_const::<0, 1>(twiddle_ptr));
-            mid[2] =
-                avx_cmul_by_pair_twiddle(mid[2], avx_twiddle_len64_pair_const::<0, 2>(twiddle_ptr));
-            mid[3] =
-                avx_cmul_by_pair_twiddle(mid[3], avx_twiddle_len64_pair_const::<0, 3>(twiddle_ptr));
-            mid[4] =
-                avx_cmul_by_pair_twiddle(mid[4], avx_twiddle_len64_pair_const::<0, 4>(twiddle_ptr));
-            mid[5] =
-                avx_cmul_by_pair_twiddle(mid[5], avx_twiddle_len64_pair_const::<0, 5>(twiddle_ptr));
-            mid[6] =
-                avx_cmul_by_pair_twiddle(mid[6], avx_twiddle_len64_pair_const::<0, 6>(twiddle_ptr));
-            mid[7] =
-                avx_cmul_by_pair_twiddle(mid[7], avx_twiddle_len64_pair_const::<0, 7>(twiddle_ptr));
-        }
-        1 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len64_pair_const::<2, 3>(twiddle_ptr));
-            mid[2] =
-                avx_cmul_by_pair_twiddle(mid[2], avx_twiddle_len64_pair_const::<4, 6>(twiddle_ptr));
-            mid[3] =
-                avx_cmul_by_pair_twiddle(mid[3], avx_twiddle_len64_pair_const::<6, 9>(twiddle_ptr));
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len64_pair_const::<0, 1, INVERSE>(twiddle_ptr),
+            );
+            mid[2] = avx_cmul_by_pair_twiddle(
+                mid[2],
+                avx_twiddle_len64_pair_const::<0, 2, INVERSE>(twiddle_ptr),
+            );
+            mid[3] = avx_cmul_by_pair_twiddle(
+                mid[3],
+                avx_twiddle_len64_pair_const::<0, 3, INVERSE>(twiddle_ptr),
+            );
             mid[4] = avx_cmul_by_pair_twiddle(
                 mid[4],
-                avx_twiddle_len64_pair_const::<8, 12>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<0, 4, INVERSE>(twiddle_ptr),
             );
             mid[5] = avx_cmul_by_pair_twiddle(
                 mid[5],
-                avx_twiddle_len64_pair_const::<10, 15>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<0, 5, INVERSE>(twiddle_ptr),
             );
             mid[6] = avx_cmul_by_pair_twiddle(
                 mid[6],
-                avx_twiddle_len64_pair_const::<12, 18>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<0, 6, INVERSE>(twiddle_ptr),
             );
             mid[7] = avx_cmul_by_pair_twiddle(
                 mid[7],
-                avx_twiddle_len64_pair_const::<14, 21>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<0, 7, INVERSE>(twiddle_ptr),
+            );
+        }
+        1 => {
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len64_pair_const::<2, 3, INVERSE>(twiddle_ptr),
+            );
+            mid[2] = avx_cmul_by_pair_twiddle(
+                mid[2],
+                avx_twiddle_len64_pair_const::<4, 6, INVERSE>(twiddle_ptr),
+            );
+            mid[3] = avx_cmul_by_pair_twiddle(
+                mid[3],
+                avx_twiddle_len64_pair_const::<6, 9, INVERSE>(twiddle_ptr),
+            );
+            mid[4] = avx_cmul_by_pair_twiddle(
+                mid[4],
+                avx_twiddle_len64_pair_const::<8, 12, INVERSE>(twiddle_ptr),
+            );
+            mid[5] = avx_cmul_by_pair_twiddle(
+                mid[5],
+                avx_twiddle_len64_pair_const::<10, 15, INVERSE>(twiddle_ptr),
+            );
+            mid[6] = avx_cmul_by_pair_twiddle(
+                mid[6],
+                avx_twiddle_len64_pair_const::<12, 18, INVERSE>(twiddle_ptr),
+            );
+            mid[7] = avx_cmul_by_pair_twiddle(
+                mid[7],
+                avx_twiddle_len64_pair_const::<14, 21, INVERSE>(twiddle_ptr),
             );
         }
         2 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len64_pair_const::<4, 5>(twiddle_ptr));
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len64_pair_const::<4, 5, INVERSE>(twiddle_ptr),
+            );
             mid[2] = avx_cmul_by_pair_twiddle(
                 mid[2],
-                avx_twiddle_len64_pair_const::<8, 10>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<8, 10, INVERSE>(twiddle_ptr),
             );
             mid[3] = avx_cmul_by_pair_twiddle(
                 mid[3],
-                avx_twiddle_len64_pair_const::<12, 15>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<12, 15, INVERSE>(twiddle_ptr),
             );
             mid[4] = avx_cmul_by_pair_twiddle(
                 mid[4],
-                avx_twiddle_len64_pair_const::<16, 20>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<16, 20, INVERSE>(twiddle_ptr),
             );
             mid[5] = avx_cmul_by_pair_twiddle(
                 mid[5],
-                avx_twiddle_len64_pair_const::<20, 25>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<20, 25, INVERSE>(twiddle_ptr),
             );
             mid[6] = avx_cmul_by_pair_twiddle(
                 mid[6],
-                avx_twiddle_len64_pair_const::<24, 30>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<24, 30, INVERSE>(twiddle_ptr),
             );
             mid[7] = avx_cmul_by_pair_twiddle(
                 mid[7],
-                avx_twiddle_len64_pair_const::<28, 35>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<28, 35, INVERSE>(twiddle_ptr),
             );
         }
         3 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len64_pair_const::<6, 7>(twiddle_ptr));
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len64_pair_const::<6, 7, INVERSE>(twiddle_ptr),
+            );
             mid[2] = avx_cmul_by_pair_twiddle(
                 mid[2],
-                avx_twiddle_len64_pair_const::<12, 14>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<12, 14, INVERSE>(twiddle_ptr),
             );
             mid[3] = avx_cmul_by_pair_twiddle(
                 mid[3],
-                avx_twiddle_len64_pair_const::<18, 21>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<18, 21, INVERSE>(twiddle_ptr),
             );
             mid[4] = avx_cmul_by_pair_twiddle(
                 mid[4],
-                avx_twiddle_len64_pair_const::<24, 28>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<24, 28, INVERSE>(twiddle_ptr),
             );
             mid[5] = avx_cmul_by_pair_twiddle(
                 mid[5],
-                avx_twiddle_len64_pair_const::<30, 35>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<30, 35, INVERSE>(twiddle_ptr),
             );
             mid[6] = avx_cmul_by_pair_twiddle(
                 mid[6],
-                avx_twiddle_len64_pair_const::<36, 42>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<36, 42, INVERSE>(twiddle_ptr),
             );
             mid[7] = avx_cmul_by_pair_twiddle(
                 mid[7],
-                avx_twiddle_len64_pair_const::<42, 49>(twiddle_ptr),
+                avx_twiddle_len64_pair_const::<42, 49, INVERSE>(twiddle_ptr),
             );
         }
         _ => unreachable!("length-64 column pair index must be in 0..4"),
@@ -249,7 +277,10 @@ unsafe fn avx_apply_len64_twiddles_for_column_pair<const COLUMN_PAIR: usize>(
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len64_first_phase_column_pair<const COLUMN_PAIR: usize>(
+pub(crate) unsafe fn fixed_len64_first_phase_column_pair<
+    const COLUMN_PAIR: usize,
+    const INVERSE: bool,
+>(
     data_ptr: *mut Complex64,
     scratch_ptr: *mut Complex64,
     twiddle_ptr: *const Complex64,
@@ -273,7 +304,7 @@ pub(crate) unsafe fn fixed_len64_first_phase_column_pair<const COLUMN_PAIR: usiz
         _mm256_loadu_pd(data_ptr.add(column + 56).cast::<f64>()),
     ];
     let mut mid = avx_butterfly8_pair(rows, quarter_turn_mask, w1_re, w1_im, w3_re, w3_im);
-    avx_apply_len64_twiddles_for_column_pair::<COLUMN_PAIR>(&mut mid, twiddle_ptr);
+    avx_apply_len64_twiddles_for_column_pair::<COLUMN_PAIR, INVERSE>(&mut mid, twiddle_ptr);
     let transposed = avx_transpose8_pairs(mid);
     let base = COLUMN_PAIR << 4;
     _mm256_storeu_pd(scratch_ptr.add(base).cast::<f64>(), transposed[0]);
@@ -349,21 +380,39 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
 ) {
-    use std::arch::x86_64::{_mm256_set1_pd, _mm256_set_pd};
-
     debug_assert_eq!(data.len(), 64);
     debug_assert!(scratch.len() >= 64);
     debug_assert!(twiddles.len() >= 63);
 
     let twiddle_ptr = twiddles.as_ptr();
     let inverse = (*twiddle_ptr.add(2)).im > 0.0;
-    let quarter_turn_mask = if inverse {
+    if inverse {
+        fixed_len64_precise_avx_fma_impl::<true>(data, scratch, twiddle_ptr);
+    } else {
+        fixed_len64_precise_avx_fma_impl::<false>(data, scratch, twiddle_ptr);
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
+unsafe fn fixed_len64_precise_avx_fma_impl<const INVERSE: bool>(
+    data: &mut [Complex64],
+    scratch: &mut [Complex64],
+    twiddle_ptr: *const Complex64,
+) {
+    use std::arch::x86_64::{_mm256_set1_pd, _mm256_set_pd};
+
+    let quarter_turn_mask = if INVERSE {
         _mm256_set_pd(0.0, -0.0, 0.0, -0.0)
     } else {
         _mm256_set_pd(-0.0, 0.0, -0.0, 0.0)
     };
-    let w1 = *twiddle_ptr.add(4);
-    let w3 = *twiddle_ptr.add(6);
+    let c = std::f64::consts::FRAC_1_SQRT_2;
+    let (w1, w3) = if INVERSE {
+        (Complex64::new(c, c), Complex64::new(-c, c))
+    } else {
+        (Complex64::new(c, -c), Complex64::new(-c, -c))
+    };
     let w1_re = _mm256_set1_pd(w1.re);
     let w1_im = _mm256_set1_pd(w1.im);
     let w3_re = _mm256_set1_pd(w3.re);
@@ -371,7 +420,7 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
     let data_ptr = data.as_mut_ptr();
     let scratch_ptr = scratch.as_mut_ptr();
 
-    fixed_len64_first_phase_column_pair::<0>(
+    fixed_len64_first_phase_column_pair::<0, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,
@@ -381,7 +430,7 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
         w3_re,
         w3_im,
     );
-    fixed_len64_first_phase_column_pair::<1>(
+    fixed_len64_first_phase_column_pair::<1, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,
@@ -391,7 +440,7 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
         w3_re,
         w3_im,
     );
-    fixed_len64_first_phase_column_pair::<2>(
+    fixed_len64_first_phase_column_pair::<2, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,
@@ -401,7 +450,7 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
         w3_re,
         w3_im,
     );
-    fixed_len64_first_phase_column_pair::<3>(
+    fixed_len64_first_phase_column_pair::<3, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,
@@ -451,7 +500,7 @@ pub(crate) unsafe fn fixed_len64_precise_avx_fma(
 }
 
 #[inline]
-unsafe fn twiddle_len32_const_unchecked<const EXPONENT: usize>(
+unsafe fn twiddle_len32_const_unchecked<const EXPONENT: usize, const INVERSE: bool>(
     twiddle_ptr: *const Complex64,
 ) -> Complex64 {
     debug_assert!(EXPONENT < 32);
@@ -471,61 +520,85 @@ unsafe fn twiddle_len32_const_unchecked<const EXPONENT: usize>(
 unsafe fn avx_twiddle_len32_pair_const<
     const FIRST_EXPONENT: usize,
     const SECOND_EXPONENT: usize,
+    const INVERSE: bool,
 >(
     twiddle_ptr: *const Complex64,
 ) -> std::arch::x86_64::__m256d {
     use std::arch::x86_64::_mm256_set_pd;
 
-    let first = twiddle_len32_const_unchecked::<FIRST_EXPONENT>(twiddle_ptr);
-    let second = twiddle_len32_const_unchecked::<SECOND_EXPONENT>(twiddle_ptr);
+    let first = twiddle_len32_const_unchecked::<FIRST_EXPONENT, INVERSE>(twiddle_ptr);
+    let second = twiddle_len32_const_unchecked::<SECOND_EXPONENT, INVERSE>(twiddle_ptr);
     _mm256_set_pd(second.im, second.re, first.im, first.re)
 }
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
-unsafe fn avx_apply_len32_twiddles_for_column_pair<const COLUMN_PAIR: usize>(
+unsafe fn avx_apply_len32_twiddles_for_column_pair<
+    const COLUMN_PAIR: usize,
+    const INVERSE: bool,
+>(
     mid: &mut [std::arch::x86_64::__m256d; 8],
     twiddle_ptr: *const Complex64,
 ) {
     match COLUMN_PAIR {
         0 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len32_pair_const::<0, 1>(twiddle_ptr));
-            mid[2] =
-                avx_cmul_by_pair_twiddle(mid[2], avx_twiddle_len32_pair_const::<0, 2>(twiddle_ptr));
-            mid[3] =
-                avx_cmul_by_pair_twiddle(mid[3], avx_twiddle_len32_pair_const::<0, 3>(twiddle_ptr));
-            mid[4] =
-                avx_cmul_by_pair_twiddle(mid[4], avx_twiddle_len32_pair_const::<0, 4>(twiddle_ptr));
-            mid[5] =
-                avx_cmul_by_pair_twiddle(mid[5], avx_twiddle_len32_pair_const::<0, 5>(twiddle_ptr));
-            mid[6] =
-                avx_cmul_by_pair_twiddle(mid[6], avx_twiddle_len32_pair_const::<0, 6>(twiddle_ptr));
-            mid[7] =
-                avx_cmul_by_pair_twiddle(mid[7], avx_twiddle_len32_pair_const::<0, 7>(twiddle_ptr));
-        }
-        1 => {
-            mid[1] =
-                avx_cmul_by_pair_twiddle(mid[1], avx_twiddle_len32_pair_const::<2, 3>(twiddle_ptr));
-            mid[2] =
-                avx_cmul_by_pair_twiddle(mid[2], avx_twiddle_len32_pair_const::<4, 6>(twiddle_ptr));
-            mid[3] =
-                avx_cmul_by_pair_twiddle(mid[3], avx_twiddle_len32_pair_const::<6, 9>(twiddle_ptr));
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len32_pair_const::<0, 1, INVERSE>(twiddle_ptr),
+            );
+            mid[2] = avx_cmul_by_pair_twiddle(
+                mid[2],
+                avx_twiddle_len32_pair_const::<0, 2, INVERSE>(twiddle_ptr),
+            );
+            mid[3] = avx_cmul_by_pair_twiddle(
+                mid[3],
+                avx_twiddle_len32_pair_const::<0, 3, INVERSE>(twiddle_ptr),
+            );
             mid[4] = avx_cmul_by_pair_twiddle(
                 mid[4],
-                avx_twiddle_len32_pair_const::<8, 12>(twiddle_ptr),
+                avx_twiddle_len32_pair_const::<0, 4, INVERSE>(twiddle_ptr),
             );
             mid[5] = avx_cmul_by_pair_twiddle(
                 mid[5],
-                avx_twiddle_len32_pair_const::<10, 15>(twiddle_ptr),
+                avx_twiddle_len32_pair_const::<0, 5, INVERSE>(twiddle_ptr),
             );
             mid[6] = avx_cmul_by_pair_twiddle(
                 mid[6],
-                avx_twiddle_len32_pair_const::<12, 18>(twiddle_ptr),
+                avx_twiddle_len32_pair_const::<0, 6, INVERSE>(twiddle_ptr),
             );
             mid[7] = avx_cmul_by_pair_twiddle(
                 mid[7],
-                avx_twiddle_len32_pair_const::<14, 21>(twiddle_ptr),
+                avx_twiddle_len32_pair_const::<0, 7, INVERSE>(twiddle_ptr),
+            );
+        }
+        1 => {
+            mid[1] = avx_cmul_by_pair_twiddle(
+                mid[1],
+                avx_twiddle_len32_pair_const::<2, 3, INVERSE>(twiddle_ptr),
+            );
+            mid[2] = avx_cmul_by_pair_twiddle(
+                mid[2],
+                avx_twiddle_len32_pair_const::<4, 6, INVERSE>(twiddle_ptr),
+            );
+            mid[3] = avx_cmul_by_pair_twiddle(
+                mid[3],
+                avx_twiddle_len32_pair_const::<6, 9, INVERSE>(twiddle_ptr),
+            );
+            mid[4] = avx_cmul_by_pair_twiddle(
+                mid[4],
+                avx_twiddle_len32_pair_const::<8, 12, INVERSE>(twiddle_ptr),
+            );
+            mid[5] = avx_cmul_by_pair_twiddle(
+                mid[5],
+                avx_twiddle_len32_pair_const::<10, 15, INVERSE>(twiddle_ptr),
+            );
+            mid[6] = avx_cmul_by_pair_twiddle(
+                mid[6],
+                avx_twiddle_len32_pair_const::<12, 18, INVERSE>(twiddle_ptr),
+            );
+            mid[7] = avx_cmul_by_pair_twiddle(
+                mid[7],
+                avx_twiddle_len32_pair_const::<14, 21, INVERSE>(twiddle_ptr),
             );
         }
         _ => unreachable!("length-32 column pair index must be in 0..1"),
@@ -535,7 +608,10 @@ unsafe fn avx_apply_len32_twiddles_for_column_pair<const COLUMN_PAIR: usize>(
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx,fma")]
-pub(crate) unsafe fn fixed_len32_first_phase_column_pair<const COLUMN_PAIR: usize>(
+pub(crate) unsafe fn fixed_len32_first_phase_column_pair<
+    const COLUMN_PAIR: usize,
+    const INVERSE: bool,
+>(
     data_ptr: *mut Complex64,
     scratch_ptr: *mut Complex64,
     twiddle_ptr: *const Complex64,
@@ -559,7 +635,7 @@ pub(crate) unsafe fn fixed_len32_first_phase_column_pair<const COLUMN_PAIR: usiz
         _mm256_loadu_pd(data_ptr.add(column + 28).cast::<f64>()),
     ];
     let mut mid = avx_butterfly8_pair(rows, quarter_turn_mask, w1_re, w1_im, w3_re, w3_im);
-    avx_apply_len32_twiddles_for_column_pair::<COLUMN_PAIR>(&mut mid, twiddle_ptr);
+    avx_apply_len32_twiddles_for_column_pair::<COLUMN_PAIR, INVERSE>(&mut mid, twiddle_ptr);
     let offset = COLUMN_PAIR << 1;
     _mm256_storeu_pd(scratch_ptr.add(offset).cast::<f64>(), mid[0]);
     _mm256_storeu_pd(scratch_ptr.add(offset + 4).cast::<f64>(), mid[1]);
@@ -606,21 +682,39 @@ pub(crate) unsafe fn fixed_len32_precise_avx_fma(
     scratch: &mut [Complex64],
     twiddles: &[Complex64],
 ) {
-    use std::arch::x86_64::{_mm256_set1_pd, _mm256_set_pd};
-
     debug_assert_eq!(data.len(), 32);
     debug_assert!(scratch.len() >= 32);
     debug_assert!(twiddles.len() >= 31);
 
     let twiddle_ptr = twiddles.as_ptr();
     let inverse = (*twiddle_ptr.add(2)).im > 0.0;
-    let quarter_turn_mask = if inverse {
+    if inverse {
+        fixed_len32_precise_avx_fma_impl::<true>(data, scratch, twiddle_ptr);
+    } else {
+        fixed_len32_precise_avx_fma_impl::<false>(data, scratch, twiddle_ptr);
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx,fma")]
+unsafe fn fixed_len32_precise_avx_fma_impl<const INVERSE: bool>(
+    data: &mut [Complex64],
+    scratch: &mut [Complex64],
+    twiddle_ptr: *const Complex64,
+) {
+    use std::arch::x86_64::{_mm256_set1_pd, _mm256_set_pd};
+
+    let quarter_turn_mask = if INVERSE {
         _mm256_set_pd(0.0, -0.0, 0.0, -0.0)
     } else {
         _mm256_set_pd(-0.0, 0.0, -0.0, 0.0)
     };
-    let w1 = *twiddle_ptr.add(4);
-    let w3 = *twiddle_ptr.add(6);
+    let c = std::f64::consts::FRAC_1_SQRT_2;
+    let (w1, w3) = if INVERSE {
+        (Complex64::new(c, c), Complex64::new(-c, c))
+    } else {
+        (Complex64::new(c, -c), Complex64::new(-c, -c))
+    };
     let w1_re = _mm256_set1_pd(w1.re);
     let w1_im = _mm256_set1_pd(w1.im);
     let w3_re = _mm256_set1_pd(w3.re);
@@ -628,7 +722,7 @@ pub(crate) unsafe fn fixed_len32_precise_avx_fma(
     let data_ptr = data.as_mut_ptr();
     let scratch_ptr = scratch.as_mut_ptr();
 
-    fixed_len32_first_phase_column_pair::<0>(
+    fixed_len32_first_phase_column_pair::<0, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,
@@ -638,7 +732,7 @@ pub(crate) unsafe fn fixed_len32_precise_avx_fma(
         w3_re,
         w3_im,
     );
-    fixed_len32_first_phase_column_pair::<1>(
+    fixed_len32_first_phase_column_pair::<1, INVERSE>(
         data_ptr,
         scratch_ptr,
         twiddle_ptr,

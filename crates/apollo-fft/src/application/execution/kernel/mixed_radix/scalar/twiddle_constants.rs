@@ -449,6 +449,8 @@ pub(crate) const TWIDDLES_64_INV: [Complex64; 64] = [
 
 pub(super) static TWIDDLES_FWD_PRECISE: std::sync::LazyLock<[Vec<Complex64>; 7]> =
     std::sync::LazyLock::new(|| {
+        debug_assert_eq!(TWIDDLES_32_FWD.len(), 32);
+        debug_assert_eq!(TWIDDLES_64_FWD.len(), 64);
         [
         Vec::new(),
         <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_forward_twiddle_table(2),
@@ -462,6 +464,8 @@ pub(super) static TWIDDLES_FWD_PRECISE: std::sync::LazyLock<[Vec<Complex64>; 7]>
 
 pub(super) static TWIDDLES_INV_PRECISE: std::sync::LazyLock<[Vec<Complex64>; 7]> =
     std::sync::LazyLock::new(|| {
+        debug_assert_eq!(TWIDDLES_32_INV.len(), 32);
+        debug_assert_eq!(TWIDDLES_64_INV.len(), 64);
         [
         Vec::new(),
         <f64 as crate::application::execution::kernel::real_fft::RealFft>::build_inverse_twiddle_table(2),
