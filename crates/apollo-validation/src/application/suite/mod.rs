@@ -894,4 +894,28 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn test_leto_ndarray_validation_boundary() {
+        use leto::{Array2 as LetoArray2, Storage};
+        use ndarray::Array2;
+
+        let ndarray = Array2::from_shape_vec((2, 3), vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .expect("ndarray construction");
+        let leto = LetoArray2::from(ndarray.clone());
+
+        assert_eq!(leto.shape(), [2, 3]);
+        assert_eq!(leto.strides(), [3, 1]);
+        assert_eq!(
+            leto.storage().as_slice(),
+            ndarray.as_slice().expect("contiguous ndarray")
+        );
+
+        let ndarray_back = ndarray::Array::try_from(leto).expect("leto to ndarray");
+        assert_eq!(ndarray_back.shape(), &[2, 3]);
+        assert_eq!(
+            ndarray_back.as_slice().expect("contiguous ndarray"),
+            ndarray.as_slice().expect("contiguous ndarray")
+        );
+    }
 }

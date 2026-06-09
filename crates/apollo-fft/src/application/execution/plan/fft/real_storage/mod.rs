@@ -58,6 +58,24 @@ pub trait RealFftData: Clone + Send + Sync + 'static {
         spectrum: &mut Array1<Self::Spectrum>,
         output: &mut Array1<Self>,
     );
+    /// Forward 1D transform from a real slice into owned spectrum storage.
+    #[must_use]
+    fn forward_1d_slice_owned(
+        plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self],
+    ) -> Vec<Self::Spectrum> {
+        let input_array = Array1::from_vec(input.to_owned());
+        Self::forward_1d(plan, &input_array).into_iter().collect()
+    }
+    /// Inverse 1D transform from a spectrum slice into owned real storage.
+    #[must_use]
+    fn inverse_1d_slice_owned(
+        plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self::Spectrum],
+    ) -> Vec<Self> {
+        let input_array = Array1::from_vec(input.to_owned());
+        Self::inverse_1d(plan, &input_array).into_iter().collect()
+    }
     /// Forward 1D transform into caller-owned spectrum storage using a
     /// compile-time-known length and zero-sized static plan.
     fn forward_1d_static_into<const N: usize>(

@@ -63,6 +63,30 @@ impl RealFftData for f16 {
         fill_f16_from_complex32(spectrum, output);
     }
 
+    fn forward_1d_slice_owned(
+        plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self],
+    ) -> Vec<Self::Spectrum> {
+        let mut output: Vec<_> = input
+            .iter()
+            .map(|&value| Complex32::new(value.to_f32(), 0.0))
+            .collect();
+        plan.forward_complex_slice_inplace(&mut output);
+        output
+    }
+
+    fn inverse_1d_slice_owned(
+        plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self::Spectrum],
+    ) -> Vec<Self> {
+        let mut scratch = input.to_owned();
+        plan.inverse_complex_slice_inplace(&mut scratch);
+        scratch
+            .into_iter()
+            .map(|value| f16::from_f32(value.re))
+            .collect()
+    }
+
     fn forward_1d_static_into<const N: usize>(
         input: &Array1<Self>,
         output: &mut Array1<Self::Spectrum>,

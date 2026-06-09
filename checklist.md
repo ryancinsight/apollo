@@ -1,4 +1,29 @@
 # Apollo Checklist
+## Leto ndarray-validated provider integration [minor]
+- [x] Added Leto to the Apollo workspace dependency surface with `std` and `ndarray-compat` enabled.
+- [x] Added `leto` to `apollo-validation` and a validation-boundary test that compares contiguous Leto ownership/conversion against `ndarray`.
+- [x] Extended `xtask provider-audit` to report Leto workspace and crate usage alongside Moirai, Mnemosyne, Melinoe, and Hermes.
+- [x] Updated `docs/provider_contract.md` with Apollo requirements for Leto and `ndarray`'s role as validation oracle.
+- [x] Verification: `cargo test -p xtask provider_audit -- --nocapture`; `cargo test -p apollo-validation test_leto_ndarray_validation_boundary --lib`.
+- Residual: Apollo currently locks Leto Git commit `5c1fd250`; the broader local Leto Apollo slice/stride contract must be committed and pushed before Apollo can update to that revision.
+
+## 1D slice-owned real-storage execution [minor]
+- [x] Added `RealFftData::forward_1d_slice_owned` and `RealFftData::inverse_1d_slice_owned` as the storage-owned slice boundary for real-to-spectrum and spectrum-to-real 1D transforms.
+- [x] Overrode the boundary for `f64`, `f32`, and `f16` so public slice wrappers allocate one owned output/scratch vector and execute through `FftPlan1D` in-place slice methods instead of constructing `Array1` input and copying the result back into a second `Vec`.
+- [x] Routed `fft_1d_slice_typed` and `ifft_1d_slice_typed` through the new storage-owned methods while preserving the public wrapper names and value semantics.
+- [x] Bumped `apollo-fft` to `0.13.0` because the storage trait gained additive default methods.
+- [x] Verification: `cargo fmt -p apollo-fft`; `cargo test -p apollo-fft --test slice_api`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`.
+- [x] SemVer gate attempted: `cargo semver-checks -p apollo-fft` failed before analysis because `apollo-fft` is not published in the registry.
+- Evidence: source-level allocation reduction and monomorphized per-storage implementations; integration parity tests for `f64`, `f32`, and `f16`. No benchmarked runtime claim.
+
+## Tiny direct plan dispatch SSOT (N=2/3/4) + direct N=3 codelet [patch]
+- [x] Consolidated runtime tiny direct routing in `dimension_1d/executors.rs` so forward, inverse, and unnormalized inverse use one helper instead of three duplicated match blocks.
+- [x] Added static-plan tiny dispatch for N=3 and routed N=3 through the canonical `butterflies::dft3_impl` with fused normalization instead of the generic short-Winograd dispatcher.
+- [x] Added value-semantic coverage for runtime and zero-sized static N=3 plans across f64/f32 forward paths plus f64 normalized inverse.
+- [x] Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft tiny_runtime_and_static_n3_match_direct --lib`; `cargo test -p apollo-fft planned --lib`; `cargo test -p apollo-fft --lib`; `cargo doc -p apollo-fft --no-deps`.
+- [x] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick` (514 canonical rows, completed within the 300s bound). Current quick profile: f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows. N=3 records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains open at `4.325x`.
+- Evidence: type-level monomorphized helper + direct canonical codelet dispatch; value tests and full library tests. No runtime benchmark claim.
+
 ## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe/Hermes [patch]
 - [x] Added `cargo run -p xtask -- provider-audit` as an Apollo-local static source audit for provider usage, Rayon residue, WGPU surface, `Arc`/`Mutex`/`dyn`, clone-to-`Vec`, and `Cow` signals by crate.
 - [x] Documented the Git dependency order in `docs/provider_contract.md`: Moirai/Mnemosyne/Melinoe/Hermes changes must be committed and pushed before Apollo can consume them; Apollo manifests must not commit local path overrides.

@@ -1,9 +1,9 @@
 # Apollo Provider Contract
 
 Apollo consumes provider crates through Git dependencies. Provider changes in
-Moirai, Mnemosyne, Melinoe, or Hermes must be committed and pushed before Apollo
-updates its dependency revision. Committed Apollo manifests must not use local
-path overrides for provider work.
+Moirai, Mnemosyne, Melinoe, Hermes, or Leto must be committed and pushed before
+Apollo updates its dependency revision. Committed Apollo manifests must not use
+local path overrides for provider work.
 
 ## Current Surface
 
@@ -15,8 +15,11 @@ path overrides for provider work.
   dependency table with default features disabled and `alloc` enabled.
 - `hermes-simd` is the SIMD provider in the Apollo workspace dependency table
   with default features disabled and `std` enabled.
-- `ndarray` still enables `rayon` and `matrixmultiply-threading`; this is an
-  audit item because it keeps Rayon-linked parallelism in the dependency graph
+- `leto` is the strided-array migration provider in the Apollo workspace
+  dependency table with default features disabled and `std` plus
+  `ndarray-compat` enabled.
+- `ndarray` remains the validation oracle and transitional public API substrate.
+  The workspace dependency must not enable Rayon or matrixmultiply threading
   while Moirai is the intended parallel runtime.
 - WGPU crates own GPU device buffers and dispatch. CPU scheduling and host-side
   allocation policy must remain decoupled from WGPU infrastructure types.
@@ -76,12 +79,32 @@ path overrides for provider work.
 - Public facade stability for Apollo's `hermes_simd::{PreferredArch, Vector}`
   usage in FWHT and future SIMD kernels.
 
+## Apollo Requirements for Leto
+
+- Constructors and rank aliases matching Apollo's current `ndarray`
+  `Array1`/`Array2`/`Array3` usage: `zeros`, `from_elem`, `from_vec`,
+  `from_shape_vec`, `from_shape_fn`, and owned `into_vec`.
+- Zero-copy immutable and mutable views over contiguous and strided layouts,
+  with signed strides preserved for reverse views and storage-span validation
+  before any external layout is accepted.
+- `ndarray`-validated slicing semantics, including full axes, signed ranges,
+  negative indices, negative strides, axis-dropping index selections, inserted
+  axes, ellipsis expansion, implicit trailing axes, and retained single-element
+  range stride metadata.
+- Broadcast and axis-iteration semantics that match `ndarray` for read paths
+  and reject mutable zero-stride aliasing.
+- Transitional `ndarray-compat` conversions for validation only. Apollo uses
+  `ndarray` to validate Leto behavior before replacing a downstream call site;
+  core hot paths should move to Leto only after differential tests cover the
+  relevant shape, stride, value, and mutation contracts.
+
 ## GPU Boundary
 
-Moirai, Mnemosyne, Melinoe, and Hermes optimize CPU scheduling, host memory,
-branded zero-copy access, and host SIMD kernels. WGPU execution remains in `*-wgpu` infrastructure
-crates. GPU buffers, command encoders, pipeline objects, and device futures
-must not leak into pure Apollo domain models or CPU mathematical kernels.
+Moirai, Mnemosyne, Melinoe, Hermes, and Leto optimize CPU scheduling, host memory,
+branded zero-copy access, host SIMD kernels, and host strided-array storage. WGPU
+execution remains in `*-wgpu` infrastructure crates. GPU buffers, command
+encoders, pipeline objects, and device futures must not leak into pure Apollo
+domain models or CPU mathematical kernels.
 
 ## Verification
 
@@ -91,7 +114,7 @@ Run:
 cargo run -p xtask -- provider-audit
 ```
 
-The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Rayon, WGPU, `Arc`, `Mutex`,
-`dyn`, clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is static
-source analysis; performance claims still require Criterion or domain-specific
-benchmarks.
+The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Leto, Rayon, WGPU, `Arc`,
+`Mutex`, `dyn`, clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is
+static source analysis; performance claims still require Criterion or
+domain-specific benchmarks.

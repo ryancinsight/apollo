@@ -82,6 +82,7 @@ num-complex = "0.4"
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", default-features = false, features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", default-features = false, features = ["std"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "ndarray-compat"] }
 proc-macro2 = "1.0"
 numpy = "0.23"
 once_cell = "1.19"

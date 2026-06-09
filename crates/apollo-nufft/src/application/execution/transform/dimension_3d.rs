@@ -398,7 +398,9 @@ impl NufftPlan3D {
                 if out_vec.len() < size_out {
                     out_vec.resize(size_out, Complex64::default());
                 }
-                let mut output64 = Array3::from_shape_vec((self.grid.nx, self.grid.ny, self.grid.nz), out_vec).unwrap();
+                let mut output64 =
+                    Array3::from_shape_vec((self.grid.nx, self.grid.ny, self.grid.nz), out_vec)
+                        .unwrap();
 
                 self.type1_into(
                     positions,
@@ -669,13 +671,19 @@ impl NufftPlan3D {
                                 if grid_vec.len() < size_grid {
                                     grid_vec.resize(size_grid, Complex64::default());
                                 }
-                                let mut scratch_grid = Array3::from_shape_vec((self.mx, self.my, self.mz), grid_vec).unwrap();
+                                let mut scratch_grid =
+                                    Array3::from_shape_vec((self.mx, self.my, self.mz), grid_vec)
+                                        .unwrap();
 
                                 let mut modes_vec = std::mem::take(&mut *modes_cell.borrow_mut());
                                 if modes_vec.len() < size_modes {
                                     modes_vec.resize(size_modes, Complex64::default());
                                 }
-                                let mut modes64 = Array3::from_shape_vec((self.grid.nx, self.grid.ny, self.grid.nz), modes_vec).unwrap();
+                                let mut modes64 = Array3::from_shape_vec(
+                                    (self.grid.nx, self.grid.ny, self.grid.nz),
+                                    modes_vec,
+                                )
+                                .unwrap();
                                 for (slot, &val) in modes64.iter_mut().zip(modes.iter()) {
                                     *slot = T::to_complex64(val);
                                 }

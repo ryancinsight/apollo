@@ -30,6 +30,10 @@ pub(super) fn static_fft_dispatch<
         return;
     }
 
+    if tiny_direct_dispatch::<F, N, INVERSE, NORMALIZE>(slice) {
+        return;
+    }
+
     if static_small_pot_dispatch::<F, N, INVERSE, NORMALIZE>(slice) {
         return;
     }
@@ -94,7 +98,29 @@ pub(super) fn static_fft_dispatch<
 }
 
 #[inline]
-fn static_small_pot_dispatch<
+pub(super) fn runtime_tiny_direct_dispatch<
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    len: usize,
+    slice: &mut [F::Complex],
+) -> bool {
+    match len {
+        2 => unsafe { F::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(slice) },
+        3 => crate::application::execution::kernel::components::butterflies::dft3_impl::<
+            F,
+            INVERSE,
+            NORMALIZE,
+        >(slice),
+        4 => unsafe { F::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(slice) },
+        _ => return false,
+    }
+    true
+}
+
+#[inline]
+fn tiny_direct_dispatch<
     F: MixedRadixScalar<Complex = Complex<F>>,
     const N: usize,
     const INVERSE: bool,
@@ -104,7 +130,27 @@ fn static_small_pot_dispatch<
 ) -> bool {
     match N {
         2 => unsafe { F::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(slice) },
+        3 => crate::application::execution::kernel::components::butterflies::dft3_impl::<
+            F,
+            INVERSE,
+            NORMALIZE,
+        >(slice),
         4 => unsafe { F::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(slice) },
+        _ => return false,
+    }
+    true
+}
+
+#[inline]
+fn static_small_pot_dispatch<
+    F: MixedRadixScalar<Complex = Complex<F>>,
+    const N: usize,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    slice: &mut [F::Complex],
+) -> bool {
+    match N {
         8 => unsafe { F::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(slice) },
         16 => unsafe { F::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(slice) },
         32 => unsafe { F::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(slice) },

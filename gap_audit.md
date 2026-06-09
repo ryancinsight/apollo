@@ -1,5 +1,33 @@
 # Apollo Gap Audit
 
+## Leto ndarray-validated provider integration [minor]
+- Performed in Leto: added an Apollo-facing `ndarray-compat` contract test covering constructors, C-order storage, transpose, broadcast, axis iteration, mutable view mutation, owned ndarray round trips, negative-stride views, slice metadata, mutable broadcast rejection, and storage-bound rejection. The test uses `ndarray` as the validation oracle.
+- Leto behavior change: `SliceArg::range` now matches `ndarray` retained single-element range metadata by setting that output stride to `0`; empty ranges keep their computed stride. Existing core slicing and layout property tests pass.
+- Performed in Apollo: added Leto to the workspace provider dependency surface with `std` and `ndarray-compat`, added `leto` to `apollo-validation`, added a Leto/ndarray contiguous conversion validation test, extended `xtask provider-audit` to report Leto, and updated the provider contract.
+- Verification: Leto `cargo test -p leto --features ndarray-compat --test apollo_ndarray_contract` (8 passed); Leto `cargo test -p leto --test core_tests slicing` (5 passed); Leto `cargo test -p leto --test layout_property_tests` (8 passed); Apollo `cargo test -p xtask provider_audit -- --nocapture`; Apollo `cargo test -p apollo-validation test_leto_ndarray_validation_boundary --lib`.
+- Evidence tier: differential validation against `ndarray`, value-semantic tests, and static provider-audit coverage. No runtime performance claim is made.
+- Residuals: Apollo `Cargo.lock` currently resolves pushed Leto commit `5c1fd250`, which is sufficient for the contiguous validation boundary but not the new local Apollo slice/stride contract. The local Leto changes must be committed and pushed before Apollo can update to a revision containing the full contract. Direct replacement of Apollo's broad `ndarray` API surface remains pending per-crate migration tests.
+
+## 1D slice-owned real-storage execution [minor]
+- Performed: `RealFftData` now exposes additive default slice-owned 1D forward and inverse methods. The concrete `f64`, `f32`, and `f16` implementations override those methods and construct exactly the owned vector required by the public slice API before executing the cached `FftPlan1D` in-place slice path.
+- Memory effect: `fft_1d_slice_typed` and `ifft_1d_slice_typed` no longer construct an intermediate `Array1` from an input clone and then copy the returned `Array1` into another `Vec`. The concrete storage paths allocate one output/scratch vector and consume it directly.
+- Architecture effect: the real-storage conversion boundary stays in `real_storage`, where the `f16` storage-to-`Complex32` execution contract already lives. `lib.rs` remains a thin API facade over the storage trait and plan cache.
+- Versioning: additive public trait methods classify this as `[minor]`; `apollo-fft` is bumped to `0.13.0`.
+- Verification: `cargo fmt -p apollo-fft`; `cargo test -p apollo-fft --test slice_api` (3 passed); `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`.
+- SemVer gate: `cargo semver-checks -p apollo-fft` failed before compatibility analysis because `apollo-fft` is not published in the registry; no semver compatibility claim is made from that tool.
+- Evidence tier: source-level allocation-path reduction plus value-semantic integration parity against the `Array1` API for `f64`, `f32`, and `f16`. No runtime benchmark claim is made for this increment.
+- Residuals: 2D/3D public slice-style allocating wrappers remain outside this increment; provider audit still reports `leto` absent from the Apollo dependency graph, so Leto-specific utilization requires a separate dependency design.
+
+## Tiny direct plan dispatch SSOT and N=3 direct codelet route [patch]
+- Performed: `FftPlan1D` runtime forward, inverse, and unnormalized inverse slice paths now call one executor-owned `runtime_tiny_direct_dispatch` helper for N=2/3/4 instead of carrying three duplicated match blocks in the plan type. Static 1D plans now use a matching compile-time `tiny_direct_dispatch` before the small power-of-two path.
+- N=3 route: runtime and static N=3 plans now call the canonical `components::butterflies::dft3_impl::<F, INVERSE, NORMALIZE>` directly. This removes the generic short-Winograd dispatcher membership check and size match from the N=3 hot path while preserving monomorphized scalar execution and fused inverse normalization.
+- Architecture effect: responsibility for tiny executor routing moves to `dimension_1d/executors.rs`; `dimension_1d.rs` keeps plan state and public methods. This is SRP/SSOT cleanup, not a new algorithm.
+- Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft tiny_runtime_and_static_n3_match_direct --lib`; `cargo test -p apollo-fft planned --lib`; `cargo test -p apollo-fft --lib` (385 passed); `cargo doc -p apollo-fft --no-deps`.
+- Benchmark refresh: `cargo run -p xtask -- benchmark --all --profile quick` regenerated `benchmark_results.md` for all 514 canonical rows within the 300s bound. Current quick profile: f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows. Relevant rows: N=2 f64 `0.814x` / f32 `0.519x`; N=3 f64 `1.001x` / f32 `0.444x`; N=4 f64 `0.774x` / f32 `4.325x`; N=32768 f64 `2.419x` / f32 `1.216x`.
+- Current worst max-ratio rows: N=132 f32 `7.250x`, N=54 f32 `6.670x`, N=352 f32 `5.920x`, N=297 f32 `5.390x`, N=264 f32 `5.390x`, N=27 f32 `5.210x`.
+- Evidence tier: type-level/compile-time monomorphization for the helper and codelet route, value-semantic tests against the direct DFT reference, and empirical quick-profile benchmark refresh. Quick profile is empirical validation, not a proof.
+- Residuals: N=4 f32 direct path remains open; the current full-table priorities are f32 misses in Good-Thomas/Cooley-Tukey/Winograd rows listed above plus the 32768 PoT row.
+
 ## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe/Hermes [patch]
 - Performed: extended `xtask provider-audit` so the dedicated audit module reports Moirai/Mnemosyne/Melinoe/Hermes/Rayon/WGPU usage and memory/dispatch signals (`Arc`, `Mutex`, `dyn`, clone-to-`Vec`, `Cow`) by crate, then prints provider requirements plus the dependency-order constraint.
 - Current finding: Apollo declares Moirai, Mnemosyne, Melinoe, and Hermes as Git workspace dependencies. `ndarray` still enables `matrixmultiply-threading` through the root workspace dependency, but repeated per-crate `ndarray = "0.16"` declarations have been consolidated onto the workspace dependency so the threading feature is controlled from one manifest.

@@ -34,10 +34,10 @@
 //! - kernel width must satisfy `kernel_width >= 2`
 
 use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use std::f64::consts::PI;
-use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };

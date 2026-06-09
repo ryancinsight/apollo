@@ -22,6 +22,10 @@ const PROVIDER_REQUIREMENTS: &[(&str, &str)] = &[
         "monomorphized SIMD vector kernels, preferred-architecture ZST routing, copy-on-write SIMD views, and no runtime-erased dispatch in transform hot paths",
     ),
     (
+        "leto",
+        "ndarray-validated strided array construction, views, slicing, broadcasting, axis iteration, and zero-copy ndarray compatibility for migration away from direct ndarray ownership",
+    ),
+    (
         "wgpu",
         "GPU kernels keep device buffers behind infrastructure crates while CPU planning, host staging, and verification stay provider-agnostic",
     ),
@@ -33,6 +37,7 @@ const SOURCE_PATTERNS: &[(&str, &str)] = &[
     ("melinoe", "melinoe"),
     ("hermes", "hermes"),
     ("hermes_simd", "hermes_simd"),
+    ("leto", "leto"),
     ("rayon", "rayon"),
     ("arc", "Arc<"),
     ("mutex", "Mutex<"),
@@ -84,6 +89,7 @@ struct WorkspaceAudit {
     mnemosyne_workspace_dep: bool,
     melinoe_workspace_dep: bool,
     hermes_workspace_dep: bool,
+    leto_workspace_dep: bool,
     ndarray_rayon_feature: bool,
 }
 
@@ -101,6 +107,7 @@ struct ManifestUsage {
     mnemosyne: bool,
     melinoe: bool,
     hermes: bool,
+    leto: bool,
     rayon: bool,
     ndarray_rayon_feature: bool,
 }
@@ -151,6 +158,11 @@ impl ProviderAudit {
         );
         push_bool_line(
             &mut output,
+            "Leto workspace dependency",
+            self.workspace.leto_workspace_dep,
+        );
+        push_bool_line(
+            &mut output,
             "ndarray rayon/matrixmultiply-threading feature",
             self.workspace.ndarray_rayon_feature,
         );
@@ -158,10 +170,10 @@ impl ProviderAudit {
 
         output.push_str("## Crate Usage\n");
         output.push_str(
-            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Rayon | ndarray rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
+            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Rayon | ndarray rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
         );
         output.push_str(
-            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
         );
         for crate_audit in &self.crates {
             let dyn_count = count(&crate_audit.source_usage, "box_dyn")
@@ -170,7 +182,7 @@ impl ProviderAudit {
                 + count(&crate_audit.source_usage, "collect_vec");
             writeln!(
                 &mut output,
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
                 crate_audit.name,
                 crate_audit.manifest.display(),
                 mark(
@@ -189,6 +201,9 @@ impl ProviderAudit {
                     crate_audit.manifest_usage.hermes
                         || count(&crate_audit.source_usage, "hermes") > 0
                         || count(&crate_audit.source_usage, "hermes_simd") > 0
+                ),
+                mark(
+                    crate_audit.manifest_usage.leto || count(&crate_audit.source_usage, "leto") > 0
                 ),
                 mark(
                     crate_audit.manifest_usage.rayon
@@ -213,7 +228,7 @@ impl ProviderAudit {
         }
         output.push_str("\n## Dependency Order\n");
         output.push_str(
-            "- Moirai, Mnemosyne, Melinoe, and Hermes are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
+            "- Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
         );
         output.push_str(
             "- Apollo must not add a local path override for provider work in committed manifests.\n",
@@ -233,6 +248,7 @@ fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
         melinoe_workspace_dep: uncommented.contains("melinoe"),
         hermes_workspace_dep: uncommented.contains("hermes-simd")
             && uncommented.contains("github.com"),
+        leto_workspace_dep: uncommented.contains("leto") && uncommented.contains("github.com"),
         ndarray_rayon_feature: uncommented.contains("features = [\"rayon\"")
             || uncommented.contains("features = [\"rayon\",")
             || uncommented.contains("features = [\"rayon\","),
@@ -314,6 +330,7 @@ fn manifest_usage(text: &str) -> ManifestUsage {
         mnemosyne: uncommented.contains("mnemosyne"),
         melinoe: uncommented.contains("melinoe"),
         hermes: uncommented.contains("hermes-simd") || uncommented.contains("hermes_simd"),
+        leto: uncommented.contains("leto"),
         rayon: uncommented.contains("rayon"),
         ndarray_rayon_feature: uncommented.contains("ndarray") && uncommented.contains("rayon"),
     }
@@ -411,6 +428,7 @@ members = ["crates/apollo-demo"]
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", default-features = false, features = ["std"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "ndarray-compat"] }
 ndarray = { version = "0.16", features = ["rayon","matrixmultiply-threading"] }
 "#,
         )?;
@@ -425,6 +443,7 @@ edition = "2021"
 moirai = { workspace = true }
 melinoe = { workspace = true }
 hermes-simd = { workspace = true }
+leto = { workspace = true }
 "#,
         )?;
         fs::write(
@@ -439,10 +458,13 @@ hermes-simd = { workspace = true }
         assert!(rendered.contains("Mnemosyne workspace dependency: no"));
         assert!(rendered.contains("Melinoe workspace dependency: yes"));
         assert!(rendered.contains("Hermes workspace dependency: yes"));
-        assert!(rendered
-            .contains("| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes |"));
-        assert!(rendered
-            .contains("Moirai, Mnemosyne, Melinoe, and Hermes are consumed from Git dependencies"));
+        assert!(rendered.contains("Leto workspace dependency: yes"));
+        assert!(rendered.contains(
+            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes | yes |"
+        ));
+        assert!(rendered.contains(
+            "Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies"
+        ));
 
         fs::remove_dir_all(root)?;
         Ok(())
@@ -490,9 +512,9 @@ moirai = { workspace = true }
         let rendered = audit.render();
 
         assert!(rendered.contains("ndarray rayon/matrixmultiply-threading feature: no"));
-        assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no |"));
+        assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no | no |"));
         assert!(rendered.contains(
-            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no |"
+            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no | no |"
         ));
 
         fs::remove_dir_all(root)?;

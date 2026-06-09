@@ -58,6 +58,31 @@ mod tests {
     }
 
     #[test]
+    fn dct3_fast_boundary_impulse_matches_direct() {
+        let mut signal = vec![0.0_f64; 32];
+        signal[31] = 0.4074011305980829;
+        let mut coefficients = vec![0.0_f64; 32];
+        DctDstPlan::new(signal.len(), RealTransformKind::DctII)
+            .expect("dct2 plan")
+            .forward_into(&signal, &mut coefficients)
+            .expect("planned dct2");
+        let mut direct = vec![0.0_f64; 32];
+        let mut fast = vec![0.0_f64; 32];
+        crate::infrastructure::kernel::direct::dct3(&coefficients, &mut direct);
+        crate::infrastructure::kernel::fast::dct3_fast(&coefficients, &mut fast);
+        for (actual, expected) in fast.iter().zip(direct.iter()) {
+            assert_abs_diff_eq!(*actual, *expected, epsilon = 1.0e-11);
+        }
+        for (actual, expected) in fast.iter().zip(signal.iter()) {
+            assert_abs_diff_eq!(
+                *actual * 2.0 / signal.len() as f64,
+                *expected,
+                epsilon = 1.0e-11
+            );
+        }
+    }
+
+    #[test]
     fn dst2_matches_known_two_point_projection() {
         let plan = DctDstPlan::new(2, RealTransformKind::DstII).expect("plan");
         let mut output = [0.0; 2];

@@ -176,7 +176,9 @@ impl CztWgpuBackend {
         let output_len = plan.output_len();
         if input_len == 0 || output_len == 0 {
             return Err(WgpuError::InvalidPlan {
-                message: format!("CZT lengths input={input_len}, output={output_len} must be greater than zero"),
+                message: format!(
+                    "CZT lengths input={input_len}, output={output_len} must be greater than zero"
+                ),
             });
         }
         if input.len() != input_len {

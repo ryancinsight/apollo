@@ -25,7 +25,7 @@ use executors::{
     exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512, exec_pot_inverse_unnorm_64,
     exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic, exec_pot_inverse_unnorm_sized,
     exec_rader_forward, exec_rader_inverse, exec_rader_inverse_unnorm, exec_winograd_forward,
-    exec_winograd_inverse, exec_winograd_inverse_unnorm,
+    exec_winograd_inverse, exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
 };
 
 /// Zero-copy composite radices: borrowed from a `'static` slice for known sizes,
@@ -565,24 +565,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Forward transform of a complex slice in-place.
     #[inline]
     pub fn forward_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
-        // Bypass function pointer dispatch for sizes <=4 where the indirect
-        // call overhead dominates (f32 N=3 2.348x, N=4 4.064x in benchmarks).
-        // The codelets are identical to what the executors call, just without
-        // the pointer indirection through forward_impl.
-        match self.n {
-            2 => unsafe {
-                F::small_pot_inplace_sized::<2, false, false>(slice);
-                return;
-            },
-            3 => {
-                F::short_winograd::<false, false>(slice);
-                return;
-            }
-            4 => unsafe {
-                F::small_pot_inplace_sized::<4, false, false>(slice);
-                return;
-            },
-            _ => {}
+        if runtime_tiny_direct_dispatch::<F, false, false>(self.n, slice) {
+            return;
         }
         (self.forward_impl)(self, slice);
     }
@@ -590,20 +574,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Inverse transform of a complex slice in-place with normalization.
     #[inline]
     pub fn inverse_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
-        match self.n {
-            2 => unsafe {
-                F::small_pot_inplace_sized::<2, true, true>(slice);
-                return;
-            },
-            3 => {
-                F::short_winograd::<true, true>(slice);
-                return;
-            }
-            4 => unsafe {
-                F::small_pot_inplace_sized::<4, true, true>(slice);
-                return;
-            },
-            _ => {}
+        if runtime_tiny_direct_dispatch::<F, true, true>(self.n, slice) {
+            return;
         }
         (self.inverse_impl)(self, slice);
     }
@@ -611,20 +583,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     /// Inverse transform of a complex slice in-place without normalization.
     #[inline]
     pub fn inverse_complex_slice_unnorm_inplace(&self, slice: &mut [F::Complex]) {
-        match self.n {
-            2 => unsafe {
-                F::small_pot_inplace_sized::<2, true, false>(slice);
-                return;
-            },
-            3 => {
-                F::short_winograd::<true, false>(slice);
-                return;
-            }
-            4 => unsafe {
-                F::small_pot_inplace_sized::<4, true, false>(slice);
-                return;
-            },
-            _ => {}
+        if runtime_tiny_direct_dispatch::<F, true, false>(self.n, slice) {
+            return;
         }
         (self.inverse_unnorm_impl)(self, slice);
     }
@@ -649,7 +609,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
 #[cfg(test)]
 mod planned_good_thomas_tests {
     use super::*;
-    use crate::application::execution::kernel::direct::dft_forward;
+    use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use num_complex::Complex32;
     use num_complex::Complex64;
 
@@ -723,6 +683,50 @@ mod planned_good_thomas_tests {
         assert_static_f64_forward_matches_direct::<512>(1.0e-10);
         assert_static_f64_forward_matches_direct::<200>(1.0e-10);
         assert_static_f64_forward_matches_direct::<359>(1.0e-10);
+    }
+
+    #[test]
+    fn tiny_runtime_and_static_n3_match_direct() {
+        let input64 = signal64(3);
+        let expected64 = dft_forward(&input64);
+        let inverse64 = dft_inverse(&expected64);
+
+        let plan64 = FftPlan1D::<f64>::new(Shape1D::new(3).expect("shape"));
+        let mut runtime_forward64 = input64.clone();
+        plan64.forward_complex_slice_inplace(&mut runtime_forward64);
+        let mut static_forward64 = input64.clone();
+        StaticFftPlan1D::<f64, 3>::new().forward_complex_slice_inplace(&mut static_forward64);
+        let mut runtime_inverse64 = expected64.clone();
+        plan64.inverse_complex_slice_inplace(&mut runtime_inverse64);
+
+        for ((runtime, static_), expected) in runtime_forward64
+            .iter()
+            .zip(static_forward64.iter())
+            .zip(expected64.iter())
+        {
+            assert!((*runtime - *expected).norm() <= 1.0e-12);
+            assert!((*static_ - *expected).norm() <= 1.0e-12);
+        }
+        for (actual, expected) in runtime_inverse64.iter().zip(inverse64.iter()) {
+            assert!((*actual - *expected).norm() <= 1.0e-12);
+        }
+
+        let input32 = signal32(3);
+        let expected32 = dft_forward(&input32);
+        let mut runtime_forward32 = input32.clone();
+        FftPlan1D::<f32>::new(Shape1D::new(3).expect("shape"))
+            .forward_complex_slice_inplace(&mut runtime_forward32);
+        let mut static_forward32 = input32;
+        StaticFftPlan1D::<f32, 3>::new().forward_complex_slice_inplace(&mut static_forward32);
+
+        for ((runtime, static_), expected) in runtime_forward32
+            .iter()
+            .zip(static_forward32.iter())
+            .zip(expected32.iter())
+        {
+            assert!(f64::from((*runtime - *expected).norm()) <= 1.0e-5);
+            assert!(f64::from((*static_ - *expected).norm()) <= 1.0e-5);
+        }
     }
 
     fn assert_planned_f32_forward_matches_direct(n: usize, tolerance: f64) {
