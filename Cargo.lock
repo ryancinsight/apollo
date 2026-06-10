@@ -520,6 +520,7 @@ dependencies = [
  "apollo-fft",
  "approx",
  "leto",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",

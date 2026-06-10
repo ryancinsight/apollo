@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-sft` typed sparse storage conversion and inverse output materialization now use Moirai above a bounded element threshold, while the deterministic dense FFT and top-K heap selector remain the canonical SFT algorithm.
 - [patch] `apollo-czt` direct CZT rows and Bluestein workspace/kernel/output stages now use Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for smaller buffers.
 - [patch] `apollo-sdft` direct-bin initialization and sliding recurrence updates now use Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for small windows and bin counts.
 - [patch] `apollo-gft` forward and inverse graph-basis row execution now uses Moirai `ParallelSliceMut` above a bounded O(N²) work threshold, with serial execution retained for small graphs.

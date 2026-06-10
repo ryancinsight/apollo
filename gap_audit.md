@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SFT typed storage Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-sft`; routed generic typed input conversion, retained-value conversion, and inverse output materialization through Moirai above a bounded element threshold.
+- Architecture effect: SFT typed slice and Leto paths now consume Apollo's Moirai provider surface for independent typed storage movement while preserving the dense FFT and deterministic top-K heap selector as the single canonical sparse-selection implementation.
+- Memory effect: typed conversion allocates one caller-owned or return-owned vector and fills it through indexed collection or disjoint mutable writes; small buffers remain serial to avoid scheduling overhead.
+- Implementation effect: three shared helpers own typed storage movement for all generic `SparseComplexStorage` implementations, preventing conversion-loop duplication across slice and Leto wrappers.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-sft`; `cargo test -p apollo-sft`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic SFT unit/property tests plus direct threshold-path storage conversion tests. No runtime benchmark claim is made.
+- Residuals: dense FFT ownership still uses ndarray as the validation/transport buffer; Hermes is still absent from `apollo-sft`; the top-K heap remains sequential due to its deterministic bounded-heap dependency.
+
 ## CZT direct/Bluestein Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-czt`; routed direct CZT output rows through `ParallelSliceMut` above a bounded O(NM) threshold; routed Bluestein workspace preparation, FFT-kernel multiplication, and output sampling through `ParallelSliceMut` above bounded contiguous-buffer thresholds.
 - Architecture effect: CZT direct reference, slice, Leto, typed, and fast Bluestein paths now consume the Apollo Moirai provider at canonical kernel boundaries instead of individual public wrappers.

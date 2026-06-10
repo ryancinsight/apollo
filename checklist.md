@@ -1,4 +1,13 @@
 # Apollo Checklist
+## SFT typed storage Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-sft`.
+- [x] Routed generic typed input conversion through `moirai::map_collect_index_with::<Adaptive, _, _>` above `STORAGE_PAR_LEN_THRESHOLD`, with serial execution retained for smaller typed inputs.
+- [x] Routed generic typed retained-value conversion through the same bounded Moirai index collection and typed inverse output materialization through `ParallelSliceMut`.
+- [x] Kept the dense FFT and deterministic top-K heap selector serial and canonical; no alternate sparse-selection algorithm body was introduced.
+- [x] Added a threshold-path value test for input conversion, retained-value conversion, and inverse output materialization.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-sft`; `cargo test -p apollo-sft`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic SFT unit/property tests plus direct threshold-path storage conversion tests. No runtime benchmark claim is made.
+
 ## CZT direct/Bluestein Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-czt`.
 - [x] Routed direct CZT output rows through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller O(NM) workloads.

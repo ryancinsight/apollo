@@ -58,11 +58,15 @@
 use crate::domain::plan::config::SparseFftConfig;
 use crate::domain::spectrum::sparse::SparseSpectrum;
 use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
+use moirai::ParallelSliceMut;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+
+/// Below this independent element count, serial conversion avoids scheduling overhead.
+const STORAGE_PAR_LEN_THRESHOLD: usize = 16_384;
 
 /// Ordering key for (magnitude_squared, frequency_index) in the top-K heap.
 ///
@@ -381,14 +385,14 @@ pub trait SparseComplexStorage: Copy + Send + Sync + 'static {
                 actual: signal.len().to_string(),
             });
         }
-        let signal64: Vec<Complex64> = signal.iter().copied().map(Self::to_complex64).collect();
-        let spectrum = plan.forward(&signal64)?;
+        let owner_values = owner_values_from_storage(signal);
+        let spectrum = plan.forward(&owner_values)?;
         frequencies.clear();
         values.clear();
         frequencies.reserve(spectrum.frequencies.len());
         values.reserve(spectrum.values.len());
         frequencies.extend_from_slice(&spectrum.frequencies);
-        values.extend(spectrum.values.into_iter().map(Self::from_complex64));
+        extend_storage_from_owner_values(values, &spectrum.values);
         Ok(())
     }
 
@@ -418,10 +422,8 @@ pub trait SparseComplexStorage: Copy + Send + Sync + 'static {
         for (&frequency, &value) in frequencies.iter().zip(values.iter()) {
             spectrum.insert(frequency, value.to_complex64())?;
         }
-        let signal = plan.inverse(&spectrum)?;
-        for (slot, value) in output.iter_mut().zip(signal.into_iter()) {
-            *slot = Self::from_complex64(value);
-        }
+        let owner_values = plan.inverse(&spectrum)?;
+        write_storage_from_owner_values(output, &owner_values);
         Ok(())
     }
 }
@@ -526,6 +528,47 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Apo
     }
 }
 
+fn owner_values_from_storage<T: SparseComplexStorage>(values: &[T]) -> Vec<Complex64> {
+    if values.len() >= STORAGE_PAR_LEN_THRESHOLD {
+        moirai::map_collect_index_with::<moirai::Adaptive, _, _>(values.len(), |index| {
+            values[index].to_complex64()
+        })
+    } else {
+        values.iter().copied().map(T::to_complex64).collect()
+    }
+}
+
+fn extend_storage_from_owner_values<T: SparseComplexStorage>(
+    output: &mut Vec<T>,
+    values: &[Complex64],
+) {
+    if values.len() >= STORAGE_PAR_LEN_THRESHOLD {
+        let converted =
+            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(values.len(), |index| {
+                T::from_complex64(values[index])
+            });
+        output.extend(converted);
+    } else {
+        output.extend(values.iter().copied().map(T::from_complex64));
+    }
+}
+
+fn write_storage_from_owner_values<T: SparseComplexStorage>(
+    output: &mut [T],
+    values: &[Complex64],
+) {
+    debug_assert_eq!(output.len(), values.len());
+    if output.len() >= STORAGE_PAR_LEN_THRESHOLD {
+        output.par_mut().enumerate(|index, slot| {
+            *slot = T::from_complex64(values[index]);
+        });
+    } else {
+        for (slot, value) in output.iter_mut().zip(values.iter().copied()) {
+            *slot = T::from_complex64(value);
+        }
+    }
+}
+
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
     if let Some(slice) = view.as_slice() {
         return Ok(Cow::Borrowed(slice));
@@ -571,6 +614,40 @@ mod tests {
             .insert(5, Complex64::new(-0.5, 2.0))
             .expect("insert");
         plan.inverse(&spectrum).expect("inverse")
+    }
+
+    #[test]
+    fn moirai_storage_conversion_helpers_match_serial_formulas_at_threshold() {
+        let values: Vec<Complex32> = (0..STORAGE_PAR_LEN_THRESHOLD)
+            .map(|index| {
+                Complex32::new(
+                    (index as f32 * 0.03125).sin(),
+                    (index as f32 * 0.015625).cos(),
+                )
+            })
+            .collect();
+
+        let owner_values = owner_values_from_storage(&values);
+        assert_eq!(owner_values.len(), values.len());
+        for (actual, expected) in owner_values.iter().zip(values.iter()) {
+            assert_eq!(actual.re.to_bits(), f64::from(expected.re).to_bits());
+            assert_eq!(actual.im.to_bits(), f64::from(expected.im).to_bits());
+        }
+
+        let mut converted = Vec::new();
+        extend_storage_from_owner_values::<Complex32>(&mut converted, &owner_values);
+        assert_eq!(converted.len(), values.len());
+        for (actual, expected) in converted.iter().zip(values.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
+
+        let mut output = vec![Complex32::new(0.0, 0.0); values.len()];
+        write_storage_from_owner_values(&mut output, &owner_values);
+        for (actual, expected) in output.iter().zip(values.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
     }
 
     #[test]
