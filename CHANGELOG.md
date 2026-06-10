@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-qft` dense forward/inverse row reductions now use Hermes interleaved complex dot products above the existing Moirai parallel threshold, with Mnemosyne thread-local twiddle-lane scratch and scalar row formulas retained for small state vectors.
 - [patch] `apollo-wavelet` CWT coefficient accumulation now uses Hermes dot-product reduction with Mnemosyne thread-local wavelet-weight scratch above a bounded signal-length threshold, while smaller coefficients retain the scalar mother-wavelet formula.
 - [patch] `apollo-mellin` real Mellin moments now use Hermes dot-product reduction with Mnemosyne thread-local trapezoid-weight scratch above a bounded signal-length threshold, while smaller moments retain the scalar trapezoid formula.
 - [patch] `apollo-gft` forward and inverse graph-basis row reductions now use Hermes dot products above a bounded row-length threshold, with Mnemosyne scratch used for inverse strided basis rows.
@@ -62,6 +63,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [patch] Updated Hermes Git lockfile revision to `b148fed9`, which adds provider-owned interleaved complex dot products for `f32`/`f64` lanes.
 - [minor] `apollo-czt` `CztStorage` now exposes canonical typed slice execution hooks reused by ndarray arrays and Leto views.
 - [minor] `apollo-qft` `QftStorage` now exposes canonical typed slice execution hooks reused by ndarray arrays and Leto views.
 - [minor] `apollo-fwht` `FwhtStorage` now exposes canonical typed slice execution hooks reused by ndarray arrays and Leto views.

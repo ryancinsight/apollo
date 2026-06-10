@@ -1,4 +1,14 @@
 # Apollo Checklist
+## QFT dense Hermes complex dot routing [patch]
+- [x] Updated Apollo's Hermes lockfile revision to provider commit `b148fed9`.
+- [x] Added the workspace Hermes provider dependency to `apollo-qft`.
+- [x] Routed dense forward/inverse row reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>` above `QFT_PAR_OP_THRESHOLD`.
+- [x] Materialized one shared interleaved input lane buffer per threshold-sized transform and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
+- [x] Kept scalar row reduction for smaller state vectors and as the value-semantic formula reference.
+- [x] Added direct threshold-path tests for Hermes forward rows, Hermes inverse rows, and twiddle-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-qft`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic QFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## Wavelet CWT Hermes dot routing [patch]
 - [x] Added the workspace Hermes and Mnemosyne provider dependencies to `apollo-wavelet`.
 - [x] Routed CWT coefficient accumulation through `hermes_simd::dot::<f64>` above `HERMES_CWT_LEN_THRESHOLD`.

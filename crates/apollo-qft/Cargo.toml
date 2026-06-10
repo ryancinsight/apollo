@@ -9,6 +9,7 @@ description = "Quantum Fourier transform utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+hermes-simd = { workspace = true }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }
 ndarray = { workspace = true }

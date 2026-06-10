@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## QFT dense Hermes complex dot routing [patch]
+- Performed: updated Apollo's Hermes lockfile revision to `b148fed9`; added the workspace Hermes provider dependency to `apollo-qft`; routed threshold-sized dense forward/inverse row reductions through Hermes provider-owned interleaved complex dot products.
+- Architecture effect: QFT dense execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized transforms materialize one interleaved input lane buffer, then reuse thread-local twiddle-lane scratch per worker row; small state vectors retain allocation-free scalar row reduction.
+- Implementation effect: `qft_row` remains the scalar formula reference for small paths and tests, while `qft_row_hermes` owns the provider reduction boundary and `fill_twiddle_lanes` owns direction-specific twiddle materialization.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-qft`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic QFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: QFT still materializes an interleaved input lane vector because the current Hermes complex dot API consumes primitive interleaved lanes; a future Hermes complex-view API could remove that copy if it can prove `Complex64` layout at the provider boundary.
+
 ## Wavelet CWT Hermes dot routing [patch]
 - Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-wavelet`; routed CWT coefficient accumulation through `hermes_simd::dot::<f64>` above a bounded signal-length threshold with mother-wavelet weights stored in Mnemosyne thread-local scratch.
 - Architecture effect: Wavelet CWT execution now composes scalar formula ownership, Moirai scale-row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction without runtime-erased dispatch in Apollo code.
