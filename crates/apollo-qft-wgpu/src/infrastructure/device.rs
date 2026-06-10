@@ -1,5 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use apollo_fft::PrecisionProfile;
@@ -77,6 +78,20 @@ impl QftWgpuBackend {
         )
     }
 
+    /// Execute the forward unitary QFT from a Leto complex `f32` view.
+    ///
+    /// Contiguous Leto views borrow host storage directly; strided views copy
+    /// once into logical order before dispatching to the existing WGPU slice path.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &QftWgpuPlan,
+        input: leto::ArrayView1<'_, Complex32>,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_forward(plan, &input)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the inverse unitary QFT.
     pub fn execute_inverse(
         &self,
@@ -91,6 +106,17 @@ impl QftWgpuBackend {
             plan.len(),
             QftMode::Inverse,
         )
+    }
+
+    /// Execute the inverse unitary QFT from a Leto complex `f32` view.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &QftWgpuPlan,
+        input: leto::ArrayView1<'_, Complex32>,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_inverse(plan, &input)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Execute the forward unitary QFT with typed `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
@@ -122,6 +148,22 @@ impl QftWgpuBackend {
         Ok(())
     }
 
+    /// Execute the forward unitary QFT from typed Leto storage.
+    ///
+    /// Precision-profile validation and host quantization match
+    /// [`Self::execute_forward_typed_into`].
+    pub fn execute_forward_leto_typed<T: QftStorage>(
+        &self,
+        plan: &QftWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.len()];
+        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the inverse unitary QFT with typed storage.
     pub fn execute_inverse_typed_into<T: QftStorage>(
         &self,
@@ -151,6 +193,19 @@ impl QftWgpuBackend {
         Ok(())
     }
 
+    /// Execute the inverse unitary QFT from typed Leto storage.
+    pub fn execute_inverse_leto_typed<T: QftStorage>(
+        &self,
+        plan: &QftWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.len()];
+        self.execute_inverse_typed_into(plan, precision, &input, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
     fn validate_qft_typed_precision<T: QftStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
         let expected = T::PROFILE;
         if precision.storage != expected.storage || precision.compute != expected.compute {
@@ -175,5 +230,50 @@ impl QftWgpuBackend {
             });
         }
         Ok(())
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view.get([index]).map_err(|_| WgpuError::LengthMismatch {
+            expected: view.size(),
+            actual: index,
+        })?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto output: {err}"),
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use num_complex::Complex32;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec(
+            [2],
+            vec![Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)],
+        )
+        .expect("leto input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, std::borrow::Cow::Borrowed(_)));
+        assert_eq!(&*cow, &[Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)]);
     }
 }

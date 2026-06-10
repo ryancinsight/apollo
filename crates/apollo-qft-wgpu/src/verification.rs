@@ -2,7 +2,9 @@
 
 #[cfg(test)]
 mod tests {
+    use apollo_fft::{f16, PrecisionProfile};
     use apollo_qft::{QftPlan, QuantumStateDimension};
+    use leto::{SliceArg, Storage};
     use ndarray::Array1;
     use num_complex::{Complex32, Complex64};
 
@@ -172,11 +174,84 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_matches_slice_forward_when_device_exists() {
+        let Ok(backend) = QftWgpuBackend::try_default() else {
+            return;
+        };
+        let input = vec![
+            Complex32::new(0.5, -0.25),
+            Complex32::new(-1.25, 0.75),
+            Complex32::new(2.0, 1.0),
+            Complex32::new(-0.5, -1.5),
+        ];
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
+        let plan = backend.plan(input.len());
+        let expected = backend
+            .execute_forward(&plan, &input)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, leto_input.view())
+            .expect("leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
+        let Ok(backend) = QftWgpuBackend::try_default() else {
+            return;
+        };
+        let logical = vec![
+            Complex32::new(0.5, -0.25),
+            Complex32::new(-1.25, 0.75),
+            Complex32::new(2.0, 1.0),
+            Complex32::new(-0.5, -1.5),
+        ];
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in &logical {
+            backing.push(*value);
+            backing.push(Complex32::new(99.0, -99.0));
+        }
+        let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let plan = backend.plan(logical.len());
+        let expected = backend
+            .execute_forward(&plan, &logical)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_inverse_when_device_exists() {
+        let Ok(backend) = QftWgpuBackend::try_default() else {
+            return;
+        };
+        let input = vec![
+            Complex32::new(0.25, -0.5),
+            Complex32::new(1.0, 1.5),
+            Complex32::new(-2.0, 0.25),
+            Complex32::new(0.75, -1.0),
+        ];
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
+        let plan = backend.plan(input.len());
+        let expected = backend
+            .execute_inverse(&plan, &input)
+            .expect("slice inverse");
+        let actual = backend
+            .execute_inverse_leto(&plan, leto_input.view())
+            .expect("leto inverse");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn typed_mixed_storage_qft_matches_represented_f32_when_device_exists() {
         let Ok(backend) = QftWgpuBackend::try_default() else {
             return;
         };
-        use apollo_fft::{f16, PrecisionProfile};
 
         let input: Vec<[f16; 2]> = vec![
             [f16::from_f32(1.0), f16::from_f32(0.0)],
@@ -218,11 +293,70 @@ mod tests {
     }
 
     #[test]
+    fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
+        let Ok(backend) = QftWgpuBackend::try_default() else {
+            return;
+        };
+        let input: Vec<[f16; 2]> = vec![
+            [f16::from_f32(1.0), f16::from_f32(0.0)],
+            [f16::from_f32(-0.5), f16::from_f32(0.75)],
+            [f16::from_f32(0.25), f16::from_f32(-1.25)],
+            [f16::from_f32(2.0), f16::from_f32(0.5)],
+        ];
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
+        let plan = backend.plan(input.len());
+
+        let mut expected_forward = vec![[f16::from_f32(0.0); 2]; input.len()];
+        backend
+            .execute_forward_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &input,
+                &mut expected_forward,
+            )
+            .expect("typed slice forward");
+        let actual_forward = backend
+            .execute_forward_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_input.view(),
+            )
+            .expect("typed leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward.clone())
+                .expect("spectrum");
+        let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; input.len()];
+        backend
+            .execute_inverse_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &expected_forward,
+                &mut expected_inverse,
+            )
+            .expect("typed slice inverse");
+        let actual_inverse = backend
+            .execute_inverse_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_spectrum.view(),
+            )
+            .expect("typed leto inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice()
+        );
+    }
+
+    #[test]
     fn typed_path_rejects_profile_storage_mismatch_when_device_exists() {
         let Ok(backend) = QftWgpuBackend::try_default() else {
             return;
         };
-        use apollo_fft::{f16, PrecisionProfile};
 
         let plan = backend.plan(2);
         let input = [
