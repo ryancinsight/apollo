@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Hilbert-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-hilbert-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for analytic signal, forward quadrature, typed forward, inverse, and typed inverse Hilbert execution.
+- Architecture effect: Hilbert-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-hilbert-wgpu`; `cargo test -p apollo-hilbert-wgpu leto -- --nocapture`; `cargo test -p apollo-hilbert-wgpu -- --nocapture`; `cargo clippy -p apollo-hilbert-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert-wgpu --no-deps`; `cargo semver-checks -p apollo-hilbert-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Hilbert-WGPU slice APIs for analytic, strided forward, inverse, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; Hilbert-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## DCT/DST-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-dctdst-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 1D forward/inverse, typed 1D forward/inverse, 2D forward/inverse, and 3D forward/inverse DCT/DST execution.
 - Architecture effect: DCT/DST-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains a validation/internal separable execution buffer.

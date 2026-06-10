@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Hilbert-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-hilbert-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `HilbertWgpuBackend::execute_analytic_signal_leto`, `execute_forward_leto`, `execute_forward_leto_typed`, `execute_inverse_leto`, and `execute_inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU slice execution contract; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical host order before dispatch.
+- [x] Added value tests proving analytic signal parity, strided forward parity, inverse parity, and typed forward/inverse parity against the existing WGPU slice methods when a device exists.
+- [x] Verification: `cargo check -p apollo-hilbert-wgpu`; `cargo test -p apollo-hilbert-wgpu leto -- --nocapture`; `cargo test -p apollo-hilbert-wgpu -- --nocapture`; `cargo clippy -p apollo-hilbert-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert-wgpu --no-deps`; `cargo semver-checks -p apollo-hilbert-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing Hilbert-WGPU slice APIs. No runtime benchmark claim is made.
+
 ## DCT/DST-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-dctdst-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `DctDstWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_leto_typed`, `execute_inverse_leto_typed`, `execute_forward_2d_leto`, `execute_inverse_2d_leto`, `execute_forward_3d_leto`, and `execute_inverse_3d_leto`, returning Mnemosyne-backed Leto arrays.

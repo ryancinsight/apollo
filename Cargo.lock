@@ -304,12 +304,13 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "apollo-hilbert",
  "apollo-wgpu-helpers",
  "bytemuck",
+ "leto",
  "num-complex",
  "wgpu",
 ]
