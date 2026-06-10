@@ -17,9 +17,13 @@ use serde::{Deserialize, Serialize};
 /// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.
 const GFT_PAR_OP_THRESHOLD: usize = 16_384;
 
+/// Below this row length, scalar accumulation avoids Hermes dispatch and inverse row scratch setup.
+const GFT_HERMES_DOT_LEN_THRESHOLD: usize = 1_024;
+
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static INVERSE_ROW_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
 /// Reusable graph Fourier plan.
@@ -100,7 +104,7 @@ impl GftPlan {
         let work_items = self.n.saturating_mul(self.n);
         if work_items >= GFT_PAR_OP_THRESHOLD {
             output.par_mut().enumerate(|k, slot| {
-                *slot = forward_row(&self.basis, signal, self.n, k);
+                *slot = forward_row_hermes(&self.basis, signal, self.n, k);
             });
         } else {
             output.iter_mut().enumerate().for_each(|(k, slot)| {
@@ -165,7 +169,7 @@ impl GftPlan {
         let work_items = self.n.saturating_mul(self.n);
         if work_items >= GFT_PAR_OP_THRESHOLD {
             output.par_mut().enumerate(|i, slot| {
-                *slot = inverse_row(&self.basis, spectrum, self.n, i);
+                *slot = inverse_row_hermes(&self.basis, spectrum, self.n, i);
             });
         } else {
             output.iter_mut().enumerate().for_each(|(i, slot)| {
@@ -182,8 +186,38 @@ fn forward_row(basis: &[f64], signal: &[f64], n: usize, k: usize) -> f64 {
 }
 
 #[inline]
+fn forward_row_hermes(basis: &[f64], signal: &[f64], n: usize, k: usize) -> f64 {
+    if n < GFT_HERMES_DOT_LEN_THRESHOLD {
+        return forward_row(basis, signal, n, k);
+    }
+    let column = &basis[k * n..(k + 1) * n];
+    hermes_simd::dot::<f64>(column, signal)
+        .expect("GFT forward Hermes dot uses equal-length basis column and signal slices")
+}
+
+#[inline]
 fn inverse_row(basis: &[f64], spectrum: &[f64], n: usize, i: usize) -> f64 {
     (0..n).map(|k| basis[i + k * n] * spectrum[k]).sum()
+}
+
+#[inline]
+fn inverse_row_hermes(basis: &[f64], spectrum: &[f64], n: usize, i: usize) -> f64 {
+    if n < GFT_HERMES_DOT_LEN_THRESHOLD {
+        return inverse_row(basis, spectrum, n, i);
+    }
+    INVERSE_ROW_SCRATCH.with(|pool| {
+        pool.with_scratch(n, |row| {
+            fill_inverse_basis_row(row, basis, n, i);
+            hermes_simd::dot::<f64>(row, spectrum)
+                .expect("GFT inverse Hermes dot uses equal-length basis row and spectrum slices")
+        })
+    })
+}
+
+fn fill_inverse_basis_row(row: &mut [f64], basis: &[f64], n: usize, i: usize) {
+    for (k, value) in row.iter_mut().enumerate() {
+        *value = basis[i + k * n];
+    }
 }
 
 /// Real storage accepted by typed GFT paths.
@@ -513,6 +547,21 @@ mod tests {
     }
 
     #[test]
+    fn hermes_forward_row_matches_scalar_formula_at_threshold() {
+        let n = GFT_HERMES_DOT_LEN_THRESHOLD;
+        let plan = synthetic_plan(n);
+        let signal = (0..n)
+            .map(|index| (index as f64 * 0.01171875).sin())
+            .collect::<Vec<_>>();
+
+        for &row in &[0usize, 1, 17, 255, 1023] {
+            let actual = forward_row_hermes(plan.basis(), &signal, n, row);
+            let expected = forward_row(plan.basis(), &signal, n, row);
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
     fn moirai_parallel_inverse_matches_row_formula_at_threshold() {
         let n = 128;
         let plan = synthetic_plan(n);
@@ -527,6 +576,35 @@ mod tests {
         for (row, value) in actual.iter().enumerate() {
             let expected = inverse_row(plan.basis(), &spectrum, n, row);
             assert_eq!(value.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn hermes_inverse_row_matches_scalar_formula_at_threshold() {
+        let n = GFT_HERMES_DOT_LEN_THRESHOLD;
+        let plan = synthetic_plan(n);
+        let spectrum = (0..n)
+            .map(|index| (index as f64 * 0.013671875).cos())
+            .collect::<Vec<_>>();
+
+        for &row in &[0usize, 1, 17, 255, 1023] {
+            let actual = inverse_row_hermes(plan.basis(), &spectrum, n, row);
+            let expected = inverse_row(plan.basis(), &spectrum, n, row);
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn hermes_inverse_basis_row_matches_column_major_layout() {
+        let n = GFT_HERMES_DOT_LEN_THRESHOLD;
+        let plan = synthetic_plan(n);
+        let row_index = 31usize;
+        let mut row = vec![0.0; n];
+
+        fill_inverse_basis_row(&mut row, plan.basis(), n, row_index);
+
+        for (k, actual) in row.iter().enumerate() {
+            assert_eq!(actual.to_bits(), plan.basis()[row_index + k * n].to_bits());
         }
     }
 }

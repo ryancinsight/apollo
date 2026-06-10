@@ -1,4 +1,13 @@
 # Apollo Checklist
+## GFT graph-basis Hermes dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-gft`.
+- [x] Routed forward `U^T x` row reductions through `hermes_simd::dot::<f64>` for contiguous column-major eigenbasis columns above `GFT_HERMES_DOT_LEN_THRESHOLD`.
+- [x] Routed inverse `U X` row reductions through `hermes_simd::dot::<f64>` above the same threshold after materializing the strided basis row into Mnemosyne thread-local scratch.
+- [x] Kept existing Moirai output-row scheduling and scalar row formulas for smaller graphs.
+- [x] Added value tests for forward Hermes row parity, inverse Hermes row parity, and inverse basis-row materialization.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-gft`; `cargo test -p apollo-gft`; `cargo clippy -p apollo-gft --all-targets -- -D warnings`; `cargo doc -p apollo-gft --no-deps`; `cargo semver-checks -p apollo-gft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic GFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## DHT direct Hermes dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-dht`.
 - [x] Routed direct DHT coefficient accumulation through `hermes_simd::dot::<f64>` above `HERMES_DOT_LEN_THRESHOLD`.

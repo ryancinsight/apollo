@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-gft` forward and inverse graph-basis row reductions now use Hermes dot products above a bounded row-length threshold, with Mnemosyne scratch used for inverse strided basis rows.
 - [patch] `apollo-dht` direct DHT coefficient rows now use Hermes dot-product reduction with Mnemosyne thread-local Hartley-row scratch above a bounded row-length threshold, while smaller rows retain the scalar formula.
 - [patch] `apollo-sft` typed sparse storage conversion and inverse output materialization now use Moirai above a bounded element threshold, while the deterministic dense FFT and top-K heap selector remain the canonical SFT algorithm.
 - [patch] `apollo-czt` direct CZT rows and Bluestein workspace/kernel/output stages now use Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for smaller buffers.

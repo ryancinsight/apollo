@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## GFT graph-basis Hermes dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-gft`; routed forward contiguous basis-column reductions and inverse scratch-materialized basis-row reductions through `hermes_simd::dot::<f64>` above a bounded row-length threshold.
+- Architecture effect: GFT execution now composes Leto eigensolver/storage boundaries, Moirai row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction in the graph-basis kernel boundary without runtime-erased dispatch in Apollo code.
+- Memory effect: forward rows borrow contiguous column-major basis columns directly; inverse rows reuse thread-local scratch for the strided row view; output remains caller-owned and filled by disjoint mutable writes.
+- Implementation effect: scalar `forward_row` and `inverse_row` remain the formula SSOT for small graphs and tests; Hermes-specific helpers only replace the multiply-reduce stage for sufficiently large rows.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-gft`; `cargo test -p apollo-gft`; `cargo clippy -p apollo-gft --all-targets -- -D warnings`; `cargo doc -p apollo-gft --no-deps`; `cargo semver-checks -p apollo-gft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic GFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: GFT typed storage conversion remains scalar; other non-FFT CPU transform crates still lack Hermes-specific kernels.
+
 ## DHT direct Hermes dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-dht`; routed direct DHT coefficient accumulation through `hermes_simd::dot::<f64>` above a bounded row-length threshold while using Mnemosyne thread-local scratch for Hartley basis rows.
 - Architecture effect: DHT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction in the same kernel boundary without introducing runtime-erased dispatch in Apollo code.
