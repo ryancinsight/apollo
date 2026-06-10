@@ -298,6 +298,7 @@ dependencies = [
  "approx",
  "leto",
  "mnemosyne",
+ "moirai",
  "num-complex",
  "proptest",
  "serde",

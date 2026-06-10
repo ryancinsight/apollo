@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Hilbert analytic path Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-hilbert`.
+- [x] Routed analytic input staging, analytic-mask application, original-real restoration, and quadrature extraction through `moirai::ParallelSliceMut` above `HILBERT_PAR_LEN_THRESHOLD`, with serial execution retained for smaller signals.
+- [x] Added a value-semantic threshold test for the Moirai helper path.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-hilbert`; `cargo test -p apollo-hilbert`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic Hilbert unit/property tests plus a direct threshold-path helper test. No runtime benchmark claim is made.
+
 ## NUFFT exact 1D Moirai reference routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-nufft`.
 - [x] Routed exact 1D Type-1 and Type-2 direct reference output writes through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller workloads.

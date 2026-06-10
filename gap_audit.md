@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Hilbert analytic path Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-hilbert` and routed analytic-signal staging, analytic-mask application, real-part restoration, and quadrature extraction through `ParallelSliceMut` above a bounded signal-length threshold.
+- Architecture effect: Hilbert CPU execution now uses Apollo's Moirai provider surface for disjoint mutable writes around the FFT plan while keeping the FFT implementation and Leto/Mnemosyne public boundaries unchanged.
+- Memory effect: caller-owned output buffers are filled in place; the existing Mnemosyne scratch pool remains the quadrature analytic workspace owner.
+- Implementation effect: one thresholded helper per output-write role preserves SSOT between serial and Moirai paths and avoids Rayon/Tokio or runtime-erased dispatch.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-hilbert`; `cargo test -p apollo-hilbert`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic Hilbert unit/property tests plus a direct threshold-path helper test. No runtime benchmark claim is made.
+- Residuals: observable-domain helper methods in `domain::signal::analytic` still use serial slice loops; Hermes is still absent from `apollo-hilbert`.
+
 ## NUFFT exact 1D Moirai reference routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-nufft` and routed `nufft_type1_1d` / `nufft_type2_1d` direct reference output construction through `ParallelSliceMut` above a bounded operation threshold.
 - Architecture effect: NUFFT exact 1D reference execution now uses Apollo's Moirai provider surface for CPU data parallelism instead of local sequential-only loops, while the public Leto/Mnemosyne boundaries and ndarray validation role remain unchanged.

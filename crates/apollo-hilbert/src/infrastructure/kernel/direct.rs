@@ -9,10 +9,15 @@
 
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use apollo_fft::{FftPlan1D, Shape1D};
+use moirai::ParallelSliceMut;
 use num_complex::Complex64;
+
 thread_local! {
     static QUADRATURE_ANALYTIC_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
+
+/// Below this length, serial loops avoid parallel scheduling overhead.
+const HILBERT_PAR_LEN_THRESHOLD: usize = 16_384;
 
 /// Compute the Hilbert quadrature component of a real signal.
 pub fn hilbert_transform(signal: &[f64]) -> HilbertResult<Vec<f64>> {
@@ -29,9 +34,7 @@ pub fn hilbert_transform_into(signal: &[f64], output: &mut [f64]) -> HilbertResu
 
     with_quadrature_analytic_workspace(signal.len(), |analytic| {
         analytic_signal_into(signal, analytic)?;
-        for (slot, value) in output.iter_mut().zip(analytic.iter()) {
-            *slot = value.im;
-        }
+        write_quadrature(signal.len(), analytic, output);
         Ok(())
     })
 }
@@ -90,17 +93,13 @@ pub fn analytic_signal_into(signal: &[f64], output: &mut [Complex64]) -> Hilbert
 
     let shape = Shape1D::new(signal.len()).expect("non-empty Hilbert signal length");
     let plan = FftPlan1D::<f64>::new(shape);
-    for (src, dst) in signal.iter().zip(output.iter_mut()) {
-        *dst = Complex64::new(*src, 0.0);
-    }
+    write_real_input(signal, output);
     plan.forward_complex_slice_inplace(output);
     apply_analytic_mask(output);
     plan.inverse_complex_slice_inplace(output);
 
     // Force the real part to equal the original input to eliminate IFFT rounding.
-    for (sample, original) in output.iter_mut().zip(signal.iter()) {
-        sample.re = *original;
-    }
+    restore_original_real(signal, output);
     Ok(())
 }
 
@@ -119,16 +118,87 @@ fn quadrature_analytic_workspace_capacity() -> usize {
 fn apply_analytic_mask(spectrum: &mut [Complex64]) {
     let len = spectrum.len();
     let positive_end = (len + 1) / 2;
-    for (k, value) in spectrum.iter_mut().enumerate() {
-        let scale = if k == 0 || (len % 2 == 0 && k == len / 2) {
-            1.0
-        } else if k < positive_end {
-            2.0
-        } else {
-            0.0
-        };
-        *value *= scale;
+    if len >= HILBERT_PAR_LEN_THRESHOLD {
+        spectrum.par_mut().enumerate(|k, value| {
+            *value *= analytic_mask_scale(len, positive_end, k);
+        });
+    } else {
+        spectrum.iter_mut().enumerate().for_each(|(k, value)| {
+            *value *= analytic_mask_scale(len, positive_end, k);
+        });
     }
+}
+
+fn analytic_mask_scale(len: usize, positive_end: usize, k: usize) -> f64 {
+    if k == 0 || (len % 2 == 0 && k == len / 2) {
+        1.0
+    } else if k < positive_end {
+        2.0
+    } else {
+        0.0
+    }
+}
+
+fn write_real_input(signal: &[f64], output: &mut [Complex64]) {
+    if signal.len() >= HILBERT_PAR_LEN_THRESHOLD {
+        output.par_mut().enumerate(|index, value| {
+            *value = Complex64::new(signal[index], 0.0);
+        });
+    } else {
+        output.iter_mut().zip(signal.iter()).for_each(|(dst, src)| {
+            *dst = Complex64::new(*src, 0.0);
+        });
+    }
+}
+
+fn restore_original_real(signal: &[f64], output: &mut [Complex64]) {
+    if signal.len() >= HILBERT_PAR_LEN_THRESHOLD {
+        output.par_mut().enumerate(|index, value| {
+            value.re = signal[index];
+        });
+    } else {
+        output
+            .iter_mut()
+            .zip(signal.iter())
+            .for_each(|(sample, original)| {
+                sample.re = *original;
+            });
+    }
+}
+
+fn write_quadrature(len: usize, analytic: &[Complex64], output: &mut [f64]) {
+    if len >= HILBERT_PAR_LEN_THRESHOLD {
+        output.par_mut().enumerate(|index, value| {
+            *value = analytic[index].im;
+        });
+    } else {
+        output
+            .iter_mut()
+            .zip(analytic.iter())
+            .for_each(|(slot, value)| {
+                *slot = value.im;
+            });
+    }
+}
+
+#[cfg(test)]
+fn analytic_mask_for_test(spectrum: &mut [Complex64]) {
+    apply_analytic_mask(spectrum);
+}
+
+#[cfg(test)]
+fn write_real_input_for_test(signal: &[f64], output: &mut [Complex64]) {
+    write_real_input(signal, output);
+}
+
+#[cfg(test)]
+fn restore_original_real_for_test(signal: &[f64], output: &mut [Complex64]) {
+    restore_original_real(signal, output);
+}
+
+#[cfg(test)]
+fn write_quadrature_for_test(analytic: &[Complex64], output: &mut [f64]) {
+    write_quadrature(analytic.len(), analytic, output);
 }
 
 #[cfg(test)]
@@ -187,6 +257,42 @@ mod tests {
 
         for (actual, expected) in second.iter().zip(first.iter()) {
             assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_helpers_match_serial_formulas_at_threshold() {
+        let len = HILBERT_PAR_LEN_THRESHOLD;
+        let signal: Vec<f64> = (0..len)
+            .map(|n| (std::f64::consts::TAU * n as f64 / len as f64).sin())
+            .collect();
+        let mut complex = vec![Complex64::new(f64::NAN, f64::NAN); len];
+
+        write_real_input_for_test(&signal, &mut complex);
+        for (index, value) in complex.iter().enumerate() {
+            assert_eq!(value.re.to_bits(), signal[index].to_bits());
+            assert_eq!(value.im.to_bits(), 0.0_f64.to_bits());
+        }
+
+        analytic_mask_for_test(&mut complex);
+        for (index, value) in complex.iter().enumerate() {
+            let scale = analytic_mask_scale(len, (len + 1) / 2, index);
+            assert_eq!(value.re.to_bits(), (signal[index] * scale).to_bits());
+            assert_eq!(value.im.to_bits(), 0.0_f64.to_bits());
+        }
+
+        let replacement: Vec<f64> = (0..len)
+            .map(|n| (std::f64::consts::TAU * n as f64 / len as f64).cos())
+            .collect();
+        restore_original_real_for_test(&replacement, &mut complex);
+        for (index, value) in complex.iter().enumerate() {
+            assert_eq!(value.re.to_bits(), replacement[index].to_bits());
+        }
+
+        let mut quadrature = vec![f64::NAN; len];
+        write_quadrature_for_test(&complex, &mut quadrature);
+        for (actual, expected) in quadrature.iter().zip(complex.iter()) {
+            assert_eq!(actual.to_bits(), expected.im.to_bits());
         }
     }
 
