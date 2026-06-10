@@ -22,8 +22,9 @@ use ndarray::Array2;
 use num_complex::Complex64;
 use helpers::{
     array2_from_leto_view, coefficients_from_leto_view, leto_array2_from_ndarray,
-    interleaved_lanes, coefficient_lanes, sht_forward_mode_sum_hermes, sht_forward_mode_sum,
+    interleaved_lanes, sht_forward_mode_sum_hermes, sht_forward_mode_sum,
     sht_inverse_sample_hermes, sht_inverse_sample, SHT_HERMES_DOT_LEN_THRESHOLD,
+    SHT_COEFF_LANE_SCRATCH,
 };
 
 /// Reusable spherical harmonic transform (SHT) plan.
@@ -103,8 +104,13 @@ impl ShtPlan {
             .collect();
 
         // Parallelize over latitude rows; each row contributes to all modes independently.
-        let contributions: Vec<Vec<Complex64>> =
-            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(n_lat, |lat| {
+        let num_modes = all_modes.len();
+        let mut flat_contributions = vec![Complex64::new(0.0, 0.0); n_lat * num_modes];
+
+        moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+            &mut flat_contributions,
+            num_modes,
+            |lat, row_contrib| {
                 let theta = self.theta(lat);
                 let weight = self.theta_weights[lat];
                 let row = samples.row(lat);
@@ -118,24 +124,24 @@ impl ShtPlan {
                 };
                 let sample_lanes =
                     (n_lon >= SHT_HERMES_DOT_LEN_THRESHOLD).then(|| interleaved_lanes(row));
-                all_modes
-                    .iter()
-                    .map(|&(degree, order)| {
-                        let lon_sum = match sample_lanes {
-                            Some(lanes) => {
-                                sht_forward_mode_sum_hermes(lanes, degree, order, theta, n_lon)
-                            }
-                            None => sht_forward_mode_sum(row, degree, order, theta, n_lon),
-                        };
-                        lon_sum * (weight * longitude_weight)
-                    })
-                    .collect()
-            });
+                for (mode_idx, &(degree, order)) in all_modes.iter().enumerate() {
+                    let lon_sum = match sample_lanes {
+                        Some(lanes) => {
+                            sht_forward_mode_sum_hermes(lanes, degree, order, theta, n_lon)
+                        }
+                        None => sht_forward_mode_sum(row, degree, order, theta, n_lon),
+                    };
+                    row_contrib[mode_idx] = lon_sum * (weight * longitude_weight);
+                }
+            },
+        );
 
         // Accumulate all latitude contributions into coefficients.
-        for lat_contribs in contributions {
-            for (mode_idx, coeff) in lat_contribs.into_iter().enumerate() {
+        for lat in 0..n_lat {
+            let offset = lat * num_modes;
+            for mode_idx in 0..num_modes {
                 let (degree, order) = all_modes[mode_idx];
+                let coeff = flat_contributions[offset + mode_idx];
                 let existing = coefficients.get(degree, order);
                 coefficients.set(degree, order, existing + coeff);
             }
@@ -186,30 +192,56 @@ impl ShtPlan {
         let all_modes: Vec<(usize, isize)> = (0..=max_degree)
             .flat_map(|l| (-(l as isize)..=(l as isize)).map(move |m| (l, m)))
             .collect();
-        let coefficient_lanes = (all_modes.len() >= SHT_HERMES_DOT_LEN_THRESHOLD)
-            .then(|| coefficient_lanes(coefficients, &all_modes));
 
-        // Parallelize over latitude rows; each row is computed independently.
-        let row_values: Vec<Vec<Complex64>> =
-            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(n_lat, |lat| {
-                let theta = self.theta(lat);
-                (0..n_lon)
-                    .map(|lon| {
-                        let phi = self.phi(lon);
-                        match &coefficient_lanes {
-                            Some(lanes) => sht_inverse_sample_hermes(lanes, &all_modes, theta, phi),
-                            None => sht_inverse_sample(coefficients, &all_modes, theta, phi),
-                        }
-                    })
-                    .collect()
-            });
-
-        // Assemble into output array.
         let mut samples = Array2::<Complex64>::zeros((n_lat, n_lon));
-        for (lat, row) in row_values.into_iter().enumerate() {
-            for (lon, value) in row.into_iter().enumerate() {
-                samples[[lat, lon]] = value;
+
+        let mut run_inverse = |coefficient_lanes: Option<&[f64]>| {
+            if let Some(flat_samples) = samples.as_slice_mut() {
+                moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+                    flat_samples,
+                    n_lon,
+                    |lat, row| {
+                        let theta = self.theta(lat);
+                        for (lon, slot) in row.iter_mut().enumerate() {
+                            let phi = self.phi(lon);
+                            *slot = match coefficient_lanes {
+                                Some(lanes) => {
+                                    sht_inverse_sample_hermes(lanes, &all_modes, theta, phi)
+                                }
+                                None => sht_inverse_sample(coefficients, &all_modes, theta, phi),
+                            };
+                        }
+                    },
+                );
+            } else {
+                for lat in 0..n_lat {
+                    let theta = self.theta(lat);
+                    for lon in 0..n_lon {
+                        let phi = self.phi(lon);
+                        samples[[lat, lon]] = match coefficient_lanes {
+                            Some(lanes) => {
+                                sht_inverse_sample_hermes(lanes, &all_modes, theta, phi)
+                            }
+                            None => sht_inverse_sample(coefficients, &all_modes, theta, phi),
+                        };
+                    }
+                }
             }
+        };
+
+        if all_modes.len() >= SHT_HERMES_DOT_LEN_THRESHOLD {
+            SHT_COEFF_LANE_SCRATCH.with(|pool| {
+                pool.with_scratch(all_modes.len() * 2, |lanes| {
+                    for (i, &(degree, order)) in all_modes.iter().enumerate() {
+                        let value = coefficients.get(degree, order);
+                        lanes[2 * i] = value.re;
+                        lanes[2 * i + 1] = value.im;
+                    }
+                    run_inverse(Some(lanes));
+                });
+            });
+        } else {
+            run_inverse(None);
         }
 
         Ok(samples)

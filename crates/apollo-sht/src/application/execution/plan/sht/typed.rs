@@ -51,6 +51,22 @@ impl ShtRealStorage for f64 {
     fn from_f64(value: f64) -> Self {
         value
     }
+
+    fn forward_real_into<O: ShtComplexStorage>(
+        plan: &ShtPlan,
+        samples: &Array2<Self>,
+        output: &mut Array2<O>,
+        sample_profile: PrecisionProfile,
+        coefficient_profile: PrecisionProfile,
+    ) -> ShtResult<()> {
+        validate_profile(sample_profile, Self::PROFILE)?;
+        validate_profile(coefficient_profile, O::PROFILE)?;
+        validate_sample_array_shape(plan, samples)?;
+        validate_coefficient_array_shape(plan, output)?;
+        let coefficients = plan.forward_real(samples)?;
+        write_complex_array(coefficients.values(), output);
+        Ok(())
+    }
 }
 
 impl ShtRealStorage for f32 {
@@ -158,6 +174,60 @@ impl ShtComplexStorage for Complex64 {
 
     fn from_complex64(value: Complex64) -> Self {
         value
+    }
+
+    fn forward_complex_into<O: ShtComplexStorage>(
+        plan: &ShtPlan,
+        samples: &Array2<Self>,
+        output: &mut Array2<O>,
+        sample_profile: PrecisionProfile,
+        coefficient_profile: PrecisionProfile,
+    ) -> ShtResult<()> {
+        validate_profile(sample_profile, Self::PROFILE)?;
+        validate_profile(coefficient_profile, O::PROFILE)?;
+        validate_sample_array_shape(plan, samples)?;
+        validate_coefficient_array_shape(plan, output)?;
+        let coefficients = plan.forward_complex(samples)?;
+        write_complex_array(coefficients.values(), output);
+        Ok(())
+    }
+
+    fn inverse_complex_into<O: ShtComplexStorage>(
+        plan: &ShtPlan,
+        coefficients: &Array2<Self>,
+        output: &mut Array2<O>,
+        coefficient_profile: PrecisionProfile,
+        sample_profile: PrecisionProfile,
+    ) -> ShtResult<()> {
+        validate_profile(coefficient_profile, Self::PROFILE)?;
+        validate_profile(sample_profile, O::PROFILE)?;
+        validate_coefficient_array_shape(plan, coefficients)?;
+        validate_sample_array_shape(plan, output)?;
+        let owner_coefficients =
+            SphericalHarmonicCoefficients::from_values(plan.grid().max_degree(), coefficients.clone());
+        let samples = plan.inverse_complex(&owner_coefficients)?;
+        write_complex_array(&samples, output);
+        Ok(())
+    }
+
+    fn inverse_real_into<O: ShtRealStorage>(
+        plan: &ShtPlan,
+        coefficients: &Array2<Self>,
+        output: &mut Array2<O>,
+        coefficient_profile: PrecisionProfile,
+        sample_profile: PrecisionProfile,
+    ) -> ShtResult<()> {
+        validate_profile(coefficient_profile, Self::PROFILE)?;
+        validate_profile(sample_profile, O::PROFILE)?;
+        validate_coefficient_array_shape(plan, coefficients)?;
+        validate_sample_array_shape(plan, output)?;
+        let owner_coefficients =
+            SphericalHarmonicCoefficients::from_values(plan.grid().max_degree(), coefficients.clone());
+        let samples = plan.inverse_real(&owner_coefficients)?;
+        for (slot, value) in output.iter_mut().zip(samples.iter().copied()) {
+            *slot = O::from_f64(value);
+        }
+        Ok(())
     }
 }
 

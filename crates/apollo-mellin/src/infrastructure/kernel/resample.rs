@@ -23,6 +23,7 @@ const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 thread_local! {
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Interpolate a positive-domain signal onto logarithmically spaced samples.
@@ -163,9 +164,16 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     let factor = -std::f64::consts::TAU / len as f64;
     let work_items = len.saturating_mul(len);
     if work_items >= HERMES_SPECTRUM_OP_THRESHOLD {
-        let input_lanes = real_interleaved_lanes(log_samples);
-        return moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
-            log_frequency_coeff_hermes(&input_lanes, factor, du, k)
+        return REAL_LANES_SCRATCH.with(|pool| {
+            pool.with_scratch(len * 2, |input_lanes| {
+                for (i, &val) in log_samples.iter().enumerate() {
+                    input_lanes[2 * i] = val;
+                    input_lanes[2 * i + 1] = 0.0;
+                }
+                moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
+                    log_frequency_coeff_hermes(input_lanes, factor, du, k)
+                })
+            })
         });
     }
 
@@ -285,6 +293,7 @@ fn inverse_log_frequency_coeff_hermes(
     })
 }
 
+#[cfg(test)]
 fn real_interleaved_lanes(values: &[f64]) -> Vec<f64> {
     let mut lanes = Vec::with_capacity(values.len() * 2);
     for value in values {

@@ -14,6 +14,7 @@ pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
 
 thread_local! {
     pub(super) static SHT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    pub(super) static SHT_COEFF_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
 pub(super) fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ShtResult<()> {
@@ -118,6 +119,7 @@ pub(super) fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
     unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
+#[cfg(test)]
 pub(super) fn coefficient_lanes(
     coefficients: &SphericalHarmonicCoefficients,
     all_modes: &[(usize, isize)],
@@ -163,15 +165,18 @@ pub(super) fn phi_for_longitude(longitude_index: usize, n_lon: usize) -> f64 {
     std::f64::consts::TAU * longitude_index as f64 / n_lon as f64
 }
 
-pub(super) fn array2_from_leto_view<T: Copy>(
+pub(super) fn array2_from_leto_view<T: Clone>(
     view: leto::ArrayView2<'_, T>,
     shape_error: ShtError,
 ) -> ShtResult<Array2<T>> {
+    if let Ok(nd_view) = ndarray::ArrayView2::try_from(leto::ArrayView2::new(view.layout(), view.data())) {
+        return Ok(nd_view.to_owned());
+    }
     let [rows, cols] = view.shape();
     let mut values = Vec::with_capacity(view.size());
     for row in 0..rows {
         for col in 0..cols {
-            values.push(*view.get([row, col]).map_err(|_| shape_error)?);
+            values.push((*view.get([row, col]).map_err(|_| shape_error)?).clone());
         }
     }
     Array2::from_shape_vec((rows, cols), values).map_err(|_| shape_error)
@@ -181,9 +186,14 @@ pub(super) fn leto_array2_from_ndarray<T: Copy>(
     array: &Array2<T>,
 ) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     let (rows, cols) = array.dim();
-    let values = array.iter().copied().collect::<Vec<_>>();
-    leto::Array::from_mnemosyne_slice([rows, cols], &values)
-        .map_err(|_| ShtError::CoefficientShapeMismatch)
+    if let Some(slice) = array.as_slice() {
+        leto::Array::from_mnemosyne_slice([rows, cols], slice)
+            .map_err(|_| ShtError::CoefficientShapeMismatch)
+    } else {
+        let values = array.iter().copied().collect::<Vec<_>>();
+        leto::Array::from_mnemosyne_slice([rows, cols], &values)
+            .map_err(|_| ShtError::CoefficientShapeMismatch)
+    }
 }
 
 pub(super) fn coefficients_from_leto_view(
