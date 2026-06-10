@@ -8,6 +8,7 @@ mod tests {
         nufft_type2_1d_fast, nufft_type2_3d, nufft_type2_3d_fast, UniformDomain1D, UniformGrid3D,
         DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING,
     };
+    use leto::{SliceArg, Storage};
     use ndarray::{Array1, Array3};
     use num_complex::{Complex32, Complex64};
 
@@ -179,6 +180,73 @@ mod tests {
     }
 
     #[test]
+    fn leto_type1_1d_matches_slice_path_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let domain = UniformDomain1D::new(8, 0.25).expect("domain");
+        let plan = NufftWgpuPlan1D::new(domain, 2, 6);
+        let positions = vec![0.0_f32, 0.25, 0.7, 1.15];
+        let values = vec![
+            Complex32::new(1.0, 0.0),
+            Complex32::new(0.5, -0.25),
+            Complex32::new(-0.75, 0.5),
+            Complex32::new(0.25, 0.75),
+        ];
+        let expected = backend
+            .execute_type1_1d(&plan, &positions, &values)
+            .expect("slice type1");
+        let leto_positions =
+            leto::Array1::from_shape_vec([positions.len()], positions).expect("positions");
+        let leto_values = leto::Array1::from_shape_vec([values.len()], values).expect("values");
+
+        let actual = backend
+            .execute_type1_1d_leto(&plan, leto_positions.view(), leto_values.view())
+            .expect("leto type1");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_complex64_close(*actual, *expected, 1.0e-6);
+        }
+    }
+
+    #[test]
+    fn leto_strided_type2_1d_matches_slice_path_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let domain = UniformDomain1D::new(4, 0.25).expect("domain");
+        let plan = NufftWgpuPlan1D::new(domain, 2, 6);
+        let coefficients = vec![
+            Complex32::new(1.0, 0.0),
+            Complex32::new(0.25, -0.5),
+            Complex32::new(-0.75, 0.25),
+            Complex32::new(0.5, 0.75),
+        ];
+        let logical_positions = vec![0.0_f32, 0.25, 0.7, 1.15];
+        let expected = backend
+            .execute_type2_1d(&plan, &coefficients, &logical_positions)
+            .expect("slice type2");
+        let positions = leto::Array1::from_shape_vec(
+            [8],
+            vec![0.0_f32, 99.0, 0.25, 99.0, 0.7, 99.0, 1.15, 99.0],
+        )
+        .expect("positions");
+        let strided_positions = positions
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided positions");
+        let leto_coefficients =
+            leto::Array1::from_shape_vec([coefficients.len()], coefficients).expect("coeffs");
+
+        let actual = backend
+            .execute_type2_1d_leto(&plan, leto_coefficients.view(), strided_positions)
+            .expect("leto type2");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_complex64_close(*actual, *expected, 1.0e-6);
+        }
+    }
+
+    #[test]
     fn type1_1d_typed_mixed_storage_matches_represented_input_when_device_exists() {
         let Some(backend) = backend_or_skip() else {
             return;
@@ -221,6 +289,50 @@ mod tests {
     }
 
     #[test]
+    fn typed_leto_fast_type1_1d_matches_typed_slice_path_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let domain = UniformDomain1D::new(8, 0.25).expect("domain");
+        let plan = NufftWgpuPlan1D::new(domain, 2, 6);
+        let positions = [0.0_f32, 0.25, 0.7, 1.15];
+        let values16 = [
+            [f16::from_f32(1.0), f16::from_f32(0.0)],
+            [f16::from_f32(0.5), f16::from_f32(-0.25)],
+            [f16::from_f32(-0.75), f16::from_f32(0.5)],
+            [f16::from_f32(0.25), f16::from_f32(0.75)],
+        ];
+        let mut expected = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; domain.n];
+        backend
+            .execute_fast_type1_1d_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &positions,
+                &values16,
+                &mut expected,
+            )
+            .expect("typed fast slice");
+        let leto_positions =
+            leto::Array1::from_shape_vec([positions.len()], positions.to_vec()).expect("positions");
+        let leto_values =
+            leto::Array1::from_shape_vec([values16.len()], values16.to_vec()).expect("values");
+
+        let actual = backend
+            .execute_fast_type1_1d_leto_typed::<[f16; 2]>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_positions.view(),
+                leto_values.view(),
+            )
+            .expect("typed fast leto");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_eq!(actual[0].to_bits(), expected[0].to_bits());
+            assert_eq!(actual[1].to_bits(), expected[1].to_bits());
+        }
+    }
+
+    #[test]
     fn type1_3d_matches_cpu_exact_reference_when_device_exists() {
         let Some(backend) = backend_or_skip() else {
             return;
@@ -250,6 +362,43 @@ mod tests {
         assert_eq!(actual.dim(), expected.dim());
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert_complex64_close(*actual, *expected, 8.0e-5);
+        }
+    }
+
+    #[test]
+    fn leto_type1_3d_matches_slice_path_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
+        let plan = NufftWgpuPlan3D::new(grid, 2, 6);
+        let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
+        let values = [
+            Complex32::new(1.0, 0.0),
+            Complex32::new(-0.25, 0.5),
+            Complex32::new(0.75, -0.5),
+        ];
+        let expected = backend
+            .execute_type1_3d(&plan, &positions, &values)
+            .expect("slice type1 3D");
+        let leto_positions = leto::Array2::from_shape_vec(
+            [positions.len(), 3],
+            positions
+                .iter()
+                .flat_map(|(x, y, z)| [*x, *y, *z])
+                .collect(),
+        )
+        .expect("positions");
+        let leto_values =
+            leto::Array1::from_shape_vec([values.len()], values.to_vec()).expect("values");
+
+        let actual = backend
+            .execute_type1_3d_leto(&plan, leto_positions.view(), leto_values.view())
+            .expect("leto type1 3D");
+
+        assert_eq!(actual.shape(), [grid.nx, grid.ny, grid.nz]);
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_complex64_close(*actual, *expected, 1.0e-6);
         }
     }
 
@@ -828,6 +977,46 @@ mod tests {
         assert_eq!(actual.len(), expected.len());
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert_complex64_close(*actual, *expected, 1.2e-4);
+        }
+    }
+
+    #[test]
+    fn leto_type2_3d_matches_slice_path_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
+        let plan = NufftWgpuPlan3D::new(grid, 2, 6);
+        let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
+        let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            Complex32::new(
+                0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
+                -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
+            )
+        });
+        let expected = backend
+            .execute_type2_3d(&plan, &modes, &positions)
+            .expect("slice type2 3D");
+        let leto_positions = leto::Array2::from_shape_vec(
+            [positions.len(), 3],
+            positions
+                .iter()
+                .flat_map(|(x, y, z)| [*x, *y, *z])
+                .collect(),
+        )
+        .expect("positions");
+        let leto_modes = leto::Array3::from_shape_vec(
+            [grid.nx, grid.ny, grid.nz],
+            modes.iter().copied().collect(),
+        )
+        .expect("modes");
+
+        let actual = backend
+            .execute_type2_3d_leto(&plan, leto_modes.view(), leto_positions.view())
+            .expect("leto type2 3D");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_complex64_close(*actual, *expected, 1.0e-6);
         }
     }
 

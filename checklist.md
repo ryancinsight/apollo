@@ -1,4 +1,12 @@
 # Apollo Checklist
+## NUFFT-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-nufft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added direct and fast 1D/3D Type-1/Type-2 Leto host boundaries, including typed `NufftComplexStorage` variants, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU slice/ndarray execution contracts; contiguous Leto 1D views borrow through `Cow`, strided Leto views copy once into logical host order, 3D positions use Leto `[samples, 3]` views, and 3D modes use Leto 3D views.
+- [x] Added value tests proving 1D Type-1 parity, strided 1D Type-2 parity, typed fast 1D Type-1 parity, 3D Type-1 parity, and 3D Type-2 parity against existing WGPU methods when a device exists.
+- [x] Verification: `cargo check -p apollo-nufft-wgpu`; `cargo test -p apollo-nufft-wgpu leto -- --nocapture`; `cargo test -p apollo-nufft-wgpu -- --nocapture`; `cargo clippy -p apollo-nufft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-nufft-wgpu --no-deps`; `cargo semver-checks -p apollo-nufft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing NUFFT-WGPU slice and ndarray APIs. No runtime benchmark claim is made.
+
 ## FFT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-fft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `GpuFft3d::forward_leto`, `inverse_leto`, `forward_f16_leto`, and `inverse_f16_leto`, returning Mnemosyne-backed Leto arrays.

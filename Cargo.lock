@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-nufft-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "apollo-fft-wgpu",
@@ -397,6 +397,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "half",
+ "leto",
  "ndarray",
  "num-complex",
  "thiserror 1.0.69",

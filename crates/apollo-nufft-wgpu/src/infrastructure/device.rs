@@ -1,5 +1,6 @@
 //! WGPU device acquisition for NUFFT backends.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use apollo_fft::PrecisionProfile;
@@ -810,6 +811,374 @@ impl NufftWgpuBackend {
             .map(|v| Complex64::new(v.re as f64, v.im as f64))
             .collect())
     }
+
+    /// Execute exact direct Type-1 1D NUFFT from Leto views.
+    pub fn execute_type1_1d_leto(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        positions: leto::ArrayView1<'_, f32>,
+        values: leto::ArrayView1<'_, Complex32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let positions = leto_view1_cow(positions)?;
+        let values = leto_view1_cow(values)?;
+        let output = self.execute_type1_1d(plan, positions.as_ref(), values.as_ref())?;
+        leto_array1_from_slice(output.as_slice().ok_or(NufftWgpuError::InvalidPlan {
+            message: "type1 1D Leto output must be contiguous",
+        })?)
+    }
+
+    /// Execute exact direct Type-1 1D NUFFT from typed Leto views.
+    pub fn execute_type1_1d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        precision: PrecisionProfile,
+        positions: leto::ArrayView1<'_, f32>,
+        values: leto::ArrayView1<'_, T>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let positions = leto_view1_cow(positions)?;
+        let values = leto_view1_cow(values)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.domain().n];
+        self.execute_type1_1d_typed_into(
+            plan,
+            precision,
+            positions.as_ref(),
+            values.as_ref(),
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute exact direct Type-2 1D NUFFT from Leto views.
+    pub fn execute_type2_1d_leto(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        fourier_coeffs: leto::ArrayView1<'_, Complex32>,
+        positions: leto::ArrayView1<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
+        let positions = leto_view1_cow(positions)?;
+        let output = self.execute_type2_1d(plan, fourier_coeffs.as_ref(), positions.as_ref())?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute exact direct Type-2 1D NUFFT from typed Leto views.
+    pub fn execute_type2_1d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        precision: PrecisionProfile,
+        fourier_coeffs: leto::ArrayView1<'_, T>,
+        positions: leto::ArrayView1<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
+        let positions = leto_view1_cow(positions)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        self.execute_type2_1d_typed_into(
+            plan,
+            precision,
+            fourier_coeffs.as_ref(),
+            positions.as_ref(),
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute fast gridded Type-1 1D NUFFT from Leto views.
+    pub fn execute_fast_type1_1d_leto(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        positions: leto::ArrayView1<'_, f32>,
+        values: leto::ArrayView1<'_, Complex32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let positions = leto_view1_cow(positions)?;
+        let values = leto_view1_cow(values)?;
+        let output = self.execute_fast_type1_1d(plan, positions.as_ref(), values.as_ref())?;
+        leto_array1_from_slice(output.as_slice().ok_or(NufftWgpuError::InvalidPlan {
+            message: "fast type1 1D Leto output must be contiguous",
+        })?)
+    }
+
+    /// Execute fast gridded Type-1 1D NUFFT from typed Leto views.
+    pub fn execute_fast_type1_1d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        precision: PrecisionProfile,
+        positions: leto::ArrayView1<'_, f32>,
+        values: leto::ArrayView1<'_, T>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let positions = leto_view1_cow(positions)?;
+        let values = leto_view1_cow(values)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.domain().n];
+        self.execute_fast_type1_1d_typed_into(
+            plan,
+            precision,
+            positions.as_ref(),
+            values.as_ref(),
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute fast gridded Type-2 1D NUFFT from Leto views.
+    pub fn execute_fast_type2_1d_leto(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        fourier_coeffs: leto::ArrayView1<'_, Complex32>,
+        positions: leto::ArrayView1<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
+        let positions = leto_view1_cow(positions)?;
+        let output =
+            self.execute_fast_type2_1d(plan, fourier_coeffs.as_ref(), positions.as_ref())?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute fast gridded Type-2 1D NUFFT from typed Leto views.
+    pub fn execute_fast_type2_1d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan1D,
+        precision: PrecisionProfile,
+        fourier_coeffs: leto::ArrayView1<'_, T>,
+        positions: leto::ArrayView1<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
+        let positions = leto_view1_cow(positions)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        self.execute_fast_type2_1d_typed_into(
+            plan,
+            precision,
+            fourier_coeffs.as_ref(),
+            positions.as_ref(),
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute exact direct Type-1 3D NUFFT from Leto views.
+    pub fn execute_type1_3d_leto(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        positions: leto::ArrayView2<'_, f32>,
+        values: leto::ArrayView1<'_, Complex32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 3>> {
+        let positions = positions3_from_leto_view(positions)?;
+        let values = leto_view1_cow(values)?;
+        let output = self.execute_type1_3d(plan, &positions, values.as_ref())?;
+        leto_array3_from_ndarray(&output)
+    }
+
+    /// Execute exact direct Type-1 3D NUFFT from typed Leto views.
+    pub fn execute_type1_3d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        precision: PrecisionProfile,
+        positions: leto::ArrayView2<'_, f32>,
+        values: leto::ArrayView1<'_, T>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
+        let positions = positions3_from_leto_view(positions)?;
+        let values = leto_view1_cow(values)?;
+        let grid = plan.grid();
+        let mut output = Array3::from_elem(
+            (grid.nx, grid.ny, grid.nz),
+            T::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.execute_type1_3d_typed_into(
+            plan,
+            precision,
+            &positions,
+            values.as_ref(),
+            &mut output,
+        )?;
+        leto_array3_from_ndarray(&output)
+    }
+
+    /// Execute exact direct Type-2 3D NUFFT from Leto views.
+    pub fn execute_type2_3d_leto(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        modes: leto::ArrayView3<'_, Complex32>,
+        positions: leto::ArrayView2<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let modes = array3_from_leto_view(modes)?;
+        let positions = positions3_from_leto_view(positions)?;
+        let output = self.execute_type2_3d(plan, &modes, &positions)?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute exact direct Type-2 3D NUFFT from typed Leto views.
+    pub fn execute_type2_3d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        precision: PrecisionProfile,
+        modes: leto::ArrayView3<'_, T>,
+        positions: leto::ArrayView2<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let modes = array3_from_leto_view(modes)?;
+        let positions = positions3_from_leto_view(positions)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        self.execute_type2_3d_typed_into(plan, precision, &modes, &positions, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute fast gridded Type-1 3D NUFFT from Leto views.
+    pub fn execute_fast_type1_3d_leto(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        positions: leto::ArrayView2<'_, f32>,
+        values: leto::ArrayView1<'_, Complex32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 3>> {
+        let positions = positions3_from_leto_view(positions)?;
+        let values = leto_view1_cow(values)?;
+        let output = self.execute_fast_type1_3d(plan, &positions, values.as_ref())?;
+        leto_array3_from_ndarray(&output)
+    }
+
+    /// Execute fast gridded Type-1 3D NUFFT from typed Leto views.
+    pub fn execute_fast_type1_3d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        precision: PrecisionProfile,
+        positions: leto::ArrayView2<'_, f32>,
+        values: leto::ArrayView1<'_, T>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
+        let positions = positions3_from_leto_view(positions)?;
+        let values = leto_view1_cow(values)?;
+        let grid = plan.grid();
+        let mut output = Array3::from_elem(
+            (grid.nx, grid.ny, grid.nz),
+            T::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.execute_fast_type1_3d_typed_into(
+            plan,
+            precision,
+            &positions,
+            values.as_ref(),
+            &mut output,
+        )?;
+        leto_array3_from_ndarray(&output)
+    }
+
+    /// Execute fast gridded Type-2 3D NUFFT from Leto views.
+    pub fn execute_fast_type2_3d_leto(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        modes: leto::ArrayView3<'_, Complex32>,
+        positions: leto::ArrayView2<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let modes = array3_from_leto_view(modes)?;
+        let positions = positions3_from_leto_view(positions)?;
+        let output = self.execute_fast_type2_3d(plan, &modes, &positions)?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Execute fast gridded Type-2 3D NUFFT from typed Leto views.
+    pub fn execute_fast_type2_3d_leto_typed<T: NufftComplexStorage>(
+        &self,
+        plan: &NufftWgpuPlan3D,
+        precision: PrecisionProfile,
+        modes: leto::ArrayView3<'_, T>,
+        positions: leto::ArrayView2<'_, f32>,
+    ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let modes = array3_from_leto_view(modes)?;
+        let positions = positions3_from_leto_view(positions)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        self.execute_fast_type2_3d_typed_into(plan, precision, &modes, &positions, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> NufftWgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|_| NufftWgpuError::InvalidPlan {
+            message: "invalid Leto NUFFT-WGPU 1D view",
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn positions3_from_leto_view(
+    view: leto::ArrayView2<'_, f32>,
+) -> NufftWgpuResult<Vec<(f32, f32, f32)>> {
+    let shape = view.shape();
+    if shape[1] != 3 {
+        return Err(NufftWgpuError::InvalidPlan {
+            message: "3D Leto position view must have shape [samples, 3]",
+        });
+    }
+    let mut values = Vec::with_capacity(shape[0]);
+    for row in 0..shape[0] {
+        values.push((
+            *view
+                .get([row, 0])
+                .map_err(|_| NufftWgpuError::InvalidPlan {
+                    message: "invalid Leto NUFFT-WGPU 3D position view",
+                })?,
+            *view
+                .get([row, 1])
+                .map_err(|_| NufftWgpuError::InvalidPlan {
+                    message: "invalid Leto NUFFT-WGPU 3D position view",
+                })?,
+            *view
+                .get([row, 2])
+                .map_err(|_| NufftWgpuError::InvalidPlan {
+                    message: "invalid Leto NUFFT-WGPU 3D position view",
+                })?,
+        ));
+    }
+    Ok(values)
+}
+
+fn array3_from_leto_view<T: Copy>(view: leto::ArrayView3<'_, T>) -> NufftWgpuResult<Array3<T>> {
+    let shape = view.shape();
+    let mut values = Vec::with_capacity(shape[0] * shape[1] * shape[2]);
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..shape[2] {
+                values.push(
+                    *view
+                        .get([i, j, k])
+                        .map_err(|_| NufftWgpuError::InvalidPlan {
+                            message: "invalid Leto NUFFT-WGPU 3D view",
+                        })?,
+                );
+            }
+        }
+    }
+    Array3::from_shape_vec((shape[0], shape[1], shape[2]), values).map_err(|_| {
+        NufftWgpuError::InvalidPlan {
+            message: "failed to materialize Leto NUFFT-WGPU 3D view",
+        }
+    })
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        NufftWgpuError::BufferMapFailed {
+            message: format!(
+                "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output: {err:?}"
+            ),
+        }
+    })
+}
+
+fn leto_array3_from_ndarray<T: Copy>(
+    values: &Array3<T>,
+) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
+    let (nx, ny, nz) = values.dim();
+    let flat: Vec<T> = values.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([nx, ny, nz], &flat).map_err(|err| {
+        NufftWgpuError::BufferMapFailed {
+            message: format!(
+                "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output: {err:?}"
+            ),
+        }
+    })
 }
 
 struct Fast3DMetadata {
