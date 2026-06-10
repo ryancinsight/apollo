@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Leto 0.4.0 broadcast binary provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `a46dea9e3c91d018e419398b3b07c7490446b9fd`.
+- [x] Updated `Cargo.lock` from Leto/Leto Ops `0.3.0` at `642d87a3` to `0.4.0` at `a46dea9`.
+- [x] Preserved Apollo public APIs; this change imports provider broadcast-aware binary map capability for later internal ndarray replacement work.
+- [x] Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: Cargo resolver output plus focused provider-consuming crate checks. No runtime benchmark claim is made.
+
 ## Leto 0.3.0 provider pin [minor]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `642d87a3dba7b0bbbec0f996e726a0af5728d6c3`.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.2.0` at `fd1d87b` to `0.3.0` at `642d87a3`.

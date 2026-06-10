@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Leto 0.4.0 broadcast binary provider pin [minor]
+- Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `642d87a3` (`0.3.0`) to pushed Leto `a46dea9` (`0.4.0`).
+- Architecture effect: Apollo now consumes provider-side broadcast-aware binary maps for caller-owned output layouts through the canonical Git dependency path.
+- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes a prerequisite for later internal ndarray replacement in validation, scaling, and tensor-style elementwise paths.
+- Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: Cargo dependency resolution plus focused compile checks for provider-consuming crates. Leto owns value-semantic broadcast coverage through dense/strided tests and ndarray differential validation.
+- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+
 ## Leto 0.3.0 provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `fd1d87b` (`0.2.0`) to pushed Leto `642d87a3` (`0.3.0`).
 - Architecture effect: Apollo now consumes the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and the Coeus rank-boundary ADR through its canonical Git dependency path.
