@@ -10,8 +10,9 @@ use crate::infrastructure::kernel::sliding::{
     direct_bins, direct_bins_into, update_bins, update_twiddles,
 };
 use apollo_fft::{f16, PrecisionProfile};
-use num_complex::{Complex32, Complex64};
 use mnemosyne::scratch::ScratchPool;
+use num_complex::{Complex32, Complex64};
+use std::borrow::Cow;
 use std::collections::VecDeque;
 
 thread_local! {
@@ -70,12 +71,34 @@ impl SdftPlan {
         ))
     }
 
+    /// Create streaming state from a Leto 1D window view.
+    ///
+    /// C-contiguous views borrow directly; strided views copy once into
+    /// oldest-to-newest logical order before state construction.
+    pub fn state_from_window_leto(
+        &self,
+        window: leto::ArrayView1<'_, f64>,
+    ) -> SdftResult<SdftState> {
+        let window = leto_view1_cow(window)?;
+        self.state_from_window(&window)
+    }
+
     /// Compute direct DFT bins for a full window using this plan's bin count.
     pub fn direct_bins(&self, window: &[f64]) -> SdftResult<Vec<Complex64>> {
         if window.len() != self.window_len() {
             return Err(SdftError::InitialWindowLengthMismatch);
         }
         direct_bins(window, self.bin_count())
+    }
+
+    /// Compute direct DFT bins from a Leto 1D window view.
+    pub fn direct_bins_leto(
+        &self,
+        window: leto::ArrayView1<'_, f64>,
+    ) -> SdftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let window = leto_view1_cow(window)?;
+        let bins = self.direct_bins(&window)?;
+        leto_array1_from_slice(&bins)
     }
 
     /// Compute direct DFT bins for a full window into caller-owned storage.
@@ -115,6 +138,18 @@ impl SdftPlan {
             Ok(())
         })
     }
+
+    /// Compute direct DFT bins from typed Leto real input storage.
+    pub fn direct_bins_leto_typed<T: SdftRealStorage, O: SdftBinStorage>(
+        &self,
+        window: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> SdftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
+        let window = leto_view1_cow(window)?;
+        let mut output = vec![O::from_complex64(Complex64::new(0.0, 0.0)); self.bin_count()];
+        self.direct_bins_typed_into(&window, &mut output, profile)?;
+        leto_array1_from_slice(&output)
+    }
 }
 
 fn with_typed_direct_workspaces<R>(
@@ -124,13 +159,32 @@ fn with_typed_direct_workspaces<R>(
 ) -> SdftResult<R> {
     TYPED_WINDOW64_SCRATCH.with(|window_cell| {
         window_cell.with_scratch(window_len, |window| {
-            TYPED_BINS64_SCRATCH.with(|bins_cell| {
-                bins_cell.with_scratch(bin_count, |bins| {
-                    f(window, bins)
-                })
-            })
+            TYPED_BINS64_SCRATCH
+                .with(|bins_cell| bins_cell.with_scratch(bin_count, |bins| f(window, bins)))
         })
     })
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> SdftResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view
+            .get([index])
+            .map_err(|_| SdftError::InitialWindowLengthMismatch)?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> SdftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values)
+        .map_err(|_| SdftError::OutputBinLengthMismatch)
 }
 
 #[cfg(test)]
@@ -377,5 +431,85 @@ mod tests {
             plan.direct_bins_into(&window, &mut output).unwrap_err(),
             SdftError::OutputBinLengthMismatch
         );
+    }
+
+    #[test]
+    fn leto_direct_bins_match_slice_reference() {
+        let plan = SdftPlan::new(4, 4).expect("plan");
+        let window = vec![1.0, -2.0, 0.5, 3.0];
+        let input = leto::Array1::from_shape_vec([4], window.clone()).expect("leto input");
+        let expected = plan.direct_bins(&window).expect("direct");
+
+        let actual = plan
+            .direct_bins_leto(input.view())
+            .expect("leto direct bins");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_direct_bins_match_slice_reference() {
+        let plan = SdftPlan::new(4, 4).expect("plan");
+        let backing = vec![1.0, 99.0, -2.0, 99.0, 0.5, 99.0, 3.0, 99.0];
+        let input = leto::Array1::from_shape_vec([8], backing).expect("leto input");
+        let strided = input.view().slice(&[(0, 8, 2)]).expect("strided view");
+        let expected_window = [1.0, -2.0, 0.5, 3.0];
+        let expected = plan.direct_bins(&expected_window).expect("direct");
+
+        let actual = plan.direct_bins_leto(strided).expect("leto direct bins");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_direct_bins_match_typed_slice_reference() {
+        let plan = SdftPlan::new(4, 4).expect("plan");
+        let window = vec![1.0_f32, -2.0, 0.5, 3.0];
+        let input = leto::Array1::from_shape_vec([4], window.clone()).expect("leto input");
+        let mut expected = vec![Complex32::new(0.0, 0.0); plan.bin_count()];
+        plan.direct_bins_typed_into(&window, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed slice direct");
+
+        let actual = plan
+            .direct_bins_leto_typed::<f32, Complex32>(
+                input.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto direct");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
+    }
+
+    #[test]
+    fn leto_state_from_window_matches_slice_state() {
+        let plan = SdftPlan::new(4, 4).expect("plan");
+        let window = vec![1.0, -2.0, 0.5, 3.0];
+        let input = leto::Array1::from_shape_vec([4], window.clone()).expect("leto input");
+        let expected = plan.state_from_window(&window).expect("slice state");
+
+        let actual = plan
+            .state_from_window_leto(input.view())
+            .expect("leto state");
+
+        assert_eq!(actual.window(), expected.window());
+        for (actual, expected) in actual.bins().iter().zip(expected.bins().iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
     }
 }

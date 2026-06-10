@@ -1,4 +1,12 @@
 # Apollo Checklist
+## SDFT Leto direct-bin boundary [minor]
+- [x] Bumped `apollo-sdft` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `SdftPlan::direct_bins_leto`, `SdftPlan::direct_bins_leto_typed`, and `SdftPlan::state_from_window_leto`, returning Mnemosyne-backed Leto arrays where output storage is produced.
+- [x] Reused the existing direct-bin and typed direct-bin contracts; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical window order.
+- [x] Added value tests proving contiguous direct-bin parity, strided direct-bin parity, typed `f32`/`Complex32` direct-bin parity, and Leto state initialization parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-sdft`; `cargo test -p apollo-sdft leto -- --nocapture`; `cargo test -p apollo-sdft -- --nocapture`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sdft --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing SDFT slice and typed slice APIs. No runtime benchmark claim is made.
+
 ## SFT Leto sparse spectrum boundary [minor]
 - [x] Bumped `apollo-sft` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `SparseFftPlan::forward_leto`, `SparseFftPlan::inverse_leto`, `SparseFftPlan::forward_leto_typed`, `SparseFftPlan::inverse_leto_typed`, and `SparseLetoSpectrum<T>`.

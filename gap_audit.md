@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SDFT Leto direct-bin boundary [minor]
+- Performed: bumped `apollo-sdft` to `0.2.0`; added the workspace Leto dependency; added `SdftPlan::direct_bins_leto`, `SdftPlan::direct_bins_leto_typed`, and `SdftPlan::state_from_window_leto`.
+- Architecture effect: SDFT direct-bin and state-initialization callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided Leto views copy once into logical window order; direct-bin outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing direct-bin and typed direct-bin execution contracts rather than adding a separate SDFT implementation.
+- Verification: `cargo check -p apollo-sdft`; `cargo test -p apollo-sdft leto -- --nocapture`; `cargo test -p apollo-sdft -- --nocapture`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sdft --examples`.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing SDFT slice APIs for contiguous direct bins, strided direct bins, typed direct bins, and state initialization. No runtime benchmark claim is made.
+- Residuals: streaming update state still owns `VecDeque<f64>` and `Vec<Complex64>` internally; broader state storage providerization remains future work.
+
 ## SFT Leto sparse spectrum boundary [minor]
 - Performed: bumped `apollo-sft` to `0.2.0`; added the workspace Leto dependency; added `SparseFftPlan::forward_leto`, `SparseFftPlan::inverse_leto`, `SparseFftPlan::forward_leto_typed`, `SparseFftPlan::inverse_leto_typed`, and `SparseLetoSpectrum<T>`.
 - Architecture effect: sparse FFT callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.
