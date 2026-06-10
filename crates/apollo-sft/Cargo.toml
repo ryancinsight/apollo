@@ -1,6 +1,6 @@
 [package]
 name = "apollo-sft"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Sparse Fourier transform plans and utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

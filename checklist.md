@@ -1,4 +1,12 @@
 # Apollo Checklist
+## SFT Leto sparse spectrum boundary [minor]
+- [x] Bumped `apollo-sft` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `SparseFftPlan::forward_leto`, `SparseFftPlan::inverse_leto`, `SparseFftPlan::forward_leto_typed`, `SparseFftPlan::inverse_leto_typed`, and `SparseLetoSpectrum<T>`.
+- [x] Reused the existing dense FFT plus top-K sparse selection contract; contiguous Leto views borrow through `Cow`, strided Leto views copy once into logical order, and inverse outputs use Mnemosyne-backed Leto arrays.
+- [x] Added value tests proving contiguous forward parity, strided forward parity, inverse parity, and typed `Complex32` Leto forward/inverse parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-sft`; `cargo test -p apollo-sft leto -- --nocapture`; `cargo test -p apollo-sft -- --nocapture`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sft --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing SFT slice and typed slice APIs. Existing property tests for top-K selection and retained DFT values remained green. No runtime benchmark claim is made.
+
 ## Hilbert Leto analytic and quadrature boundary [minor]
 - [x] Bumped `apollo-hilbert` to `0.4.0` and added the workspace Leto provider dependency.
 - [x] Added `HilbertPlan::analytic_signal_leto`, `HilbertPlan::transform_leto`, and `HilbertPlan::transform_leto_typed`, returning Mnemosyne-backed Leto arrays.

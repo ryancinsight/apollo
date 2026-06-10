@@ -60,6 +60,7 @@ use crate::domain::spectrum::sparse::SparseSpectrum;
 use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
+use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
@@ -123,6 +124,14 @@ impl Ord for MagIdx {
 #[derive(Clone, Debug)]
 pub struct SparseFftPlan {
     config: SparseFftConfig,
+}
+
+/// Retained sparse frequencies and Mnemosyne-backed typed Leto coefficient values.
+pub struct SparseLetoSpectrum<T> {
+    /// Retained frequency indices in ascending order.
+    pub frequencies: Vec<usize>,
+    /// Retained coefficient values in the same order as `frequencies`.
+    pub values: leto::Array<T, leto::MnemosyneStorage<T>, 1>,
 }
 
 impl SparseFftPlan {
@@ -235,6 +244,18 @@ impl SparseFftPlan {
         Ok(spectrum)
     }
 
+    /// Forward sparse transform from a Leto 1D complex view.
+    ///
+    /// C-contiguous views borrow directly; strided views copy once into logical
+    /// order before entering the canonical slice sparse-transform path.
+    pub fn forward_leto(
+        &self,
+        signal: leto::ArrayView1<'_, Complex64>,
+    ) -> ApolloResult<SparseSpectrum> {
+        let signal = leto_view1_cow(signal)?;
+        self.forward(&signal)
+    }
+
     /// Inverse transform from sparse spectrum to a dense complex signal.
     ///
     /// Uses FFTW-compatible normalised inverse FFT (divides by N), matching
@@ -253,6 +274,15 @@ impl SparseFftPlan {
         let (data, offset) = arr.into_raw_vec_and_offset();
         debug_assert_eq!(offset.unwrap_or(0), 0);
         Ok(data)
+    }
+
+    /// Inverse sparse transform into a Mnemosyne-backed Leto 1D complex array.
+    pub fn inverse_leto(
+        &self,
+        spectrum: &SparseSpectrum,
+    ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = self.inverse(spectrum)?;
+        leto_array1_from_slice(&signal)
     }
 
     /// Return the retained support as a list of (frequency, coefficient) pairs.
@@ -281,6 +311,25 @@ impl SparseFftPlan {
         T::forward_into(self, signal, frequencies, values, profile)
     }
 
+    /// Forward sparse transform from typed Leto 1D input storage.
+    ///
+    /// Returns retained frequencies plus Mnemosyne-backed retained values.
+    pub fn forward_leto_typed<T: SparseComplexStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> ApolloResult<SparseLetoSpectrum<T>> {
+        let signal = leto_view1_cow(signal)?;
+        let mut frequencies = Vec::new();
+        let mut values = Vec::new();
+        self.forward_typed_into(&signal, &mut frequencies, &mut values, profile)?;
+        let values = leto_array1_from_slice(&values)?;
+        Ok(SparseLetoSpectrum {
+            frequencies,
+            values,
+        })
+    }
+
     /// Inverse sparse transform for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
     pub fn inverse_typed_into<T: SparseComplexStorage>(
         &self,
@@ -290,6 +339,19 @@ impl SparseFftPlan {
         profile: PrecisionProfile,
     ) -> ApolloResult<()> {
         T::inverse_into(self, frequencies, values, output, profile)
+    }
+
+    /// Inverse sparse transform from typed Leto retained-value storage.
+    pub fn inverse_leto_typed<T: SparseComplexStorage>(
+        &self,
+        frequencies: &[usize],
+        values: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let values = leto_view1_cow(values)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        self.inverse_typed_into(frequencies, &values, &mut output, profile)?;
+        leto_array1_from_slice(&output)
     }
 }
 
@@ -464,6 +526,33 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Apo
     }
 }
 
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view.get([index]).map_err(|err| {
+            ApolloError::validation("leto_view", format!("{err:?}"), "valid 1D logical view")
+        })?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        ApolloError::validation(
+            "leto_array",
+            format!("{err:?}"),
+            "Mnemosyne-backed 1D array construction",
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -612,6 +701,123 @@ mod tests {
             err,
             ApolloError::Validation { field, .. } if field == "sparse_values"
         ));
+    }
+
+    #[test]
+    fn leto_forward_matches_slice_reference() {
+        let plan = SparseFftPlan::new(8, 2).expect("plan");
+        let signal = exactly_sparse_signal();
+        let input = leto::Array1::from_shape_vec([8], signal.clone()).expect("leto input");
+        let expected = plan.forward(&signal).expect("slice forward");
+
+        let actual = plan.forward_leto(input.view()).expect("leto forward");
+
+        assert_eq!(actual.frequencies, expected.frequencies);
+        for (actual, expected) in actual.values.iter().zip(expected.values.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_slice_reference() {
+        let plan = SparseFftPlan::new(8, 2).expect("plan");
+        let signal = exactly_sparse_signal();
+        let mut backing = Vec::with_capacity(16);
+        for sample in signal.iter().copied() {
+            backing.push(sample);
+            backing.push(Complex64::new(1000.0, -1000.0));
+        }
+        let input = leto::Array1::from_shape_vec([16], backing).expect("leto input");
+        let strided = input.view().slice(&[(0, 16, 2)]).expect("strided view");
+        let expected = plan.forward(&signal).expect("slice forward");
+
+        let actual = plan.forward_leto(strided).expect("leto forward");
+
+        assert_eq!(actual.frequencies, expected.frequencies);
+        for (actual, expected) in actual.values.iter().zip(expected.values.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_reference() {
+        let plan = SparseFftPlan::new(8, 2).expect("plan");
+        let signal = exactly_sparse_signal();
+        let spectrum = plan.forward(&signal).expect("forward");
+        let expected = plan.inverse(&spectrum).expect("slice inverse");
+
+        let actual = plan.inverse_leto(&spectrum).expect("leto inverse");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_typed_slice_reference() {
+        let plan = SparseFftPlan::new(8, 2).expect("plan");
+        let signal64 = exactly_sparse_signal();
+        let signal32: Vec<Complex32> = signal64
+            .iter()
+            .map(|value| Complex32::new(value.re as f32, value.im as f32))
+            .collect();
+        let input = leto::Array1::from_shape_vec([8], signal32.clone()).expect("leto input");
+        let mut expected_freq = Vec::new();
+        let mut expected_values = Vec::new();
+        plan.forward_typed_into(
+            &signal32,
+            &mut expected_freq,
+            &mut expected_values,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice forward");
+
+        let actual = plan
+            .forward_leto_typed(input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto forward");
+        let actual_values_view = actual.values.view();
+        let actual_values = actual_values_view
+            .as_slice()
+            .expect("contiguous leto values");
+
+        assert_eq!(actual.frequencies, expected_freq);
+        for (actual, expected) in actual_values.iter().zip(expected_values.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
+
+        let values_array =
+            leto::Array1::from_shape_vec([expected_values.len()], expected_values.clone())
+                .expect("leto values");
+        let actual_signal = plan
+            .inverse_leto_typed(
+                &expected_freq,
+                values_array.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto inverse");
+        let actual_signal_view = actual_signal.view();
+        let actual_signal = actual_signal_view
+            .as_slice()
+            .expect("contiguous leto signal");
+        let mut expected_signal = vec![Complex32::new(0.0, 0.0); plan.len()];
+        plan.inverse_typed_into(
+            &expected_freq,
+            &expected_values,
+            &mut expected_signal,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice inverse");
+
+        for (actual, expected) in actual_signal.iter().zip(expected_signal.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
     }
 
     proptest! {
