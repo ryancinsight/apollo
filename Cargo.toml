@@ -83,6 +83,10 @@ melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-feature
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "9d5a2bf6f01425d454085b954300c76e9b5d3354", default-features = false, features = ["std", "ndarray-compat", "mnemosyne-alloc"] }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "9d5a2bf6f01425d454085b954300c76e9b5d3354", default-features = false, features = ["std"] }
+# hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
+# delegates adapter/device acquisition here so the device layer is shared with
+# coeus without an apollo->coeus edge.
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "a561c269e97fd80f84c837151638fba6d68c9b0d" }
 proc-macro2 = "1.0"
 numpy = "0.23"
 once_cell = "1.19"

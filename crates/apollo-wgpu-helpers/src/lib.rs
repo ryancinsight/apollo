@@ -77,6 +77,10 @@ impl WgpuDevice {
     /// Use this when the kernel requires non-default buffer counts (e.g.
     /// `max_storage_buffers_per_shader_stage`).
     ///
+    /// Acquisition is delegated to the shared Atlas GPU substrate
+    /// (`hephaestus-wgpu`, atlas ADR 0001); this crate keeps Apollo's error
+    /// contracts and `Arc`-pair surface stable for the `-wgpu` crate family.
+    ///
     /// # Errors
     ///
     /// Returns [`WgpuDeviceError::AdapterUnavailable`] or
@@ -85,26 +89,19 @@ impl WgpuDevice {
         label: &str,
         required_limits: wgpu::Limits,
     ) -> WgpuDeviceResult<Self> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|e| WgpuDeviceError::AdapterUnavailable {
-            message: e.to_string(),
-        })?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some(label),
-            required_features: wgpu::Features::empty(),
-            required_limits,
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| WgpuDeviceError::DeviceUnavailable {
-            message: e.to_string(),
-        })?;
-        Ok(Self::new(Arc::new(device), Arc::new(queue)))
+        let acquired = hephaestus_wgpu::WgpuDevice::try_default_with_limits(label, required_limits)
+            .map_err(|e| match e {
+                hephaestus_wgpu::HephaestusError::AdapterUnavailable { message } => {
+                    WgpuDeviceError::AdapterUnavailable { message }
+                }
+                other => WgpuDeviceError::DeviceUnavailable {
+                    message: other.to_string(),
+                },
+            })?;
+        Ok(Self::new(
+            Arc::clone(acquired.device()),
+            Arc::clone(acquired.queue()),
+        ))
     }
 
     /// Return a reference to the inner WGPU device, for kernel construction.

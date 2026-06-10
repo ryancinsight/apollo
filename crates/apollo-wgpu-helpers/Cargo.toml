@@ -8,7 +8,7 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Shared WGPU device acquisition and error contracts for the Apollo WGPU crate family"
 
 [dependencies]
-pollster = "0.4"
+hephaestus-wgpu = { workspace = true }
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
