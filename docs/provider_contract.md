@@ -17,7 +17,7 @@ local path overrides for provider work.
   with default features disabled and `std` enabled.
 - `leto` is the strided-array migration provider in the Apollo workspace
   dependency table with default features disabled and `std` plus
-  `ndarray-compat` enabled.
+  `ndarray-compat` and `mnemosyne-alloc` enabled.
 - `ndarray` remains the validation oracle and transitional public API substrate.
   The workspace dependency must not enable Rayon or matrixmultiply threading
   while Moirai is the intended parallel runtime.
@@ -104,6 +104,9 @@ local path overrides for provider work.
   `ndarray` to validate Leto behavior before replacing a downstream call site;
   core hot paths should move to Leto only after differential tests cover the
   relevant shape, stride, value, and mutation contracts.
+- Mnemosyne-backed owned array constructors for Apollo output boundaries. The
+  first migrated surface is the `apollo-fft` 1D Leto view API, which returns
+  `MnemosyneStorage` and keeps `ndarray` only as the differential oracle.
 
 ## GPU Boundary
 

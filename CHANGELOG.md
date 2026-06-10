@@ -8,12 +8,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-fft` now exposes Leto 1D FFT/IFFT boundaries that accept Leto views and return Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
 - [minor] Added Leto as an Apollo workspace provider dependency and wired `apollo-validation` to validate a Leto contiguous array conversion boundary against `ndarray`.
 - [minor] `apollo-fft` `RealFftData` now has additive slice-owned 1D forward and inverse methods for storage-owned public slice allocation boundaries.
 - [patch] `xtask provider-audit` for Apollo-local Moirai/Mnemosyne/Melinoe/Hermes utilization analysis plus `docs/provider_contract.md` documenting provider requirements and Git dependency order.
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [minor] Updated Apollo's Leto dependency to pushed commit `9f639b73` with `mnemosyne-alloc` enabled; Leto and Apollo now resolve the same pinned Mnemosyne source identity.
+- [patch] Removed Apollo's root `ndarray` `matrixmultiply-threading` feature so ndarray remains a validation dependency without Rayon-backed execution in Apollo's normal transform dependency surface.
 - [patch] Updated Mnemosyne Git lockfile revision to `9411c444` and routed `apollo-fft` mixed-radix and plan workspace scratch roles through Mnemosyne `ScratchBank<T, const N>`, reducing repeated Apollo-local thread-local pool declarations while preserving sealed monomorphized complex-type dispatch.
 - [patch] Updated Hermes Git lockfile revision to `55efd380` and routed `apollo-fft` mixed-radix non-FMA pointwise fallback through Hermes' provider-owned `interleaved_complex_mul_assign` kernel.
 - [patch] Updated Hermes Git lockfile revision to `b7f1a907` and removed Apollo FFT's local mixed-radix pointwise AVX/FMA implementation in favor of Hermes' provider-owned runtime complex dispatch.

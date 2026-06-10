@@ -395,7 +395,8 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
             let q = F::from_precise(1.0 / 64.0);
             for k in 0..32 {
                 let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
-                data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] =
+                    num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 32] =
                     num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }
@@ -459,7 +460,8 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
             let q = F::from_precise(1.0 / 128.0);
             for k in 0..64 {
                 let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
-                data[k] = num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] =
+                    num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 64] =
                     num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }

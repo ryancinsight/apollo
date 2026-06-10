@@ -147,13 +147,14 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "apollo-fft-macros",
  "approx",
  "criterion",
  "half",
  "hermes-simd",
+ "leto",
  "mnemosyne",
  "moirai",
  "nalgebra",
@@ -917,15 +918,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-channel"
-version = "0.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-deque"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1430,11 +1422,12 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "leto"
-version = "0.1.0"
-source = "git+https://github.com/ryancinsight/leto.git#88c9ac6c8b142d4731e5e52544a4d53675dc10b9"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/leto.git?rev=9f639b738aa0cb26bbbbb4b338f02d823c237f8f#9f639b738aa0cb26bbbbb4b338f02d823c237f8f"
 dependencies = [
  "bytemuck",
  "half",
+ "mnemosyne",
  "ndarray",
  "num-complex",
  "num-traits",
@@ -1506,10 +1499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08"
 dependencies = [
  "autocfg",
- "num_cpus",
- "once_cell",
  "rawpointer",
- "thread-tree",
 ]
 
 [[package]]
@@ -1566,6 +1556,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-hardened",
+ "mnemosyne-heap",
  "mnemosyne-local",
  "mnemosyne-prof",
  "num-complex",
@@ -1611,6 +1602,19 @@ version = "0.1.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git?rev=9411c4448c4fe841ce23909668c0f948ad1643bb#9411c4448c4fe841ce23909668c0f948ad1643bb"
 dependencies = [
  "mnemosyne-core",
+]
+
+[[package]]
+name = "mnemosyne-heap"
+version = "0.1.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git?rev=9411c4448c4fe841ce23909668c0f948ad1643bb#9411c4448c4fe841ce23909668c0f948ad1643bb"
+dependencies = [
+ "melinoe",
+ "mnemosyne-arena",
+ "mnemosyne-backend",
+ "mnemosyne-core",
+ "mnemosyne-local",
+ "mnemosyne-prof",
 ]
 
 [[package]]
@@ -2686,15 +2690,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "thread-tree"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffbd370cb847953a25954d9f63e14824a36113f8c72eecf6eccef5dc4b45d630"
-dependencies = [
- "crossbeam-channel",
 ]
 
 [[package]]

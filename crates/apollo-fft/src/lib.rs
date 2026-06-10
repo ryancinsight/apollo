@@ -71,6 +71,7 @@ use application::execution::kernel::mixed_radix::MixedRadixScalar;
 use application::execution::plan::fft::workspace::PlanScratch;
 use ndarray::{Array1, Array2, Array3};
 use num_complex::Complex;
+use std::borrow::Cow;
 
 /// Forward 1D FFT of a real signal.
 #[must_use]
@@ -169,6 +170,54 @@ where
         .as_ref(),
         signal,
     )
+}
+
+/// Forward 1D FFT of a Leto real view, returning Mnemosyne-backed Leto storage.
+#[must_use]
+pub fn fft_1d_leto(
+    field: leto::ArrayView1<'_, f64>,
+) -> leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1> {
+    fft_1d_leto_typed::<f64>(field)
+}
+
+/// Forward 1D FFT of a Leto real view using generic storage dispatch.
+///
+/// C-contiguous Leto views are consumed through a borrowed slice. Strided views
+/// are copied once in logical row-major order before entering the existing FFT
+/// slice boundary. The returned Leto array is backed by Mnemosyne allocation.
+#[must_use]
+pub fn fft_1d_leto_typed<T>(
+    field: leto::ArrayView1<'_, T>,
+) -> leto::Array<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>
+where
+    T: RealFftData + PlanCacheProvider + Copy,
+    T::Spectrum: Copy,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let signal = leto_view1_cow(&field);
+    let spectrum = fft_1d_slice_typed::<T>(&signal);
+    leto::Array::<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>::from_mnemosyne_slice(
+        [spectrum.len()],
+        &spectrum,
+    )
+    .expect("FFT spectrum length must match Leto output shape")
+}
+
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    if let Some(slice) = view.as_slice() {
+        return Cow::Borrowed(slice);
+    }
+
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .expect("Leto view shape and storage bounds must be valid"),
+        );
+    }
+    Cow::Owned(values)
 }
 
 /// Forward 2D FFT of a real array.
@@ -492,6 +541,34 @@ where
         .as_ref(),
         spectrum,
     )
+}
+
+/// Inverse 1D FFT of a Leto spectrum view, returning Mnemosyne-backed Leto storage.
+#[must_use]
+pub fn ifft_1d_leto(
+    field_hat: leto::ArrayView1<'_, Complex64>,
+) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 1> {
+    ifft_1d_leto_typed::<f64>(field_hat)
+}
+
+/// Inverse 1D FFT of a Leto spectrum view using generic storage dispatch.
+///
+/// C-contiguous Leto views are consumed through a borrowed slice. Strided views
+/// are copied once in logical row-major order before entering the existing IFFT
+/// slice boundary. The returned Leto array is backed by Mnemosyne allocation.
+#[must_use]
+pub fn ifft_1d_leto_typed<T>(
+    field_hat: leto::ArrayView1<'_, T::Spectrum>,
+) -> leto::Array<T, leto::MnemosyneStorage<T>, 1>
+where
+    T: RealFftData + PlanCacheProvider + Copy,
+    T::Spectrum: Copy,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let spectrum = leto_view1_cow(&field_hat);
+    let signal = ifft_1d_slice_typed::<T>(&spectrum);
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([signal.len()], &signal)
+        .expect("IFFT signal length must match Leto output shape")
 }
 
 /// Inverse 2D FFT of a complex array.

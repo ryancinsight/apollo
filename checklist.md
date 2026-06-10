@@ -1,4 +1,13 @@
 # Apollo Checklist
+## Leto-backed FFT boundary with Mnemosyne storage [minor]
+- [x] Updated Apollo to pinned Leto commit `9f639b73`, which carries Mnemosyne-backed Leto constructors validated against `ndarray`.
+- [x] Added `leto` to `apollo-fft` and exposed `fft_1d_leto(_typed)` / `ifft_1d_leto(_typed)` returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
+- [x] Preserved zero-copy input for contiguous Leto views through `Cow::Borrowed`; strided views copy once into logical row-major order before entering the existing slice FFT boundary.
+- [x] Removed Apollo's root `ndarray` `matrixmultiply-threading` feature so ndarray remains a validation oracle without Rayon-backed execution.
+- [x] Verification: `cargo check -p apollo-fft`; `cargo test -p apollo-fft --test slice_api -- --nocapture`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo run -p xtask -- provider-audit`; touched rustfmt check; `cargo tree -p apollo-fft --edges normal` dependency inspection.
+- Evidence: differential value-semantic tests against the ndarray array API for contiguous and strided Leto 1D views, static provider audit, and single-source Mnemosyne dependency resolution. No runtime benchmark claim is made.
+- Residual: broad Apollo ndarray replacement remains per-crate work; current increment covers the public 1D FFT boundary.
+
 ## Mnemosyne scratch-bank provider consumption [patch]
 - [x] Added and pushed Mnemosyne `ScratchBank<T, const N>` in commit `9411c444`, with independent role slots over provider-owned `ScratchPool<T>` instances.
 - [x] Updated Apollo `Cargo.toml` and `Cargo.lock` to Mnemosyne `9411c444`.

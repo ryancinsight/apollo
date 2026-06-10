@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Leto-backed FFT boundary with Mnemosyne storage [minor]
+- Performed in Leto: pinned Mnemosyne to commit `9411c444` in pushed Leto commit `9f639b73`, keeping Apollo and Leto on one Mnemosyne source identity.
+- Performed in Apollo: updated Leto to commit `9f639b73` with `mnemosyne-alloc`; added `leto` to `apollo-fft`; exposed forward/inverse Leto 1D FFT APIs returning Mnemosyne-backed Leto arrays; removed Apollo's root `ndarray` `matrixmultiply-threading` feature.
+- Architecture effect: Leto becomes the array/layout boundary for the first public FFT slice while ndarray remains the differential validation oracle. Contiguous Leto views borrow input storage through `Cow::Borrowed`; strided views perform one explicit logical-order copy before reusing the existing slice execution boundary.
+- Verification: `cargo check -p apollo-fft`; `cargo test -p apollo-fft --test slice_api -- --nocapture`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo run -p xtask -- provider-audit`; touched rustfmt check; `cargo tree -p apollo-fft --edges normal` inspection.
+- Evidence tier: differential value-semantic tests against ndarray for contiguous and strided Leto 1D views, type-level Mnemosyne-backed return storage, and static dependency/provider audit. No runtime performance claim is made.
+- Residuals: Apollo still exposes ndarray-backed 2D/3D and validation APIs. Those migrate in later per-crate increments after Leto covers each ndarray contract surface with validation tests.
+
 ## Mnemosyne scratch-bank provider consumption [patch]
 - Performed in Mnemosyne: added `ScratchBank<T, const N>` as a const-generic fixed-role scratch-bank abstraction over independent provider-owned `ScratchPool<T>` slots, bumped exposed Mnemosyne packages to `0.2.0`, and pushed commit `9411c444`.
 - Performed in Apollo: updated the Mnemosyne Git revision to `9411c444`; `apollo-fft` mixed-radix scratch roles now use one per-precision bank for Stockham, PFA, Rader padding, and Bluestein roles; 2D/3D plan workspaces now use one per-precision bank for 2D, 3D-Y, and 3D-X roles.
