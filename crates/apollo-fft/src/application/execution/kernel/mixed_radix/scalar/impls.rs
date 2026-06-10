@@ -687,31 +687,11 @@ impl MixedRadixScalar for f32 {
                 true
             }
             32 => {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
-                crate::application::execution::kernel::components::winograd::dft32_impl::<
-                    Self,
-                    INVERSE,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex32::new(1.0 / 32.0, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
-                }
+                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
                 true
             }
             64 => {
-                let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
-                crate::application::execution::kernel::components::winograd::dft64_impl::<
-                    Self,
-                    INVERSE,
-                >(data_ref);
-                if INVERSE && NORMALIZE {
-                    let scale = Complex32::new(1.0 / 64.0, 0.0);
-                    for x in data_ref.iter_mut() {
-                        *x *= scale;
-                    }
-                }
+                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
                 true
             }
             9 => {
