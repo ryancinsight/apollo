@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## FRFT Leto public 1D boundary [minor]
+- Performed: added `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and crate-root `frft_leto`, accepting `leto::ArrayView1<'_, Complex64>` and returning `leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>`.
+- Architecture effect: FRFT now has a public Leto array boundary matching the provider direction already used in FFT, GFT, and the unitary FRFT basis. The existing ndarray API remains for compatibility and validation while callers migrate.
+- Memory effect: contiguous Leto views borrow their backing slice; strided views copy once into logical order before the canonical slice FrFT execution path. Returned arrays use Mnemosyne-backed Leto storage.
+- Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`.
+- Evidence tier: type-level public Leto boundary plus value-semantic parity tests against the existing ndarray path. No runtime benchmark claim is made.
+- Residuals: FRFT's typed reduced-precision APIs still use ndarray arrays. Migrating those requires a typed Leto storage boundary and precision-profile tests.
+
 ## FRFT Leto eigensolver migration and nalgebra removal [major]
 - Performed: replaced the `apollo-frft` unitary Grünbaum matrix and eigenbasis representation with `leto::Array2<f64>` and `leto_ops::symmetric_eigen_jacobi`, removing the local `DMatrix` and `SymmetricEigen` usage.
 - GPU boundary: added `GrunbaumBasis::eigenvectors_column_major_f32()` and updated `apollo-frft-wgpu` to consume this explicit column-major buffer. This preserves the shader's `v_mat[row + col*n]` contract without relying on nalgebra's column-major `as_slice()` layout.

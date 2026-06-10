@@ -21,7 +21,7 @@ pub mod infrastructure;
 
 // Canonical crate-root API for transform plans and error contracts.
 
-pub use crate::application::execution::plan::frft::dimension_1d::{frft, FrftPlan};
+pub use crate::application::execution::plan::frft::dimension_1d::{frft, frft_leto, FrftPlan};
 pub use crate::application::execution::plan::frft::storage::FrftStorage;
 pub use crate::application::execution::plan::frft::unitary::{GrunbaumBasis, UnitaryFrftPlan};
 pub use crate::domain::contracts::error::FrftError;

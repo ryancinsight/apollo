@@ -7,6 +7,7 @@ use apollo_fft::PrecisionProfile;
 use ndarray::Array1;
 use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use std::f64::consts::FRAC_PI_2;
 
@@ -115,6 +116,26 @@ impl FrftPlan {
         Ok(output)
     }
 
+    /// Execute the forward FrFT over a Leto complex view.
+    ///
+    /// C-contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn forward_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, FrftError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.n];
+        self.forward_complex64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("FrFT output length must match Leto output shape"),
+        )
+    }
+
     /// Execute the forward FrFT into a pre-allocated output buffer.
     pub fn forward_into(
         &self,
@@ -154,6 +175,26 @@ impl FrftPlan {
         let mut output = Array1::<Complex64>::zeros(self.n);
         self.inverse_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Execute the inverse FrFT over a Leto complex view.
+    ///
+    /// C-contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn inverse_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, FrftError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.n];
+        self.inverse_complex64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("inverse FrFT output length must match Leto output shape"),
+        )
     }
 
     /// Execute the inverse FrFT into a pre-allocated output buffer.
@@ -207,6 +248,31 @@ pub fn frft(input: &Array1<Complex64>, order: f64) -> Result<Array1<Complex64>, 
     FrftPlan::new(input.len(), order)?.forward(input)
 }
 
+/// Execute a single forward fractional Fourier transform on a Leto 1D view.
+pub fn frft_leto(
+    input: leto::ArrayView1<'_, Complex64>,
+    order: f64,
+) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, FrftError> {
+    FrftPlan::new(input.shape()[0], order)?.forward_leto(input)
+}
+
+fn leto_view1_cow<'a>(view: &leto::ArrayView1<'a, Complex64>) -> Cow<'a, [Complex64]> {
+    if let Some(slice) = view.as_slice() {
+        return Cow::Borrowed(slice);
+    }
+
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .expect("Leto view shape and storage bounds must be valid"),
+        );
+    }
+    Cow::Owned(values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +283,69 @@ mod tests {
     fn integer_order_zero_is_identity() {
         let input = Array1::from_vec(vec![Complex64::new(1.0, 2.0), Complex64::new(-3.0, 4.0)]);
         assert_eq!(frft(&input, 0.0).expect("frft"), input);
+    }
+
+    #[test]
+    fn leto_forward_and_inverse_match_ndarray_path() {
+        use leto::Storage;
+
+        let n = 8;
+        let plan = FrftPlan::new(n, 0.75).expect("valid plan");
+        let signal = (0..n)
+            .map(|i| Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin()))
+            .collect::<Vec<_>>();
+        let ndarray_input = Array1::from_vec(signal.clone());
+        let leto_input = leto::Array1::from_shape_vec([n], signal).expect("leto input");
+
+        let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
+        let ndarray_forward = plan.forward(&ndarray_input).expect("ndarray forward");
+        assert_eq!(leto_forward.shape(), [ndarray_forward.len()]);
+        for (actual, expected) in leto_forward
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(ndarray_forward.iter())
+        {
+            assert!((actual - expected).norm() < 1.0e-12);
+        }
+
+        let leto_inverse = plan
+            .inverse_leto(leto_forward.view())
+            .expect("leto inverse");
+        let ndarray_inverse = plan.inverse(&ndarray_forward).expect("ndarray inverse");
+        for (actual, expected) in leto_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(ndarray_inverse.iter())
+        {
+            assert!((actual - expected).norm() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_forward_accepts_strided_logical_view() {
+        use leto::{SliceArg, Storage};
+
+        let n = 8;
+        let logical = (0..n)
+            .map(|i| Complex64::new((i as f64 * 0.19).sin(), (i as f64 * 0.29).cos()))
+            .collect::<Vec<_>>();
+        let interleaved = logical
+            .iter()
+            .flat_map(|&value| [value, Complex64::new(99.0, -99.0)])
+            .collect::<Vec<_>>();
+        let leto_input =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+
+        let via_leto = frft_leto(strided, 0.5).expect("leto frft");
+        let via_ndarray = frft(&Array1::from_vec(logical), 0.5).expect("ndarray frft");
+        for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_ndarray.iter()) {
+            assert!((actual - expected).norm() < 1.0e-12);
+        }
     }
 
     #[test]

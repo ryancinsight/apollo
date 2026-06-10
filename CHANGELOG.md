@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-frft` now exposes `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and `frft_leto` for Leto 1D complex views returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-fft` now exposes Leto 1D FFT/IFFT boundaries that accept Leto views and return Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
 - [minor] Added Leto as an Apollo workspace provider dependency and wired `apollo-validation` to validate a Leto contiguous array conversion boundary against `ndarray`.
 - [minor] `apollo-fft` `RealFftData` now has additive slice-owned 1D forward and inverse methods for storage-owned public slice allocation boundaries.

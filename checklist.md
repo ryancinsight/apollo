@@ -1,4 +1,11 @@
 # Apollo Checklist
+## FRFT Leto public 1D boundary [minor]
+- [x] Added `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and crate-root `frft_leto` so direct FRFT callers can use `leto::ArrayView1<'_, Complex64>` and receive Mnemosyne-backed Leto arrays.
+- [x] Reused the existing contiguous slice execution path; contiguous Leto views borrow storage, while strided views copy once into logical order before execution.
+- [x] Added value tests proving contiguous Leto forward/inverse parity with the existing ndarray path and strided Leto logical-view parity with `frft`.
+- [x] Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`.
+- Evidence: type-level public Leto boundary plus value-semantic tests against the existing ndarray API. No runtime benchmark claim is made.
+
 ## FRFT Leto eigensolver migration and nalgebra removal [major]
 - [x] Replaced `apollo-frft`'s `nalgebra::DMatrix`/`SymmetricEigen` Grünbaum basis construction with `leto::Array2<f64>` plus `leto_ops::symmetric_eigen_jacobi`.
 - [x] Added `GrunbaumBasis::eigenvectors_column_major_f32()` so `apollo-frft-wgpu` receives an explicit column-major GPU buffer without depending on nalgebra storage layout.
