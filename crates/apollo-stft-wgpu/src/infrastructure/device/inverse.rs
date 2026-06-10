@@ -76,7 +76,7 @@ impl StftWgpuBackend {
         spectrum: leto::ArrayView1<'_, Complex32>,
         signal_len: usize,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
+        let spectrum = leto_view1_cow(spectrum);
         let output = self.execute_inverse(plan, &spectrum, signal_len)?;
         leto_array1_from_slice(&output)
     }
@@ -141,7 +141,7 @@ impl StftWgpuBackend {
         spectrum: leto::ArrayView1<'_, I>,
         signal_len: usize,
     ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
+        let spectrum = leto_view1_cow(spectrum);
         let mut output = vec![O::from_f64(0.0); signal_len];
         self.execute_inverse_typed_into(
             plan,

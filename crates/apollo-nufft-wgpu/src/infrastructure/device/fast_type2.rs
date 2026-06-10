@@ -78,8 +78,8 @@ impl NufftWgpuBackend {
         fourier_coeffs: leto::ArrayView1<'_, Complex32>,
         positions: leto::ArrayView1<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
-        let positions = leto_view1_cow(positions)?;
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
+        let positions = leto_view1_cow(positions);
         let output =
             self.execute_fast_type2_1d(plan, fourier_coeffs.as_ref(), positions.as_ref())?;
         leto_array1_from_slice(&output)
@@ -93,8 +93,8 @@ impl NufftWgpuBackend {
         fourier_coeffs: leto::ArrayView1<'_, T>,
         positions: leto::ArrayView1<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs)?;
-        let positions = leto_view1_cow(positions)?;
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
+        let positions = leto_view1_cow(positions);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_fast_type2_1d_typed_into(
             plan,
@@ -221,7 +221,7 @@ impl NufftWgpuBackend {
         modes: leto::ArrayView3<'_, Complex32>,
         positions: leto::ArrayView2<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let modes = array3_from_leto_view(modes)?;
+        let modes = array3_from_leto_view(modes);
         let positions = positions3_from_leto_view(positions)?;
         let output = self.execute_fast_type2_3d(plan, &modes, &positions)?;
         leto_array1_from_slice(&output)
@@ -235,7 +235,7 @@ impl NufftWgpuBackend {
         modes: leto::ArrayView3<'_, T>,
         positions: leto::ArrayView2<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let modes = array3_from_leto_view(modes)?;
+        let modes = array3_from_leto_view(modes);
         let positions = positions3_from_leto_view(positions)?;
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_fast_type2_3d_typed_into(plan, precision, &modes, &positions, &mut output)?;

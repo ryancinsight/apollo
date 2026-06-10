@@ -1,13 +1,13 @@
+use super::helpers::{
+    dwt_typed_coefficients_to_leto, leto_array1_from_slice, leto_view1_cow,
+    validate_cwt_output_shape, validate_dwt_output_shapes, validate_profile,
+};
+use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::CwtPlan;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array2;
-use super::{DwtLetoCoefficients, DwtPlan};
-use super::helpers::{
-    dwt_typed_coefficients_to_leto, leto_array1_from_slice, leto_view1_cow,
-    validate_cwt_output_shape, validate_dwt_output_shapes, validate_profile,
-};
 
 impl DwtPlan {
     /// Execute a multilevel forward DWT for `f64`, `f32`, or mixed `f16` storage.
@@ -136,7 +136,8 @@ pub trait WaveletStorage: Copy + Send + Sync + 'static {
             .iter()
             .map(|detail| detail.iter().copied().map(Self::to_f64).collect())
             .collect();
-        let coefficients = DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64);
+        let coefficients =
+            DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64);
         let signal = plan.inverse(&coefficients)?;
         for (slot, value) in output.iter_mut().zip(signal.into_iter()) {
             *slot = Self::from_f64(value);

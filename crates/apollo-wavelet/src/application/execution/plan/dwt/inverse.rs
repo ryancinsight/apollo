@@ -1,8 +1,8 @@
+use super::helpers::{dwt_coefficients_from_leto, leto_array1_from_slice};
+use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::infrastructure::kernel::discrete::synthesis_stage_into;
-use super::{DwtLetoCoefficients, DwtPlan};
-use super::helpers::{dwt_coefficients_from_leto, leto_array1_from_slice};
 
 impl DwtPlan {
     /// Execute inverse multilevel DWT.

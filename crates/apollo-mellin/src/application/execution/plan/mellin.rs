@@ -94,7 +94,7 @@ impl MellinPlan {
         signal_min: f64,
         signal_max: f64,
     ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let mut output = vec![0.0; self.config.samples()];
         self.forward_resample(&signal, signal_min, signal_max, &mut output)?;
         leto_array1_from_slice(&output)
@@ -124,7 +124,7 @@ impl MellinPlan {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let mut output = vec![T::from_f64(0.0); self.config.samples()];
         self.forward_resample_typed_into(&signal, signal_min, signal_max, &mut output, profile)?;
         leto_array1_from_slice(&output)
@@ -153,7 +153,7 @@ impl MellinPlan {
         signal_max: f64,
         exponent: f64,
     ) -> MellinResult<f64> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         self.moment(&signal, signal_min, signal_max, exponent)
     }
 
@@ -178,7 +178,7 @@ impl MellinPlan {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         self.moment_typed(&signal, signal_min, signal_max, exponent, profile)
     }
 
@@ -205,7 +205,7 @@ impl MellinPlan {
         signal_min: f64,
         signal_max: f64,
     ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let spectrum = self.forward_spectrum(&signal, signal_min, signal_max)?;
         leto_array1_from_slice(spectrum.values())
     }
@@ -229,7 +229,7 @@ impl MellinPlan {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let spectrum = self.forward_spectrum_typed(&signal, signal_min, signal_max, profile)?;
         leto_array1_from_slice(spectrum.values())
     }
@@ -317,7 +317,7 @@ impl MellinPlan {
         output_max: f64,
         output_len: usize,
     ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
+        let spectrum = leto_view1_cow(spectrum);
         self.inverse_spectrum_leto(
             &MellinSpectrum::new(spectrum.into_owned()),
             output_min,
@@ -500,31 +500,21 @@ fn validate_signal_domain_typed<T>(
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> MellinResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(MellinError::PrecisionMismatch)
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> MellinResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-
-    let mut values = Vec::with_capacity(view.size());
-    for index in 0..view.size() {
-        let value = view.get([index]).map_err(|_| MellinError::LengthMismatch)?;
-        values.push(*value);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values)
-        .map_err(|_| MellinError::LengthMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
+        .ok_or(MellinError::LengthMismatch)
 }
 
 #[cfg(test)]

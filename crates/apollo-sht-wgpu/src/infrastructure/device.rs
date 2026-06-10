@@ -1,5 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
+use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
@@ -111,7 +112,7 @@ impl ShtWgpuBackend {
         plan: &ShtWgpuPlan,
         samples: leto::ArrayView2<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let samples = array2_from_leto_view(samples, "SHT samples")?;
+        let samples = array2_from_leto_view(samples);
         let coefficients = self.execute_forward(plan, &samples)?;
         leto_array2_from_ndarray(coefficients.values(), "SHT coefficients")
     }
@@ -211,7 +212,7 @@ impl ShtWgpuBackend {
         precision: PrecisionProfile,
         flat_samples: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let flat_samples = leto_view1_cow(flat_samples)?;
+        let flat_samples = leto_view1_cow(flat_samples);
         let coefficients = self.execute_forward_flat_typed(plan, precision, &flat_samples)?;
         leto_array2_from_ndarray(coefficients.values(), "SHT typed coefficients")
     }
@@ -321,47 +322,17 @@ fn modes_from_coefficients(coefficients: &SphericalHarmonicCoefficients) -> Vec<
         .collect()
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
-            message: format!("invalid Leto SHT 1D view: {err:?}"),
-        })?);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
-fn array2_from_leto_view<T: Copy>(
-    view: leto::ArrayView2<'_, T>,
-    label: &str,
-) -> WgpuResult<Array2<T>> {
-    let [rows, cols] = view.shape();
-    let mut values = Vec::with_capacity(rows * cols);
-    for row in 0..rows {
-        for col in 0..cols {
-            values.push(
-                *view
-                    .get([row, col])
-                    .map_err(|err| WgpuError::ShapeMismatch {
-                        message: format!("invalid Leto {label} 2D view: {err:?}"),
-                    })?,
-            );
-        }
-    }
-    Array2::from_shape_vec((rows, cols), values).map_err(|err| WgpuError::ShapeMismatch {
-        message: format!("failed to materialize Leto {label} 2D view: {err}"),
-    })
+fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
+    leto_interop::array2_from_view(&view)
 }
-
 fn coefficients_from_leto_view(
     plan: &ShtWgpuPlan,
     coefficients: leto::ArrayView2<'_, Complex64>,
 ) -> WgpuResult<SphericalHarmonicCoefficients> {
-    let values = array2_from_leto_view(coefficients, "SHT coefficients")?;
+    let values = array2_from_leto_view(coefficients);
     let expected = (plan.max_degree() + 1, 2 * plan.max_degree() + 1);
     if values.dim() != expected {
         let (rows, cols) = values.dim();
@@ -382,10 +353,8 @@ fn leto_array1_from_slice<T: Copy>(
     values: &[T],
     label: &str,
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        WgpuError::InvalidPlan {
-            message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
-        }
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }
 
@@ -393,10 +362,8 @@ fn leto_array2_from_ndarray<T: Copy>(
     values: &Array2<T>,
     label: &str,
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let (rows, cols) = values.dim();
-    let flat: Vec<T> = values.iter().copied().collect();
-    leto::Array::from_mnemosyne_slice([rows, cols], &flat).map_err(|err| WgpuError::InvalidPlan {
-        message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
+    leto_interop::try_array2_from_ndarray(values).ok_or_else(|| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }
 
@@ -411,7 +378,7 @@ mod tests {
     #[test]
     fn leto_view1_cow_borrows_contiguous_views() {
         let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        let cow = leto_view1_cow(input.view());
         assert!(matches!(cow, Cow::Borrowed(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
@@ -423,7 +390,7 @@ mod tests {
         let view = input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let cow = leto_view1_cow(view).expect("strided view");
+        let cow = leto_view1_cow(view);
         assert!(matches!(cow, Cow::Owned(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }

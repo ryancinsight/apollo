@@ -21,7 +21,7 @@ pub(super) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> ShtResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(ShtError::PrecisionMismatch)
@@ -196,11 +196,11 @@ pub(super) fn array2_from_leto_view<T: Clone>(
 pub(super) fn leto_array2_from_ndarray<T: Copy>(
     array: &Array2<T>,
 ) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let (rows, cols) = array.dim();
-    if let Some(slice) = array.as_slice() {
-        leto::Array::from_mnemosyne_slice([rows, cols], slice)
-            .map_err(|_| ShtError::CoefficientShapeMismatch)
+    if array.as_slice().is_some() {
+        apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+            .ok_or(ShtError::CoefficientShapeMismatch)
     } else {
+        let (rows, cols) = array.dim();
         let values = array.iter().copied().collect::<Vec<_>>();
         leto::Array::from_mnemosyne_slice([rows, cols], &values)
             .map_err(|_| ShtError::CoefficientShapeMismatch)

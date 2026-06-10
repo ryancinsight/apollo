@@ -514,7 +514,7 @@ impl HartleyStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DhtResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(DhtError::PrecisionMismatch)
@@ -522,47 +522,25 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Dht
 }
 
 fn array2_from_leto_view(input: leto::ArrayView2<'_, f64>) -> Array2<f64> {
-    let [rows, cols] = input.shape();
-    Array2::from_shape_fn((rows, cols), |(row, col)| {
-        *input
-            .get([row, col])
-            .expect("Leto 2D DHT view index must be valid after shape validation")
-    })
+    apollo_fft::application::utilities::leto_interop::array2_from_view(&input)
 }
 
 fn array3_from_leto_view(input: leto::ArrayView3<'_, f64>) -> Array3<f64> {
-    let [d0, d1, d2] = input.shape();
-    Array3::from_shape_fn((d0, d1, d2), |(i, j, k)| {
-        *input
-            .get([i, j, k])
-            .expect("Leto 3D DHT view index must be valid after shape validation")
-    })
+    apollo_fft::application::utilities::leto_interop::array3_from_view(&input)
 }
 
 fn leto_array2_from_ndarray(
     output: &Array2<f64>,
 ) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 2> {
-    let (rows, cols) = output.dim();
-    leto::Array::<f64, leto::MnemosyneStorage<f64>, 2>::from_mnemosyne_slice(
-        [rows, cols],
-        output
-            .as_slice()
-            .expect("DHT-owned 2D ndarray output must be contiguous"),
-    )
-    .expect("DHT 2D output length must match Leto output shape")
+    apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(output)
+        .expect("DHT-owned 2D ndarray output must be contiguous with matching Leto shape")
 }
 
 fn leto_array3_from_ndarray(
     output: &Array3<f64>,
 ) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 3> {
-    let (d0, d1, d2) = output.dim();
-    leto::Array::<f64, leto::MnemosyneStorage<f64>, 3>::from_mnemosyne_slice(
-        [d0, d1, d2],
-        output
-            .as_slice()
-            .expect("DHT-owned 3D ndarray output must be contiguous"),
-    )
-    .expect("DHT 3D output length must match Leto output shape")
+    apollo_fft::application::utilities::leto_interop::try_array3_from_ndarray(output)
+        .expect("DHT-owned 3D ndarray output must be contiguous with matching Leto shape")
 }
 
 #[cfg(test)]

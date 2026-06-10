@@ -1,35 +1,27 @@
+use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::CwtPlan;
 use apollo_fft::PrecisionProfile;
 use ndarray::Array2;
 use std::borrow::Cow;
-use super::{DwtLetoCoefficients, DwtPlan};
 
-pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'_, [T]>> {
+pub(crate) fn leto_view1_cow<T: Copy>(
+    view: leto::ArrayView1<'_, T>,
+) -> WaveletResult<Cow<'_, [T]>> {
     if view.shape()[0] == 0 {
         return Err(WaveletError::EmptySignal);
     }
-    if let Some(slice) = view.as_slice() {
-        Ok(Cow::Borrowed(slice))
-    } else {
-        let mut values = Vec::with_capacity(view.size());
-        for index in 0..view.shape()[0] {
-            values.push(
-                *view
-                    .get([index])
-                    .map_err(|_| WaveletError::LengthMismatch)?,
-            );
-        }
-        Ok(Cow::Owned(values))
-    }
+    Ok(apollo_fft::application::utilities::leto_interop::view1_cow(
+        &view,
+    ))
 }
 
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values)
-        .map_err(|_| WaveletError::CoefficientShapeMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
+        .ok_or(WaveletError::CoefficientShapeMismatch)
 }
 
 pub(crate) fn dwt_coefficients_to_leto(
@@ -89,7 +81,7 @@ pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> WaveletResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(WaveletError::PrecisionMismatch)

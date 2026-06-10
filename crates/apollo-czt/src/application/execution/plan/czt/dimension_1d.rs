@@ -544,7 +544,7 @@ impl CztStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), CztError> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(CztError::PrecisionMismatch)
@@ -565,22 +565,11 @@ fn with_complex64_workspaces<R>(
 }
 
 fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    match view.as_slice() {
-        Some(slice) => Cow::Borrowed(slice),
-        None => Cow::Owned(
-            (0..view.shape()[0])
-                .map(|index| {
-                    *view
-                        .get([index])
-                        .expect("Leto CZT view index must be valid after shape validation")
-                })
-                .collect(),
-        ),
-    }
+    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 fn leto_array1_from_slice<T: Copy>(output: &[T]) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
-    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([output.len()], output)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(output)
         .expect("CZT output length must match Leto output shape")
 }
 

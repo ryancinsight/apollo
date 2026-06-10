@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use num_complex::Complex32;
-use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use super::{
-    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d,
-    read_complex_buffer, real_to_complex_pods_scaled, split_grid_buffers,
-    storage_buffer, ComplexPod, FastNufftParams, NufftGpuKernel,
+    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d, read_complex_buffer,
+    real_to_complex_pods_scaled, split_grid_buffers, storage_buffer, ComplexPod, FastNufftParams,
+    NufftGpuKernel,
 };
-use crate::infrastructure::kernel::NufftGpuBuffers1D;
+use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::kernel::buffers::ensure_sample_capacity;
+use crate::infrastructure::kernel::NufftGpuBuffers1D;
 use apollo_fft_wgpu::GpuFft3d;
+use num_complex::Complex32;
+use std::sync::Arc;
 
 #[cfg(any(test, feature = "diagnostics"))]
 use super::{read_split_grid_snapshot, NufftType2GridDiagnostics};

@@ -58,7 +58,7 @@ impl DctDstWgpuBackend {
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = leto_view1_cow(input);
         let output = self.execute_forward(plan, &input)?;
         leto_array1_from_slice(&output)
     }
@@ -124,7 +124,7 @@ impl DctDstWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = leto_view1_cow(input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
         leto_array1_from_slice(&output)
@@ -160,7 +160,10 @@ impl DctDstWgpuBackend {
                     self.execute_forward(plan, &lane)?
                 }
             };
-            tmp.row_mut(r).iter_mut().zip(&out).for_each(|(s, v)| *s = *v);
+            tmp.row_mut(r)
+                .iter_mut()
+                .zip(&out)
+                .for_each(|(s, v)| *s = *v);
         }
         // Column pass: columns are strided, so the single lane buffer is reused.
         let mut result = Array2::<f32>::zeros((n, n));
@@ -168,7 +171,11 @@ impl DctDstWgpuBackend {
             lane.clear();
             lane.extend(tmp.column(c).iter().copied());
             let out = self.execute_forward(plan, &lane)?;
-            result.column_mut(c).iter_mut().zip(&out).for_each(|(s, v)| *s = *v);
+            result
+                .column_mut(c)
+                .iter_mut()
+                .zip(&out)
+                .for_each(|(s, v)| *s = *v);
         }
         Ok(result)
     }
@@ -179,7 +186,7 @@ impl DctDstWgpuBackend {
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView2<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let input = array2_from_leto_view(input)?;
+        let input = array2_from_leto_view(input);
         let output = self.execute_forward_2d(plan, &input)?;
         leto_array2_from_ndarray(&output)
     }
@@ -248,7 +255,7 @@ impl DctDstWgpuBackend {
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView3<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
-        let input = array3_from_leto_view(input)?;
+        let input = array3_from_leto_view(input);
         let output = self.execute_forward_3d(plan, &input)?;
         leto_array3_from_ndarray(&output)
     }

@@ -515,21 +515,16 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> StftResult<Cow<'_, 
     if view.shape()[0] == 0 {
         return Err(StftError::InputTooShort);
     }
-    if let Some(slice) = view.as_slice() {
-        Ok(Cow::Borrowed(slice))
-    } else {
-        let mut values = Vec::with_capacity(view.size());
-        for index in 0..view.shape()[0] {
-            values.push(*view.get([index]).map_err(|_| StftError::LengthMismatch)?);
-        }
-        Ok(Cow::Owned(values))
-    }
+    Ok(apollo_fft::application::utilities::leto_interop::view1_cow(
+        &view,
+    ))
 }
 
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> StftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|_| StftError::LengthMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
+        .ok_or(StftError::LengthMismatch)
 }
 
 fn with_forward_typed_workspaces<R>(

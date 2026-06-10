@@ -1,9 +1,11 @@
-use std::sync::mpsc;
+use super::{
+    ComplexPod, FastNufftParams3D, NufftGpuKernel, NufftParams, Position3Pod, WORKGROUP_SIZE,
+};
+use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use bytemuck::Pod;
 use num_complex::Complex32;
+use std::sync::mpsc;
 use wgpu::util::DeviceExt;
-use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
-use super::{ComplexPod, Position3Pod, NufftParams, FastNufftParams3D, NufftGpuKernel, WORKGROUP_SIZE};
 
 impl NufftGpuKernel {
     pub(crate) fn execute(
@@ -212,7 +214,11 @@ pub(crate) fn real_to_complex_pods_scaled(values: &[f32], scale: f32) -> Vec<Com
         .collect()
 }
 
-pub(crate) fn storage_buffer<T: Pod>(device: &wgpu::Device, label: &'static str, data: &[T]) -> wgpu::Buffer {
+pub(crate) fn storage_buffer<T: Pod>(
+    device: &wgpu::Device,
+    label: &'static str,
+    data: &[T],
+) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
         contents: bytemuck::cast_slice(data),
@@ -220,7 +226,10 @@ pub(crate) fn storage_buffer<T: Pod>(device: &wgpu::Device, label: &'static str,
     })
 }
 
-pub(crate) fn split_grid_buffers(device: &wgpu::Device, len: usize) -> (wgpu::Buffer, wgpu::Buffer) {
+pub(crate) fn split_grid_buffers(
+    device: &wgpu::Device,
+    len: usize,
+) -> (wgpu::Buffer, wgpu::Buffer) {
     let size = (len * std::mem::size_of::<f32>()) as u64;
     let usage =
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;

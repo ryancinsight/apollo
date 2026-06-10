@@ -1,8 +1,8 @@
+use super::helpers::{leto_array1_from_slice, leto_view1_cow, validate_profile};
+use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
-use super::DctDstPlan;
-use super::helpers::{leto_array1_from_slice, leto_view1_cow, validate_profile};
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };

@@ -1,5 +1,6 @@
 //! WGPU device acquisition and GFT execution backend.
 
+use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
@@ -90,8 +91,8 @@ impl GftWgpuBackend {
         signal: leto::ArrayView1<'_, f32>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let signal = leto_view1_cow(signal)?;
-        let basis = leto_view1_cow(basis)?;
+        let signal = leto_view1_cow(signal);
+        let basis = leto_view1_cow(basis);
         let output = self.execute_forward(plan, &signal, &basis)?;
         leto_array1_from_slice(&output)
     }
@@ -123,8 +124,8 @@ impl GftWgpuBackend {
         spectrum: leto::ArrayView1<'_, f32>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
-        let basis = leto_view1_cow(basis)?;
+        let spectrum = leto_view1_cow(spectrum);
+        let basis = leto_view1_cow(basis);
         let output = self.execute_inverse(plan, &spectrum, &basis)?;
         leto_array1_from_slice(&output)
     }
@@ -182,8 +183,8 @@ impl GftWgpuBackend {
         signal: leto::ArrayView1<'_, T>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal)?;
-        let basis = leto_view1_cow(basis)?;
+        let signal = leto_view1_cow(signal);
+        let basis = leto_view1_cow(basis);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_forward_typed_into(plan, precision, &signal, &basis, &mut output)?;
         leto_array1_from_slice(&output)
@@ -238,8 +239,8 @@ impl GftWgpuBackend {
         spectrum: leto::ArrayView1<'_, T>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
-        let basis = leto_view1_cow(basis)?;
+        let spectrum = leto_view1_cow(spectrum);
+        let basis = leto_view1_cow(basis);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_inverse_typed_into(plan, precision, &spectrum, &basis, &mut output)?;
         leto_array1_from_slice(&output)
@@ -279,27 +280,14 @@ impl GftWgpuBackend {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
-            message: format!("invalid Leto GFT 1D view: {err:?}"),
-        })?);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        WgpuError::InvalidPlan {
-            message: format!("failed to allocate Mnemosyne-backed Leto GFT output: {err:?}"),
-        }
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
+        message: "failed to allocate Mnemosyne-backed Leto GFT output".to_string(),
     })
 }
 
@@ -314,7 +302,7 @@ mod tests {
     #[test]
     fn leto_view1_cow_borrows_contiguous_views() {
         let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        let cow = leto_view1_cow(input.view());
         assert!(matches!(cow, Cow::Borrowed(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
@@ -326,7 +314,7 @@ mod tests {
         let view = input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let cow = leto_view1_cow(view).expect("strided view");
+        let cow = leto_view1_cow(view);
         assert!(matches!(cow, Cow::Owned(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }

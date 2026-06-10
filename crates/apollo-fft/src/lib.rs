@@ -71,7 +71,6 @@ use application::execution::kernel::mixed_radix::MixedRadixScalar;
 use application::execution::plan::fft::workspace::PlanScratch;
 use ndarray::{Array1, Array2, Array3};
 use num_complex::Complex;
-use std::borrow::Cow;
 
 /// Forward 1D FFT of a real signal.
 #[must_use]
@@ -194,7 +193,7 @@ where
     T::Spectrum: Copy,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let signal = leto_view1_cow(&field);
+    let signal = view1_cow(&field);
     let spectrum = fft_1d_slice_typed::<T>(&signal);
     leto::Array::<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>::from_mnemosyne_slice(
         [spectrum.len()],
@@ -203,22 +202,7 @@ where
     .expect("FFT spectrum length must match Leto output shape")
 }
 
-fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    if let Some(slice) = view.as_slice() {
-        return Cow::Borrowed(slice);
-    }
-
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(
-            *view
-                .get([index])
-                .expect("Leto view shape and storage bounds must be valid"),
-        );
-    }
-    Cow::Owned(values)
-}
+use application::utilities::leto_interop::view1_cow;
 
 /// Forward 2D FFT of a real array.
 #[must_use]
@@ -565,7 +549,7 @@ where
     T::Spectrum: Copy,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let spectrum = leto_view1_cow(&field_hat);
+    let spectrum = view1_cow(&field_hat);
     let signal = ifft_1d_slice_typed::<T>(&spectrum);
     leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([signal.len()], &signal)
         .expect("IFFT signal length must match Leto output shape")

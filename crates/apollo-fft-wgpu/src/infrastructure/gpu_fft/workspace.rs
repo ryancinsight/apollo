@@ -2,6 +2,7 @@
 
 use crate::infrastructure::gpu_fft::pipeline::GpuFft3d;
 use crate::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy};
+use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::{f16, ApolloError, ApolloResult};
 use ndarray::Array3;
 use std::borrow::Cow;
@@ -400,7 +401,7 @@ impl GpuFft3d {
         &self,
         field_hat: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let field_hat = leto_view1_cow(field_hat)?;
+        let field_hat = leto_view1_cow(field_hat);
         let mut out = vec![0.0_f64; self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self);
         self.inverse_values_into_with_buffers(field_hat.as_ref(), &mut out, &mut buffers)?;
@@ -417,7 +418,7 @@ impl GpuFft3d {
         &self,
         field_hat: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f16, leto::MnemosyneStorage<f16>, 3>> {
-        let field_hat = leto_view1_cow(field_hat)?;
+        let field_hat = leto_view1_cow(field_hat);
         let mut out = vec![f16::from_f32(0.0); self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self);
         self.inverse_f16_values_into_with_buffers(field_hat.as_ref(), &mut out, &mut buffers)?;
@@ -844,25 +845,9 @@ impl GpuFft3d {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(
-            *view
-                .get([index])
-                .map_err(|err| ApolloError::ShapeMismatch {
-                    expected: "valid Leto FFT-WGPU 1D view".to_string(),
-                    actual: format!("{err:?}"),
-                })?,
-        );
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
 fn leto_view3_cow<T: Copy>(view: leto::ArrayView3<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
     if let Some(slice) = view.as_slice() {
         return Ok(Cow::Borrowed(slice));
@@ -890,8 +875,8 @@ fn leto_array1_from_slice<T: Copy>(
     values: &[T],
     context: &str,
 ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| ApolloError::Wgpu {
-        message: format!("failed to allocate Mnemosyne-backed Leto {context}: {err:?}"),
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| ApolloError::Wgpu {
+        message: format!("failed to allocate Mnemosyne-backed Leto {context}"),
     })
 }
 

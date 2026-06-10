@@ -1,5 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
+use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
 use num_complex::Complex32;
@@ -82,7 +83,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = leto_view1_cow(input);
         let output = self.execute_analytic_signal(plan, &input)?;
         leto_array1_from_slice(&output)
     }
@@ -102,7 +103,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = leto_view1_cow(input);
         let output = self.execute_forward(plan, &input)?;
         leto_array1_from_slice(&output)
     }
@@ -156,7 +157,7 @@ impl HilbertWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = leto_view1_cow(input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
         leto_array1_from_slice(&output)
@@ -195,7 +196,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         quadrature: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let quadrature = leto_view1_cow(quadrature)?;
+        let quadrature = leto_view1_cow(quadrature);
         let output = self.execute_inverse(plan, &quadrature)?;
         leto_array1_from_slice(&output)
     }
@@ -247,7 +248,7 @@ impl HilbertWgpuBackend {
         precision: PrecisionProfile,
         quadrature: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let quadrature = leto_view1_cow(quadrature)?;
+        let quadrature = leto_view1_cow(quadrature);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_inverse_typed_into(plan, precision, &quadrature, &mut output)?;
         leto_array1_from_slice(&output)
@@ -270,27 +271,14 @@ impl HilbertWgpuBackend {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
-            message: format!("invalid Leto Hilbert 1D view: {err:?}"),
-        })?);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        WgpuError::InvalidPlan {
-            message: format!("failed to allocate Mnemosyne-backed Leto Hilbert output: {err:?}"),
-        }
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
+        message: "failed to allocate Mnemosyne-backed Leto Hilbert output".to_string(),
     })
 }
 
@@ -305,7 +293,7 @@ mod tests {
     #[test]
     fn leto_view1_cow_borrows_contiguous_views() {
         let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("input");
-        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        let cow = leto_view1_cow(input.view());
         assert!(matches!(cow, Cow::Borrowed(_)));
         assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
     }
@@ -318,7 +306,7 @@ mod tests {
         let view = input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let cow = leto_view1_cow(view).expect("strided view");
+        let cow = leto_view1_cow(view);
         assert!(matches!(cow, Cow::Owned(_)));
         assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
     }

@@ -1,5 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
+use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
@@ -102,8 +103,8 @@ impl RadonWgpuBackend {
         image: leto::ArrayView2<'_, f32>,
         angles: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let image = array2_from_leto_view(image, "Radon image")?;
-        let angles = leto_view1_cow(angles)?;
+        let image = array2_from_leto_view(image);
+        let angles = leto_view1_cow(angles);
         let output = self.execute_forward(plan, &image, &angles)?;
         leto_array2_from_ndarray(&output, "Radon forward sinogram")
     }
@@ -136,8 +137,8 @@ impl RadonWgpuBackend {
         sinogram: leto::ArrayView2<'_, f32>,
         angles: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, "Radon sinogram")?;
-        let angles = leto_view1_cow(angles)?;
+        let sinogram = array2_from_leto_view(sinogram);
+        let angles = leto_view1_cow(angles);
         let output = self.execute_inverse(plan, &sinogram, &angles)?;
         leto_array2_from_ndarray(&output, "Radon backprojection image")
     }
@@ -197,9 +198,9 @@ impl RadonWgpuBackend {
         sinogram: leto::ArrayView2<'_, T>,
         angles: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, "Radon typed sinogram")?;
+        let sinogram = array2_from_leto_view(sinogram);
         let flat = sinogram.iter().copied().collect::<Vec<_>>();
-        let angles = leto_view1_cow(angles)?;
+        let angles = leto_view1_cow(angles);
         let output = self.execute_inverse_flat_typed(plan, precision, &flat, &angles)?;
         leto_array2_from_ndarray(&output, "Radon typed backprojection image")
     }
@@ -236,8 +237,8 @@ impl RadonWgpuBackend {
         sinogram: leto::ArrayView2<'_, f32>,
         angles: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, "Radon filtered sinogram")?;
-        let angles = leto_view1_cow(angles)?;
+        let sinogram = array2_from_leto_view(sinogram);
+        let angles = leto_view1_cow(angles);
         let output = self.execute_filtered_backproject(plan, &sinogram, &angles)?;
         leto_array2_from_ndarray(&output, "Radon filtered backprojection image")
     }
@@ -294,9 +295,9 @@ impl RadonWgpuBackend {
         image: leto::ArrayView2<'_, T>,
         angles: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let image = array2_from_leto_view(image, "Radon typed image")?;
+        let image = array2_from_leto_view(image);
         let flat = image.iter().copied().collect::<Vec<_>>();
-        let angles = leto_view1_cow(angles)?;
+        let angles = leto_view1_cow(angles);
         let output = self.execute_forward_flat_typed(plan, precision, &flat, &angles)?;
         leto_array2_from_ndarray(&output, "Radon typed forward sinogram")
     }
@@ -382,50 +383,18 @@ impl RadonWgpuBackend {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
-            message: format!("invalid Leto Radon 1D view: {err:?}"),
-        })?);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
-fn array2_from_leto_view<T: Copy>(
-    view: leto::ArrayView2<'_, T>,
-    label: &str,
-) -> WgpuResult<Array2<T>> {
-    let [rows, cols] = view.shape();
-    let mut values = Vec::with_capacity(rows * cols);
-    for row in 0..rows {
-        for col in 0..cols {
-            values.push(
-                *view
-                    .get([row, col])
-                    .map_err(|err| WgpuError::ShapeMismatch {
-                        message: format!("invalid Leto {label} 2D view: {err:?}"),
-                    })?,
-            );
-        }
-    }
-    Array2::from_shape_vec((rows, cols), values).map_err(|err| WgpuError::ShapeMismatch {
-        message: format!("failed to materialize Leto {label} 2D view: {err}"),
-    })
+fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
+    leto_interop::array2_from_view(&view)
 }
-
 fn leto_array2_from_ndarray(
     values: &Array2<f32>,
     label: &str,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-    let (rows, cols) = values.dim();
-    let flat: Vec<f32> = values.iter().copied().collect();
-    leto::Array::from_mnemosyne_slice([rows, cols], &flat).map_err(|err| WgpuError::InvalidPlan {
-        message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
+    leto_interop::try_array2_from_ndarray(values).ok_or_else(|| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }
 
@@ -440,7 +409,7 @@ mod tests {
     #[test]
     fn leto_view1_cow_borrows_contiguous_views() {
         let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        let cow = leto_view1_cow(input.view());
         assert!(matches!(cow, Cow::Borrowed(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
@@ -452,7 +421,7 @@ mod tests {
         let view = input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let cow = leto_view1_cow(view).expect("strided view");
+        let cow = leto_view1_cow(view);
         assert!(matches!(cow, Cow::Owned(_)));
         assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }

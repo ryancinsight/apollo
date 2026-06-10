@@ -256,7 +256,7 @@ impl SparseFftPlan {
         &self,
         signal: leto::ArrayView1<'_, Complex64>,
     ) -> ApolloResult<SparseSpectrum> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         self.forward(&signal)
     }
 
@@ -323,7 +323,7 @@ impl SparseFftPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<SparseLetoSpectrum<T>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let mut frequencies = Vec::new();
         let mut values = Vec::new();
         self.forward_typed_into(&signal, &mut frequencies, &mut values, profile)?;
@@ -352,7 +352,7 @@ impl SparseFftPlan {
         values: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let values = leto_view1_cow(values)?;
+        let values = leto_view1_cow(values);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
         self.inverse_typed_into(frequencies, &values, &mut output, profile)?;
         leto_array1_from_slice(&output)
@@ -514,7 +514,7 @@ impl SparseComplexStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ApolloResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(ApolloError::validation(
@@ -569,31 +569,21 @@ fn write_storage_from_owner_values<T: SparseComplexStorage>(
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-
-    let mut values = Vec::with_capacity(view.size());
-    for index in 0..view.size() {
-        let value = view.get([index]).map_err(|err| {
-            ApolloError::validation("leto_view", format!("{err:?}"), "valid 1D logical view")
-        })?;
-        values.push(*value);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        ApolloError::validation(
-            "leto_array",
-            format!("{err:?}"),
-            "Mnemosyne-backed 1D array construction",
-        )
-    })
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values).ok_or_else(
+        || {
+            ApolloError::validation(
+                "leto_array",
+                "rejected length",
+                "Mnemosyne-backed 1D array construction",
+            )
+        },
+    )
 }
 
 #[cfg(test)]

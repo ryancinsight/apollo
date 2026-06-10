@@ -1,5 +1,6 @@
 use crate::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
+use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::PrecisionProfile;
 use apollo_nufft::infrastructure::kernel::kaiser_bessel::{fft_signed_index, i0, kb_kernel_ft};
 use apollo_nufft::NufftComplexStorage;
@@ -229,22 +230,9 @@ pub(crate) fn fast_3d_metadata(plan: &NufftWgpuPlan3D) -> NufftWgpuResult<Fast3D
     })
 }
 
-pub(crate) fn leto_view1_cow<T: Copy>(
-    view: leto::ArrayView1<'_, T>,
-) -> NufftWgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|_| NufftWgpuError::InvalidPlan {
-            message: "invalid Leto NUFFT-WGPU 1D view",
-        })?);
-    }
-    Ok(Cow::Owned(values))
+pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    leto_interop::view1_cow(&view)
 }
-
 pub(crate) fn positions3_from_leto_view(
     view: leto::ArrayView2<'_, f32>,
 ) -> NufftWgpuResult<Vec<(f32, f32, f32)>> {
@@ -277,53 +265,21 @@ pub(crate) fn positions3_from_leto_view(
     Ok(values)
 }
 
-pub(crate) fn array3_from_leto_view<T: Copy>(
-    view: leto::ArrayView3<'_, T>,
-) -> NufftWgpuResult<Array3<T>> {
-    let shape = view.shape();
-    let mut values = Vec::with_capacity(shape[0] * shape[1] * shape[2]);
-    for i in 0..shape[0] {
-        for j in 0..shape[1] {
-            for k in 0..shape[2] {
-                values.push(
-                    *view
-                        .get([i, j, k])
-                        .map_err(|_| NufftWgpuError::InvalidPlan {
-                            message: "invalid Leto NUFFT-WGPU 3D view",
-                        })?,
-                );
-            }
-        }
-    }
-    Array3::from_shape_vec((shape[0], shape[1], shape[2]), values).map_err(|_| {
-        NufftWgpuError::InvalidPlan {
-            message: "failed to materialize Leto NUFFT-WGPU 3D view",
-        }
-    })
+pub(crate) fn array3_from_leto_view<T: Copy>(view: leto::ArrayView3<'_, T>) -> Array3<T> {
+    leto_interop::array3_from_view(&view)
 }
-
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        NufftWgpuError::BufferMapFailed {
-            message: format!(
-                "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output: {err:?}"
-            ),
-        }
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| NufftWgpuError::BufferMapFailed {
+        message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output".to_string(),
     })
 }
 
 pub(crate) fn leto_array3_from_ndarray<T: Copy>(
     values: &Array3<T>,
 ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    let (nx, ny, nz) = values.dim();
-    let flat: Vec<T> = values.iter().copied().collect();
-    leto::Array::from_mnemosyne_slice([nx, ny, nz], &flat).map_err(|err| {
-        NufftWgpuError::BufferMapFailed {
-            message: format!(
-                "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output: {err:?}"
-            ),
-        }
+    leto_interop::try_array3_from_ndarray(values).ok_or_else(|| NufftWgpuError::BufferMapFailed {
+        message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output".to_string(),
     })
 }

@@ -66,7 +66,7 @@ impl HilbertPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let analytic = self.analytic_signal(&signal)?;
         leto_complex_array1_from_slice(analytic.values())
     }
@@ -112,7 +112,7 @@ impl HilbertPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> HilbertResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let output = self.transform(&signal)?;
         leto_array1_from_slice(&output)
     }
@@ -141,7 +141,7 @@ impl HilbertPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let mut output = vec![T::from_f64(0.0); self.len()];
         self.transform_typed_into(&signal, &mut output, profile)?;
         leto_array1_from_slice(&output)
@@ -216,33 +216,21 @@ fn with_observable_analytic_workspace<R>(
     OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> HilbertResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
-    }
-
-    let mut values = Vec::with_capacity(view.size());
-    for index in 0..view.size() {
-        let value = view
-            .get([index])
-            .map_err(|_| HilbertError::LengthMismatch)?;
-        values.push(*value);
-    }
-    Ok(Cow::Owned(values))
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values)
-        .map_err(|_| HilbertError::LengthMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
+        .ok_or(HilbertError::LengthMismatch)
 }
 
 fn leto_complex_array1_from_slice(
     values: &[Complex64],
 ) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values)
-        .map_err(|_| HilbertError::LengthMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
+        .ok_or(HilbertError::LengthMismatch)
 }
 
 #[cfg(test)]
@@ -365,7 +353,7 @@ impl HilbertStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(HilbertError::PrecisionMismatch)

@@ -64,7 +64,7 @@ impl RadonPlan {
         &self,
         image: leto::ArrayView2<'_, f64>,
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let image = array2_from_leto_view(image, RadonError::ImageShapeMismatch)?;
+        let image = array2_from_leto_view(image);
         let sinogram = self.forward(&image)?;
         leto_array2_from_ndarray(sinogram.values())
     }
@@ -97,7 +97,7 @@ impl RadonPlan {
         image: leto::ArrayView2<'_, T>,
         profile: PrecisionProfile,
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-        let image = array2_from_leto_view(image, RadonError::ImageShapeMismatch)?;
+        let image = array2_from_leto_view(image);
         let mut output = Array2::<T>::from_elem(
             (self.geometry.angle_count(), self.geometry.detector_count()),
             T::from_f64(0.0),
@@ -119,7 +119,7 @@ impl RadonPlan {
         &self,
         sinogram: leto::ArrayView2<'_, f64>,
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let sinogram = array2_from_leto_view(sinogram);
         let image = self.backproject(&Sinogram::new(sinogram))?;
         leto_array2_from_ndarray(&image)
     }
@@ -156,7 +156,7 @@ impl RadonPlan {
         sinogram: leto::ArrayView2<'_, T>,
         profile: PrecisionProfile,
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let sinogram = array2_from_leto_view(sinogram);
         let mut output = Array2::<T>::from_elem(
             (self.geometry.rows(), self.geometry.cols()),
             T::from_f64(0.0),
@@ -212,7 +212,7 @@ impl RadonPlan {
         &self,
         sinogram: leto::ArrayView2<'_, f64>,
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let sinogram = array2_from_leto_view(sinogram);
         let image = self.filtered_backprojection(&Sinogram::new(sinogram))?;
         leto_array2_from_ndarray(&image)
     }
@@ -342,35 +342,28 @@ impl RadonStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(RadonError::PrecisionMismatch)
     }
 }
 
-fn array2_from_leto_view<T: Copy>(
-    view: leto::ArrayView2<'_, T>,
-    shape_error: RadonError,
-) -> RadonResult<Array2<T>> {
-    let [rows, cols] = view.shape();
-    let mut values = Vec::with_capacity(view.size());
-    for row in 0..rows {
-        for col in 0..cols {
-            let value = view.get([row, col]).map_err(|_| shape_error)?;
-            values.push(*value);
-        }
-    }
-    Array2::from_shape_vec((rows, cols), values).map_err(|_| shape_error)
+fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
+    apollo_fft::application::utilities::leto_interop::array2_from_view(&view)
 }
-
 fn leto_array2_from_ndarray<T: Copy>(
     array: &Array2<T>,
 ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let (rows, cols) = array.dim();
-    let values: Vec<T> = array.iter().copied().collect();
-    leto::Array::from_mnemosyne_slice([rows, cols], &values)
-        .map_err(|_| RadonError::ImageShapeMismatch)
+    if array.as_slice().is_some() {
+        apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+            .ok_or(RadonError::ImageShapeMismatch)
+    } else {
+        let (rows, cols) = array.dim();
+        let values: Vec<T> = array.iter().copied().collect();
+        leto::Array::from_mnemosyne_slice([rows, cols], &values)
+            .map_err(|_| RadonError::ImageShapeMismatch)
+    }
 }
 
 #[cfg(test)]

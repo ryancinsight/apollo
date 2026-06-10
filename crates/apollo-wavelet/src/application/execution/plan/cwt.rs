@@ -120,28 +120,16 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'
     if view.shape()[0] == 0 {
         return Err(WaveletError::EmptySignal);
     }
-    if let Some(slice) = view.as_slice() {
-        Ok(Cow::Borrowed(slice))
-    } else {
-        let mut values = Vec::with_capacity(view.size());
-        for index in 0..view.shape()[0] {
-            values.push(
-                *view
-                    .get([index])
-                    .map_err(|_| WaveletError::LengthMismatch)?,
-            );
-        }
-        Ok(Cow::Owned(values))
-    }
+    Ok(apollo_fft::application::utilities::leto_interop::view1_cow(
+        &view,
+    ))
 }
 
 fn leto_array2_from_ndarray<T: Copy>(
     array: &Array2<T>,
 ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let (rows, cols) = array.dim();
-    let values = array.iter().copied().collect::<Vec<_>>();
-    leto::Array::from_mnemosyne_slice([rows, cols], &values)
-        .map_err(|_| WaveletError::CoefficientShapeMismatch)
+    apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+        .ok_or(WaveletError::CoefficientShapeMismatch)
 }
 
 #[cfg(test)]

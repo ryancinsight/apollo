@@ -182,8 +182,8 @@ impl NufftPlan1D {
         positions: leto::ArrayView1<'_, f64>,
         values: leto::ArrayView1<'_, Complex64>,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let positions = leto_view1_cow(positions, "positions")?;
-        let values = leto_view1_cow(values, "values")?;
+        let positions = leto_view1_cow(positions);
+        let values = leto_view1_cow(values);
         if positions.len() != values.len() {
             return Err(ApolloError::ShapeMismatch {
                 expected: positions.len().to_string(),
@@ -258,8 +258,8 @@ impl NufftPlan1D {
         fourier_coeffs: leto::ArrayView1<'_, Complex64>,
         positions: leto::ArrayView1<'_, f64>,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs, "fourier_coeffs")?;
-        let positions = leto_view1_cow(positions, "positions")?;
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
+        let positions = leto_view1_cow(positions);
         if fourier_coeffs.len() != self.n_out {
             return Err(ApolloError::ShapeMismatch {
                 expected: self.n_out.to_string(),
@@ -379,8 +379,8 @@ impl NufftPlan1D {
         values: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let positions = leto_view1_cow(positions, "positions")?;
-        let values = leto_view1_cow(values, "values")?;
+        let positions = leto_view1_cow(positions);
+        let values = leto_view1_cow(values);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n_out];
         self.type1_typed_into(
@@ -443,8 +443,8 @@ impl NufftPlan1D {
         positions: leto::ArrayView1<'_, f64>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs, "fourier_coeffs")?;
-        let positions = leto_view1_cow(positions, "positions")?;
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
+        let positions = leto_view1_cow(positions);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.type2_typed_into(
@@ -513,7 +513,7 @@ pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> ApolloResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(ApolloError::validation(
@@ -533,30 +533,21 @@ pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], t
     }
 }
 
-fn leto_view1_cow<'a, T: Copy>(
-    view: leto::ArrayView1<'a, T>,
-    name: &'static str,
-) -> ApolloResult<Cow<'a, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        Ok(Cow::Borrowed(slice))
-    } else {
-        let mut values = Vec::with_capacity(view.size());
-        for index in 0..view.shape()[0] {
-            values.push(*view.get([index]).map_err(|_| ApolloError::ShapeMismatch {
-                expected: name.to_string(),
-                actual: format!("index {index}"),
-            })?);
-        }
-        Ok(Cow::Owned(values))
-    }
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
+    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
 }
-
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
-        ApolloError::validation("leto_shape", values.len().to_string(), err.to_string())
-    })
+    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values).ok_or_else(
+        || {
+            ApolloError::validation(
+                "leto_shape",
+                values.len().to_string(),
+                "Mnemosyne-backed 1D array construction",
+            )
+        },
+    )
 }
 
 /// Exact direct 1D type-1 NUFFT.

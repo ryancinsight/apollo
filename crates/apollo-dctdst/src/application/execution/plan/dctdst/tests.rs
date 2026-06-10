@@ -2,9 +2,9 @@ use super::DctDstPlan;
 use crate::domain::contracts::error::DctDstError;
 use crate::domain::metadata::kind::RealTransformKind;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::{Array2, Array3};
 use approx::assert_abs_diff_eq;
 use leto::{SliceArg, Storage};
+use ndarray::{Array2, Array3};
 
 #[test]
 fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
@@ -130,8 +130,8 @@ fn leto_2d_forward_matches_ndarray_reference() {
     )
     .expect("ndarray input");
     let expected = plan.forward_2d(&input).expect("ndarray forward");
-    let leto_input = leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect())
-        .expect("leto input");
+    let leto_input =
+        leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect()).expect("leto input");
 
     let actual = plan
         .forward_2d_leto(leto_input.view())
@@ -158,8 +158,7 @@ fn leto_2d_strided_inverse_matches_ndarray_reference() {
         interleaved.push(*value);
         interleaved.push(-999.0);
     }
-    let leto_input =
-        leto::Array2::from_shape_vec([3, 6], interleaved).expect("leto interleaved");
+    let leto_input = leto::Array2::from_shape_vec([3, 6], interleaved).expect("leto interleaved");
     let strided = leto_input
         .view()
         .slice_with::<2>(&[
@@ -179,9 +178,8 @@ fn leto_2d_strided_inverse_matches_ndarray_reference() {
 #[test]
 fn leto_3d_forward_and_inverse_match_ndarray_reference() {
     let plan = DctDstPlan::new(2, RealTransformKind::DctIV).expect("valid plan");
-    let input =
-        Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
-            .expect("ndarray input");
+    let input = Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+        .expect("ndarray input");
     let expected_forward = plan.forward_3d(&input).expect("ndarray forward");
     let expected_inverse = plan.inverse_3d(&expected_forward).expect("ndarray inverse");
     let leto_input = leto::Array3::from_shape_vec([2, 2, 2], input.iter().copied().collect())

@@ -389,7 +389,7 @@ impl QftStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(QftError::PrecisionMismatch)
@@ -426,20 +426,7 @@ pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
 }
 
 fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    if let Some(slice) = view.as_slice() {
-        return Cow::Borrowed(slice);
-    }
-
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(
-            *view
-                .get([index])
-                .expect("Leto view shape and storage bounds must be valid"),
-        );
-    }
-    Cow::Owned(values)
+    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 /// Convenience wrapper for forward QFT.

@@ -1,8 +1,8 @@
+use super::helpers::{dwt_coefficients_to_leto, leto_view1_cow};
+use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::infrastructure::kernel::discrete::analysis_stage_into;
-use super::{DwtLetoCoefficients, DwtPlan};
-use super::helpers::{dwt_coefficients_to_leto, leto_view1_cow};
 
 impl DwtPlan {
     /// Execute a multilevel forward DWT.

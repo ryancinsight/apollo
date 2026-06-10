@@ -187,7 +187,7 @@ fn validate_lengths(plan: &FrftPlan, input: usize, output: usize) -> Result<(), 
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FrftError> {
-    if actual.storage == expected.storage && actual.compute == expected.compute {
+    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
         Err(FrftError::PrecisionMismatch)

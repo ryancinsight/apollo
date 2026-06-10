@@ -1,3 +1,8 @@
+use super::helpers::{
+    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_ndarray,
+    leto_array3_from_ndarray, leto_view1_cow,
+};
+use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
 use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
@@ -5,11 +10,6 @@ use crate::infrastructure::kernel::fast::{
     dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
 };
 use ndarray::{Array2, Array3};
-use super::DctDstPlan;
-use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice,
-    leto_array2_from_ndarray, leto_array3_from_ndarray, leto_view1_cow,
-};
 
 impl DctDstPlan {
     /// Compute the inverse of the given forward transform.
@@ -243,8 +243,8 @@ impl DctDstPlan {
 
         // Scale factor derived from the self-inverse identity of each transform kind:
         //   DCT-II/III, DST-II/III, DCT-IV, DST-IV: paired/self-inverse scale = 2/N
-//   DCT-I: C₁·C₁ = 2(N−1)·I  →  scale = 1/(2(N−1))
-//   DST-I: S₁·S₁ = 2(N+1)·I  →  scale = 1/(2(N+1))
+        //   DCT-I: C₁·C₁ = 2(N−1)·I  →  scale = 1/(2(N−1))
+        //   DST-I: S₁·S₁ = 2(N+1)·I  →  scale = 1/(2(N+1))
         let scale = match self.kind() {
             RealTransformKind::DctI => 1.0 / (2.0 * (n - 1) as f64),
             RealTransformKind::DstI => 1.0 / (2.0 * (n + 1) as f64),

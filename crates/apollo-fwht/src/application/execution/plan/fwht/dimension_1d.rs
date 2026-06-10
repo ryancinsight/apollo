@@ -345,20 +345,7 @@ impl FwhtPlan {
 }
 
 fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    if let Some(slice) = view.as_slice() {
-        return Cow::Borrowed(slice);
-    }
-
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(
-            *view
-                .get([index])
-                .expect("Leto view shape and storage bounds must be valid"),
-        );
-    }
-    Cow::Owned(values)
+    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 #[cfg(test)]

@@ -63,7 +63,7 @@ impl StftWgpuBackend {
         plan: &StftWgpuPlan,
         signal: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let output = self.execute_forward(plan, &signal)?;
         leto_array1_from_slice(&output)
     }
@@ -125,7 +125,7 @@ impl StftWgpuBackend {
         output_precision: PrecisionProfile,
         signal: leto::ArrayView1<'_, I>,
     ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        let signal = leto_view1_cow(signal);
         let output_len = forward_output_len(plan, signal.len())?;
         let mut output = vec![O::from_complex64(num_complex::Complex64::new(0.0, 0.0)); output_len];
         self.execute_forward_typed_into(

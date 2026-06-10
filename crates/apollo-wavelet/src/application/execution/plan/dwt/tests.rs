@@ -183,8 +183,7 @@ fn typed_leto_forward_and_inverse_match_slice_reference() {
     {
         assert_eq!(actual.to_bits(), expected.to_bits());
     }
-    for (actual_detail, expected_detail) in actual.details().iter().zip(expected_details.iter())
-    {
+    for (actual_detail, expected_detail) in actual.details().iter().zip(expected_details.iter()) {
         let actual_detail = actual_detail.view();
         let actual_detail = actual_detail.as_slice().expect("contiguous detail");
         for (actual, expected) in actual_detail.iter().zip(expected_detail) {

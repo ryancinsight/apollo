@@ -81,8 +81,8 @@ impl NufftWgpuBackend {
         positions: leto::ArrayView1<'_, f32>,
         values: leto::ArrayView1<'_, Complex32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let positions = leto_view1_cow(positions)?;
-        let values = leto_view1_cow(values)?;
+        let positions = leto_view1_cow(positions);
+        let values = leto_view1_cow(values);
         let output = self.execute_fast_type1_1d(plan, positions.as_ref(), values.as_ref())?;
         leto_array1_from_slice(output.as_slice().ok_or(NufftWgpuError::InvalidPlan {
             message: "fast type1 1D Leto output must be contiguous",
@@ -97,8 +97,8 @@ impl NufftWgpuBackend {
         positions: leto::ArrayView1<'_, f32>,
         values: leto::ArrayView1<'_, T>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let positions = leto_view1_cow(positions)?;
-        let values = leto_view1_cow(values)?;
+        let positions = leto_view1_cow(positions);
+        let values = leto_view1_cow(values);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.domain().n];
         self.execute_fast_type1_1d_typed_into(
             plan,
@@ -181,7 +181,7 @@ impl NufftWgpuBackend {
         values: leto::ArrayView1<'_, Complex32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 3>> {
         let positions = positions3_from_leto_view(positions)?;
-        let values = leto_view1_cow(values)?;
+        let values = leto_view1_cow(values);
         let output = self.execute_fast_type1_3d(plan, &positions, values.as_ref())?;
         leto_array3_from_ndarray(&output)
     }
@@ -195,7 +195,7 @@ impl NufftWgpuBackend {
         values: leto::ArrayView1<'_, T>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
         let positions = positions3_from_leto_view(positions)?;
-        let values = leto_view1_cow(values)?;
+        let values = leto_view1_cow(values);
         let grid = plan.grid();
         let mut output = Array3::from_elem(
             (grid.nx, grid.ny, grid.nz),

@@ -1,3 +1,8 @@
+use super::helpers::{
+    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_ndarray,
+    leto_array3_from_ndarray, leto_view1_cow,
+};
+use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
 use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
@@ -5,11 +10,6 @@ use crate::infrastructure::kernel::fast::{
     dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
 };
 use ndarray::{Array2, Array3};
-use super::DctDstPlan;
-use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice,
-    leto_array2_from_ndarray, leto_array3_from_ndarray, leto_view1_cow,
-};
 
 impl DctDstPlan {
     /// Execute the forward transform and return allocated coefficients.

@@ -8,12 +8,12 @@ pub mod fast_type1;
 pub mod fast_type2_1d;
 /// Fast Type-2 3D execution pipelines.
 pub mod fast_type2_3d;
+/// Internal helper functions.
+pub(crate) mod helpers;
 /// Direct Type-1 execution pipelines.
 pub mod type1;
 /// Direct Type-2 execution pipelines.
 pub mod type2;
-/// Internal helper functions.
-pub(crate) mod helpers;
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
@@ -26,9 +26,9 @@ pub use buffers::{NufftGridSnapshot, NufftType2GridDiagnostics};
 
 // Re-export helpers to keep imports in submodules simple.
 pub(crate) use helpers::{
-    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d,
-    read_complex_buffer, read_complex_buffer_with_staging, real_to_complex_pods,
-    real_to_complex_pods_scaled, split_grid_buffers, storage_buffer,
+    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d, read_complex_buffer,
+    read_complex_buffer_with_staging, real_to_complex_pods, real_to_complex_pods_scaled,
+    split_grid_buffers, storage_buffer,
 };
 
 #[cfg(any(test, feature = "diagnostics"))]
