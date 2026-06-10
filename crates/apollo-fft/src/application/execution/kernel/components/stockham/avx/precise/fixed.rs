@@ -110,17 +110,16 @@ unsafe fn avx_transpose8_pairs(
 
 #[inline]
 unsafe fn twiddle_len64_const_unchecked<const EXPONENT: usize, const INVERSE: bool>(
-    twiddle_ptr: *const Complex64,
+    _twiddle_ptr: *const Complex64,
 ) -> Complex64 {
     debug_assert!(EXPONENT < 64);
-    match EXPONENT {
-        0 => Complex64::new(1.0, 0.0),
-        1..=31 => *twiddle_ptr.add(31 + EXPONENT),
-        32 => Complex64::new(-1.0, 0.0),
-        _ => {
-            let w = *twiddle_ptr.add(31 + EXPONENT - 32);
-            Complex64::new(-w.re, -w.im)
-        }
+    use crate::application::execution::kernel::mixed_radix::scalar::twiddle_constants::{
+        TWIDDLES_64_FWD, TWIDDLES_64_INV,
+    };
+    if INVERSE {
+        TWIDDLES_64_INV[EXPONENT]
+    } else {
+        TWIDDLES_64_FWD[EXPONENT]
     }
 }
 
@@ -501,17 +500,16 @@ unsafe fn fixed_len64_precise_avx_fma_impl<const INVERSE: bool>(
 
 #[inline]
 unsafe fn twiddle_len32_const_unchecked<const EXPONENT: usize, const INVERSE: bool>(
-    twiddle_ptr: *const Complex64,
+    _twiddle_ptr: *const Complex64,
 ) -> Complex64 {
     debug_assert!(EXPONENT < 32);
-    match EXPONENT {
-        0 => Complex64::new(1.0, 0.0),
-        1..=15 => *twiddle_ptr.add(15 + EXPONENT),
-        16 => Complex64::new(-1.0, 0.0),
-        _ => {
-            let w = *twiddle_ptr.add(15 + EXPONENT - 16);
-            Complex64::new(-w.re, -w.im)
-        }
+    use crate::application::execution::kernel::mixed_radix::scalar::twiddle_constants::{
+        TWIDDLES_32_FWD, TWIDDLES_32_INV,
+    };
+    if INVERSE {
+        TWIDDLES_32_INV[EXPONENT]
+    } else {
+        TWIDDLES_32_FWD[EXPONENT]
     }
 }
 
