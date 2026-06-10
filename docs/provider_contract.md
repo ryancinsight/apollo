@@ -81,6 +81,8 @@ local path overrides for provider work.
 - Public interleaved complex kernels over primitive `[re, im, ...]` lanes so
   Apollo can keep `num-complex` at the domain boundary while reusing Hermes
   monomorphized SIMD logic.
+- Runtime-selected interleaved complex dispatch for `f32` and `f64` so Apollo
+  does not duplicate x86 feature detection or AVX/FMA pointwise kernels.
 
 ## Apollo Requirements for Leto
 

@@ -15,6 +15,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
 - [patch] Updated Hermes Git lockfile revision to `55efd380` and routed `apollo-fft` mixed-radix non-FMA pointwise fallback through Hermes' provider-owned `interleaved_complex_mul_assign` kernel.
+- [patch] Updated Hermes Git lockfile revision to `b7f1a907` and removed Apollo FFT's local mixed-radix pointwise AVX/FMA implementation in favor of Hermes' provider-owned runtime complex dispatch.
 - [patch] `apollo-fft` mixed-radix pointwise fallback now uses Hermes `PreferredArch` vector chunks for precise and reduced complex multiplication, while preserving the existing runtime-gated x86 AVX/FMA hot kernel.
 - [patch] `apollo-fft` f64 Stockham AVX fixed length-32 and length-64 transforms now use full-sized static twiddle tables (`TWIDDLES_32_FWD`/`TWIDDLES_32_INV`/`TWIDDLES_64_FWD`/`TWIDDLES_64_INV`) and const-generic index lookups, completely removing twiddle index branches, negations, and pointer offset math.
 - [minor] `xtask provider-audit` now reports Leto workspace/crate usage and `docs/provider_contract.md` documents Leto requirements plus `ndarray`'s role as validation oracle.

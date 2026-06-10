@@ -1,8 +1,11 @@
 # Apollo Checklist
 ## Hermes provider-owned complex pointwise kernel [patch]
 - [x] Added and pushed Hermes `interleaved_complex_mul_assign<T, A, const CONJ_B: bool>` in commit `55efd380`, with an interleaved primitive lane contract and no `num-complex` dependency.
+- [x] Added and pushed Hermes `interleaved_complex_mul_assign_runtime<T, const CONJ_B: bool>` in commit `b7f1a907`, moving the runtime AVX/FMA complex pointwise hot path into the provider.
 - [x] Updated Apollo `Cargo.lock` to Hermes `55efd380`.
+- [x] Updated Apollo `Cargo.lock` to Hermes `b7f1a907`.
 - [x] Replaced Apollo FFT's local portable Hermes fallback loop with the provider-owned Hermes interleaved complex kernel.
+- [x] Removed Apollo FFT's local x86 AVX/FMA pointwise implementation and feature detection; Apollo now delegates runtime selection to Hermes.
 - [x] Verification: Hermes `cargo test --workspace`; Hermes `cargo test -p hermes-simd-examples --examples`; Hermes `cargo clippy -p hermes-simd --all-targets -- -D warnings`; Hermes `cargo doc -p hermes-simd --no-deps`; Apollo `cargo check -p apollo-fft`; Apollo `cargo clippy -p apollo-fft --all-targets -- -D warnings`; Apollo `cargo test -p apollo-fft --lib rader -- --nocapture`; Apollo `cargo test -p apollo-fft --test slice_api -- --nocapture`; Apollo `cargo doc -p apollo-fft --no-deps`; Apollo `cargo run -p xtask -- provider-audit`; `rustfmt --check` on the touched Apollo pointwise file.
 - Evidence: type-level monomorphization through Hermes architecture ZSTs, value-semantic complex/Rader/slice tests, and static provider-audit coverage. No benchmark claim is made for this increment.
 - Residual: full `cargo fmt -p apollo-fft -- --check` reports pre-existing unrelated formatting drift in Winograd and precision-bridge files.
