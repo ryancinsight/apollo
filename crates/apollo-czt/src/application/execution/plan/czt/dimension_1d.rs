@@ -6,9 +6,10 @@ use crate::application::execution::kernel::bluestein::{
 use crate::application::execution::kernel::direct::czt_direct_forward;
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, FftPlan1D, PrecisionProfile, Shape1D};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
-use mnemosyne::scratch::ScratchPool;
+use std::borrow::Cow;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -169,6 +170,20 @@ impl CztPlan {
         Ok(output)
     }
 
+    /// Forward CZT over a Leto complex view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical
+    /// order before entering the canonical contiguous slice kernel.
+    pub fn forward_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.output_len()];
+        self.forward_complex64_slice_into(&signal, &mut output)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// Forward CZT into caller-owned output storage.
     pub fn forward_into(
         &self,
@@ -226,6 +241,18 @@ impl CztPlan {
         T::forward_into(self, input, output, profile)
     }
 
+    /// Forward CZT over a typed Leto complex-storage view.
+    pub fn forward_leto_typed<T: CztStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.output_len()];
+        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// In-place forward CZT.
     pub fn forward_inplace(&self, data: &mut Array1<Complex64>) -> Result<(), CztError> {
         let transformed = self.forward(data)?;
@@ -269,6 +296,20 @@ impl CztPlan {
         Ok(output)
     }
 
+    /// Inverse CZT over a Leto complex spectrum view.
+    ///
+    /// Inversion is available only for square plans (`M == N`), matching the
+    /// existing ndarray inverse contract.
+    pub fn inverse_leto(
+        &self,
+        spectrum: leto::ArrayView1<'_, Complex64>,
+    ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
+        let spectrum = leto_view1_cow(&spectrum);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.input_len()];
+        self.inverse_complex64_slice_into(&spectrum, &mut output)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// Inverse CZT over contiguous Complex64 slices.
     pub(crate) fn inverse_complex64_slice_into(
         &self,
@@ -299,6 +340,18 @@ impl CztPlan {
     ) -> Result<(), CztError> {
         T::inverse_into(self, spectrum, output, profile)
     }
+
+    /// Inverse CZT over a typed Leto complex-storage spectrum view.
+    pub fn inverse_leto_typed<T: CztStorage>(
+        &self,
+        spectrum: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
+        let spectrum = leto_view1_cow(&spectrum);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.input_len()];
+        T::inverse_slice_into(self, &spectrum, &mut output, profile)?;
+        Ok(leto_array1_from_slice(&output))
+    }
 }
 
 /// Complex storage accepted by typed CZT paths.
@@ -317,6 +370,25 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
         plan: &CztPlan,
         input: &Array1<Self>,
         output: &mut Array1<Self>,
+        profile: PrecisionProfile,
+    ) -> Result<(), CztError> {
+        Self::forward_slice_into(
+            plan,
+            input
+                .as_slice()
+                .expect("CZT typed input must be contiguous"),
+            output
+                .as_slice_mut()
+                .expect("CZT typed output must be contiguous"),
+            profile,
+        )
+    }
+
+    /// Execute forward transform into caller-owned contiguous storage.
+    fn forward_slice_into(
+        plan: &CztPlan,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
         validate_profile(profile, Self::PROFILE)?;
@@ -340,6 +412,25 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
         plan: &CztPlan,
         spectrum: &Array1<Self>,
         output: &mut Array1<Self>,
+        profile: PrecisionProfile,
+    ) -> Result<(), CztError> {
+        Self::inverse_slice_into(
+            plan,
+            spectrum
+                .as_slice()
+                .expect("CZT typed spectrum must be contiguous"),
+            output
+                .as_slice_mut()
+                .expect("CZT typed inverse output must be contiguous"),
+            profile,
+        )
+    }
+
+    /// Execute inverse transform into caller-owned contiguous storage.
+    fn inverse_slice_into(
+        plan: &CztPlan,
+        spectrum: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
         validate_profile(profile, Self::PROFILE)?;
@@ -384,6 +475,16 @@ impl CztStorage for Complex64 {
         plan.forward_into(input, output)
     }
 
+    fn forward_slice_into(
+        plan: &CztPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), CztError> {
+        validate_profile(profile, Self::PROFILE)?;
+        plan.forward_complex64_slice_into(input, output)
+    }
+
     fn inverse_into(
         plan: &CztPlan,
         spectrum: &Array1<Self>,
@@ -402,6 +503,16 @@ impl CztStorage for Complex64 {
                 .as_slice_mut()
                 .expect("CZT inverse output must be contiguous"),
         )
+    }
+
+    fn inverse_slice_into(
+        plan: &CztPlan,
+        spectrum: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), CztError> {
+        validate_profile(profile, Self::PROFILE)?;
+        plan.inverse_complex64_slice_into(spectrum, output)
     }
 }
 
@@ -447,25 +558,42 @@ fn with_complex64_workspaces<R>(
 ) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
         in_pool.with_scratch(input_len, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-                out_pool.with_scratch(output_len, |output64| {
-                    f(input64, output64)
-                })
-            })
+            TYPED_OUTPUT64_SCRATCH
+                .with(|out_pool| out_pool.with_scratch(output_len, |output64| f(input64, output64)))
         })
     })
+}
+
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    match view.as_slice() {
+        Some(slice) => Cow::Borrowed(slice),
+        None => Cow::Owned(
+            (0..view.shape()[0])
+                .map(|index| {
+                    *view
+                        .get([index])
+                        .expect("Leto CZT view index must be valid after shape validation")
+                })
+                .collect(),
+        ),
+    }
+}
+
+fn leto_array1_from_slice<T: Copy>(output: &[T]) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([output.len()], output)
+        .expect("CZT output length must match Leto output shape")
 }
 
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
-        TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-            (
-                in_pool.capacity(),
-                out_pool.capacity(),
-            )
-        })
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| (in_pool.capacity(), out_pool.capacity()))
     })
+}
+
+#[cfg(test)]
+mod leto_tests {
+    include!("dimension_1d/leto_tests.rs");
 }
 
 #[cfg(test)]

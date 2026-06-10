@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## CZT Leto public 1D boundary [minor]
+- Performed: bumped `apollo-czt` to `0.3.0`; added the workspace Leto dependency; added `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
+- Architecture effect: CZT Complex64 and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
+- Implementation effect: `CztStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Verification: `cargo check -p apollo-czt`; `cargo test -p apollo-czt leto -- --nocapture`; `cargo test -p apollo-czt -- --nocapture`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-czt --examples`.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray CZT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, inverse `Complex64`, and transport helper output. Existing CZT property tests also remained green. No runtime benchmark claim is made.
+- Residuals: CZT WGPU and some internal kernels still expose ndarray arrays where validation and compatibility surfaces already exist; broader Apollo ndarray replacement remains per-crate work.
+
 ## DHT Leto multidimensional boundary [minor]
 - Performed: bumped `apollo-dht` to `0.2.0`; added the workspace Leto dependency; added `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto`, returning `leto::Array<f64, leto::MnemosyneStorage<f64>, 2/3>`.
 - Architecture effect: DHT 2D/3D callers can now use Leto as the array/layout boundary while ndarray remains the validation and compatibility oracle.

@@ -1,4 +1,12 @@
 # Apollo Checklist
+## CZT Leto public 1D boundary [minor]
+- [x] Bumped `apollo-czt` to `0.3.0` and added the workspace Leto provider dependency.
+- [x] Added `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Refactored `CztStorage` through canonical `forward_slice_into` and `inverse_slice_into` hooks so ndarray arrays and Leto views share one typed execution contract.
+- [x] Added value tests proving contiguous Complex64 Leto parity, strided Complex64 Leto parity, typed Complex32 Leto parity, inverse Leto parity, and transport-helper parity against the existing ndarray API.
+- [x] Verification: `cargo check -p apollo-czt`; `cargo test -p apollo-czt leto -- --nocapture`; `cargo test -p apollo-czt -- --nocapture`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-czt --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against the existing ndarray CZT API. No runtime benchmark claim is made.
+
 ## DHT Leto multidimensional boundary [minor]
 - [x] Bumped `apollo-dht` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto`, returning Mnemosyne-backed Leto arrays.
