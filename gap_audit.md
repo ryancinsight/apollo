@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## FRFT direct Hermes complex dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-frft`; routed threshold-sized direct fractional and centered-DFT row reductions through Hermes provider-owned interleaved complex dot products with phasor weight lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: standard FRFT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized direct transforms materialize one interleaved input lane buffer, then reuse thread-local phasor weight-lane scratch per worker row; small direct transforms retain allocation-free scalar accumulation and exact integer-order identity/reversal paths.
+- Implementation effect: `fractional_row` and `centered_dft_row` remain scalar formula references for small paths and tests, while the Hermes helpers own the provider reduction boundary and phasor lane materialization.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-frft`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic FrFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: standard FRFT still materializes interleaved input lanes because the current Hermes complex dot API consumes primitive interleaved lanes; unitary Grünbaum projection/reconstruction still use local complex reductions through Moirai rather than Hermes.
+
 ## CZT direct Hermes complex dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-czt`; routed threshold-sized direct CZT row reductions through Hermes provider-owned interleaved complex dot products with geometric weight lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: CZT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.

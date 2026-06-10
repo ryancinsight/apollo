@@ -1,4 +1,14 @@
 # Apollo Checklist
+## FRFT direct Hermes complex dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-frft`.
+- [x] Routed threshold-sized direct fractional and centered-DFT FrFT row reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Materialized one shared interleaved input lane buffer per threshold-sized direct transform and reused Mnemosyne thread-local scratch for per-row phasor weight lanes.
+- [x] Kept scalar direct fractional and centered-DFT row accumulation for smaller transforms and as the value-semantic formula reference.
+- [x] Preserved existing Moirai disjoint output-row scheduling and exact integer-order identity/reversal paths.
+- [x] Added direct threshold-path tests for Hermes fractional-row parity, Hermes centered-DFT row parity, and phasor weight-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-frft`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic FrFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## CZT direct Hermes complex dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-czt`.
 - [x] Routed threshold-sized direct CZT row reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
