@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-sdft` direct-bin initialization and sliding recurrence updates now use Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for small windows and bin counts.
 - [patch] `apollo-gft` forward and inverse graph-basis row execution now uses Moirai `ParallelSliceMut` above a bounded O(N²) work threshold, with serial execution retained for small graphs.
 - [patch] `apollo-frft` direct and unitary O(N²) CPU row execution now uses Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for small vectors and exact integer-order special cases unchanged.
 - [patch] `apollo-qft` dense forward/inverse row execution now uses Moirai `ParallelSliceMut` above a bounded O(N²) work threshold, with serial execution retained for small state vectors.

@@ -1,4 +1,12 @@
 # Apollo Checklist
+## SDFT direct/update Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-sdft`.
+- [x] Routed direct DFT bin writes through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller windows.
+- [x] Routed sliding recurrence bin updates through `moirai::ParallelSliceMut` above `UPDATE_PAR_BIN_THRESHOLD`, with serial execution retained for smaller bin counts.
+- [x] Added threshold-path value tests for direct-bin formulas and recurrence updates.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-sdft`; `cargo test -p apollo-sdft`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic SDFT unit/property tests plus direct threshold-path formula tests. No runtime benchmark claim is made.
+
 ## GFT graph-basis Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-gft`.
 - [x] Routed forward `U^T x` row writes and inverse `U X` row writes through `moirai::ParallelSliceMut` above `GFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller graphs.

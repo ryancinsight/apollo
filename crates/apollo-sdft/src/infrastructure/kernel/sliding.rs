@@ -6,7 +6,14 @@
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
 use crate::domain::contracts::error::{SdftError, SdftResult};
+use moirai::ParallelSliceMut;
 use num_complex::Complex64;
+
+/// Below this O(bin_count * window_len) count, serial loops avoid scheduling overhead.
+const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
+
+/// Below this bin count, serial recurrence updates avoid scheduling overhead.
+const UPDATE_PAR_BIN_THRESHOLD: usize = 16_384;
 
 /// Build update twiddle factors for SDFT bins.
 #[must_use]
@@ -39,16 +46,28 @@ pub fn direct_bins_into(window: &[f64], bins: &mut [Complex64]) -> SdftResult<()
     if bins.len() > n {
         return Err(SdftError::BinCountExceedsWindow);
     }
-    for (bin, slot) in bins.iter_mut().enumerate() {
-        *slot = window
-            .iter()
-            .enumerate()
-            .fold(Complex64::new(0.0, 0.0), |acc, (index, &value)| {
-                let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / n as f64;
-                acc + Complex64::new(value, 0.0) * Complex64::new(angle.cos(), angle.sin())
-            });
+    let work_items = bins.len().saturating_mul(n);
+    if work_items >= DIRECT_PAR_OP_THRESHOLD {
+        bins.par_mut().enumerate(|bin, slot| {
+            *slot = direct_bin(window, n, bin);
+        });
+    } else {
+        bins.iter_mut().enumerate().for_each(|(bin, slot)| {
+            *slot = direct_bin(window, n, bin);
+        });
     }
     Ok(())
+}
+
+#[inline]
+fn direct_bin(window: &[f64], n: usize, bin: usize) -> Complex64 {
+    window
+        .iter()
+        .enumerate()
+        .fold(Complex64::new(0.0, 0.0), |acc, (index, &value)| {
+            let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / n as f64;
+            acc + Complex64::new(value, 0.0) * Complex64::new(angle.cos(), angle.sin())
+        })
 }
 
 /// Apply one O(bin_count) sliding DFT update.
@@ -67,7 +86,62 @@ pub fn direct_bins_into(window: &[f64], bins: &mut [Complex64]) -> SdftResult<()
 /// by exp(-2pi i k / N) in frequency, and the recurrence advances the phase forward.
 pub fn update_bins(bins: &mut [Complex64], twiddles: &[Complex64], outgoing: f64, incoming: f64) {
     let delta = Complex64::new(incoming - outgoing, 0.0);
-    for (bin, twiddle) in bins.iter_mut().zip(twiddles.iter()) {
-        *bin = (*bin + delta) * *twiddle;
+    if bins.len() >= UPDATE_PAR_BIN_THRESHOLD && twiddles.len() >= bins.len() {
+        bins.par_mut().enumerate(|index, bin| {
+            *bin = update_bin(*bin, twiddles[index], delta);
+        });
+    } else {
+        bins.iter_mut()
+            .zip(twiddles.iter())
+            .for_each(|(bin, twiddle)| {
+                *bin = update_bin(*bin, *twiddle, delta);
+            });
+    }
+}
+
+#[inline]
+fn update_bin(bin: Complex64, twiddle: Complex64, delta: Complex64) -> Complex64 {
+    (bin + delta) * twiddle
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn moirai_parallel_direct_bins_match_serial_formula_at_threshold() {
+        let window_len = 128;
+        let bin_count = DIRECT_PAR_OP_THRESHOLD / window_len;
+        let window = (0..window_len)
+            .map(|index| (index as f64 * 0.125).sin() - (index as f64 * 0.03125).cos())
+            .collect::<Vec<_>>();
+        let mut actual = vec![Complex64::new(0.0, 0.0); bin_count];
+
+        direct_bins_into(&window, &mut actual).expect("parallel direct bins");
+
+        for (bin, actual) in actual.iter().enumerate() {
+            let expected = direct_bin(&window, window_len, bin);
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_update_bins_match_recurrence_formula_at_threshold() {
+        let mut bins = (0..UPDATE_PAR_BIN_THRESHOLD)
+            .map(|index| Complex64::new(index as f64 * 0.25, -(index as f64) * 0.125))
+            .collect::<Vec<_>>();
+        let before = bins.clone();
+        let twiddles = update_twiddles(UPDATE_PAR_BIN_THRESHOLD, UPDATE_PAR_BIN_THRESHOLD);
+        let delta = Complex64::new(1.25 - -0.5, 0.0);
+
+        update_bins(&mut bins, &twiddles, -0.5, 1.25);
+
+        for (index, actual) in bins.iter().enumerate() {
+            let expected = update_bin(before[index], twiddles[index], delta);
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
     }
 }

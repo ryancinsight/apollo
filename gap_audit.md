@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SDFT direct/update Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-sdft`; routed direct DFT bin writes through `ParallelSliceMut` above a bounded O(bin_count * window_len) work threshold; routed sliding recurrence bin updates through `ParallelSliceMut` above a bounded bin-count threshold.
+- Architecture effect: SDFT slice, Leto, typed, and state-initialization paths now share Moirai-backed direct-bin and update kernels instead of adding provider logic to public wrappers.
+- Memory effect: caller-owned bin buffers are filled in place by disjoint mutable writes; the existing Mnemosyne typed scratch pools remain the typed conversion boundary; small workloads remain serial to avoid scheduling overhead.
+- Implementation effect: direct-bin and recurrence formulas are factored into shared helpers used by serial and Moirai paths, preserving the sliding DFT recurrence contract.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-sdft`; `cargo test -p apollo-sdft`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic SDFT unit/property tests plus direct threshold-path formula tests for direct-bin and recurrence execution. No runtime benchmark claim is made.
+- Residuals: typed storage conversion loops in `SdftRealStorage`/`SdftBinStorage` still use serial scratch copies; Hermes is still absent from `apollo-sdft`.
+
 ## GFT graph-basis Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-gft`; routed forward `U^T x` and inverse `U X` output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold.
 - Architecture effect: GFT ndarray and typed paths now share Moirai-backed graph-basis slice execution while Leto remains the adjacency/eigensolver storage boundary.
