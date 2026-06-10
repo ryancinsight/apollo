@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-frft-wgpu` `0.2.0` adds Leto standard forward/inverse, unitary forward/inverse, and typed forward/inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-ntt-wgpu` `0.2.0` adds Leto `u64` forward/inverse and exact `u32` quantized forward/inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-mellin-wgpu` `0.3.0` adds Leto forward, typed forward, and inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-hilbert-wgpu` `0.2.0` adds Leto analytic-signal, forward, typed forward, inverse, and typed inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
@@ -76,6 +77,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] : added LOG2=6 (n=64) fast path in  calling  instead of falling through to generic Stockham with scratch allocation.
 - [patch] : collapsed duplicate coprime factors path in  and removed dead LOG2=5 ZST constructions and redundant n==90/n==198 special cases.
 ### Performance/Memory
+- [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark`, refreshing the canonical quick-profile benchmark table after the FRFT-WGPU Leto host-boundary increment.
 - [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 68 rows, f32 faster on 44 rows, and both faster on 19 rows.
 - [patch] Refreshed selected measured rows in `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`; the full table remains populated and only the requested rows received new quick-profile measurements.
 - [minor] `apollo-fft` public 1D slice wrappers now route through storage-specific owned slice methods and cached in-place `FftPlan1D` execution. Concrete `f64`, `f32`, and `f16` paths allocate one owned output/scratch vector instead of cloning into `Array1` and copying the result back into a second `Vec`. `apollo-fft` version bumped to `0.13.0`; `cargo semver-checks` could not analyze the crate because it is not published in the registry.

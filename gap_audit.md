@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## FRFT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-frft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for standard forward/inverse FrFT, unitary forward/inverse DFrFT, and typed forward/inverse execution.
+- Architecture effect: FRFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-frft-wgpu`; `cargo test -p apollo-frft-wgpu leto -- --nocapture`; `cargo test -p apollo-frft-wgpu -- --nocapture`; `cargo clippy -p apollo-frft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-frft-wgpu --no-deps`; `cargo semver-checks -p apollo-frft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo run -p xtask -- benchmark`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing FRFT-WGPU slice APIs for standard, strided, typed, and unitary paths. Benchmark evidence is empirical Criterion quick-profile measurement only; no runtime speedup claim is made for this boundary.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; FRFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## NTT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-ntt-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for `u64` forward/inverse NTT and exact `u32` quantized forward/inverse execution.
 - Architecture effect: NTT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
