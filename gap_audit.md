@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Mellin Leto resample and spectrum boundary [minor]
+- Performed: bumped `apollo-mellin` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for resampling, typed resampling, moments, typed moments, forward spectra, typed forward spectra, inverse spectra, and inverse from Leto spectrum views.
+- Architecture effect: Mellin callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided Leto views copy once into logical order; generated resample, spectrum, and inverse outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing Mellin slice resample/moment/spectrum/inverse contracts and retain Moirai-backed spectrum computation in the kernel layer.
+- Verification: `cargo check -p apollo-mellin`; `cargo test -p apollo-mellin leto -- --nocapture`; `cargo test -p apollo-mellin -- --nocapture`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-mellin --examples`.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Mellin slice APIs for contiguous resampling, strided resampling, typed resampling, moment/spectrum computation, and inverse spectrum recovery. Existing analytical moment and inverse tests remained green. No runtime benchmark claim is made.
+- Residuals: Mellin WGPU still has no Leto boundary; broader provider migration remains per-crate work.
+
 ## SDFT Leto direct-bin boundary [minor]
 - Performed: bumped `apollo-sdft` to `0.2.0`; added the workspace Leto dependency; added `SdftPlan::direct_bins_leto`, `SdftPlan::direct_bins_leto_typed`, and `SdftPlan::state_from_window_leto`.
 - Architecture effect: SDFT direct-bin and state-initialization callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.

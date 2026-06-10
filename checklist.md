@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Mellin Leto resample and spectrum boundary [minor]
+- [x] Bumped `apollo-mellin` to `0.3.0` and added the workspace Leto provider dependency.
+- [x] Added `MellinPlan::forward_resample_leto`, `MellinPlan::forward_resample_leto_typed`, `MellinPlan::moment_leto`, `MellinPlan::moment_leto_typed`, `MellinPlan::forward_spectrum_leto`, `MellinPlan::forward_spectrum_leto_typed`, `MellinPlan::inverse_spectrum_leto`, and `MellinPlan::inverse_spectrum_from_leto`.
+- [x] Reused the existing slice Mellin resample/moment/spectrum/inverse contracts; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical order.
+- [x] Added value tests proving contiguous resample parity, strided resample parity, typed `f32` resample parity, moment/spectrum parity, and inverse-spectrum parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-mellin`; `cargo test -p apollo-mellin leto -- --nocapture`; `cargo test -p apollo-mellin -- --nocapture`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-mellin --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing Mellin slice and typed slice APIs. Existing analytical moment and inverse tests remained green. No runtime benchmark claim is made.
+
 ## SDFT Leto direct-bin boundary [minor]
 - [x] Bumped `apollo-sdft` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `SdftPlan::direct_bins_leto`, `SdftPlan::direct_bins_leto_typed`, and `SdftPlan::state_from_window_leto`, returning Mnemosyne-backed Leto arrays where output storage is produced.

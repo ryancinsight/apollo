@@ -7,6 +7,7 @@ use crate::infrastructure::kernel::resample::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use num_complex::Complex64;
+use std::borrow::Cow;
 
 /// Dense Mellin log-frequency spectrum.
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +84,22 @@ impl MellinPlan {
         Ok(())
     }
 
+    /// Resample a Leto 1D view onto this plan's logarithmic scale grid.
+    ///
+    /// C-contiguous views borrow directly; strided views copy once into
+    /// logical order before reusing the canonical slice resampling path.
+    pub fn forward_resample_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+        signal_min: f64,
+        signal_max: f64,
+    ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let mut output = vec![0.0; self.config.samples()];
+        self.forward_resample(&signal, signal_min, signal_max, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Resample typed input onto the logarithmic scale grid into caller-owned storage.
     ///
     /// The owner implementation remains the `f64` log-resampling kernel.
@@ -97,6 +114,20 @@ impl MellinPlan {
         profile: PrecisionProfile,
     ) -> MellinResult<()> {
         T::forward_resample_into(self, signal, signal_min, signal_max, output, profile)
+    }
+
+    /// Resample typed Leto input onto this plan's logarithmic scale grid.
+    pub fn forward_resample_leto_typed<T: MellinStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        signal_min: f64,
+        signal_max: f64,
+        profile: PrecisionProfile,
+    ) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let mut output = vec![T::from_f64(0.0); self.config.samples()];
+        self.forward_resample_typed_into(&signal, signal_min, signal_max, &mut output, profile)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Evaluate the real Mellin moment `M(s) = int f(r) r^(s-1) dr`.
@@ -114,6 +145,18 @@ impl MellinPlan {
         Ok(mellin_moment(signal, signal_min, signal_max, exponent))
     }
 
+    /// Evaluate a real Mellin moment from a Leto 1D view.
+    pub fn moment_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+        signal_min: f64,
+        signal_max: f64,
+        exponent: f64,
+    ) -> MellinResult<f64> {
+        let signal = leto_view1_cow(signal)?;
+        self.moment(&signal, signal_min, signal_max, exponent)
+    }
+
     /// Evaluate the real Mellin moment for typed input storage.
     pub fn moment_typed<T: MellinStorage>(
         &self,
@@ -124,6 +167,19 @@ impl MellinPlan {
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
         T::moment(self, signal, signal_min, signal_max, exponent, profile)
+    }
+
+    /// Evaluate a real Mellin moment from typed Leto input storage.
+    pub fn moment_leto_typed<T: MellinStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        signal_min: f64,
+        signal_max: f64,
+        exponent: f64,
+        profile: PrecisionProfile,
+    ) -> MellinResult<f64> {
+        let signal = leto_view1_cow(signal)?;
+        self.moment_typed(&signal, signal_min, signal_max, exponent, profile)
     }
 
     /// Compute the direct log-frequency Mellin spectrum over this plan's scale grid.
@@ -142,6 +198,18 @@ impl MellinPlan {
         )))
     }
 
+    /// Compute the direct log-frequency Mellin spectrum from a Leto 1D view.
+    pub fn forward_spectrum_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+        signal_min: f64,
+        signal_max: f64,
+    ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let spectrum = self.forward_spectrum(&signal, signal_min, signal_max)?;
+        leto_array1_from_slice(spectrum.values())
+    }
+
     /// Compute the direct log-frequency Mellin spectrum for typed input storage.
     pub fn forward_spectrum_typed<T: MellinStorage>(
         &self,
@@ -151,6 +219,19 @@ impl MellinPlan {
         profile: PrecisionProfile,
     ) -> MellinResult<MellinSpectrum> {
         T::forward_spectrum(self, signal, signal_min, signal_max, profile)
+    }
+
+    /// Compute the direct log-frequency Mellin spectrum from typed Leto input storage.
+    pub fn forward_spectrum_leto_typed<T: MellinStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        signal_min: f64,
+        signal_max: f64,
+        profile: PrecisionProfile,
+    ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let spectrum = self.forward_spectrum_typed(&signal, signal_min, signal_max, profile)?;
+        leto_array1_from_slice(spectrum.values())
     }
 
     /// Recover the time-domain signal from a log-frequency Mellin spectrum.
@@ -213,6 +294,36 @@ impl MellinPlan {
         );
 
         Ok(())
+    }
+
+    /// Recover an output signal from a Mellin spectrum into a Mnemosyne-backed Leto array.
+    pub fn inverse_spectrum_leto(
+        &self,
+        spectrum: &MellinSpectrum,
+        output_min: f64,
+        output_max: f64,
+        output_len: usize,
+    ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let mut output = vec![0.0; output_len];
+        self.inverse_spectrum(spectrum, output_min, output_max, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
+    /// Recover an output signal from a Leto spectrum view.
+    pub fn inverse_spectrum_from_leto(
+        &self,
+        spectrum: leto::ArrayView1<'_, Complex64>,
+        output_min: f64,
+        output_max: f64,
+        output_len: usize,
+    ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let spectrum = leto_view1_cow(spectrum)?;
+        self.inverse_spectrum_leto(
+            &MellinSpectrum::new(spectrum.into_owned()),
+            output_min,
+            output_max,
+            output_len,
+        )
     }
 }
 
@@ -396,6 +507,26 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Mel
     }
 }
 
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> MellinResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view.get([index]).map_err(|_| MellinError::LengthMismatch)?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values)
+        .map_err(|_| MellinError::LengthMismatch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -511,5 +642,137 @@ mod tests {
             ),
             Err(MellinError::PrecisionMismatch)
         ));
+    }
+
+    #[test]
+    fn leto_resample_matches_slice_reference() {
+        let plan = MellinPlan::new(5, 1.0, 4.0).expect("plan");
+        let signal = vec![1.0_f64, 1.5, 2.25, 3.0, 4.0];
+        let input = leto::Array1::from_shape_vec([5], signal.clone()).expect("leto input");
+        let mut expected = vec![0.0; 5];
+        plan.forward_resample(&signal, 1.0, 4.0, &mut expected)
+            .expect("slice resample");
+
+        let actual = plan
+            .forward_resample_leto(input.view(), 1.0, 4.0)
+            .expect("leto resample");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_resample_matches_slice_reference() {
+        let plan = MellinPlan::new(5, 1.0, 4.0).expect("plan");
+        let backing = vec![1.0_f64, 99.0, 1.5, 99.0, 2.25, 99.0, 3.0, 99.0, 4.0, 99.0];
+        let input = leto::Array1::from_shape_vec([10], backing).expect("leto input");
+        let strided = input.view().slice(&[(0, 10, 2)]).expect("strided view");
+        let signal = [1.0_f64, 1.5, 2.25, 3.0, 4.0];
+        let mut expected = vec![0.0; 5];
+        plan.forward_resample(&signal, 1.0, 4.0, &mut expected)
+            .expect("slice resample");
+
+        let actual = plan
+            .forward_resample_leto(strided, 1.0, 4.0)
+            .expect("leto resample");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_resample_matches_typed_slice_reference() {
+        let plan = MellinPlan::new(5, 1.0, 4.0).expect("plan");
+        let signal = vec![1.0_f32, 1.5, 2.25, 3.0, 4.0];
+        let input = leto::Array1::from_shape_vec([5], signal.clone()).expect("leto input");
+        let mut expected = vec![0.0_f32; 5];
+        plan.forward_resample_typed_into(
+            &signal,
+            1.0,
+            4.0,
+            &mut expected,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice resample");
+
+        let actual = plan
+            .forward_resample_leto_typed(
+                input.view(),
+                1.0,
+                4.0,
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto resample");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn leto_moment_and_spectrum_match_slice_reference() {
+        let plan = MellinPlan::new(8, 1.0, 4.0).expect("plan");
+        let signal = vec![2.0_f64; 65];
+        let input = leto::Array1::from_shape_vec([65], signal.clone()).expect("leto input");
+        let expected_moment = plan.moment(&signal, 1.0, 4.0, 1.0).expect("moment");
+        let actual_moment = plan
+            .moment_leto(input.view(), 1.0, 4.0, 1.0)
+            .expect("leto moment");
+        assert_abs_diff_eq!(actual_moment, expected_moment, epsilon = 1.0e-12);
+
+        let expected_spectrum = plan.forward_spectrum(&signal, 1.0, 4.0).expect("spectrum");
+        let actual_spectrum = plan
+            .forward_spectrum_leto(input.view(), 1.0, 4.0)
+            .expect("leto spectrum");
+        let actual_spectrum = actual_spectrum.view();
+        let actual_spectrum = actual_spectrum.as_slice().expect("contiguous spectrum");
+
+        for (actual, expected) in actual_spectrum
+            .iter()
+            .zip(expected_spectrum.values().iter())
+        {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_inverse_spectrum_matches_slice_reference() {
+        let plan = MellinPlan::new(8, 1.0, 4.0).expect("plan");
+        let signal = vec![2.0_f64; 65];
+        let spectrum = plan.forward_spectrum(&signal, 1.0, 4.0).expect("spectrum");
+        let mut expected = vec![0.0; 65];
+        plan.inverse_spectrum(&spectrum, 1.0, 4.0, &mut expected)
+            .expect("slice inverse");
+
+        let actual = plan
+            .inverse_spectrum_leto(&spectrum, 1.0, 4.0, 65)
+            .expect("leto inverse");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous inverse");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+
+        let spectrum_array =
+            leto::Array1::from_shape_vec([spectrum.len()], spectrum.values().to_vec())
+                .expect("leto spectrum");
+        let from_leto = plan
+            .inverse_spectrum_from_leto(spectrum_array.view(), 1.0, 4.0, 65)
+            .expect("leto spectrum inverse");
+        let from_leto = from_leto.view();
+        let from_leto = from_leto.as_slice().expect("contiguous inverse");
+        for (actual, expected) in from_leto.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
     }
 }

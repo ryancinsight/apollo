@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-mellin` `0.3.0` adds Leto resample, moment, forward-spectrum, and inverse-spectrum boundaries returning Mnemosyne-backed Leto arrays for generated outputs.
 - [minor] `apollo-sdft` `0.2.0` adds Leto direct-bin and state-initialization boundaries returning Mnemosyne-backed Leto arrays for direct-bin output.
 - [minor] `apollo-sft` `0.2.0` adds Leto sparse forward/inverse boundaries and `SparseLetoSpectrum<T>` for typed Mnemosyne-backed retained values.
 - [minor] `apollo-hilbert` `0.4.0` adds Leto analytic-signal, real quadrature, and typed quadrature boundaries returning Mnemosyne-backed Leto arrays.
