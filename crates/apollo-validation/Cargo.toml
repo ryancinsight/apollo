@@ -32,7 +32,6 @@ apollo-radon = { path = "../apollo-radon" }
 apollo-sft = { path = "../apollo-sft" }
 apollo-sht = { path = "../apollo-sht" }
 apollo-stft = { path = "../apollo-stft" }
-nalgebra = "0.33"
 ndarray = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

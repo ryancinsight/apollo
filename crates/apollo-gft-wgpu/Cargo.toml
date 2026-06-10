@@ -15,7 +15,7 @@ bytemuck = { version = "1.19", features = ["derive"] }
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [dev-dependencies]
-nalgebra = "0.33"
+leto = { workspace = true }
 ndarray = { workspace = true }
 
 [lints]

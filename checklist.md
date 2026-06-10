@@ -1,4 +1,13 @@
 # Apollo Checklist
+## GFT Leto adjacency boundary replacing nalgebra domain storage [major]
+- [x] Pushed Leto commit `646c036` adding structural `Debug`/`Clone` derives for `Array<T, S, N>` and `VecStorage<T>` so Leto arrays can serve as Apollo domain descriptors.
+- [x] Updated Apollo to Leto commit `646c036`.
+- [x] Changed `apollo-gft` `GraphAdjacency` to own `leto::Array2<f64>` instead of `nalgebra::DMatrix<f64>`.
+- [x] Changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>` and build the combinatorial Laplacian in Leto storage before converting to nalgebra only at the `SymmetricEigen` boundary.
+- [x] Updated `apollo-gft-wgpu` verification and Apollo validation GFT fixtures to construct Leto adjacency arrays; removed stale validation and WGPU nalgebra dependencies.
+- [x] Verification: Leto focused check/core tests; Apollo `cargo check` for GFT/GFT-WGPU/validation; `cargo test -p apollo-gft`; `cargo test -p apollo-gft-wgpu`; `cargo test -p apollo-validation gft`; clippy for affected crates; docs for GFT/GFT-WGPU; provider audit.
+- Evidence: type-level domain boundary replacement plus value-semantic GFT roundtrip, eigenspectrum, WGPU parity, and validation fixture tests. Nalgebra remains an infrastructure eigensolver dependency only.
+
 ## Leto-backed FFT boundary with Mnemosyne storage [minor]
 - [x] Updated Apollo to pinned Leto commit `9f639b73`, which carries Mnemosyne-backed Leto constructors validated against `ndarray`.
 - [x] Added `leto` to `apollo-fft` and exposed `fft_1d_leto(_typed)` / `ifft_1d_leto(_typed)` returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.

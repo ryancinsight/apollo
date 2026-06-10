@@ -25,7 +25,7 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use nalgebra::DMatrix;
+use leto::Array2 as LetoArray2;
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 
@@ -41,8 +41,8 @@ use num_complex::Complex64;
 /// numerically deterministic published result.
 /// Reference: Shuman et al. (2013), IEEE Signal Processing Magazine, graph Fourier basis definition.
 pub(crate) fn gft_path_graph_forward_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let adjacency = DMatrix::from_row_slice(2, 2, &[0.0_f64, 1.0, 1.0, 0.0]);
-    let plan = GftPlan::from_adjacency(&adjacency)?;
+    let adjacency = LetoArray2::from_shape_vec([2, 2], vec![0.0_f64, 1.0, 1.0, 0.0])?;
+    let plan = GftPlan::from_adjacency(adjacency.view())?;
     let eigenvalues = plan.eigenvalues().to_vec();
     let expected = [0.0_f64, 2.0];
     Ok(published_real_fixture(
@@ -66,8 +66,8 @@ pub(crate) fn gft_path_graph_forward_fixture() -> SuiteResult<PublishedFixtureRe
 /// ≈ 4.4×10⁻¹⁶; threshold is 1×10⁻¹².
 /// Reference: Sandryhaila and Moura (2013), ICASSP: GFT via Laplacian eigendecomposition.
 pub(crate) fn gft_path_graph_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let adjacency = DMatrix::from_row_slice(2, 2, &[0.0_f64, 1.0, 1.0, 0.0]);
-    let plan = GftPlan::from_adjacency(&adjacency)?;
+    let adjacency = LetoArray2::from_shape_vec([2, 2], vec![0.0_f64, 1.0, 1.0, 0.0])?;
+    let plan = GftPlan::from_adjacency(adjacency.view())?;
     let signal = Array1::from_vec(vec![3.0_f64, -1.0]);
     let spectrum = plan.forward(&signal)?;
     let recovered = plan.inverse(&spectrum)?;

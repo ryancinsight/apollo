@@ -25,7 +25,6 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use nalgebra::DMatrix;
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 

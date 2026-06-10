@@ -1,6 +1,6 @@
 [package]
 name = "apollo-gft"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Graph Fourier transform plans and utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 nalgebra = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"

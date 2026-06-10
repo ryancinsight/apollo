@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## GFT Leto adjacency boundary replacing nalgebra domain storage [major]
+- Performed in Leto: added structural `Debug`/`Clone` derives for `Array<T, S, N>` and `VecStorage<T>` in pushed commit `646c036`, enabling Leto arrays to serve as Apollo domain descriptors without wrapper boilerplate.
+- Performed in Apollo: updated Leto to `646c036`; added Leto to `apollo-gft`; changed `GraphAdjacency` to own `leto::Array2<f64>`; changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>`; built the combinatorial Laplacian as `leto::Array2<f64>` before converting to nalgebra only for `SymmetricEigen`.
+- Downstream updates: `apollo-gft-wgpu` verification and Apollo validation GFT fixtures now construct Leto adjacency arrays. Stale `nalgebra` dependencies were removed from `apollo-gft-wgpu` dev-dependencies and `apollo-validation`.
+- Architecture effect: GFT graph-domain validation and Laplacian construction no longer expose nalgebra as the storage model. Nalgebra is isolated to the current eigensolver adapter; replacing that adapter with a Leto-owned eigensolver remains the next dependency-removal step.
+- Verification: Leto `cargo check -p leto` and `cargo test -p leto --test core_tests`; Apollo `cargo check -p apollo-gft`, `cargo check -p apollo-gft-wgpu`, `cargo check -p apollo-validation`, `cargo test -p apollo-gft`, `cargo test -p apollo-gft-wgpu`, `cargo test -p apollo-validation gft`, `cargo clippy -p apollo-gft -p apollo-gft-wgpu -p apollo-validation --all-targets -- -D warnings`, `cargo doc -p apollo-gft --no-deps`, `cargo doc -p apollo-gft-wgpu --no-deps`, and `cargo run -p xtask -- provider-audit`.
+- Evidence tier: type-level boundary replacement plus value-semantic GFT eigenspectrum, roundtrip, WGPU parity, and published-fixture tests. No runtime benchmark claim is made.
+- Residuals: `apollo-frft` and `apollo-gft` still use nalgebra eigensolvers at infrastructure boundaries. Leto needs a symmetric eigensolver contract before nalgebra can be fully removed from those crates.
+
 ## Leto-backed FFT boundary with Mnemosyne storage [minor]
 - Performed in Leto: pinned Mnemosyne to commit `9411c444` in pushed Leto commit `9f639b73`, keeping Apollo and Leto on one Mnemosyne source identity.
 - Performed in Apollo: updated Leto to commit `9f639b73` with `mnemosyne-alloc`; added `leto` to `apollo-fft`; exposed forward/inverse Leto 1D FFT APIs returning Mnemosyne-backed Leto arrays; removed Apollo's root `ndarray` `matrixmultiply-threading` feature.

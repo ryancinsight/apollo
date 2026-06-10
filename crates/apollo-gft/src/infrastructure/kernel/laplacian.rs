@@ -1,6 +1,7 @@
 //! Combinatorial Laplacian and graph spectral basis construction.
 
 use crate::domain::graph::adjacency::GraphAdjacency;
+use leto::{Array2, Storage};
 use nalgebra::{DMatrix, SymmetricEigen};
 
 /// Laplacian eigensystem stored for application-layer plans.
@@ -14,25 +15,32 @@ pub struct GraphSpectralBasis {
 
 /// Build the combinatorial Laplacian `L = D - A`.
 #[must_use]
-pub fn combinatorial_laplacian(graph: &GraphAdjacency) -> DMatrix<f64> {
+pub fn combinatorial_laplacian(graph: &GraphAdjacency) -> Array2<f64> {
     let adjacency = graph.matrix();
     let n = graph.len();
-    let mut laplacian = DMatrix::<f64>::zeros(n, n);
+    let mut values = vec![0.0; n * n];
     for row in 0..n {
-        let degree: f64 = (0..n).map(|col| adjacency[(row, col)]).sum();
-        laplacian[(row, row)] = degree;
+        let degree: f64 = (0..n)
+            .map(|col| *adjacency.get([row, col]).expect("validated adjacency"))
+            .sum();
+        values[row * n + row] = degree;
         for col in 0..n {
-            laplacian[(row, col)] -= adjacency[(row, col)];
+            values[row * n + col] -= *adjacency.get([row, col]).expect("validated adjacency");
         }
     }
-    laplacian
+    Array2::from_shape_vec([n, n], values).expect("laplacian shape must match storage")
 }
 
 /// Compute the graph Fourier basis from the combinatorial Laplacian.
 #[must_use]
 pub fn spectral_basis(graph: &GraphAdjacency) -> GraphSpectralBasis {
-    let decomposition = SymmetricEigen::new(combinatorial_laplacian(graph));
+    let laplacian = combinatorial_laplacian(graph);
     let n = graph.len();
+    let decomposition = SymmetricEigen::new(DMatrix::from_row_slice(
+        n,
+        n,
+        laplacian.storage().as_slice(),
+    ));
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&lhs, &rhs| {
         decomposition.eigenvalues[lhs]

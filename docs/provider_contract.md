@@ -15,7 +15,7 @@ local path overrides for provider work.
   dependency table with default features disabled and `alloc` enabled.
 - `hermes-simd` is the SIMD provider in the Apollo workspace dependency table
   with default features disabled and `std` enabled.
-- `leto` is the strided-array migration provider in the Apollo workspace
+- `leto` is the strided-array and dense-matrix migration provider in the Apollo workspace
   dependency table with default features disabled and `std` plus
   `ndarray-compat` and `mnemosyne-alloc` enabled.
 - `ndarray` remains the validation oracle and transitional public API substrate.
@@ -107,6 +107,11 @@ local path overrides for provider work.
 - Mnemosyne-backed owned array constructors for Apollo output boundaries. The
   first migrated surface is the `apollo-fft` 1D Leto view API, which returns
   `MnemosyneStorage` and keeps `ndarray` only as the differential oracle.
+- Dense graph/matrix descriptors that can replace `nalgebra::DMatrix` in
+  Apollo domain models. Current migration coverage includes `apollo-gft`
+  adjacency validation and combinatorial Laplacian construction; nalgebra
+  remains only for symmetric eigendecomposition until Leto owns that solver
+  contract.
 
 ## GPU Boundary
 

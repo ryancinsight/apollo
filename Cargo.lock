@@ -253,10 +253,11 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "leto",
  "mnemosyne",
  "nalgebra",
  "ndarray",
@@ -274,7 +275,7 @@ dependencies = [
  "apollo-gft",
  "apollo-wgpu-helpers",
  "bytemuck",
- "nalgebra",
+ "leto",
  "ndarray",
  "wgpu",
 ]
@@ -589,7 +590,6 @@ dependencies = [
  "leto",
  "melinoe",
  "moirai",
- "nalgebra",
  "ndarray",
  "num-complex",
  "rustfft",
@@ -1423,7 +1423,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 [[package]]
 name = "leto"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/leto.git?rev=9f639b738aa0cb26bbbbb4b338f02d823c237f8f#9f639b738aa0cb26bbbbb4b338f02d823c237f8f"
+source = "git+https://github.com/ryancinsight/leto.git?rev=646c036e17bc9c3cc0cb28438ad617e6ee727e44#646c036e17bc9c3cc0cb28438ad617e6ee727e44"
 dependencies = [
  "bytemuck",
  "half",

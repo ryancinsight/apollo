@@ -8,10 +8,10 @@ use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
 use apollo_fft::{f16, PrecisionProfile};
-use nalgebra::DMatrix;
+use leto::ArrayView2;
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use serde::{Deserialize, Serialize};
-use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -28,8 +28,8 @@ pub struct GftPlan {
 
 impl GftPlan {
     /// Create a graph Fourier plan from an undirected weighted adjacency matrix.
-    pub fn from_adjacency(adjacency: &DMatrix<f64>) -> GftResult<Self> {
-        let graph = GraphAdjacency::new(adjacency.clone())?;
+    pub fn from_adjacency(adjacency: ArrayView2<'_, f64>) -> GftResult<Self> {
+        let graph = GraphAdjacency::from_view(adjacency)?;
         Self::from_graph(&graph)
     }
 
@@ -287,11 +287,8 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Gft
 fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
         in_pool.with_scratch(n, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-                out_pool.with_scratch(n, |output64| {
-                    f(input64, output64)
-                })
-            })
+            TYPED_OUTPUT64_SCRATCH
+                .with(|out_pool| out_pool.with_scratch(n, |output64| f(input64, output64)))
         })
     })
 }
@@ -299,12 +296,7 @@ fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R)
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
-        TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-            (
-                in_pool.capacity(),
-                out_pool.capacity(),
-            )
-        })
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| (in_pool.capacity(), out_pool.capacity()))
     })
 }
 
@@ -315,8 +307,9 @@ mod tests {
 
     fn path_three_plan() -> GftPlan {
         let adjacency =
-            DMatrix::from_row_slice(3, 3, &[0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
-        GftPlan::from_adjacency(&adjacency).expect("valid path graph")
+            leto::Array2::from_shape_vec([3, 3], vec![0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0])
+                .expect("valid adjacency shape");
+        GftPlan::from_adjacency(adjacency.view()).expect("valid path graph")
     }
 
     #[test]

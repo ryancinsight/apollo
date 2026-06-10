@@ -50,14 +50,14 @@ mod tests {
     /// Build the 4-node path graph CPU plan and extract basis as f32.
     /// Adjacency: [[0,1,0,0],[1,0,1,0],[0,1,0,1],[0,0,1,0]]
     fn path4_plan_and_basis() -> (apollo_gft::GftPlan, Vec<f32>, Vec<f32>) {
-        let adj = nalgebra::DMatrix::<f64>::from_row_slice(
-            4,
-            4,
-            &[
+        let adj = leto::Array2::from_shape_vec(
+            [4, 4],
+            vec![
                 0.0_f64, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,
             ],
-        );
-        let cpu_plan = apollo_gft::GftPlan::from_adjacency(&adj).expect("path-4 gft plan");
+        )
+        .expect("path-4 adjacency shape");
+        let cpu_plan = apollo_gft::GftPlan::from_adjacency(adj.view()).expect("path-4 gft plan");
         let basis_f32: Vec<f32> = cpu_plan.basis().iter().map(|&v| v as f32).collect();
         let signal_f32 = vec![1.0_f32, -0.5, 2.0, 0.5];
         (cpu_plan, basis_f32, signal_f32)
