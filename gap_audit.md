@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## DHT direct Hermes dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-dht`; routed direct DHT coefficient accumulation through `hermes_simd::dot::<f64>` above a bounded row-length threshold while using Mnemosyne thread-local scratch for Hartley basis rows.
+- Architecture effect: DHT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction in the same kernel boundary without introducing runtime-erased dispatch in Apollo code.
+- Memory effect: Hartley rows reuse thread-local scratch buffers; output remains caller-owned and filled by disjoint mutable writes; small rows keep scalar accumulation to avoid scratch setup overhead.
+- Implementation effect: the direct `cas` formula remains the SSOT through `fill_hartley_row` and scalar `coefficient`; Hermes only replaces the multiply-reduce stage for sufficiently large rows.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-dht`; `cargo test -p apollo-dht`; `cargo clippy -p apollo-dht --all-targets -- -D warnings`; `cargo doc -p apollo-dht --no-deps`; `cargo semver-checks -p apollo-dht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic DHT unit/property tests plus direct threshold-path Hermes coefficient tests. No runtime benchmark claim is made.
+- Residuals: DHT typed storage conversion remains scalar; other non-FFT CPU transform crates still lack Hermes-specific kernels.
+
 ## SFT typed storage Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-sft`; routed generic typed input conversion, retained-value conversion, and inverse output materialization through Moirai above a bounded element threshold.
 - Architecture effect: SFT typed slice and Leto paths now consume Apollo's Moirai provider surface for independent typed storage movement while preserving the dense FFT and deterministic top-K heap selector as the single canonical sparse-selection implementation.

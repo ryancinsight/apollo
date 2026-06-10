@@ -8,6 +8,7 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Discrete Hartley Transform plans for real-to-real Apollo signal analysis"
 
 [dependencies]
+hermes-simd = { workspace = true }
 moirai = { workspace = true }
 mnemosyne = { workspace = true }
 thiserror = "1.0"

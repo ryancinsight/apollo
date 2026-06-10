@@ -1,4 +1,13 @@
 # Apollo Checklist
+## DHT direct Hermes dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-dht`.
+- [x] Routed direct DHT coefficient accumulation through `hermes_simd::dot::<f64>` above `HERMES_DOT_LEN_THRESHOLD`.
+- [x] Materialized Hartley basis rows in Mnemosyne thread-local scratch to avoid per-row heap allocation while preserving the direct `cas` formula.
+- [x] Kept existing Moirai output-row scheduling and scalar accumulation for smaller rows.
+- [x] Added value tests for Hermes coefficient parity, Hartley row materialization, and `PreferredArch` ZST size.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-dht`; `cargo test -p apollo-dht`; `cargo clippy -p apollo-dht --all-targets -- -D warnings`; `cargo doc -p apollo-dht --no-deps`; `cargo semver-checks -p apollo-dht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic DHT unit/property tests plus direct threshold-path Hermes coefficient tests. No runtime benchmark claim is made.
+
 ## SFT typed storage Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-sft`.
 - [x] Routed generic typed input conversion through `moirai::map_collect_index_with::<Adaptive, _, _>` above `STORAGE_PAR_LEN_THRESHOLD`, with serial execution retained for smaller typed inputs.
