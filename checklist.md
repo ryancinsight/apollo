@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Hermes provider-owned complex pointwise kernel [patch]
+- [x] Added and pushed Hermes `interleaved_complex_mul_assign<T, A, const CONJ_B: bool>` in commit `55efd380`, with an interleaved primitive lane contract and no `num-complex` dependency.
+- [x] Updated Apollo `Cargo.lock` to Hermes `55efd380`.
+- [x] Replaced Apollo FFT's local portable Hermes fallback loop with the provider-owned Hermes interleaved complex kernel.
+- [x] Verification: Hermes `cargo test --workspace`; Hermes `cargo test -p hermes-simd-examples --examples`; Hermes `cargo clippy -p hermes-simd --all-targets -- -D warnings`; Hermes `cargo doc -p hermes-simd --no-deps`; Apollo `cargo check -p apollo-fft`; Apollo `cargo clippy -p apollo-fft --all-targets -- -D warnings`; Apollo `cargo test -p apollo-fft --lib rader -- --nocapture`; Apollo `cargo test -p apollo-fft --test slice_api -- --nocapture`; Apollo `cargo doc -p apollo-fft --no-deps`; Apollo `cargo run -p xtask -- provider-audit`; `rustfmt --check` on the touched Apollo pointwise file.
+- Evidence: type-level monomorphization through Hermes architecture ZSTs, value-semantic complex/Rader/slice tests, and static provider-audit coverage. No benchmark claim is made for this increment.
+- Residual: full `cargo fmt -p apollo-fft -- --check` reports pre-existing unrelated formatting drift in Winograd and precision-bridge files.
+
 ## Apollo FFT Hermes pointwise fallback [patch]
 - [x] Added `hermes-simd` as an `apollo-fft` workspace dependency so FFT kernels consume the SIMD provider directly.
 - [x] Routed the mixed-radix pointwise fallback through `Vector<f64, PreferredArch>` and `Vector<f32, PreferredArch>` chunk load/store paths, while preserving the runtime-gated AVX/FMA hot kernel.

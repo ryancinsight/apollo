@@ -78,6 +78,9 @@ local path overrides for provider work.
   compile away through ZSTs, consts, and associated types.
 - Public facade stability for Apollo's `hermes_simd::{PreferredArch, Vector}`
   usage in FWHT and FFT mixed-radix pointwise fallback kernels.
+- Public interleaved complex kernels over primitive `[re, im, ...]` lanes so
+  Apollo can keep `num-complex` at the domain boundary while reusing Hermes
+  monomorphized SIMD logic.
 
 ## Apollo Requirements for Leto
 
