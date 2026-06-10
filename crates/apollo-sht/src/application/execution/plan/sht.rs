@@ -96,6 +96,16 @@ impl ShtPlan {
         self.forward_complex(&complex_samples)
     }
 
+    /// Forward SHT for real-valued Leto sample views on the plan grid.
+    pub fn forward_real_leto(
+        &self,
+        samples: leto::ArrayView2<'_, f64>,
+    ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let coefficients = self.forward_real(&samples)?;
+        leto_array2_from_ndarray(coefficients.values())
+    }
+
     /// Forward SHT for complex-valued samples on the plan grid.
     pub fn forward_complex(
         &self,
@@ -145,12 +155,32 @@ impl ShtPlan {
         Ok(coefficients)
     }
 
+    /// Forward SHT for complex-valued Leto sample views on the plan grid.
+    pub fn forward_complex_leto(
+        &self,
+        samples: leto::ArrayView2<'_, Complex64>,
+    ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let coefficients = self.forward_complex(&samples)?;
+        leto_array2_from_ndarray(coefficients.values())
+    }
+
     /// Inverse SHT evaluating real-valued samples on the plan grid.
     pub fn inverse_real(
         &self,
         coefficients: &SphericalHarmonicCoefficients,
     ) -> ShtResult<Array2<f64>> {
         Ok(self.inverse_complex(coefficients)?.mapv(|value| value.re))
+    }
+
+    /// Inverse SHT from Leto coefficient views into real-valued samples.
+    pub fn inverse_real_leto(
+        &self,
+        coefficients: leto::ArrayView2<'_, Complex64>,
+    ) -> ShtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let coefficients = coefficients_from_leto_view(self, coefficients)?;
+        let samples = self.inverse_real(&coefficients)?;
+        leto_array2_from_ndarray(&samples)
     }
 
     /// Inverse SHT evaluating complex-valued samples on the plan grid.
@@ -197,6 +227,16 @@ impl ShtPlan {
         Ok(samples)
     }
 
+    /// Inverse SHT from Leto coefficient views into complex-valued samples.
+    pub fn inverse_complex_leto(
+        &self,
+        coefficients: leto::ArrayView2<'_, Complex64>,
+    ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let coefficients = coefficients_from_leto_view(self, coefficients)?;
+        let samples = self.inverse_complex(&coefficients)?;
+        leto_array2_from_ndarray(&samples)
+    }
+
     /// Forward real-sample SHT for `f64`, `f32`, or mixed `f16` sample storage.
     pub fn forward_real_typed_into<T: ShtRealStorage, O: ShtComplexStorage>(
         &self,
@@ -208,6 +248,22 @@ impl ShtPlan {
         T::forward_real_into(self, samples, output, sample_profile, coefficient_profile)
     }
 
+    /// Forward real-sample SHT from typed Leto sample storage.
+    pub fn forward_real_leto_typed<T: ShtRealStorage, O: ShtComplexStorage>(
+        &self,
+        samples: leto::ArrayView2<'_, T>,
+        sample_profile: PrecisionProfile,
+        coefficient_profile: PrecisionProfile,
+    ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
+        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let mut output = Array2::<O>::from_elem(
+            self.coefficient_shape(),
+            O::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.forward_real_typed_into(&samples, &mut output, sample_profile, coefficient_profile)?;
+        leto_array2_from_ndarray(&output)
+    }
+
     /// Forward complex-sample SHT for `Complex64`, `Complex32`, or mixed `[f16; 2]`.
     pub fn forward_complex_typed_into<T: ShtComplexStorage, O: ShtComplexStorage>(
         &self,
@@ -217,6 +273,27 @@ impl ShtPlan {
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<()> {
         T::forward_complex_into(self, samples, output, sample_profile, coefficient_profile)
+    }
+
+    /// Forward complex-sample SHT from typed Leto sample storage.
+    pub fn forward_complex_leto_typed<T: ShtComplexStorage, O: ShtComplexStorage>(
+        &self,
+        samples: leto::ArrayView2<'_, T>,
+        sample_profile: PrecisionProfile,
+        coefficient_profile: PrecisionProfile,
+    ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
+        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let mut output = Array2::<O>::from_elem(
+            self.coefficient_shape(),
+            O::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.forward_complex_typed_into(
+            &samples,
+            &mut output,
+            sample_profile,
+            coefficient_profile,
+        )?;
+        leto_array2_from_ndarray(&output)
     }
 
     /// Inverse SHT into complex sample storage.
@@ -236,6 +313,27 @@ impl ShtPlan {
         )
     }
 
+    /// Inverse SHT from typed Leto coefficient storage into complex samples.
+    pub fn inverse_complex_leto_typed<T: ShtComplexStorage, O: ShtComplexStorage>(
+        &self,
+        coefficients: leto::ArrayView2<'_, T>,
+        coefficient_profile: PrecisionProfile,
+        sample_profile: PrecisionProfile,
+    ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
+        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let mut output = Array2::<O>::from_elem(
+            (self.grid.latitudes(), self.grid.longitudes()),
+            O::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.inverse_complex_typed_into(
+            &coefficients,
+            &mut output,
+            coefficient_profile,
+            sample_profile,
+        )?;
+        leto_array2_from_ndarray(&output)
+    }
+
     /// Inverse SHT into real sample storage by taking the synthesized real part.
     pub fn inverse_real_typed_into<T: ShtComplexStorage, O: ShtRealStorage>(
         &self,
@@ -251,6 +349,27 @@ impl ShtPlan {
             coefficient_profile,
             sample_profile,
         )
+    }
+
+    /// Inverse SHT from typed Leto coefficient storage into real samples.
+    pub fn inverse_real_leto_typed<T: ShtComplexStorage, O: ShtRealStorage>(
+        &self,
+        coefficients: leto::ArrayView2<'_, T>,
+        coefficient_profile: PrecisionProfile,
+        sample_profile: PrecisionProfile,
+    ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
+        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let mut output = Array2::<O>::from_elem(
+            (self.grid.latitudes(), self.grid.longitudes()),
+            O::from_f64(0.0),
+        );
+        self.inverse_real_typed_into(
+            &coefficients,
+            &mut output,
+            coefficient_profile,
+            sample_profile,
+        )?;
+        leto_array2_from_ndarray(&output)
     }
 
     fn check_sample_shape(&self, shape: (usize, usize)) -> ShtResult<()> {
@@ -481,6 +600,43 @@ fn write_complex_array<T: ShtComplexStorage>(source: &Array2<Complex64>, target:
     }
 }
 
+fn array2_from_leto_view<T: Copy>(
+    view: leto::ArrayView2<'_, T>,
+    shape_error: ShtError,
+) -> ShtResult<Array2<T>> {
+    let [rows, cols] = view.shape();
+    let mut values = Vec::with_capacity(view.size());
+    for row in 0..rows {
+        for col in 0..cols {
+            values.push(*view.get([row, col]).map_err(|_| shape_error)?);
+        }
+    }
+    Array2::from_shape_vec((rows, cols), values).map_err(|_| shape_error)
+}
+
+fn leto_array2_from_ndarray<T: Copy>(
+    array: &Array2<T>,
+) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+    let (rows, cols) = array.dim();
+    let values = array.iter().copied().collect::<Vec<_>>();
+    leto::Array::from_mnemosyne_slice([rows, cols], &values)
+        .map_err(|_| ShtError::CoefficientShapeMismatch)
+}
+
+fn coefficients_from_leto_view(
+    plan: &ShtPlan,
+    coefficients: leto::ArrayView2<'_, Complex64>,
+) -> ShtResult<SphericalHarmonicCoefficients> {
+    let values = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+    if values.dim() != plan.coefficient_shape() {
+        return Err(ShtError::CoefficientShapeMismatch);
+    }
+    Ok(SphericalHarmonicCoefficients::from_values(
+        plan.grid.max_degree(),
+        values,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,6 +709,189 @@ mod tests {
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual[0].to_f32()) - expected.re).abs() <= re_bound);
             assert!((f64::from(actual[1].to_f32()) - expected.im).abs() <= im_bound);
+        }
+    }
+
+    #[test]
+    fn leto_real_forward_matches_ndarray_reference() {
+        let plan = ShtPlan::new(6, 13, 2).expect("plan");
+        let constant = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
+        let samples = Array2::from_elem(
+            (plan.grid().latitudes(), plan.grid().longitudes()),
+            constant,
+        );
+        let input = leto::Array2::from_shape_vec(
+            [plan.grid().latitudes(), plan.grid().longitudes()],
+            samples.iter().copied().collect(),
+        )
+        .expect("leto samples");
+        let expected = plan.forward_real(&samples).expect("ndarray forward");
+
+        let actual = plan
+            .forward_real_leto(input.view())
+            .expect("leto real forward");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous coefficients");
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_real_forward_matches_ndarray_reference() {
+        let plan = ShtPlan::new(6, 13, 2).expect("plan");
+        let samples = Array2::from_shape_fn(
+            (plan.grid().latitudes(), plan.grid().longitudes()),
+            |(lat, lon)| (lat as f64 * 0.2).sin() + (lon as f64 * 0.1).cos(),
+        );
+        let mut backing = Vec::with_capacity(samples.len() * 2);
+        for value in samples.iter().copied() {
+            backing.push(value);
+            backing.push(99.0);
+        }
+        let input = leto::Array2::from_shape_vec(
+            [plan.grid().latitudes(), plan.grid().longitudes() * 2],
+            backing,
+        )
+        .expect("leto samples");
+        let strided = input
+            .view()
+            .slice(&[
+                (0, plan.grid().latitudes(), 1),
+                (0, plan.grid().longitudes() * 2, 2),
+            ])
+            .expect("strided samples");
+        let expected = plan.forward_real(&samples).expect("ndarray forward");
+
+        let actual = plan.forward_real_leto(strided).expect("leto real forward");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous coefficients");
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_complex_forward_and_inverse_match_ndarray_reference() {
+        let plan = ShtPlan::new(6, 13, 2).expect("plan");
+        let samples = Array2::from_shape_fn(
+            (plan.grid().latitudes(), plan.grid().longitudes()),
+            |(lat, lon)| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
+        );
+        let input = leto::Array2::from_shape_vec(
+            [plan.grid().latitudes(), plan.grid().longitudes()],
+            samples.iter().copied().collect(),
+        )
+        .expect("leto samples");
+        let expected_coefficients = plan.forward_complex(&samples).expect("ndarray forward");
+
+        let actual_coefficients = plan
+            .forward_complex_leto(input.view())
+            .expect("leto complex forward");
+        let actual_coefficients_view = actual_coefficients.view();
+        let actual_coefficients_slice = actual_coefficients_view
+            .as_slice()
+            .expect("contiguous coefficients");
+        for (actual, expected) in actual_coefficients_slice
+            .iter()
+            .zip(expected_coefficients.values().iter())
+        {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+
+        let coefficients = leto::Array2::from_shape_vec(
+            [
+                plan.grid().max_degree() + 1,
+                2 * plan.grid().max_degree() + 1,
+            ],
+            expected_coefficients.values().iter().copied().collect(),
+        )
+        .expect("leto coefficients");
+        let expected_inverse = plan
+            .inverse_complex(&expected_coefficients)
+            .expect("ndarray inverse");
+        let actual_inverse = plan
+            .inverse_complex_leto(coefficients.view())
+            .expect("leto inverse");
+        let actual_inverse_view = actual_inverse.view();
+        let actual_inverse = actual_inverse_view
+            .as_slice()
+            .expect("contiguous inverse samples");
+        for (actual, expected) in actual_inverse.iter().zip(expected_inverse.iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_ndarray_reference() {
+        let plan = ShtPlan::new(6, 13, 2).expect("plan");
+        let samples = Array2::from_shape_fn(
+            (plan.grid().latitudes(), plan.grid().longitudes()),
+            |(lat, lon)| (lat as f32 * 0.2).sin() + (lon as f32 * 0.1).cos(),
+        );
+        let input = leto::Array2::from_shape_vec(
+            [plan.grid().latitudes(), plan.grid().longitudes()],
+            samples.iter().copied().collect(),
+        )
+        .expect("leto samples");
+        let shape = coefficient_shape(&plan);
+        let mut expected_coefficients = Array2::<Complex32>::zeros(shape);
+        plan.forward_real_typed_into(
+            &samples,
+            &mut expected_coefficients,
+            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed ndarray forward");
+
+        let actual_coefficients = plan
+            .forward_real_leto_typed::<f32, Complex32>(
+                input.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto forward");
+        let actual_coefficients_view = actual_coefficients.view();
+        let actual_coefficients_slice = actual_coefficients_view
+            .as_slice()
+            .expect("contiguous coefficients");
+        for (actual, expected) in actual_coefficients_slice
+            .iter()
+            .zip(expected_coefficients.iter())
+        {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
+
+        let coefficients = leto::Array2::from_shape_vec(
+            [shape.0, shape.1],
+            expected_coefficients.iter().copied().collect(),
+        )
+        .expect("leto coefficients");
+        let mut expected_samples =
+            Array2::<f32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
+        plan.inverse_real_typed_into(
+            &expected_coefficients,
+            &mut expected_samples,
+            PrecisionProfile::LOW_PRECISION_F32,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed ndarray inverse");
+        let actual_samples = plan
+            .inverse_real_leto_typed::<Complex32, f32>(
+                coefficients.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto inverse");
+        let actual_samples_view = actual_samples.view();
+        let actual_samples = actual_samples_view.as_slice().expect("contiguous samples");
+        for (actual, expected) in actual_samples.iter().zip(expected_samples.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
         }
     }
 

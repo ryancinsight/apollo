@@ -1,4 +1,12 @@
 # Apollo Checklist
+## SHT Leto 2D sample/coefficient boundary [minor]
+- [x] Bumped `apollo-sht` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `ShtPlan::forward_real_leto`, `ShtPlan::forward_complex_leto`, `ShtPlan::inverse_real_leto`, `ShtPlan::inverse_complex_leto`, and typed Leto variants for real/complex forward and inverse paths, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing ndarray/Moirai SHT kernels; Leto 2D views copy once into logical row-major validation buffers before execution.
+- [x] Added value tests proving real forward parity, strided real forward parity, complex forward/inverse parity, and typed `f32` real forward/inverse parity against existing ndarray APIs.
+- [x] Verification: `cargo check -p apollo-sht`; `cargo test -p apollo-sht leto -- --nocapture`; `cargo test -p apollo-sht -- --nocapture`; `cargo clippy -p apollo-sht --all-targets -- -D warnings`; `cargo doc -p apollo-sht --no-deps`; `cargo semver-checks -p apollo-sht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sht --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing SHT ndarray and typed ndarray APIs. No runtime benchmark claim is made.
+
 ## Wavelet Leto DWT/CWT boundary [minor]
 - [x] Bumped `apollo-wavelet` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `DwtLetoCoefficients<T>`, `DwtPlan::forward_leto`, `DwtPlan::inverse_leto`, `DwtPlan::forward_leto_typed`, `DwtPlan::inverse_leto_typed`, `CwtPlan::transform_leto`, and `CwtPlan::transform_leto_typed`, returning Mnemosyne-backed Leto arrays.

@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SHT Leto 2D sample/coefficient boundary [minor]
+- Performed: bumped `apollo-sht` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for real forward, complex forward, real inverse, complex inverse, and typed real/complex forward/inverse storage.
+- Architecture effect: SHT callers can now use Leto as the public 2D sample/coefficient boundary while existing ndarray APIs remain the validation and compatibility surface.
+- Memory effect: Leto 2D views copy once into logical row-major ndarray validation buffers; generated coefficient and sample outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai SHT quadrature and synthesis kernels rather than adding a separate SHT implementation.
+- Verification: `cargo check -p apollo-sht`; `cargo test -p apollo-sht leto -- --nocapture`; `cargo test -p apollo-sht -- --nocapture`; `cargo clippy -p apollo-sht --all-targets -- -D warnings`; `cargo doc -p apollo-sht --no-deps`; `cargo semver-checks -p apollo-sht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sht --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SHT ndarray APIs for real forward, strided real forward, complex forward/inverse, and typed `f32` real forward/inverse. No runtime benchmark claim is made.
+- Residuals: SHT WGPU still has no Leto boundary; SHT CPU internals still use ndarray as the validation/execution buffer until Leto owns all row/chunk mutation contracts required by dense spherical grids.
+
 ## Wavelet Leto DWT/CWT boundary [minor]
 - Performed: bumped `apollo-wavelet` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for DWT forward/inverse, typed DWT forward/inverse, CWT transform, and typed CWT transform.
 - Architecture effect: Wavelet callers can now use Leto as the public 1D signal and dense coefficient boundary while existing slice APIs remain the validation and compatibility surface.

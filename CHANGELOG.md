@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-sht` `0.2.0` adds Leto SHT sample/coefficient boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-wavelet` `0.2.0` adds Leto DWT/CWT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-stft` `0.3.0` adds Leto STFT analysis/synthesis boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-radon` `0.2.0` adds Leto 2D forward projection, adjoint backprojection, and filtered-backprojection boundaries returning Mnemosyne-backed Leto arrays.
