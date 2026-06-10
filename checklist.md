@@ -1,4 +1,11 @@
 # Apollo Checklist
+## NUFFT exact 1D Moirai reference routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-nufft`.
+- [x] Routed exact 1D Type-1 and Type-2 direct reference output writes through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller workloads.
+- [x] Kept the canonical direct formulas in shared coefficient/sample helpers; no Rayon, Tokio, runtime-erased dispatch, or alternate algorithm body was introduced.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic NUFFT unit/property tests cover the exact direct paths and fast-path comparisons that depend on them. No runtime benchmark claim is made.
+
 ## NUFFT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-nufft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added direct and fast 1D/3D Type-1/Type-2 Leto host boundaries, including typed `NufftComplexStorage` variants, returning Mnemosyne-backed Leto arrays.

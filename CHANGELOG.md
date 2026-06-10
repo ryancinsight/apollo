@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-nufft` exact 1D direct Type-1/Type-2 reference transforms now use Moirai `ParallelSliceMut` for disjoint output writes above a bounded operation threshold while preserving serial execution for small inputs.
 - [minor] `apollo-nufft-wgpu` `0.2.0` adds Leto direct and fast 1D/3D Type-1/Type-2 NUFFT host boundaries, including typed storage variants, returning Mnemosyne-backed Leto arrays while preserving WGPU slice/ndarray execution as the device dispatch path.
 - [minor] `apollo-fft-wgpu` `0.2.0` adds Leto 3D forward/inverse and mixed `f16` forward/inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU 3D FFT execution as the device dispatch path.
 - [minor] `apollo-stft-wgpu` `0.12.0` adds Leto forward, inverse, typed forward, and typed inverse STFT host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.

@@ -35,6 +35,7 @@
 
 use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
 use mnemosyne::scratch::ScratchPool;
+use moirai::ParallelSliceMut;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use std::borrow::Cow;
@@ -43,6 +44,9 @@ use std::f64::consts::PI;
 thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
+
+/// Below this operation count, serial loops avoid parallel scheduling overhead.
+const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
 
 use crate::domain::metadata::grid::UniformDomain1D;
 use crate::infrastructure::kernel::kaiser_bessel::{
@@ -567,16 +571,50 @@ pub fn nufft_type1_1d(
         "positions/value length mismatch"
     );
     let two_pi_over_l = 2.0 * PI / domain.length();
-    Array1::from_shape_fn(domain.n, |k| {
-        let k_signed = fft_signed_index(k, domain.n);
-        positions
-            .iter()
-            .zip(values.iter())
-            .fold(Complex64::new(0.0, 0.0), |acc, (&x, &value)| {
-                let angle = -two_pi_over_l * k_signed as f64 * x;
-                acc + value * Complex64::new(angle.cos(), angle.sin())
-            })
-    })
+    let mut output = vec![Complex64::new(0.0, 0.0); domain.n];
+    let work_items = domain.n.saturating_mul(positions.len());
+    if work_items >= DIRECT_PAR_OP_THRESHOLD {
+        output.par_mut().enumerate(|k, value| {
+            *value = nufft_type1_coefficient(k, positions, values, domain.n, two_pi_over_l);
+        });
+    } else {
+        output.iter_mut().enumerate().for_each(|(k, value)| {
+            *value = nufft_type1_coefficient(k, positions, values, domain.n, two_pi_over_l);
+        });
+    }
+    Array1::from_vec(output)
+}
+
+fn nufft_type1_coefficient(
+    k: usize,
+    positions: &[f64],
+    values: &[Complex64],
+    n_out: usize,
+    two_pi_over_l: f64,
+) -> Complex64 {
+    let k_signed = fft_signed_index(k, n_out);
+    positions
+        .iter()
+        .zip(values.iter())
+        .fold(Complex64::new(0.0, 0.0), |acc, (&x, &value)| {
+            let angle = -two_pi_over_l * k_signed as f64 * x;
+            acc + value * Complex64::new(angle.cos(), angle.sin())
+        })
+}
+
+fn nufft_type2_sample(
+    x: f64,
+    fourier_coeffs: &Array1<Complex64>,
+    domain: UniformDomain1D,
+) -> Complex64 {
+    fourier_coeffs
+        .iter()
+        .enumerate()
+        .fold(Complex64::new(0.0, 0.0), |acc, (k, &value)| {
+            let k_signed = fft_signed_index(k, domain.n);
+            let angle = 2.0 * PI * k_signed as f64 * x / domain.length();
+            acc + value * Complex64::new(angle.cos(), angle.sin())
+        })
 }
 
 /// Exact direct 1D type-2 NUFFT.
@@ -586,19 +624,18 @@ pub fn nufft_type2_1d(
     positions: &[f64],
     domain: UniformDomain1D,
 ) -> Vec<Complex64> {
-    positions
-        .iter()
-        .map(|&x| {
-            fourier_coeffs
-                .iter()
-                .enumerate()
-                .fold(Complex64::new(0.0, 0.0), |acc, (k, &value)| {
-                    let angle =
-                        2.0 * PI * fft_signed_index(k, domain.n) as f64 * x / domain.length();
-                    acc + value * Complex64::new(angle.cos(), angle.sin())
-                })
-        })
-        .collect()
+    let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
+    let work_items = positions.len().saturating_mul(fourier_coeffs.len());
+    if work_items >= DIRECT_PAR_OP_THRESHOLD {
+        output.par_mut().enumerate(|index, value| {
+            *value = nufft_type2_sample(positions[index], fourier_coeffs, domain);
+        });
+    } else {
+        output.iter_mut().enumerate().for_each(|(index, value)| {
+            *value = nufft_type2_sample(positions[index], fourier_coeffs, domain);
+        });
+    }
+    output
 }
 
 /// Fast 1D type-1 NUFFT convenience wrapper.

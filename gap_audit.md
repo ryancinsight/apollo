@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## NUFFT exact 1D Moirai reference routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-nufft` and routed `nufft_type1_1d` / `nufft_type2_1d` direct reference output construction through `ParallelSliceMut` above a bounded operation threshold.
+- Architecture effect: NUFFT exact 1D reference execution now uses Apollo's Moirai provider surface for CPU data parallelism instead of local sequential-only loops, while the public Leto/Mnemosyne boundaries and ndarray validation role remain unchanged.
+- Memory effect: output buffers are allocated once, then filled by disjoint mutable slice writes; small workloads use the serial path to avoid scheduler overhead.
+- Implementation effect: the mathematical formulas are factored into shared helper functions used by both serial and Moirai paths, preserving SSOT and avoiding duplicated algorithm bodies.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic unit/property tests over exact 1D direct outputs and fast-vs-exact comparisons. No runtime benchmark claim is made.
+- Residuals: NUFFT 3D exact references and fast gridding loops still use local serial loops; Hermes is still absent from `apollo-nufft`.
+
 ## NUFFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-nufft-wgpu` to `0.2.0`; added the workspace Leto dependency; added direct and fast 1D/3D Type-1/Type-2 Leto host boundaries, including typed storage variants.
 - Architecture effect: NUFFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains available as the validation oracle for 3D mode storage.
