@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests {
     use apollo_wavelet::{DiscreteWavelet, DwtPlan};
+    use leto::{SliceArg, Storage};
 
     use crate::{WaveletWgpuBackend, WaveletWgpuPlan, WgpuCapabilities, WgpuError};
 
@@ -229,6 +230,65 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_and_inverse_match_slice_when_device_exists() {
+        let Ok(backend) = WaveletWgpuBackend::try_default() else {
+            return;
+        };
+        let signal = vec![1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
+        let plan = WaveletWgpuPlan::new(signal.len(), 3);
+        let expected_forward = backend
+            .execute_forward(&plan, &signal)
+            .expect("slice forward");
+        let signal_leto =
+            leto::Array1::from_shape_vec([signal.len()], signal).expect("leto signal");
+        let actual_forward = backend
+            .execute_forward_leto(&plan, signal_leto.view())
+            .expect("leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let expected_inverse = backend
+            .execute_inverse(&plan, &expected_forward)
+            .expect("slice inverse");
+        let coeffs_leto = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+            .expect("leto coeffs");
+        let actual_inverse = backend
+            .execute_inverse_leto(&plan, coeffs_leto.view())
+            .expect("leto inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice()
+        );
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_when_device_exists() {
+        let Ok(backend) = WaveletWgpuBackend::try_default() else {
+            return;
+        };
+        let signal = vec![1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
+        let backing = signal
+            .iter()
+            .flat_map(|value| [*value, 99.0_f32])
+            .collect::<Vec<_>>();
+        let signal_leto =
+            leto::Array1::from_shape_vec([backing.len()], backing).expect("interleaved signal");
+        let strided = signal_leto
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided signal");
+        let plan = WaveletWgpuPlan::new(signal.len(), 3);
+        let expected = backend
+            .execute_forward(&plan, &signal)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn inverse_matches_cpu_haar_reconstruction_when_device_exists() {
         let Ok(backend) = WaveletWgpuBackend::try_default() else {
             return;
@@ -316,6 +376,78 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
+        let Ok(backend) = WaveletWgpuBackend::try_default() else {
+            return;
+        };
+        use apollo_fft::{f16, PrecisionProfile};
+        let represented = [1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
+        let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
+        let plan = WaveletWgpuPlan::new(input.len(), 3);
+
+        let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
+        backend
+            .execute_forward_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &input,
+                &mut expected_forward,
+            )
+            .expect("typed slice forward");
+        let input_leto = leto::Array1::from_shape_vec([input.len()], input).expect("input");
+        let actual_forward = backend
+            .execute_forward_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                input_leto.view(),
+            )
+            .expect("typed leto forward");
+        assert_eq!(
+            actual_forward
+                .storage()
+                .as_slice()
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>(),
+            expected_forward
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>()
+        );
+
+        let mut expected_inverse = vec![f16::from_f32(0.0); expected_forward.len()];
+        backend
+            .execute_inverse_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &expected_forward,
+                &mut expected_inverse,
+            )
+            .expect("typed slice inverse");
+        let coeffs_leto = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+            .expect("coefficients");
+        let actual_inverse = backend
+            .execute_inverse_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                coeffs_leto.view(),
+            )
+            .expect("typed leto inverse");
+        assert_eq!(
+            actual_inverse
+                .storage()
+                .as_slice()
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>(),
+            expected_inverse
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Wavelet-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-wavelet-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward, inverse, typed forward, and typed inverse Haar DWT execution.
+- Architecture effect: Wavelet-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-wavelet-wgpu`; `cargo test -p apollo-wavelet-wgpu leto -- --nocapture`; `cargo test -p apollo-wavelet-wgpu -- --nocapture`; `cargo clippy -p apollo-wavelet-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-wavelet-wgpu --no-deps`; `cargo semver-checks -p apollo-wavelet-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Wavelet-WGPU slice APIs for forward, inverse, strided forward, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; Wavelet-WGPU currently covers the Haar DWT WGPU surface and still performs WGPU arithmetic at `f32` precision by contract.
+
 ## Radon-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-radon-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward projection, adjoint backprojection, filtered backprojection, typed forward projection, and typed adjoint backprojection.
 - Architecture effect: Radon-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
