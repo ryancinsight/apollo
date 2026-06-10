@@ -56,6 +56,19 @@ impl RadonPlan {
         Ok(Sinogram::new(forward_project(image, &self.geometry)))
     }
 
+    /// Execute the forward Radon transform from a Leto 2D image view.
+    ///
+    /// The Leto view is copied once into logical row-major order before
+    /// reusing the canonical ndarray/Moirai projection kernel.
+    pub fn forward_leto(
+        &self,
+        image: leto::ArrayView2<'_, f64>,
+    ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let image = array2_from_leto_view(image, RadonError::ImageShapeMismatch)?;
+        let sinogram = self.forward(&image)?;
+        leto_array2_from_ndarray(sinogram.values())
+    }
+
     /// Execute the forward Radon transform into caller-owned storage.
     pub fn forward_into(&self, image: &Array2<f64>, output: &mut Array2<f64>) -> RadonResult<()> {
         if image.dim() != (self.geometry.rows(), self.geometry.cols()) {
@@ -78,12 +91,37 @@ impl RadonPlan {
         T::forward_into(self, image, output, profile)
     }
 
+    /// Execute typed forward Radon projection from a Leto 2D image view.
+    pub fn forward_leto_typed<T: RadonStorage>(
+        &self,
+        image: leto::ArrayView2<'_, T>,
+        profile: PrecisionProfile,
+    ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+        let image = array2_from_leto_view(image, RadonError::ImageShapeMismatch)?;
+        let mut output = Array2::<T>::from_elem(
+            (self.geometry.angle_count(), self.geometry.detector_count()),
+            T::from_f64(0.0),
+        );
+        self.forward_typed_into(&image, &mut output, profile)?;
+        leto_array2_from_ndarray(&output)
+    }
+
     /// Execute adjoint backprojection.
     pub fn backproject(&self, sinogram: &Sinogram) -> RadonResult<Array2<f64>> {
         if sinogram.shape() != (self.geometry.angle_count(), self.geometry.detector_count()) {
             return Err(RadonError::SinogramShapeMismatch);
         }
         Ok(adjoint_backproject(sinogram.values(), &self.geometry))
+    }
+
+    /// Execute adjoint backprojection from a Leto 2D sinogram view.
+    pub fn backproject_leto(
+        &self,
+        sinogram: leto::ArrayView2<'_, f64>,
+    ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let image = self.backproject(&Sinogram::new(sinogram))?;
+        leto_array2_from_ndarray(&image)
     }
 
     /// Execute adjoint backprojection into caller-owned image storage.
@@ -110,6 +148,21 @@ impl RadonPlan {
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
         T::backproject_into(self, sinogram, output, profile)
+    }
+
+    /// Execute typed adjoint backprojection from a Leto 2D sinogram view.
+    pub fn backproject_leto_typed<T: RadonStorage>(
+        &self,
+        sinogram: leto::ArrayView2<'_, T>,
+        profile: PrecisionProfile,
+    ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let mut output = Array2::<T>::from_elem(
+            (self.geometry.rows(), self.geometry.cols()),
+            T::from_f64(0.0),
+        );
+        self.backproject_typed_into(&sinogram, &mut output, profile)?;
+        leto_array2_from_ndarray(&output)
     }
 
     /// Execute ramp-filtered backprojection.
@@ -152,6 +205,16 @@ impl RadonPlan {
         let scale = std::f64::consts::PI / self.geometry.angle_count() as f64;
         image.iter_mut().for_each(|value| *value *= scale);
         Ok(image)
+    }
+
+    /// Execute ramp-filtered backprojection from a Leto 2D sinogram view.
+    pub fn filtered_backprojection_leto(
+        &self,
+        sinogram: leto::ArrayView2<'_, f64>,
+    ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, RadonError::SinogramShapeMismatch)?;
+        let image = self.filtered_backprojection(&Sinogram::new(sinogram))?;
+        leto_array2_from_ndarray(&image)
     }
 }
 
@@ -286,6 +349,30 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Rad
     }
 }
 
+fn array2_from_leto_view<T: Copy>(
+    view: leto::ArrayView2<'_, T>,
+    shape_error: RadonError,
+) -> RadonResult<Array2<T>> {
+    let [rows, cols] = view.shape();
+    let mut values = Vec::with_capacity(view.size());
+    for row in 0..rows {
+        for col in 0..cols {
+            let value = view.get([row, col]).map_err(|_| shape_error)?;
+            values.push(*value);
+        }
+    }
+    Array2::from_shape_vec((rows, cols), values).map_err(|_| shape_error)
+}
+
+fn leto_array2_from_ndarray<T: Copy>(
+    array: &Array2<T>,
+) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+    let (rows, cols) = array.dim();
+    let values: Vec<T> = array.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([rows, cols], &values)
+        .map_err(|_| RadonError::ImageShapeMismatch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,5 +482,143 @@ mod tests {
             plan.forward_typed_into(&image, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(RadonError::PrecisionMismatch)
         ));
+    }
+
+    #[test]
+    fn leto_forward_matches_ndarray_reference() {
+        let plan = plan();
+        let image = image64();
+        let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
+            .expect("leto image");
+        let expected = plan.forward(&image).expect("ndarray forward");
+
+        let actual = plan.forward_leto(input.view()).expect("leto forward");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_ndarray_reference() {
+        let plan = plan();
+        let image = image64();
+        let mut backing = Vec::with_capacity(18);
+        for value in image.iter().copied() {
+            backing.push(value);
+            backing.push(99.0);
+        }
+        let input = leto::Array2::from_shape_vec([3, 6], backing).expect("leto image");
+        let strided = input
+            .view()
+            .slice(&[(0, 3, 1), (0, 6, 2)])
+            .expect("strided view");
+        let expected = plan.forward(&image).expect("ndarray forward");
+
+        let actual = plan.forward_leto(strided).expect("leto forward");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_backproject_match_ndarray_reference() {
+        let plan = plan();
+        let image = image64().mapv(|value| value as f32);
+        let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
+            .expect("leto image");
+        let mut expected_forward =
+            Array2::<f32>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+        plan.forward_typed_into(
+            &image,
+            &mut expected_forward,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed ndarray forward");
+
+        let actual_forward = plan
+            .forward_leto_typed::<f32>(input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto forward");
+        let actual_forward_view = actual_forward.view();
+        let actual_forward_slice = actual_forward_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_forward_slice.iter().zip(expected_forward.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+
+        let mut expected_backproject =
+            Array2::<f32>::zeros((plan.geometry.rows(), plan.geometry.cols()));
+        plan.backproject_typed_into(
+            &expected_forward,
+            &mut expected_backproject,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed ndarray backproject");
+        let values = leto::Array2::from_shape_vec(
+            [plan.geometry.angle_count(), plan.geometry.detector_count()],
+            expected_forward.iter().copied().collect(),
+        )
+        .expect("leto sinogram");
+
+        let actual_backproject = plan
+            .backproject_leto_typed::<f32>(values.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto backproject");
+        let actual_backproject_view = actual_backproject.view();
+        let actual_backproject_slice = actual_backproject_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_backproject_slice
+            .iter()
+            .zip(expected_backproject.iter())
+        {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn leto_backproject_and_filtered_backprojection_match_ndarray_reference() {
+        let plan = plan();
+        let image = image64();
+        let sinogram = plan.forward(&image).expect("forward");
+        let sinogram_array = leto::Array2::from_shape_vec(
+            [plan.geometry.angle_count(), plan.geometry.detector_count()],
+            sinogram.values().iter().copied().collect(),
+        )
+        .expect("leto sinogram");
+        let expected_backproject = plan.backproject(&sinogram).expect("backproject");
+
+        let actual_backproject = plan
+            .backproject_leto(sinogram_array.view())
+            .expect("leto backproject");
+        let actual_backproject_view = actual_backproject.view();
+        let actual_backproject_slice = actual_backproject_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_backproject_slice
+            .iter()
+            .zip(expected_backproject.iter())
+        {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+
+        let expected_filtered = plan
+            .filtered_backprojection(&sinogram)
+            .expect("filtered backprojection");
+        let actual_filtered = plan
+            .filtered_backprojection_leto(sinogram_array.view())
+            .expect("leto filtered backprojection");
+        let actual_filtered_view = actual_filtered.view();
+        let actual_filtered_slice = actual_filtered_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_filtered_slice.iter().zip(expected_filtered.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
     }
 }

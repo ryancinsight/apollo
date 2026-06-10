@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-radon` `0.2.0` adds Leto 2D forward projection, adjoint backprojection, and filtered-backprojection boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-mellin` `0.3.0` adds Leto resample, moment, forward-spectrum, and inverse-spectrum boundaries returning Mnemosyne-backed Leto arrays for generated outputs.
 - [minor] `apollo-sdft` `0.2.0` adds Leto direct-bin and state-initialization boundaries returning Mnemosyne-backed Leto arrays for direct-bin output.
 - [minor] `apollo-sft` `0.2.0` adds Leto sparse forward/inverse boundaries and `SparseLetoSpectrum<T>` for typed Mnemosyne-backed retained values.

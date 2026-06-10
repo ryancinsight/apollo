@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Radon Leto 2D projection boundary [minor]
+- Performed: bumped `apollo-radon` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for forward projection, typed forward projection, adjoint backprojection, typed adjoint backprojection, and filtered backprojection.
+- Architecture effect: Radon callers can now use Leto as the public 2D image/sinogram boundary while existing ndarray APIs remain the validation and compatibility surface.
+- Memory effect: Leto 2D views copy once into logical row-major ndarray validation buffers; generated image and sinogram outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai projection, adjoint, and filtered-backprojection kernels rather than adding a separate Radon implementation.
+- Verification: `cargo check -p apollo-radon`; `cargo test -p apollo-radon leto -- --nocapture`; `cargo test -p apollo-radon -- --nocapture`; `cargo clippy -p apollo-radon --all-targets -- -D warnings`; `cargo doc -p apollo-radon --no-deps`; `cargo semver-checks -p apollo-radon --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-radon --examples`.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Radon ndarray APIs for contiguous forward projection, strided forward projection, typed `f32` forward/backprojection, adjoint backprojection, and filtered backprojection. Existing adjoint identity and ramp-filter tests remained green. No runtime benchmark claim is made.
+- Residuals: Radon WGPU still has no Leto boundary; CPU internals still use ndarray as the validation/execution buffer until Leto grows all required row/chunk mutation contracts.
+
 ## Mellin Leto resample and spectrum boundary [minor]
 - Performed: bumped `apollo-mellin` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for resampling, typed resampling, moments, typed moments, forward spectra, typed forward spectra, inverse spectra, and inverse from Leto spectrum views.
 - Architecture effect: Mellin callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.
