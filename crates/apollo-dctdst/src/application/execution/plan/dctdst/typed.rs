@@ -1,7 +1,22 @@
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, PrecisionProfile};
+use mnemosyne::scratch::ScratchPool;
 use super::DctDstPlan;
 use super::helpers::{leto_array1_from_slice, leto_view1_cow, validate_profile};
+
+thread_local! {
+    static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
+
+fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
+    TYPED_INPUT64_SCRATCH.with(|in_pool| {
+        in_pool.with_scratch(n, |input64| {
+            TYPED_OUTPUT64_SCRATCH
+                .with(|out_pool| out_pool.with_scratch(n, |output64| f(input64, output64)))
+        })
+    })
+}
 
 impl DctDstPlan {
     /// Execute the forward transform for `f64`, `f32`, or mixed `f16` storage.
@@ -75,13 +90,16 @@ pub trait RealTransformStorage: Copy + Send + Sync + 'static {
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DctDstError::LengthMismatch);
         }
-        let input64: Vec<f64> = signal.iter().map(|value| value.to_f64()).collect();
-        let mut output64 = vec![0.0_f64; plan.len()];
-        plan.forward_into(&input64, &mut output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.into_iter()) {
-            *slot = Self::from_f64(value);
-        }
-        Ok(())
+        with_f64_workspaces(plan.len(), |input64, output64| {
+            for (slot, value) in input64.iter_mut().zip(signal.iter()) {
+                *slot = value.to_f64();
+            }
+            plan.forward_into(input64, output64)?;
+            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+                *slot = Self::from_f64(value);
+            }
+            Ok(())
+        })
     }
 
     /// Execute inverse transform into caller-owned storage.
@@ -95,13 +113,16 @@ pub trait RealTransformStorage: Copy + Send + Sync + 'static {
         if signal.len() != plan.len() || output.len() != plan.len() {
             return Err(DctDstError::LengthMismatch);
         }
-        let input64: Vec<f64> = signal.iter().map(|value| value.to_f64()).collect();
-        let mut output64 = vec![0.0_f64; plan.len()];
-        plan.inverse_into(&input64, &mut output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.into_iter()) {
-            *slot = Self::from_f64(value);
-        }
-        Ok(())
+        with_f64_workspaces(plan.len(), |input64, output64| {
+            for (slot, value) in input64.iter_mut().zip(signal.iter()) {
+                *slot = value.to_f64();
+            }
+            plan.inverse_into(input64, output64)?;
+            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+                *slot = Self::from_f64(value);
+            }
+            Ok(())
+        })
     }
 }
 
