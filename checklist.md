@@ -1,4 +1,16 @@
 # Apollo Checklist
+## Leto interop helper consolidation [patch]
+- [x] Added canonical `apollo_fft::application::utilities::leto_interop` module (view1_cow, array2/3_from_view, try_array{1,2,3} builders, profile_matches) with unit tests.
+- [x] Replaced duplicated private helper bodies in 33 crates (16 CPU + 17 WGPU) with thin error-mapping delegations; infallible wrappers dropped `Result` and dead label parameters with all call sites updated.
+- [x] Deliberate non-delegations recorded: apollo-sht `array2_from_leto_view` (Clone bound + view fast path), non-contiguous ndarray gather fallbacks in sht/radon, apollo-ntt-wgpu (no apollo-fft dependency), fft-wgpu 3D-specific helpers.
+- [x] Verification: `cargo clippy --workspace --all-targets` zero warnings; `cargo nextest run --workspace` 1213/1213 passed; `cargo fmt`.
+- Evidence: value-semantic workspace test suite. No runtime benchmark claim is made.
+
+## DCT/DST allocation elimination [patch]
+- [x] `apollo-dctdst-wgpu` 2D/3D separable forward/inverse passes reuse one lane buffer per pass; contiguous rows borrowed via `as_slice()` (zero copy) instead of per-iteration `Vec` collects (was O(n^2)/O(n^3) allocations).
+- [x] `apollo-dctdst` typed forward/inverse paths route f64 conversion workspaces through thread-local `mnemosyne::scratch::ScratchPool`, matching the established CZT/DHT/FWHT pattern; removes two per-call `Vec<f64>` allocations.
+- [x] Verification: `cargo clippy -p apollo-dctdst -p apollo-dctdst-wgpu --all-targets` clean; `cargo nextest run -p apollo-dctdst` 52/52 passed.
+- Evidence: value-semantic tests; allocation removal verified by source inspection, not heap profiling.
 ## Leto 0.5.0 shape/materialization provider pin [minor]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `6c7899d865b689004cd48265b9a967d70a15a787`.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.4.0` at `a46dea9` to `0.5.0` at `6c7899d`.

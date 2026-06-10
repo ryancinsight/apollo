@@ -4120,3 +4120,15 @@ Open gaps are listed at the top of this audit. Future increments should:
 - Bluestein f16 gap: implemented `chirp_native_f16.wgsl` with `enable f16;`, `array<f16>` bindings, and f32-precision twiddles narrowed to f16; lifted power-of-two-only constraint on `GpuFft3dF16Native` by adding `strategy_x/y/z`, `chirp_x/y/z` fields, `build_chirp_data_f16`, and `dispatch_chirp_f16` (flat 1D dispatch, no data races); roundtrip test on 3×3×3 (all-Bluestein) passes with error < 0.05.
 - 3D NUFFT buffer-reuse bench gap: added `bench_fast_type1_3d` and `bench_fast_type2_3d` Criterion functions to `apollo-nufft-wgpu/benches/buffer_reuse.rs`; covers per-call vs `with_buffers` for N=4,6,8.
 - Published-reference fixture breadth gap: added NTT impulse ([1,0,0,0]→[1,1,1,1], Pollard 1971), NTT constant ([1,1,1,1]→[4,0,0,0], geometric-series theorem), and NUFFT Type-1 at origin (single source x=0 → F[k]=1 ∀k, Dutt and Rokhlin 1993) to `apollo-validation`; all three verified at PUBLISHED_FIXTURE_LIMIT=1×10⁻¹².
+
+---
+<a id="audit-2026-06-10"></a>
+## Residual findings from workspace performance/consolidation audit (2026-06-10)
+Open items from the parallel duplication/allocation/dispatch audit; each is a candidate micro-sprint. Evidence tier: source inspection only unless noted.
+- [minor] `apollo-fft` RealFftData impls triplicated across `real_storage/{precise,reduced,compact}.rs` (~700 duplicated lines) plus type-named fill helpers in `real_storage/fill.rs`; consolidate to one generic impl per the canonical-implementation rule.
+- [minor] Stockham AVX backend impls duplicated f32/f64 in `stockham/avx/{precise,reduced}/backend_impl.rs`; candidate for trait-level SIMD-lane abstraction.
+- [patch] `apollo-czt-wgpu` kernel converts input to `Vec<ComplexPod>` per dispatch (`kernel.rs:143`); bytemuck cast or plan-level buffer would remove it.
+- [patch] WGPU kernels (incl. dctdst) create GPU input/output buffers per `execute` call; plan-level staging buffer reuse (pattern exists in apollo-stft-wgpu) not yet propagated.
+- [patch] Remaining >500-line files: `stockham/avx/generic/triple.rs` (3260), `mixed_radix/scalar/impls.rs` (2226), `apollo-fft/src/lib.rs` (1624), `fft/dimension_1d.rs` (1435), `apollo-python/src/lib.rs` (1383), others per line audit; split where operation families separate cleanly.
+- [info] TypeId-based typed dispatch in WGPU device methods is const-folded by LLVM (statically-known T); not a runtime defect. The real cost in those paths is the per-call conversion Vec for non-native storage types.
+- [info] `apollo-ntt-wgpu` retains local leto helpers (no apollo-fft dependency by design — integer transform domain).

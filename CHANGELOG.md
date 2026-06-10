@@ -8,6 +8,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] Canonical `apollo_fft::application::utilities::leto_interop` module consolidates Leto view/array interop helpers (`view1_cow`, dense view copies, fallible Leto array builders, precision-profile matching) previously duplicated across 33 crates; crate-local wrappers now delegate with their own error mapping, and infallible wrappers shed their `Result` returns.
+- [patch] `apollo-dctdst-wgpu` 2D/3D separable transforms reuse a single lane buffer per pass and borrow contiguous rows zero-copy, removing O(n^2)/O(n^3) per-iteration allocations; `apollo-dctdst` typed paths adopt thread-local Mnemosyne scratch pools for f64 conversion workspaces.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `6c7899d` (`0.5.0`), importing provider-side dense reshape/into_shape, permute aliases, and row-major to_contiguous materialization for later ndarray replacement work.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `a46dea9` (`0.4.0`), importing provider-side broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` into caller-owned output layouts while keeping Apollo public APIs unchanged.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `642d87a3` (`0.3.0`), bringing the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR into the workspace dependency graph.
