@@ -1,4 +1,13 @@
 # Apollo Checklist
+## Wavelet CWT Hermes dot routing [patch]
+- [x] Added the workspace Hermes and Mnemosyne provider dependencies to `apollo-wavelet`.
+- [x] Routed CWT coefficient accumulation through `hermes_simd::dot::<f64>` above `HERMES_CWT_LEN_THRESHOLD`.
+- [x] Materialized mother-wavelet weights in Mnemosyne thread-local scratch to avoid per-coefficient heap allocation on the Hermes path.
+- [x] Kept scalar coefficient accumulation for smaller signals and left existing Moirai scale-row scheduling unchanged.
+- [x] Added value tests for Hermes coefficient parity and wavelet-weight materialization.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-wavelet`; `cargo test -p apollo-wavelet`; `cargo clippy -p apollo-wavelet --all-targets -- -D warnings`; `cargo doc -p apollo-wavelet --no-deps`; `cargo semver-checks -p apollo-wavelet --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic Wavelet unit/property tests plus direct threshold-path Hermes coefficient tests. No runtime benchmark claim is made.
+
 ## Mellin moment Hermes dot routing [patch]
 - [x] Added the workspace Hermes and Mnemosyne provider dependencies to `apollo-mellin`.
 - [x] Routed real Mellin moment accumulation through `hermes_simd::dot::<f64>` above `HERMES_MOMENT_LEN_THRESHOLD`.

@@ -13,6 +13,8 @@ leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }
+mnemosyne = { workspace = true }
+hermes-simd = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 

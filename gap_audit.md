@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Wavelet CWT Hermes dot routing [patch]
+- Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-wavelet`; routed CWT coefficient accumulation through `hermes_simd::dot::<f64>` above a bounded signal-length threshold with mother-wavelet weights stored in Mnemosyne thread-local scratch.
+- Architecture effect: Wavelet CWT execution now composes scalar formula ownership, Moirai scale-row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction without runtime-erased dispatch in Apollo code.
+- Memory effect: the Hermes path reuses thread-local weight buffers and does not allocate a new weight vector per coefficient; small signals keep the allocation-free scalar path.
+- Implementation effect: `fill_cwt_weights` owns the wavelet-weight formula, and `coefficient_scalar` remains the scalar formula reference for small paths and tests.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-wavelet`; `cargo test -p apollo-wavelet`; `cargo clippy -p apollo-wavelet --all-targets -- -D warnings`; `cargo doc -p apollo-wavelet --no-deps`; `cargo semver-checks -p apollo-wavelet --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic Wavelet unit/property tests plus direct threshold-path Hermes coefficient tests. No runtime benchmark claim is made.
+- Residuals: typed Wavelet storage conversion still uses owner `f64` arithmetic before quantization; other non-FFT CPU transform crates still lack Hermes-specific kernels.
+
 ## Mellin moment Hermes dot routing [patch]
 - Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-mellin`; routed real Mellin moment accumulation through `hermes_simd::dot::<f64>` above a bounded signal-length threshold with trapezoid weights stored in Mnemosyne thread-local scratch.
 - Architecture effect: Mellin moment execution now composes scalar formula ownership, Mnemosyne scratch reuse, and Hermes SIMD reduction without runtime-erased dispatch in Apollo code; Moirai remains the provider for independent resampling and spectrum rows.

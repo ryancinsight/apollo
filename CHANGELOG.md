@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-wavelet` CWT coefficient accumulation now uses Hermes dot-product reduction with Mnemosyne thread-local wavelet-weight scratch above a bounded signal-length threshold, while smaller coefficients retain the scalar mother-wavelet formula.
 - [patch] `apollo-mellin` real Mellin moments now use Hermes dot-product reduction with Mnemosyne thread-local trapezoid-weight scratch above a bounded signal-length threshold, while smaller moments retain the scalar trapezoid formula.
 - [patch] `apollo-gft` forward and inverse graph-basis row reductions now use Hermes dot products above a bounded row-length threshold, with Mnemosyne scratch used for inverse strided basis rows.
 - [patch] `apollo-dht` direct DHT coefficient rows now use Hermes dot-product reduction with Mnemosyne thread-local Hartley-row scratch above a bounded row-length threshold, while smaller rows retain the scalar formula.
