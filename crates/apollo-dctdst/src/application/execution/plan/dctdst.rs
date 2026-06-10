@@ -8,6 +8,7 @@ use crate::infrastructure::kernel::fast::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::{Array2, Array3};
+use std::borrow::Cow;
 
 /// Reusable DCT/DST plan.
 ///
@@ -102,6 +103,20 @@ impl DctDstPlan {
         Ok(output)
     }
 
+    /// Execute the forward transform over a Leto real-valued 1D view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical
+    /// order before entering the canonical slice execution path.
+    pub fn forward_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let signal = leto_view1_cow(&signal);
+        let mut output = vec![0.0_f64; self.len()];
+        self.forward_into(&signal, &mut output)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// Execute a separable 2D forward transform over a square `N x N` field.
     ///
     /// The plan length `N` is applied to both axes; each row is transformed
@@ -116,6 +131,16 @@ impl DctDstPlan {
         let mut output = Array2::<f64>::zeros((rows, cols));
         self.forward_2d_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Execute a separable 2D forward transform over a Leto `N x N` view.
+    pub fn forward_2d_leto(
+        &self,
+        input: leto::ArrayView2<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let input = array2_from_leto_view(input);
+        let output = self.forward_2d(&input)?;
+        Ok(leto_array2_from_ndarray(&output))
     }
 
     /// Execute a separable 2D forward transform into caller-owned output.
@@ -173,6 +198,16 @@ impl DctDstPlan {
         let mut output = Array3::<f64>::zeros(dims);
         self.forward_3d_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Execute a separable 3D forward transform over a Leto `N x N x N` view.
+    pub fn forward_3d_leto(
+        &self,
+        input: leto::ArrayView3<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
+        let input = array3_from_leto_view(input);
+        let output = self.forward_3d(&input)?;
+        Ok(leto_array3_from_ndarray(&output))
     }
 
     /// Execute a separable 3D forward transform into caller-owned output.
@@ -300,6 +335,17 @@ impl DctDstPlan {
         Ok(output)
     }
 
+    /// Execute the inverse transform over a Leto real-valued 1D view.
+    pub fn inverse_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let signal = leto_view1_cow(&signal);
+        let mut output = vec![0.0_f64; self.len()];
+        self.inverse_into(&signal, &mut output)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// Execute a separable 2D inverse transform over a square `N x N` field.
     ///
     /// Returns `LengthMismatch` unless `input.dim() == (N, N)`.
@@ -311,6 +357,16 @@ impl DctDstPlan {
         let mut output = Array2::<f64>::zeros((rows, cols));
         self.inverse_2d_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Execute a separable 2D inverse transform over a Leto `N x N` view.
+    pub fn inverse_2d_leto(
+        &self,
+        input: leto::ArrayView2<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let input = array2_from_leto_view(input);
+        let output = self.inverse_2d(&input)?;
+        Ok(leto_array2_from_ndarray(&output))
     }
 
     /// Execute a separable 2D inverse transform into caller-owned output.
@@ -365,6 +421,16 @@ impl DctDstPlan {
         let mut output = Array3::<f64>::zeros(dims);
         self.inverse_3d_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Execute a separable 3D inverse transform over a Leto `N x N x N` view.
+    pub fn inverse_3d_leto(
+        &self,
+        input: leto::ArrayView3<'_, f64>,
+    ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
+        let input = array3_from_leto_view(input);
+        let output = self.inverse_3d(&input)?;
+        Ok(leto_array3_from_ndarray(&output))
     }
 
     /// Execute a separable 3D inverse transform into caller-owned output.
@@ -508,6 +574,18 @@ impl DctDstPlan {
         T::forward_into(self, signal, output, profile)
     }
 
+    /// Execute the forward transform over a typed Leto real-valued 1D view.
+    pub fn forward_leto_typed<T: RealTransformStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(&signal);
+        let mut output = vec![T::from_f64(0.0); self.len()];
+        T::forward_into(self, &signal, &mut output, profile)?;
+        Ok(leto_array1_from_slice(&output))
+    }
+
     /// Execute the inverse transform for `f64`, `f32`, or mixed `f16` storage.
     pub fn inverse_typed_into<T: RealTransformStorage>(
         &self,
@@ -516,6 +594,18 @@ impl DctDstPlan {
         profile: PrecisionProfile,
     ) -> DctDstResult<()> {
         T::inverse_into(self, signal, output, profile)
+    }
+
+    /// Execute the inverse transform over a typed Leto real-valued 1D view.
+    pub fn inverse_leto_typed<T: RealTransformStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(&signal);
+        let mut output = vec![T::from_f64(0.0); self.len()];
+        T::inverse_into(self, &signal, &mut output, profile)?;
+        Ok(leto_array1_from_slice(&output))
     }
 }
 
@@ -634,10 +724,75 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Dct
     }
 }
 
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    match view.as_slice() {
+        Some(slice) => Cow::Borrowed(slice),
+        None => Cow::Owned(
+            (0..view.shape()[0])
+                .map(|index| {
+                    *view
+                        .get([index])
+                        .expect("Leto DCT/DST view index must be valid after shape validation")
+                })
+                .collect(),
+        ),
+    }
+}
+
+fn array2_from_leto_view(input: leto::ArrayView2<'_, f64>) -> Array2<f64> {
+    let [rows, cols] = input.shape();
+    Array2::from_shape_fn((rows, cols), |(row, col)| {
+        *input
+            .get([row, col])
+            .expect("Leto 2D DCT/DST view index must be valid after shape validation")
+    })
+}
+
+fn array3_from_leto_view(input: leto::ArrayView3<'_, f64>) -> Array3<f64> {
+    let [d0, d1, d2] = input.shape();
+    Array3::from_shape_fn((d0, d1, d2), |(i, j, k)| {
+        *input
+            .get([i, j, k])
+            .expect("Leto 3D DCT/DST view index must be valid after shape validation")
+    })
+}
+
+fn leto_array1_from_slice<T: Copy>(output: &[T]) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([output.len()], output)
+        .expect("DCT/DST output length must match Leto output shape")
+}
+
+fn leto_array2_from_ndarray(
+    output: &Array2<f64>,
+) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 2> {
+    let (rows, cols) = output.dim();
+    leto::Array::<f64, leto::MnemosyneStorage<f64>, 2>::from_mnemosyne_slice(
+        [rows, cols],
+        output
+            .as_slice()
+            .expect("DCT/DST-owned 2D ndarray output must be contiguous"),
+    )
+    .expect("DCT/DST 2D output length must match Leto output shape")
+}
+
+fn leto_array3_from_ndarray(
+    output: &Array3<f64>,
+) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 3> {
+    let (d0, d1, d2) = output.dim();
+    leto::Array::<f64, leto::MnemosyneStorage<f64>, 3>::from_mnemosyne_slice(
+        [d0, d1, d2],
+        output
+            .as_slice()
+            .expect("DCT/DST-owned 3D ndarray output must be contiguous"),
+    )
+    .expect("DCT/DST 3D output length must match Leto output shape")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use leto::{SliceArg, Storage};
 
     #[test]
     fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
@@ -682,5 +837,168 @@ mod tests {
             plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(DctDstError::PrecisionMismatch)
         ));
+    }
+
+    #[test]
+    fn leto_1d_forward_and_inverse_match_slice_reference() {
+        let plan = DctDstPlan::new(8, RealTransformKind::DctII).expect("valid plan");
+        let signal = vec![1.0_f64, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+        let expected_forward = plan.forward(&signal).expect("slice forward");
+        let expected_inverse = plan.inverse(&expected_forward).expect("slice inverse");
+        let leto_signal = leto::Array1::from_shape_vec([signal.len()], signal).expect("leto input");
+
+        let actual_forward = plan.forward_leto(leto_signal.view()).expect("leto forward");
+        let actual_inverse = plan
+            .inverse_leto(actual_forward.view())
+            .expect("leto inverse");
+
+        for (actual, expected) in actual_forward
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_forward.iter())
+        {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+        for (actual, expected) in actual_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_inverse.iter())
+        {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_1d_forward_matches_slice_reference() {
+        let plan = DctDstPlan::new(4, RealTransformKind::DstII).expect("valid plan");
+        let signal = [1.0_f64, -2.0, 0.5, 2.25];
+        let expected = plan.forward(&signal).expect("slice forward");
+        let interleaved = vec![1.0, -999.0, -2.0, -999.0, 0.5, -999.0, 2.25, -999.0];
+        let leto_signal =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+        let strided = leto_signal
+            .view()
+            .slice_with::<1>(&[SliceArg::range(Some(0), Some(8), 2)])
+            .expect("strided input");
+
+        let actual = plan.forward_leto(strided).expect("leto forward");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_forward_matches_typed_slice_reference() {
+        let plan = DctDstPlan::new(8, RealTransformKind::DctII).expect("valid plan");
+        let signal = vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+        let mut expected = vec![0.0_f32; signal.len()];
+        plan.forward_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed slice forward");
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal).expect("typed leto input");
+
+        let actual = plan
+            .forward_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto forward");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-6);
+        }
+    }
+
+    #[test]
+    fn leto_2d_forward_matches_ndarray_reference() {
+        let plan = DctDstPlan::new(3, RealTransformKind::DctII).expect("valid plan");
+        let input = Array2::from_shape_vec(
+            (3, 3),
+            vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
+        )
+        .expect("ndarray input");
+        let expected = plan.forward_2d(&input).expect("ndarray forward");
+        let leto_input = leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect())
+            .expect("leto input");
+
+        let actual = plan
+            .forward_2d_leto(leto_input.view())
+            .expect("leto forward");
+
+        assert_eq!(actual.shape(), [3, 3]);
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_2d_strided_inverse_matches_ndarray_reference() {
+        let plan = DctDstPlan::new(3, RealTransformKind::DstII).expect("valid plan");
+        let input = Array2::from_shape_vec(
+            (3, 3),
+            vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
+        )
+        .expect("ndarray input");
+        let spectrum = plan.forward_2d(&input).expect("ndarray forward");
+        let expected = plan.inverse_2d(&spectrum).expect("ndarray inverse");
+        let mut interleaved = Vec::with_capacity(18);
+        for value in spectrum.iter() {
+            interleaved.push(*value);
+            interleaved.push(-999.0);
+        }
+        let leto_input =
+            leto::Array2::from_shape_vec([3, 6], interleaved).expect("leto interleaved");
+        let strided = leto_input
+            .view()
+            .slice_with::<2>(&[
+                SliceArg::range(Some(0), Some(3), 1),
+                SliceArg::range(Some(0), Some(6), 2),
+            ])
+            .expect("strided spectrum");
+
+        let actual = plan.inverse_2d_leto(strided).expect("leto inverse");
+
+        assert_eq!(actual.shape(), [3, 3]);
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_3d_forward_and_inverse_match_ndarray_reference() {
+        let plan = DctDstPlan::new(2, RealTransformKind::DctIV).expect("valid plan");
+        let input =
+            Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+                .expect("ndarray input");
+        let expected_forward = plan.forward_3d(&input).expect("ndarray forward");
+        let expected_inverse = plan.inverse_3d(&expected_forward).expect("ndarray inverse");
+        let leto_input = leto::Array3::from_shape_vec([2, 2, 2], input.iter().copied().collect())
+            .expect("leto input");
+
+        let actual_forward = plan
+            .forward_3d_leto(leto_input.view())
+            .expect("leto forward");
+        let actual_inverse = plan
+            .inverse_3d_leto(actual_forward.view())
+            .expect("leto inverse");
+
+        assert_eq!(actual_forward.shape(), [2, 2, 2]);
+        assert_eq!(actual_inverse.shape(), [2, 2, 2]);
+        for (actual, expected) in actual_forward
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_forward.iter())
+        {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+        for (actual, expected) in actual_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_inverse.iter())
+        {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
     }
 }

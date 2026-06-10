@@ -1,5 +1,15 @@
 # Apollo Gap Audit
 
+## DCT/DST Leto multidimensional boundary and benchmark refresh [minor]
+- Performed: bumped `apollo-dctdst` to `0.2.0`; added the workspace Leto dependency; added Leto 1D/2D/3D forward and inverse boundaries plus typed 1D Leto storage boundaries, returning `leto::Array<_, leto::MnemosyneStorage<_>, _>`.
+- Architecture effect: DCT/DST callers can now use Leto as a public array/layout boundary while existing slice and ndarray APIs remain the validation and compatibility surfaces.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided 1D views copy once into logical order; multidimensional Leto views copy once into ndarray row-major validation buffers before returning Mnemosyne-backed Leto arrays.
+- Implementation effect: Leto boundaries reuse the existing transform execution paths instead of adding a separate DCT/DST algorithm body.
+- Benchmark refresh: regenerated the full canonical FFT table with `cargo run -p xtask -- benchmark --all --profile quick`. Current measured table has 514 rows; f64 is faster on 68 rows, f32 is faster on 44 rows, and both are faster on 19 rows. This is empirical FFT benchmark evidence only and does not measure DCT/DST.
+- Verification: `cargo check -p apollo-dctdst`; `cargo test -p apollo-dctdst leto -- --nocapture`; `cargo test -p apollo-dctdst -- --nocapture`; `cargo clippy -p apollo-dctdst --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst --no-deps`; `cargo semver-checks -p apollo-dctdst --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dctdst --examples`; `cargo run -p xtask -- benchmark --all --profile quick`.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST slice and ndarray APIs. Benchmark table evidence is empirical quick-profile measurement only. No machine-checked proof is performed.
+- Residuals: DCT/DST still retains ndarray APIs for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+
 ## CZT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-czt` to `0.3.0`; added the workspace Leto dependency; added `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
 - Architecture effect: CZT Complex64 and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.

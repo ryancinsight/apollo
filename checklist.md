@@ -1,4 +1,13 @@
 # Apollo Checklist
+## DCT/DST Leto multidimensional boundary and full benchmark refresh [minor]
+- [x] Bumped `apollo-dctdst` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `DctDstPlan::forward_leto`, `DctDstPlan::inverse_leto`, `DctDstPlan::forward_2d_leto`, `DctDstPlan::inverse_2d_leto`, `DctDstPlan::forward_3d_leto`, `DctDstPlan::inverse_3d_leto`, `DctDstPlan::forward_leto_typed`, and `DctDstPlan::inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Kept ndarray and slice APIs as validation oracles while routing Leto inputs through the existing DCT/DST transform execution contract.
+- [x] Added value tests proving contiguous 1D, strided 1D, typed 1D, contiguous 2D, strided 2D inverse, and 3D Leto parity against existing slice or ndarray APIs.
+- [x] Regenerated the full canonical quick-profile `benchmark_results.md` table with `cargo run -p xtask -- benchmark --all --profile quick`. Current measured table: 514 rows; f64 faster on 68 rows; f32 faster on 44 rows; both faster on 19 rows.
+- [x] Verification: `cargo check -p apollo-dctdst`; `cargo test -p apollo-dctdst leto -- --nocapture`; `cargo test -p apollo-dctdst -- --nocapture`; `cargo clippy -p apollo-dctdst --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst --no-deps`; `cargo semver-checks -p apollo-dctdst --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dctdst --examples`; `cargo run -p xtask -- benchmark --all --profile quick`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST slice and ndarray APIs; empirical quick-profile benchmark refresh for FFT table rows. No machine-checked proof or DCT/DST runtime benchmark claim is made.
+
 ## CZT Leto public 1D boundary [minor]
 - [x] Bumped `apollo-czt` to `0.3.0` and added the workspace Leto provider dependency.
 - [x] Added `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto`, returning Mnemosyne-backed Leto arrays.

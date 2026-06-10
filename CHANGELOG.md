@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-dctdst` `0.2.0` adds real, typed, 2D, and 3D Leto DCT/DST boundaries returning Mnemosyne-backed Leto arrays, with slice and ndarray differential validation.
 - [minor] `apollo-czt` `0.3.0` adds Complex64 and typed Leto 1D CZT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-dht` `0.2.0` adds 2D/3D Leto DHT boundaries returning Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
 - [minor] `apollo-qft` `0.2.0` adds Complex64 and typed Leto 1D QFT boundaries returning Mnemosyne-backed Leto arrays.
@@ -56,6 +57,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] : added LOG2=6 (n=64) fast path in  calling  instead of falling through to generic Stockham with scratch allocation.
 - [patch] : collapsed duplicate coprime factors path in  and removed dead LOG2=5 ZST constructions and redundant n==90/n==198 special cases.
 ### Performance/Memory
+- [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 68 rows, f32 faster on 44 rows, and both faster on 19 rows.
 - [patch] Refreshed selected measured rows in `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`; the full table remains populated and only the requested rows received new quick-profile measurements.
 - [minor] `apollo-fft` public 1D slice wrappers now route through storage-specific owned slice methods and cached in-place `FftPlan1D` execution. Concrete `f64`, `f32`, and `f16` paths allocate one owned output/scratch vector instead of cloning into `Array1` and copying the result back into a second `Vec`. `apollo-fft` version bumped to `0.13.0`; `cargo semver-checks` could not analyze the crate because it is not published in the registry.
 - [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 101 rows, f32 faster on 71 rows, and both faster on 33 rows. N=3 now records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains a direct-row miss at `4.325x`.
