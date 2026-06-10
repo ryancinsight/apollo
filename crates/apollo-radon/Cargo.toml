@@ -9,7 +9,9 @@ description = "Discrete Radon transform and filtered backprojection plans for Ap
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+hermes-simd = { workspace = true }
 leto = { workspace = true }
+mnemosyne = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }

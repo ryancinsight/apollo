@@ -1,4 +1,14 @@
 # Apollo Checklist
+## Radon adjoint Hermes dot routing [patch]
+- [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-radon`.
+- [x] Routed threshold-sized adjoint backprojection pixel accumulations through `hermes_simd::dot::<f64>`.
+- [x] Materialized two detector sample lanes and two interpolation-weight lanes per projection angle in Mnemosyne thread-local scratch.
+- [x] Kept scalar linear interpolation sampling for smaller angle counts and as the value-semantic formula reference.
+- [x] Preserved existing Moirai image-row scheduling, public Leto/ndarray contracts, and forward projection scatter/deposit semantics.
+- [x] Added direct threshold-path tests for Hermes pixel parity and lane materialization against the scalar linear sampler.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-radon`; `cargo clippy -p apollo-radon --all-targets -- -D warnings`; `cargo doc -p apollo-radon --no-deps`; `cargo semver-checks -p apollo-radon --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: value-semantic Radon unit/property tests plus direct threshold-path Hermes pixel tests. No runtime benchmark claim is made.
+
 ## SHT Hermes complex dot routing [patch]
 - [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-sht`.
 - [x] Routed threshold-sized forward longitude reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.

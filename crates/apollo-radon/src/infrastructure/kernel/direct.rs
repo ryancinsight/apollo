@@ -1,7 +1,16 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
 
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array2;
+
+/// Below this angle count, scalar accumulation avoids Hermes dispatch and scratch setup.
+const RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD: usize = 256;
+
+thread_local! {
+    static BACKPROJECT_SAMPLE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static BACKPROJECT_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
 
 /// Execute the forward discrete Radon projection.
 ///
@@ -72,15 +81,86 @@ pub fn adjoint_backproject_into(
         let y = geometry.y(r);
         for c in 0..cols {
             let x = geometry.x(c);
-            let mut value = 0.0_f64;
-            for (angle_index, angle) in geometry.angles().iter().enumerate() {
-                let (sin_theta, cos_theta) = angle.sin_cos();
-                let det_coord = x * cos_theta + y * sin_theta;
-                value += sample_linear(geometry.detector_index(det_coord), sinogram, angle_index);
-            }
-            row[c] = value;
+            row[c] = backproject_pixel(x, y, sinogram, geometry);
         }
     });
+}
+
+fn backproject_pixel(
+    x: f64,
+    y: f64,
+    sinogram: &Array2<f64>,
+    geometry: &ParallelBeamGeometry,
+) -> f64 {
+    if geometry.angle_count() >= RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD {
+        backproject_pixel_hermes(x, y, sinogram, geometry)
+    } else {
+        backproject_pixel_scalar(x, y, sinogram, geometry)
+    }
+}
+
+fn backproject_pixel_scalar(
+    x: f64,
+    y: f64,
+    sinogram: &Array2<f64>,
+    geometry: &ParallelBeamGeometry,
+) -> f64 {
+    geometry
+        .angles()
+        .iter()
+        .enumerate()
+        .map(|(angle_index, angle)| {
+            let (sin_theta, cos_theta) = angle.sin_cos();
+            let det_coord = x * cos_theta + y * sin_theta;
+            sample_linear(geometry.detector_index(det_coord), sinogram, angle_index)
+        })
+        .sum()
+}
+
+fn backproject_pixel_hermes(
+    x: f64,
+    y: f64,
+    sinogram: &Array2<f64>,
+    geometry: &ParallelBeamGeometry,
+) -> f64 {
+    let lane_len = geometry.angle_count() * 2;
+    BACKPROJECT_SAMPLE_SCRATCH.with(|sample_pool| {
+        sample_pool.with_scratch(lane_len, |samples| {
+            BACKPROJECT_WEIGHT_SCRATCH.with(|weight_pool| {
+                weight_pool.with_scratch(lane_len, |weights| {
+                    fill_backproject_lanes(samples, weights, x, y, sinogram, geometry);
+                    hermes_simd::dot::<f64>(samples, weights)
+                        .expect("Radon backprojection Hermes dot uses equal-length angle lanes")
+                })
+            })
+        })
+    })
+}
+
+fn fill_backproject_lanes(
+    samples: &mut [f64],
+    weights: &mut [f64],
+    x: f64,
+    y: f64,
+    sinogram: &Array2<f64>,
+    geometry: &ParallelBeamGeometry,
+) {
+    for (angle_index, (&angle, (sample_pair, weight_pair))) in geometry
+        .angles()
+        .iter()
+        .zip(samples.chunks_exact_mut(2).zip(weights.chunks_exact_mut(2)))
+        .enumerate()
+    {
+        let (sin_theta, cos_theta) = angle.sin_cos();
+        let det_coord = x * cos_theta + y * sin_theta;
+        fill_linear_sample_weight(
+            geometry.detector_index(det_coord),
+            sinogram,
+            angle_index,
+            sample_pair,
+            weight_pair,
+        );
+    }
 }
 
 /// Deposit mass at fractional detector index into a single sinogram row
@@ -111,4 +191,90 @@ fn sample_linear(index: f64, sinogram: &Array2<f64>, angle_index: usize) -> f64 
         value += sinogram[(angle_index, left + 1)] * right_weight;
     }
     value
+}
+
+fn fill_linear_sample_weight(
+    index: f64,
+    sinogram: &Array2<f64>,
+    angle_index: usize,
+    samples: &mut [f64],
+    weights: &mut [f64],
+) {
+    debug_assert_eq!(samples.len(), 2);
+    debug_assert_eq!(weights.len(), 2);
+    if index < 0.0 || index > (sinogram.ncols() - 1) as f64 {
+        samples.fill(0.0);
+        weights.fill(0.0);
+        return;
+    }
+    let left = index.floor() as usize;
+    let right_weight = index - left as f64;
+    let left_weight = 1.0 - right_weight;
+    samples[0] = sinogram[(angle_index, left)];
+    weights[0] = left_weight;
+    if right_weight > 0.0 && left + 1 < sinogram.ncols() {
+        samples[1] = sinogram[(angle_index, left + 1)];
+        weights[1] = right_weight;
+    } else {
+        samples[1] = 0.0;
+        weights[1] = 0.0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn hermes_backproject_pixel_matches_scalar_formula_at_threshold() {
+        let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
+            .map(|index| std::f64::consts::PI * index as f64 / 511.0)
+            .collect::<Vec<_>>();
+        let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
+        let sinogram = Array2::from_shape_fn(
+            (geometry.angle_count(), geometry.detector_count()),
+            |(angle, detector)| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
+        );
+
+        for (x, y) in [(-0.5, -0.25), (0.0, 0.0), (0.75, 0.5)] {
+            let expected = backproject_pixel_scalar(x, y, &sinogram, &geometry);
+            let actual = backproject_pixel_hermes(x, y, &sinogram, &geometry);
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-11);
+        }
+    }
+
+    #[test]
+    fn backproject_lanes_match_linear_sample_formula() {
+        let angles = (0..RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD)
+            .map(|index| std::f64::consts::PI * index as f64 / 257.0)
+            .collect::<Vec<_>>();
+        let geometry = ParallelBeamGeometry::new(3, 3, angles, 5, 1.0).expect("valid geometry");
+        let sinogram = Array2::from_shape_fn(
+            (geometry.angle_count(), geometry.detector_count()),
+            |(angle, detector)| angle as f64 * 0.25 - detector as f64 * 0.5,
+        );
+        let mut samples = vec![f64::NAN; geometry.angle_count() * 2];
+        let mut weights = vec![f64::NAN; geometry.angle_count() * 2];
+
+        fill_backproject_lanes(
+            &mut samples,
+            &mut weights,
+            0.25,
+            -0.75,
+            &sinogram,
+            &geometry,
+        );
+
+        for angle_index in 0..geometry.angle_count() {
+            let angle = geometry.angles()[angle_index];
+            let (sin_theta, cos_theta) = angle.sin_cos();
+            let det_coord = 0.25 * cos_theta - 0.75 * sin_theta;
+            let expected =
+                sample_linear(geometry.detector_index(det_coord), &sinogram, angle_index);
+            let lane = angle_index * 2;
+            let actual = samples[lane] * weights[lane] + samples[lane + 1] * weights[lane + 1];
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
 }

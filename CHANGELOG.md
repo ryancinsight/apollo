@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-radon` adjoint backprojection pixel reductions now use Hermes dot products above a bounded angle-count threshold, with Mnemosyne thread-local detector sample and interpolation-weight scratch lanes while scalar linear sampling remains the small-path reference.
 - [patch] `apollo-sht` forward longitude reductions and inverse synthesis mode reductions now use Hermes interleaved complex dot-product reductions above a bounded threshold, with Mnemosyne thread-local spherical-harmonic lane scratch and scalar formulas retained for smaller workloads.
 - [patch] `apollo-nufft` exact 1D Type-1 and Type-2 direct rows now use Hermes interleaved complex dot-product reductions above the existing Moirai work threshold, with Mnemosyne thread-local phasor-lane scratch and scalar direct formulas retained for smaller workloads.
 - [patch] `apollo-mellin` forward and inverse log-frequency spectrum rows now use Hermes interleaved complex dot-product reductions above a bounded O(N^2) threshold, with Mnemosyne thread-local twiddle-lane scratch and scalar DFT/IDFT formulas retained for smaller spectra.

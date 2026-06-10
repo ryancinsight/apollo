@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Radon adjoint Hermes dot routing [patch]
+- Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-radon`; routed threshold-sized adjoint backprojection pixel accumulations through Hermes real dot products with detector sample lanes and interpolation-weight lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: Radon adjoint execution now composes Moirai image-row scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: the Hermes path reuses two thread-local `f64` lane buffers per worker, with two lanes per angle for left/right detector interpolation. Small angle counts retain allocation-free scalar accumulation.
+- Implementation effect: `backproject_pixel_scalar` remains the scalar formula reference; `fill_backproject_lanes` owns linear-sampler lane materialization; `backproject_pixel_hermes` owns the provider reduction boundary.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-radon`; `cargo clippy -p apollo-radon --all-targets -- -D warnings`; `cargo doc -p apollo-radon --no-deps`; `cargo semver-checks -p apollo-radon --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic Radon unit/property tests plus direct threshold-path Hermes pixel tests. No runtime benchmark claim is made.
+- Residuals: forward projection remains a scatter/deposit kernel and is not routed through Hermes dot products; WGPU Radon remains provider-isolated and does not consume Hermes.
+
 ## SHT Hermes complex dot routing [patch]
 - Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-sht`; routed threshold-sized forward longitude sums and inverse synthesis mode sums through Hermes provider-owned interleaved complex dot products with spherical-harmonic lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: SHT CPU execution now composes Moirai latitude-row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
