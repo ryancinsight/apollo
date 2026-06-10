@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## CZT direct Hermes complex dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-czt`; routed threshold-sized direct CZT row reductions through Hermes provider-owned interleaved complex dot products with geometric weight lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: CZT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized direct transforms materialize one interleaved input lane buffer, then reuse thread-local geometric weight-lane scratch per worker row; small direct transforms retain allocation-free scalar accumulation.
+- Implementation effect: `czt_direct_bin` remains the scalar formula reference for small paths and tests, while `czt_direct_bin_hermes` owns the provider reduction boundary and `fill_power_lanes` owns geometric progression materialization.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-czt`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic CZT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: direct CZT still materializes interleaved input lanes because the current Hermes complex dot API consumes primitive interleaved lanes; Bluestein pointwise multiplication still uses local complex multiplication through Moirai rather than Hermes.
+
 ## SDFT direct-bin Hermes dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-sdft`; routed threshold-sized direct-bin real and imaginary reductions through Hermes dot products with trigonometric weights stored in Mnemosyne thread-local scratch.
 - Architecture effect: SDFT direct initialization now composes Moirai bin scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.

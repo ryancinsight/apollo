@@ -1,4 +1,14 @@
 # Apollo Checklist
+## CZT direct Hermes complex dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-czt`.
+- [x] Routed threshold-sized direct CZT row reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Materialized one shared interleaved input lane buffer per threshold-sized direct transform and reused Mnemosyne thread-local scratch for per-row geometric power lanes.
+- [x] Kept scalar direct-bin accumulation for smaller direct transforms and as the value-semantic formula reference.
+- [x] Preserved existing Moirai disjoint output-row scheduling and Bluestein fast-path routing.
+- [x] Added direct threshold-path tests for Hermes row parity and geometric power-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-czt`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`; `cargo run -p xtask -- benchmark`.
+- Evidence: value-semantic CZT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## SDFT direct-bin Hermes dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-sdft`.
 - [x] Routed direct-bin real and imaginary reductions through `hermes_simd::dot::<f64>` above `HERMES_DIRECT_BIN_LEN_THRESHOLD`.

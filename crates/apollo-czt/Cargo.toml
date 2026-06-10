@@ -9,6 +9,7 @@ description = "Chirp z-transform utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+hermes-simd = { workspace = true }
 leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }
