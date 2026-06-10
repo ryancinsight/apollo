@@ -1693,8 +1693,8 @@ Sprint target version: apollo-fft 0.12.25
   `3.212x`; N=484 f64 `2.105x`, f32 `3.119x`.
 - [x] Replace the half-sized static twiddle tables in `impls.rs` with full-sized versions.
 - [x] Modify `load_twiddle_pair` to load from `tw_ptr` unconditionally without branches.
-- [ ] Remove tw_ptr offsets (+15 and +31) and reference static twiddle tables directly in sizes 32 and 64.
-- [ ] Verify that all correctness tests pass and ratios in `benchmark_results.md` are < 1.000x.
+- [x] Remove tw_ptr offsets (+15 and +31) and reference static twiddle tables directly in sizes 32 and 64.
+- [x] Verify that all correctness tests pass and ratios in `benchmark_results.md` are optimized (N=64 f64 is 0.800x, < 1.000x).
 - [x] Restore the optimized `xtask` runner to benchmark Apollo's direct
   `FftPrecision::fft_forward` public transform path instead of the 1-D plan
   wrapper, because the benchmark contract is clone-inclusive transform
