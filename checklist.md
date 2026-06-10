@@ -1,4 +1,12 @@
 # Apollo Checklist
+## NUFFT Leto 1D type-1/type-2 boundary [minor]
+- [x] Bumped `apollo-nufft` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `NufftPlan1D::type1_leto`, `NufftPlan1D::type2_leto`, `NufftPlan1D::type1_leto_typed`, and `NufftPlan1D::type2_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing slice/Mnemosyne scratch NUFFT kernels; contiguous Leto views borrow through `Cow`, and strided views copy once into logical order.
+- [x] Added value tests proving type-1 parity, strided type-1 parity, type-2 parity, and typed `Complex32` type-1/type-2 parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft leto -- --nocapture`; `cargo test -p apollo-nufft -- --nocapture`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-nufft --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing NUFFT slice and typed slice APIs. No runtime benchmark claim is made.
+
 ## SHT Leto 2D sample/coefficient boundary [minor]
 - [x] Bumped `apollo-sht` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `ShtPlan::forward_real_leto`, `ShtPlan::forward_complex_leto`, `ShtPlan::inverse_real_leto`, `ShtPlan::inverse_complex_leto`, and typed Leto variants for real/complex forward and inverse paths, returning Mnemosyne-backed Leto arrays.

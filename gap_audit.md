@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## NUFFT Leto 1D type-1/type-2 boundary [minor]
+- Performed: bumped `apollo-nufft` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for 1D type-1, type-2, typed type-1, and typed type-2 NUFFT.
+- Architecture effect: NUFFT 1D callers can now use Leto as the public position/value/coefficient boundary while existing slice and ndarray APIs remain the validation and compatibility surface.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated Fourier bins and interpolated values use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing slice NUFFT kernels and Mnemosyne scratch pools rather than adding a separate NUFFT implementation.
+- Verification: `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft leto -- --nocapture`; `cargo test -p apollo-nufft -- --nocapture`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-nufft --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing NUFFT slice APIs for type-1, strided type-1, type-2, and typed `Complex32` type-1/type-2. No runtime benchmark claim is made.
+- Residuals: NUFFT 3D and NUFFT WGPU still have no Leto boundary; direct exact helper functions still expose ndarray where they are validation surfaces.
+
 ## SHT Leto 2D sample/coefficient boundary [minor]
 - Performed: bumped `apollo-sht` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for real forward, complex forward, real inverse, complex inverse, and typed real/complex forward/inverse storage.
 - Architecture effect: SHT callers can now use Leto as the public 2D sample/coefficient boundary while existing ndarray APIs remain the validation and compatibility surface.

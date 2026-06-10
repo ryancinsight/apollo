@@ -37,6 +37,7 @@ use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Sh
 use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
+use std::borrow::Cow;
 use std::f64::consts::PI;
 
 thread_local! {
@@ -167,6 +168,27 @@ impl NufftPlan1D {
         Array1::from_vec(output)
     }
 
+    /// Run type-1 NUFFT from Leto position and value views.
+    ///
+    /// Contiguous Leto views are borrowed directly; strided views are copied once
+    /// into logical order before reusing the canonical slice NUFFT kernel.
+    pub fn type1_leto(
+        &self,
+        positions: leto::ArrayView1<'_, f64>,
+        values: leto::ArrayView1<'_, Complex64>,
+    ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let positions = leto_view1_cow(positions, "positions")?;
+        let values = leto_view1_cow(values, "values")?;
+        if positions.len() != values.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: positions.len().to_string(),
+                actual: values.len().to_string(),
+            });
+        }
+        let output = self.type1(positions.as_ref(), values.as_ref());
+        leto_array1_from_slice(output.as_slice().expect("NUFFT output must be contiguous"))
+    }
+
     /// Run type-1 NUFFT mapping strictly inside zero-allocation bounding limits.
     pub fn type1_into(
         &self,
@@ -223,6 +245,31 @@ impl NufftPlan1D {
             &mut output,
         );
         output
+    }
+
+    /// Run type-2 NUFFT from Leto coefficient and position views.
+    pub fn type2_leto(
+        &self,
+        fourier_coeffs: leto::ArrayView1<'_, Complex64>,
+        positions: leto::ArrayView1<'_, f64>,
+    ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs, "fourier_coeffs")?;
+        let positions = leto_view1_cow(positions, "positions")?;
+        if fourier_coeffs.len() != self.n_out {
+            return Err(ApolloError::ShapeMismatch {
+                expected: self.n_out.to_string(),
+                actual: fourier_coeffs.len().to_string(),
+            });
+        }
+        let mut spread = vec![Complex64::new(0.0, 0.0); self.m];
+        let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
+        self.type2_into(
+            fourier_coeffs.as_ref(),
+            positions.as_ref(),
+            &mut spread,
+            &mut output,
+        );
+        leto_array1_from_slice(&output)
     }
 
     /// Run type-2 NUFFT mapping strictly inside zero-allocation bounding limits.
@@ -320,6 +367,27 @@ impl NufftPlan1D {
         Ok(())
     }
 
+    /// Run typed type-1 NUFFT from Leto position and value views.
+    pub fn type1_leto_typed<T: NufftComplexStorage>(
+        &self,
+        positions: leto::ArrayView1<'_, f64>,
+        values: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let positions = leto_view1_cow(positions, "positions")?;
+        let values = leto_view1_cow(values, "values")?;
+        let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n_out];
+        self.type1_typed_into(
+            positions.as_ref(),
+            values.as_ref(),
+            &mut scratch,
+            &mut output,
+            profile,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Run type-2 NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
     pub fn type2_typed_into<T: NufftComplexStorage>(
         &self,
@@ -361,6 +429,27 @@ impl NufftPlan1D {
             });
         });
         Ok(())
+    }
+
+    /// Run typed type-2 NUFFT from Leto coefficient and position views.
+    pub fn type2_leto_typed<T: NufftComplexStorage>(
+        &self,
+        fourier_coeffs: leto::ArrayView1<'_, T>,
+        positions: leto::ArrayView1<'_, f64>,
+        profile: PrecisionProfile,
+    ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let fourier_coeffs = leto_view1_cow(fourier_coeffs, "fourier_coeffs")?;
+        let positions = leto_view1_cow(positions, "positions")?;
+        let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        self.type2_typed_into(
+            fourier_coeffs.as_ref(),
+            positions.as_ref(),
+            &mut scratch,
+            &mut output,
+            profile,
+        )?;
+        leto_array1_from_slice(&output)
     }
 }
 
@@ -437,6 +526,32 @@ pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], t
     for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
         *slot = T::from_complex64(value);
     }
+}
+
+fn leto_view1_cow<'a, T: Copy>(
+    view: leto::ArrayView1<'a, T>,
+    name: &'static str,
+) -> ApolloResult<Cow<'a, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        Ok(Cow::Borrowed(slice))
+    } else {
+        let mut values = Vec::with_capacity(view.size());
+        for index in 0..view.shape()[0] {
+            values.push(*view.get([index]).map_err(|_| ApolloError::ShapeMismatch {
+                expected: name.to_string(),
+                actual: format!("index {index}"),
+            })?);
+        }
+        Ok(Cow::Owned(values))
+    }
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        ApolloError::validation("leto_shape", values.len().to_string(), err.to_string())
+    })
 }
 
 /// Exact direct 1D type-1 NUFFT.
@@ -687,6 +802,189 @@ mod tests {
             let im_bound = expected.im.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual[0].to_f32()) - expected.re).abs() <= re_bound);
             assert!((f64::from(actual[1].to_f32()) - expected.im).abs() <= im_bound);
+        }
+    }
+
+    #[test]
+    fn leto_type1_matches_slice_reference() {
+        let domain = UniformDomain1D::new(8, 0.125).unwrap();
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
+        let values = vec![
+            Complex64::new(1.0, 0.25),
+            Complex64::new(-0.5, 0.75),
+            Complex64::new(0.25, -0.1),
+            Complex64::new(0.125, 0.5),
+        ];
+        let leto_positions =
+            leto::Array1::from_shape_vec([positions.len()], positions.clone()).unwrap();
+        let leto_values = leto::Array1::from_shape_vec([values.len()], values.clone()).unwrap();
+        let expected = plan.type1(&positions, &values);
+
+        let actual = plan
+            .type1_leto(leto_positions.view(), leto_values.view())
+            .expect("leto type1");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert!((*actual - *expected).norm() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_type1_matches_slice_reference() {
+        let domain = UniformDomain1D::new(8, 0.125).unwrap();
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
+        let values = vec![
+            Complex64::new(1.0, 0.25),
+            Complex64::new(-0.5, 0.75),
+            Complex64::new(0.25, -0.1),
+            Complex64::new(0.125, 0.5),
+        ];
+        let mut position_backing = Vec::with_capacity(positions.len() * 2);
+        let mut value_backing = Vec::with_capacity(values.len() * 2);
+        for (position, value) in positions.iter().copied().zip(values.iter().copied()) {
+            position_backing.push(position);
+            position_backing.push(99.0);
+            value_backing.push(value);
+            value_backing.push(Complex64::new(99.0, 99.0));
+        }
+        let leto_positions =
+            leto::Array1::from_shape_vec([position_backing.len()], position_backing).unwrap();
+        let leto_values =
+            leto::Array1::from_shape_vec([value_backing.len()], value_backing).unwrap();
+        let strided_positions = leto_positions
+            .view()
+            .slice(&[(0, positions.len() * 2, 2)])
+            .expect("strided positions");
+        let strided_values = leto_values
+            .view()
+            .slice(&[(0, values.len() * 2, 2)])
+            .expect("strided values");
+        let expected = plan.type1(&positions, &values);
+
+        let actual = plan
+            .type1_leto(strided_positions, strided_values)
+            .expect("leto type1");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert!((*actual - *expected).norm() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_type2_matches_slice_reference() {
+        let domain = UniformDomain1D::new(8, 0.125).unwrap();
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
+        let coefficients = Array1::from_vec(
+            (0..plan.n_out)
+                .map(|i| Complex64::new((i as f64 * 0.2).cos(), (i as f64 * 0.3).sin()))
+                .collect(),
+        );
+        let leto_positions =
+            leto::Array1::from_shape_vec([positions.len()], positions.clone()).unwrap();
+        let leto_coefficients =
+            leto::Array1::from_shape_vec([coefficients.len()], coefficients.to_vec()).unwrap();
+        let expected = plan.type2(&coefficients, &positions);
+
+        let actual = plan
+            .type2_leto(leto_coefficients.view(), leto_positions.view())
+            .expect("leto type2");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert!((*actual - *expected).norm() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn typed_leto_type1_and_type2_match_slice_reference() {
+        let domain = UniformDomain1D::new(8, 0.125).unwrap();
+        let plan = NufftPlan1D::new(
+            domain,
+            DEFAULT_NUFFT_OVERSAMPLING,
+            DEFAULT_NUFFT_KERNEL_WIDTH,
+        );
+        let positions = vec![0.0, 0.09, 0.21, 0.47];
+        let values = vec![
+            Complex32::new(1.0, 0.25),
+            Complex32::new(-0.5, 0.75),
+            Complex32::new(0.25, -0.1),
+            Complex32::new(0.125, 0.5),
+        ];
+        let leto_positions =
+            leto::Array1::from_shape_vec([positions.len()], positions.clone()).unwrap();
+        let leto_values = leto::Array1::from_shape_vec([values.len()], values.clone()).unwrap();
+        let mut scratch = vec![Complex64::new(0.0, 0.0); plan.m];
+        let mut expected_type1 = vec![Complex32::new(0.0, 0.0); plan.n_out];
+        plan.type1_typed_into(
+            &positions,
+            &values,
+            &mut scratch,
+            &mut expected_type1,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice type1");
+
+        let actual_type1 = plan
+            .type1_leto_typed(
+                leto_positions.view(),
+                leto_values.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto type1");
+        let actual_type1_view = actual_type1.view();
+        let actual_type1 = actual_type1_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_type1.iter().zip(expected_type1.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
+        }
+
+        let leto_coefficients =
+            leto::Array1::from_shape_vec([expected_type1.len()], expected_type1.clone()).unwrap();
+        let mut expected_type2 = vec![Complex32::new(0.0, 0.0); positions.len()];
+        plan.type2_typed_into(
+            &expected_type1,
+            &positions,
+            &mut scratch,
+            &mut expected_type2,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice type2");
+        let actual_type2 = plan
+            .type2_leto_typed(
+                leto_coefficients.view(),
+                leto_positions.view(),
+                PrecisionProfile::LOW_PRECISION_F32,
+            )
+            .expect("typed leto type2");
+        let actual_type2_view = actual_type2.view();
+        let actual_type2 = actual_type2_view
+            .as_slice()
+            .expect("contiguous leto output");
+        for (actual, expected) in actual_type2.iter().zip(expected_type2.iter()) {
+            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
+            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
         }
     }
 
