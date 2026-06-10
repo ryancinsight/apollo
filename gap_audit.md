@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SHT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-sht-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 2D forward samples, 2D inverse coefficients, flat typed forward samples, and flat typed inverse coefficients.
+- Architecture effect: SHT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
+- Memory effect: contiguous flat typed Leto 1D views borrow storage through `Cow`; strided Leto 1D/2D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU ndarray and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-sht-wgpu`; `cargo test -p apollo-sht-wgpu leto -- --nocapture`; `cargo test -p apollo-sht-wgpu -- --nocapture`; `cargo clippy -p apollo-sht-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-sht-wgpu --no-deps`; `cargo semver-checks -p apollo-sht-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SHT-WGPU ndarray/slice APIs for 2D forward, 2D inverse, strided 2D forward, and typed flat forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; SHT-WGPU still performs WGPU arithmetic at `f32` precision by contract; ndarray remains an internal staging and validation surface for this WGPU crate.
+
 ## GFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-gft-wgpu` to `0.2.0`; promoted Leto from dev-only to public dependency; added Leto host boundaries for forward, inverse, typed forward, and typed inverse execution.
 - Architecture effect: GFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

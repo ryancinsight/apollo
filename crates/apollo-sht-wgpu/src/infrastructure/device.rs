@@ -1,6 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
 use apollo_sht::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
@@ -100,6 +100,22 @@ impl ShtWgpuBackend {
         Ok(coefficients_from_modes(plan.max_degree(), &raw))
     }
 
+    /// Execute forward complex SHT from a Leto sample grid.
+    ///
+    /// The returned dense coefficient matrix has shape
+    /// `(max_degree + 1, 2 * max_degree + 1)` and uses Mnemosyne-backed Leto
+    /// storage. Strided sample views are materialized once into logical order
+    /// before the existing WGPU ndarray execution path.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &ShtWgpuPlan,
+        samples: leto::ArrayView2<'_, Complex32>,
+    ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let samples = array2_from_leto_view(samples, "SHT samples")?;
+        let coefficients = self.execute_forward(plan, &samples)?;
+        leto_array2_from_ndarray(coefficients.values(), "SHT coefficients")
+    }
+
     /// Execute inverse complex SHT by direct synthesis matrix summation.
     pub fn execute_inverse(
         &self,
@@ -135,6 +151,17 @@ impl ShtWgpuBackend {
         .map_err(|_| WgpuError::InvalidPlan {
                 message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: inverse output shape does not match plan", plan.latitudes(), plan.longitudes(), plan.max_degree()),
             })
+    }
+
+    /// Execute inverse complex SHT from a dense Leto coefficient matrix.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &ShtWgpuPlan,
+        coefficients: leto::ArrayView2<'_, Complex64>,
+    ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let coefficients = coefficients_from_leto_view(plan, coefficients)?;
+        let samples = self.execute_inverse(plan, &coefficients)?;
+        leto_array2_from_ndarray(&samples, "SHT inverse samples")
     }
 
     /// Execute forward complex SHT from a flat typed sample slice.
@@ -177,6 +204,18 @@ impl ShtWgpuBackend {
         self.execute_forward(plan, &samples_2d)
     }
 
+    /// Execute forward complex SHT from a flat typed Leto sample view.
+    pub fn execute_forward_flat_leto_typed<T: ShtComplexStorage>(
+        &self,
+        plan: &ShtWgpuPlan,
+        precision: PrecisionProfile,
+        flat_samples: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
+        let flat_samples = leto_view1_cow(flat_samples)?;
+        let coefficients = self.execute_forward_flat_typed(plan, precision, &flat_samples)?;
+        leto_array2_from_ndarray(coefficients.values(), "SHT typed coefficients")
+    }
+
     /// Execute inverse complex SHT and write the flat output to a typed slice.
     ///
     /// The output slice must have exactly `plan.latitudes() * plan.longitudes()` elements.
@@ -207,6 +246,20 @@ impl ShtWgpuBackend {
             *slot = T::from_complex64(*value);
         }
         Ok(())
+    }
+
+    /// Execute inverse complex SHT from a Leto coefficient matrix and return a
+    /// flat typed Leto sample buffer in row-major latitude × longitude order.
+    pub fn execute_inverse_flat_leto_typed<T: ShtComplexStorage>(
+        &self,
+        plan: &ShtWgpuPlan,
+        precision: PrecisionProfile,
+        coefficients: leto::ArrayView2<'_, Complex64>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let coefficients = coefficients_from_leto_view(plan, coefficients)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.sample_count()];
+        self.execute_inverse_flat_typed_into(plan, precision, &coefficients, &mut output)?;
+        leto_array1_from_slice(&output, "SHT typed inverse samples")
     }
 }
 
@@ -266,4 +319,112 @@ fn modes_from_coefficients(coefficients: &SphericalHarmonicCoefficients) -> Vec<
             Complex32::new(value.re as f32, value.im as f32)
         })
         .collect()
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
+            message: format!("invalid Leto SHT 1D view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn array2_from_leto_view<T: Copy>(
+    view: leto::ArrayView2<'_, T>,
+    label: &str,
+) -> WgpuResult<Array2<T>> {
+    let [rows, cols] = view.shape();
+    let mut values = Vec::with_capacity(rows * cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            values.push(
+                *view
+                    .get([row, col])
+                    .map_err(|err| WgpuError::ShapeMismatch {
+                        message: format!("invalid Leto {label} 2D view: {err:?}"),
+                    })?,
+            );
+        }
+    }
+    Array2::from_shape_vec((rows, cols), values).map_err(|err| WgpuError::ShapeMismatch {
+        message: format!("failed to materialize Leto {label} 2D view: {err}"),
+    })
+}
+
+fn coefficients_from_leto_view(
+    plan: &ShtWgpuPlan,
+    coefficients: leto::ArrayView2<'_, Complex64>,
+) -> WgpuResult<SphericalHarmonicCoefficients> {
+    let values = array2_from_leto_view(coefficients, "SHT coefficients")?;
+    let expected = (plan.max_degree() + 1, 2 * plan.max_degree() + 1);
+    if values.dim() != expected {
+        let (rows, cols) = values.dim();
+        return Err(WgpuError::ShapeMismatch {
+            message: format!(
+                "coefficient shape mismatch: expected {}x{}, got {}x{}",
+                expected.0, expected.1, rows, cols
+            ),
+        });
+    }
+    Ok(SphericalHarmonicCoefficients::from_values(
+        plan.max_degree(),
+        values,
+    ))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+    label: &str,
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
+        }
+    })
+}
+
+fn leto_array2_from_ndarray<T: Copy>(
+    values: &Array2<T>,
+    label: &str,
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+    let (rows, cols) = values.dim();
+    let flat: Vec<T> = values.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([rows, cols], &flat).map_err(|err| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
 }

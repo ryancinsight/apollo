@@ -4,6 +4,7 @@
 mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use apollo_sht::{ShtPlan, SphericalHarmonicCoefficients};
+    use leto::{SliceArg, Storage};
     use ndarray::Array2;
     use num_complex::{Complex32, Complex64};
 
@@ -132,6 +133,86 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_and_inverse_match_ndarray_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = ShtWgpuPlan::new(4, 5, 1);
+        let samples = Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+            Complex32::new(
+                0.25 + lat as f32 * 0.5 - lon as f32 * 0.125,
+                0.1 * (lat as f32 + 1.0) * (lon as f32 + 1.0),
+            )
+        });
+        let expected_forward = backend
+            .execute_forward(&plan, &samples)
+            .expect("ndarray forward");
+        let samples_leto = leto::Array::from_mnemosyne_slice(
+            [plan.latitudes(), plan.longitudes()],
+            &samples.iter().copied().collect::<Vec<_>>(),
+        )
+        .expect("leto samples");
+        let actual_forward = backend
+            .execute_forward_leto(&plan, samples_leto.view())
+            .expect("leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward
+                .values()
+                .as_slice()
+                .expect("contiguous coeffs")
+        );
+
+        let expected_inverse = backend
+            .execute_inverse(&plan, &expected_forward)
+            .expect("ndarray inverse");
+        let actual_inverse = backend
+            .execute_inverse_leto(&plan, actual_forward.view())
+            .expect("leto inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice().expect("contiguous inverse")
+        );
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_ndarray_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = ShtWgpuPlan::new(4, 5, 1);
+        let samples = Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+            Complex32::new(lat as f32 + lon as f32 * 0.25, 0.5 + lon as f32 * 0.1)
+        });
+        let mut interleaved = Vec::with_capacity(plan.latitudes() * plan.longitudes() * 2);
+        for value in samples.iter().copied() {
+            interleaved.push(value);
+            interleaved.push(Complex32::new(99.0, -99.0));
+        }
+        let interleaved_leto = leto::Array::from_mnemosyne_slice(
+            [plan.latitudes(), plan.longitudes() * 2],
+            &interleaved,
+        )
+        .expect("interleaved samples");
+        let strided = interleaved_leto
+            .slice_with::<2>(&[
+                SliceArg::range(Some(0), None, 1),
+                SliceArg::range(Some(0), None, 2),
+            ])
+            .expect("strided samples");
+        let expected = backend
+            .execute_forward(&plan, &samples)
+            .expect("ndarray forward");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(
+            actual.storage().as_slice(),
+            expected.values().as_slice().expect("contiguous coeffs")
+        );
+    }
+
+    #[test]
     fn typed_flat_mixed_storage_matches_represented_forward_when_device_exists() {
         let Some(backend) = backend_or_skip() else {
             return;
@@ -184,6 +265,71 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = ShtWgpuPlan::new(3, 5, 2);
+        let flat_len = plan.sample_count();
+        let input: Vec<[f16; 2]> = (0..flat_len)
+            .map(|i| {
+                [
+                    f16::from_f32(0.5 + i as f32 * 0.1),
+                    f16::from_f32(0.1 * (i as f32 + 1.0)),
+                ]
+            })
+            .collect();
+
+        let expected_forward = backend
+            .execute_forward_flat_typed(&plan, PrecisionProfile::MIXED_PRECISION_F16_F32, &input)
+            .expect("typed slice forward");
+        let input_leto =
+            leto::Array::from_mnemosyne_slice([input.len()], &input).expect("typed leto input");
+        let actual_forward = backend
+            .execute_forward_flat_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                input_leto.view(),
+            )
+            .expect("typed leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward
+                .values()
+                .as_slice()
+                .expect("contiguous coeffs")
+        );
+
+        let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; flat_len];
+        backend
+            .execute_inverse_flat_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &expected_forward,
+                &mut expected_inverse,
+            )
+            .expect("typed slice inverse");
+        let actual_inverse = backend
+            .execute_inverse_flat_leto_typed::<[f16; 2]>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                actual_forward.view(),
+            )
+            .expect("typed leto inverse");
+        let actual_bits: Vec<[u16; 2]> = actual_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .map(|value| [value[0].to_bits(), value[1].to_bits()])
+            .collect();
+        let expected_bits: Vec<[u16; 2]> = expected_inverse
+            .iter()
+            .map(|value| [value[0].to_bits(), value[1].to_bits()])
+            .collect();
+        assert_eq!(actual_bits, expected_bits);
     }
 
     #[test]
