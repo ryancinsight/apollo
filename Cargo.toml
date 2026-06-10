@@ -99,7 +99,7 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
 # moirai: data-parallel runtime replacing direct scheduler usage (default-features off avoids its
 # global allocator; `parallel` provides the data-parallel API).
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "047e22e486b6308d683b1741433f4ce336618a4b", default-features = false, features = ["parallel", "melinoe", "mnemosyne"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "de4bf69e7f12b4522da1148ce547a634f214fd8a", default-features = false, features = ["parallel", "melinoe", "mnemosyne", "no-global-alloc"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
