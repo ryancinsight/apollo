@@ -40,10 +40,14 @@
 use crate::domain::contracts::error::FrftError;
 use leto::Array2;
 use leto_ops::symmetric_eigen_jacobi;
+use moirai::ParallelSliceMut;
 use ndarray::Array1;
 use num_complex::Complex64;
 use std::f64::consts::PI;
 use std::sync::Arc;
+
+/// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.
+const UNITARY_FRFT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
     static UNITARY_COEFF_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
@@ -285,28 +289,58 @@ fn apply_unitary_frft(
     output: &mut [Complex64],
 ) {
     with_coeff_scratch(n, |coeffs| {
+        let work_items = n.saturating_mul(n);
         // Step 1: c = V^T x
-        for k in 0..n {
-            let mut sum = Complex64::new(0.0, 0.0);
-            for j in 0..n {
-                sum += input[j] * *v.get([j, k]).expect("basis index in bounds");
-            }
-            coeffs[k] = sum;
+        if work_items >= UNITARY_FRFT_PAR_OP_THRESHOLD {
+            coeffs.par_mut().enumerate(|k, coeff| {
+                *coeff = projection_row(v, input, n, k);
+            });
+        } else {
+            coeffs.iter_mut().enumerate().for_each(|(k, coeff)| {
+                *coeff = projection_row(v, input, n, k);
+            });
         }
         // Step 2: phase c[k] *= exp(-i * order * k * pi / 2)
-        for (k, coeff) in coeffs.iter_mut().enumerate() {
-            let phase = -order * k as f64 * PI / 2.0;
-            *coeff *= Complex64::new(phase.cos(), phase.sin());
+        if work_items >= UNITARY_FRFT_PAR_OP_THRESHOLD {
+            coeffs.par_mut().enumerate(|k, coeff| {
+                apply_phase(coeff, order, k);
+            });
+        } else {
+            coeffs.iter_mut().enumerate().for_each(|(k, coeff)| {
+                apply_phase(coeff, order, k);
+            });
         }
         // Step 3: output = V c
-        for j in 0..n {
-            let mut sum = Complex64::new(0.0, 0.0);
-            for k in 0..n {
-                sum += coeffs[k] * *v.get([j, k]).expect("basis index in bounds");
-            }
-            output[j] = sum;
+        if work_items >= UNITARY_FRFT_PAR_OP_THRESHOLD {
+            output.par_mut().enumerate(|j, slot| {
+                *slot = reconstruction_row(v, coeffs, n, j);
+            });
+        } else {
+            output.iter_mut().enumerate().for_each(|(j, slot)| {
+                *slot = reconstruction_row(v, coeffs, n, j);
+            });
         }
     });
+}
+
+#[inline]
+fn projection_row(v: &Array2<f64>, input: &[Complex64], n: usize, k: usize) -> Complex64 {
+    (0..n)
+        .map(|j| input[j] * *v.get([j, k]).expect("basis index in bounds"))
+        .sum()
+}
+
+#[inline]
+fn apply_phase(coeff: &mut Complex64, order: f64, k: usize) {
+    let phase = -order * k as f64 * PI / 2.0;
+    *coeff *= Complex64::new(phase.cos(), phase.sin());
+}
+
+#[inline]
+fn reconstruction_row(v: &Array2<f64>, coeffs: &[Complex64], n: usize, j: usize) -> Complex64 {
+    (0..n)
+        .map(|k| coeffs[k] * *v.get([j, k]).expect("basis index in bounds"))
+        .sum()
 }
 
 #[inline]
@@ -441,6 +475,35 @@ mod tests {
         assert!(first_capacity >= n);
         for (actual, expected) in second.iter().zip(first.iter()) {
             assert!((actual - expected).norm() < 1.0e-14);
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_unitary_rows_match_serial_formula_at_threshold() {
+        let n = 128;
+        let order = 0.5;
+        let basis = GrunbaumBasis::new(n);
+        let input = Array1::from_shape_fn(n, |i| {
+            Complex64::new((i as f64 * 0.11).sin(), (i as f64 * 0.19).cos())
+        });
+        let plan = UnitaryFrftPlan {
+            n,
+            order,
+            basis: basis.clone(),
+        };
+        let actual = plan.forward(&input).expect("forward");
+        let v = basis.eigenvectors();
+        let mut coeffs = (0..n)
+            .map(|k| projection_row(v, input.as_slice().expect("contiguous input"), n, k))
+            .collect::<Vec<_>>();
+        for (k, coeff) in coeffs.iter_mut().enumerate() {
+            apply_phase(coeff, order, k);
+        }
+
+        for (row, value) in actual.iter().enumerate() {
+            let expected = reconstruction_row(v, &coeffs, n, row);
+            assert_eq!(value.re.to_bits(), expected.re.to_bits());
+            assert_eq!(value.im.to_bits(), expected.im.to_bits());
         }
     }
 

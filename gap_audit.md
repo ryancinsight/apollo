@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## FRFT direct/unitary Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-frft`; routed direct fractional and centered-DFT output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold; routed unitary Grünbaum projection coefficients, phase application, and reconstruction rows through `ParallelSliceMut` above the same bounded work model.
+- Architecture effect: FRFT ndarray, Leto, typed, and unitary public paths now share Moirai-backed CPU row execution instead of adding provider logic to individual wrappers.
+- Memory effect: caller-owned output buffers and the existing Mnemosyne thread-local coefficient scratch are filled in place by disjoint mutable writes; small vectors and exact identity/reversal special cases remain serial.
+- Implementation effect: direct fractional rows, centered-DFT rows, unitary projection rows, phase application, and unitary reconstruction rows are factored into shared helpers used by serial and Moirai paths.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-frft`; `cargo test -p apollo-frft`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic FrFT unit/property tests plus direct threshold-path row-formula tests for fractional, centered-DFT, and unitary execution. No runtime benchmark claim is made.
+- Residuals: typed storage conversion loops in `FrftStorage` still use serial scratch copies; Hermes is still absent from `apollo-frft`.
+
 ## QFT dense kernel Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-qft`; routed dense forward/inverse output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold; replaced the private direction boolean with `QftDirection`.
 - Architecture effect: QFT ndarray, Leto, and typed paths now share the same Moirai-backed dense kernel instead of adding provider logic to individual wrappers.

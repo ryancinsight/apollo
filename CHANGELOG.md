@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-frft` direct and unitary O(N²) CPU row execution now uses Moirai `ParallelSliceMut` above bounded work thresholds, with serial execution retained for small vectors and exact integer-order special cases unchanged.
 - [patch] `apollo-qft` dense forward/inverse row execution now uses Moirai `ParallelSliceMut` above a bounded O(N²) work threshold, with serial execution retained for small state vectors.
 - [patch] `apollo-hilbert` analytic-signal staging, analytic-mask application, real-part restoration, and quadrature extraction now use Moirai `ParallelSliceMut` above a bounded signal-length threshold while preserving serial execution for small inputs.
 - [patch] `apollo-nufft` exact 1D direct Type-1/Type-2 reference transforms now use Moirai `ParallelSliceMut` for disjoint output writes above a bounded operation threshold while preserving serial execution for small inputs.

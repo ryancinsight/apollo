@@ -15,6 +15,7 @@ ndarray = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 mnemosyne = { workspace = true }
+moirai = { workspace = true }
 thiserror = "1.0"
 
 [dev-dependencies]

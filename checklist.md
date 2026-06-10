@@ -1,4 +1,12 @@
 # Apollo Checklist
+## FRFT direct/unitary Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-frft`.
+- [x] Routed direct fractional and centered-DFT output-row writes through `moirai::ParallelSliceMut` above `FRFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller vectors and identity/reversal special cases unchanged.
+- [x] Routed unitary DFrFT projection coefficients, phase application, and reconstruction rows through `moirai::ParallelSliceMut` above `UNITARY_FRFT_PAR_OP_THRESHOLD`.
+- [x] Added threshold-path value tests for direct fractional rows, centered-DFT rows, and unitary Grünbaum rows.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-frft`; `cargo test -p apollo-frft`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic FrFT unit/property tests plus direct threshold-path row-formula tests. No runtime benchmark claim is made.
+
 ## QFT dense kernel Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-qft`.
 - [x] Routed dense forward/inverse output-row writes through `moirai::ParallelSliceMut` above `QFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller state vectors.
