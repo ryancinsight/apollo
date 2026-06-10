@@ -1,4 +1,23 @@
 # Apollo Backlog
+
+## Atlas in-house replacement roadmap — apollo slice [arch]
+
+Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),
+hermes (SIMD), moirai (parallel), mnemosyne (scratch). nalgebra is fully removed.
+Remaining replacement work:
+- [ ] [minor] Stage A3: replace residual internal ndarray in validation builders and
+  the Python/numpy boundary with leto where not a public contract; keep ndarray a
+  dev-only differential oracle.
+- [ ] [major] Stage A3: deprecate the public `Array1/2/3` ndarray surface behind an
+  `ndarray-compat` feature once consumers move to the `*_leto` APIs; ADR + migration guide.
+- [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
+  through moirai.
+- [ ] [arch] Stage D4: add an NVIDIA GPU path via **cuda-oxide** alongside the wgpu
+  backends, sharing a low-level GPU device/buffer abstraction co-owned with coeus
+  (coeus Stage D) rather than duplicating device plumbing. Start with FFT; differential
+  vs CPU and wgpu. ADR first.
+
+## Delivered
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `a46dea9` (`0.4.0`). This imports broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` that write through caller-owned output layouts, covering provider-side `[N,1]`/`[1,C]` elementwise tensor paths without materialized broadcast inputs. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `642d87a3` (`0.3.0`). This imports the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR without changing Apollo public APIs. Verification: focused FFT/FRFT/GFT check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
