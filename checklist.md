@@ -1,4 +1,11 @@
 # Apollo Checklist
+## FFT f32 small-power dispatch consolidation [patch]
+- [x] Routed mixed-radix f32 length-32 and length-64 small-power dispatch through `small_pot_inplace_sized`.
+- [x] Removed duplicated Winograd dispatch and inverse-normalization loops from the direct match arms.
+- [x] Preserved the canonical helper’s existing Stockham AVX/FMA path and Winograd fallback behavior.
+- [x] Verification: `cargo test -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo semver-checks -p apollo-fft --baseline-rev HEAD`.
+- Evidence: value-semantic FFT tests covering f32 power-of-two plans and mixed-radix paths. No runtime benchmark claim is made.
+
 ## Hermes complex-lane zero-copy cleanup [patch]
 - [x] Replaced redundant `Vec<f64>` interleaved lane materialization with borrowed `Complex64` lane views in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT Hermes helpers.
 - [x] Kept each unsafe reinterpretation isolated in a helper with a `SAFETY` layout invariant comment.

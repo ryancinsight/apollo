@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-fft` f32 mixed-radix length-32 and length-64 small-power paths now route through the canonical const-generic `small_pot_inplace_sized` helper instead of duplicating Winograd dispatch and inverse normalization.
 - [patch] `apollo-stft` forward analysis windowing and inverse WOLA frame windowing now use Hermes elementwise multiplication above a bounded frame-length threshold, with Mnemosyne thread-local real-frame scratch and scalar windowing retained for smaller frames.
 - [patch] Hermes complex-lane helpers in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT now borrow `Complex64` buffers as interleaved `f64` lanes instead of materializing redundant lane vectors.
 - [patch] `apollo-sft` direct DFT verification rows now use Hermes interleaved complex dot-product reductions above a bounded row-length threshold, with Mnemosyne thread-local twiddle-lane scratch and scalar DFT rows retained for smaller verification inputs.

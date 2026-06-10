@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## FFT f32 small-power dispatch consolidation [patch]
+- Performed: replaced the f32 mixed-radix length-32 and length-64 direct match-arm implementations with calls to the canonical const-generic `small_pot_inplace_sized` helper.
+- Architecture effect: length-specific f32 small-power behavior now has one authoritative implementation for Stockham AVX/FMA routing, Winograd fallback, and inverse normalization.
+- Memory effect: no new allocation surface; the helper keeps stack scratch for the Stockham path and direct array reinterpretation for the Winograd fallback.
+- Verification: `cargo test -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo semver-checks -p apollo-fft --baseline-rev HEAD`.
+- Evidence tier: value-semantic FFT tests and static diagnostics. No runtime benchmark claim is made.
+- Residuals: larger FFT small-power and composite paths still contain additional shape-specific branches that need separate audit before consolidation.
+
 ## Hermes complex-lane zero-copy cleanup [patch]
 - Performed: replaced redundant interleaved `Vec<f64>` construction with borrowed `Complex64` lane views in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT Hermes helpers; removed needless slice borrows and inline-always markers that violated the current clippy gate.
 - Architecture effect: complex reduction helpers now use one provider-facing borrowed lane boundary instead of duplicated allocation loops per transform crate.
