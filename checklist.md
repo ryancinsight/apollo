@@ -1,4 +1,12 @@
 # Apollo Checklist
+## FFT-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-fft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `GpuFft3d::forward_leto`, `inverse_leto`, `forward_f16_leto`, and `inverse_f16_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU 3D FFT split-buffer execution contract; contiguous Leto 1D/3D views borrow through `Cow`, and strided Leto views copy once into logical host order before dispatch.
+- [x] Added value tests proving forward/inverse parity, strided forward parity, and mixed `f16` forward/inverse parity against existing ndarray-backed FFT-WGPU methods when a device exists.
+- [x] Verification: `cargo check -p apollo-fft-wgpu`; `cargo test -p apollo-fft-wgpu leto -- --nocapture`; `cargo test -p apollo-fft-wgpu -- --nocapture`; `cargo clippy -p apollo-fft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-fft-wgpu --no-deps`; `cargo semver-checks -p apollo-fft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing FFT-WGPU ndarray APIs. No runtime benchmark claim is made.
+
 ## STFT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-stft-wgpu` to `0.12.0` and added the workspace Leto provider dependency.
 - [x] Added `StftWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_leto_typed`, and `execute_inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.

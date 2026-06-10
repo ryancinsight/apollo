@@ -187,13 +187,14 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "apollo-wgpu-helpers",
  "bytemuck",
  "criterion",
  "half",
+ "leto",
  "ndarray",
  "num-complex",
  "pollster",

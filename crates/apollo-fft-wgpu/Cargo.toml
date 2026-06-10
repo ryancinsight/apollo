@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -15,6 +15,7 @@ native-f16 = []
 apollo-fft = { path = "../apollo-fft" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
+leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 pollster = { workspace = true }

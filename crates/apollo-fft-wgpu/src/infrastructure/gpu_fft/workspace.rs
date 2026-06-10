@@ -2,8 +2,9 @@
 
 use crate::infrastructure::gpu_fft::pipeline::GpuFft3d;
 use crate::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy};
-use apollo_fft::f16;
+use apollo_fft::{f16, ApolloError, ApolloResult};
 use ndarray::Array3;
+use std::borrow::Cow;
 
 /// Reusable GPU and host buffers for repeated `GpuFft3d` dispatch.
 ///
@@ -258,6 +259,34 @@ impl GpuFft3d {
         }
     }
 
+    /// Forward transform of a Leto real field into a Mnemosyne-backed
+    /// interleaved complex Leto spectrum.
+    pub fn forward_leto(
+        &self,
+        field: leto::ArrayView3<'_, f64>,
+    ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        self.validate_leto_3d_shape(field.shape())?;
+        let field = leto_view3_cow(field)?;
+        let mut out = vec![0.0_f32; 2 * self.element_count()];
+        let mut buffers = GpuFft3dBuffers::new(self);
+        self.forward_values_into_with_buffers(field.as_ref(), &mut out, &mut buffers)?;
+        leto_array1_from_slice(&out, "FFT-WGPU forward Leto spectrum")
+    }
+
+    /// Forward mixed-precision transform of a Leto `f16` real field into a
+    /// Mnemosyne-backed interleaved `f32` complex Leto spectrum.
+    pub fn forward_f16_leto(
+        &self,
+        field: leto::ArrayView3<'_, f16>,
+    ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        self.validate_leto_3d_shape(field.shape())?;
+        let field = leto_view3_cow(field)?;
+        let mut out = vec![0.0_f32; 2 * self.element_count()];
+        let mut buffers = GpuFft3dBuffers::new(self);
+        self.forward_f16_values_into_with_buffers(field.as_ref(), &mut out, &mut buffers)?;
+        leto_array1_from_slice(&out, "FFT-WGPU f16 forward Leto spectrum")
+    }
+
     /// Inverse transform of an interleaved complex buffer into a real field.
     pub fn inverse(&self, field_hat: &[f32], out: &mut Array3<f64>) {
         assert_eq!(field_hat.len(), 2 * self.nx * self.ny * self.nz);
@@ -363,6 +392,210 @@ impl GpuFft3d {
         for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
             *dst = f16::from_f32(value);
         }
+    }
+
+    /// Inverse transform of an interleaved complex Leto spectrum into a
+    /// Mnemosyne-backed 3D Leto real field.
+    pub fn inverse_leto(
+        &self,
+        field_hat: leto::ArrayView1<'_, f32>,
+    ) -> ApolloResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
+        let field_hat = leto_view1_cow(field_hat)?;
+        let mut out = vec![0.0_f64; self.element_count()];
+        let mut buffers = GpuFft3dBuffers::new(self);
+        self.inverse_values_into_with_buffers(field_hat.as_ref(), &mut out, &mut buffers)?;
+        leto_array3_from_slice(
+            [self.nx, self.ny, self.nz],
+            &out,
+            "FFT-WGPU inverse Leto field",
+        )
+    }
+
+    /// Inverse mixed-precision transform of an interleaved complex Leto
+    /// spectrum into a Mnemosyne-backed 3D Leto `f16` real field.
+    pub fn inverse_f16_leto(
+        &self,
+        field_hat: leto::ArrayView1<'_, f32>,
+    ) -> ApolloResult<leto::Array<f16, leto::MnemosyneStorage<f16>, 3>> {
+        let field_hat = leto_view1_cow(field_hat)?;
+        let mut out = vec![f16::from_f32(0.0); self.element_count()];
+        let mut buffers = GpuFft3dBuffers::new(self);
+        self.inverse_f16_values_into_with_buffers(field_hat.as_ref(), &mut out, &mut buffers)?;
+        leto_array3_from_slice(
+            [self.nx, self.ny, self.nz],
+            &out,
+            "FFT-WGPU f16 inverse Leto field",
+        )
+    }
+
+    fn validate_leto_3d_shape(&self, shape: [usize; 3]) -> ApolloResult<()> {
+        let expected = [self.nx, self.ny, self.nz];
+        if shape == expected {
+            Ok(())
+        } else {
+            Err(ApolloError::ShapeMismatch {
+                expected: format!("{expected:?}"),
+                actual: format!("{shape:?}"),
+            })
+        }
+    }
+
+    fn validate_interleaved_len(&self, len: usize) -> ApolloResult<()> {
+        let expected = 2 * self.element_count();
+        if len == expected {
+            Ok(())
+        } else {
+            Err(ApolloError::ShapeMismatch {
+                expected: format!("interleaved complex length {expected}"),
+                actual: format!("interleaved complex length {len}"),
+            })
+        }
+    }
+
+    fn forward_values_into_with_buffers(
+        &self,
+        field: &[f64],
+        out: &mut [f32],
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
+        buffers.assert_matches(self);
+        if field.len() != buffers.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: format!("real field length {}", buffers.len()),
+                actual: format!("real field length {}", field.len()),
+            });
+        }
+        self.validate_interleaved_len(out.len())?;
+
+        buffers.im_host.fill(0.0);
+        buffers
+            .re_host
+            .iter_mut()
+            .zip(field.iter().copied())
+            .for_each(|(dst, src)| *dst = src as f32);
+        self.execute_forward_buffers(out, buffers);
+        Ok(())
+    }
+
+    fn forward_f16_values_into_with_buffers(
+        &self,
+        field: &[f16],
+        out: &mut [f32],
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
+        buffers.assert_matches(self);
+        if field.len() != buffers.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: format!("real field length {}", buffers.len()),
+                actual: format!("real field length {}", field.len()),
+            });
+        }
+        self.validate_interleaved_len(out.len())?;
+
+        buffers.im_host.fill(0.0);
+        buffers
+            .re_host
+            .iter_mut()
+            .zip(field.iter().copied())
+            .for_each(|(dst, src)| *dst = src.to_f32());
+        self.execute_forward_buffers(out, buffers);
+        Ok(())
+    }
+
+    fn inverse_values_into_with_buffers(
+        &self,
+        field_hat: &[f32],
+        out: &mut [f64],
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
+        buffers.assert_matches(self);
+        self.validate_interleaved_len(field_hat.len())?;
+        if out.len() != buffers.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: format!("real field length {}", buffers.len()),
+                actual: format!("real field length {}", out.len()),
+            });
+        }
+
+        Self::load_interleaved_spectrum(field_hat, buffers);
+        self.execute_inverse_buffers(buffers);
+        for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
+            *dst = value as f64;
+        }
+        Ok(())
+    }
+
+    fn inverse_f16_values_into_with_buffers(
+        &self,
+        field_hat: &[f32],
+        out: &mut [f16],
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
+        buffers.assert_matches(self);
+        self.validate_interleaved_len(field_hat.len())?;
+        if out.len() != buffers.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: format!("real field length {}", buffers.len()),
+                actual: format!("real field length {}", out.len()),
+            });
+        }
+
+        Self::load_interleaved_spectrum(field_hat, buffers);
+        self.execute_inverse_buffers(buffers);
+        for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
+            *dst = f16::from_f32(value);
+        }
+        Ok(())
+    }
+
+    fn execute_forward_buffers(&self, out: &mut [f32], buffers: &mut GpuFft3dBuffers) {
+        self.queue
+            .write_buffer(&buffers.re_buf, 0, bytemuck::cast_slice(&buffers.re_host));
+        self.queue
+            .write_buffer(&buffers.im_buf, 0, bytemuck::cast_slice(&buffers.im_host));
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-fft-wgpu leto forward encoder"),
+            });
+        self.encode_forward_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        buffers.read_split_into_host(self);
+        for ((re, im), pair) in buffers
+            .re_host
+            .iter()
+            .zip(buffers.im_host.iter())
+            .zip(out.chunks_exact_mut(2))
+        {
+            pair[0] = *re;
+            pair[1] = *im;
+        }
+    }
+
+    fn load_interleaved_spectrum(field_hat: &[f32], buffers: &mut GpuFft3dBuffers) {
+        for (idx, pair) in field_hat.chunks_exact(2).enumerate() {
+            buffers.re_host[idx] = pair[0];
+            buffers.im_host[idx] = pair[1];
+        }
+    }
+
+    fn execute_inverse_buffers(&self, buffers: &mut GpuFft3dBuffers) {
+        self.queue
+            .write_buffer(&buffers.re_buf, 0, bytemuck::cast_slice(&buffers.re_host));
+        self.queue
+            .write_buffer(&buffers.im_buf, 0, bytemuck::cast_slice(&buffers.im_host));
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-fft-wgpu leto inverse encoder"),
+            });
+        self.encode_inverse_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        buffers.read_split_into_host(self);
     }
 
     pub(crate) fn run_device_axis_fft(&self, axis: Axis, inverse: bool) {
@@ -611,12 +844,75 @@ impl GpuFft3d {
     }
 }
 
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .map_err(|err| ApolloError::ShapeMismatch {
+                    expected: "valid Leto FFT-WGPU 1D view".to_string(),
+                    actual: format!("{err:?}"),
+                })?,
+        );
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_view3_cow<T: Copy>(view: leto::ArrayView3<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let shape = view.shape();
+    let mut values = Vec::with_capacity(shape[0] * shape[1] * shape[2]);
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..shape[2] {
+                values.push(
+                    *view
+                        .get([i, j, k])
+                        .map_err(|err| ApolloError::ShapeMismatch {
+                            expected: "valid Leto FFT-WGPU 3D view".to_string(),
+                            actual: format!("{err:?}"),
+                        })?,
+                );
+            }
+        }
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+    context: &str,
+) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| ApolloError::Wgpu {
+        message: format!("failed to allocate Mnemosyne-backed Leto {context}: {err:?}"),
+    })
+}
+
+fn leto_array3_from_slice<T: Copy>(
+    shape: [usize; 3],
+    values: &[T],
+    context: &str,
+) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
+    leto::Array::from_mnemosyne_slice(shape, values).map_err(|err| ApolloError::Wgpu {
+        message: format!("failed to allocate Mnemosyne-backed Leto {context}: {err:?}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::WgpuBackend;
     use apollo_fft::{f16, FftBackend, PrecisionProfile, Shape3D};
+    use leto::{SliceArg, Storage};
+    use std::borrow::Cow;
 
-    use super::GpuFft3dBuffers;
+    use super::{leto_view3_cow, GpuFft3dBuffers};
 
     #[test]
     fn reusable_buffers_match_allocating_forward_and_inverse_when_device_exists() {
@@ -708,6 +1004,155 @@ mod tests {
                 actual.to_bits(),
                 expected.to_bits(),
                 "mixed inverse mismatch: actual={}, expected={}",
+                actual.to_f32(),
+                expected.to_f32()
+            );
+        }
+    }
+
+    #[test]
+    fn leto_view3_cow_borrows_contiguous_views() {
+        let input = leto::Array3::from_shape_vec([2, 2, 2], vec![1_u32, 2, 3, 4, 5, 6, 7, 8])
+            .expect("input");
+        let cow = leto_view3_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn leto_view3_cow_materializes_strided_views() {
+        let input = leto::Array3::from_shape_vec(
+            [2, 2, 4],
+            vec![1_u32, 99, 2, 99, 3, 99, 4, 99, 5, 99, 6, 99, 7, 99, 8, 99],
+        )
+        .expect("input");
+        let view = input
+            .slice_with::<3>(&[
+                SliceArg::range(Some(0), None, 1),
+                SliceArg::range(Some(0), None, 1),
+                SliceArg::range(Some(0), None, 2),
+            ])
+            .expect("strided view");
+        let cow = leto_view3_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn leto_forward_and_inverse_match_ndarray_when_device_exists() {
+        let Ok(backend) = WgpuBackend::try_default() else {
+            return;
+        };
+        let plan = backend
+            .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
+            .expect("gpu plan");
+        let values = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
+        let field = ndarray::Array3::from_shape_vec((2, 2, 2), values.clone()).expect("field");
+        let leto_field = leto::Array3::from_shape_vec([2, 2, 2], values).expect("leto field");
+
+        let expected_forward = plan.forward(&field);
+        let actual_forward = plan.forward_leto(leto_field.view()).expect("leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let mut expected_inverse = ndarray::Array3::<f64>::zeros((2, 2, 2));
+        plan.inverse(&expected_forward, &mut expected_inverse);
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                .expect("leto spectrum");
+        let actual_inverse = plan
+            .inverse_leto(leto_spectrum.view())
+            .expect("leto inverse");
+        for (actual, expected) in actual_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_inverse.iter())
+        {
+            assert!(
+                (actual - expected).abs() < 1.0e-5,
+                "inverse mismatch: actual={actual}, expected={expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_ndarray_when_device_exists() {
+        let Ok(backend) = WgpuBackend::try_default() else {
+            return;
+        };
+        let plan = backend
+            .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
+            .expect("gpu plan");
+        let backing = vec![
+            1.0_f64, 99.0, -2.0, 99.0, 0.5, 99.0, 3.0, 99.0, -1.25, 99.0, 0.75, 99.0, 2.5, 99.0,
+            -0.5, 99.0,
+        ];
+        let logical = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
+        let field = ndarray::Array3::from_shape_vec((2, 2, 2), logical).expect("field");
+        let leto_field = leto::Array3::from_shape_vec([2, 2, 4], backing).expect("leto field");
+        let view = leto_field
+            .slice_with::<3>(&[
+                SliceArg::range(Some(0), None, 1),
+                SliceArg::range(Some(0), None, 1),
+                SliceArg::range(Some(0), None, 2),
+            ])
+            .expect("strided view");
+
+        let expected = plan.forward(&field);
+        let actual = plan.forward_leto(view).expect("leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_ndarray_f16_when_device_exists() {
+        let Ok(backend) = WgpuBackend::try_default() else {
+            return;
+        };
+        let plan = backend
+            .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
+            .expect("gpu plan");
+        let values = [1.0_f32, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
+        let field_f16 = ndarray::Array3::from_shape_vec(
+            (2, 2, 2),
+            values.iter().copied().map(f16::from_f32).collect(),
+        )
+        .expect("f16 field");
+        let leto_field = leto::Array3::from_shape_vec(
+            [2, 2, 2],
+            values.iter().copied().map(f16::from_f32).collect(),
+        )
+        .expect("leto f16 field");
+
+        let expected_forward = plan.forward_f16(&field_f16);
+        let actual_forward = plan
+            .forward_f16_leto(leto_field.view())
+            .expect("leto f16 forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let mut expected_inverse = ndarray::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
+        plan.inverse_f16(&expected_forward, &mut expected_inverse);
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                .expect("leto spectrum");
+        let actual_inverse = plan
+            .inverse_f16_leto(leto_spectrum.view())
+            .expect("leto f16 inverse");
+        for (actual, expected) in actual_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(expected_inverse.iter())
+        {
+            assert_eq!(
+                actual.to_bits(),
+                expected.to_bits(),
+                "f16 inverse mismatch: actual={}, expected={}",
                 actual.to_f32(),
                 expected.to_f32()
             );

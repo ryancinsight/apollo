@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## FFT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-fft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 3D forward, 3D inverse, mixed `f16` 3D forward, and mixed `f16` 3D inverse execution.
+- Architecture effect: FFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains available as the validation oracle.
+- Memory effect: contiguous Leto 1D/3D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU split-buffer 3D FFT execution path instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-fft-wgpu`; `cargo test -p apollo-fft-wgpu leto -- --nocapture`; `cargo test -p apollo-fft-wgpu -- --nocapture`; `cargo clippy -p apollo-fft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-fft-wgpu --no-deps`; `cargo semver-checks -p apollo-fft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing FFT-WGPU ndarray APIs for forward, inverse, strided forward, and mixed `f16` paths. No runtime benchmark claim is made.
+- Residuals: `apollo-nufft-wgpu` still lacks Leto/Mnemosyne host boundaries; FFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## STFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-stft-wgpu` to `0.12.0`; added the workspace Leto dependency; added Leto host boundaries for forward, inverse, typed forward, and typed inverse STFT execution.
 - Architecture effect: STFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

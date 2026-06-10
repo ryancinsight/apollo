@@ -14,7 +14,7 @@
 //! Proof: H_N^2 = N * I (Hadamard 1893, Walsh 1923 -- H^T * H = N * I, H = H^T).
 //! Therefore WHT(WHT(x)) = H_N * (H_N * x) = N * x.
 
-use hermes_simd::{PreferredArch, Vector, SimdArch, SimdKernel, SimdScalar};
+use hermes_simd::{PreferredArch, SimdArch, SimdKernel, SimdScalar, Vector};
 use num_complex::Complex64;
 use std::any::TypeId;
 use std::ops::{Add, Sub};
