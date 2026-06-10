@@ -141,23 +141,29 @@ impl DctDstWgpuBackend {
                 message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
             });
         }
-        // Column pass (inverse).
+        // Column pass (inverse): columns are strided, so a single lane buffer
+        // is reused instead of a per-column allocation.
+        let mut lane = Vec::with_capacity(n);
         let mut tmp = Array2::<f32>::zeros((n, n));
         for c in 0..n {
-            let col: Vec<f32> = input.column(c).iter().copied().collect();
-            let out = self.execute_inverse(plan, &col)?;
-            for r in 0..n {
-                tmp[[r, c]] = out[r];
-            }
+            lane.clear();
+            lane.extend(input.column(c).iter().copied());
+            let out = self.execute_inverse(plan, &lane)?;
+            tmp.column_mut(c).iter_mut().zip(&out).for_each(|(s, v)| *s = *v);
         }
-        // Row pass (inverse).
+        // Row pass (inverse): contiguous rows are borrowed without copying.
         let mut result = Array2::<f32>::zeros((n, n));
         for r in 0..n {
-            let row: Vec<f32> = tmp.row(r).iter().copied().collect();
-            let out = self.execute_inverse(plan, &row)?;
-            for c in 0..n {
-                result[[r, c]] = out[c];
-            }
+            let row = tmp.row(r);
+            let out = match row.as_slice() {
+                Some(slice) => self.execute_inverse(plan, slice)?,
+                None => {
+                    lane.clear();
+                    lane.extend(row.iter().copied());
+                    self.execute_inverse(plan, &lane)?
+                }
+            };
+            result.row_mut(r).iter_mut().zip(&out).for_each(|(s, v)| *s = *v);
         }
         Ok(result)
     }
@@ -189,12 +195,16 @@ impl DctDstWgpuBackend {
                 message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
             });
         }
+        // One lane buffer reused across all three axis passes; fibers are
+        // strided so each is gathered into it instead of a fresh allocation.
+        let mut lane = Vec::with_capacity(n);
         // Axis-2 pass (inverse).
         let mut tmp0 = Array3::<f32>::zeros((n, n, n));
         for i in 0..n {
             for j in 0..n {
-                let fiber: Vec<f32> = (0..n).map(|k| input[[i, j, k]]).collect();
-                let out = self.execute_inverse(plan, &fiber)?;
+                lane.clear();
+                lane.extend((0..n).map(|k| input[[i, j, k]]));
+                let out = self.execute_inverse(plan, &lane)?;
                 for k in 0..n {
                     tmp0[[i, j, k]] = out[k];
                 }
@@ -204,8 +214,9 @@ impl DctDstWgpuBackend {
         let mut tmp1 = Array3::<f32>::zeros((n, n, n));
         for i in 0..n {
             for k in 0..n {
-                let fiber: Vec<f32> = (0..n).map(|j| tmp0[[i, j, k]]).collect();
-                let out = self.execute_inverse(plan, &fiber)?;
+                lane.clear();
+                lane.extend((0..n).map(|j| tmp0[[i, j, k]]));
+                let out = self.execute_inverse(plan, &lane)?;
                 for j in 0..n {
                     tmp1[[i, j, k]] = out[j];
                 }
@@ -215,8 +226,9 @@ impl DctDstWgpuBackend {
         let mut result = Array3::<f32>::zeros((n, n, n));
         for j in 0..n {
             for k in 0..n {
-                let fiber: Vec<f32> = (0..n).map(|i| tmp1[[i, j, k]]).collect();
-                let out = self.execute_inverse(plan, &fiber)?;
+                lane.clear();
+                lane.extend((0..n).map(|i| tmp1[[i, j, k]]));
+                let out = self.execute_inverse(plan, &lane)?;
                 for i in 0..n {
                     result[[i, j, k]] = out[i];
                 }
