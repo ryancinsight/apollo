@@ -32,7 +32,7 @@
 
 use apollo_fft::{ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
 use mnemosyne::scratch::ScratchPool;
-use ndarray::{Array1, Array3, ArrayView3, ArrayViewMut3};
+use ndarray::{Array3, ArrayView3, ArrayViewMut3};
 use num_complex::Complex64;
 use std::cmp::Ordering;
 use std::f64::consts::PI;
@@ -44,6 +44,7 @@ thread_local! {
     static WEIGHT3D_SCRATCH_X: ScratchPool<f64> = const { ScratchPool::new() };
     static WEIGHT3D_SCRATCH_Y: ScratchPool<f64> = const { ScratchPool::new() };
     static WEIGHT3D_SCRATCH_Z: ScratchPool<f64> = const { ScratchPool::new() };
+    static FFT3D_LANE_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 use crate::application::execution::transform::dimension_1d::{
@@ -465,48 +466,57 @@ impl NufftPlan3D {
     }
 
     fn ifft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.mz);
-        for ix in 0..self.mx {
-            for iy in 0..self.my {
-                for iz in 0..self.mz {
-                    lane[iz] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.mz, |lane| {
+                for ix in 0..self.mx {
+                    for iy in 0..self.my {
+                        for iz in 0..self.mz {
+                            lane[iz] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_z.inverse_complex_slice_inplace(lane);
+                        for iz in 0..self.mz {
+                            grid[[ix, iy, iz]] = lane[iz];
+                        }
+                    }
                 }
-                self.fft_z.inverse_complex_inplace(&mut lane);
-                for iz in 0..self.mz {
-                    grid[[ix, iy, iz]] = lane[iz];
-                }
-            }
-        }
+            });
+        });
     }
 
     fn ifft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.my);
-        for ix in 0..self.mx {
-            for iz in 0..self.mz {
-                for iy in 0..self.my {
-                    lane[iy] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.my, |lane| {
+                for ix in 0..self.mx {
+                    for iz in 0..self.mz {
+                        for iy in 0..self.my {
+                            lane[iy] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_y.inverse_complex_slice_inplace(lane);
+                        for iy in 0..self.my {
+                            grid[[ix, iy, iz]] = lane[iy];
+                        }
+                    }
                 }
-                self.fft_y.inverse_complex_inplace(&mut lane);
-                for iy in 0..self.my {
-                    grid[[ix, iy, iz]] = lane[iy];
-                }
-            }
-        }
+            });
+        });
     }
 
     fn ifft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.mx);
-        for iy in 0..self.my {
-            for iz in 0..self.mz {
-                for ix in 0..self.mx {
-                    lane[ix] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.mx, |lane| {
+                for iy in 0..self.my {
+                    for iz in 0..self.mz {
+                        for ix in 0..self.mx {
+                            lane[ix] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_x.inverse_complex_slice_inplace(lane);
+                        for ix in 0..self.mx {
+                            grid[[ix, iy, iz]] = lane[ix];
+                        }
+                    }
                 }
-                self.fft_x.inverse_complex_inplace(&mut lane);
-                for ix in 0..self.mx {
-                    grid[[ix, iy, iz]] = lane[ix];
-                }
-            }
-        }
+            });
+        });
     }
 
     /// Type-2 3D NUFFT: interpolate from uniform Fourier coefficients to non-uniform points.
@@ -751,48 +761,57 @@ impl NufftPlan3D {
     }
 
     fn fft_z_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.mz);
-        for ix in 0..self.mx {
-            for iy in 0..self.my {
-                for iz in 0..self.mz {
-                    lane[iz] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.mz, |lane| {
+                for ix in 0..self.mx {
+                    for iy in 0..self.my {
+                        for iz in 0..self.mz {
+                            lane[iz] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_z.forward_complex_slice_inplace(lane);
+                        for iz in 0..self.mz {
+                            grid[[ix, iy, iz]] = lane[iz];
+                        }
+                    }
                 }
-                self.fft_z.forward_complex_inplace(&mut lane);
-                for iz in 0..self.mz {
-                    grid[[ix, iy, iz]] = lane[iz];
-                }
-            }
-        }
+            });
+        });
     }
 
     fn fft_y_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.my);
-        for ix in 0..self.mx {
-            for iz in 0..self.mz {
-                for iy in 0..self.my {
-                    lane[iy] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.my, |lane| {
+                for ix in 0..self.mx {
+                    for iz in 0..self.mz {
+                        for iy in 0..self.my {
+                            lane[iy] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_y.forward_complex_slice_inplace(lane);
+                        for iy in 0..self.my {
+                            grid[[ix, iy, iz]] = lane[iy];
+                        }
+                    }
                 }
-                self.fft_y.forward_complex_inplace(&mut lane);
-                for iy in 0..self.my {
-                    grid[[ix, iy, iz]] = lane[iy];
-                }
-            }
-        }
+            });
+        });
     }
 
     fn fft_x_pass(&self, grid: &mut ArrayViewMut3<'_, Complex64>) {
-        let mut lane = Array1::<Complex64>::zeros(self.mx);
-        for iy in 0..self.my {
-            for iz in 0..self.mz {
-                for ix in 0..self.mx {
-                    lane[ix] = grid[[ix, iy, iz]];
+        FFT3D_LANE_SCRATCH.with(|pool| {
+            pool.with_scratch(self.mx, |lane| {
+                for iy in 0..self.my {
+                    for iz in 0..self.mz {
+                        for ix in 0..self.mx {
+                            lane[ix] = grid[[ix, iy, iz]];
+                        }
+                        self.fft_x.forward_complex_slice_inplace(lane);
+                        for ix in 0..self.mx {
+                            grid[[ix, iy, iz]] = lane[ix];
+                        }
+                    }
                 }
-                self.fft_x.forward_complex_inplace(&mut lane);
-                for ix in 0..self.mx {
-                    grid[[ix, iy, iz]] = lane[ix];
-                }
-            }
-        }
+            });
+        });
     }
 }
 

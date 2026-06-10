@@ -1,12 +1,20 @@
 # Apollo Gap Audit
 
+## NUFFT 3D FFT lane scratch migration [patch]
+- Performed: replaced all 3D NUFFT separable FFT forward/inverse x/y/z temporary lane `Array1` allocations with a Mnemosyne `ScratchPool<Complex64>` and Apollo FFT slice execution.
+- Architecture effect: 3D NUFFT now keeps gridding workspaces, typed conversion workspaces, axis weights, and FFT lane buffers under the same provider scratch discipline.
+- Memory effect: each separable pass reuses one thread-local lane slice sized to the active axis instead of allocating a fresh ndarray lane per pass call.
+- Verification: `cargo fmt --check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`; `rg -n "Array1::<Complex64>::zeros|forward_complex_inplace\\(&mut lane\\)|inverse_complex_inplace\\(&mut lane\\)" crates/apollo-nufft/src/application/execution/transform/dimension_3d.rs` returned no matches.
+- Evidence tier: source-level allocation-path removal plus value-semantic NUFFT unit/property tests. No runtime benchmark claim is made.
+- Residuals: `type1` and `type2` allocating convenience methods still allocate their documented output and caller-visible scratch arrays before entering caller-owned paths; changing that would require an API-surface design decision rather than an internal scratch migration.
+
 ## NUFFT 3D Mnemosyne scratch migration [patch]
 - Performed: replaced `apollo-nufft` 3D typed Type-1/Type-2 thread-local `RefCell<Vec<_>>` scratch buffers with `mnemosyne::scratch::ScratchPool` instances for grid, modes, output, and axis weight workspaces.
 - Architecture effect: 3D NUFFT now uses the same provider scratch discipline as the existing 1D NUFFT typed paths. Internal `ArrayViewMut3` helpers let scratch slices back ndarray indexing without changing public caller-owned `Array3` APIs.
 - Memory effect: typed 3D paths no longer extract and reinsert owned vectors from thread-local `RefCell`s. Scratch lifetimes are bounded to provider pool closures and reuse capacity per thread.
 - Verification: `cargo fmt --check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`; `rg -n "RefCell" crates/apollo-nufft/src/application/execution/transform/dimension_3d.rs` returned no matches.
 - Evidence tier: source-level ownership replacement plus value-semantic NUFFT unit/property tests and static diagnostics. No runtime benchmark claim is made.
-- Residuals: 3D NUFFT separable FFT lane passes still allocate per-pass `Array1` lanes; a later slice-backed lane-scratch increment should route those through Mnemosyne without changing formulas.
+- Residuals: closed by the subsequent NUFFT 3D FFT lane scratch migration entry.
 
 ## NTT Hermes modular butterfly routing [patch]
 - Performed: added Hermes commit `25c261b3` with an exact modular `u64` NTT butterfly-stage kernel and routed `apollo-ntt` serial plus Moirai chunked stage execution through it.

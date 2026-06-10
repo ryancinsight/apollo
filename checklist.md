@@ -1,4 +1,12 @@
 # Apollo Checklist
+## NUFFT 3D FFT lane scratch migration [patch]
+- [x] Added `FFT3D_LANE_SCRATCH` as a Mnemosyne complex scratch pool for separable 3D NUFFT lane buffers.
+- [x] Replaced forward and inverse x/y/z per-pass `Array1::<Complex64>::zeros(...)` lane allocation with provider scratch slices.
+- [x] Routed lane execution through `FftPlan1D::forward_complex_slice_inplace` and `FftPlan1D::inverse_complex_slice_inplace`.
+- [x] Preserved Type-1/Type-2 formulas, FFT pass order, grid indexing, and public caller-owned APIs.
+- [x] Verification: `cargo fmt --check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`; static scan for removed `Array1::<Complex64>::zeros` lane allocation returned no matches.
+- Evidence: value-semantic NUFFT tests plus static source scan. No runtime benchmark claim is made.
+
 ## NUFFT 3D Mnemosyne scratch migration [patch]
 - [x] Replaced 3D NUFFT typed-path `RefCell<Vec<_>>` thread-local scratch with `mnemosyne::scratch::ScratchPool`.
 - [x] Added internal mutable ndarray-view helpers so Mnemosyne scratch slices back Type-1 output grids and Type-2 grid/mode workspaces without changing public caller-owned `Array3` APIs.
