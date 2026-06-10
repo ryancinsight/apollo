@@ -1,6 +1,6 @@
 //! WGPU device acquisition and backend orchestration for the STFT.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use num_complex::{Complex32, Complex64};
 
@@ -116,6 +116,20 @@ impl StftWgpuBackend {
         )
     }
 
+    /// Execute the forward STFT from a Leto real `f32` signal view.
+    ///
+    /// Contiguous Leto views borrow host storage directly; strided views copy
+    /// once into logical order before dispatching to the existing WGPU slice path.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &StftWgpuPlan,
+        signal: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let output = self.execute_forward(plan, &signal)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the inverse STFT (WOLA reconstruction) on the GPU.
     ///
     /// `frame_count` is derived as `1 + signal_len.div_ceil(hop_len)` and
@@ -181,6 +195,18 @@ impl StftWgpuBackend {
         )
     }
 
+    /// Execute the inverse STFT from a Leto complex `f32` spectrum view.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &StftWgpuPlan,
+        spectrum: leto::ArrayView1<'_, Complex32>,
+        signal_len: usize,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        let spectrum = leto_view1_cow(spectrum)?;
+        let output = self.execute_inverse(plan, &spectrum, signal_len)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the inverse STFT with typed complex spectrum input and typed real output.
     ///
     /// `input_precision` must match `I::PROFILE`; `output_precision` must match `O::PROFILE`.
@@ -228,6 +254,31 @@ impl StftWgpuBackend {
         Ok(())
     }
 
+    /// Execute typed inverse STFT from a Leto spectrum view.
+    ///
+    /// Precision-profile validation and host quantization match
+    /// [`Self::execute_inverse_typed_into`].
+    pub fn execute_inverse_leto_typed<I: StftSpectrumInput, O: StftRealOutputStorage>(
+        &self,
+        plan: &StftWgpuPlan,
+        input_precision: PrecisionProfile,
+        output_precision: PrecisionProfile,
+        spectrum: leto::ArrayView1<'_, I>,
+        signal_len: usize,
+    ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
+        let spectrum = leto_view1_cow(spectrum)?;
+        let mut output = vec![O::from_f64(0.0); signal_len];
+        self.execute_inverse_typed_into(
+            plan,
+            input_precision,
+            output_precision,
+            &spectrum,
+            signal_len,
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the forward STFT with typed real input and typed complex spectrum output.
     ///
     /// `input_precision` must match `I::PROFILE`; `output_precision` must match `O::PROFILE`.
@@ -264,6 +315,30 @@ impl StftWgpuBackend {
             *slot = O::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
         }
         Ok(())
+    }
+
+    /// Execute typed forward STFT from a Leto real signal view.
+    ///
+    /// Output length is validated from the same plan-shape contract used by the
+    /// slice API before allocation, avoiding any `div_ceil` panic on invalid plans.
+    pub fn execute_forward_leto_typed<I: StftRealStorage, O: StftSpectrumStorage>(
+        &self,
+        plan: &StftWgpuPlan,
+        input_precision: PrecisionProfile,
+        output_precision: PrecisionProfile,
+        signal: leto::ArrayView1<'_, I>,
+    ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let output_len = forward_output_len(plan, signal.len())?;
+        let mut output = vec![O::from_complex64(Complex64::new(0.0, 0.0)); output_len];
+        self.execute_forward_typed_into(
+            plan,
+            input_precision,
+            output_precision,
+            &signal,
+            &mut output,
+        )?;
+        leto_array1_from_slice(&output)
     }
 
     /// Allocate pre-allocated GPU buffers for repeated STFT dispatches with the given plan.
@@ -400,5 +475,95 @@ impl StftWgpuBackend {
             signal_len,
             buffers,
         )
+    }
+}
+
+fn forward_output_len(plan: &StftWgpuPlan, signal_len: usize) -> WgpuResult<usize> {
+    if plan.frame_len() == 0 {
+        return Err(WgpuError::InvalidPlan {
+            message: format!(
+                "invalid plan frame_len={}, hop_len={}: frame_len must be non-zero",
+                plan.frame_len(),
+                plan.hop_len()
+            ),
+        });
+    }
+    if plan.hop_len() == 0 {
+        return Err(WgpuError::InvalidPlan {
+            message: format!(
+                "invalid plan frame_len={}, hop_len={}: hop_len must be non-zero",
+                plan.frame_len(),
+                plan.hop_len()
+            ),
+        });
+    }
+    if plan.hop_len() > plan.frame_len() {
+        return Err(WgpuError::InvalidPlan {
+            message: format!(
+                "invalid plan frame_len={}, hop_len={}: hop_len must not exceed frame_len",
+                plan.frame_len(),
+                plan.hop_len()
+            ),
+        });
+    }
+    if signal_len < plan.frame_len() {
+        return Err(WgpuError::InputTooShort {
+            min: plan.frame_len(),
+            actual: signal_len,
+        });
+    }
+    Ok((1 + signal_len.div_ceil(plan.hop_len())) * plan.frame_len())
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
+            message: format!("invalid Leto STFT 1D view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto STFT output: {err:?}"),
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }
