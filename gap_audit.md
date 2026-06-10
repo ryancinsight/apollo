@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## GFT graph-basis Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-gft`; routed forward `U^T x` and inverse `U X` output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold.
+- Architecture effect: GFT ndarray and typed paths now share Moirai-backed graph-basis slice execution while Leto remains the adjacency/eigensolver storage boundary.
+- Memory effect: caller-owned output buffers are filled in place by disjoint mutable row writes; small graphs remain serial to avoid scheduling overhead.
+- Implementation effect: forward and inverse graph-basis row formulas are factored into shared helpers used by serial and Moirai paths, preserving the column-major basis contract.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-gft`; `cargo test -p apollo-gft`; `cargo clippy -p apollo-gft --all-targets -- -D warnings`; `cargo doc -p apollo-gft --no-deps`; `cargo semver-checks -p apollo-gft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic GFT unit/property tests plus direct threshold-path row-formula tests for forward and inverse execution. No runtime benchmark claim is made.
+- Residuals: typed storage conversion loops in `GftStorage` still use serial scratch copies; Hermes is still absent from `apollo-gft`.
+
 ## FRFT direct/unitary Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-frft`; routed direct fractional and centered-DFT output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold; routed unitary Grünbaum projection coefficients, phase application, and reconstruction rows through `ParallelSliceMut` above the same bounded work model.
 - Architecture effect: FRFT ndarray, Leto, typed, and unitary public paths now share Moirai-backed CPU row execution instead of adding provider logic to individual wrappers.

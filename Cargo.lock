@@ -271,6 +271,7 @@ dependencies = [
  "leto",
  "leto-ops",
  "mnemosyne",
+ "moirai",
  "ndarray",
  "num-complex",
  "proptest",

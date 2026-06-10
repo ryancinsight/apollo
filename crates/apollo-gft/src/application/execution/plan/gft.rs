@@ -10,8 +10,12 @@ use crate::infrastructure::kernel::laplacian::spectral_basis;
 use apollo_fft::{f16, PrecisionProfile};
 use leto::ArrayView2;
 use mnemosyne::scratch::ScratchPool;
+use moirai::ParallelSliceMut;
 use ndarray::Array1;
 use serde::{Deserialize, Serialize};
+
+/// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.
+const GFT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -93,10 +97,15 @@ impl GftPlan {
         if signal.len() != self.n || output.len() != self.n {
             return Err(GftError::LengthMismatch);
         }
-        for (k, slot) in output.iter_mut().enumerate() {
-            *slot = (0..self.n)
-                .map(|i| self.basis[i + k * self.n] * signal[i])
-                .sum();
+        let work_items = self.n.saturating_mul(self.n);
+        if work_items >= GFT_PAR_OP_THRESHOLD {
+            output.par_mut().enumerate(|k, slot| {
+                *slot = forward_row(&self.basis, signal, self.n, k);
+            });
+        } else {
+            output.iter_mut().enumerate().for_each(|(k, slot)| {
+                *slot = forward_row(&self.basis, signal, self.n, k);
+            });
         }
         Ok(())
     }
@@ -153,13 +162,28 @@ impl GftPlan {
         if spectrum.len() != self.n || output.len() != self.n {
             return Err(GftError::LengthMismatch);
         }
-        for (i, slot) in output.iter_mut().enumerate() {
-            *slot = (0..self.n)
-                .map(|k| self.basis[i + k * self.n] * spectrum[k])
-                .sum();
+        let work_items = self.n.saturating_mul(self.n);
+        if work_items >= GFT_PAR_OP_THRESHOLD {
+            output.par_mut().enumerate(|i, slot| {
+                *slot = inverse_row(&self.basis, spectrum, self.n, i);
+            });
+        } else {
+            output.iter_mut().enumerate().for_each(|(i, slot)| {
+                *slot = inverse_row(&self.basis, spectrum, self.n, i);
+            });
         }
         Ok(())
     }
+}
+
+#[inline]
+fn forward_row(basis: &[f64], signal: &[f64], n: usize, k: usize) -> f64 {
+    (0..n).map(|i| basis[i + k * n] * signal[i]).sum()
+}
+
+#[inline]
+fn inverse_row(basis: &[f64], spectrum: &[f64], n: usize, i: usize) -> f64 {
+    (0..n).map(|k| basis[i + k * n] * spectrum[k]).sum()
 }
 
 /// Real storage accepted by typed GFT paths.
@@ -455,5 +479,54 @@ mod tests {
             plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(GftError::PrecisionMismatch)
         ));
+    }
+
+    fn synthetic_plan(n: usize) -> GftPlan {
+        let eigenvalues = (0..n).map(|index| index as f64).collect::<Vec<_>>();
+        let mut basis = vec![0.0; n * n];
+        for col in 0..n {
+            basis[(n - 1 - col) + col * n] = if col % 2 == 0 { 1.0 } else { -1.0 };
+        }
+        GftPlan {
+            n,
+            eigenvalues,
+            basis,
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_forward_matches_row_formula_at_threshold() {
+        let n = 128;
+        let plan = synthetic_plan(n);
+        let signal = (0..n)
+            .map(|index| (index as f64 * 0.17).sin())
+            .collect::<Vec<_>>();
+        let mut actual = vec![0.0; n];
+
+        plan.forward_f64_slice_into(&signal, &mut actual)
+            .expect("forward");
+
+        for (row, value) in actual.iter().enumerate() {
+            let expected = forward_row(plan.basis(), &signal, n, row);
+            assert_eq!(value.to_bits(), expected.to_bits());
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_inverse_matches_row_formula_at_threshold() {
+        let n = 128;
+        let plan = synthetic_plan(n);
+        let spectrum = (0..n)
+            .map(|index| (index as f64 * 0.19).cos())
+            .collect::<Vec<_>>();
+        let mut actual = vec![0.0; n];
+
+        plan.inverse_f64_slice_into(&spectrum, &mut actual)
+            .expect("inverse");
+
+        for (row, value) in actual.iter().enumerate() {
+            let expected = inverse_row(plan.basis(), &spectrum, n, row);
+            assert_eq!(value.to_bits(), expected.to_bits());
+        }
     }
 }

@@ -1,4 +1,12 @@
 # Apollo Checklist
+## GFT graph-basis Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-gft`.
+- [x] Routed forward `U^T x` row writes and inverse `U X` row writes through `moirai::ParallelSliceMut` above `GFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller graphs.
+- [x] Kept Leto adjacency storage and `leto_ops::symmetric_eigen_jacobi` as the graph spectral-basis construction boundary.
+- [x] Added threshold-path value tests for forward and inverse graph-basis row formulas.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-gft`; `cargo test -p apollo-gft`; `cargo clippy -p apollo-gft --all-targets -- -D warnings`; `cargo doc -p apollo-gft --no-deps`; `cargo semver-checks -p apollo-gft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic GFT unit/property tests plus direct threshold-path row-formula tests. No runtime benchmark claim is made.
+
 ## FRFT direct/unitary Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-frft`.
 - [x] Routed direct fractional and centered-DFT output-row writes through `moirai::ParallelSliceMut` above `FRFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller vectors and identity/reversal special cases unchanged.
