@@ -13,4 +13,4 @@ pub use application::execution::plan::stft::storage::{
     StftRealOutputStorage, StftRealStorage, StftSpectrumInput, StftSpectrumStorage,
 };
 pub use domain::contracts::error::StftError;
-pub use infrastructure::transport::cpu::{istft, stft};
+pub use infrastructure::transport::cpu::{istft, istft_leto, stft, stft_leto};

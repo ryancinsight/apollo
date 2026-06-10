@@ -9,9 +9,10 @@ use super::storage::{
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::Complex64;
-use mnemosyne::scratch::ScratchPool;
+use std::borrow::Cow;
 
 thread_local! {
     static TYPED_SIGNAL64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -123,6 +124,21 @@ impl StftPlan {
         Ok(output)
     }
 
+    /// Forward STFT from a Leto 1D signal view.
+    ///
+    /// Contiguous Leto views are borrowed directly; strided views are copied once
+    /// into logical order before reusing the canonical ndarray-validated kernel.
+    pub fn forward_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> StftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let frames = self.frame_count(signal.len());
+        let mut output = vec![Complex64::new(0.0, 0.0); frames * self.spectrum_len()];
+        self.forward_f64_slice_into(signal.as_ref(), &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Forward STFT with a user-supplied analysis window.
     ///
     /// # Errors
@@ -197,6 +213,25 @@ impl StftPlan {
         })
     }
 
+    /// Forward STFT from typed Leto input into typed Leto spectrum storage.
+    pub fn forward_leto_typed<T: StftRealStorage, O: StftSpectrumStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
+        validate_profile(profile, T::PROFILE)?;
+        validate_profile(profile, O::PROFILE)?;
+        let signal = leto_view1_cow(signal)?;
+        let signal = Array1::from_vec(signal.into_owned());
+        let frames = self.frame_count(signal.len());
+        let mut output = Array1::<O>::from_elem(
+            frames * self.spectrum_len(),
+            O::from_complex64(Complex64::new(0.0, 0.0)),
+        );
+        self.forward_typed_into(&signal, &mut output, profile)?;
+        leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
+    }
+
     fn forward_f64_slice_into(&self, signal: &[f64], output: &mut [Complex64]) -> StftResult<()> {
         if signal.len() < self.frame_len {
             return Err(StftError::InputTooShort);
@@ -259,6 +294,21 @@ impl StftPlan {
         let mut output = Array1::<f64>::zeros(signal_len);
         self.inverse_into(spectrum, signal_len, &mut output)?;
         Ok(output)
+    }
+
+    /// Inverse STFT from a Leto 1D spectrum view.
+    ///
+    /// Contiguous Leto views are borrowed directly; strided views are copied once
+    /// into logical order before reusing the canonical ndarray-validated kernel.
+    pub fn inverse_leto(
+        &self,
+        spectrum: leto::ArrayView1<'_, Complex64>,
+        signal_len: usize,
+    ) -> StftResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let spectrum = leto_view1_cow(spectrum)?;
+        let mut output = vec![0.0; signal_len];
+        self.inverse_complex64_slice_into(spectrum.as_ref(), signal_len, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Inverse STFT into a pre-allocated output buffer.
@@ -374,6 +424,43 @@ impl StftPlan {
             Ok(())
         })
     }
+
+    /// Inverse STFT from typed Leto spectrum storage into typed Leto signal storage.
+    pub fn inverse_leto_typed<T: StftSpectrumInput, O: StftRealOutputStorage>(
+        &self,
+        spectrum: leto::ArrayView1<'_, T>,
+        signal_len: usize,
+        profile: PrecisionProfile,
+    ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
+        validate_profile(profile, T::PROFILE)?;
+        validate_profile(profile, O::PROFILE)?;
+        let spectrum = leto_view1_cow(spectrum)?;
+        let spectrum = Array1::from_vec(spectrum.into_owned());
+        let mut output = Array1::<O>::from_elem(signal_len, O::from_f64(0.0));
+        self.inverse_typed_into(&spectrum, signal_len, &mut output, profile)?;
+        leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> StftResult<Cow<'_, [T]>> {
+    if view.shape()[0] == 0 {
+        return Err(StftError::InputTooShort);
+    }
+    if let Some(slice) = view.as_slice() {
+        Ok(Cow::Borrowed(slice))
+    } else {
+        let mut values = Vec::with_capacity(view.size());
+        for index in 0..view.shape()[0] {
+            values.push(*view.get([index]).map_err(|_| StftError::LengthMismatch)?);
+        }
+        Ok(Cow::Owned(values))
+    }
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> StftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|_| StftError::LengthMismatch)
 }
 
 fn with_forward_typed_workspaces<R>(
@@ -384,9 +471,7 @@ fn with_forward_typed_workspaces<R>(
     TYPED_SIGNAL64_SCRATCH.with(|signal_cell| {
         signal_cell.with_scratch(signal_len, |signal| {
             TYPED_FORWARD_OUTPUT64_SCRATCH.with(|spectrum_cell| {
-                spectrum_cell.with_scratch(spectrum_len, |spectrum| {
-                    f(signal, spectrum)
-                })
+                spectrum_cell.with_scratch(spectrum_len, |spectrum| f(signal, spectrum))
             })
         })
     })
@@ -400,9 +485,7 @@ fn with_inverse_typed_workspaces<R>(
     TYPED_SPECTRUM64_SCRATCH.with(|spectrum_cell| {
         spectrum_cell.with_scratch(spectrum_len, |spectrum| {
             TYPED_INVERSE_OUTPUT64_SCRATCH.with(|signal_cell| {
-                signal_cell.with_scratch(signal_len, |signal| {
-                    f(spectrum, signal)
-                })
+                signal_cell.with_scratch(signal_len, |signal| f(spectrum, signal))
             })
         })
     })

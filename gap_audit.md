@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## STFT Leto 1D analysis/synthesis boundary [minor]
+- Performed: bumped `apollo-stft` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for forward analysis, inverse synthesis, typed forward analysis, typed inverse synthesis, and transport convenience wrappers.
+- Architecture effect: STFT callers can now use Leto as the public 1D signal/spectrum boundary while existing ndarray APIs remain the validation and compatibility surface.
+- Memory effect: contiguous `f64` Leto views borrow storage through `Cow`; strided Leto views copy once into logical order; generated spectrum and signal outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai STFT execution contract rather than adding a separate STFT implementation.
+- Verification: `cargo check -p apollo-stft`; `cargo test -p apollo-stft leto -- --nocapture`; `cargo test -p apollo-stft -- --nocapture`; `cargo clippy -p apollo-stft --all-targets -- -D warnings`; `cargo doc -p apollo-stft --no-deps`; `cargo semver-checks -p apollo-stft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-stft --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing STFT ndarray APIs for contiguous forward analysis, strided forward analysis, inverse synthesis, and typed `f32` forward/inverse. No runtime benchmark claim is made.
+- Residuals: STFT WGPU still has no Leto boundary; typed Leto paths still bridge through ndarray typed validation storage until Leto owns the full typed mutation surface required by the existing STFT implementation.
+
 ## Radon Leto 2D projection boundary [minor]
 - Performed: bumped `apollo-radon` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for forward projection, typed forward projection, adjoint backprojection, typed adjoint backprojection, and filtered backprojection.
 - Architecture effect: Radon callers can now use Leto as the public 2D image/sinogram boundary while existing ndarray APIs remain the validation and compatibility surface.

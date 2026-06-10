@@ -1,6 +1,6 @@
 [package]
 name = "apollo-stft"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Short-time Fourier transform utilities for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 mnemosyne = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"

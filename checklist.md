@@ -1,4 +1,12 @@
 # Apollo Checklist
+## STFT Leto 1D analysis/synthesis boundary [minor]
+- [x] Bumped `apollo-stft` to `0.3.0` and added the workspace Leto provider dependency.
+- [x] Added `StftPlan::forward_leto`, `StftPlan::inverse_leto`, `StftPlan::forward_leto_typed`, `StftPlan::inverse_leto_typed`, `stft_leto`, and `istft_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing ndarray/Moirai STFT kernels; contiguous `f64` Leto views borrow through `Cow`, strided views copy once into logical order, and typed Leto boundaries reuse the existing typed ndarray validation bridge.
+- [x] Added value tests proving contiguous forward parity, strided forward parity, inverse parity, and typed `f32` forward/inverse parity against existing ndarray APIs.
+- [x] Verification: `cargo check -p apollo-stft`; `cargo test -p apollo-stft leto -- --nocapture`; `cargo test -p apollo-stft -- --nocapture`; `cargo clippy -p apollo-stft --all-targets -- -D warnings`; `cargo doc -p apollo-stft --no-deps`; `cargo semver-checks -p apollo-stft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-stft --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing STFT ndarray and typed ndarray APIs. No runtime benchmark claim is made.
+
 ## Radon Leto 2D projection boundary [minor]
 - [x] Bumped `apollo-radon` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `RadonPlan::forward_leto`, `RadonPlan::forward_leto_typed`, `RadonPlan::backproject_leto`, `RadonPlan::backproject_leto_typed`, and `RadonPlan::filtered_backprojection_leto`, returning Mnemosyne-backed Leto arrays.
