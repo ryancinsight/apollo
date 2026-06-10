@@ -1,6 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use apollo_czt::CztStorage;
 use apollo_fft::PrecisionProfile;
@@ -87,6 +87,20 @@ impl CztWgpuBackend {
         )
     }
 
+    /// Execute the direct forward CZT from a Leto host view.
+    ///
+    /// Contiguous views are borrowed without copying. Strided views are
+    /// materialized once into logical order before GPU upload.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &CztWgpuPlan,
+        input: leto::ArrayView1<'_, Complex32>,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_forward(plan, &input)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the forward CZT with typed `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
     ///
     /// Promotes represented input once to `Complex32`, dispatches the GPU kernel,
@@ -118,6 +132,19 @@ impl CztWgpuBackend {
             *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
         }
         Ok(())
+    }
+
+    /// Execute typed forward CZT from a Leto host view into Mnemosyne-backed Leto storage.
+    pub fn execute_forward_leto_typed<T: CztStorage>(
+        &self,
+        plan: &CztWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.output_len()];
+        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     fn validate_czt_typed_precision<T: CztStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
@@ -171,6 +198,20 @@ impl CztWgpuBackend {
         )
     }
 
+    /// Execute the adjoint inverse CZT from a Leto host view.
+    ///
+    /// This preserves the existing WGPU inverse contract: exact for DFT
+    /// parameters and adjoint/minimum-norm for general CZT spirals.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &CztWgpuPlan,
+        spectrum: leto::ArrayView1<'_, Complex32>,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let spectrum = leto_view1_cow(spectrum)?;
+        let output = self.execute_inverse(plan, &spectrum)?;
+        leto_array1_from_slice(&output)
+    }
+
     fn validate_plan_input(plan: &CztWgpuPlan, input: &[Complex32]) -> WgpuResult<()> {
         let input_len = plan.input_len();
         let output_len = plan.output_len();
@@ -197,5 +238,58 @@ impl CztWgpuBackend {
             });
         }
         Ok(())
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::InvalidPlan {
+            message: format!("invalid Leto CZT view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto CZT output: {err:?}"),
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }

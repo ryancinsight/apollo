@@ -81,12 +81,13 @@ dependencies = [
 
 [[package]]
 name = "apollo-czt-wgpu"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "apollo-czt",
  "apollo-fft",
  "apollo-wgpu-helpers",
  "bytemuck",
+ "leto",
  "ndarray",
  "num-complex",
  "wgpu",

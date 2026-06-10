@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## CZT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-czt-wgpu` to `0.3.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, and adjoint inverse CZT execution.
+- Architecture effect: CZT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D complex views borrow storage through `Cow`; strided Leto views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-czt-wgpu`; `cargo test -p apollo-czt-wgpu leto -- --nocapture`; `cargo test -p apollo-czt-wgpu -- --nocapture`; `cargo clippy -p apollo-czt-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-czt-wgpu --no-deps`; `cargo semver-checks -p apollo-czt-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing CZT-WGPU slice APIs for contiguous forward, strided forward, typed forward, and inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; CZT-WGPU still performs WGPU arithmetic at `f32` precision by contract; no typed inverse Leto boundary was added because the crate has no typed inverse slice execution contract.
+
 ## SFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-sft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, inverse, and typed inverse SFT execution.
 - Architecture effect: SFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and sparse spectra remain represented by the owning `SparseSpectrum` domain type.

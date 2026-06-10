@@ -4,6 +4,7 @@
 mod tests {
     use apollo_czt::CztPlan;
     use apollo_fft::{f16, PrecisionProfile};
+    use leto::{SliceArg, Storage};
     use ndarray::Array1;
     use num_complex::{Complex32, Complex64};
 
@@ -144,6 +145,102 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_matches_slice_forward_when_device_exists() {
+        let Ok(backend) = CztWgpuBackend::try_default() else {
+            return;
+        };
+        let a32 = Complex32::new(0.95, 0.1);
+        let w32 = Complex32::from_polar(1.0, -std::f32::consts::TAU / 9.0);
+        let input = vec![
+            Complex32::new(1.0, 0.0),
+            Complex32::new(-0.5, 1.0),
+            Complex32::new(0.25, -0.75),
+            Complex32::new(1.25, 0.5),
+        ];
+        let plan = backend.plan(input.len(), 6, a32, w32);
+        let expected = backend
+            .execute_forward(&plan, &input)
+            .expect("slice forward");
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+        let actual = backend
+            .execute_forward_leto(&plan, leto_input.view())
+            .expect("leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
+        let Ok(backend) = CztWgpuBackend::try_default() else {
+            return;
+        };
+        let a32 = Complex32::new(0.95, 0.1);
+        let w32 = Complex32::from_polar(1.0, -std::f32::consts::TAU / 9.0);
+        let logical = vec![
+            Complex32::new(1.0, 0.0),
+            Complex32::new(-0.5, 1.0),
+            Complex32::new(0.25, -0.75),
+            Complex32::new(1.25, 0.5),
+        ];
+        let sentinel = Complex32::new(99.0, -99.0);
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in logical.iter().copied() {
+            backing.push(value);
+            backing.push(sentinel);
+        }
+        let plan = backend.plan(logical.len(), 6, a32, w32);
+        let expected = backend
+            .execute_forward(&plan, &logical)
+            .expect("slice forward");
+        let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn typed_leto_forward_matches_typed_slice_forward_when_device_exists() {
+        let Ok(backend) = CztWgpuBackend::try_default() else {
+            return;
+        };
+        let a32 = Complex32::new(0.95, 0.1);
+        let w32 = Complex32::from_polar(1.0, -std::f32::consts::TAU / 9.0);
+        let input_f32 = [
+            Complex32::new(1.0, 0.0),
+            Complex32::new(-0.5, 1.0),
+            Complex32::new(0.25, -0.75),
+            Complex32::new(1.25, 0.5),
+        ];
+        let input_f16: Vec<[f16; 2]> = input_f32
+            .iter()
+            .map(|c| [f16::from_f32(c.re), f16::from_f32(c.im)])
+            .collect();
+        let plan = backend.plan(input_f16.len(), 6, a32, w32);
+        let mut expected = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 6];
+        backend
+            .execute_forward_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &input_f16,
+                &mut expected,
+            )
+            .expect("typed slice forward");
+        let leto_input =
+            leto::Array1::from_shape_vec([input_f16.len()], input_f16).expect("leto input");
+        let actual = backend
+            .execute_forward_leto_typed::<[f16; 2]>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_input.view(),
+            )
+            .expect("typed leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn typed_path_rejects_profile_mismatch() {
         let Ok(backend) = CztWgpuBackend::try_default() else {
             return;
@@ -242,6 +339,32 @@ mod tests {
             assert!(re_err < 5.0e-4, "sample {i} re: err={re_err:.3e}");
             assert!(im_err < 5.0e-4, "sample {i} im: err={im_err:.3e}");
         }
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_inverse_dft_parameters_when_device_exists() {
+        let Ok(backend) = CztWgpuBackend::try_default() else {
+            return;
+        };
+        let n = 8usize;
+        let a32 = Complex32::new(1.0, 0.0);
+        let w32 = Complex32::from_polar(1.0, -std::f32::consts::TAU / n as f32);
+        let input: Vec<Complex32> = (0..n)
+            .map(|i| Complex32::new((i as f32 * 0.7).sin(), (i as f32 * 0.31).cos()))
+            .collect();
+        let plan = backend.plan(n, n, a32, w32);
+        let spectrum = backend
+            .execute_forward(&plan, &input)
+            .expect("slice forward");
+        let expected = backend
+            .execute_inverse(&plan, &spectrum)
+            .expect("slice inverse");
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([spectrum.len()], spectrum).expect("leto spectrum");
+        let actual = backend
+            .execute_inverse_leto(&plan, leto_spectrum.view())
+            .expect("leto inverse");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
     }
 
     /// GPU inverse rejects non-square plans (M ≠ N).
