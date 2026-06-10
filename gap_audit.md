@@ -1,13 +1,22 @@
 # Apollo Gap Audit
 
+## GFT Leto eigensolver boundary replacing nalgebra adapter [patch]
+- Performed in Leto: added `leto-ops::symmetric_eigen_jacobi` in pushed commit `fd1d87b`. The solver validates square finite symmetric input, copies strided views once into row-major working storage, returns ascending eigenvalues, and stores eigenvectors as columns in `leto::Array2<f64>`.
+- Performed in Apollo: updated the Leto Git revision to `fd1d87b`; added `leto-ops` as a workspace dependency; removed `apollo-gft`'s direct `nalgebra` dependency; and routed graph spectral basis construction through `symmetric_eigen_jacobi(&laplacian.view())`.
+- Architecture effect: `apollo-gft` no longer depends on nalgebra for storage or eigensolver execution. Leto now owns the GFT dense symmetric eigensolver boundary while `ndarray` and `nalgebra` remain validation or residual infrastructure dependencies outside this crate.
+- Benchmark refresh: regenerated selected quick-profile rows in `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`. This is empirical FFT benchmark evidence only; it does not measure the GFT eigensolver path.
+- Verification: Leto `cargo test -p leto-ops eigen -- --nocapture`, `cargo clippy -p leto-ops --all-targets -- -D warnings`, `cargo doc -p leto-ops --no-deps`; Apollo `cargo check -p apollo-gft`, `cargo test -p apollo-gft -- --nocapture`, `cargo clippy -p apollo-gft --all-targets -- -D warnings`, `cargo doc -p apollo-gft --no-deps`, `cargo run -p xtask -- provider-audit`, and `cargo semver-checks -p apollo-gft --baseline-rev HEAD`.
+- Evidence tier: type-level provider boundary replacement plus value-semantic GFT tests and differential eigensolver tests against nalgebra. No machine-checked proof was performed.
+- Residuals: `apollo-frft` still uses `nalgebra::SymmetricEigen`; root `nalgebra` stays until FRFT migrates to Leto. The current Jacobi solver is scalar `f64`; future Leto work should generalize the eigensolver through the provider scalar/backend traits before broader transform use.
+
 ## GFT Leto adjacency boundary replacing nalgebra domain storage [major]
 - Performed in Leto: added structural `Debug`/`Clone` derives for `Array<T, S, N>` and `VecStorage<T>` in pushed commit `646c036`, enabling Leto arrays to serve as Apollo domain descriptors without wrapper boilerplate.
-- Performed in Apollo: updated Leto to `646c036`; added Leto to `apollo-gft`; changed `GraphAdjacency` to own `leto::Array2<f64>`; changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>`; built the combinatorial Laplacian as `leto::Array2<f64>` before converting to nalgebra only for `SymmetricEigen`.
+- Performed in Apollo: updated Leto to `646c036`; added Leto to `apollo-gft`; changed `GraphAdjacency` to own `leto::Array2<f64>`; changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>`; built the combinatorial Laplacian as `leto::Array2<f64>`.
 - Downstream updates: `apollo-gft-wgpu` verification and Apollo validation GFT fixtures now construct Leto adjacency arrays. Stale `nalgebra` dependencies were removed from `apollo-gft-wgpu` dev-dependencies and `apollo-validation`.
-- Architecture effect: GFT graph-domain validation and Laplacian construction no longer expose nalgebra as the storage model. Nalgebra is isolated to the current eigensolver adapter; replacing that adapter with a Leto-owned eigensolver remains the next dependency-removal step.
+- Architecture effect: GFT graph-domain validation and Laplacian construction no longer expose nalgebra as the storage model. The later Leto eigensolver increment removes the remaining `apollo-gft` nalgebra adapter.
 - Verification: Leto `cargo check -p leto` and `cargo test -p leto --test core_tests`; Apollo `cargo check -p apollo-gft`, `cargo check -p apollo-gft-wgpu`, `cargo check -p apollo-validation`, `cargo test -p apollo-gft`, `cargo test -p apollo-gft-wgpu`, `cargo test -p apollo-validation gft`, `cargo clippy -p apollo-gft -p apollo-gft-wgpu -p apollo-validation --all-targets -- -D warnings`, `cargo doc -p apollo-gft --no-deps`, `cargo doc -p apollo-gft-wgpu --no-deps`, and `cargo run -p xtask -- provider-audit`.
 - Evidence tier: type-level boundary replacement plus value-semantic GFT eigenspectrum, roundtrip, WGPU parity, and published-fixture tests. No runtime benchmark claim is made.
-- Residuals: `apollo-frft` and `apollo-gft` still use nalgebra eigensolvers at infrastructure boundaries. Leto needs a symmetric eigensolver contract before nalgebra can be fully removed from those crates.
+- Residuals: `apollo-frft` still uses `nalgebra::SymmetricEigen`. Leto now has the first symmetric eigensolver contract used by GFT; broader scalar/backend generalization remains future provider work.
 
 ## Leto-backed FFT boundary with Mnemosyne storage [minor]
 - Performed in Leto: pinned Mnemosyne to commit `9411c444` in pushed Leto commit `9f639b73`, keeping Apollo and Leto on one Mnemosyne source identity.

@@ -1,8 +1,8 @@
 //! Combinatorial Laplacian and graph spectral basis construction.
 
 use crate::domain::graph::adjacency::GraphAdjacency;
-use leto::{Array2, Storage};
-use nalgebra::{DMatrix, SymmetricEigen};
+use leto::Array2;
+use leto_ops::symmetric_eigen_jacobi;
 
 /// Laplacian eigensystem stored for application-layer plans.
 #[derive(Debug, Clone)]
@@ -36,24 +36,20 @@ pub fn combinatorial_laplacian(graph: &GraphAdjacency) -> Array2<f64> {
 pub fn spectral_basis(graph: &GraphAdjacency) -> GraphSpectralBasis {
     let laplacian = combinatorial_laplacian(graph);
     let n = graph.len();
-    let decomposition = SymmetricEigen::new(DMatrix::from_row_slice(
-        n,
-        n,
-        laplacian.storage().as_slice(),
-    ));
-    let mut order: Vec<usize> = (0..n).collect();
-    order.sort_by(|&lhs, &rhs| {
-        decomposition.eigenvalues[lhs]
-            .partial_cmp(&decomposition.eigenvalues[rhs])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    let decomposition = symmetric_eigen_jacobi(&laplacian.view())
+        .expect("combinatorial Laplacian from validated undirected graph must be finite symmetric");
 
     let mut eigenvalues = Vec::with_capacity(n);
     let mut eigenvectors = Vec::with_capacity(n * n);
-    for &column in &order {
+    for column in 0..n {
         eigenvalues.push(decomposition.eigenvalues[column]);
         for row in 0..n {
-            eigenvectors.push(decomposition.eigenvectors[(row, column)]);
+            eigenvectors.push(
+                *decomposition
+                    .eigenvectors
+                    .get([row, column])
+                    .expect("eigenvector matrix shape must match graph order"),
+            );
         }
     }
 

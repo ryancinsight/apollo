@@ -1,12 +1,21 @@
 # Apollo Checklist
+## GFT Leto eigensolver boundary replacing nalgebra adapter [patch]
+- [x] Pushed Leto commit `fd1d87b` adding `leto-ops::symmetric_eigen_jacobi` with finite/square/symmetric validation, row-major Leto output storage, ascending eigenvalue ordering, and differential tests against `nalgebra`.
+- [x] Updated Apollo to Leto commit `fd1d87b` and added `leto-ops` as the workspace eigensolver provider.
+- [x] Removed `apollo-gft`'s direct `nalgebra` dependency and routed `spectral_basis` through `leto_ops::symmetric_eigen_jacobi(&laplacian.view())`.
+- [x] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`, preserving the full table and refreshing the selected measured rows.
+- [x] Verification: Leto `cargo test -p leto-ops eigen -- --nocapture`; Leto `cargo clippy -p leto-ops --all-targets -- -D warnings`; Leto `cargo doc -p leto-ops --no-deps`; Apollo `cargo check -p apollo-gft`; Apollo `cargo test -p apollo-gft -- --nocapture`; Apollo `cargo clippy -p apollo-gft --all-targets -- -D warnings`; Apollo `cargo doc -p apollo-gft --no-deps`; Apollo `cargo run -p xtask -- provider-audit`; Apollo `cargo semver-checks -p apollo-gft --baseline-rev HEAD`.
+- Evidence: value-semantic eigensolver tests, differential validation against `nalgebra`, GFT roundtrip/eigenspectrum tests, static provider audit, semver check, and empirical quick-profile benchmark rows. No machine-checked proof was performed.
+- Residual: `apollo-frft` still uses `nalgebra::SymmetricEigen`; root `nalgebra` remains until FRFT migrates to the Leto eigensolver.
+
 ## GFT Leto adjacency boundary replacing nalgebra domain storage [major]
 - [x] Pushed Leto commit `646c036` adding structural `Debug`/`Clone` derives for `Array<T, S, N>` and `VecStorage<T>` so Leto arrays can serve as Apollo domain descriptors.
 - [x] Updated Apollo to Leto commit `646c036`.
 - [x] Changed `apollo-gft` `GraphAdjacency` to own `leto::Array2<f64>` instead of `nalgebra::DMatrix<f64>`.
-- [x] Changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>` and build the combinatorial Laplacian in Leto storage before converting to nalgebra only at the `SymmetricEigen` boundary.
+- [x] Changed `GftPlan::from_adjacency` to accept `leto::ArrayView2<'_, f64>` and build the combinatorial Laplacian in Leto storage.
 - [x] Updated `apollo-gft-wgpu` verification and Apollo validation GFT fixtures to construct Leto adjacency arrays; removed stale validation and WGPU nalgebra dependencies.
 - [x] Verification: Leto focused check/core tests; Apollo `cargo check` for GFT/GFT-WGPU/validation; `cargo test -p apollo-gft`; `cargo test -p apollo-gft-wgpu`; `cargo test -p apollo-validation gft`; clippy for affected crates; docs for GFT/GFT-WGPU; provider audit.
-- Evidence: type-level domain boundary replacement plus value-semantic GFT roundtrip, eigenspectrum, WGPU parity, and validation fixture tests. Nalgebra remains an infrastructure eigensolver dependency only.
+- Evidence: type-level domain boundary replacement plus value-semantic GFT roundtrip, eigenspectrum, WGPU parity, and validation fixture tests. The later Leto eigensolver increment removes the remaining `apollo-gft` nalgebra adapter.
 
 ## Leto-backed FFT boundary with Mnemosyne storage [minor]
 - [x] Updated Apollo to pinned Leto commit `9f639b73`, which carries Mnemosyne-backed Leto constructors validated against `ndarray`.

@@ -8,14 +8,14 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 
 | Size | Apollo Engine | RustFFT Engine | f64 Apollo (ns) | f64 RustFFT (ns) | f64 Apollo/RustFFT | f32 Apollo (ns) | f32 RustFFT (ns) | f32 Apollo/RustFFT | Last Updated |
 | ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
-| 1 | Identity | Identity | 1.63 | 3.65 | 0.445x | 1.25 | 3.58 | 0.348x | 2026-06-10 02:28 UTC |
-| 2 | Winograd | Butterfly | 1.43 | 1.43 | 1.001x | 0.56 | 1.79 | 0.313x | 2026-06-10 02:28 UTC |
+| 1 | Identity | Identity | 1.70 | 3.67 | 0.464x | 1.28 | 3.53 | 0.363x | 2026-06-10 03:03 UTC |
+| 2 | Winograd | Butterfly | 1.21 | 1.33 | 0.912x | 0.65 | 1.66 | 0.390x | 2026-06-10 03:03 UTC |
 | 3 | Winograd | Butterfly | 1.52 | 1.83 | 0.830x | 0.89 | 1.98 | 0.450x | 2026-06-10 02:28 UTC |
-| 4 | Winograd | Butterfly | 0.92 | 1.98 | 0.463x | 7.12 | 1.56 | 4.557x | 2026-06-10 02:28 UTC |
+| 4 | Winograd | Butterfly | 1.65 | 1.84 | 0.893x | 6.83 | 1.59 | 4.297x | 2026-06-10 03:03 UTC |
 | 5 | Winograd | Butterfly | 8.27 | 9.72 | 0.851x | 11.39 | 8.57 | 1.330x | 2026-06-10 02:28 UTC |
 | 6 | Winograd | Butterfly | 2.28 | 3.04 | 0.750x | 10.95 | 7.86 | 1.393x | 2026-06-10 02:28 UTC |
 | 7 | Winograd | Butterfly | 12.11 | 11.06 | 1.095x | 13.84 | 12.14 | 1.140x | 2026-06-10 02:28 UTC |
-| 8 | Winograd | Butterfly | 3.30 | 3.70 | 0.894x | 1.91 | 1.59 | 1.203x | 2026-06-10 02:28 UTC |
+| 8 | Winograd | Butterfly | 3.35 | 2.03 | 1.650x | 1.97 | 1.36 | 1.446x | 2026-06-10 03:03 UTC |
 | 9 | Winograd | Butterfly | 7.60 | 11.71 | 0.649x | 21.41 | 13.47 | 1.590x | 2026-06-10 02:28 UTC |
 | 10 | Winograd | Mixed-Radix | 4.25 | 23.91 | 0.178x | 13.14 | 22.51 | 0.584x | 2026-06-10 02:28 UTC |
 | 11 | Winograd | Butterfly | 18.71 | 13.22 | 1.415x | 18.70 | 12.35 | 1.515x | 2026-06-10 02:28 UTC |
@@ -23,7 +23,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 13 | Winograd | Butterfly | 7.91 | 15.11 | 0.523x | 19.32 | 14.50 | 1.332x | 2026-06-10 02:28 UTC |
 | 14 | Winograd | Mixed-Radix | 13.07 | 26.88 | 0.486x | 14.22 | 27.87 | 0.510x | 2026-06-10 02:28 UTC |
 | 15 | Winograd | Mixed-Radix | 9.22 | 26.91 | 0.343x | 17.73 | 27.75 | 0.639x | 2026-06-10 02:28 UTC |
-| 16 | Winograd | Butterfly | 9.36 | 5.76 | 1.624x | 18.30 | 2.32 | 7.880x | 2026-06-10 02:28 UTC |
+| 16 | Winograd | Butterfly | 9.57 | 5.31 | 1.802x | 18.50 | 2.80 | 6.598x | 2026-06-10 03:03 UTC |
 | 17 | Winograd | Butterfly | 30.85 | 24.52 | 1.259x | 20.89 | 20.23 | 1.033x | 2026-06-10 02:28 UTC |
 | 18 | Winograd | Butterfly | 32.96 | 13.35 | 2.468x | 60.64 | 24.11 | 2.515x | 2026-06-10 02:28 UTC |
 | 19 | Winograd | Butterfly | 29.54 | 31.58 | 0.935x | 35.56 | 26.02 | 1.366x | 2026-06-10 02:28 UTC |
@@ -39,7 +39,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 29 | Winograd | Butterfly | 77.78 | 67.66 | 1.150x | 75.14 | 57.06 | 1.317x | 2026-06-10 02:28 UTC |
 | 30 | Winograd | Mixed-Radix | 32.36 | 36.61 | 0.884x | 45.16 | 48.92 | 0.923x | 2026-06-10 02:28 UTC |
 | 31 | Winograd | Butterfly | 59.31 | 86.10 | 0.689x | 66.33 | 65.45 | 1.013x | 2026-06-10 02:28 UTC |
-| 32 | Stockham | Butterfly | 34.85 | 14.78 | 2.357x | 19.43 | 8.43 | 2.305x | 2026-06-10 02:28 UTC |
+| 32 | Stockham | Butterfly | 21.19 | 22.41 | 0.946x | 15.88 | 7.13 | 2.226x | 2026-06-10 03:03 UTC |
 | 33 | Winograd | Mixed-Radix | 95.94 | 36.50 | 2.628x | 86.43 | 31.32 | 2.759x | 2026-06-10 02:28 UTC |
 | 34 | Winograd | Mixed-Radix | 81.37 | 66.00 | 1.233x | 54.60 | 59.85 | 0.912x | 2026-06-10 02:28 UTC |
 | 35 | Winograd | Mixed-Radix | 43.14 | 43.97 | 0.981x | 56.63 | 37.70 | 1.502x | 2026-06-10 02:28 UTC |
@@ -71,7 +71,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 61 | Rader | Rader | 484.56 | 208.51 | 2.324x | 274.45 | 129.45 | 2.120x | 2026-06-10 02:28 UTC |
 | 62 | Winograd | Mixed-Radix | 158.07 | 164.90 | 0.959x | 153.85 | 147.28 | 1.045x | 2026-06-10 02:28 UTC |
 | 63 | Winograd | Mixed-Radix | 111.59 | 58.05 | 1.922x | 104.42 | 50.67 | 2.061x | 2026-06-10 02:28 UTC |
-| 64 | Stockham | Butterfly | 54.35 | 39.97 | 1.360x | 36.12 | 20.96 | 1.723x | 2026-06-10 02:28 UTC |
+| 64 | Stockham | Butterfly | 54.74 | 39.57 | 1.383x | 35.32 | 34.11 | 1.035x | 2026-06-10 03:03 UTC |
 | 65 | Good-Thomas (Static) | Mixed-Radix | 178.75 | 99.23 | 1.801x | 204.61 | 77.08 | 2.654x | 2026-06-10 02:28 UTC |
 | 66 | Good-Thomas (Static) | Mixed-Radix | 213.82 | 68.85 | 3.105x | 214.15 | 76.44 | 2.801x | 2026-06-10 02:28 UTC |
 | 67 | Rader | Rader | 521.65 | 281.47 | 1.853x | 384.47 | 222.60 | 1.727x | 2026-06-10 02:28 UTC |
@@ -135,7 +135,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 125 | Cooley-Tukey | Mixed-Radix | 312.81 | 184.95 | 1.691x | 203.38 | 167.44 | 1.215x | 2026-06-10 02:28 UTC |
 | 126 | Good-Thomas (Static) | Mixed-Radix | 244.54 | 109.56 | 2.232x | 166.40 | 134.29 | 1.239x | 2026-06-10 02:28 UTC |
 | 127 | Rader | Rader | 913.20 | 551.65 | 1.655x | 418.83 | 401.58 | 1.043x | 2026-06-10 02:28 UTC |
-| 128 | Stockham | Butterfly | 94.75 | 90.31 | 1.049x | 72.83 | 54.10 | 1.346x | 2026-06-10 02:28 UTC |
+| 128 | Stockham | Butterfly | 97.10 | 93.94 | 1.034x | 72.03 | 45.66 | 1.578x | 2026-06-10 03:03 UTC |
 | 129 | Good-Thomas (Static) | Mixed-Radix (Rader) | 661.66 | 573.61 | 1.154x | 617.79 | 512.50 | 1.205x | 2026-06-10 02:28 UTC |
 | 130 | Good-Thomas (Static) | Mixed-Radix | 474.55 | 270.95 | 1.751x | 570.25 | 187.59 | 3.040x | 2026-06-10 02:28 UTC |
 | 131 | Rader | Rader | 1325.30 | 799.11 | 1.658x | 900.07 | 471.68 | 1.908x | 2026-06-10 02:28 UTC |
@@ -263,7 +263,7 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 253 | Cooley-Tukey | Mixed-Radix | 955.92 | 620.74 | 1.540x | 1031.38 | 491.94 | 2.097x | 2026-06-10 02:28 UTC |
 | 254 | Good-Thomas | Mixed-Radix (Rader) | 1964.59 | 1029.72 | 1.908x | 993.69 | 821.32 | 1.210x | 2026-06-10 02:28 UTC |
 | 255 | Cooley-Tukey | Mixed-Radix | 877.71 | 519.11 | 1.691x | 772.78 | 368.21 | 2.099x | 2026-06-10 02:28 UTC |
-| 256 | Stockham | Butterfly | 382.81 | 265.20 | 1.443x | 212.26 | 150.49 | 1.410x | 2026-06-10 02:28 UTC |
+| 256 | Stockham | Butterfly | 206.41 | 218.79 | 0.943x | 124.15 | 121.35 | 1.023x | 2026-06-10 03:03 UTC |
 | 257 | Rader | Rader | 1159.87 | 931.10 | 1.246x | 1198.01 | 480.56 | 2.493x | 2026-06-10 02:28 UTC |
 | 258 | Good-Thomas | Mixed-Radix (Rader) | 3494.43 | 1202.24 | 2.907x | 1472.98 | 938.66 | 1.569x | 2026-06-10 02:28 UTC |
 | 259 | Good-Thomas | Mixed-Radix (Rader) | 1517.29 | 904.62 | 1.677x | 1419.88 | 548.61 | 2.588x | 2026-06-10 02:28 UTC |
@@ -519,6 +519,6 @@ Lower time is better. `Apollo/RustFFT < 1.000x` means Apollo is faster.
 | 509 | Rader | Bluestein | 6122.40 | 7314.43 | 0.837x | 1990.33 | 3750.95 | 0.531x | 2026-06-10 02:28 UTC |
 | 510 | Cooley-Tukey | Mixed-Radix | 1866.38 | 2339.18 | 0.798x | 1540.53 | 752.70 | 2.047x | 2026-06-10 02:28 UTC |
 | 511 | Good-Thomas | Mixed-Radix (Rader) | 7015.79 | 2380.46 | 2.947x | 4742.33 | 3656.77 | 1.297x | 2026-06-10 02:28 UTC |
-| 512 | Stockham | Butterfly | 379.16 | 445.91 | 0.850x | 718.59 | 1251.30 | 0.574x | 2026-06-10 02:28 UTC |
-| 10007 | Rader (Precision Policy) | Bluestein | 294324.24 | 187014.64 | 1.574x | 182174.55 | 53089.34 | 3.431x | 2026-06-10 02:28 UTC |
-| 32768 | Stockham | Mixed-Radix | 414200.79 | 91179.51 | 4.543x | 65332.39 | 47185.57 | 1.385x | 2026-06-10 02:28 UTC |
+| 512 | Stockham | Butterfly | 448.58 | 457.69 | 0.980x | 312.86 | 311.89 | 1.003x | 2026-06-10 03:03 UTC |
+| 10007 | Rader (Precision Policy) | Bluestein | 177027.50 | 106787.06 | 1.658x | 144767.24 | 55444.89 | 2.611x | 2026-06-10 03:03 UTC |
+| 32768 | Stockham | Mixed-Radix | 134884.54 | 75639.95 | 1.783x | 55502.96 | 34523.16 | 1.608x | 2026-06-10 03:03 UTC |
