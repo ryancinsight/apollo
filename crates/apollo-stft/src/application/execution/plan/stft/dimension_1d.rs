@@ -19,11 +19,16 @@ thread_local! {
     static TYPED_SPECTRUM64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     static TYPED_FORWARD_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     static TYPED_INVERSE_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static FORWARD_FRAME_REAL_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    static WINDOWED_FRAME_REAL_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     static INVERSE_FRAME_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     static INVERSE_COMPLEX_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     static INVERSE_OVERLAP_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     static INVERSE_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
+
+/// Below this frame length scalar windowing avoids scratch setup overhead.
+const HERMES_WINDOW_FRAME_THRESHOLD: usize = 64;
 
 /// Return `true` when `n > 0`.
 #[must_use]
@@ -261,14 +266,7 @@ impl StftPlan {
             self.spectrum_len(),
             |m, out_chunk| {
                 let start = m as isize * self.hop_len as isize - (self.frame_len / 2) as isize;
-                for n in 0..self.frame_len {
-                    let signal_index = start + n as isize;
-                    out_chunk[n] = if signal_index >= 0 && (signal_index as usize) < signal.len() {
-                        Complex64::new(signal[signal_index as usize] * window[n], 0.0)
-                    } else {
-                        Complex64::new(0.0, 0.0)
-                    };
-                }
+                window_signal_frame_into(start, signal, window, out_chunk);
                 self.fft_plan.forward_complex_slice_inplace(out_chunk);
             },
         );
@@ -366,9 +364,7 @@ impl StftPlan {
                             frame_complex[k] = spectrum[offset + k];
                         }
                         self.fft_plan.inverse_complex_slice_inplace(frame_complex);
-                        for n in 0..self.frame_len {
-                            frame_out[n] = frame_complex[n].re * window[n];
-                        }
+                        window_complex_real_frame_into(frame_complex, window, frame_out);
                     },
                 );
 
@@ -439,6 +435,79 @@ impl StftPlan {
         let mut output = Array1::<O>::from_elem(signal_len, O::from_f64(0.0));
         self.inverse_typed_into(&spectrum, signal_len, &mut output, profile)?;
         leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
+    }
+}
+
+fn window_signal_frame_into(
+    start: isize,
+    signal: &[f64],
+    window: &[f64],
+    output: &mut [Complex64],
+) {
+    debug_assert_eq!(window.len(), output.len());
+    if window.len() < HERMES_WINDOW_FRAME_THRESHOLD {
+        window_signal_frame_scalar(start, signal, window, output);
+        return;
+    }
+    FORWARD_FRAME_REAL_SCRATCH.with(|cell| {
+        cell.with_scratch(window.len(), |frame| {
+            WINDOWED_FRAME_REAL_SCRATCH.with(|windowed_cell| {
+                windowed_cell.with_scratch(window.len(), |windowed| {
+                    for (n, slot) in frame.iter_mut().enumerate() {
+                        let signal_index = start + n as isize;
+                        *slot = if signal_index >= 0 && (signal_index as usize) < signal.len() {
+                            signal[signal_index as usize]
+                        } else {
+                            0.0
+                        };
+                    }
+                    hermes_simd::elementwise_mul(frame, window, windowed)
+                        .expect("STFT frame and window lengths match");
+                    for (slot, value) in output.iter_mut().zip(windowed.iter().copied()) {
+                        *slot = Complex64::new(value, 0.0);
+                    }
+                });
+            });
+        });
+    });
+}
+
+fn window_signal_frame_scalar(
+    start: isize,
+    signal: &[f64],
+    window: &[f64],
+    output: &mut [Complex64],
+) {
+    for (n, slot) in output.iter_mut().enumerate() {
+        let signal_index = start + n as isize;
+        *slot = if signal_index >= 0 && (signal_index as usize) < signal.len() {
+            Complex64::new(signal[signal_index as usize] * window[n], 0.0)
+        } else {
+            Complex64::new(0.0, 0.0)
+        };
+    }
+}
+
+fn window_complex_real_frame_into(frame_complex: &[Complex64], window: &[f64], output: &mut [f64]) {
+    debug_assert_eq!(frame_complex.len(), output.len());
+    debug_assert_eq!(window.len(), output.len());
+    if output.len() >= HERMES_WINDOW_FRAME_THRESHOLD {
+        FORWARD_FRAME_REAL_SCRATCH.with(|cell| {
+            cell.with_scratch(output.len(), |frame| {
+                for (slot, value) in frame.iter_mut().zip(frame_complex.iter()) {
+                    *slot = value.re;
+                }
+                hermes_simd::elementwise_mul(frame, window, output)
+                    .expect("STFT inverse frame and window lengths match");
+            });
+        });
+    } else {
+        for (slot, value) in output.iter_mut().zip(frame_complex.iter()) {
+            *slot = value.re;
+        }
+        for (slot, factor) in output.iter_mut().zip(window.iter().copied()) {
+            *slot *= factor;
+        }
     }
 }
 
@@ -526,6 +595,11 @@ fn typed_workspace_capacities() -> (usize, usize, usize, usize) {
     let forward_output = TYPED_FORWARD_OUTPUT64_SCRATCH.with(|cell| cell.capacity());
     let inverse_output = TYPED_INVERSE_OUTPUT64_SCRATCH.with(|cell| cell.capacity());
     (signal, spectrum, forward_output, inverse_output)
+}
+
+#[cfg(test)]
+fn forward_window_workspace_capacity() -> usize {
+    FORWARD_FRAME_REAL_SCRATCH.with(|cell| cell.capacity())
 }
 
 #[cfg(test)]

@@ -52,7 +52,7 @@ pub fn direct_frft_forward_into(
         if work_items >= FRFT_PAR_OP_THRESHOLD {
             let input_lanes = interleaved_lanes(input);
             output.par_mut().enumerate(|k, out| {
-                *out = centered_dft_row_hermes(&input_lanes, n, center, sign, scale, k);
+                *out = centered_dft_row_hermes(input_lanes, n, center, sign, scale, k);
             });
         } else {
             output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -65,7 +65,7 @@ pub fn direct_frft_forward_into(
     if work_items >= FRFT_PAR_OP_THRESHOLD {
         let input_lanes = interleaved_lanes(input);
         output.par_mut().enumerate(|k, out| {
-            *out = fractional_row_hermes(&input_lanes, n, center, cot, csc, scale, k);
+            *out = fractional_row_hermes(input_lanes, n, center, cot, csc, scale, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -166,13 +166,10 @@ fn fractional_row_hermes(
     })
 }
 
-fn interleaved_lanes(input: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(input.len() * 2);
-    for value in input {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn interleaved_lanes(input: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(input.as_ptr().cast::<f64>(), input.len() * 2) }
 }
 
 fn fill_centered_dft_weight_lanes(lanes: &mut [f64], n: usize, center: f64, sign: f64, u: f64) {
@@ -262,7 +259,7 @@ mod tests {
         let center = (n as f64 - 1.0) * 0.5;
 
         for k in [0_usize, 1, 17, 64, 127] {
-            let actual = fractional_row_hermes(&input_lanes, n, center, cot, csc, scale, k);
+            let actual = fractional_row_hermes(input_lanes, n, center, cot, csc, scale, k);
             let expected = fractional_row(&input, n, center, cot, csc, scale, k);
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
@@ -278,7 +275,7 @@ mod tests {
         let scale = 1.0 / (n as f64).sqrt();
 
         for k in [0_usize, 1, 17, 64, 127] {
-            let actual = centered_dft_row_hermes(&input_lanes, n, center, -1.0, scale, k);
+            let actual = centered_dft_row_hermes(input_lanes, n, center, -1.0, scale, k);
             let expected = centered_dft_row(&input, n, center, -1.0, scale, k);
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);

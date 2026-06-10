@@ -1,4 +1,22 @@
 # Apollo Checklist
+## Hermes complex-lane zero-copy cleanup [patch]
+- [x] Replaced redundant `Vec<f64>` interleaved lane materialization with borrowed `Complex64` lane views in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT Hermes helpers.
+- [x] Kept each unsafe reinterpretation isolated in a helper with a `SAFETY` layout invariant comment.
+- [x] Removed needless borrows and `#[inline(always)]` markers that blocked the current full-workspace clippy gate.
+- [x] Verification: focused tests for CZT, FrFT, Mellin, NUFFT, QFT, SFT, SHT, and STFT; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic transform tests and full workspace gates. No runtime benchmark claim is made.
+
+## STFT Hermes frame-window routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-stft`.
+- [x] Routed threshold-sized forward analysis frame windowing through `hermes_simd::elementwise_mul`.
+- [x] Routed threshold-sized inverse WOLA frame windowing through `hermes_simd::elementwise_mul`.
+- [x] Reused Mnemosyne thread-local real-frame scratch for zero-padded forward frames and inverse real-frame extraction.
+- [x] Kept scalar windowing for smaller frames and as the value-semantic formula reference.
+- [x] Preserved existing Moirai frame scheduling, FFT plan reuse, public Leto boundaries, and ndarray validation paths.
+- [x] Added direct threshold-path tests for forward and inverse Hermes windowing parity against scalar formulas.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-stft`; `cargo clippy -p apollo-stft --all-targets -- -D warnings`; `cargo doc -p apollo-stft --no-deps`; `cargo semver-checks -p apollo-stft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: value-semantic STFT unit/property tests plus direct threshold-path Hermes frame-windowing tests. No runtime benchmark claim is made.
+
 ## SFT direct-reference Hermes complex dot routing [patch]
 - [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-sft`.
 - [x] Routed threshold-sized direct DFT verification rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.

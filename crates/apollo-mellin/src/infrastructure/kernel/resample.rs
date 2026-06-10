@@ -243,7 +243,7 @@ pub fn inverse_log_frequency_spectrum(
     if work_items >= HERMES_SPECTRUM_OP_THRESHOLD {
         let spectrum_lanes = complex_interleaved_lanes(spectrum);
         return moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |n| {
-            inverse_log_frequency_coeff_hermes(&spectrum_lanes, factor, inv_du / len as f64, n)
+            inverse_log_frequency_coeff_hermes(spectrum_lanes, factor, inv_du / len as f64, n)
         });
     }
 
@@ -294,13 +294,10 @@ fn real_interleaved_lanes(values: &[f64]) -> Vec<f64> {
     lanes
 }
 
-fn complex_interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn complex_interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 fn fill_log_frequency_weight_lanes(lanes: &mut [f64], factor: f64, row: usize) {
@@ -466,7 +463,7 @@ mod tests {
 
         for n in [0usize, 1, 17, 64, 127, 255] {
             let actual =
-                inverse_log_frequency_coeff_hermes(&spectrum_lanes, factor, inv_du / len as f64, n);
+                inverse_log_frequency_coeff_hermes(spectrum_lanes, factor, inv_du / len as f64, n);
             let expected = spectrum
                 .iter()
                 .enumerate()

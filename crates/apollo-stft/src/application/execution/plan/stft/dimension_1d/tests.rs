@@ -1,4 +1,8 @@
-use super::{inverse_wola_workspace_capacities, typed_workspace_capacities, StftPlan};
+use super::{
+    forward_window_workspace_capacity, inverse_wola_workspace_capacities,
+    typed_workspace_capacities, window_complex_real_frame_into, window_signal_frame_into, StftPlan,
+    HERMES_WINDOW_FRAME_THRESHOLD,
+};
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{f16, PrecisionProfile};
@@ -134,6 +138,57 @@ fn inverse_into_reuses_wola_workspace_capacity() {
     for ((lhs, rhs), expected) in first.iter().zip(second.iter()).zip(signal.iter()) {
         assert_eq!(lhs.to_bits(), rhs.to_bits());
         assert_relative_eq!(lhs, expected, epsilon = 1.0e-8);
+    }
+}
+
+#[test]
+fn hermes_forward_windowing_matches_scalar_formula_at_threshold() {
+    let signal: Vec<f64> = (0..(HERMES_WINDOW_FRAME_THRESHOLD + 16))
+        .map(|i| (i as f64 * 0.17).cos())
+        .collect();
+    let window: Vec<f64> = (0..HERMES_WINDOW_FRAME_THRESHOLD)
+        .map(|i| {
+            0.5 - 0.5
+                * (std::f64::consts::TAU * i as f64 / (HERMES_WINDOW_FRAME_THRESHOLD - 1) as f64)
+                    .cos()
+        })
+        .collect();
+    let start = -5;
+    let mut actual = vec![Complex64::new(0.0, 0.0); HERMES_WINDOW_FRAME_THRESHOLD];
+
+    window_signal_frame_into(start, &signal, &window, &mut actual);
+
+    assert!(forward_window_workspace_capacity() >= HERMES_WINDOW_FRAME_THRESHOLD);
+    for (n, actual) in actual.iter().enumerate() {
+        let signal_index = start + n as isize;
+        let expected = if signal_index >= 0 && (signal_index as usize) < signal.len() {
+            signal[signal_index as usize] * window[n]
+        } else {
+            0.0
+        };
+        assert_relative_eq!(actual.re, expected, epsilon = 1.0e-12);
+        assert_eq!(actual.im.to_bits(), 0.0f64.to_bits());
+    }
+}
+
+#[test]
+fn hermes_inverse_windowing_matches_scalar_formula_at_threshold() {
+    let frame: Vec<Complex64> = (0..HERMES_WINDOW_FRAME_THRESHOLD)
+        .map(|i| Complex64::new((i as f64 * 0.13).sin(), (i as f64 * 0.19).cos()))
+        .collect();
+    let window: Vec<f64> = (0..HERMES_WINDOW_FRAME_THRESHOLD)
+        .map(|i| {
+            0.5 - 0.5
+                * (std::f64::consts::TAU * i as f64 / (HERMES_WINDOW_FRAME_THRESHOLD - 1) as f64)
+                    .cos()
+        })
+        .collect();
+    let mut actual = vec![0.0; HERMES_WINDOW_FRAME_THRESHOLD];
+
+    window_complex_real_frame_into(&frame, &window, &mut actual);
+
+    for ((actual, frame), window) in actual.iter().zip(frame.iter()).zip(window.iter()) {
+        assert_relative_eq!(*actual, frame.re * window, epsilon = 1.0e-12);
     }
 }
 

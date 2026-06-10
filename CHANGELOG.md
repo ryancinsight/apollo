@@ -8,6 +8,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-stft` forward analysis windowing and inverse WOLA frame windowing now use Hermes elementwise multiplication above a bounded frame-length threshold, with Mnemosyne thread-local real-frame scratch and scalar windowing retained for smaller frames.
+- [patch] Hermes complex-lane helpers in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT now borrow `Complex64` buffers as interleaved `f64` lanes instead of materializing redundant lane vectors.
 - [patch] `apollo-sft` direct DFT verification rows now use Hermes interleaved complex dot-product reductions above a bounded row-length threshold, with Mnemosyne thread-local twiddle-lane scratch and scalar DFT rows retained for smaller verification inputs.
 - [patch] `apollo-radon` adjoint backprojection pixel reductions now use Hermes dot products above a bounded angle-count threshold, with Mnemosyne thread-local detector sample and interpolation-weight scratch lanes while scalar linear sampling remains the small-path reference.
 - [patch] `apollo-sht` forward longitude reductions and inverse synthesis mode reductions now use Hermes interleaved complex dot-product reductions above a bounded threshold, with Mnemosyne thread-local spherical-harmonic lane scratch and scalar formulas retained for smaller workloads.

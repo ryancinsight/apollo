@@ -578,7 +578,7 @@ pub fn nufft_type1_1d(
         let value_lanes = interleaved_lanes(values);
         output.par_mut().enumerate(|k, value| {
             *value =
-                nufft_type1_coefficient_hermes(k, positions, &value_lanes, domain.n, two_pi_over_l);
+                nufft_type1_coefficient_hermes(k, positions, value_lanes, domain.n, two_pi_over_l);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, value)| {
@@ -656,7 +656,7 @@ pub fn nufft_type2_1d(
             .expect("NUFFT direct type-2 Fourier coefficients must be contiguous");
         let coeff_lanes = interleaved_lanes(coeffs);
         output.par_mut().enumerate(|index, value| {
-            *value = nufft_type2_sample_hermes(positions[index], &coeff_lanes, domain);
+            *value = nufft_type2_sample_hermes(positions[index], coeff_lanes, domain);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(index, value)| {
@@ -680,13 +680,10 @@ fn nufft_type2_sample_hermes(x: f64, coeff_lanes: &[f64], domain: UniformDomain1
     })
 }
 
-fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 fn fill_type1_weight_lanes(
@@ -785,13 +782,8 @@ mod tests {
         let two_pi_over_l = 2.0 * PI / domain.length();
 
         for k in [0usize, 1, 17, 64, 96, 127] {
-            let actual = nufft_type1_coefficient_hermes(
-                k,
-                &positions,
-                &value_lanes,
-                domain.n,
-                two_pi_over_l,
-            );
+            let actual =
+                nufft_type1_coefficient_hermes(k, &positions, value_lanes, domain.n, two_pi_over_l);
             let expected = nufft_type1_coefficient(k, &positions, &values, domain.n, two_pi_over_l);
 
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
@@ -808,7 +800,7 @@ mod tests {
         let coeff_lanes = interleaved_lanes(coeffs.as_slice().expect("contiguous coeffs"));
 
         for x in [0.0_f64, 0.125, 0.37, 0.5, 0.875, 1.25] {
-            let actual = nufft_type2_sample_hermes(x, &coeff_lanes, domain);
+            let actual = nufft_type2_sample_hermes(x, coeff_lanes, domain);
             let expected = nufft_type2_sample(x, &coeffs, domain);
 
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);

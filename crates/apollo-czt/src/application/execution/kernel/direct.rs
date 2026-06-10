@@ -30,7 +30,7 @@ pub fn czt_direct_forward(
     if work_items >= DIRECT_PAR_OP_THRESHOLD {
         let input_lanes = interleaved_lanes(input);
         output_slice.par_mut().enumerate(|k, slot| {
-            *slot = czt_direct_bin_hermes(&input_lanes, k, a, w);
+            *slot = czt_direct_bin_hermes(input_lanes, k, a, w);
         });
     } else {
         output_slice.iter_mut().enumerate().for_each(|(k, slot)| {
@@ -69,13 +69,10 @@ fn czt_direct_bin_hermes(input_lanes: &[f64], k: usize, a: Complex64, w: Complex
     })
 }
 
-fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 fn fill_power_lanes(lanes: &mut [f64], z_inv: Complex64) {
@@ -125,7 +122,7 @@ mod tests {
         let w = Complex64::from_polar(1.0, -std::f64::consts::TAU / 257.0);
 
         for k in [0usize, 1, 17, 64, 127] {
-            let actual = czt_direct_bin_hermes(&input_lanes, k, a, w);
+            let actual = czt_direct_bin_hermes(input_lanes, k, a, w);
             let expected = czt_direct_bin(&input, k, a, w);
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);

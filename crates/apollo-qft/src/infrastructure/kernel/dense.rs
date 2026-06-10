@@ -72,7 +72,7 @@ fn qft_dense_into(
     if work_items >= QFT_PAR_OP_THRESHOLD {
         let input_lanes = interleaved_lanes(input);
         output.par_mut().enumerate(|row, slot| {
-            *slot = qft_row_hermes(&input_lanes, twiddles, row, direction, scale);
+            *slot = qft_row_hermes(input_lanes, twiddles, row, direction, scale);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(row, slot)| {
@@ -124,13 +124,10 @@ fn qft_row_hermes(
     })
 }
 
-fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 fn fill_twiddle_lanes(
@@ -209,7 +206,7 @@ mod tests {
         let scale = 1.0 / (n as f64).sqrt();
 
         for row in [0usize, 1, 17, 64, 127] {
-            let actual = qft_row_hermes(&input_lanes, &twiddles, row, QftDirection::Forward, scale);
+            let actual = qft_row_hermes(input_lanes, &twiddles, row, QftDirection::Forward, scale);
             let expected = qft_row(&input, &twiddles, row, QftDirection::Forward, scale);
             assert_eq!(actual.re.to_bits(), expected.re.to_bits(), "row={row}");
             assert_eq!(actual.im.to_bits(), expected.im.to_bits(), "row={row}");
@@ -225,7 +222,7 @@ mod tests {
         let scale = 1.0 / (n as f64).sqrt();
 
         for row in [0usize, 1, 17, 64, 127] {
-            let actual = qft_row_hermes(&input_lanes, &twiddles, row, QftDirection::Inverse, scale);
+            let actual = qft_row_hermes(input_lanes, &twiddles, row, QftDirection::Inverse, scale);
             let expected = qft_row(&input, &twiddles, row, QftDirection::Inverse, scale);
             assert_eq!(actual.re.to_bits(), expected.re.to_bits(), "row={row}");
             assert_eq!(actual.im.to_bits(), expected.im.to_bits(), "row={row}");

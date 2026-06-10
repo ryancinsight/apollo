@@ -1,5 +1,22 @@
 # Apollo Gap Audit
 
+## Hermes complex-lane zero-copy cleanup [patch]
+- Performed: replaced redundant interleaved `Vec<f64>` construction with borrowed `Complex64` lane views in CZT, FrFT, Mellin, NUFFT, QFT, SFT, and SHT Hermes helpers; removed needless slice borrows and inline-always markers that violated the current clippy gate.
+- Architecture effect: complex reduction helpers now use one provider-facing borrowed lane boundary instead of duplicated allocation loops per transform crate.
+- Memory effect: threshold-sized Hermes complex reductions avoid materializing owned input lane vectors; only provider weight/twiddle lanes remain scratch-backed where formulas require generated coefficients.
+- Verification: focused tests for all touched CPU transform crates plus full workspace format, tests, examples, clippy, docs, and provider audit.
+- Evidence tier: value-semantic transform tests and static diagnostics. No runtime benchmark claim is made.
+- Residuals: generated weight/twiddle lanes remain materialized because current Hermes complex dot APIs consume two primitive interleaved lane slices.
+
+## STFT Hermes frame-window routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-stft`; routed threshold-sized forward analysis windowing and inverse WOLA real-frame windowing through Hermes elementwise multiplication with real frame lanes staged in Mnemosyne thread-local scratch.
+- Architecture effect: STFT CPU execution now composes Moirai frame scheduling, Mnemosyne scratch reuse, Hermes SIMD elementwise kernels, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized forward frames reuse one thread-local real-frame lane buffer and one windowed-frame buffer per worker; inverse WOLA reuses thread-local real-frame extraction before writing the existing flat frame workspace. Small frames retain allocation-free scalar windowing.
+- Implementation effect: `window_signal_frame_scalar` remains the forward formula reference; `window_signal_frame_into` owns zero-padded forward frame materialization and Hermes routing; `window_complex_real_frame_into` owns inverse real extraction and Hermes routing.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-stft`; `cargo clippy -p apollo-stft --all-targets -- -D warnings`; `cargo doc -p apollo-stft --no-deps`; `cargo semver-checks -p apollo-stft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic STFT tests plus direct threshold-path Hermes frame-windowing tests. No runtime benchmark claim is made.
+- Residuals: STFT still delegates DFT execution to `apollo-fft`; overlap-add accumulation remains sequential to preserve race-free shared-output semantics.
+
 ## SFT direct-reference Hermes complex dot routing [patch]
 - Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-sft`; routed threshold-sized direct DFT verification rows through Hermes provider-owned interleaved complex dot products with twiddle lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: SFT verification now composes scalar formula ownership, Mnemosyne scratch reuse, and Hermes SIMD complex reduction without runtime-erased dispatch in Apollo code. Production sparse FFT execution remains delegated to `apollo-fft`.

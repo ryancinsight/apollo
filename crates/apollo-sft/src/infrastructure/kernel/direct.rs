@@ -43,7 +43,7 @@ pub(crate) fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
     let input_lanes = (n >= DFT_HERMES_ROW_LEN_THRESHOLD).then(|| interleaved_lanes(input));
 
     for (k, out) in output.iter_mut().enumerate() {
-        let sum = match &input_lanes {
+        let sum = match input_lanes {
             Some(lanes) => dft_row_hermes(lanes, k, n, sign, tau),
             None => dft_row_scalar(input, k, sign, tau),
         };
@@ -82,14 +82,11 @@ fn dft_row_hermes(input_lanes: &[f64], k: usize, n: usize, sign: f64, tau: f64) 
     })
 }
 
+#[inline]
 #[cfg(test)]
-fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 #[cfg(test)]
@@ -120,7 +117,7 @@ mod tests {
 
         for (k, sign) in [(0, -1.0), (7, -1.0), (13, 1.0), (255, 1.0)] {
             let expected = dft_row_scalar(&input, k, sign, tau);
-            let actual = dft_row_hermes(&lanes, k, input.len(), sign, tau);
+            let actual = dft_row_hermes(lanes, k, input.len(), sign, tau);
             assert!((actual.re - expected.re).abs() < 1.0e-10);
             assert!((actual.im - expected.im).abs() < 1.0e-10);
         }

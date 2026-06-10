@@ -150,7 +150,7 @@ impl ShtPlan {
                 all_modes
                     .iter()
                     .map(|&(degree, order)| {
-                        let lon_sum = match &sample_lanes {
+                        let lon_sum = match sample_lanes {
                             Some(lanes) => {
                                 sht_forward_mode_sum_hermes(lanes, degree, order, theta, n_lon)
                             }
@@ -687,13 +687,10 @@ fn sht_inverse_sample_hermes(
     })
 }
 
-fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(value.re);
-        lanes.push(value.im);
-    }
-    lanes
+#[inline]
+fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
+    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
+    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
 }
 
 fn coefficient_lanes(
@@ -808,7 +805,7 @@ mod tests {
             let expected =
                 sht_forward_mode_sum(&row, degree, order, theta, plan.grid().longitudes());
             let actual =
-                sht_forward_mode_sum_hermes(&lanes, degree, order, theta, plan.grid().longitudes());
+                sht_forward_mode_sum_hermes(lanes, degree, order, theta, plan.grid().longitudes());
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-11);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-11);
         }
