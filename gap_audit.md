@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SDFT direct-bin Hermes dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-sdft`; routed threshold-sized direct-bin real and imaginary reductions through Hermes dot products with trigonometric weights stored in Mnemosyne thread-local scratch.
+- Architecture effect: SDFT direct initialization now composes Moirai bin scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: each threshold-path worker row reuses one thread-local weight buffer for cosine and sine passes; smaller windows retain allocation-free scalar accumulation.
+- Implementation effect: `direct_bin_scalar` remains the DFT-bin formula reference for small paths and tests, while `direct_bin_hermes` owns the provider reduction boundary and `fill_direct_bin_weights` owns weight materialization.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-sdft`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic SDFT unit/property tests plus direct threshold-path Hermes bin tests. No runtime benchmark claim is made.
+- Residuals: typed direct-bin storage conversion still promotes reduced storage to `f64` scratch before computation by existing API contract; sliding recurrence updates remain complex scalar multiply-adds because Hermes lacks a provider primitive for that recurrence shape.
+
 ## QFT dense Hermes complex dot routing [patch]
 - Performed: updated Apollo's Hermes lockfile revision to `b148fed9`; added the workspace Hermes provider dependency to `apollo-qft`; routed threshold-sized dense forward/inverse row reductions through Hermes provider-owned interleaved complex dot products.
 - Architecture effect: QFT dense execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.

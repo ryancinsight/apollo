@@ -1,4 +1,14 @@
 # Apollo Checklist
+## SDFT direct-bin Hermes dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-sdft`.
+- [x] Routed direct-bin real and imaginary reductions through `hermes_simd::dot::<f64>` above `HERMES_DIRECT_BIN_LEN_THRESHOLD`.
+- [x] Reused Mnemosyne thread-local scratch for per-bin trigonometric weight rows.
+- [x] Kept scalar direct-bin accumulation for smaller windows and as the value-semantic formula reference.
+- [x] Preserved existing Moirai disjoint bin scheduling and sliding recurrence update routing.
+- [x] Added direct threshold-path tests for Hermes bin parity and trigonometric weight materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-sdft`; `cargo clippy -p apollo-sdft --all-targets -- -D warnings`; `cargo doc -p apollo-sdft --no-deps`; `cargo semver-checks -p apollo-sdft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic SDFT unit/property tests plus direct threshold-path Hermes bin tests. No runtime benchmark claim is made.
+
 ## QFT dense Hermes complex dot routing [patch]
 - [x] Updated Apollo's Hermes lockfile revision to provider commit `b148fed9`.
 - [x] Added the workspace Hermes provider dependency to `apollo-qft`.

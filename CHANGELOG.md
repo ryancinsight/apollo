@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-sdft` direct-bin initialization now uses Hermes dot-product reductions with Mnemosyne thread-local trigonometric-weight scratch above a bounded window-length threshold, while smaller windows retain the scalar DFT-bin formula and Moirai keeps disjoint bin scheduling.
 - [patch] `apollo-qft` dense forward/inverse row reductions now use Hermes interleaved complex dot products above the existing Moirai parallel threshold, with Mnemosyne thread-local twiddle-lane scratch and scalar row formulas retained for small state vectors.
 - [patch] `apollo-wavelet` CWT coefficient accumulation now uses Hermes dot-product reduction with Mnemosyne thread-local wavelet-weight scratch above a bounded signal-length threshold, while smaller coefficients retain the scalar mother-wavelet formula.
 - [patch] `apollo-mellin` real Mellin moments now use Hermes dot-product reduction with Mnemosyne thread-local trapezoid-weight scratch above a bounded signal-length threshold, while smaller moments retain the scalar trapezoid formula.

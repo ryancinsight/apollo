@@ -6,6 +6,7 @@
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
 use crate::domain::contracts::error::{SdftError, SdftResult};
+use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
 use num_complex::Complex64;
 
@@ -14,6 +15,13 @@ const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
 
 /// Below this bin count, serial recurrence updates avoid scheduling overhead.
 const UPDATE_PAR_BIN_THRESHOLD: usize = 16_384;
+
+/// Below this window length, scalar accumulation avoids scratch setup overhead.
+const HERMES_DIRECT_BIN_LEN_THRESHOLD: usize = 128;
+
+thread_local! {
+    static DIRECT_BIN_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
 
 /// Build update twiddle factors for SDFT bins.
 #[must_use]
@@ -61,6 +69,14 @@ pub fn direct_bins_into(window: &[f64], bins: &mut [Complex64]) -> SdftResult<()
 
 #[inline]
 fn direct_bin(window: &[f64], n: usize, bin: usize) -> Complex64 {
+    if window.len() >= HERMES_DIRECT_BIN_LEN_THRESHOLD {
+        return direct_bin_hermes(window, n, bin);
+    }
+    direct_bin_scalar(window, n, bin)
+}
+
+#[inline]
+fn direct_bin_scalar(window: &[f64], n: usize, bin: usize) -> Complex64 {
     window
         .iter()
         .enumerate()
@@ -68,6 +84,41 @@ fn direct_bin(window: &[f64], n: usize, bin: usize) -> Complex64 {
             let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / n as f64;
             acc + Complex64::new(value, 0.0) * Complex64::new(angle.cos(), angle.sin())
         })
+}
+
+fn direct_bin_hermes(window: &[f64], n: usize, bin: usize) -> Complex64 {
+    DIRECT_BIN_WEIGHT_SCRATCH.with(|pool| {
+        pool.with_scratch(window.len(), |weights| {
+            fill_direct_bin_weights(weights, n, bin, DirectBinComponent::Real);
+            let re = hermes_simd::dot::<f64>(window, weights)
+                .expect("SDFT Hermes real dot uses equal-length window and weight slices");
+            fill_direct_bin_weights(weights, n, bin, DirectBinComponent::Imaginary);
+            let im = hermes_simd::dot::<f64>(window, weights)
+                .expect("SDFT Hermes imaginary dot uses equal-length window and weight slices");
+            Complex64::new(re, im)
+        })
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DirectBinComponent {
+    Real,
+    Imaginary,
+}
+
+fn fill_direct_bin_weights(
+    weights: &mut [f64],
+    n: usize,
+    bin: usize,
+    component: DirectBinComponent,
+) {
+    for (index, weight) in weights.iter_mut().enumerate() {
+        let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / n as f64;
+        *weight = match component {
+            DirectBinComponent::Real => angle.cos(),
+            DirectBinComponent::Imaginary => angle.sin(),
+        };
+    }
 }
 
 /// Apply one O(bin_count) sliding DFT update.
@@ -121,9 +172,38 @@ mod tests {
         direct_bins_into(&window, &mut actual).expect("parallel direct bins");
 
         for (bin, actual) in actual.iter().enumerate() {
-            let expected = direct_bin(&window, window_len, bin);
+            let expected = direct_bin_scalar(&window, window_len, bin);
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn hermes_direct_bin_matches_scalar_formula_at_threshold() {
+        let window_len = HERMES_DIRECT_BIN_LEN_THRESHOLD;
+        let window = (0..window_len)
+            .map(|index| (index as f64 * 0.125).sin() - (index as f64 * 0.03125).cos())
+            .collect::<Vec<_>>();
+
+        for bin in [0usize, 1, 17, 64, 127] {
+            let actual = direct_bin_hermes(&window, window_len, bin);
+            let expected = direct_bin_scalar(&window, window_len, bin);
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn direct_bin_weights_match_component_formula() {
+        let n = 16;
+        let bin = 5;
+        let mut weights = vec![0.0; n];
+
+        fill_direct_bin_weights(&mut weights, n, bin, DirectBinComponent::Imaginary);
+
+        for (index, actual) in weights.iter().copied().enumerate() {
+            let angle = -std::f64::consts::TAU * bin as f64 * index as f64 / n as f64;
+            assert_eq!(actual.to_bits(), angle.sin().to_bits(), "index={index}");
         }
     }
 
