@@ -1,15 +1,15 @@
 //! Typed storage traits and implementations for Spherical Harmonic Transforms.
 
+use super::helpers::{
+    validate_coefficient_array_shape, validate_profile, validate_sample_array_shape,
+    write_complex_array,
+};
+use super::ShtPlan;
 use crate::domain::contracts::error::ShtResult;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array2;
 use num_complex::{Complex32, Complex64};
-use super::ShtPlan;
-use super::helpers::{
-    validate_profile, validate_sample_array_shape, validate_coefficient_array_shape,
-    write_complex_array,
-};
 
 /// Real sample storage accepted by typed SHT paths.
 pub trait ShtRealStorage: Copy + Send + Sync + 'static {
@@ -203,8 +203,10 @@ impl ShtComplexStorage for Complex64 {
         validate_profile(sample_profile, O::PROFILE)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
-        let owner_coefficients =
-            SphericalHarmonicCoefficients::from_values(plan.grid().max_degree(), coefficients.clone());
+        let owner_coefficients = SphericalHarmonicCoefficients::from_values(
+            plan.grid().max_degree(),
+            coefficients.clone(),
+        );
         let samples = plan.inverse_complex(&owner_coefficients)?;
         write_complex_array(&samples, output);
         Ok(())
@@ -221,8 +223,10 @@ impl ShtComplexStorage for Complex64 {
         validate_profile(sample_profile, O::PROFILE)?;
         validate_coefficient_array_shape(plan, coefficients)?;
         validate_sample_array_shape(plan, output)?;
-        let owner_coefficients =
-            SphericalHarmonicCoefficients::from_values(plan.grid().max_degree(), coefficients.clone());
+        let owner_coefficients = SphericalHarmonicCoefficients::from_values(
+            plan.grid().max_degree(),
+            coefficients.clone(),
+        );
         let samples = plan.inverse_real(&owner_coefficients)?;
         for (slot, value) in output.iter_mut().zip(samples.iter().copied()) {
             *slot = O::from_f64(value);

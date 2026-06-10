@@ -226,16 +226,36 @@ impl FrftWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented: Vec<Complex32> = input
-            .iter()
-            .map(|v| {
-                let c = v.to_complex64();
-                Complex32::new(c.re as f32, c.im as f32)
-            })
-            .collect();
+        let represented = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
+            // Safety: T is Complex32, so &[T] is layout-compatible with &[Complex32].
+            let slice_c32 = unsafe {
+                std::slice::from_raw_parts(input.as_ptr().cast::<Complex32>(), input.len())
+            };
+            std::borrow::Cow::Borrowed(slice_c32)
+        } else {
+            let vec: Vec<Complex32> = input
+                .iter()
+                .map(|v| {
+                    let c = v.to_complex64();
+                    Complex32::new(c.re as f32, c.im as f32)
+                })
+                .collect();
+            std::borrow::Cow::Owned(vec)
+        };
         let computed = self.execute_forward(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
+        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
+            // Safety: T is Complex32, so &mut [T] is layout-compatible with &mut [Complex32].
+            let slice_c32 = unsafe {
+                std::slice::from_raw_parts_mut(
+                    output.as_mut_ptr().cast::<Complex32>(),
+                    output.len(),
+                )
+            };
+            slice_c32.copy_from_slice(&computed);
+        } else {
+            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
+            }
         }
         Ok(())
     }
@@ -268,16 +288,36 @@ impl FrftWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented: Vec<Complex32> = input
-            .iter()
-            .map(|v| {
-                let c = v.to_complex64();
-                Complex32::new(c.re as f32, c.im as f32)
-            })
-            .collect();
+        let represented = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
+            // Safety: T is Complex32, so &[T] is layout-compatible with &[Complex32].
+            let slice_c32 = unsafe {
+                std::slice::from_raw_parts(input.as_ptr().cast::<Complex32>(), input.len())
+            };
+            std::borrow::Cow::Borrowed(slice_c32)
+        } else {
+            let vec: Vec<Complex32> = input
+                .iter()
+                .map(|v| {
+                    let c = v.to_complex64();
+                    Complex32::new(c.re as f32, c.im as f32)
+                })
+                .collect();
+            std::borrow::Cow::Owned(vec)
+        };
         let computed = self.execute_inverse(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
+        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
+            // Safety: T is Complex32, so &mut [T] is layout-compatible with &mut [Complex32].
+            let slice_c32 = unsafe {
+                std::slice::from_raw_parts_mut(
+                    output.as_mut_ptr().cast::<Complex32>(),
+                    output.len(),
+                )
+            };
+            slice_c32.copy_from_slice(&computed);
+        } else {
+            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
+            }
         }
         Ok(())
     }

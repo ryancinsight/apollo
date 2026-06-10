@@ -1,16 +1,15 @@
-use std::sync::mpsc;
 use num_complex::Complex32;
+use std::sync::mpsc;
 use wgpu::util::DeviceExt;
 
 use crate::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::kernel::{ComplexPod, StftGpuKernel, fft_dispatch_count};
 use crate::infrastructure::chirp::{chirp_padded_len, StftChirpData};
+use crate::infrastructure::kernel::{fft_dispatch_count, ComplexPod, StftGpuKernel};
 use apollo_wgpu_helpers::WgpuDevice;
 
 impl StftGpuKernel {
     /// Execute the forward STFT for non-power-of-two `frame_len` via Bluestein's identity.
     pub(crate) fn execute_forward_fft_chirp(
-        &self,
         device: &WgpuDevice,
         signal: &[f32],
         frame_len: usize,
@@ -32,11 +31,13 @@ impl StftGpuKernel {
         );
 
         // Upload signal to GPU.
-        let signal_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu chirp fwd signal"),
-            contents: bytemuck::cast_slice(signal),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let signal_buf = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-stft-wgpu chirp fwd signal"),
+                contents: bytemuck::cast_slice(signal),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         // Output buffer: frame_count × frame_len × ComplexPod.
         let out_size = (frame_count * frame_len * std::mem::size_of::<ComplexPod>()) as u64;
@@ -49,24 +50,28 @@ impl StftGpuKernel {
         let staging = device.get_staging_buffer(out_size);
 
         // IO bind group for premul_fwd (binding 0 = signal, binding 1 = output_data).
-        let io_bg_fwd = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu chirp fwd IO BG"),
-            layout: &chirp.io_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buf.as_entire_binding(),
-                },
-            ],
-        });
+        let io_bg_fwd = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu chirp fwd IO BG"),
+                layout: &chirp.io_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu chirp fwd encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu chirp fwd encoder"),
+            });
 
         // Pass A: premul_fwd — Hann window + Bluestein exp(+πi·n²/N) premultiply.
         {
@@ -82,7 +87,7 @@ impl StftGpuKernel {
         }
 
         // Pass B: Radix-2 forward sub-FFT over M on chirp working buffers.
-        self.dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, false);
+        Self::dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, false);
 
         // Pass C: pointmul — pointwise multiply by precomputed H in DFT domain.
         {
@@ -97,7 +102,7 @@ impl StftGpuKernel {
         }
 
         // Pass D: Radix-2 inverse sub-FFT over M (+ 1/M scale).
-        self.dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, true);
+        Self::dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, true);
 
         // Pass E: postmul_fwd — Bluestein exp(+πi·k²/N) postmultiply + write output.
         {
@@ -128,14 +133,14 @@ impl StftGpuKernel {
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
             Err(e) => {
                 staging.unmap();
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
         }
         let output = {

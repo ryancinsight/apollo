@@ -168,7 +168,18 @@ impl RadonWgpuBackend {
                 ),
             });
         }
-        let promoted: Vec<f32> = flat_sinogram.iter().map(|v| v.to_f64() as f32).collect();
+        let promoted = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
+            let slice_f32 = unsafe {
+                std::slice::from_raw_parts(
+                    flat_sinogram.as_ptr().cast::<f32>(),
+                    flat_sinogram.len(),
+                )
+            };
+            slice_f32.to_vec()
+        } else {
+            flat_sinogram.iter().map(|v| v.to_f64() as f32).collect()
+        };
         let sinogram_2d =
             Array2::from_shape_vec((plan.angle_count(), plan.detector_count()), promoted).map_err(
                 |_| WgpuError::InvalidPlan {
@@ -257,7 +268,15 @@ impl RadonWgpuBackend {
                 ),
             });
         }
-        let promoted: Vec<f32> = flat_image.iter().map(|v| v.to_f64() as f32).collect();
+        let promoted = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
+            let slice_f32 = unsafe {
+                std::slice::from_raw_parts(flat_image.as_ptr().cast::<f32>(), flat_image.len())
+            };
+            slice_f32.to_vec()
+        } else {
+            flat_image.iter().map(|v| v.to_f64() as f32).collect()
+        };
         let image_2d =
             Array2::from_shape_vec((plan.rows(), plan.cols()), promoted).map_err(|_| {
                 WgpuError::InvalidPlan {

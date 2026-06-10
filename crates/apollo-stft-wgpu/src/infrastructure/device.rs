@@ -1,19 +1,19 @@
 //! WGPU device acquisition and backend orchestration for the STFT.
 
-use std::sync::Arc;
-use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::kernel::StftGpuKernel;
-use crate::domain::error::WgpuResult;
 use crate::domain::capabilities::WgpuCapabilities;
+use crate::domain::error::WgpuResult;
+use crate::infrastructure::kernel::StftGpuKernel;
+use apollo_wgpu_helpers::WgpuDevice;
+use std::sync::Arc;
 
-/// Forward execution implementations.
-pub mod forward;
-/// Inverse execution implementations.
-pub mod inverse;
 /// Pre-allocated execution buffers.
 pub mod buffers;
+/// Forward execution implementations.
+pub mod forward;
 /// Layout translation helpers.
 pub mod helpers;
+/// Inverse execution implementations.
+pub mod inverse;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]

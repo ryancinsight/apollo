@@ -1,5 +1,6 @@
 //! Mathematical and data-structure helpers for Spherical Harmonic Transforms.
 
+use super::ShtPlan;
 use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
@@ -7,7 +8,6 @@ use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
 use ndarray::Array2;
 use num_complex::Complex64;
-use super::ShtPlan;
 
 /// Below this reduction length, scalar accumulation avoids Hermes dispatch and scratch setup.
 pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
@@ -17,7 +17,10 @@ thread_local! {
     pub(super) static SHT_COEFF_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
-pub(super) fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ShtResult<()> {
+pub(super) fn validate_profile(
+    actual: PrecisionProfile,
+    expected: PrecisionProfile,
+) -> ShtResult<()> {
     if actual.storage == expected.storage && actual.compute == expected.compute {
         Ok(())
     } else {
@@ -29,7 +32,10 @@ pub(super) fn validate_sample_array_shape<T>(plan: &ShtPlan, samples: &Array2<T>
     plan.check_sample_shape(samples.dim())
 }
 
-pub(super) fn validate_coefficient_array_shape<T>(plan: &ShtPlan, coefficients: &Array2<T>) -> ShtResult<()> {
+pub(super) fn validate_coefficient_array_shape<T>(
+    plan: &ShtPlan,
+    coefficients: &Array2<T>,
+) -> ShtResult<()> {
     if coefficients.dim() == plan.coefficient_shape() {
         Ok(())
     } else {
@@ -37,7 +43,10 @@ pub(super) fn validate_coefficient_array_shape<T>(plan: &ShtPlan, coefficients: 
     }
 }
 
-pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(source: &Array2<Complex64>, target: &mut Array2<T>) {
+pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(
+    source: &Array2<Complex64>,
+    target: &mut Array2<T>,
+) {
     for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
         *slot = T::from_complex64(value);
     }
@@ -169,7 +178,9 @@ pub(super) fn array2_from_leto_view<T: Clone>(
     view: leto::ArrayView2<'_, T>,
     shape_error: ShtError,
 ) -> ShtResult<Array2<T>> {
-    if let Ok(nd_view) = ndarray::ArrayView2::try_from(leto::ArrayView2::new(view.layout(), view.data())) {
+    if let Ok(nd_view) =
+        ndarray::ArrayView2::try_from(leto::ArrayView2::new(view.layout(), view.data()))
+    {
         return Ok(nd_view.to_owned());
     }
     let [rows, cols] = view.shape();

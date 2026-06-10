@@ -62,7 +62,9 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn from_hephaestus(inner: hephaestus_wgpu::WgpuDevice) -> Self {
-        Self { inner_device: inner }
+        Self {
+            inner_device: inner,
+        }
     }
 
     /// Access the underlying hephaestus-wgpu WgpuDevice.

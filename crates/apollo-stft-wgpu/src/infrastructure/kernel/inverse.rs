@@ -1,9 +1,11 @@
-use std::sync::mpsc;
 use num_complex::Complex32;
+use std::sync::mpsc;
 use wgpu::util::DeviceExt;
 
 use crate::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::kernel::{FftStageParams, StftGpuKernel, StftParams, fft_dispatch_count, dispatch_count};
+use crate::infrastructure::kernel::{
+    dispatch_count, fft_dispatch_count, FftStageParams, StftGpuKernel, StftParams,
+};
 use apollo_wgpu_helpers::WgpuDevice;
 
 impl StftGpuKernel {
@@ -38,11 +40,13 @@ impl StftGpuKernel {
         let spectrum_flat: Vec<f32> = spectrum.iter().flat_map(|c| [c.re, c.im]).collect();
 
         // ── Step 2: Allocate GPU buffers ──────────────────────────────────────
-        let spectrum_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu inverse spectrum"),
-            contents: bytemuck::cast_slice(&spectrum_flat),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let spectrum_buf = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-stft-wgpu inverse spectrum"),
+                contents: bytemuck::cast_slice(&spectrum_flat),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         let scratch_size = (frame_count * frame_len * std::mem::size_of::<f32>()) as u64;
         let re_scratch_buf = device.inner().create_buffer(&wgpu::BufferDescriptor {
@@ -86,28 +90,30 @@ impl StftGpuKernel {
         );
 
         // ── Step 4: Build the shared FFT data bind group (group 0) ────────────
-        let fft_data_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu FFT data bind group"),
-            layout: &self.fft_data_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: re_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: im_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-            ],
-        });
+        let fft_data_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu FFT data bind group"),
+                layout: &self.fft_data_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: re_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: im_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                ],
+            });
 
         // ── Step 5: Pre-allocate per-stage params buffers and bind groups ─────
         let base_params = FftStageParams {
@@ -116,19 +122,24 @@ impl StftGpuKernel {
             stage: 0,
             _pad: 0,
         };
-        let base_params_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu base FFT params"),
-            contents: bytemuck::bytes_of(&base_params),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let base_params_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu base FFT params BG"),
-            layout: &self.fft_params_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: base_params_buf.as_entire_binding(),
-            }],
-        });
+        let base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu base FFT params"),
+                    contents: bytemuck::bytes_of(&base_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let base_params_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu base FFT params BG"),
+                layout: &self.fft_params_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: base_params_buf.as_entire_binding(),
+                }],
+            });
 
         let mut butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
         let mut butterfly_bgs: Vec<wgpu::BindGroup> = Vec::with_capacity(log2_n as usize);
@@ -139,47 +150,55 @@ impl StftGpuKernel {
                 stage: s,
                 _pad: 0,
             };
-            let buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu butterfly stage params"),
-                contents: bytemuck::bytes_of(&stage_params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-stft-wgpu butterfly stage params BG"),
-                layout: &self.fft_params_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buf.as_entire_binding(),
-                }],
-            });
+            let buf = device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu butterfly stage params"),
+                    contents: bytemuck::bytes_of(&stage_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            let bg = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-stft-wgpu butterfly stage params BG"),
+                    layout: &self.fft_params_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buf.as_entire_binding(),
+                    }],
+                });
             butterfly_bufs.push(buf);
             butterfly_bgs.push(bg);
         }
 
         // ── Step 6: Build the OLA bind group (3-binding layout) ──────────────
-        let ola_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu ola bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let ola_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu ola bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
         // ── Step 7: Encode all passes in one CommandEncoder ───────────────────
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu inverse encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu inverse encoder"),
+            });
 
         // Pass 1: deinterleave.
         {
@@ -262,14 +281,14 @@ impl StftGpuKernel {
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
             Err(e) => {
                 staging.unmap();
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
         }
         let output = {

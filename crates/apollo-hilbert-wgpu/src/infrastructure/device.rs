@@ -125,10 +125,26 @@ impl HilbertWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
+        let represented = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
+            let slice_f32 =
+                unsafe { std::slice::from_raw_parts(input.as_ptr().cast::<f32>(), input.len()) };
+            std::borrow::Cow::Borrowed(slice_f32)
+        } else {
+            let vec: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
+            std::borrow::Cow::Owned(vec)
+        };
         let computed = self.execute_forward(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_f64(f64::from(value));
+        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &mut [T] is layout-compatible with &mut [f32].
+            let slice_f32 = unsafe {
+                std::slice::from_raw_parts_mut(output.as_mut_ptr().cast::<f32>(), output.len())
+            };
+            slice_f32.copy_from_slice(&computed);
+        } else {
+            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *slot = T::from_f64(f64::from(value));
+            }
         }
         Ok(())
     }
@@ -199,10 +215,27 @@ impl HilbertWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented: Vec<f32> = quadrature.iter().map(|v| v.to_f64() as f32).collect();
+        let represented = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
+            let slice_f32 = unsafe {
+                std::slice::from_raw_parts(quadrature.as_ptr().cast::<f32>(), quadrature.len())
+            };
+            std::borrow::Cow::Borrowed(slice_f32)
+        } else {
+            let vec: Vec<f32> = quadrature.iter().map(|v| v.to_f64() as f32).collect();
+            std::borrow::Cow::Owned(vec)
+        };
         let computed = self.execute_inverse(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_f64(f64::from(value));
+        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+            // Safety: T is f32, so &mut [T] is layout-compatible with &mut [f32].
+            let slice_f32 = unsafe {
+                std::slice::from_raw_parts_mut(output.as_mut_ptr().cast::<f32>(), output.len())
+            };
+            slice_f32.copy_from_slice(&computed);
+        } else {
+            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *slot = T::from_f64(f64::from(value));
+            }
         }
         Ok(())
     }

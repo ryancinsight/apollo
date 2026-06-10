@@ -7,25 +7,25 @@
 //! `f(theta, phi) = sum_l sum_m a_lm Y_lm(theta, phi)` on the same grid.
 
 mod helpers;
-mod typed;
 #[cfg(test)]
 mod tests;
+mod typed;
 
-pub use typed::{ShtRealStorage, ShtComplexStorage};
+pub use typed::{ShtComplexStorage, ShtRealStorage};
 
 use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::metadata::grid::SphericalGridSpec;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
 use apollo_fft::PrecisionProfile;
+use helpers::{
+    array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes,
+    leto_array2_from_ndarray, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
+    sht_inverse_sample, sht_inverse_sample_hermes, SHT_COEFF_LANE_SCRATCH,
+    SHT_HERMES_DOT_LEN_THRESHOLD,
+};
 use ndarray::Array2;
 use num_complex::Complex64;
-use helpers::{
-    array2_from_leto_view, coefficients_from_leto_view, leto_array2_from_ndarray,
-    interleaved_lanes, sht_forward_mode_sum_hermes, sht_forward_mode_sum,
-    sht_inverse_sample_hermes, sht_inverse_sample, SHT_HERMES_DOT_LEN_THRESHOLD,
-    SHT_COEFF_LANE_SCRATCH,
-};
 
 /// Reusable spherical harmonic transform (SHT) plan.
 ///
@@ -219,9 +219,7 @@ impl ShtPlan {
                     for lon in 0..n_lon {
                         let phi = self.phi(lon);
                         samples[[lat, lon]] = match coefficient_lanes {
-                            Some(lanes) => {
-                                sht_inverse_sample_hermes(lanes, &all_modes, theta, phi)
-                            }
+                            Some(lanes) => sht_inverse_sample_hermes(lanes, &all_modes, theta, phi),
                             None => sht_inverse_sample(coefficients, &all_modes, theta, phi),
                         };
                     }

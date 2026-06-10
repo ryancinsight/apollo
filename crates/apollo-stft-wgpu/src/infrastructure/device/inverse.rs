@@ -1,11 +1,11 @@
-use num_complex::Complex32;
 use apollo_fft::PrecisionProfile;
 use apollo_stft::{StftRealOutputStorage, StftSpectrumInput};
+use num_complex::Complex32;
 
 use crate::application::plan::StftWgpuPlan;
 use crate::domain::error::{WgpuError, WgpuResult};
+use crate::infrastructure::device::helpers::{leto_array1_from_slice, leto_view1_cow};
 use crate::infrastructure::device::StftWgpuBackend;
-use crate::infrastructure::device::helpers::{leto_view1_cow, leto_array1_from_slice};
 
 impl StftWgpuBackend {
     /// Execute the inverse STFT (WOLA reconstruction) on the GPU.
@@ -112,7 +112,7 @@ impl StftWgpuBackend {
         let promoted = if std::any::TypeId::of::<I>() == std::any::TypeId::of::<Complex32>() {
             // Safety: I is Complex32, so &[I] is layout-compatible with &[Complex32].
             let slice_c32 = unsafe {
-                std::slice::from_raw_parts(spectrum.as_ptr() as *const Complex32, spectrum.len())
+                std::slice::from_raw_parts(spectrum.as_ptr().cast::<Complex32>(), spectrum.len())
             };
             std::borrow::Cow::Borrowed(slice_c32)
         } else {

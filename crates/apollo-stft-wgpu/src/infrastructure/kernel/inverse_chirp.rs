@@ -1,10 +1,12 @@
-use std::sync::mpsc;
 use num_complex::Complex32;
+use std::sync::mpsc;
 use wgpu::util::DeviceExt;
 
 use crate::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::kernel::{StftGpuKernel, StftParams, fft_dispatch_count, dispatch_count};
 use crate::infrastructure::chirp::{chirp_padded_len, StftChirpData};
+use crate::infrastructure::kernel::{
+    dispatch_count, fft_dispatch_count, StftGpuKernel, StftParams,
+};
 use apollo_wgpu_helpers::WgpuDevice;
 
 impl StftGpuKernel {
@@ -32,11 +34,13 @@ impl StftGpuKernel {
 
         // Flat interleaved spectrum for GPU upload.
         let spectrum_flat: Vec<f32> = spectrum.iter().flat_map(|c| [c.re, c.im]).collect();
-        let spectrum_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu chirp inv spectrum"),
-            contents: bytemuck::cast_slice(&spectrum_flat),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let spectrum_buf = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-stft-wgpu chirp inv spectrum"),
+                contents: bytemuck::cast_slice(&spectrum_flat),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         // frame_data buffer: written by postmul_inv, read by OLA pass.
         let frame_data_size = (frame_count * frame_len * std::mem::size_of::<f32>()) as u64;
@@ -58,20 +62,22 @@ impl StftGpuKernel {
         let staging = device.get_staging_buffer(signal_size);
 
         // IO bind group for premul_inv (binding 0 = interleaved spectrum, binding 1 = frame_data).
-        let io_bg_inv = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu chirp inv IO BG"),
-            layout: &chirp.io_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-            ],
-        });
+        let io_bg_inv = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu chirp inv IO BG"),
+                layout: &chirp.io_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                ],
+            });
 
         // OLA bind group (3-binding layout: frame_data ro, signal rw, params uniform).
         device.queue().write_buffer(
@@ -84,28 +90,32 @@ impl StftGpuKernel {
                 frame_count: frame_count as u32,
             }),
         );
-        let ola_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu chirp inv OLA BG"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let ola_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu chirp inv OLA BG"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu chirp inv encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu chirp inv encoder"),
+            });
 
         // Pass A: premul_inv.
         {
@@ -121,7 +131,7 @@ impl StftGpuKernel {
         }
 
         // Pass B: Radix-2 forward sub-FFT over M.
-        self.dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, false);
+        Self::dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, false);
 
         // Pass C: pointmul.
         {
@@ -136,7 +146,7 @@ impl StftGpuKernel {
         }
 
         // Pass D: Radix-2 inverse sub-FFT over M (+ 1/M scale).
-        self.dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, true);
+        Self::dispatch_chirp_radix2(&mut enc, &chirp, frame_count, m, log2_m, true);
 
         // Pass E: postmul_inv — conjugate postmul + 1/N scale + Hann window → frame_data.
         {
@@ -178,14 +188,14 @@ impl StftGpuKernel {
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
             Err(e) => {
                 staging.unmap();
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
         }
         let output = {
@@ -199,7 +209,6 @@ impl StftGpuKernel {
 
     /// Dispatch the Radix-2 sub-FFT passes of the Chirp-Z path over the chirp working buffers.
     pub(crate) fn dispatch_chirp_radix2(
-        &self,
         enc: &mut wgpu::CommandEncoder,
         chirp: &StftChirpData,
         frame_count: usize,
@@ -221,11 +230,7 @@ impl StftGpuKernel {
                 label: Some("chirp_fft_bitrev"),
                 timestamp_writes: None,
             });
-            let pipeline = if inverse {
-                &chirp.chirp_bitrev_pipeline
-            } else {
-                &chirp.chirp_bitrev_pipeline
-            };
+            let pipeline = &chirp.chirp_bitrev_pipeline;
             p.set_pipeline(pipeline);
             p.set_bind_group(0, &chirp.chirp_data_bg, &[]);
             p.set_bind_group(1, &bgs[0], &[]);

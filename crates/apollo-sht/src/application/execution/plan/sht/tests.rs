@@ -1,17 +1,16 @@
-use super::ShtPlan;
 use super::helpers::{
-    interleaved_lanes, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
-    coefficient_lanes, sht_inverse_sample, sht_inverse_sample_hermes,
-    SHT_HERMES_DOT_LEN_THRESHOLD,
+    coefficient_lanes, interleaved_lanes, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
+    sht_inverse_sample, sht_inverse_sample_hermes, SHT_HERMES_DOT_LEN_THRESHOLD,
 };
 use super::typed::ShtComplexStorage;
+use super::ShtPlan;
+use crate::domain::contracts::error::ShtError;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
-use crate::domain::contracts::error::ShtError;
 use apollo_fft::{f16, PrecisionProfile};
+use approx::assert_abs_diff_eq;
 use ndarray::Array2;
 use num_complex::{Complex32, Complex64};
-use approx::assert_abs_diff_eq;
 
 fn coefficient_shape(plan: &ShtPlan) -> (usize, usize) {
     (
@@ -35,8 +34,7 @@ fn hermes_forward_mode_sum_matches_scalar_formula_at_threshold() {
     let theta = plan.theta(3);
 
     for (degree, order) in [(0, 0), (1, -1), (2, 1), (3, 3)] {
-        let expected =
-            sht_forward_mode_sum(&row, degree, order, theta, plan.grid().longitudes());
+        let expected = sht_forward_mode_sum(&row, degree, order, theta, plan.grid().longitudes());
         let actual =
             sht_forward_mode_sum_hermes(lanes, degree, order, theta, plan.grid().longitudes());
         assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-11);
@@ -372,8 +370,7 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
     let coefficients32 = coefficients
         .values()
         .mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-    let mut samples32 =
-        Array2::<f32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
+    let mut samples32 = Array2::<f32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
 
     plan.inverse_real_typed_into(
         &coefficients32,

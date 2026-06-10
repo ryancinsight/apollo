@@ -1,11 +1,11 @@
-use num_complex::Complex32;
 use apollo_fft::PrecisionProfile;
 use apollo_stft::{StftRealStorage, StftSpectrumStorage};
+use num_complex::Complex32;
 
 use crate::application::plan::StftWgpuPlan;
 use crate::domain::error::{WgpuError, WgpuResult};
+use crate::infrastructure::device::helpers::{leto_array1_from_slice, leto_view1_cow};
 use crate::infrastructure::device::StftWgpuBackend;
-use crate::infrastructure::device::helpers::{leto_view1_cow, leto_array1_from_slice};
 
 impl StftWgpuBackend {
     /// Execute the forward STFT on `signal` using the supplied plan.
@@ -91,9 +91,8 @@ impl StftWgpuBackend {
         }
         let represented = if std::any::TypeId::of::<I>() == std::any::TypeId::of::<f32>() {
             // Safety: I is f32, so &[I] is layout-compatible with &[f32].
-            let slice_f32 = unsafe {
-                std::slice::from_raw_parts(signal.as_ptr() as *const f32, signal.len())
-            };
+            let slice_f32 =
+                unsafe { std::slice::from_raw_parts(signal.as_ptr().cast::<f32>(), signal.len()) };
             std::borrow::Cow::Borrowed(slice_f32)
         } else {
             let vec: Vec<f32> = signal.iter().map(|v| v.to_f64() as f32).collect();
@@ -110,7 +109,10 @@ impl StftWgpuBackend {
             });
         }
         for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = O::from_complex64(num_complex::Complex64::new(f64::from(value.re), f64::from(value.im)));
+            *slot = O::from_complex64(num_complex::Complex64::new(
+                f64::from(value.re),
+                f64::from(value.im),
+            ));
         }
         Ok(())
     }

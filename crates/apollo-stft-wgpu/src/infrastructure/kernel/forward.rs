@@ -1,9 +1,11 @@
-use std::sync::mpsc;
 use num_complex::Complex32;
+use std::sync::mpsc;
 use wgpu::util::DeviceExt;
 
 use crate::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::kernel::{ComplexPod, FwdFftStageParams, StftGpuKernel, fft_dispatch_count};
+use crate::infrastructure::kernel::{
+    fft_dispatch_count, ComplexPod, FwdFftStageParams, StftGpuKernel,
+};
 use apollo_wgpu_helpers::WgpuDevice;
 
 impl StftGpuKernel {
@@ -21,7 +23,7 @@ impl StftGpuKernel {
     ) -> WgpuResult<Vec<Complex32>> {
         // Non-power-of-two frame_len: delegate to Bluestein/Chirp-Z path.
         if !frame_len.is_power_of_two() {
-            return self.execute_forward_fft_chirp(
+            return Self::execute_forward_fft_chirp(
                 device,
                 signal,
                 frame_len,
@@ -31,11 +33,13 @@ impl StftGpuKernel {
         }
         let log2_n = frame_len.trailing_zeros();
 
-        let signal_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu fwd signal"),
-            contents: bytemuck::cast_slice(signal),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let signal_buf = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-stft-wgpu fwd signal"),
+                contents: bytemuck::cast_slice(signal),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         let scratch_size = (frame_count * frame_len * std::mem::size_of::<f32>()) as u64;
         let re_scratch_buf = device.inner().create_buffer(&wgpu::BufferDescriptor {
@@ -61,28 +65,30 @@ impl StftGpuKernel {
         let staging = device.get_staging_buffer(out_size);
 
         // Bind group 0: reuse fft_data_bgl (binding types are identical: ro, rw, rw, rw).
-        let fft_fwd_data_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu fwd FFT data BG"),
-            layout: &self.fft_data_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: re_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: im_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: output_buf.as_entire_binding(),
-                },
-            ],
-        });
+        let fft_fwd_data_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu fwd FFT data BG"),
+                layout: &self.fft_data_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: re_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: im_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                ],
+            });
 
         // Base params bind group: stage=0, hop_len filled.
         // Used for pack_window, bitrev, and interleave passes (stage field unused for these).
@@ -92,19 +98,24 @@ impl StftGpuKernel {
             hop_len: hop_len as u32,
             stage: 0,
         };
-        let base_params_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu fwd base params"),
-            contents: bytemuck::bytes_of(&base_params),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let base_params_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu fwd base params BG"),
-            layout: &self.fft_params_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: base_params_buf.as_entire_binding(),
-            }],
-        });
+        let base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu fwd base params"),
+                    contents: bytemuck::bytes_of(&base_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let base_params_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu fwd base params BG"),
+                layout: &self.fft_params_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: base_params_buf.as_entire_binding(),
+                }],
+            });
 
         // Per-butterfly-stage params bind groups (one per stage, stage index varies).
         let mut butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
@@ -116,26 +127,32 @@ impl StftGpuKernel {
                 hop_len: hop_len as u32,
                 stage: s,
             };
-            let buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu fwd butterfly stage params"),
-                contents: bytemuck::bytes_of(&stage_params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-stft-wgpu fwd butterfly stage params BG"),
-                layout: &self.fft_params_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buf.as_entire_binding(),
-                }],
-            });
+            let buf = device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu fwd butterfly stage params"),
+                    contents: bytemuck::bytes_of(&stage_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            let bg = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-stft-wgpu fwd butterfly stage params BG"),
+                    layout: &self.fft_params_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buf.as_entire_binding(),
+                    }],
+                });
             butterfly_bufs.push(buf);
             butterfly_bgs.push(bg);
         }
 
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu fwd encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu fwd encoder"),
+            });
 
         // Pass 1: pack + Hann analysis window → split re/im scratch.
         {
@@ -202,14 +219,14 @@ impl StftGpuKernel {
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
             Err(e) => {
                 staging.unmap();
                 device.recycle_staging_buffer(staging);
                 return Err(WgpuError::BufferMapFailed {
                     message: e.to_string(),
-                })
+                });
             }
         }
         let output = {

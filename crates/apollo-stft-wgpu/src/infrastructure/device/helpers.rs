@@ -1,5 +1,5 @@
-use std::borrow::Cow;
 use crate::domain::error::{WgpuError, WgpuResult};
+use std::borrow::Cow;
 
 pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
     if let Some(slice) = view.as_slice() {
@@ -27,9 +27,9 @@ pub(crate) fn leto_array1_from_slice<T: Copy>(
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-    use leto::SliceArg;
     use super::leto_view1_cow;
+    use leto::SliceArg;
+    use std::borrow::Cow;
 
     #[test]
     fn leto_view1_cow_borrows_contiguous_views() {
