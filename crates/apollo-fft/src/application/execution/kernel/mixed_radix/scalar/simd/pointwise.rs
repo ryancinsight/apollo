@@ -1,4 +1,4 @@
-use hermes_simd::interleaved_complex_mul_assign_runtime;
+use hermes_simd::{interleaved_complex_mul_assign, PreferredArch};
 use num_complex::{Complex32, Complex64};
 
 #[inline]
@@ -10,7 +10,7 @@ fn pointwise_mul_precise_hermes<const CONJ_B: bool>(a: &mut [Complex64], b: &[Co
         unsafe { core::slice::from_raw_parts_mut(a.as_mut_ptr().cast::<f64>(), scalar_len) };
     // SAFETY: same representation as `a_lanes`; `b` is immutable and length-matched by caller.
     let b_lanes = unsafe { core::slice::from_raw_parts(b.as_ptr().cast::<f64>(), scalar_len) };
-    interleaved_complex_mul_assign_runtime::<f64, CONJ_B>(a_lanes, b_lanes)
+    interleaved_complex_mul_assign::<f64, PreferredArch, CONJ_B>(a_lanes, b_lanes)
         .expect("pointwise operands must have matching complex lengths");
 }
 
@@ -23,7 +23,7 @@ fn pointwise_mul_reduced_hermes<const CONJ_B: bool>(a: &mut [Complex32], b: &[Co
         unsafe { core::slice::from_raw_parts_mut(a.as_mut_ptr().cast::<f32>(), scalar_len) };
     // SAFETY: same representation as `a_lanes`; `b` is immutable and length-matched by caller.
     let b_lanes = unsafe { core::slice::from_raw_parts(b.as_ptr().cast::<f32>(), scalar_len) };
-    interleaved_complex_mul_assign_runtime::<f32, CONJ_B>(a_lanes, b_lanes)
+    interleaved_complex_mul_assign::<f32, PreferredArch, CONJ_B>(a_lanes, b_lanes)
         .expect("pointwise operands must have matching complex lengths");
 }
 
