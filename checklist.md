@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Hilbert Leto analytic and quadrature boundary [minor]
+- [x] Bumped `apollo-hilbert` to `0.4.0` and added the workspace Leto provider dependency.
+- [x] Added `HilbertPlan::analytic_signal_leto`, `HilbertPlan::transform_leto`, and `HilbertPlan::transform_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing slice and typed Hilbert execution contracts; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical order.
+- [x] Added value tests proving contiguous quadrature parity, strided quadrature parity, analytic-signal parity, and typed `f32` Leto parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-hilbert`; `cargo test -p apollo-hilbert leto -- --nocapture`; `cargo test -p apollo-hilbert -- --nocapture`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-hilbert --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing Hilbert slice and typed slice APIs. No runtime benchmark claim is made.
+
 ## DCT/DST Leto multidimensional boundary and full benchmark refresh [minor]
 - [x] Bumped `apollo-dctdst` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `DctDstPlan::forward_leto`, `DctDstPlan::inverse_leto`, `DctDstPlan::forward_2d_leto`, `DctDstPlan::inverse_2d_leto`, `DctDstPlan::forward_3d_leto`, `DctDstPlan::inverse_3d_leto`, `DctDstPlan::forward_leto_typed`, and `DctDstPlan::inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.

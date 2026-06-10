@@ -286,10 +286,11 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "leto",
  "mnemosyne",
  "num-complex",
  "proptest",

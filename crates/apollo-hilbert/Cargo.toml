@@ -1,6 +1,6 @@
 [package]
 name = "apollo-hilbert"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Hilbert transform and analytic-signal plans for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 mnemosyne = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

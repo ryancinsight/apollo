@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Hilbert Leto analytic and quadrature boundary [minor]
+- Performed: bumped `apollo-hilbert` to `0.4.0`; added the workspace Leto dependency; added `HilbertPlan::analytic_signal_leto`, `HilbertPlan::transform_leto`, and `HilbertPlan::transform_leto_typed`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
+- Architecture effect: Hilbert callers can now use Leto as the public 1D array/layout boundary while existing slice APIs remain the validation and compatibility surface.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided Leto views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing slice and typed Hilbert execution contracts rather than adding a separate transform implementation.
+- Verification: `cargo check -p apollo-hilbert`; `cargo test -p apollo-hilbert leto -- --nocapture`; `cargo test -p apollo-hilbert -- --nocapture`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-hilbert --examples`.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Hilbert slice APIs for contiguous quadrature, strided quadrature, analytic signal, and typed `f32` quadrature. No runtime benchmark claim is made.
+- Residuals: Hilbert WGPU still has no Leto boundary; broader Apollo ndarray/Leto provider migration remains per-crate work.
+
 ## DCT/DST Leto multidimensional boundary and benchmark refresh [minor]
 - Performed: bumped `apollo-dctdst` to `0.2.0`; added the workspace Leto dependency; added Leto 1D/2D/3D forward and inverse boundaries plus typed 1D Leto storage boundaries, returning `leto::Array<_, leto::MnemosyneStorage<_>, _>`.
 - Architecture effect: DCT/DST callers can now use Leto as a public array/layout boundary while existing slice and ndarray APIs remain the validation and compatibility surfaces.

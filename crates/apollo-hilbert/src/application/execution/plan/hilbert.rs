@@ -1,5 +1,7 @@
 //! Reusable Hilbert transform plan.
 
+use std::borrow::Cow;
+
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use crate::domain::metadata::length::SignalLength;
 use crate::domain::signal::analytic::{envelope_values_into, phase_values_into, AnalyticSignal};
@@ -7,8 +9,8 @@ use crate::infrastructure::kernel::direct::{
     analytic_signal, analytic_signal_into, hilbert_transform, hilbert_transform_into,
 };
 use apollo_fft::{f16, PrecisionProfile};
-use num_complex::Complex64;
 use mnemosyne::scratch::ScratchPool;
+use num_complex::Complex64;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -56,6 +58,19 @@ impl HilbertPlan {
         Ok(AnalyticSignal::new(analytic_signal(signal)?))
     }
 
+    /// Compute the analytic signal from a Leto 1D view.
+    ///
+    /// C-contiguous views borrow directly; strided views copy once into
+    /// logical order before reusing the canonical slice execution path.
+    pub fn analytic_signal_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let analytic = self.analytic_signal(&signal)?;
+        leto_complex_array1_from_slice(analytic.values())
+    }
+
     /// Compute the analytic signal `x + i H{x}` into caller-owned storage.
     pub fn analytic_signal_into(
         &self,
@@ -89,6 +104,19 @@ impl HilbertPlan {
         hilbert_transform(signal)
     }
 
+    /// Compute the Hilbert quadrature component from a Leto 1D view.
+    ///
+    /// C-contiguous views borrow directly; strided views copy once into
+    /// logical order before reusing the canonical slice execution path.
+    pub fn transform_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> HilbertResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let output = self.transform(&signal)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Compute only the Hilbert quadrature component into caller-owned storage.
     pub fn transform_into(&self, signal: &[f64], output: &mut [f64]) -> HilbertResult<()> {
         if signal.len() != self.len() || output.len() != self.len() {
@@ -105,6 +133,18 @@ impl HilbertPlan {
         profile: PrecisionProfile,
     ) -> HilbertResult<()> {
         T::transform_into(self, signal, output, profile)
+    }
+
+    /// Compute Hilbert quadrature for typed Leto 1D input storage.
+    pub fn transform_leto_typed<T: HilbertStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(signal)?;
+        let mut output = vec![T::from_f64(0.0); self.len()];
+        self.transform_typed_into(&signal, &mut output, profile)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Compute the instantaneous envelope from the analytic signal.
@@ -163,11 +203,8 @@ fn with_typed_transform_workspaces<R>(
 ) -> HilbertResult<R> {
     TYPED_INPUT64_SCRATCH.with(|input| {
         input.with_scratch(len, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|output| {
-                output.with_scratch(len, |output64| {
-                    f(input64, output64)
-                })
-            })
+            TYPED_OUTPUT64_SCRATCH
+                .with(|output| output.with_scratch(len, |output64| f(input64, output64)))
         })
     })
 }
@@ -179,12 +216,39 @@ fn with_observable_analytic_workspace<R>(
     OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
 }
 
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> HilbertResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view
+            .get([index])
+            .map_err(|_| HilbertError::LengthMismatch)?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values)
+        .map_err(|_| HilbertError::LengthMismatch)
+}
+
+fn leto_complex_array1_from_slice(
+    values: &[Complex64],
+) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values)
+        .map_err(|_| HilbertError::LengthMismatch)
+}
+
 #[cfg(test)]
 fn typed_workspace_capacities() -> (usize, usize) {
-    TYPED_INPUT64_SCRATCH.with(|input| {
-        TYPED_OUTPUT64_SCRATCH
-            .with(|output| (input.capacity(), output.capacity()))
-    })
+    TYPED_INPUT64_SCRATCH
+        .with(|input| TYPED_OUTPUT64_SCRATCH.with(|output| (input.capacity(), output.capacity())))
 }
 
 #[cfg(test)]
@@ -467,5 +531,93 @@ mod tests {
             plan.transform_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(HilbertError::PrecisionMismatch)
         ));
+    }
+
+    #[test]
+    fn leto_transform_matches_slice_reference() {
+        let len = 16;
+        let signal: Vec<f64> = (0..len)
+            .map(|n| (std::f64::consts::TAU * n as f64 / len as f64).cos())
+            .collect();
+        let input = leto::Array1::from_shape_vec([len], signal.clone()).expect("leto input");
+        let plan = HilbertPlan::new(len).expect("plan");
+        let expected = plan.transform(&signal).expect("slice transform");
+
+        let actual = plan.transform_leto(input.view()).expect("leto transform");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_transform_matches_slice_reference() {
+        let len = 16;
+        let backing: Vec<f64> = (0..(len * 2))
+            .map(|n| (std::f64::consts::TAU * n as f64 / (len * 2) as f64).cos())
+            .collect();
+        let input = leto::Array1::from_shape_vec([len * 2], backing.clone()).expect("leto input");
+        let strided = input
+            .view()
+            .slice(&[(0, len * 2, 2)])
+            .expect("strided view");
+        let logical: Vec<f64> = backing.iter().step_by(2).copied().collect();
+        let plan = HilbertPlan::new(len).expect("plan");
+        let expected = plan.transform(&logical).expect("slice transform");
+
+        let actual = plan.transform_leto(strided).expect("leto transform");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_analytic_signal_matches_slice_reference() {
+        let len = 16;
+        let signal: Vec<f64> = (0..len)
+            .map(|n| (std::f64::consts::TAU * n as f64 / len as f64).sin())
+            .collect();
+        let input = leto::Array1::from_shape_vec([len], signal.clone()).expect("leto input");
+        let plan = HilbertPlan::new(len).expect("plan");
+        let expected = plan.analytic_signal(&signal).expect("slice analytic");
+
+        let actual = plan
+            .analytic_signal_leto(input.view())
+            .expect("leto analytic");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_transform_matches_typed_slice_reference() {
+        let len = 16;
+        let signal: Vec<f32> = (0..len)
+            .map(|n| (std::f32::consts::TAU * n as f32 / len as f32).cos())
+            .collect();
+        let input = leto::Array1::from_shape_vec([len], signal.clone()).expect("leto input");
+        let plan = HilbertPlan::new(len).expect("plan");
+        let mut expected = vec![0.0_f32; len];
+        plan.transform_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed slice transform");
+
+        let actual = plan
+            .transform_leto_typed(input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto transform");
+        let actual = actual.view();
+        let actual = actual.as_slice().expect("contiguous leto output");
+
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
     }
 }

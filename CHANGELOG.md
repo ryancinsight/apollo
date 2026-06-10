@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-hilbert` `0.4.0` adds Leto analytic-signal, real quadrature, and typed quadrature boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-dctdst` `0.2.0` adds real, typed, 2D, and 3D Leto DCT/DST boundaries returning Mnemosyne-backed Leto arrays, with slice and ndarray differential validation.
 - [minor] `apollo-czt` `0.3.0` adds Complex64 and typed Leto 1D CZT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-dht` `0.2.0` adds 2D/3D Leto DHT boundaries returning Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
