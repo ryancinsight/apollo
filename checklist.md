@@ -1,4 +1,12 @@
 # Apollo Checklist
+## QFT Leto public 1D boundary [minor]
+- [x] Bumped `apollo-qft` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Refactored `QftStorage` through canonical `forward_slice_into` and `inverse_slice_into` hooks so ndarray arrays and Leto views share one typed execution contract.
+- [x] Added value tests proving contiguous Complex64 Leto parity, strided Complex64 Leto parity, typed Complex32 Leto parity, and strided mixed-f16 Leto parity against the existing ndarray API.
+- [x] Verification: `cargo check -p apollo-qft`; `cargo test -p apollo-qft leto -- --nocapture`; `cargo test -p apollo-qft -- --nocapture`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-qft --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against the existing ndarray QFT API. No runtime benchmark claim is made.
+
 ## FWHT Leto public 1D boundary [minor]
 - [x] Bumped `apollo-fwht` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `FwhtPlan::forward_leto`, `FwhtPlan::inverse_leto`, `FwhtPlan::forward_leto_typed`, `FwhtPlan::inverse_leto_typed`, `fwht_leto`, and `ifwht_leto`, returning Mnemosyne-backed Leto arrays.

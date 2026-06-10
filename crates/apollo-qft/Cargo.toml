@@ -1,6 +1,6 @@
 [package]
 name = "apollo-qft"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -11,6 +11,7 @@ description = "Quantum Fourier transform utilities for Apollo"
 apollo-fft = { path = "../apollo-fft" }
 mnemosyne = { workspace = true }
 ndarray = { workspace = true }
+leto = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"

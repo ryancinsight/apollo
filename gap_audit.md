@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## QFT Leto public 1D boundary [minor]
+- Performed: bumped `apollo-qft` to `0.2.0`; added the workspace Leto dependency; added `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
+- Architecture effect: QFT complex and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
+- Implementation effect: `QftStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Verification: `cargo check -p apollo-qft`; `cargo test -p apollo-qft leto -- --nocapture`; `cargo test -p apollo-qft -- --nocapture`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-qft --examples`.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray QFT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, and strided mixed `[f16; 2]`. No runtime benchmark claim is made.
+- Residuals: QFT WGPU and verification fixtures still use ndarray arrays where validation fixtures already exist; broader Apollo ndarray replacement remains per-crate work.
+
 ## FWHT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-fwht` to `0.2.0`; added the workspace Leto dependency; added `FwhtPlan::forward_leto`, `FwhtPlan::inverse_leto`, `FwhtPlan::forward_leto_typed`, `FwhtPlan::inverse_leto_typed`, `fwht_leto`, and `ifwht_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
 - Architecture effect: FWHT real and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.

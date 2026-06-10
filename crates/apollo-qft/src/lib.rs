@@ -13,6 +13,6 @@ pub mod infrastructure;
 /// Value-semantic verification.
 pub mod verification;
 
-pub use application::execution::plan::qft::{iqft, qft, QftPlan, QftStorage};
+pub use application::execution::plan::qft::{iqft, iqft_leto, qft, qft_leto, QftPlan, QftStorage};
 pub use domain::contracts::error::{QftError, QftResult};
 pub use domain::state::dimension::{is_valid_length, QuantumStateDimension};

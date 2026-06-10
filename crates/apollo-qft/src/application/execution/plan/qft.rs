@@ -11,10 +11,11 @@ use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
 use crate::infrastructure::kernel::dense::{qft_forward_dense_into, qft_inverse_dense_into};
 use apollo_fft::{f16, PrecisionProfile};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
 use serde::{Deserialize, Serialize};
-use mnemosyne::scratch::ScratchPool;
+use std::borrow::Cow;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -68,6 +69,26 @@ impl QftPlan {
         Ok(output)
     }
 
+    /// Forward QFT over a Leto complex amplitude view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn forward_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
+        self.forward_complex64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("QFT output length must match Leto output shape"),
+        )
+    }
+
     /// Forward QFT into caller-owned storage.
     pub fn forward_into(
         &self,
@@ -105,11 +126,49 @@ impl QftPlan {
         T::forward_into(self, input, output, profile)
     }
 
+    /// Forward QFT over a typed Leto complex amplitude view.
+    pub fn forward_leto_typed<T: QftStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed QFT output length must match Leto output shape"),
+        )
+    }
+
     /// Inverse QFT of a complex amplitude vector.
     pub fn inverse(&self, input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
         let mut output = Array1::zeros(self.len());
         self.inverse_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Inverse QFT over a Leto complex amplitude view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn inverse_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
+        self.inverse_complex64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("inverse QFT output length must match Leto output shape"),
+        )
     }
 
     /// Inverse QFT into caller-owned storage.
@@ -149,6 +208,24 @@ impl QftPlan {
         T::inverse_into(self, input, output, profile)
     }
 
+    /// Inverse QFT over a typed Leto complex amplitude view.
+    pub fn inverse_leto_typed<T: QftStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        T::inverse_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed inverse QFT output length must match Leto output shape"),
+        )
+    }
+
     /// Forward QFT executed in place.
     pub fn forward_inplace(&self, data: &mut Array1<Complex64>) -> QftResult<()> {
         let transformed = self.forward(data)?;
@@ -175,17 +252,15 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic result back to storage.
     fn from_complex64(value: Complex64) -> Self;
 
-    /// Execute forward transform into caller-owned storage.
-    fn forward_into(
+    /// Execute forward transform into caller-owned contiguous storage.
+    fn forward_slice_into(
         plan: &QftPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(QftError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_complex64(value);
@@ -198,17 +273,32 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned storage.
-    fn inverse_into(
+    /// Execute forward transform into caller-owned ndarray storage.
+    fn forward_into(
         plan: &QftPlan,
         input: &Array1<Self>,
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> QftResult<()> {
+        Self::forward_slice_into(
+            plan,
+            input.as_slice().expect("QFT input must be contiguous"),
+            output
+                .as_slice_mut()
+                .expect("QFT output must be contiguous"),
+            profile,
+        )
+    }
+
+    /// Execute inverse transform into caller-owned contiguous storage.
+    fn inverse_slice_into(
+        plan: &QftPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(QftError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_complex64(value);
@@ -219,6 +309,23 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
             }
             Ok(())
         })
+    }
+
+    /// Execute inverse transform into caller-owned ndarray storage.
+    fn inverse_into(
+        plan: &QftPlan,
+        input: &Array1<Self>,
+        output: &mut Array1<Self>,
+        profile: PrecisionProfile,
+    ) -> QftResult<()> {
+        Self::inverse_slice_into(
+            plan,
+            input.as_slice().expect("QFT input must be contiguous"),
+            output
+                .as_slice_mut()
+                .expect("QFT output must be contiguous"),
+            profile,
+        )
     }
 }
 
@@ -233,24 +340,24 @@ impl QftStorage for Complex64 {
         value
     }
 
-    fn forward_into(
+    fn forward_slice_into(
         plan: &QftPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        plan.forward_into(input, output)
+        plan.forward_complex64_slice_into(input, output)
     }
 
-    fn inverse_into(
+    fn inverse_slice_into(
         plan: &QftPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        plan.inverse_into(input, output)
+        plan.inverse_complex64_slice_into(input, output)
     }
 }
 
@@ -289,6 +396,14 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Qft
     }
 }
 
+fn validate_lengths(plan: &QftPlan, input: usize, output: usize) -> QftResult<()> {
+    if input == plan.len() && output == plan.len() {
+        Ok(())
+    } else {
+        Err(QftError::LengthMismatch)
+    }
+}
+
 fn with_complex64_workspaces<R>(
     n: usize,
     f: impl FnOnce(&mut [Complex64], &mut [Complex64]) -> R,
@@ -296,9 +411,7 @@ fn with_complex64_workspaces<R>(
     TYPED_INPUT64_SCRATCH.with(|input_scratch| {
         input_scratch.with_scratch(n, |input64| {
             TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-                output_scratch.with_scratch(n, |output64| {
-                    f(input64, output64)
-                })
+                output_scratch.with_scratch(n, |output64| f(input64, output64))
             })
         })
     })
@@ -307,13 +420,26 @@ fn with_complex64_workspaces<R>(
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-            (
-                input_scratch.capacity(),
-                output_scratch.capacity(),
-            )
-        })
+        TYPED_OUTPUT64_SCRATCH
+            .with(|output_scratch| (input_scratch.capacity(), output_scratch.capacity()))
     })
+}
+
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    if let Some(slice) = view.as_slice() {
+        return Cow::Borrowed(slice);
+    }
+
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .expect("Leto view shape and storage bounds must be valid"),
+        );
+    }
+    Cow::Owned(values)
 }
 
 /// Convenience wrapper for forward QFT.
@@ -321,9 +447,23 @@ pub fn qft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
     QftPlan::new(QuantumStateDimension::new(input.len())?).forward(input)
 }
 
+/// Convenience wrapper for forward QFT over a Leto view.
+pub fn qft_leto(
+    input: leto::ArrayView1<'_, Complex64>,
+) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+    QftPlan::new(QuantumStateDimension::new(input.shape()[0])?).forward_leto(input)
+}
+
 /// Convenience wrapper for inverse QFT.
 pub fn iqft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
     QftPlan::new(QuantumStateDimension::new(input.len())?).inverse(input)
+}
+
+/// Convenience wrapper for inverse QFT over a Leto view.
+pub fn iqft_leto(
+    input: leto::ArrayView1<'_, Complex64>,
+) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
+    QftPlan::new(QuantumStateDimension::new(input.shape()[0])?).inverse_leto(input)
 }
 
 #[cfg(test)]
@@ -370,6 +510,126 @@ mod tests {
             assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
             assert_relative_eq!(actual.re, original.re, epsilon = 1.0e-12);
             assert_relative_eq!(actual.im, original.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_forward_and_inverse_match_ndarray_path() {
+        use leto::Storage;
+
+        let plan = plan4();
+        let signal = input64().to_vec();
+        let ndarray_input = Array1::from_vec(signal.clone());
+        let leto_input = leto::Array1::from_shape_vec([plan.len()], signal).expect("leto input");
+
+        let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
+        let ndarray_forward = plan.forward(&ndarray_input).expect("ndarray forward");
+        for (actual, expected) in leto_forward
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(ndarray_forward.iter())
+        {
+            assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+
+        let leto_inverse = plan
+            .inverse_leto(leto_forward.view())
+            .expect("leto inverse");
+        let ndarray_inverse = plan.inverse(&ndarray_forward).expect("ndarray inverse");
+        for (actual, expected) in leto_inverse
+            .storage()
+            .as_slice()
+            .iter()
+            .zip(ndarray_inverse.iter())
+        {
+            assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_forward_accepts_strided_logical_view() {
+        use leto::{SliceArg, Storage};
+
+        let logical = input64().to_vec();
+        let interleaved = logical
+            .iter()
+            .copied()
+            .flat_map(|value| [value, Complex64::new(99.0, -99.0)])
+            .collect::<Vec<_>>();
+        let leto_input =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+
+        let actual = qft_leto(strided).expect("leto qft");
+        let expected = qft(&Array1::from_vec(logical)).expect("ndarray qft");
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+            assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_complex32_matches_ndarray_typed_path() {
+        use leto::Storage;
+
+        let plan = plan4();
+        let input = input64().mapv(|value| Complex32::new(value.re as f32, value.im as f32));
+        let leto_input =
+            leto::Array1::from_shape_vec([plan.len()], input.iter().copied().collect())
+                .expect("leto input");
+        let mut expected = Array1::<Complex32>::zeros(plan.len());
+        plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("ndarray typed forward");
+
+        let actual = plan
+            .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("leto typed forward");
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_relative_eq!(actual.re, expected.re, epsilon = 0.0);
+            assert_relative_eq!(actual.im, expected.im, epsilon = 0.0);
+        }
+    }
+
+    #[test]
+    fn leto_typed_strided_f16_matches_ndarray_typed_path() {
+        use leto::{SliceArg, Storage};
+
+        let plan = plan4();
+        let input = input64().mapv(|value| {
+            [
+                f16::from_f32(value.re as f32),
+                f16::from_f32(value.im as f32),
+            ]
+        });
+        let interleaved = input
+            .iter()
+            .copied()
+            .flat_map(|value| [value, [f16::from_f32(99.0), f16::from_f32(-99.0)]])
+            .collect::<Vec<_>>();
+        let leto_input =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let mut expected = Array1::from_elem(plan.len(), [f16::from_f32(0.0); 2]);
+        plan.forward_typed_into(
+            &input,
+            &mut expected,
+            PrecisionProfile::MIXED_PRECISION_F16_F32,
+        )
+        .expect("ndarray typed forward");
+
+        let actual = plan
+            .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
+            .expect("leto typed forward");
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_relative_eq!(actual[0].to_f32(), expected[0].to_f32(), epsilon = 0.0);
+            assert_relative_eq!(actual[1].to_f32(), expected[1].to_f32(), epsilon = 0.0);
         }
     }
 
