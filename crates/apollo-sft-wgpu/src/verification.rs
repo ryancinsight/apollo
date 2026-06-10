@@ -4,6 +4,7 @@
 mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use apollo_sft::{SparseFftPlan, SparseSpectrum};
+    use leto::{SliceArg, Storage};
     use num_complex::{Complex32, Complex64};
 
     use crate::{SftWgpuBackend, SftWgpuPlan, WgpuCapabilities, WgpuError};
@@ -123,6 +124,80 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_matches_slice_forward_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = SftWgpuPlan::new(8, 2);
+        let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
+        let input: Vec<Complex32> = signal
+            .iter()
+            .map(|value| Complex32::new(value.re as f32, value.im as f32))
+            .collect();
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
+
+        let expected = backend
+            .execute_forward(&plan, &input)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, leto_input.view())
+            .expect("leto forward");
+        assert_eq!(actual.frequencies, expected.frequencies);
+        assert_eq!(actual.values, expected.values);
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = SftWgpuPlan::new(8, 2);
+        let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
+        let logical: Vec<Complex32> = signal
+            .iter()
+            .map(|value| Complex32::new(value.re as f32, value.im as f32))
+            .collect();
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in &logical {
+            backing.push(*value);
+            backing.push(Complex32::new(99.0, -99.0));
+        }
+        let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+
+        let expected = backend
+            .execute_forward(&plan, &logical)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.frequencies, expected.frequencies);
+        assert_eq!(actual.values, expected.values);
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_inverse_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = SftWgpuPlan::new(8, 2);
+        let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
+        let spectrum = SparseFftPlan::new(plan.len(), plan.sparsity())
+            .expect("valid CPU plan")
+            .forward(&signal)
+            .expect("CPU SFT");
+        let expected = backend
+            .execute_inverse(&plan, &spectrum)
+            .expect("slice inverse");
+        let actual = backend
+            .execute_inverse_leto(&plan, &spectrum)
+            .expect("leto inverse");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn typed_mixed_storage_forward_matches_complex32_execution_when_device_exists() {
         let Some(backend) = backend_or_skip() else {
             return;
@@ -156,6 +231,59 @@ mod tests {
         for (actual, expected) in typed_result.values.iter().zip(f32_result.values.iter()) {
             assert_complex64_close(*actual, *expected, 1.0e-3);
         }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
+        let Some(backend) = backend_or_skip() else {
+            return;
+        };
+        let plan = SftWgpuPlan::new(4, 2);
+        let signal_c64 = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
+        let signal_c32: Vec<Complex32> = signal_c64
+            .iter()
+            .map(|v| Complex32::new(v.re as f32, v.im as f32))
+            .collect();
+        let input_f16: Vec<[f16; 2]> = signal_c32
+            .iter()
+            .map(|v| [f16::from_f32(v.re), f16::from_f32(v.im)])
+            .collect();
+        let leto_input =
+            leto::Array1::from_shape_vec([input_f16.len()], input_f16.clone()).expect("input");
+
+        let expected_forward = backend
+            .execute_forward_typed(&plan, PrecisionProfile::MIXED_PRECISION_F16_F32, &input_f16)
+            .expect("typed slice forward");
+        let actual_forward = backend
+            .execute_forward_leto_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_input.view(),
+            )
+            .expect("typed leto forward");
+        assert_eq!(actual_forward.frequencies, expected_forward.frequencies);
+        assert_eq!(actual_forward.values, expected_forward.values);
+
+        let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; plan.len()];
+        backend
+            .execute_inverse_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &expected_forward,
+                &mut expected_inverse,
+            )
+            .expect("typed slice inverse");
+        let actual_inverse = backend
+            .execute_inverse_leto_typed::<[f16; 2]>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &expected_forward,
+            )
+            .expect("typed leto inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice()
+        );
     }
 
     #[test]

@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SFT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-sft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, inverse, and typed inverse SFT execution.
+- Architecture effect: SFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and sparse spectra remain represented by the owning `SparseSpectrum` domain type.
+- Memory effect: contiguous Leto 1D complex views borrow storage through `Cow`; strided Leto views copy once into logical order; dense inverse host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice execution methods and deterministic top-k sparse selection instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-sft-wgpu`; `cargo test -p apollo-sft-wgpu leto -- --nocapture`; `cargo test -p apollo-sft-wgpu -- --nocapture`; `cargo clippy -p apollo-sft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-sft-wgpu --no-deps`; `cargo semver-checks -p apollo-sft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SFT-WGPU slice APIs for contiguous forward, strided forward, inverse, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: most other Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; SFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## QFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-qft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, inverse, and typed inverse QFT execution.
 - Architecture effect: QFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

@@ -1,5 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use apollo_fft::PrecisionProfile;
@@ -88,6 +89,19 @@ impl SftWgpuBackend {
         select_top_k(plan.len(), plan.sparsity(), &dense)
     }
 
+    /// Execute direct dense-spectrum SFT from a Leto complex `f32` view.
+    ///
+    /// Contiguous Leto views borrow host storage directly; strided views copy
+    /// once into logical order before dispatching to the existing WGPU slice path.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &SftWgpuPlan,
+        input: leto::ArrayView1<'_, Complex32>,
+    ) -> WgpuResult<SparseSpectrum> {
+        let input = leto_view1_cow(input)?;
+        self.execute_forward(plan, &input)
+    }
+
     /// Execute inverse reconstruction from a sparse spectrum.
     pub fn execute_inverse(
         &self,
@@ -115,6 +129,16 @@ impl SftWgpuBackend {
         )
     }
 
+    /// Execute inverse reconstruction from a sparse spectrum into a Leto dense signal.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &SftWgpuPlan,
+        spectrum: &SparseSpectrum,
+    ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
+        let output = self.execute_inverse(plan, spectrum)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the forward SFT with typed `Complex64`, `Complex32`, or mixed `[f16; 2]` input storage.
     ///
     /// Promotes represented input once to `Complex32` before dispatch.
@@ -137,6 +161,20 @@ impl SftWgpuBackend {
             })
             .collect();
         self.execute_forward(plan, &represented)
+    }
+
+    /// Execute forward SFT from typed Leto complex storage.
+    ///
+    /// Precision-profile validation and host representation match
+    /// [`Self::execute_forward_typed`].
+    pub fn execute_forward_leto_typed<T: SparseComplexStorage>(
+        &self,
+        plan: &SftWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<SparseSpectrum> {
+        let input = leto_view1_cow(input)?;
+        self.execute_forward_typed(plan, precision, &input)
     }
 
     /// Execute the inverse SFT from a sparse spectrum with typed complex output storage.
@@ -162,6 +200,18 @@ impl SftWgpuBackend {
             *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
         }
         Ok(())
+    }
+
+    /// Execute inverse SFT from a sparse spectrum into typed Leto dense storage.
+    pub fn execute_inverse_leto_typed<T: SparseComplexStorage>(
+        &self,
+        plan: &SftWgpuPlan,
+        precision: PrecisionProfile,
+        spectrum: &SparseSpectrum,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.len()];
+        self.execute_inverse_typed_into(plan, precision, spectrum, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     fn validate_plan(plan: &SftWgpuPlan) -> WgpuResult<()> {
@@ -201,6 +251,32 @@ impl SftWgpuBackend {
     }
 }
 
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+
+    let mut values = Vec::with_capacity(view.size());
+    for index in 0..view.size() {
+        let value = view.get([index]).map_err(|_| WgpuError::LengthMismatch {
+            expected: view.size(),
+            actual: index,
+        })?;
+        values.push(*value);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto output: {err}"),
+        }
+    })
+}
+
 fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<SparseSpectrum> {
     let mut ranked: Vec<(usize, Complex32, f32)> = dense
         .iter()
@@ -227,4 +303,23 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
                 })?;
     }
     Ok(spectrum)
+}
+
+#[cfg(test)]
+mod tests {
+    use num_complex::Complex32;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec(
+            [2],
+            vec![Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)],
+        )
+        .expect("leto input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, std::borrow::Cow::Borrowed(_)));
+        assert_eq!(&*cow, &[Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)]);
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "apollo-sft-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -12,6 +12,7 @@ apollo-fft = { path = "../apollo-fft" }
 apollo-sft = { path = "../apollo-sft" }
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
+leto = { workspace = true }
 num-complex = "0.4"
 wgpu = { version = "26.0", features = ["wgsl"] }
 

@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-sft-wgpu` `0.2.0` adds Leto forward, typed forward, inverse, and typed inverse host boundaries; sparse forward keeps `SparseSpectrum` as the SSOT and dense inverse outputs can return Mnemosyne-backed Leto arrays.
 - [minor] `apollo-qft-wgpu` `0.2.0` adds Leto forward, typed forward, inverse, and typed inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-dht-wgpu` `0.2.0` adds Leto forward, typed forward, inverse, and typed inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-fwht-wgpu` `0.2.0` adds Leto forward, typed forward, inverse, and typed inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
