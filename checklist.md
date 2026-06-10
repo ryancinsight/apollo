@@ -1,4 +1,12 @@
 # Apollo Checklist
+## QFT dense kernel Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-qft`.
+- [x] Routed dense forward/inverse output-row writes through `moirai::ParallelSliceMut` above `QFT_PAR_OP_THRESHOLD`, with serial execution retained for smaller state vectors.
+- [x] Replaced the private boolean direction flag with `QftDirection` while preserving the public dense kernel API.
+- [x] Added threshold-path value tests for forward and inverse Moirai execution.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-qft`; `cargo test -p apollo-qft`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic QFT unit/property tests plus direct threshold-path row-formula tests. No runtime benchmark claim is made.
+
 ## Hilbert analytic path Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-hilbert`.
 - [x] Routed analytic input staging, analytic-mask application, original-real restoration, and quadrature extraction through `moirai::ParallelSliceMut` above `HILBERT_PAR_LEN_THRESHOLD`, with serial execution retained for smaller signals.

@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-qft` dense forward/inverse row execution now uses Moirai `ParallelSliceMut` above a bounded O(N²) work threshold, with serial execution retained for small state vectors.
 - [patch] `apollo-hilbert` analytic-signal staging, analytic-mask application, real-part restoration, and quadrature extraction now use Moirai `ParallelSliceMut` above a bounded signal-length threshold while preserving serial execution for small inputs.
 - [patch] `apollo-nufft` exact 1D direct Type-1/Type-2 reference transforms now use Moirai `ParallelSliceMut` for disjoint output writes above a bounded operation threshold while preserving serial execution for small inputs.
 - [minor] `apollo-nufft-wgpu` `0.2.0` adds Leto direct and fast 1D/3D Type-1/Type-2 NUFFT host boundaries, including typed storage variants, returning Mnemosyne-backed Leto arrays while preserving WGPU slice/ndarray execution as the device dispatch path.

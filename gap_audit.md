@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## QFT dense kernel Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-qft`; routed dense forward/inverse output-row writes through `ParallelSliceMut` above a bounded O(N²) work threshold; replaced the private direction boolean with `QftDirection`.
+- Architecture effect: QFT ndarray, Leto, and typed paths now share the same Moirai-backed dense kernel instead of adding provider logic to individual wrappers.
+- Memory effect: caller-owned output buffers are filled in place by disjoint mutable row writes; small state vectors remain serial to avoid scheduling overhead.
+- Implementation effect: one `qft_row` helper is the SSOT for serial and Moirai execution, preserving the existing twiddle-table contract.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-qft`; `cargo test -p apollo-qft`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic QFT unit/property tests plus direct threshold-path row-formula tests for forward and inverse execution. No runtime benchmark claim is made.
+- Residuals: typed storage conversion loops in `QftStorage` still use serial scratch copies; Hermes is still absent from `apollo-qft`.
+
 ## Hilbert analytic path Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-hilbert` and routed analytic-signal staging, analytic-mask application, real-part restoration, and quadrature extraction through `ParallelSliceMut` above a bounded signal-length threshold.
 - Architecture effect: Hilbert CPU execution now uses Apollo's Moirai provider surface for disjoint mutable writes around the FFT plan while keeping the FFT implementation and Leto/Mnemosyne public boundaries unchanged.
