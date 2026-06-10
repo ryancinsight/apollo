@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## FRFT typed Leto storage boundary [minor]
+- Performed: bumped `apollo-frft` to `0.2.0`; added `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and crate-root `frft_leto_typed`, accepting `leto::ArrayView1<'_, T>` where `T: FrftStorage` and returning `leto::Array<T, leto::MnemosyneStorage<T>, 1>`.
+- Architecture effect: FRFT reduced-precision callers now have a typed Leto boundary instead of requiring ndarray ownership at the public edge. The `FrftStorage` trait owns canonical slice execution hooks, and ndarray arrays delegate into those hooks.
+- Memory effect: contiguous typed Leto views borrow their backing slice through `Cow`; strided views copy once into logical order before typed slice execution; returned arrays use Mnemosyne-backed Leto storage.
+- Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: type-level public boundary replacement plus value-semantic differential tests against the existing ndarray typed API for contiguous `Complex32` and strided mixed `[f16; 2]`. `cargo semver-checks` reported no required semver update for `apollo-frft` 0.1.2 to 0.2.0. No runtime benchmark claim is made.
+- Residuals: FRFT still retains ndarray APIs for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+
 ## FRFT Leto public 1D boundary [minor]
 - Performed: added `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and crate-root `frft_leto`, accepting `leto::ArrayView1<'_, Complex64>` and returning `leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>`.
 - Architecture effect: FRFT now has a public Leto array boundary matching the provider direction already used in FFT, GFT, and the unitary FRFT basis. The existing ndarray API remains for compatibility and validation while callers migrate.

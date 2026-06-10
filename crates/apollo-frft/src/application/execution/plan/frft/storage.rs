@@ -3,9 +3,9 @@
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
-use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -23,20 +23,15 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic result back to storage.
     fn from_complex64(value: Complex64) -> Self;
 
-    /// Execute forward transform into caller-owned storage.
-    fn forward_into(
+    /// Execute forward transform into caller-owned contiguous storage.
+    fn forward_slice_into(
         plan: &FrftPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FrftError::LengthMismatch {
-                input: input.len().max(output.len()),
-                plan: plan.len(),
-            });
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_complex64(value);
@@ -49,20 +44,30 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned storage.
-    fn inverse_into(
+    /// Execute forward transform into caller-owned ndarray storage.
+    fn forward_into(
         plan: &FrftPlan,
         input: &Array1<Self>,
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), FrftError> {
+        Self::forward_slice_into(
+            plan,
+            input.as_slice().expect("Array must be contiguous"),
+            output.as_slice_mut().expect("Array must be contiguous"),
+            profile,
+        )
+    }
+
+    /// Execute inverse transform into caller-owned contiguous storage.
+    fn inverse_slice_into(
+        plan: &FrftPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), FrftError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FrftError::LengthMismatch {
-                input: input.len().max(output.len()),
-                plan: plan.len(),
-            });
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_complex64(value);
@@ -73,6 +78,21 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
             }
             Ok(())
         })
+    }
+
+    /// Execute inverse transform into caller-owned ndarray storage.
+    fn inverse_into(
+        plan: &FrftPlan,
+        input: &Array1<Self>,
+        output: &mut Array1<Self>,
+        profile: PrecisionProfile,
+    ) -> Result<(), FrftError> {
+        Self::inverse_slice_into(
+            plan,
+            input.as_slice().expect("Array must be contiguous"),
+            output.as_slice_mut().expect("Array must be contiguous"),
+            profile,
+        )
     }
 }
 
@@ -87,6 +107,16 @@ impl FrftStorage for Complex64 {
         value
     }
 
+    fn forward_slice_into(
+        plan: &FrftPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), FrftError> {
+        validate_profile(profile, Self::PROFILE)?;
+        plan.forward_complex64_slice_into(input, output)
+    }
+
     fn forward_into(
         plan: &FrftPlan,
         input: &Array1<Self>,
@@ -95,6 +125,16 @@ impl FrftStorage for Complex64 {
     ) -> Result<(), FrftError> {
         validate_profile(profile, Self::PROFILE)?;
         plan.forward_into(input, output)
+    }
+
+    fn inverse_slice_into(
+        plan: &FrftPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), FrftError> {
+        validate_profile(profile, Self::PROFILE)?;
+        plan.inverse_complex64_slice_into(input, output)
     }
 
     fn inverse_into(
@@ -135,6 +175,17 @@ impl FrftStorage for [f16; 2] {
     }
 }
 
+fn validate_lengths(plan: &FrftPlan, input: usize, output: usize) -> Result<(), FrftError> {
+    if input != plan.len() || output != plan.len() {
+        Err(FrftError::LengthMismatch {
+            input: input.max(output),
+            plan: plan.len(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FrftError> {
     if actual.storage == expected.storage && actual.compute == expected.compute {
         Ok(())
@@ -149,11 +200,8 @@ fn with_complex64_workspaces<R>(
 ) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
         in_pool.with_scratch(n, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-                out_pool.with_scratch(n, |output64| {
-                    f(input64, output64)
-                })
-            })
+            TYPED_OUTPUT64_SCRATCH
+                .with(|out_pool| out_pool.with_scratch(n, |output64| f(input64, output64)))
         })
     })
 }
@@ -161,11 +209,6 @@ fn with_complex64_workspaces<R>(
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
-        TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-            (
-                in_pool.capacity(),
-                out_pool.capacity(),
-            )
-        })
+        TYPED_OUTPUT64_SCRATCH.with(|out_pool| (in_pool.capacity(), out_pool.capacity()))
     })
 }

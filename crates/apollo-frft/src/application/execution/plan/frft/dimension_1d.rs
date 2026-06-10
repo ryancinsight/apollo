@@ -136,6 +136,27 @@ impl FrftPlan {
         )
     }
 
+    /// Execute the forward FrFT over a typed Leto complex view.
+    ///
+    /// C-contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical typed slice execution path.
+    pub fn forward_leto_typed<T: FrftStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
+        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed FrFT output length must match Leto output shape"),
+        )
+    }
+
     /// Execute the forward FrFT into a pre-allocated output buffer.
     pub fn forward_into(
         &self,
@@ -194,6 +215,27 @@ impl FrftPlan {
                 &output,
             )
             .expect("inverse FrFT output length must match Leto output shape"),
+        )
+    }
+
+    /// Execute the inverse FrFT over a typed Leto complex view.
+    ///
+    /// C-contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical typed slice execution path.
+    pub fn inverse_leto_typed<T: FrftStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
+        T::inverse_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed inverse FrFT output length must match Leto output shape"),
         )
     }
 
@@ -256,7 +298,16 @@ pub fn frft_leto(
     FrftPlan::new(input.shape()[0], order)?.forward_leto(input)
 }
 
-fn leto_view1_cow<'a>(view: &leto::ArrayView1<'a, Complex64>) -> Cow<'a, [Complex64]> {
+/// Execute a single forward fractional Fourier transform on a typed Leto 1D view.
+pub fn frft_leto_typed<T: FrftStorage>(
+    input: leto::ArrayView1<'_, T>,
+    order: f64,
+    profile: PrecisionProfile,
+) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
+    FrftPlan::new(input.shape()[0], order)?.forward_leto_typed(input, profile)
+}
+
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
     if let Some(slice) = view.as_slice() {
         return Cow::Borrowed(slice);
     }
@@ -345,6 +396,71 @@ mod tests {
         let via_ndarray = frft(&Array1::from_vec(logical), 0.5).expect("ndarray frft");
         for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_ndarray.iter()) {
             assert!((actual - expected).norm() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_typed_complex32_matches_ndarray_typed_path() {
+        use leto::Storage;
+
+        let n = 8;
+        let plan = FrftPlan::new(n, 0.75).expect("valid plan");
+        let input = Array1::from_shape_fn(n, |i| {
+            Complex32::new((i as f32 * 0.17).cos(), (i as f32 * 0.23).sin())
+        });
+        let leto_input =
+            leto::Array1::from_shape_vec([n], input.iter().copied().collect()).expect("leto input");
+
+        let mut expected = Array1::<Complex32>::zeros(n);
+        plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("ndarray typed forward");
+        let actual = plan
+            .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("leto typed forward");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert!((actual.re - expected.re).abs() < 1.0e-7);
+            assert!((actual.im - expected.im).abs() < 1.0e-7);
+        }
+    }
+
+    #[test]
+    fn leto_typed_strided_f16_matches_ndarray_typed_path() {
+        use leto::{SliceArg, Storage};
+
+        let n = 8;
+        let plan = FrftPlan::new(n, 0.5).expect("valid plan");
+        let logical = Array1::from_shape_fn(n, |i| {
+            [
+                f16::from_f32((i as f32 * 0.13).sin()),
+                f16::from_f32((i as f32 * 0.31).cos()),
+            ]
+        });
+        let interleaved = logical
+            .iter()
+            .copied()
+            .flat_map(|value| [value, [f16::from_f32(99.0), f16::from_f32(-99.0)]])
+            .collect::<Vec<_>>();
+        let leto_input =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+
+        let mut expected = Array1::from_elem(n, [f16::from_f32(0.0); 2]);
+        plan.forward_typed_into(
+            &logical,
+            &mut expected,
+            PrecisionProfile::MIXED_PRECISION_F16_F32,
+        )
+        .expect("ndarray typed forward");
+        let actual = plan
+            .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
+            .expect("leto typed forward");
+
+        for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+            assert_eq!(actual[0].to_f32(), expected[0].to_f32());
+            assert_eq!(actual[1].to_f32(), expected[1].to_f32());
         }
     }
 

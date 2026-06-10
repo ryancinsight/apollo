@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-frft` `0.2.0` adds `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and `frft_leto_typed` for typed Leto 1D views returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-frft` now exposes `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and `frft_leto` for Leto 1D complex views returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-fft` now exposes Leto 1D FFT/IFFT boundaries that accept Leto views and return Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
 - [minor] Added Leto as an Apollo workspace provider dependency and wired `apollo-validation` to validate a Leto contiguous array conversion boundary against `ndarray`.
@@ -16,6 +17,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [minor] `apollo-frft` `FrftStorage` now exposes canonical typed slice execution hooks reused by both ndarray arrays and Leto views.
 - [major] `apollo-frft` unitary Grünbaum basis construction now uses Leto arrays and `leto-ops::symmetric_eigen_jacobi`; `apollo-frft-wgpu` consumes an explicit column-major Leto flattening boundary; Apollo manifests and lockfile no longer depend on `nalgebra`.
 - [patch] Updated Leto to commit `fd1d87b`, added `leto-ops`, and routed `apollo-gft` graph spectral basis construction through `leto_ops::symmetric_eigen_jacobi`, removing `apollo-gft`'s direct `nalgebra` eigensolver dependency.
 - [major] `apollo-gft` graph adjacency construction now uses Leto arrays: `GraphAdjacency` owns `leto::Array2<f64>` and `GftPlan::from_adjacency` accepts `leto::ArrayView2<'_, f64>`.

@@ -1,4 +1,12 @@
 # Apollo Checklist
+## FRFT typed Leto storage boundary [minor]
+- [x] Bumped `apollo-frft` to `0.2.0` for additive public typed Leto APIs.
+- [x] Added `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and crate-root `frft_leto_typed` so `FrftStorage` callers can use `leto::ArrayView1<'_, T>` for `Complex64`, `Complex32`, and mixed `[f16; 2]` storage.
+- [x] Refactored `FrftStorage` through canonical `forward_slice_into` and `inverse_slice_into` hooks so ndarray arrays and Leto views share one typed execution contract.
+- [x] Added value tests proving Complex32 contiguous Leto parity and strided mixed-f16 Leto parity against the existing ndarray typed API.
+- [x] Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against the existing ndarray typed API. `cargo semver-checks` reported no required semver update for `apollo-frft` 0.1.2 to 0.2.0.
+
 ## FRFT Leto public 1D boundary [minor]
 - [x] Added `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and crate-root `frft_leto` so direct FRFT callers can use `leto::ArrayView1<'_, Complex64>` and receive Mnemosyne-backed Leto arrays.
 - [x] Reused the existing contiguous slice execution path; contiguous Leto views borrow storage, while strided views copy once into logical order before execution.
