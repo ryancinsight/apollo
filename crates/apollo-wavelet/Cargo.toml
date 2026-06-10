@@ -1,6 +1,6 @@
 [package]
 name = "apollo-wavelet"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Discrete and continuous wavelet transform plans for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }

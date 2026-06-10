@@ -21,7 +21,7 @@ pub mod infrastructure;
 pub mod verification;
 
 pub use application::execution::plan::cwt::CwtPlan;
-pub use application::execution::plan::dwt::{DwtPlan, WaveletStorage};
+pub use application::execution::plan::dwt::{DwtLetoCoefficients, DwtPlan, WaveletStorage};
 pub use domain::contracts::error::{WaveletError, WaveletResult};
 pub use domain::metadata::wavelet::{ContinuousWavelet, DiscreteWavelet};
 pub use domain::spectrum::coefficients::{CwtCoefficients, DwtCoefficients};

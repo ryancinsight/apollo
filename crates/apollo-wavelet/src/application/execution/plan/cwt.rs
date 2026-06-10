@@ -8,6 +8,7 @@ use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use moirai::ParallelSlice;
 use ndarray::Array2;
+use std::borrow::Cow;
 
 /// Reusable real-valued 1D CWT plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,6 +79,19 @@ impl CwtPlan {
         Ok(CwtCoefficients::new(self.scales.clone(), values))
     }
 
+    /// Execute the CWT from a Leto 1D signal view.
+    ///
+    /// Contiguous Leto views are borrowed directly; strided views are copied once
+    /// into logical order before reusing the canonical slice CWT kernel.
+    pub fn transform_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> WaveletResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
+        let signal = leto_view1_cow(signal)?;
+        let coefficients = self.transform(signal.as_ref())?;
+        leto_array2_from_ndarray(coefficients.values())
+    }
+
     /// Execute the CWT for `f64`, `f32`, or mixed `f16` storage into a
     /// caller-owned matrix with shape `(scales, signal_len)`.
     pub fn transform_typed_into<T: WaveletStorage>(
@@ -88,6 +102,46 @@ impl CwtPlan {
     ) -> WaveletResult<()> {
         T::transform_cwt_into(self, signal, output, profile)
     }
+
+    /// Execute the CWT from typed Leto signal storage.
+    pub fn transform_leto_typed<T: WaveletStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+        let signal = leto_view1_cow(signal)?;
+        let mut output = Array2::<T>::from_elem((self.scales.len(), self.len), T::from_f64(0.0));
+        self.transform_typed_into(signal.as_ref(), &mut output, profile)?;
+        leto_array2_from_ndarray(&output)
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'_, [T]>> {
+    if view.shape()[0] == 0 {
+        return Err(WaveletError::EmptySignal);
+    }
+    if let Some(slice) = view.as_slice() {
+        Ok(Cow::Borrowed(slice))
+    } else {
+        let mut values = Vec::with_capacity(view.size());
+        for index in 0..view.shape()[0] {
+            values.push(
+                *view
+                    .get([index])
+                    .map_err(|_| WaveletError::LengthMismatch)?,
+            );
+        }
+        Ok(Cow::Owned(values))
+    }
+}
+
+fn leto_array2_from_ndarray<T: Copy>(
+    array: &Array2<T>,
+) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
+    let (rows, cols) = array.dim();
+    let values = array.iter().copied().collect::<Vec<_>>();
+    leto::Array::from_mnemosyne_slice([rows, cols], &values)
+        .map_err(|_| WaveletError::CoefficientShapeMismatch)
 }
 
 #[cfg(test)]
@@ -133,6 +187,70 @@ mod tests {
         for (actual, expected) in out16.iter().zip(expected16.values().iter()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
+        }
+    }
+
+    #[test]
+    fn leto_transform_matches_slice_reference() {
+        let plan = CwtPlan::new(4, vec![1.0, 2.0], ContinuousWavelet::Morlet { omega0: 5.0 })
+            .expect("valid CWT plan");
+        let signal = [1.0_f64, -0.5, 0.25, 2.0];
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
+        let expected = plan.transform(&signal).expect("slice CWT");
+
+        let actual = plan.transform_leto(leto_signal.view()).expect("leto CWT");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_transform_matches_slice_reference() {
+        let plan =
+            CwtPlan::new(4, vec![1.0, 2.0], ContinuousWavelet::Ricker).expect("valid CWT plan");
+        let signal = [1.0_f64, -0.5, 0.25, 2.0];
+        let mut interleaved = Vec::with_capacity(signal.len() * 2);
+        for value in signal {
+            interleaved.push(value);
+            interleaved.push(99.0);
+        }
+        let leto_signal =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto signal");
+        let strided = leto_signal
+            .view()
+            .slice(&[(0, signal.len() * 2, 2)])
+            .expect("strided signal");
+        let expected = plan.transform(&signal).expect("slice CWT");
+
+        let actual = plan.transform_leto(strided).expect("leto CWT");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+        for (actual, expected) in actual.iter().zip(expected.values().iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn typed_leto_transform_matches_slice_reference() {
+        let plan = CwtPlan::new(4, vec![1.0, 2.0], ContinuousWavelet::Morlet { omega0: 5.0 })
+            .expect("valid CWT plan");
+        let signal = [1.0_f32, -0.5, 0.25, 2.0];
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
+        let mut expected = Array2::<f32>::zeros((2, 4));
+        plan.transform_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed slice CWT");
+
+        let actual = plan
+            .transform_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto CWT");
+        let actual_view = actual.view();
+        let actual = actual_view.as_slice().expect("contiguous leto output");
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
         }
     }
 

@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Wavelet Leto DWT/CWT boundary [minor]
+- Performed: bumped `apollo-wavelet` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for DWT forward/inverse, typed DWT forward/inverse, CWT transform, and typed CWT transform.
+- Architecture effect: Wavelet callers can now use Leto as the public 1D signal and dense coefficient boundary while existing slice APIs remain the validation and compatibility surface.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided Leto views copy once into logical order; generated DWT approximation/detail arrays, reconstructed signals, and CWT coefficient matrices use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing DWT slice kernels and CWT Moirai scale-parallel kernel rather than adding separate wavelet implementations.
+- Verification: `cargo check -p apollo-wavelet`; `cargo test -p apollo-wavelet leto -- --nocapture`; `cargo test -p apollo-wavelet -- --nocapture`; `cargo clippy -p apollo-wavelet --all-targets -- -D warnings`; `cargo doc -p apollo-wavelet --no-deps`; `cargo semver-checks -p apollo-wavelet --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-wavelet --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Wavelet slice APIs for DWT contiguous forward/inverse, DWT strided forward, typed `f32` DWT forward/inverse, CWT contiguous transform, CWT strided transform, and typed `f32` CWT transform. No runtime benchmark claim is made.
+- Residuals: Wavelet WGPU still has no Leto boundary; `DwtLetoCoefficients` remains ragged by design because multilevel DWT detail bands are ragged.
+
 ## STFT Leto 1D analysis/synthesis boundary [minor]
 - Performed: bumped `apollo-stft` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for forward analysis, inverse synthesis, typed forward analysis, typed inverse synthesis, and transport convenience wrappers.
 - Architecture effect: STFT callers can now use Leto as the public 1D signal/spectrum boundary while existing ndarray APIs remain the validation and compatibility surface.

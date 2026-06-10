@@ -7,6 +7,7 @@ use crate::infrastructure::kernel::discrete::{analysis_stage_into, synthesis_sta
 use crate::CwtPlan;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array2;
+use std::borrow::Cow;
 
 /// Reusable 1D orthogonal DWT plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +15,62 @@ pub struct DwtPlan {
     len: usize,
     levels: usize,
     wavelet: DiscreteWavelet,
+}
+
+/// Multilevel DWT coefficient storage backed by Leto arrays.
+pub struct DwtLetoCoefficients<T> {
+    len: usize,
+    levels: usize,
+    approximation: leto::Array<T, leto::MnemosyneStorage<T>, 1>,
+    details: Vec<leto::Array<T, leto::MnemosyneStorage<T>, 1>>,
+}
+
+impl<T> DwtLetoCoefficients<T> {
+    /// Create DWT coefficient storage backed by Leto arrays.
+    #[must_use]
+    pub fn new(
+        len: usize,
+        levels: usize,
+        approximation: leto::Array<T, leto::MnemosyneStorage<T>, 1>,
+        details: Vec<leto::Array<T, leto::MnemosyneStorage<T>, 1>>,
+    ) -> Self {
+        Self {
+            len,
+            levels,
+            approximation,
+            details,
+        }
+    }
+
+    /// Return original signal length.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Return true when original signal length is zero.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Return decomposition levels.
+    #[must_use]
+    pub const fn levels(&self) -> usize {
+        self.levels
+    }
+
+    /// Return the coarsest approximation coefficients.
+    #[must_use]
+    pub const fn approximation(&self) -> &leto::Array<T, leto::MnemosyneStorage<T>, 1> {
+        &self.approximation
+    }
+
+    /// Return detail coefficients from finest to coarsest.
+    #[must_use]
+    pub fn details(&self) -> &[leto::Array<T, leto::MnemosyneStorage<T>, 1>] {
+        &self.details
+    }
 }
 
 impl DwtPlan {
@@ -85,6 +142,19 @@ impl DwtPlan {
         ))
     }
 
+    /// Execute a multilevel forward DWT from a Leto 1D signal view.
+    ///
+    /// Contiguous Leto views are borrowed directly; strided views are copied once
+    /// into logical order before reusing the canonical slice DWT kernel.
+    pub fn forward_leto(
+        &self,
+        signal: leto::ArrayView1<'_, f64>,
+    ) -> WaveletResult<DwtLetoCoefficients<f64>> {
+        let signal = leto_view1_cow(signal)?;
+        let coefficients = self.forward(signal.as_ref())?;
+        dwt_coefficients_to_leto(&coefficients)
+    }
+
     /// Execute inverse multilevel DWT.
     pub fn inverse(&self, coefficients: &DwtCoefficients) -> WaveletResult<Vec<f64>> {
         if coefficients.len() != self.len || coefficients.levels() != self.levels {
@@ -98,6 +168,16 @@ impl DwtPlan {
             current = output;
         }
         Ok(current)
+    }
+
+    /// Execute inverse multilevel DWT from Leto-backed coefficients.
+    pub fn inverse_leto(
+        &self,
+        coefficients: &DwtLetoCoefficients<f64>,
+    ) -> WaveletResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
+        let coefficients = dwt_coefficients_from_leto(coefficients)?;
+        let signal = self.inverse(&coefficients)?;
+        leto_array1_from_slice(&signal)
     }
 
     /// Execute a multilevel forward DWT for `f64`, `f32`, or mixed `f16` storage.
@@ -115,6 +195,26 @@ impl DwtPlan {
         T::forward_dwt_into(self, signal, approximation, details, profile)
     }
 
+    /// Execute a multilevel forward DWT from typed Leto signal storage.
+    pub fn forward_leto_typed<T: WaveletStorage>(
+        &self,
+        signal: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> WaveletResult<DwtLetoCoefficients<T>> {
+        validate_profile(profile, T::PROFILE)?;
+        let signal = leto_view1_cow(signal)?;
+        if signal.len() != self.len {
+            return Err(WaveletError::LengthMismatch);
+        }
+        let mut approximation = vec![T::from_f64(0.0); self.len >> self.levels];
+        let mut details = self
+            .coefficient_shapes()
+            .map(|len| vec![T::from_f64(0.0); len])
+            .collect::<Vec<_>>();
+        self.forward_typed_into(signal.as_ref(), &mut approximation, &mut details, profile)?;
+        dwt_typed_coefficients_to_leto(self.len, self.levels, &approximation, &details)
+    }
+
     /// Execute inverse multilevel DWT for `f64`, `f32`, or mixed `f16` storage.
     pub fn inverse_typed_into<T: WaveletStorage>(
         &self,
@@ -126,11 +226,111 @@ impl DwtPlan {
         T::inverse_dwt_into(self, approximation, details, output, profile)
     }
 
+    /// Execute inverse multilevel DWT from typed Leto-backed coefficients.
+    pub fn inverse_leto_typed<T: WaveletStorage>(
+        &self,
+        coefficients: &DwtLetoCoefficients<T>,
+        profile: PrecisionProfile,
+    ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        validate_profile(profile, T::PROFILE)?;
+        if coefficients.len() != self.len || coefficients.levels() != self.levels {
+            return Err(WaveletError::CoefficientShapeMismatch);
+        }
+        let approximation = leto_view1_cow(coefficients.approximation().view())?;
+        let details = coefficients
+            .details()
+            .iter()
+            .map(|detail| Ok(leto_view1_cow(detail.view())?.into_owned()))
+            .collect::<WaveletResult<Vec<_>>>()?;
+        let mut output = vec![T::from_f64(0.0); self.len];
+        self.inverse_typed_into(approximation.as_ref(), &details, &mut output, profile)?;
+        leto_array1_from_slice(&output)
+    }
+
     fn coefficient_shapes(&self) -> impl Iterator<Item = usize> {
         let len = self.len;
         let levels = self.levels;
         (0..levels).map(move |level| len >> (level + 1))
     }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'_, [T]>> {
+    if view.shape()[0] == 0 {
+        return Err(WaveletError::EmptySignal);
+    }
+    if let Some(slice) = view.as_slice() {
+        Ok(Cow::Borrowed(slice))
+    } else {
+        let mut values = Vec::with_capacity(view.size());
+        for index in 0..view.shape()[0] {
+            values.push(
+                *view
+                    .get([index])
+                    .map_err(|_| WaveletError::LengthMismatch)?,
+            );
+        }
+        Ok(Cow::Owned(values))
+    }
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values)
+        .map_err(|_| WaveletError::CoefficientShapeMismatch)
+}
+
+fn dwt_coefficients_to_leto(
+    coefficients: &DwtCoefficients,
+) -> WaveletResult<DwtLetoCoefficients<f64>> {
+    let approximation = leto_array1_from_slice(coefficients.approximation())?;
+    let details = coefficients
+        .details()
+        .iter()
+        .map(|detail| leto_array1_from_slice(detail))
+        .collect::<WaveletResult<Vec<_>>>()?;
+    Ok(DwtLetoCoefficients::new(
+        coefficients.len(),
+        coefficients.levels(),
+        approximation,
+        details,
+    ))
+}
+
+fn dwt_typed_coefficients_to_leto<T: Copy>(
+    len: usize,
+    levels: usize,
+    approximation: &[T],
+    details: &[Vec<T>],
+) -> WaveletResult<DwtLetoCoefficients<T>> {
+    let approximation = leto_array1_from_slice(approximation)?;
+    let details = details
+        .iter()
+        .map(|detail| leto_array1_from_slice(detail))
+        .collect::<WaveletResult<Vec<_>>>()?;
+    Ok(DwtLetoCoefficients::new(
+        len,
+        levels,
+        approximation,
+        details,
+    ))
+}
+
+fn dwt_coefficients_from_leto(
+    coefficients: &DwtLetoCoefficients<f64>,
+) -> WaveletResult<DwtCoefficients> {
+    let approximation = leto_view1_cow(coefficients.approximation().view())?.into_owned();
+    let details = coefficients
+        .details()
+        .iter()
+        .map(|detail| Ok(leto_view1_cow(detail.view())?.into_owned()))
+        .collect::<WaveletResult<Vec<_>>>()?;
+    Ok(DwtCoefficients::new(
+        coefficients.len(),
+        coefficients.levels(),
+        approximation,
+        details,
+    ))
 }
 
 /// Real storage accepted by typed wavelet paths.
@@ -432,6 +632,135 @@ mod tests {
         for (actual, expected) in approx16.iter().zip(expected16.approximation()) {
             let quantization_bound = expected.abs() * 2.0_f64.powi(-10) + 2.0_f64.powi(-14);
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
+        }
+    }
+
+    #[test]
+    fn leto_forward_and_inverse_match_slice_reference() {
+        let plan = DwtPlan::new(8, 3, DiscreteWavelet::Haar).expect("valid DWT plan");
+        let signal = [1.0_f64, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
+        let expected = plan.forward(&signal).expect("slice forward");
+
+        let actual = plan.forward_leto(leto_signal.view()).expect("leto forward");
+        assert_eq!(actual.len(), expected.len());
+        assert_eq!(actual.levels(), expected.levels());
+        let actual_approximation = actual.approximation().view();
+        let actual_approximation = actual_approximation
+            .as_slice()
+            .expect("contiguous approximation");
+        for (actual, expected) in actual_approximation.iter().zip(expected.approximation()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+        for (actual_detail, expected_detail) in actual.details().iter().zip(expected.details()) {
+            let actual_detail = actual_detail.view();
+            let actual_detail = actual_detail.as_slice().expect("contiguous detail");
+            for (actual, expected) in actual_detail.iter().zip(expected_detail) {
+                assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+            }
+        }
+
+        let expected_inverse = plan.inverse(&expected).expect("slice inverse");
+        let actual_inverse = plan.inverse_leto(&actual).expect("leto inverse");
+        let actual_inverse_view = actual_inverse.view();
+        let actual_inverse = actual_inverse_view
+            .as_slice()
+            .expect("contiguous inverse signal");
+        for (actual, expected) in actual_inverse.iter().zip(expected_inverse.iter()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_slice_reference() {
+        let plan = DwtPlan::new(8, 3, DiscreteWavelet::Haar).expect("valid DWT plan");
+        let signal = [1.0_f64, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+        let mut interleaved = Vec::with_capacity(signal.len() * 2);
+        for value in signal {
+            interleaved.push(value);
+            interleaved.push(99.0);
+        }
+        let leto_signal =
+            leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto signal");
+        let strided = leto_signal
+            .view()
+            .slice(&[(0, signal.len() * 2, 2)])
+            .expect("strided signal");
+        let expected = plan.forward(&signal).expect("slice forward");
+
+        let actual = plan.forward_leto(strided).expect("leto forward");
+        let actual_approximation = actual.approximation().view();
+        let actual_approximation = actual_approximation
+            .as_slice()
+            .expect("contiguous approximation");
+        for (actual, expected) in actual_approximation.iter().zip(expected.approximation()) {
+            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+        }
+        for (actual_detail, expected_detail) in actual.details().iter().zip(expected.details()) {
+            let actual_detail = actual_detail.view();
+            let actual_detail = actual_detail.as_slice().expect("contiguous detail");
+            for (actual, expected) in actual_detail.iter().zip(expected_detail) {
+                assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-12);
+            }
+        }
+    }
+
+    #[test]
+    fn typed_leto_forward_and_inverse_match_slice_reference() {
+        let plan = DwtPlan::new(8, 3, DiscreteWavelet::Haar).expect("valid DWT plan");
+        let signal = [1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
+        let mut expected_approximation = vec![0.0_f32; 1];
+        let mut expected_details = detail_buffers(&plan, 0.0_f32);
+        plan.forward_typed_into(
+            &signal,
+            &mut expected_approximation,
+            &mut expected_details,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice forward");
+
+        let actual = plan
+            .forward_leto_typed(leto_signal.view(), PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto forward");
+        let actual_approximation = actual.approximation().view();
+        let actual_approximation = actual_approximation
+            .as_slice()
+            .expect("contiguous approximation");
+        for (actual, expected) in actual_approximation
+            .iter()
+            .zip(expected_approximation.iter())
+        {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        for (actual_detail, expected_detail) in actual.details().iter().zip(expected_details.iter())
+        {
+            let actual_detail = actual_detail.view();
+            let actual_detail = actual_detail.as_slice().expect("contiguous detail");
+            for (actual, expected) in actual_detail.iter().zip(expected_detail) {
+                assert_eq!(actual.to_bits(), expected.to_bits());
+            }
+        }
+
+        let mut expected_inverse = [0.0_f32; 8];
+        plan.inverse_typed_into(
+            &expected_approximation,
+            &expected_details,
+            &mut expected_inverse,
+            PrecisionProfile::LOW_PRECISION_F32,
+        )
+        .expect("typed slice inverse");
+        let actual_inverse = plan
+            .inverse_leto_typed(&actual, PrecisionProfile::LOW_PRECISION_F32)
+            .expect("typed leto inverse");
+        let actual_inverse_view = actual_inverse.view();
+        let actual_inverse = actual_inverse_view
+            .as_slice()
+            .expect("contiguous inverse signal");
+        for (actual, expected) in actual_inverse.iter().zip(expected_inverse.iter()) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
         }
     }
 

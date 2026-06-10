@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Wavelet Leto DWT/CWT boundary [minor]
+- [x] Bumped `apollo-wavelet` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `DwtLetoCoefficients<T>`, `DwtPlan::forward_leto`, `DwtPlan::inverse_leto`, `DwtPlan::forward_leto_typed`, `DwtPlan::inverse_leto_typed`, `CwtPlan::transform_leto`, and `CwtPlan::transform_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing slice/Moirai wavelet kernels; contiguous Leto views borrow through `Cow`, and strided views copy once into logical order.
+- [x] Added value tests proving DWT contiguous forward/inverse parity, DWT strided forward parity, typed `f32` DWT forward/inverse parity, CWT contiguous parity, CWT strided parity, and typed `f32` CWT parity against existing slice APIs.
+- [x] Verification: `cargo check -p apollo-wavelet`; `cargo test -p apollo-wavelet leto -- --nocapture`; `cargo test -p apollo-wavelet -- --nocapture`; `cargo clippy -p apollo-wavelet --all-targets -- -D warnings`; `cargo doc -p apollo-wavelet --no-deps`; `cargo semver-checks -p apollo-wavelet --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-wavelet --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing Wavelet slice and typed slice APIs. No runtime benchmark claim is made.
+
 ## STFT Leto 1D analysis/synthesis boundary [minor]
 - [x] Bumped `apollo-stft` to `0.3.0` and added the workspace Leto provider dependency.
 - [x] Added `StftPlan::forward_leto`, `StftPlan::inverse_leto`, `StftPlan::forward_leto_typed`, `StftPlan::inverse_leto_typed`, `stft_leto`, and `istft_leto`, returning Mnemosyne-backed Leto arrays.
