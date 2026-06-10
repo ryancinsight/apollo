@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-nufft` 3D typed Type-1/Type-2 fast paths now use Mnemosyne scratch pools and slice-backed ndarray views for grid, mode, output, and Kaiser-Bessel weight workspaces, replacing raw thread-local `RefCell<Vec<_>>` scratch ownership while preserving caller-owned ndarray APIs.
 - [patch] `apollo-ntt` radix-2 butterfly stages now route through Hermes exact modular `u64` butterfly kernels pinned at Hermes `25c261b3`, preserving `u128` widening and Moirai stage chunk scheduling.
 - [patch] `apollo-hilbert` analytic-mask scaling now uses Hermes in-place SIMD scaling on borrowed interleaved complex lanes above the existing bounded signal-length threshold, with scalar masking retained for smaller signals and as the value reference.
 - [patch] `apollo-fft` f32 mixed-radix length-32 and length-64 small-power paths now route through the canonical const-generic `small_pot_inplace_sized` helper instead of duplicating Winograd dispatch and inverse normalization.

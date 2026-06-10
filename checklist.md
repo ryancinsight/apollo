@@ -1,4 +1,11 @@
 # Apollo Checklist
+## NUFFT 3D Mnemosyne scratch migration [patch]
+- [x] Replaced 3D NUFFT typed-path `RefCell<Vec<_>>` thread-local scratch with `mnemosyne::scratch::ScratchPool`.
+- [x] Added internal mutable ndarray-view helpers so Mnemosyne scratch slices back Type-1 output grids and Type-2 grid/mode workspaces without changing public caller-owned `Array3` APIs.
+- [x] Preserved Type-1/Type-2 mathematical formulas, Kaiser-Bessel weight buffers, typed storage conversion contracts, and existing validation surfaces.
+- [x] Verification: `cargo fmt --check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic NUFFT unit/property tests plus static source scan confirming no `RefCell` remains in `dimension_3d.rs`. No runtime benchmark claim is made.
+
 ## NTT Hermes modular butterfly routing [patch]
 - [x] Added Hermes exact modular `u64` butterfly-stage provider kernel in commit `25c261b3`.
 - [x] Pinned Apollo's workspace Hermes dependency to `25c261b3e990916729ed5ff613b7e41dfe051b0b`.
