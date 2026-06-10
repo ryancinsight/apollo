@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Mellin log-frequency Hermes complex dot routing [patch]
+- Performed: routed threshold-sized forward and inverse log-frequency spectrum rows through Hermes provider-owned interleaved complex dot products with twiddle lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: Mellin spectrum execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized forward spectra materialize one shared real interleaved input lane buffer; inverse spectra materialize one shared complex interleaved lane buffer; each worker row reuses thread-local twiddle-lane scratch. Small spectra retain allocation-free scalar accumulation.
+- Implementation effect: the existing scalar DFT/IDFT closures remain the small-path reference, while `log_frequency_coeff_hermes` and `inverse_log_frequency_coeff_hermes` own the provider reduction boundary.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic Mellin unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: log-frequency spectrum rows still materialize interleaved lane buffers because the current Hermes complex dot API consumes primitive interleaved lanes; typed storage conversion remains owner `f64` arithmetic before quantization.
+
 ## DCT/DST direct Hermes dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-dctdst`; routed threshold-sized direct DCT-I/II/III/IV and DST-I/II/III/IV row reductions through Hermes real dot products with basis rows stored in Mnemosyne thread-local scratch.
 - Architecture effect: DCT/DST direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.

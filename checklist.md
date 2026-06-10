@@ -1,4 +1,14 @@
 # Apollo Checklist
+## Mellin log-frequency Hermes complex dot routing [patch]
+- [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Routed threshold-sized inverse log-frequency spectrum rows through the same Hermes complex dot boundary and retained the real component required by the IDFT contract.
+- [x] Materialized one shared real interleaved input lane buffer or complex spectrum lane buffer per threshold-sized transform and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
+- [x] Kept scalar DFT/IDFT row formulas for smaller spectra and as the value-semantic formula reference.
+- [x] Preserved existing Moirai disjoint output-row scheduling and public Leto/slice spectrum execution contracts.
+- [x] Added direct threshold-path tests for Hermes forward row parity, Hermes inverse row parity, and twiddle-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## DCT/DST direct Hermes dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-dctdst`.
 - [x] Routed threshold-sized direct DCT-I/II/III/IV and DST-I/II/III/IV row reductions through `hermes_simd::dot::<f64>`.
