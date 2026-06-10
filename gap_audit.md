@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## CZT direct/Bluestein Moirai routing [patch]
+- Performed: added the workspace Moirai provider dependency to `apollo-czt`; routed direct CZT output rows through `ParallelSliceMut` above a bounded O(NM) threshold; routed Bluestein workspace preparation, FFT-kernel multiplication, and output sampling through `ParallelSliceMut` above bounded contiguous-buffer thresholds.
+- Architecture effect: CZT direct reference, slice, Leto, typed, and fast Bluestein paths now consume the Apollo Moirai provider at canonical kernel boundaries instead of individual public wrappers.
+- Memory effect: caller-owned output and scratch buffers are filled in place by disjoint mutable writes; the existing Mnemosyne thread-local forward and typed scratch pools remain the allocation boundary.
+- Implementation effect: direct CZT row evaluation is factored into a shared helper used by serial and Moirai paths; Bluestein workspace, kernel multiply, and output sampling stages are isolated helpers with one formula each.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-czt`; `cargo test -p apollo-czt`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic CZT unit/property tests plus direct threshold-path formula tests for direct rows and Bluestein buffer stages. No runtime benchmark claim is made.
+- Residuals: typed storage conversion loops in `CztStorage` still use serial scratch copies; inverse Björck-Pereyra solve remains sequential due to data dependencies; Hermes is still absent from `apollo-czt`.
+
 ## SDFT direct/update Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-sdft`; routed direct DFT bin writes through `ParallelSliceMut` above a bounded O(bin_count * window_len) work threshold; routed sliding recurrence bin updates through `ParallelSliceMut` above a bounded bin-count threshold.
 - Architecture effect: SDFT slice, Leto, typed, and state-initialization paths now share Moirai-backed direct-bin and update kernels instead of adding provider logic to public wrappers.

@@ -1,7 +1,11 @@
 use apollo_fft::FftPlan1D;
 use mnemosyne::scratch::ScratchPool;
+use moirai::ParallelSliceMut;
 use ndarray::Array1;
 use num_complex::Complex64;
+
+/// Below this contiguous element count, serial loops avoid scheduling overhead.
+const BLUESTEIN_PAR_LEN_THRESHOLD: usize = 16_384;
 
 thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -119,21 +123,55 @@ pub(crate) fn czt_bluestein_forward_into_with_workspace(
         "CZT workspace length must match convolution length"
     );
 
-    workspace.fill(Complex64::new(0.0, 0.0));
-    for n_idx in 0..input.len() {
-        workspace[n_idx] = input[n_idx] * chirp_n[n_idx];
-    }
+    prepare_workspace(input, workspace, chirp_n);
 
     fft_plan.forward_complex_slice_inplace(workspace);
 
-    for (value, &kernel_value) in workspace.iter_mut().zip(fft_kernel.iter()) {
-        *value *= kernel_value;
-    }
+    multiply_kernel(workspace, fft_kernel);
 
     fft_plan.inverse_complex_slice_inplace(workspace);
 
-    for (k, out) in output.iter_mut().enumerate() {
-        *out = chirp_k[k] * workspace[k];
+    sample_output(output, workspace, chirp_k);
+}
+
+fn prepare_workspace(input: &[Complex64], workspace: &mut [Complex64], chirp_n: &[Complex64]) {
+    if workspace.len() >= BLUESTEIN_PAR_LEN_THRESHOLD {
+        workspace.par_mut().enumerate(|index, value| {
+            *value = if index < input.len() {
+                input[index] * chirp_n[index]
+            } else {
+                Complex64::new(0.0, 0.0)
+            };
+        });
+    } else {
+        workspace.fill(Complex64::new(0.0, 0.0));
+        for n_idx in 0..input.len() {
+            workspace[n_idx] = input[n_idx] * chirp_n[n_idx];
+        }
+    }
+}
+
+fn multiply_kernel(workspace: &mut [Complex64], fft_kernel: &[Complex64]) {
+    if workspace.len() >= BLUESTEIN_PAR_LEN_THRESHOLD {
+        workspace.par_mut().enumerate(|index, value| {
+            *value *= fft_kernel[index];
+        });
+    } else {
+        for (value, &kernel_value) in workspace.iter_mut().zip(fft_kernel.iter()) {
+            *value *= kernel_value;
+        }
+    }
+}
+
+fn sample_output(output: &mut [Complex64], workspace: &[Complex64], chirp_k: &[Complex64]) {
+    if output.len() >= BLUESTEIN_PAR_LEN_THRESHOLD {
+        output.par_mut().enumerate(|k, out| {
+            *out = chirp_k[k] * workspace[k];
+        });
+    } else {
+        for (k, out) in output.iter_mut().enumerate() {
+            *out = chirp_k[k] * workspace[k];
+        }
     }
 }
 
@@ -228,4 +266,72 @@ pub(crate) fn czt_bjork_pereyra_inverse_into(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn moirai_parallel_prepare_workspace_matches_serial_formula_at_threshold() {
+        let input_len = 128usize;
+        let mut workspace = vec![Complex64::new(9.0, -9.0); BLUESTEIN_PAR_LEN_THRESHOLD];
+        let input = (0..input_len)
+            .map(|index| Complex64::new(index as f64 * 0.25, -(index as f64) * 0.125))
+            .collect::<Vec<_>>();
+        let chirp_n = (0..input_len)
+            .map(|index| Complex64::from_polar(1.0, index as f64 * 0.03125))
+            .collect::<Vec<_>>();
+
+        prepare_workspace(&input, &mut workspace, &chirp_n);
+
+        for index in 0..workspace.len() {
+            let expected = if index < input_len {
+                input[index] * chirp_n[index]
+            } else {
+                Complex64::new(0.0, 0.0)
+            };
+            assert_abs_diff_eq!(workspace[index].re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(workspace[index].im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_kernel_multiply_matches_elementwise_formula_at_threshold() {
+        let mut workspace = (0..BLUESTEIN_PAR_LEN_THRESHOLD)
+            .map(|index| Complex64::new(index as f64 * 0.125, index as f64 * -0.0625))
+            .collect::<Vec<_>>();
+        let before = workspace.clone();
+        let fft_kernel = (0..BLUESTEIN_PAR_LEN_THRESHOLD)
+            .map(|index| Complex64::from_polar(1.0, index as f64 * 0.015625))
+            .collect::<Vec<_>>();
+
+        multiply_kernel(&mut workspace, &fft_kernel);
+
+        for index in 0..workspace.len() {
+            let expected = before[index] * fft_kernel[index];
+            assert_abs_diff_eq!(workspace[index].re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(workspace[index].im, expected.im, epsilon = 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn moirai_parallel_sample_output_matches_chirp_formula_at_threshold() {
+        let workspace = (0..BLUESTEIN_PAR_LEN_THRESHOLD)
+            .map(|index| Complex64::new(index as f64 * 0.125, index as f64 * 0.03125))
+            .collect::<Vec<_>>();
+        let chirp_k = (0..BLUESTEIN_PAR_LEN_THRESHOLD)
+            .map(|index| Complex64::from_polar(1.0, -(index as f64) * 0.0078125))
+            .collect::<Vec<_>>();
+        let mut output = vec![Complex64::new(0.0, 0.0); BLUESTEIN_PAR_LEN_THRESHOLD];
+
+        sample_output(&mut output, &workspace, &chirp_k);
+
+        for index in 0..output.len() {
+            let expected = chirp_k[index] * workspace[index];
+            assert_abs_diff_eq!(output[index].re, expected.re, epsilon = 1.0e-12);
+            assert_abs_diff_eq!(output[index].im, expected.im, epsilon = 1.0e-12);
+        }
+    }
 }

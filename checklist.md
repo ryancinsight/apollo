@@ -1,4 +1,12 @@
 # Apollo Checklist
+## CZT direct/Bluestein Moirai routing [patch]
+- [x] Added the workspace Moirai provider dependency to `apollo-czt`.
+- [x] Routed direct CZT output rows through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller O(NM) workloads.
+- [x] Routed Bluestein workspace preparation, FFT-kernel multiplication, and output sampling through `moirai::ParallelSliceMut` above `BLUESTEIN_PAR_LEN_THRESHOLD`, with serial execution retained for smaller contiguous buffers.
+- [x] Added threshold-path value tests for direct rows, workspace preparation, kernel multiplication, and output sampling.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-czt`; `cargo test -p apollo-czt`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic CZT unit/property tests plus direct threshold-path formula tests. No runtime benchmark claim is made.
+
 ## SDFT direct/update Moirai routing [patch]
 - [x] Added the workspace Moirai provider dependency to `apollo-sdft`.
 - [x] Routed direct DFT bin writes through `moirai::ParallelSliceMut` above `DIRECT_PAR_OP_THRESHOLD`, with serial execution retained for smaller windows.
