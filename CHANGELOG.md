@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] Apollo now pins Leto/Leto Ops to pushed Leto `6c7899d` (`0.5.0`), importing provider-side dense reshape/into_shape, permute aliases, and row-major to_contiguous materialization for later ndarray replacement work.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `a46dea9` (`0.4.0`), importing provider-side broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` into caller-owned output layouts while keeping Apollo public APIs unchanged.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `642d87a3` (`0.3.0`), bringing the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR into the workspace dependency graph.
 - [patch] `apollo-nufft` 3D separable FFT x/y/z lane passes now reuse Mnemosyne complex scratch slices and call Apollo FFT slice execution directly, removing per-pass temporary `Array1<Complex64>` lane allocation.

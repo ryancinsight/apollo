@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Leto 0.5.0 shape/materialization provider pin [minor]
+- Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `a46dea9` (`0.4.0`) to pushed Leto `6c7899d` (`0.5.0`).
+- Architecture effect: Apollo now consumes provider-side dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization through the canonical Git dependency path.
+- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes a prerequisite for replacing ndarray shape/materialization usage in low-frequency validation and staging paths.
+- Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: Cargo dependency resolution plus focused compile checks for provider-consuming crates. Leto owns value-semantic reshape/materialization coverage through core tests and ndarray contract validation.
+- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+
 ## Leto 0.4.0 broadcast binary provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `642d87a3` (`0.3.0`) to pushed Leto `a46dea9` (`0.4.0`).
 - Architecture effect: Apollo now consumes provider-side broadcast-aware binary maps for caller-owned output layouts through the canonical Git dependency path.

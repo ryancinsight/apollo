@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Leto 0.5.0 shape/materialization provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `6c7899d865b689004cd48265b9a967d70a15a787`.
+- [x] Updated `Cargo.lock` from Leto/Leto Ops `0.4.0` at `a46dea9` to `0.5.0` at `6c7899d`.
+- [x] Preserved Apollo public APIs; this change imports provider reshape/materialization capability for later internal ndarray replacement work.
+- [x] Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: Cargo resolver output plus focused provider-consuming crate checks. No runtime benchmark claim is made.
+
 ## Leto 0.4.0 broadcast binary provider pin [minor]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `a46dea9e3c91d018e419398b3b07c7490446b9fd`.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.3.0` at `642d87a3` to `0.4.0` at `a46dea9`.

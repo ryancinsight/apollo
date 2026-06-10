@@ -81,8 +81,8 @@ num-complex = "0.4"
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "9411c4448c4fe841ce23909668c0f948ad1643bb", default-features = false, features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "a46dea9e3c91d018e419398b3b07c7490446b9fd", default-features = false, features = ["std", "ndarray-compat", "mnemosyne-alloc"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "a46dea9e3c91d018e419398b3b07c7490446b9fd", default-features = false, features = ["std"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "6c7899d865b689004cd48265b9a967d70a15a787", default-features = false, features = ["std", "ndarray-compat", "mnemosyne-alloc"] }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "6c7899d865b689004cd48265b9a967d70a15a787", default-features = false, features = ["std"] }
 proc-macro2 = "1.0"
 numpy = "0.23"
 once_cell = "1.19"
