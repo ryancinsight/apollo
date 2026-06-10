@@ -12,10 +12,11 @@ Remaining replacement work:
   `ndarray-compat` feature once consumers move to the `*_leto` APIs; ADR + migration guide.
 - [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
   through moirai.
-- [ ] [arch] Stage D4: add an NVIDIA GPU path via **cuda-oxide** alongside the wgpu
-  backends, sharing a low-level GPU device/buffer abstraction co-owned with coeus
-  (coeus Stage D) rather than duplicating device plumbing. Start with FFT; differential
-  vs CPU and wgpu. ADR first.
+- [ ] [arch] Stage D4: re-base the `-wgpu` device plumbing onto the shared `hephaestus`
+  GPU substrate (atlas ADR 0001) and add an NVIDIA transform path on its CUDA backend
+  (cuda-oxide + cutile composed). Start with FFT; differential vs CPU and wgpu. Blocked
+  on `hephaestus` scaffold; apollo keeps its WGSL kernels and re-homes only device/buffer/
+  queue/pipeline acquisition.
 
 ## Delivered
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
