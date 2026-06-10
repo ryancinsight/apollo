@@ -1,4 +1,13 @@
 # Apollo Checklist
+## Mellin moment Hermes dot routing [patch]
+- [x] Added the workspace Hermes and Mnemosyne provider dependencies to `apollo-mellin`.
+- [x] Routed real Mellin moment accumulation through `hermes_simd::dot::<f64>` above `HERMES_MOMENT_LEN_THRESHOLD`.
+- [x] Materialized trapezoid integration weights in Mnemosyne thread-local scratch to avoid per-call heap allocation on the Hermes path.
+- [x] Kept scalar moment accumulation for smaller signals and left existing Moirai resampling/spectrum paths unchanged.
+- [x] Added value tests for Hermes moment parity and trapezoid-weight materialization.
+- [x] Verification: `cargo fmt --check`; `cargo check -p apollo-mellin`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes moment tests. Runtime FFT benchmark evidence is recorded in `benchmark_results.md`.
+
 ## GFT graph-basis Hermes dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-gft`.
 - [x] Routed forward `U^T x` row reductions through `hermes_simd::dot::<f64>` for contiguous column-major eigenbasis columns above `GFT_HERMES_DOT_LEN_THRESHOLD`.

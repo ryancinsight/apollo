@@ -17,6 +17,11 @@ use moirai::ParallelSliceMut;
 use num_complex::Complex64;
 
 const PAR_THRESHOLD: usize = 256;
+const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
+
+thread_local! {
+    static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+}
 
 /// Interpolate a positive-domain signal onto logarithmically spaced samples.
 ///
@@ -92,6 +97,36 @@ pub fn mellin_moment(signal: &[f64], signal_min: f64, signal_max: f64, exponent:
     }
 
     let step = (signal_max - signal_min) / (signal.len() as f64 - 1.0);
+    if signal.len() >= HERMES_MOMENT_LEN_THRESHOLD {
+        return mellin_moment_hermes(signal, signal_min, exponent, step) * step;
+    }
+    mellin_moment_scalar(signal, signal_min, exponent, step) * step
+}
+
+fn mellin_moment_hermes(signal: &[f64], signal_min: f64, exponent: f64, step: f64) -> f64 {
+    MOMENT_WEIGHT_SCRATCH.with(|pool| {
+        pool.with_scratch(signal.len(), |weights| {
+            fill_moment_weights(weights, signal_min, exponent, step);
+            hermes_simd::dot::<f64>(signal, weights)
+                .expect("Mellin moment Hermes dot uses equal-length signal and weight slices")
+        })
+    })
+}
+
+fn fill_moment_weights(weights: &mut [f64], signal_min: f64, exponent: f64, step: f64) {
+    let len = weights.len();
+    for (index, value) in weights.iter_mut().enumerate() {
+        let coordinate = signal_min + index as f64 * step;
+        let trapezoid = if index == 0 || index + 1 == len {
+            0.5
+        } else {
+            1.0
+        };
+        *value = trapezoid * coordinate.powf(exponent - 1.0);
+    }
+}
+
+fn mellin_moment_scalar(signal: &[f64], signal_min: f64, exponent: f64, step: f64) -> f64 {
     signal
         .iter()
         .enumerate()
@@ -105,7 +140,6 @@ pub fn mellin_moment(signal: &[f64], signal_min: f64, signal_max: f64, exponent:
             weight * sample * coordinate.powf(exponent - 1.0)
         })
         .sum::<f64>()
-        * step
 }
 
 /// Compute the direct log-frequency Mellin spectrum from log-domain samples.
@@ -257,5 +291,53 @@ pub fn exp_resample(
         output.iter_mut().enumerate().for_each(|(i, v)| {
             *v = eval(i);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn hermes_mellin_moment_matches_scalar_formula_at_threshold() {
+        let len = HERMES_MOMENT_LEN_THRESHOLD;
+        let signal_min = 1.0_f64;
+        let signal_max = 5.0_f64;
+        let exponent = 1.75_f64;
+        let step = (signal_max - signal_min) / (len as f64 - 1.0);
+        let signal = (0..len)
+            .map(|index| {
+                let coordinate = signal_min + index as f64 * step;
+                coordinate.ln().sin() + 2.0
+            })
+            .collect::<Vec<_>>();
+
+        let actual = mellin_moment_hermes(&signal, signal_min, exponent, step);
+        let expected = mellin_moment_scalar(&signal, signal_min, exponent, step);
+
+        assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-9);
+    }
+
+    #[test]
+    fn moment_weights_match_trapezoid_formula() {
+        let len = HERMES_MOMENT_LEN_THRESHOLD;
+        let signal_min = 0.5_f64;
+        let step = 0.001_f64;
+        let exponent = 2.25_f64;
+        let mut weights = vec![0.0; len];
+
+        fill_moment_weights(&mut weights, signal_min, exponent, step);
+
+        for &index in &[0usize, 1, 257, len - 2, len - 1] {
+            let coordinate = signal_min + index as f64 * step;
+            let trapezoid = if index == 0 || index + 1 == len {
+                0.5
+            } else {
+                1.0
+            };
+            let expected = trapezoid * coordinate.powf(exponent - 1.0);
+            assert_eq!(weights[index].to_bits(), expected.to_bits());
+        }
     }
 }

@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Mellin moment Hermes dot routing [patch]
+- Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-mellin`; routed real Mellin moment accumulation through `hermes_simd::dot::<f64>` above a bounded signal-length threshold with trapezoid weights stored in Mnemosyne thread-local scratch.
+- Architecture effect: Mellin moment execution now composes scalar formula ownership, Mnemosyne scratch reuse, and Hermes SIMD reduction without runtime-erased dispatch in Apollo code; Moirai remains the provider for independent resampling and spectrum rows.
+- Memory effect: the Hermes path reuses thread-local weight buffers and does not allocate a new weight vector per moment; small signals keep the allocation-free scalar path.
+- Implementation effect: `fill_moment_weights` owns the trapezoid-rule weights, and `mellin_moment_scalar` remains the scalar formula reference for small paths and tests.
+- Verification: `cargo fmt --check`; `cargo check -p apollo-mellin`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic Mellin unit/property tests plus direct threshold-path Hermes moment tests; empirical FFT benchmark results recorded in `benchmark_results.md`.
+- Residuals: log-frequency DFT and inverse DFT still use scalar complex reductions inside Moirai row scheduling; other non-FFT CPU transform crates still lack Hermes-specific kernels.
+
 ## GFT graph-basis Hermes dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-gft`; routed forward contiguous basis-column reductions and inverse scratch-materialized basis-row reductions through `hermes_simd::dot::<f64>` above a bounded row-length threshold.
 - Architecture effect: GFT execution now composes Leto eigensolver/storage boundaries, Moirai row scheduling, Mnemosyne scratch reuse, and Hermes SIMD reduction in the graph-basis kernel boundary without runtime-erased dispatch in Apollo code.
