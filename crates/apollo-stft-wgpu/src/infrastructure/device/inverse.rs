@@ -109,13 +109,22 @@ impl StftWgpuBackend {
                 actual: output.len(),
             });
         }
-        let promoted: Vec<Complex32> = spectrum
-            .iter()
-            .map(|v| {
-                let c = v.to_complex64();
-                Complex32::new(c.re as f32, c.im as f32)
-            })
-            .collect();
+        let promoted = if std::any::TypeId::of::<I>() == std::any::TypeId::of::<Complex32>() {
+            // Safety: I is Complex32, so &[I] is layout-compatible with &[Complex32].
+            let slice_c32 = unsafe {
+                std::slice::from_raw_parts(spectrum.as_ptr() as *const Complex32, spectrum.len())
+            };
+            std::borrow::Cow::Borrowed(slice_c32)
+        } else {
+            let vec: Vec<Complex32> = spectrum
+                .iter()
+                .map(|v| {
+                    let c = v.to_complex64();
+                    Complex32::new(c.re as f32, c.im as f32)
+                })
+                .collect();
+            std::borrow::Cow::Owned(vec)
+        };
         let computed = self.execute_inverse(plan, &promoted, signal_len)?;
         for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
             *slot = O::from_f64(f64::from(value));
