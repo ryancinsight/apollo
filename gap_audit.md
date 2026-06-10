@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Hilbert analytic-mask Hermes scaling [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-hilbert` and routed threshold-sized analytic-mask scaling through `hermes_simd::scale` over borrowed interleaved `Complex64` lanes.
+- Architecture effect: Hilbert CPU execution now composes Apollo FFT execution, Moirai staging/extraction, Mnemosyne scratch reuse, Hermes SIMD mask scaling, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: the Hermes mask path borrows the FFT spectrum as primitive `[re, im]` lanes and does not allocate mask vectors; small signals retain the existing scalar loop.
+- Verification: `cargo fmt --check -p apollo-hilbert`; `cargo test -p apollo-hilbert`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic Hilbert unit/property tests and static diagnostics. No runtime benchmark claim is made.
+- Residuals: `apollo-ntt` remains the only CPU transform crate without Hermes usage because the current provider surface has no modular-arithmetic SIMD kernel.
+
 ## FFT f32 small-power dispatch consolidation [patch]
 - Performed: replaced the f32 mixed-radix length-32 and length-64 direct match-arm implementations with calls to the canonical const-generic `small_pot_inplace_sized` helper.
 - Architecture effect: length-specific f32 small-power behavior now has one authoritative implementation for Stockham AVX/FMA routing, Winograd fallback, and inverse normalization.

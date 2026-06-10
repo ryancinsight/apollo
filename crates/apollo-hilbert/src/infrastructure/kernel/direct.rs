@@ -119,14 +119,35 @@ fn apply_analytic_mask(spectrum: &mut [Complex64]) {
     let len = spectrum.len();
     let positive_end = (len + 1) / 2;
     if len >= HILBERT_PAR_LEN_THRESHOLD {
-        spectrum.par_mut().enumerate(|k, value| {
-            *value *= analytic_mask_scale(len, positive_end, k);
-        });
+        apply_analytic_mask_hermes(spectrum, positive_end);
     } else {
         spectrum.iter_mut().enumerate().for_each(|(k, value)| {
             *value *= analytic_mask_scale(len, positive_end, k);
         });
     }
+}
+
+fn apply_analytic_mask_hermes(spectrum: &mut [Complex64], positive_end: usize) {
+    let len = spectrum.len();
+    if positive_end > 1 {
+        hermes_simd::scale(complex_lanes_mut(&mut spectrum[1..positive_end]), 2.0);
+    }
+
+    let negative_start = if len.is_multiple_of(2) {
+        len / 2 + 1
+    } else {
+        positive_end
+    };
+    if negative_start < len {
+        hermes_simd::scale(complex_lanes_mut(&mut spectrum[negative_start..]), 0.0);
+    }
+}
+
+fn complex_lanes_mut(values: &mut [Complex64]) -> &mut [f64] {
+    let scalar_len = values.len() * 2;
+    // SAFETY: num_complex::Complex64 stores adjacent `re, im` f64 lanes; this
+    // helper preserves the slice lifetime and does not change alignment.
+    unsafe { core::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<f64>(), scalar_len) }
 }
 
 fn analytic_mask_scale(len: usize, positive_end: usize, k: usize) -> f64 {
@@ -293,6 +314,24 @@ mod tests {
         write_quadrature_for_test(&complex, &mut quadrature);
         for (actual, expected) in quadrature.iter().zip(complex.iter()) {
             assert_eq!(actual.to_bits(), expected.im.to_bits());
+        }
+    }
+
+    #[test]
+    fn hermes_mask_matches_scalar_formula_for_odd_threshold_length() {
+        let len = HILBERT_PAR_LEN_THRESHOLD + 1;
+        let mut spectrum: Vec<Complex64> = (0..len)
+            .map(|index| Complex64::new(index as f64 * 0.25, -(index as f64) * 0.125))
+            .collect();
+        let original = spectrum.clone();
+
+        analytic_mask_for_test(&mut spectrum);
+
+        let positive_end = (len + 1) / 2;
+        for (index, actual) in spectrum.iter().enumerate() {
+            let scale = analytic_mask_scale(len, positive_end, index);
+            assert_eq!(actual.re.to_bits(), (original[index].re * scale).to_bits());
+            assert_eq!(actual.im.to_bits(), (original[index].im * scale).to_bits());
         }
     }
 

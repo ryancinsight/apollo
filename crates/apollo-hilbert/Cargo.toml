@@ -9,6 +9,7 @@ description = "Hilbert transform and analytic-signal plans for Apollo"
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
+hermes-simd = { workspace = true }
 leto = { workspace = true }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }

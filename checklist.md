@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Hilbert analytic-mask Hermes scaling [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-hilbert`.
+- [x] Routed threshold-sized analytic-mask scaling through `hermes_simd::scale` on borrowed interleaved `Complex64` lanes.
+- [x] Preserved DC/Nyquist bins, positive-frequency doubling, negative-frequency zeroing, scalar small-signal masking, Moirai staging/restoration, Mnemosyne scratch reuse, and Leto public boundaries.
+- [x] Verification: `cargo fmt --check -p apollo-hilbert`; `cargo test -p apollo-hilbert`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: value-semantic Hilbert tests and provider audit. No runtime benchmark claim is made.
+
 ## FFT f32 small-power dispatch consolidation [patch]
 - [x] Routed mixed-radix f32 length-32 and length-64 small-power dispatch through `small_pot_inplace_sized`.
 - [x] Removed duplicated Winograd dispatch and inverse-normalization loops from the direct match arms.
