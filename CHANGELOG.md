@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-gft-wgpu` `0.2.0` adds Leto forward, inverse, typed forward, and typed inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-frft-wgpu` `0.2.0` adds Leto standard forward/inverse, unitary forward/inverse, and typed forward/inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-ntt-wgpu` `0.2.0` adds Leto `u64` forward/inverse and exact `u32` quantized forward/inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-mellin-wgpu` `0.3.0` adds Leto forward, typed forward, and inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.

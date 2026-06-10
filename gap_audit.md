@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## GFT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-gft-wgpu` to `0.2.0`; promoted Leto from dev-only to public dependency; added Leto host boundaries for forward, inverse, typed forward, and typed inverse execution.
+- Architecture effect: GFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D signal and basis views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-gft-wgpu`; `cargo test -p apollo-gft-wgpu leto -- --nocapture`; `cargo test -p apollo-gft-wgpu -- --nocapture`; `cargo clippy -p apollo-gft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-gft-wgpu --no-deps`; `cargo semver-checks -p apollo-gft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing GFT-WGPU slice APIs for forward, inverse, strided forward, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; GFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## FRFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-frft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for standard forward/inverse FrFT, unitary forward/inverse DFrFT, and typed forward/inverse execution.
 - Architecture effect: FRFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

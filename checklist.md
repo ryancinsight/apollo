@@ -1,4 +1,12 @@
 # Apollo Checklist
+## GFT-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-gft-wgpu` to `0.2.0` and promoted the workspace Leto provider dependency from dev-only to public API use.
+- [x] Added `GftWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_leto_typed`, and `execute_inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU slice execution contract; contiguous Leto signal/basis views borrow through `Cow`, and strided Leto views copy once into logical host order before dispatch.
+- [x] Added value tests proving forward/inverse parity, strided forward parity, and typed forward/inverse parity against the existing WGPU slice methods when a device exists.
+- [x] Verification: `cargo check -p apollo-gft-wgpu`; `cargo test -p apollo-gft-wgpu leto -- --nocapture`; `cargo test -p apollo-gft-wgpu -- --nocapture`; `cargo clippy -p apollo-gft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-gft-wgpu --no-deps`; `cargo semver-checks -p apollo-gft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing GFT-WGPU slice APIs. No runtime benchmark claim is made.
+
 ## FRFT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-frft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `FrftWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_unitary_forward_leto`, `execute_unitary_inverse_leto`, `execute_forward_leto_typed`, and `execute_inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
