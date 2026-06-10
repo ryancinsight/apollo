@@ -1,4 +1,15 @@
 # Apollo Checklist
+## SHT Hermes complex dot routing [patch]
+- [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-sht`.
+- [x] Routed threshold-sized forward longitude reductions through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Routed threshold-sized inverse synthesis mode reductions through the same Hermes complex dot boundary.
+- [x] Materialized one shared interleaved sample row or coefficient lane buffer per threshold-sized transform and reused Mnemosyne thread-local scratch for spherical-harmonic weight lanes.
+- [x] Kept scalar forward and inverse SHT formulas for smaller workloads and as the value-semantic formula reference.
+- [x] Preserved existing Moirai latitude-row scheduling and public Leto/ndarray execution contracts.
+- [x] Added direct threshold-path tests for Hermes forward mode parity and Hermes inverse sample parity.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-sht`; `cargo clippy -p apollo-sht --all-targets -- -D warnings`; `cargo doc -p apollo-sht --no-deps`; `cargo semver-checks -p apollo-sht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark --all`.
+- Evidence: value-semantic SHT unit/property tests plus direct threshold-path Hermes row tests. Runtime benchmark evidence is limited to the generated FFT quick-profile table owned by `xtask benchmark`; no SHT runtime speedup claim is made.
+
 ## NUFFT exact 1D Hermes complex dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-nufft`.
 - [x] Routed threshold-sized exact 1D Type-1 NUFFT direct coefficient rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.

@@ -13,8 +13,16 @@ use crate::infrastructure::kernel::spherical_harmonic::{
     gauss_legendre_nodes_weights, spherical_harmonic,
 };
 use apollo_fft::{f16, PrecisionProfile};
+use mnemosyne::scratch::ScratchPool;
 use ndarray::Array2;
 use num_complex::{Complex32, Complex64};
+
+/// Below this reduction length, scalar accumulation avoids Hermes dispatch and scratch setup.
+const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
+
+thread_local! {
+    static SHT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
 
 /// Reusable spherical harmonic transform (SHT) plan.
 ///
@@ -128,16 +136,26 @@ impl ShtPlan {
             moirai::map_collect_index_with::<moirai::Adaptive, _, _>(n_lat, |lat| {
                 let theta = self.theta(lat);
                 let weight = self.theta_weights[lat];
+                let row = samples.row(lat);
+                let row_values;
+                let row = match row.as_slice() {
+                    Some(row) => row,
+                    None => {
+                        row_values = row.iter().copied().collect::<Vec<_>>();
+                        &row_values
+                    }
+                };
+                let sample_lanes =
+                    (n_lon >= SHT_HERMES_DOT_LEN_THRESHOLD).then(|| interleaved_lanes(row));
                 all_modes
                     .iter()
                     .map(|&(degree, order)| {
-                        let lon_sum: Complex64 = (0..n_lon)
-                            .map(|lon| {
-                                let phi = self.phi(lon);
-                                samples[[lat, lon]]
-                                    * spherical_harmonic(degree, order, theta, phi).conj()
-                            })
-                            .sum();
+                        let lon_sum = match &sample_lanes {
+                            Some(lanes) => {
+                                sht_forward_mode_sum_hermes(lanes, degree, order, theta, n_lon)
+                            }
+                            None => sht_forward_mode_sum(row, degree, order, theta, n_lon),
+                        };
                         lon_sum * (weight * longitude_weight)
                     })
                     .collect()
@@ -197,6 +215,8 @@ impl ShtPlan {
         let all_modes: Vec<(usize, isize)> = (0..=max_degree)
             .flat_map(|l| (-(l as isize)..=(l as isize)).map(move |m| (l, m)))
             .collect();
+        let coefficient_lanes = (all_modes.len() >= SHT_HERMES_DOT_LEN_THRESHOLD)
+            .then(|| coefficient_lanes(coefficients, &all_modes));
 
         // Parallelize over latitude rows; each row is computed independently.
         let row_values: Vec<Vec<Complex64>> =
@@ -205,13 +225,10 @@ impl ShtPlan {
                 (0..n_lon)
                     .map(|lon| {
                         let phi = self.phi(lon);
-                        all_modes
-                            .iter()
-                            .map(|&(degree, order)| {
-                                coefficients.get(degree, order)
-                                    * spherical_harmonic(degree, order, theta, phi)
-                            })
-                            .sum()
+                        match &coefficient_lanes {
+                            Some(lanes) => sht_inverse_sample_hermes(lanes, &all_modes, theta, phi),
+                            None => sht_inverse_sample(coefficients, &all_modes, theta, phi),
+                        }
                     })
                     .collect()
             });
@@ -600,6 +617,130 @@ fn write_complex_array<T: ShtComplexStorage>(source: &Array2<Complex64>, target:
     }
 }
 
+fn sht_forward_mode_sum(
+    samples: &[Complex64],
+    degree: usize,
+    order: isize,
+    theta: f64,
+    n_lon: usize,
+) -> Complex64 {
+    samples
+        .iter()
+        .enumerate()
+        .map(|(lon, &sample)| {
+            let phi = phi_for_longitude(lon, n_lon);
+            sample * spherical_harmonic(degree, order, theta, phi).conj()
+        })
+        .sum()
+}
+
+fn sht_forward_mode_sum_hermes(
+    sample_lanes: &[f64],
+    degree: usize,
+    order: isize,
+    theta: f64,
+    n_lon: usize,
+) -> Complex64 {
+    SHT_WEIGHT_LANE_SCRATCH.with(|pool| {
+        pool.with_scratch(sample_lanes.len(), |weight_lanes| {
+            fill_forward_weight_lanes(weight_lanes, degree, order, theta, n_lon);
+            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
+                sample_lanes,
+                weight_lanes,
+            )
+            .expect("SHT forward Hermes dot uses equal-length interleaved lanes");
+            Complex64::new(re, im)
+        })
+    })
+}
+
+fn sht_inverse_sample(
+    coefficients: &SphericalHarmonicCoefficients,
+    all_modes: &[(usize, isize)],
+    theta: f64,
+    phi: f64,
+) -> Complex64 {
+    all_modes
+        .iter()
+        .map(|&(degree, order)| {
+            coefficients.get(degree, order) * spherical_harmonic(degree, order, theta, phi)
+        })
+        .sum()
+}
+
+fn sht_inverse_sample_hermes(
+    coefficient_lanes: &[f64],
+    all_modes: &[(usize, isize)],
+    theta: f64,
+    phi: f64,
+) -> Complex64 {
+    SHT_WEIGHT_LANE_SCRATCH.with(|pool| {
+        pool.with_scratch(coefficient_lanes.len(), |weight_lanes| {
+            fill_inverse_weight_lanes(weight_lanes, all_modes, theta, phi);
+            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
+                coefficient_lanes,
+                weight_lanes,
+            )
+            .expect("SHT inverse Hermes dot uses equal-length interleaved lanes");
+            Complex64::new(re, im)
+        })
+    })
+}
+
+fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
+    let mut lanes = Vec::with_capacity(values.len() * 2);
+    for value in values {
+        lanes.push(value.re);
+        lanes.push(value.im);
+    }
+    lanes
+}
+
+fn coefficient_lanes(
+    coefficients: &SphericalHarmonicCoefficients,
+    all_modes: &[(usize, isize)],
+) -> Vec<f64> {
+    let mut lanes = Vec::with_capacity(all_modes.len() * 2);
+    for &(degree, order) in all_modes {
+        let value = coefficients.get(degree, order);
+        lanes.push(value.re);
+        lanes.push(value.im);
+    }
+    lanes
+}
+
+fn fill_forward_weight_lanes(
+    lanes: &mut [f64],
+    degree: usize,
+    order: isize,
+    theta: f64,
+    n_lon: usize,
+) {
+    for (lon, lane_pair) in lanes.chunks_exact_mut(2).enumerate() {
+        let phi = phi_for_longitude(lon, n_lon);
+        let value = spherical_harmonic(degree, order, theta, phi).conj();
+        lane_pair[0] = value.re;
+        lane_pair[1] = value.im;
+    }
+}
+
+fn fill_inverse_weight_lanes(
+    lanes: &mut [f64],
+    all_modes: &[(usize, isize)],
+    theta: f64,
+    phi: f64,
+) {
+    for (&(degree, order), lane_pair) in all_modes.iter().zip(lanes.chunks_exact_mut(2)) {
+        let value = spherical_harmonic(degree, order, theta, phi);
+        lane_pair[0] = value.re;
+        lane_pair[1] = value.im;
+    }
+}
+
+fn phi_for_longitude(longitude_index: usize, n_lon: usize) -> f64 {
+    std::f64::consts::TAU * longitude_index as f64 / n_lon as f64
+}
+
 fn array2_from_leto_view<T: Copy>(
     view: leto::ArrayView2<'_, T>,
     shape_error: ShtError,
@@ -647,6 +788,63 @@ mod tests {
             plan.grid().max_degree() + 1,
             2 * plan.grid().max_degree() + 1,
         )
+    }
+
+    #[test]
+    fn hermes_forward_mode_sum_matches_scalar_formula_at_threshold() {
+        let plan = ShtPlan::new(8, SHT_HERMES_DOT_LEN_THRESHOLD, 3).expect("plan");
+        let row = (0..plan.grid().longitudes())
+            .map(|lon| {
+                Complex64::new(
+                    (lon as f64 * 0.013).sin() + 0.125,
+                    (lon as f64 * 0.017).cos() - 0.25,
+                )
+            })
+            .collect::<Vec<_>>();
+        let lanes = interleaved_lanes(&row);
+        let theta = plan.theta(3);
+
+        for (degree, order) in [(0, 0), (1, -1), (2, 1), (3, 3)] {
+            let expected =
+                sht_forward_mode_sum(&row, degree, order, theta, plan.grid().longitudes());
+            let actual =
+                sht_forward_mode_sum_hermes(&lanes, degree, order, theta, plan.grid().longitudes());
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-11);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-11);
+        }
+    }
+
+    #[test]
+    fn hermes_inverse_sample_matches_scalar_formula_at_threshold() {
+        let max_degree = 15;
+        let plan = ShtPlan::new(16, 31, max_degree).expect("plan");
+        let all_modes = (0..=max_degree)
+            .flat_map(|degree| {
+                (-(degree as isize)..=(degree as isize)).map(move |order| (degree, order))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(all_modes.len(), SHT_HERMES_DOT_LEN_THRESHOLD);
+        let mut coefficients = SphericalHarmonicCoefficients::zeros(max_degree);
+        for &(degree, order) in &all_modes {
+            coefficients.set(
+                degree,
+                order,
+                Complex64::new(
+                    degree as f64 * 0.031 + order as f64 * 0.007,
+                    degree as f64 * -0.019 + order as f64 * 0.011,
+                ),
+            );
+        }
+        let lanes = coefficient_lanes(&coefficients, &all_modes);
+
+        for (lat, lon) in [(0, 0), (5, 7), (15, 30)] {
+            let theta = plan.theta(lat);
+            let phi = plan.phi(lon);
+            let expected = sht_inverse_sample(&coefficients, &all_modes, theta, phi);
+            let actual = sht_inverse_sample_hermes(&lanes, &all_modes, theta, phi);
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-11);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-11);
+        }
     }
 
     #[test]
