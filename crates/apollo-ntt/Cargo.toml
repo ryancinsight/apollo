@@ -1,6 +1,6 @@
 [package]
 name = "apollo-ntt"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Number Theoretic Transform plans and utilities for Apollo"
 
 [dependencies]
 ndarray = { workspace = true }
+leto = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

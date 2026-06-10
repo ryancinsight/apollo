@@ -6,6 +6,7 @@ use crate::domain::contracts::error::NttError;
 use crate::domain::contracts::math::{mod_inv, mod_mul, mod_pow};
 use ndarray::Array1;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// Reusable radix-2 NTT plan.
 ///
@@ -99,18 +100,56 @@ impl NttPlan {
 
     /// Allocate and execute the forward transform.
     pub fn forward(&self, input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-        self.check_len(input.len())?;
-        let mut output = input.clone();
-        self.forward_inplace(&mut output)?;
+        let mut output = Array1::zeros(self.n);
+        self.forward_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Allocate and execute the forward transform over a Leto view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn forward_leto(
+        &self,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> Result<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>, NttError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![0; self.n];
+        self.forward_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("NTT output length must match Leto output shape"),
+        )
     }
 
     /// Allocate and execute the inverse transform.
     pub fn inverse(&self, input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-        self.check_len(input.len())?;
-        let mut output = input.clone();
-        self.inverse_inplace(&mut output)?;
+        let mut output = Array1::zeros(self.n);
+        self.inverse_into(input, &mut output)?;
         Ok(output)
+    }
+
+    /// Allocate and execute the inverse transform over a Leto view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn inverse_leto(
+        &self,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> Result<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>, NttError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![0; self.n];
+        self.inverse_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("inverse NTT output length must match Leto output shape"),
+        )
     }
 
     /// Execute the forward transform into caller-owned output storage.
@@ -119,10 +158,14 @@ impl NttPlan {
         input: &Array1<u64>,
         output: &mut Array1<u64>,
     ) -> Result<(), NttError> {
-        self.check_len(input.len())?;
-        self.check_len(output.len())?;
-        output.assign(input);
-        self.forward_inplace(output)
+        self.forward_slice_into(
+            input
+                .as_slice()
+                .expect("owned Array1 storage is contiguous"),
+            output
+                .as_slice_mut()
+                .expect("owned Array1 storage is contiguous"),
+        )
     }
 
     /// Execute the inverse transform into caller-owned output storage.
@@ -131,36 +174,68 @@ impl NttPlan {
         input: &Array1<u64>,
         output: &mut Array1<u64>,
     ) -> Result<(), NttError> {
-        self.check_len(input.len())?;
-        self.check_len(output.len())?;
-        output.assign(input);
-        self.inverse_inplace(output)
+        self.inverse_slice_into(
+            input
+                .as_slice()
+                .expect("owned Array1 storage is contiguous"),
+            output
+                .as_slice_mut()
+                .expect("owned Array1 storage is contiguous"),
+        )
     }
 
     /// Execute the forward transform in place.
     pub fn forward_inplace(&self, data: &mut Array1<u64>) -> Result<(), NttError> {
-        self.check_len(data.len())?;
-        data.mapv_inplace(|value| value % self.modulus);
-        ntt_kernel(
+        self.forward_slice_inplace(
             data.as_slice_mut()
                 .expect("owned Array1 storage is contiguous"),
-            &self.forward_twiddles,
-            self.modulus,
-        );
-        Ok(())
+        )
     }
 
     /// Execute the inverse transform in place.
     pub fn inverse_inplace(&self, data: &mut Array1<u64>) -> Result<(), NttError> {
-        self.check_len(data.len())?;
-        data.mapv_inplace(|value| value % self.modulus);
-        ntt_kernel(
+        self.inverse_slice_inplace(
             data.as_slice_mut()
                 .expect("owned Array1 storage is contiguous"),
-            &self.inverse_twiddles,
-            self.modulus,
-        );
-        data.mapv_inplace(|value| mod_mul(value, self.n_inv, self.modulus));
+        )
+    }
+
+    /// Execute the forward transform into caller-owned contiguous output storage.
+    pub fn forward_slice_into(&self, input: &[u64], output: &mut [u64]) -> Result<(), NttError> {
+        self.check_len(input.len())?;
+        self.check_len(output.len())?;
+        output.copy_from_slice(input);
+        self.forward_slice_inplace(output)
+    }
+
+    /// Execute the inverse transform into caller-owned contiguous output storage.
+    pub fn inverse_slice_into(&self, input: &[u64], output: &mut [u64]) -> Result<(), NttError> {
+        self.check_len(input.len())?;
+        self.check_len(output.len())?;
+        output.copy_from_slice(input);
+        self.inverse_slice_inplace(output)
+    }
+
+    /// Execute the forward transform in caller-owned contiguous storage.
+    pub fn forward_slice_inplace(&self, data: &mut [u64]) -> Result<(), NttError> {
+        self.check_len(data.len())?;
+        for value in data.iter_mut() {
+            *value %= self.modulus;
+        }
+        ntt_kernel(data, &self.forward_twiddles, self.modulus);
+        Ok(())
+    }
+
+    /// Execute the inverse transform in caller-owned contiguous storage.
+    pub fn inverse_slice_inplace(&self, data: &mut [u64]) -> Result<(), NttError> {
+        self.check_len(data.len())?;
+        for value in data.iter_mut() {
+            *value %= self.modulus;
+        }
+        ntt_kernel(data, &self.inverse_twiddles, self.modulus);
+        for value in data.iter_mut() {
+            *value = mod_mul(*value, self.n_inv, self.modulus);
+        }
         Ok(())
     }
 
@@ -188,6 +263,23 @@ impl NttPlan {
         }
         twiddles
     }
+}
+
+fn leto_view1_cow<'a>(view: &leto::ArrayView1<'a, u64>) -> Cow<'a, [u64]> {
+    if let Some(slice) = view.as_slice() {
+        return Cow::Borrowed(slice);
+    }
+
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .expect("Leto view shape and storage bounds must be valid"),
+        );
+    }
+    Cow::Owned(values)
 }
 
 #[cfg(test)]
@@ -230,6 +322,62 @@ mod tests {
         let expected_inverse = plan.inverse(&expected).unwrap();
         plan.inverse_into(&expected, &mut actual).unwrap();
         assert_eq!(actual, expected_inverse);
+    }
+
+    #[test]
+    fn leto_forward_and_inverse_match_ndarray_path() {
+        use leto::Storage;
+
+        let plan = NttPlan::new(8).unwrap();
+        let signal = vec![1, 1, 2, 3, 5, 8, 13, 21];
+        let ndarray_input = Array1::from_vec(signal.clone());
+        let leto_input = leto::Array1::from_shape_vec([8], signal).unwrap();
+
+        let leto_spectrum = plan.forward_leto(leto_input.view()).unwrap();
+        let ndarray_spectrum = plan.forward(&ndarray_input).unwrap();
+        assert_eq!(
+            leto_spectrum.storage().as_slice(),
+            ndarray_spectrum.as_slice().unwrap()
+        );
+
+        let leto_recovered = plan.inverse_leto(leto_spectrum.view()).unwrap();
+        let ndarray_recovered = plan.inverse(&ndarray_spectrum).unwrap();
+        assert_eq!(
+            leto_recovered.storage().as_slice(),
+            ndarray_recovered.as_slice().unwrap()
+        );
+    }
+
+    #[test]
+    fn leto_forward_accepts_strided_logical_view() {
+        use leto::{SliceArg, Storage};
+
+        let plan = NttPlan::new(8).unwrap();
+        let logical = vec![3, 1, 4, 1, 5, 9, 2, 6];
+        let interleaved = logical
+            .iter()
+            .copied()
+            .flat_map(|value| [value, DEFAULT_MODULUS - 1])
+            .collect::<Vec<_>>();
+        let leto_input = leto::Array1::from_shape_vec([interleaved.len()], interleaved).unwrap();
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .unwrap();
+
+        let actual = plan.forward_leto(strided).unwrap();
+        let expected = plan.forward(&Array1::from_vec(logical)).unwrap();
+        assert_eq!(actual.storage().as_slice(), expected.as_slice().unwrap());
+    }
+
+    #[test]
+    fn leto_transport_helpers_match_plan_paths() {
+        use crate::{intt_leto, ntt_leto};
+        use leto::Storage;
+
+        let input = leto::Array1::from_shape_vec([4], vec![1, 2, 3, 4]).unwrap();
+        let spectrum = ntt_leto(input.view()).unwrap();
+        let recovered = intt_leto(spectrum.view()).unwrap();
+        assert_eq!(recovered.storage().as_slice(), input.storage().as_slice());
     }
 
     #[test]

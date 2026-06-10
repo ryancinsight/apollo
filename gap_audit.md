@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## NTT Leto public 1D boundary [minor]
+- Performed: bumped `apollo-ntt` to `0.2.0`; added the workspace Leto dependency; added `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto`, accepting `leto::ArrayView1<'_, u64>` and returning `leto::Array<u64, leto::MnemosyneStorage<u64>, 1>`.
+- Architecture effect: NTT now has a public Leto array boundary matching FFT, FRFT, and GFT migration direction while retaining ndarray APIs for validation and compatibility.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
+- Implementation effect: ndarray allocation/caller-owned methods and Leto allocation methods now share canonical contiguous slice execution hooks, reducing repeated normalization and kernel-dispatch logic.
+- Verification: `cargo check -p apollo-ntt`; `cargo test -p apollo-ntt leto -- --nocapture`; `cargo test -p apollo-ntt -- --nocapture`; `cargo clippy -p apollo-ntt --all-targets -- -D warnings`; `cargo doc -p apollo-ntt --no-deps`; `cargo semver-checks -p apollo-ntt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-ntt --examples`.
+- Evidence tier: type-level provider boundary plus exact value-semantic tests against the existing ndarray NTT API. No runtime benchmark claim is made.
+- Residuals: NTT WGPU verification still consumes CPU `NttPlan` through ndarray arrays where validation fixtures already exist; broader Apollo ndarray replacement remains per-crate work.
+
 ## FRFT typed Leto storage boundary [minor]
 - Performed: bumped `apollo-frft` to `0.2.0`; added `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and crate-root `frft_leto_typed`, accepting `leto::ArrayView1<'_, T>` where `T: FrftStorage` and returning `leto::Array<T, leto::MnemosyneStorage<T>, 1>`.
 - Architecture effect: FRFT reduced-precision callers now have a typed Leto boundary instead of requiring ndarray ownership at the public edge. The `FrftStorage` trait owns canonical slice execution hooks, and ndarray arrays delegate into those hooks.

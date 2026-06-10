@@ -1,4 +1,12 @@
 # Apollo Checklist
+## NTT Leto public 1D boundary [minor]
+- [x] Bumped `apollo-ntt` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Refactored NTT execution through canonical contiguous slice methods: `forward_slice_into`, `inverse_slice_into`, `forward_slice_inplace`, and `inverse_slice_inplace`.
+- [x] Added value tests proving contiguous Leto forward/inverse parity, strided Leto logical-view parity, and transport-helper roundtrip behavior.
+- [x] Verification: `cargo check -p apollo-ntt`; `cargo test -p apollo-ntt leto -- --nocapture`; `cargo test -p apollo-ntt -- --nocapture`; `cargo clippy -p apollo-ntt --all-targets -- -D warnings`; `cargo doc -p apollo-ntt --no-deps`; `cargo semver-checks -p apollo-ntt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-ntt --examples`.
+- Evidence: type-level public Leto boundary plus exact value-semantic tests against the existing ndarray API. No runtime benchmark claim is made.
+
 ## FRFT typed Leto storage boundary [minor]
 - [x] Bumped `apollo-frft` to `0.2.0` for additive public typed Leto APIs.
 - [x] Added `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and crate-root `frft_leto_typed` so `FrftStorage` callers can use `leto::ArrayView1<'_, T>` for `Complex64`, `Complex32`, and mixed `[f16; 2]` storage.
