@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Radon-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-radon-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `RadonWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_filtered_backproject_leto`, `execute_forward_leto_typed`, and `execute_inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU ndarray and typed flat slice execution contracts; strided Leto 2D views copy once into logical host order, and contiguous Leto angle views borrow through `Cow`.
+- [x] Added value tests proving forward/inverse/FBP parity, strided forward parity, and typed forward/inverse parity against the existing WGPU ndarray/slice methods when a device exists.
+- [x] Verification: `cargo check -p apollo-radon-wgpu`; `cargo test -p apollo-radon-wgpu leto -- --nocapture`; `cargo test -p apollo-radon-wgpu -- --nocapture`; `cargo clippy -p apollo-radon-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-radon-wgpu --no-deps`; `cargo semver-checks -p apollo-radon-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing Radon-WGPU ndarray and typed slice APIs. No runtime benchmark claim is made.
+
 ## SHT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-sht-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `ShtWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_flat_leto_typed`, and `execute_inverse_flat_leto_typed`, returning Mnemosyne-backed Leto arrays.

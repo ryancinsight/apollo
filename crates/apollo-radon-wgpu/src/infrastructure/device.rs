@@ -1,6 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
 use apollo_radon::RadonStorage;
@@ -91,6 +91,23 @@ impl RadonWgpuBackend {
         )
     }
 
+    /// Execute the forward Radon projection from Leto image and angle views.
+    ///
+    /// Contiguous angle views are borrowed. Strided image or angle views are
+    /// materialized once into logical order before the existing WGPU ndarray
+    /// execution path.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &RadonWgpuPlan,
+        image: leto::ArrayView2<'_, f32>,
+        angles: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let image = array2_from_leto_view(image, "Radon image")?;
+        let angles = leto_view1_cow(angles)?;
+        let output = self.execute_forward(plan, &image, &angles)?;
+        leto_array2_from_ndarray(&output, "Radon forward sinogram")
+    }
+
     /// Execute the GPU adjoint backprojection (Radon adjoint operator).
     ///
     /// Returns the backprojected image as `Array2<f32>` of shape `(rows, cols)`.
@@ -110,6 +127,19 @@ impl RadonWgpuBackend {
             sinogram,
             angles,
         )
+    }
+
+    /// Execute GPU adjoint backprojection from Leto sinogram and angle views.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &RadonWgpuPlan,
+        sinogram: leto::ArrayView2<'_, f32>,
+        angles: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, "Radon sinogram")?;
+        let angles = leto_view1_cow(angles)?;
+        let output = self.execute_inverse(plan, &sinogram, &angles)?;
+        leto_array2_from_ndarray(&output, "Radon backprojection image")
     }
 
     /// Execute GPU adjoint backprojection from a flat typed sinogram slice.
@@ -148,6 +178,21 @@ impl RadonWgpuBackend {
         self.execute_inverse(plan, &sinogram_2d, angles)
     }
 
+    /// Execute GPU adjoint backprojection from a typed Leto sinogram view.
+    pub fn execute_inverse_leto_typed<T: RadonStorage>(
+        &self,
+        plan: &RadonWgpuPlan,
+        precision: PrecisionProfile,
+        sinogram: leto::ArrayView2<'_, T>,
+        angles: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, "Radon typed sinogram")?;
+        let flat = sinogram.iter().copied().collect::<Vec<_>>();
+        let angles = leto_view1_cow(angles)?;
+        let output = self.execute_inverse_flat_typed(plan, precision, &flat, &angles)?;
+        leto_array2_from_ndarray(&output, "Radon typed backprojection image")
+    }
+
     /// Execute GPU ramp-filtered backprojection (FBP).
     ///
     /// Two-pass GPU execution:
@@ -171,6 +216,19 @@ impl RadonWgpuBackend {
             sinogram,
             angles,
         )
+    }
+
+    /// Execute GPU ramp-filtered backprojection from Leto sinogram and angle views.
+    pub fn execute_filtered_backproject_leto(
+        &self,
+        plan: &RadonWgpuPlan,
+        sinogram: leto::ArrayView2<'_, f32>,
+        angles: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let sinogram = array2_from_leto_view(sinogram, "Radon filtered sinogram")?;
+        let angles = leto_view1_cow(angles)?;
+        let output = self.execute_filtered_backproject(plan, &sinogram, &angles)?;
+        leto_array2_from_ndarray(&output, "Radon filtered backprojection image")
     }
 
     /// Execute the forward Radon projection from a flat typed image slice.
@@ -207,6 +265,21 @@ impl RadonWgpuBackend {
                     }
             })?;
         self.execute_forward(plan, &image_2d, angles)
+    }
+
+    /// Execute the forward Radon projection from a typed Leto image view.
+    pub fn execute_forward_leto_typed<T: RadonStorage>(
+        &self,
+        plan: &RadonWgpuPlan,
+        precision: PrecisionProfile,
+        image: leto::ArrayView2<'_, T>,
+        angles: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let image = array2_from_leto_view(image, "Radon typed image")?;
+        let flat = image.iter().copied().collect::<Vec<_>>();
+        let angles = leto_view1_cow(angles)?;
+        let output = self.execute_forward_flat_typed(plan, precision, &flat, &angles)?;
+        leto_array2_from_ndarray(&output, "Radon typed forward sinogram")
     }
 
     fn validate_sinogram_inputs(
@@ -287,5 +360,81 @@ impl RadonWgpuBackend {
             });
         }
         Ok(())
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
+            message: format!("invalid Leto Radon 1D view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn array2_from_leto_view<T: Copy>(
+    view: leto::ArrayView2<'_, T>,
+    label: &str,
+) -> WgpuResult<Array2<T>> {
+    let [rows, cols] = view.shape();
+    let mut values = Vec::with_capacity(rows * cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            values.push(
+                *view
+                    .get([row, col])
+                    .map_err(|err| WgpuError::ShapeMismatch {
+                        message: format!("invalid Leto {label} 2D view: {err:?}"),
+                    })?,
+            );
+        }
+    }
+    Array2::from_shape_vec((rows, cols), values).map_err(|err| WgpuError::ShapeMismatch {
+        message: format!("failed to materialize Leto {label} 2D view: {err}"),
+    })
+}
+
+fn leto_array2_from_ndarray(
+    values: &Array2<f32>,
+    label: &str,
+) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+    let (rows, cols) = values.dim();
+    let flat: Vec<f32> = values.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([rows, cols], &flat).map_err(|err| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto {label}: {err:?}"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }

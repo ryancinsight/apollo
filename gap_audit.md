@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Radon-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-radon-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward projection, adjoint backprojection, filtered backprojection, typed forward projection, and typed adjoint backprojection.
+- Architecture effect: Radon-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
+- Memory effect: contiguous Leto 1D angle views borrow storage through `Cow`; strided Leto 1D/2D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU ndarray and typed flat slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-radon-wgpu`; `cargo test -p apollo-radon-wgpu leto -- --nocapture`; `cargo test -p apollo-radon-wgpu -- --nocapture`; `cargo clippy -p apollo-radon-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-radon-wgpu --no-deps`; `cargo semver-checks -p apollo-radon-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Radon-WGPU ndarray/slice APIs for forward, adjoint backprojection, filtered backprojection, strided forward, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; Radon-WGPU still performs WGPU arithmetic at `f32` precision by contract; ndarray remains an internal staging and validation surface for this WGPU crate.
+
 ## SHT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-sht-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 2D forward samples, 2D inverse coefficients, flat typed forward samples, and flat typed inverse coefficients.
 - Architecture effect: SHT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
