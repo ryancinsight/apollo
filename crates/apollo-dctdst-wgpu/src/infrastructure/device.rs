@@ -1,6 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use apollo_dctdst::{RealTransformKind, RealTransformStorage};
 use apollo_fft::PrecisionProfile;
@@ -96,6 +96,20 @@ impl DctDstWgpuBackend {
         )
     }
 
+    /// Execute the unnormalized forward transform from a Leto 1D host view.
+    ///
+    /// Contiguous views are borrowed without copying. Strided views are
+    /// materialized once into logical order before GPU upload.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_forward(plan, &input)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the normalized inverse of the configured real-to-real transform for a real-valued `f32` signal.
     ///
     /// Supported kinds: DCT-I, DCT-II, DCT-III, DCT-IV, DST-I, DST-II, DST-III, and DST-IV.
@@ -130,6 +144,17 @@ impl DctDstWgpuBackend {
             mode,
             scale,
         )
+    }
+
+    /// Execute the normalized inverse transform from a Leto 1D host view.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView1<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_inverse(plan, &input)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Execute the forward real-to-real transform with typed storage.
@@ -170,6 +195,19 @@ impl DctDstWgpuBackend {
         Ok(())
     }
 
+    /// Execute typed forward transform from a Leto 1D host view.
+    pub fn execute_forward_leto_typed<T: RealTransformStorage>(
+        &self,
+        plan: &DctDstWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![T::from_f64(0.0); plan.len()];
+        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute the normalized inverse real-to-real transform with typed storage.
     pub fn execute_inverse_typed_into<T: RealTransformStorage>(
         &self,
@@ -203,6 +241,19 @@ impl DctDstWgpuBackend {
             *slot = T::from_f64(f64::from(value));
         }
         Ok(())
+    }
+
+    /// Execute typed inverse transform from a Leto 1D host view.
+    pub fn execute_inverse_leto_typed<T: RealTransformStorage>(
+        &self,
+        plan: &DctDstWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![T::from_f64(0.0); plan.len()];
+        self.execute_inverse_typed_into(plan, precision, &input, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     fn validate_dct_typed_precision<T: RealTransformStorage>(
@@ -268,6 +319,17 @@ impl DctDstWgpuBackend {
         Ok(result)
     }
 
+    /// Execute the unnormalized 2D separable forward transform from a Leto view.
+    pub fn execute_forward_2d_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView2<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let input = array2_from_leto_view(input)?;
+        let output = self.execute_forward_2d(plan, &input)?;
+        leto_array2_from_ndarray(&output)
+    }
+
     /// Execute the normalized 2D separable inverse real-to-real transform.
     ///
     /// Applies the 1D inverse transform along each column then each row.
@@ -303,6 +365,17 @@ impl DctDstWgpuBackend {
             }
         }
         Ok(result)
+    }
+
+    /// Execute the normalized 2D separable inverse transform from a Leto view.
+    pub fn execute_inverse_2d_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView2<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+        let input = array2_from_leto_view(input)?;
+        let output = self.execute_inverse_2d(plan, &input)?;
+        leto_array2_from_ndarray(&output)
     }
 
     /// Execute the unnormalized 3D separable forward real-to-real transform.
@@ -357,6 +430,17 @@ impl DctDstWgpuBackend {
         Ok(result)
     }
 
+    /// Execute the unnormalized 3D separable forward transform from a Leto view.
+    pub fn execute_forward_3d_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView3<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
+        let input = array3_from_leto_view(input)?;
+        let output = self.execute_forward_3d(plan, &input)?;
+        leto_array3_from_ndarray(&output)
+    }
+
     /// Execute the normalized 3D separable inverse real-to-real transform.
     ///
     /// Applies the 1D inverse transform along axes 2, 1, and 0 in sequence.
@@ -407,5 +491,135 @@ impl DctDstWgpuBackend {
             }
         }
         Ok(result)
+    }
+
+    /// Execute the normalized 3D separable inverse transform from a Leto view.
+    pub fn execute_inverse_3d_leto(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: leto::ArrayView3<'_, f32>,
+    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
+        let input = array3_from_leto_view(input)?;
+        let output = self.execute_inverse_3d(plan, &input)?;
+        leto_array3_from_ndarray(&output)
+    }
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
+            message: format!("invalid Leto DCT/DST 1D view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn array2_from_leto_view(view: leto::ArrayView2<'_, f32>) -> WgpuResult<Array2<f32>> {
+    let shape = view.shape();
+    let rows = shape[0];
+    let cols = shape[1];
+    let mut values = Vec::with_capacity(rows * cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            values.push(
+                *view
+                    .get([row, col])
+                    .map_err(|err| WgpuError::ShapeMismatch {
+                        message: format!("invalid Leto DCT/DST 2D view: {err:?}"),
+                    })?,
+            );
+        }
+    }
+    Array2::from_shape_vec((rows, cols), values).map_err(|err| WgpuError::ShapeMismatch {
+        message: format!("failed to materialize Leto DCT/DST 2D view: {err}"),
+    })
+}
+
+fn array3_from_leto_view(view: leto::ArrayView3<'_, f32>) -> WgpuResult<Array3<f32>> {
+    let shape = view.shape();
+    let d0 = shape[0];
+    let d1 = shape[1];
+    let d2 = shape[2];
+    let mut values = Vec::with_capacity(d0 * d1 * d2);
+    for i in 0..d0 {
+        for j in 0..d1 {
+            for k in 0..d2 {
+                values.push(
+                    *view
+                        .get([i, j, k])
+                        .map_err(|err| WgpuError::ShapeMismatch {
+                            message: format!("invalid Leto DCT/DST 3D view: {err:?}"),
+                        })?,
+                );
+            }
+        }
+    }
+    Array3::from_shape_vec((d0, d1, d2), values).map_err(|err| WgpuError::ShapeMismatch {
+        message: format!("failed to materialize Leto DCT/DST 3D view: {err}"),
+    })
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto DCT/DST 1D output: {err:?}"),
+        }
+    })
+}
+
+fn leto_array2_from_ndarray(
+    values: &Array2<f32>,
+) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
+    let (rows, cols) = values.dim();
+    let flat: Vec<f32> = values.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([rows, cols], &flat).map_err(|err| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto DCT/DST 2D output: {err:?}"),
+    })
+}
+
+fn leto_array3_from_ndarray(
+    values: &Array3<f32>,
+) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
+    let (d0, d1, d2) = values.dim();
+    let flat: Vec<f32> = values.iter().copied().collect();
+    leto::Array::from_mnemosyne_slice([d0, d1, d2], &flat).map_err(|err| WgpuError::InvalidPlan {
+        message: format!("failed to allocate Mnemosyne-backed Leto DCT/DST 3D output: {err:?}"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1.0_f32, 99.0, 2.0, 99.0, 3.0, 99.0, 4.0, 99.0])
+                .expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
     }
 }

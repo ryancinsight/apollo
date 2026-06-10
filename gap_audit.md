@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## DCT/DST-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-dctdst-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 1D forward/inverse, typed 1D forward/inverse, 2D forward/inverse, and 3D forward/inverse DCT/DST execution.
+- Architecture effect: DCT/DST-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains a validation/internal separable execution buffer.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; 2D/3D Leto views materialize once into existing ndarray buffers; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice, typed slice, and separable ndarray execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-dctdst-wgpu`; `cargo test -p apollo-dctdst-wgpu leto -- --nocapture`; `cargo test -p apollo-dctdst-wgpu -- --nocapture`; `cargo clippy -p apollo-dctdst-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst-wgpu --no-deps`; `cargo semver-checks -p apollo-dctdst-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing DCT/DST-WGPU slice and ndarray APIs for 1D, typed 1D, 2D, and 3D paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; DCT/DST-WGPU still performs WGPU arithmetic at `f32` precision by contract; multidimensional WGPU helpers still use ndarray as internal validation/separable host staging.
+
 ## CZT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-czt-wgpu` to `0.3.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, and adjoint inverse CZT execution.
 - Architecture effect: CZT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

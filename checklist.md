@@ -1,4 +1,12 @@
 # Apollo Checklist
+## DCT/DST-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-dctdst-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `DctDstWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_leto_typed`, `execute_inverse_leto_typed`, `execute_forward_2d_leto`, `execute_inverse_2d_leto`, `execute_forward_3d_leto`, and `execute_inverse_3d_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU execution contracts; contiguous 1D Leto views borrow through `Cow`, strided 1D Leto views copy once into logical host order, and 2D/3D Leto views materialize once into the existing ndarray-backed separable WGPU path.
+- [x] Added value tests proving 1D forward/inverse parity, strided 1D forward parity, typed 1D forward/inverse parity, 2D forward/inverse parity, and 3D forward/inverse parity against the existing WGPU methods when a device exists.
+- [x] Verification: `cargo check -p apollo-dctdst-wgpu`; `cargo test -p apollo-dctdst-wgpu leto -- --nocapture`; `cargo test -p apollo-dctdst-wgpu -- --nocapture`; `cargo clippy -p apollo-dctdst-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst-wgpu --no-deps`; `cargo semver-checks -p apollo-dctdst-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST-WGPU slice and ndarray APIs. No runtime benchmark claim is made.
+
 ## CZT-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-czt-wgpu` to `0.3.0` and added the workspace Leto provider dependency.
 - [x] Added `CztWgpuBackend::execute_forward_leto`, `CztWgpuBackend::execute_forward_leto_typed`, and `CztWgpuBackend::execute_inverse_leto`, returning Mnemosyne-backed Leto arrays.
