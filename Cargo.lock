@@ -138,12 +138,13 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "apollo-dht",
  "apollo-fft",
  "apollo-wgpu-helpers",
  "bytemuck",
+ "leto",
  "ndarray",
  "wgpu",
 ]
