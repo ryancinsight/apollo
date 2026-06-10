@@ -4,6 +4,7 @@
 mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use apollo_mellin::MellinPlan;
+    use leto::{SliceArg, Storage};
 
     use crate::{MellinWgpuBackend, MellinWgpuPlan, WgpuCapabilities, WgpuError};
 
@@ -125,6 +126,86 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_matches_slice_when_device_exists() {
+        let Ok(backend) = MellinWgpuBackend::try_default() else {
+            return;
+        };
+        let signal = vec![1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
+        let signal_min = 1.0_f64;
+        let signal_max = 8.0_f64;
+        let plan = backend.plan(8, 1.0, 8.0);
+        let expected = backend
+            .execute_forward(&plan, &signal, signal_min, signal_max)
+            .expect("slice forward");
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal.len()], signal).expect("leto signal");
+        let actual = backend
+            .execute_forward_leto(&plan, leto_signal.view(), signal_min, signal_max)
+            .expect("leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_when_device_exists() {
+        let Ok(backend) = MellinWgpuBackend::try_default() else {
+            return;
+        };
+        let logical = vec![1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in logical.iter().copied() {
+            backing.push(value);
+            backing.push(99.0);
+        }
+        let signal_min = 1.0_f64;
+        let signal_max = 8.0_f64;
+        let plan = backend.plan(8, 1.0, 8.0);
+        let expected = backend
+            .execute_forward(&plan, &logical, signal_min, signal_max)
+            .expect("slice forward");
+        let leto_signal = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = leto_signal
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let actual = backend
+            .execute_forward_leto(&plan, strided, signal_min, signal_max)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn typed_leto_forward_matches_typed_slice_when_device_exists() {
+        let Ok(backend) = MellinWgpuBackend::try_default() else {
+            return;
+        };
+        let signal_f32 = [1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
+        let signal_min = 1.0_f64;
+        let signal_max = 8.0_f64;
+        let plan = backend.plan(8, 1.0, 8.0);
+        let signal_f16: Vec<f16> = signal_f32.iter().copied().map(f16::from_f32).collect();
+        let expected = backend
+            .execute_forward_typed(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &signal_f16,
+                signal_min,
+                signal_max,
+            )
+            .expect("typed forward");
+        let leto_signal =
+            leto::Array1::from_shape_vec([signal_f16.len()], signal_f16).expect("leto signal");
+        let actual = backend
+            .execute_forward_leto_typed::<f16>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                leto_signal.view(),
+                signal_min,
+                signal_max,
+            )
+            .expect("typed leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn typed_path_rejects_profile_mismatch_when_device_exists() {
         let Ok(backend) = MellinWgpuBackend::try_default() else {
             return;
@@ -218,6 +299,30 @@ mod tests {
                 "sample {i}: expected=2.5, got={v:.6}, err={err:.3e}"
             );
         }
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_when_device_exists() {
+        let Ok(backend) = MellinWgpuBackend::try_default() else {
+            return;
+        };
+        let n = 16usize;
+        let min_scale = 1.0_f64;
+        let max_scale = 8.0_f64;
+        let plan = backend.plan(n, min_scale, max_scale);
+        let signal = vec![2.5_f32; n];
+        let spectrum = backend
+            .execute_forward(&plan, &signal, min_scale, max_scale)
+            .expect("forward");
+        let expected = backend
+            .execute_inverse(&plan, &spectrum, min_scale, max_scale, n)
+            .expect("slice inverse");
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([spectrum.len()], spectrum).expect("leto spectrum");
+        let actual = backend
+            .execute_inverse_leto(&plan, leto_spectrum.view(), min_scale, max_scale, n)
+            .expect("leto inverse");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
     }
 
     /// GPU inverse rejects invalid output domain (non-positive bounds).

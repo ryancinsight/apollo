@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## Mellin-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-mellin-wgpu` to `0.3.0`; added the workspace Leto dependency; added Leto host boundaries for forward spectrum, typed forward spectrum, and inverse reconstruction.
+- Architecture effect: Mellin-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-mellin-wgpu`; `cargo test -p apollo-mellin-wgpu leto -- --nocapture`; `cargo test -p apollo-mellin-wgpu -- --nocapture`; `cargo clippy -p apollo-mellin-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-mellin-wgpu --no-deps`; `cargo semver-checks -p apollo-mellin-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Mellin-WGPU slice APIs for forward, strided forward, typed forward, and inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; Mellin-WGPU still performs WGPU arithmetic at `f32` precision by contract; no typed inverse Leto boundary was added because the crate has no typed inverse slice execution contract.
+
 ## Hilbert-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-hilbert-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for analytic signal, forward quadrature, typed forward, inverse, and typed inverse Hilbert execution.
 - Architecture effect: Hilbert-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
