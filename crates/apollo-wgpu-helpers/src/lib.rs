@@ -42,11 +42,10 @@ mod error;
 /// Created via [`WgpuDevice::new`] (with caller-owned `Arc`s) or
 /// [`WgpuDevice::try_default`] (auto-acquire).
 ///
-/// `Clone` is cheap (two `Arc` clones); `Debug` shows the label.
+/// `Clone` is cheap (three `Arc` clones inside inner_device); `Debug` shows the label.
 #[derive(Clone, Debug)]
 pub struct WgpuDevice {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    inner_device: hephaestus_wgpu::WgpuDevice,
 }
 
 impl WgpuDevice {
@@ -54,7 +53,23 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        Self { device, queue }
+        Self {
+            inner_device: hephaestus_wgpu::WgpuDevice::new(device, queue),
+        }
+    }
+
+    /// Wrap an existing hephaestus-wgpu WgpuDevice.
+    #[must_use]
+    #[inline]
+    pub fn from_hephaestus(inner: hephaestus_wgpu::WgpuDevice) -> Self {
+        Self { inner_device: inner }
+    }
+
+    /// Access the underlying hephaestus-wgpu WgpuDevice.
+    #[must_use]
+    #[inline]
+    pub fn hephaestus(&self) -> &hephaestus_wgpu::WgpuDevice {
+        &self.inner_device
     }
 
     /// Acquire a default adapter and device.
@@ -98,10 +113,7 @@ impl WgpuDevice {
                     message: other.to_string(),
                 },
             })?;
-        Ok(Self::new(
-            Arc::clone(acquired.device()),
-            Arc::clone(acquired.queue()),
-        ))
+        Ok(Self::from_hephaestus(acquired))
     }
 
     /// Return a reference to the inner WGPU device, for kernel construction.
@@ -111,20 +123,34 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn inner(&self) -> &wgpu::Device {
-        &self.device
+        self.inner_device.inner()
     }
 
     /// Return a reference to the WGPU device `Arc`.
     #[must_use]
     #[inline]
     pub fn device(&self) -> &Arc<wgpu::Device> {
-        &self.device
+        self.inner_device.device()
     }
 
     /// Return a reference to the WGPU queue `Arc`.
     #[must_use]
     #[inline]
     pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        &self.queue
+        self.inner_device.queue()
+    }
+
+    /// Retrieve a staging buffer of size >= size from the pool, or create a new one.
+    /// The size is automatically aligned to `wgpu::MAP_ALIGNMENT` (8 bytes).
+    #[must_use]
+    #[inline]
+    pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
+        self.inner_device.get_staging_buffer(size)
+    }
+
+    /// Return a staging buffer back to the pool for reuse.
+    #[inline]
+    pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
+        self.inner_device.recycle_staging_buffer(buffer);
     }
 }

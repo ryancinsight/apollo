@@ -86,7 +86,7 @@ leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "9d5a2bf6f0
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "46be8926843a101266641fc3b779dcf285f0d544" }
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "fddb2fbe4901a0dc267bb4e2792a62ee0b2163d0" }
 proc-macro2 = "1.0"
 numpy = "0.23"
 once_cell = "1.19"
