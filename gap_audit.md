@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Mnemosyne scratch-bank provider consumption [patch]
+- Performed in Mnemosyne: added `ScratchBank<T, const N>` as a const-generic fixed-role scratch-bank abstraction over independent provider-owned `ScratchPool<T>` slots, bumped exposed Mnemosyne packages to `0.2.0`, and pushed commit `9411c444`.
+- Performed in Apollo: updated the Mnemosyne Git revision to `9411c444`; `apollo-fft` mixed-radix scratch roles now use one per-precision bank for Stockham, PFA, Rader padding, and Bluestein roles; 2D/3D plan workspaces now use one per-precision bank for 2D, 3D-Y, and 3D-X roles.
+- Architecture effect: Apollo retains transform-domain role names and sealed complex-type dispatch, while Mnemosyne owns the fixed pool bank representation. Const slot IDs preserve monomorphized routing and avoid runtime-erased scratch selection.
+- Verification: Mnemosyne `cargo test -p mnemosyne-arena scratch -- --nocapture`, `cargo check -p mnemosyne`, `cargo clippy -p mnemosyne-arena --all-targets -- -D warnings`, `cargo doc -p mnemosyne-arena --no-deps`, `cargo semver-checks -p mnemosyne-arena --baseline-rev HEAD`, `cargo semver-checks -p mnemosyne --baseline-rev HEAD`; Apollo touched-file rustfmt, `cargo check -p apollo-fft`, `cargo test -p apollo-fft --lib rader -- --nocapture`, `cargo test -p apollo-fft --test slice_api -- --nocapture`, `cargo clippy -p apollo-fft --all-targets -- -D warnings`, `cargo doc -p apollo-fft --no-deps`, and `cargo run -p xtask -- provider-audit`.
+- Evidence tier: type-level const slot selection plus value-semantic scratch, Rader, and slice API tests. No runtime performance claim is made.
+- Residuals: broader Apollo crates still use direct `ScratchPool` statics where no multi-role bank is needed; leave those until repeated role banks appear.
+
 ## Stockham AVX fixed-size twiddle optimizations [patch]
 - Performed: Optimized power-of-two (N=32 and N=64) transforms in `apollo-fft` by replacing partial, half-sized twiddle tables with full-sized ones (`TWIDDLES_32_FWD`, `TWIDDLES_32_INV`, `TWIDDLES_64_FWD`, `TWIDDLES_64_INV`).
 - Implementation: Removed twiddle index branches/negations and pointer offsets (+15 and +31) by routing through direct compile-time const-generic static array lookups. Also exposed the `twiddle_constants` module as `pub(crate)` and routed `small_pot_inplace` transforms to compile-time sized counterparts.

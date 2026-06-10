@@ -1,22 +1,15 @@
-use mnemosyne::scratch::{ScratchElement, ScratchPool};
+use mnemosyne::scratch::{ScratchBank, ScratchElement};
 use num_complex::{Complex32, Complex64};
 
+const STOCKHAM_SLOT: usize = 0;
+const PFA_SLOT: usize = 1;
+const RADER_PADDED_SLOT: usize = 2;
+const BLUESTEIN_SLOT: usize = 3;
+const SCRATCH_ROLE_COUNT: usize = 4;
+
 thread_local! {
-    // Stockham scratch pools
-    static TL_STOCKHAM_SCRATCH_64: ScratchPool<Complex64> = ScratchPool::new();
-    static TL_STOCKHAM_SCRATCH_32: ScratchPool<Complex32> = ScratchPool::new();
-
-    // PFA scratch pools
-    static TL_PFA_SCRATCH_64: ScratchPool<Complex64> = ScratchPool::new();
-    static TL_PFA_SCRATCH_32: ScratchPool<Complex32> = ScratchPool::new();
-
-    // Rader padded scratch pools
-    static TL_RADER_PADDED_SCRATCH_64: ScratchPool<Complex64> = ScratchPool::new();
-    static TL_RADER_PADDED_SCRATCH_32: ScratchPool<Complex32> = ScratchPool::new();
-
-    // Bluestein chirp scratch pools
-    static TL_BLUESTEIN_SCRATCH_64: ScratchPool<Complex64> = ScratchPool::new();
-    static TL_BLUESTEIN_SCRATCH_32: ScratchPool<Complex32> = ScratchPool::new();
+    static TL_SCRATCH_BANK_64: ScratchBank<Complex64, SCRATCH_ROLE_COUNT> = const { ScratchBank::new() };
+    static TL_SCRATCH_BANK_32: ScratchBank<Complex32, SCRATCH_ROLE_COUNT> = const { ScratchBank::new() };
 }
 
 mod sealed {
@@ -38,22 +31,22 @@ impl sealed::ScratchDispatchSealed for Complex64 {}
 impl ScratchDispatch for Complex64 {
     #[inline]
     fn with_stockham_impl<R, F: FnOnce(&mut [Complex64]) -> R>(n: usize, f: F) -> R {
-        TL_STOCKHAM_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<STOCKHAM_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_pfa_impl<R, F: FnOnce(&mut [Complex64]) -> R>(n: usize, f: F) -> R {
-        TL_PFA_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<PFA_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_rader_padded_impl<R, F: FnOnce(&mut [Complex64]) -> R>(n: usize, f: F) -> R {
-        TL_RADER_PADDED_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<RADER_PADDED_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_bluestein_impl<R, F: FnOnce(&mut [Complex64]) -> R>(n: usize, f: F) -> R {
-        TL_BLUESTEIN_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<BLUESTEIN_SLOT, _>(n, f))
     }
 }
 
@@ -62,22 +55,22 @@ impl sealed::ScratchDispatchSealed for Complex32 {}
 impl ScratchDispatch for Complex32 {
     #[inline]
     fn with_stockham_impl<R, F: FnOnce(&mut [Complex32]) -> R>(n: usize, f: F) -> R {
-        TL_STOCKHAM_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<STOCKHAM_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_pfa_impl<R, F: FnOnce(&mut [Complex32]) -> R>(n: usize, f: F) -> R {
-        TL_PFA_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<PFA_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_rader_padded_impl<R, F: FnOnce(&mut [Complex32]) -> R>(n: usize, f: F) -> R {
-        TL_RADER_PADDED_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<RADER_PADDED_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_bluestein_impl<R, F: FnOnce(&mut [Complex32]) -> R>(n: usize, f: F) -> R {
-        TL_BLUESTEIN_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+        TL_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<BLUESTEIN_SLOT, _>(n, f))
     }
 }
 

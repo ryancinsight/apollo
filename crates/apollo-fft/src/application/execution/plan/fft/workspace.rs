@@ -2,6 +2,11 @@
 
 use num_complex::{Complex32, Complex64};
 
+const SCRATCH_2D_SLOT: usize = 0;
+const SCRATCH_3D_Y_SLOT: usize = 1;
+const SCRATCH_3D_X_SLOT: usize = 2;
+const PLAN_SCRATCH_ROLE_COUNT: usize = 3;
+
 mod sealed {
     pub trait Sealed {}
 
@@ -18,12 +23,10 @@ mod sealed {
 // `mixed_radix/caches/scratch.rs`.
 
 thread_local! {
-    static TL_2D_SCRATCH_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
-    static TL_2D_SCRATCH_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
-    static TL_3D_SCRATCH_Y_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
-    static TL_3D_SCRATCH_Y_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
-    static TL_3D_SCRATCH_X_64: mnemosyne::scratch::ScratchPool<Complex64> = mnemosyne::scratch::ScratchPool::new();
-    static TL_3D_SCRATCH_X_32: mnemosyne::scratch::ScratchPool<Complex32> = mnemosyne::scratch::ScratchPool::new();
+    static TL_PLAN_SCRATCH_BANK_64: mnemosyne::scratch::ScratchBank<Complex64, PLAN_SCRATCH_ROLE_COUNT> =
+        const { mnemosyne::scratch::ScratchBank::new() };
+    static TL_PLAN_SCRATCH_BANK_32: mnemosyne::scratch::ScratchBank<Complex32, PLAN_SCRATCH_ROLE_COUNT> =
+        const { mnemosyne::scratch::ScratchBank::new() };
 }
 
 /// Sealed trait providing thread-local plan scratch buffer access per complex type.
@@ -39,34 +42,34 @@ pub trait PlanScratch: sealed::Sealed + 'static {
 impl PlanScratch for Complex64 {
     #[inline]
     fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_2D_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_2D_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_3D_SCRATCH_Y_64.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_3D_Y_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_3D_SCRATCH_X_64.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
     }
 }
 
 impl PlanScratch for Complex32 {
     #[inline]
     fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_2D_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_2D_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_3D_SCRATCH_Y_32.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_3D_Y_SLOT, _>(n, f))
     }
 
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_3D_SCRATCH_X_32.with(|pool| pool.with_scratch(n, f))
+        TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
     }
 }
 

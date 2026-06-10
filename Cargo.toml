@@ -79,7 +79,7 @@ bytemuck = { version = "1.19", features = ["derive"] }
 nalgebra = "0.33"
 ndarray = { version = "0.16", features = ["matrixmultiply-threading"] }
 num-complex = "0.4"
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "8fea2c4a47bb081f53d373d8f0dfaa3b42cf905b", default-features = false, features = ["num-complex"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "9411c4448c4fe841ce23909668c0f948ad1643bb", default-features = false, features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", default-features = false, features = ["std"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "ndarray-compat"] }

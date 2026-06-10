@@ -1,4 +1,12 @@
 # Apollo Checklist
+## Mnemosyne scratch-bank provider consumption [patch]
+- [x] Added and pushed Mnemosyne `ScratchBank<T, const N>` in commit `9411c444`, with independent role slots over provider-owned `ScratchPool<T>` instances.
+- [x] Updated Apollo `Cargo.toml` and `Cargo.lock` to Mnemosyne `9411c444`.
+- [x] Replaced `apollo-fft` mixed-radix scratch-role statics with per-precision Mnemosyne scratch banks and const slot IDs.
+- [x] Replaced `apollo-fft` 2D/3D plan workspace scratch statics with per-precision Mnemosyne scratch banks and const slot IDs.
+- [x] Verification: Mnemosyne scratch tests, check, clippy, doc, local-HEAD semver checks; Apollo touched-file rustfmt, `cargo check -p apollo-fft`, Rader tests, slice API tests, clippy, doc, and provider audit.
+- Evidence: type-level const slot selection plus value-semantic scratch/Rader/slice tests. No runtime benchmark claim is made.
+
 ## Hermes provider-owned complex pointwise kernel [patch]
 - [x] Added and pushed Hermes `interleaved_complex_mul_assign<T, A, const CONJ_B: bool>` in commit `55efd380`, with an interleaved primitive lane contract and no `num-complex` dependency.
 - [x] Added and pushed Hermes `interleaved_complex_mul_assign_runtime<T, const CONJ_B: bool>` in commit `b7f1a907`, moving the runtime AVX/FMA complex pointwise hot path into the provider.

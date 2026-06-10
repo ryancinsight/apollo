@@ -43,6 +43,8 @@ local path overrides for provider work.
 
 - Optional scratch allocators for aligned FFT/STFT/Radon/NUFFT workspaces and
   plan caches.
+- Const-generic fixed scratch banks for same-typed role groups so Apollo can
+  name transform roles locally while Mnemosyne owns pooled storage layout.
 - Thread-local reusable regions for temporary buffers, with explicit reset
   semantics at transform boundaries.
 - `Cow`-compatible borrowed views for twiddle tables, kernels, window
