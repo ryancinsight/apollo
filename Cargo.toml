@@ -86,7 +86,7 @@ leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "9d5a2bf6f0
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "a561c269e97fd80f84c837151638fba6d68c9b0d" }
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "46be8926843a101266641fc3b779dcf285f0d544" }
 proc-macro2 = "1.0"
 numpy = "0.23"
 once_cell = "1.19"
@@ -99,7 +99,7 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
 # moirai: data-parallel runtime replacing direct scheduler usage (default-features off avoids its
 # global allocator; `parallel` provides the data-parallel API).
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "047e22e486b6308d683b1741433f4ce336618a4b", default-features = false, features = ["parallel", "melinoe"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "047e22e486b6308d683b1741433f4ce336618a4b", default-features = false, features = ["parallel", "melinoe", "mnemosyne"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
