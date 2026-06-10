@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Leto 0.3.0 provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `642d87a3dba7b0bbbec0f996e726a0af5728d6c3`.
+- [x] Updated `Cargo.lock` from Leto/Leto Ops `0.2.0` at `fd1d87b` to `0.3.0` at `642d87a3`.
+- [x] Preserved Apollo public APIs; this change imports provider capability for later internal ndarray replacement work.
+- [x] Verification: `cargo check -p apollo-frft -p apollo-gft -p apollo-fft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: Cargo resolver output plus focused provider-consuming crate checks. No runtime benchmark claim is made.
+
 ## NUFFT 3D FFT lane scratch migration [patch]
 - [x] Added `FFT3D_LANE_SCRATCH` as a Mnemosyne complex scratch pool for separable 3D NUFFT lane buffers.
 - [x] Replaced forward and inverse x/y/z per-pass `Array1::<Complex64>::zeros(...)` lane allocation with provider scratch slices.

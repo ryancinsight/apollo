@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Leto 0.3.0 provider pin [minor]
+- Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `fd1d87b` (`0.2.0`) to pushed Leto `642d87a3` (`0.3.0`).
+- Architecture effect: Apollo now consumes the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and the Coeus rank-boundary ADR through its canonical Git dependency path.
+- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes prerequisites for later internal ndarray replacement work.
+- Verification: `cargo check -p apollo-frft -p apollo-gft -p apollo-fft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: Cargo dependency resolution plus focused compile checks for the FFT, FRFT, and GFT Leto consumers. No runtime benchmark claim is made.
+- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+
 ## NUFFT 3D FFT lane scratch migration [patch]
 - Performed: replaced all 3D NUFFT separable FFT forward/inverse x/y/z temporary lane `Array1` allocations with a Mnemosyne `ScratchPool<Complex64>` and Apollo FFT slice execution.
 - Architecture effect: 3D NUFFT now keeps gridding workspaces, typed conversion workspaces, axis weights, and FFT lane buffers under the same provider scratch discipline.

@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] Apollo now pins Leto/Leto Ops to pushed Leto `642d87a3` (`0.3.0`), bringing the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR into the workspace dependency graph.
 - [patch] `apollo-nufft` 3D separable FFT x/y/z lane passes now reuse Mnemosyne complex scratch slices and call Apollo FFT slice execution directly, removing per-pass temporary `Array1<Complex64>` lane allocation.
 - [patch] `apollo-nufft` 3D typed Type-1/Type-2 fast paths now use Mnemosyne scratch pools and slice-backed ndarray views for grid, mode, output, and Kaiser-Bessel weight workspaces, replacing raw thread-local `RefCell<Vec<_>>` scratch ownership while preserving caller-owned ndarray APIs.
 - [patch] `apollo-ntt` radix-2 butterfly stages now route through Hermes exact modular `u64` butterfly kernels pinned at Hermes `25c261b3`, preserving `u128` widening and Moirai stage chunk scheduling.

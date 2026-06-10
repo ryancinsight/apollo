@@ -1483,8 +1483,8 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "leto"
-version = "0.2.0"
-source = "git+https://github.com/ryancinsight/leto.git?rev=fd1d87beadfd4fe5b0624650b59956a0c87cf2f5#fd1d87beadfd4fe5b0624650b59956a0c87cf2f5"
+version = "0.3.0"
+source = "git+https://github.com/ryancinsight/leto.git?rev=642d87a3dba7b0bbbec0f996e726a0af5728d6c3#642d87a3dba7b0bbbec0f996e726a0af5728d6c3"
 dependencies = [
  "bytemuck",
  "half",
@@ -1497,8 +1497,8 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.2.0"
-source = "git+https://github.com/ryancinsight/leto.git?rev=fd1d87beadfd4fe5b0624650b59956a0c87cf2f5#fd1d87beadfd4fe5b0624650b59956a0c87cf2f5"
+version = "0.3.0"
+source = "git+https://github.com/ryancinsight/leto.git?rev=642d87a3dba7b0bbbec0f996e726a0af5728d6c3#642d87a3dba7b0bbbec0f996e726a0af5728d6c3"
 dependencies = [
  "bytemuck",
  "half",
