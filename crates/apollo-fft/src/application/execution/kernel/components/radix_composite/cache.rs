@@ -123,10 +123,10 @@ thread_local! {
     static TL_TWIDDLES_FWD_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
     static TL_TWIDDLES_INV_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
 
-    static TL_COMPOSITE_SCRATCH_64: RefCell<Vec<Vec<num_complex::Complex64>>> =
-        const { RefCell::new(Vec::new()) };
-    static TL_COMPOSITE_SCRATCH_32: RefCell<Vec<Vec<num_complex::Complex32>>> =
-        const { RefCell::new(Vec::new()) };
+    static TL_COMPOSITE_SCRATCH_64: mnemosyne::scratch::ScratchPool<num_complex::Complex64> =
+        const { mnemosyne::scratch::ScratchPool::new() };
+    static TL_COMPOSITE_SCRATCH_32: mnemosyne::scratch::ScratchPool<num_complex::Complex32> =
+        const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
@@ -343,14 +343,7 @@ impl CompositeCache for f64 {
 
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
-        let mut scratch =
-            TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
-        if scratch.len() < n {
-            scratch.resize(n, Complex::new(0.0, 0.0));
-        }
-        let res = f(&mut scratch[..n]);
-        TL_COMPOSITE_SCRATCH_64.with(|pool| pool.borrow_mut().push(scratch));
-        res
+        TL_COMPOSITE_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
@@ -543,14 +536,7 @@ impl CompositeCache for f32 {
 
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
-        let mut scratch =
-            TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().pop().unwrap_or_default());
-        if scratch.len() < n {
-            scratch.resize(n, Complex::new(0.0, 0.0));
-        }
-        let res = f(&mut scratch[..n]);
-        TL_COMPOSITE_SCRATCH_32.with(|pool| pool.borrow_mut().push(scratch));
-        res
+        TL_COMPOSITE_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
     }
 
     #[inline]
