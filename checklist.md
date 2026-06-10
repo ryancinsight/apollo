@@ -1,4 +1,14 @@
 # Apollo Checklist
+## SFT direct-reference Hermes complex dot routing [patch]
+- [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-sft`.
+- [x] Routed threshold-sized direct DFT verification rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Materialized one shared interleaved input lane buffer per threshold-sized direct DFT and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
+- [x] Kept scalar DFT row accumulation for smaller verification inputs and as the value-semantic formula reference.
+- [x] Preserved production sparse FFT behavior: dense transform selection remains delegated to `apollo-fft`; the direct DFT kernel remains a verification/reference path.
+- [x] Added direct threshold-path tests for Hermes DFT row parity and twiddle-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-sft`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence: value-semantic SFT tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## Radon adjoint Hermes dot routing [patch]
 - [x] Added workspace Hermes and Mnemosyne provider dependencies to `apollo-radon`.
 - [x] Routed threshold-sized adjoint backprojection pixel accumulations through `hermes_simd::dot::<f64>`.

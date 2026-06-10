@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SFT direct-reference Hermes complex dot routing [patch]
+- Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-sft`; routed threshold-sized direct DFT verification rows through Hermes provider-owned interleaved complex dot products with twiddle lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: SFT verification now composes scalar formula ownership, Mnemosyne scratch reuse, and Hermes SIMD complex reduction without runtime-erased dispatch in Apollo code. Production sparse FFT execution remains delegated to `apollo-fft`.
+- Memory effect: threshold-sized direct DFT verification materializes one shared interleaved complex input lane buffer, then reuses thread-local twiddle-lane scratch per row. Small verification transforms retain allocation-free scalar row accumulation.
+- Implementation effect: `dft_row_scalar` remains the formula reference; `fill_twiddle_lanes` owns DFT twiddle materialization; `dft_row_hermes` owns the provider reduction boundary.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-sft`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic SFT tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: SFT production top-K sparse selection has no Hermes-specific reduction target with the current provider API; direct DFT remains `#[cfg(test)]` verification/reference infrastructure.
+
 ## Radon adjoint Hermes dot routing [patch]
 - Performed: added workspace Hermes and Mnemosyne provider dependencies to `apollo-radon`; routed threshold-sized adjoint backprojection pixel accumulations through Hermes real dot products with detector sample lanes and interpolation-weight lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: Radon adjoint execution now composes Moirai image-row scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
