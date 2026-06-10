@@ -1,6 +1,6 @@
 [package]
 name = "apollo-dht"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -12,6 +12,7 @@ moirai = { workspace = true }
 mnemosyne = { workspace = true }
 thiserror = "1.0"
 apollo-fft = { path = "../apollo-fft" }
+leto = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

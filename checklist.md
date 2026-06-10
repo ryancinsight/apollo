@@ -1,4 +1,12 @@
 # Apollo Checklist
+## DHT Leto multidimensional boundary [minor]
+- [x] Bumped `apollo-dht` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Kept ndarray as the validation oracle while routing Leto inputs through the existing separable DHT kernels and lane scratch reuse.
+- [x] Added value tests proving contiguous 2D/3D Leto parity and strided 2D inverse parity against the existing ndarray API.
+- [x] Verification: `cargo check -p apollo-dht`; `cargo test -p apollo-dht leto -- --nocapture`; `cargo test -p apollo-dht -- --nocapture`; `cargo clippy -p apollo-dht --all-targets -- -D warnings`; `cargo doc -p apollo-dht --no-deps`; `cargo semver-checks -p apollo-dht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dht --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against the existing ndarray DHT API. No runtime benchmark claim is made.
+
 ## QFT Leto public 1D boundary [minor]
 - [x] Bumped `apollo-qft` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto`, returning Mnemosyne-backed Leto arrays.

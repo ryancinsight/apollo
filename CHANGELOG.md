@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-dht` `0.2.0` adds 2D/3D Leto DHT boundaries returning Mnemosyne-backed Leto arrays, with ndarray differential validation for contiguous and strided view inputs.
 - [minor] `apollo-qft` `0.2.0` adds Complex64 and typed Leto 1D QFT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-fwht` `0.2.0` adds real and typed Leto 1D FWHT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-ntt` `0.2.0` adds `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto` for Leto 1D views returning Mnemosyne-backed Leto arrays.

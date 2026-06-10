@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## DHT Leto multidimensional boundary [minor]
+- Performed: bumped `apollo-dht` to `0.2.0`; added the workspace Leto dependency; added `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto`, returning `leto::Array<f64, leto::MnemosyneStorage<f64>, 2/3>`.
+- Architecture effect: DHT 2D/3D callers can now use Leto as the array/layout boundary while ndarray remains the validation and compatibility oracle.
+- Memory effect: output arrays use Mnemosyne-backed Leto storage; Leto strided inputs copy once into the existing row-major lane workspace required by the separable DHT scheduler.
+- Implementation effect: Leto boundaries reuse the existing separable DHT row/column/depth kernels and Mnemosyne lane scratch pools instead of adding a separate transform implementation.
+- Verification: `cargo check -p apollo-dht`; `cargo test -p apollo-dht leto -- --nocapture`; `cargo test -p apollo-dht -- --nocapture`; `cargo clippy -p apollo-dht --all-targets -- -D warnings`; `cargo doc -p apollo-dht --no-deps`; `cargo semver-checks -p apollo-dht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dht --examples`.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray DHT API for contiguous 2D, strided 2D inverse, contiguous 3D, and 3D inverse. No runtime benchmark claim is made.
+- Residuals: DHT still exposes ndarray arrays for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+
 ## QFT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-qft` to `0.2.0`; added the workspace Leto dependency; added `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
 - Architecture effect: QFT complex and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
