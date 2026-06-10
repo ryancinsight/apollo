@@ -27,7 +27,7 @@
 //!
 //! # Complexity
 //!
-//! Construction: O(N³) (dense symmetric eigendecomposition via nalgebra).
+//! Construction: O(N³) (dense symmetric eigendecomposition via Leto).
 //! Transform: O(N²) per call.
 //!
 //! # References
@@ -38,7 +38,8 @@
 //!   *J. Math. Anal. Appl.*, 88(1), 355–363.
 
 use crate::domain::contracts::error::FrftError;
-use nalgebra::{DMatrix, SymmetricEigen};
+use leto::Array2;
+use leto_ops::symmetric_eigen_jacobi;
 use ndarray::Array1;
 use num_complex::Complex64;
 use std::f64::consts::PI;
@@ -55,7 +56,7 @@ thread_local! {
 /// oscillatory, smallest eigenvalue) to column N−1.
 #[derive(Debug, Clone)]
 pub struct GrunbaumBasis {
-    eigenvectors: Arc<DMatrix<f64>>,
+    eigenvectors: Arc<Array2<f64>>,
     n: usize,
 }
 
@@ -82,10 +83,28 @@ impl GrunbaumBasis {
         self.n
     }
 
-    /// Return the sorted eigenvector matrix (N×N, column-major).
+    /// Return the sorted eigenvector matrix (N×N, row-major Leto storage).
     #[must_use]
-    pub fn eigenvectors(&self) -> &DMatrix<f64> {
+    pub fn eigenvectors(&self) -> &Array2<f64> {
         &self.eigenvectors
+    }
+
+    /// Return the sorted eigenvectors as column-major `f32` values for WGPU storage buffers.
+    #[must_use]
+    pub fn eigenvectors_column_major_f32(&self) -> Vec<f32> {
+        let mut values = Vec::with_capacity(self.n * self.n);
+        for col in 0..self.n {
+            for row in 0..self.n {
+                values.push(
+                    *self
+                        .eigenvectors
+                        .get([row, col])
+                        .expect("eigenvector matrix shape matches basis order")
+                        as f32,
+                );
+            }
+        }
+        values
     }
 }
 
@@ -96,43 +115,41 @@ impl GrunbaumBasis {
 /// symmetric or antisymmetric under index reversal. This property guarantees
 /// DFrFT_2(x)[k] = x[N−1−k] (reversal) and ‖DFrFT_a(x)‖₂ = ‖x‖₂ for all
 /// real a (unitarity follows from V^T V = I and |exp(−iakπ/2)| = 1).
-fn build_grunbaum_matrix(n: usize) -> DMatrix<f64> {
-    let mut s = DMatrix::<f64>::zeros(n, n);
+fn build_grunbaum_matrix(n: usize) -> Array2<f64> {
+    let mut values = vec![0.0; n * n];
     let center = (n as f64 - 1.0) / 2.0;
     // Diagonal: 2*cos(2*pi*(j - center)/n) - 2
     for j in 0..n {
-        s[(j, j)] = 2.0 * (2.0 * PI * (j as f64 - center) / n as f64).cos() - 2.0;
+        values[j * n + j] = 2.0 * (2.0 * PI * (j as f64 - center) / n as f64).cos() - 2.0;
     }
     // Off-diagonal with periodic wrap
     for j in 0..n.saturating_sub(1) {
-        s[(j, j + 1)] = 1.0;
-        s[(j + 1, j)] = 1.0;
+        values[j * n + (j + 1)] = 1.0;
+        values[(j + 1) * n + j] = 1.0;
     }
     if n >= 2 {
-        s[(0, n - 1)] = 1.0;
-        s[(n - 1, 0)] = 1.0;
+        values[n - 1] = 1.0;
+        values[(n - 1) * n] = 1.0;
     }
-    s
+    Array2::from_shape_vec([n, n], values).expect("Grunbaum matrix shape matches storage")
 }
 
 /// Eigendecompose S and return eigenvectors sorted by decreasing eigenvalue.
-fn sorted_eigenvectors(s: DMatrix<f64>) -> DMatrix<f64> {
-    let n = s.nrows();
-    let decomp = SymmetricEigen::new(s);
-    let mut order: Vec<usize> = (0..n).collect();
-    // Decreasing eigenvalue: largest → H_0 (DC-like) at column 0.
-    order.sort_by(|&a, &b| {
-        decomp.eigenvalues[b]
-            .partial_cmp(&decomp.eigenvalues[a])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let mut v = DMatrix::<f64>::zeros(n, n);
-    for (new_col, &old_col) in order.iter().enumerate() {
+fn sorted_eigenvectors(s: Array2<f64>) -> Array2<f64> {
+    let n = s.shape()[0];
+    let decomp = symmetric_eigen_jacobi(&s.view())
+        .expect("Grunbaum matrix construction must produce a finite symmetric matrix");
+    let mut values = vec![0.0; n * n];
+    // Leto returns increasing eigenvalues; reverse to place H_0 (DC-like) at column 0.
+    for (new_col, old_col) in (0..n).rev().enumerate() {
         for row in 0..n {
-            v[(row, new_col)] = decomp.eigenvectors[(row, old_col)];
+            values[row * n + new_col] = *decomp
+                .eigenvectors
+                .get([row, old_col])
+                .expect("eigenvector matrix shape matches basis order");
         }
     }
-    v
+    Array2::from_shape_vec([n, n], values).expect("sorted eigenvector shape matches storage")
 }
 
 /// Unitary discrete fractional Fourier transform plan.
@@ -261,7 +278,7 @@ fn validate_io(input_len: usize, output_len: usize, n: usize) -> Result<(), Frft
 /// 2. Apply fractional phase: c[k] *= exp(−i·order·k·π/2)
 /// 3. Reconstruct from eigenbasis: output[j] = (V c)[j] = sum_k V[j,k] * c[k]
 fn apply_unitary_frft(
-    v: &DMatrix<f64>,
+    v: &Array2<f64>,
     n: usize,
     order: f64,
     input: &[Complex64],
@@ -272,7 +289,7 @@ fn apply_unitary_frft(
         for k in 0..n {
             let mut sum = Complex64::new(0.0, 0.0);
             for j in 0..n {
-                sum += input[j] * v[(j, k)];
+                sum += input[j] * *v.get([j, k]).expect("basis index in bounds");
             }
             coeffs[k] = sum;
         }
@@ -285,7 +302,7 @@ fn apply_unitary_frft(
         for j in 0..n {
             let mut sum = Complex64::new(0.0, 0.0);
             for k in 0..n {
-                sum += coeffs[k] * v[(j, k)];
+                sum += coeffs[k] * *v.get([j, k]).expect("basis index in bounds");
             }
             output[j] = sum;
         }

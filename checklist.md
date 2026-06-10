@@ -1,4 +1,12 @@
 # Apollo Checklist
+## FRFT Leto eigensolver migration and nalgebra removal [major]
+- [x] Replaced `apollo-frft`'s `nalgebra::DMatrix`/`SymmetricEigen` Grünbaum basis construction with `leto::Array2<f64>` plus `leto_ops::symmetric_eigen_jacobi`.
+- [x] Added `GrunbaumBasis::eigenvectors_column_major_f32()` so `apollo-frft-wgpu` receives an explicit column-major GPU buffer without depending on nalgebra storage layout.
+- [x] Removed stale `nalgebra` declarations from `apollo-frft`, `apollo-fft`, and the workspace root; refreshed `Cargo.lock`, removing nalgebra and its transitive packages from Apollo normal resolution.
+- [x] Fixed `apollo-frft-wgpu` re-export rustdoc links so docs remain warning-clean.
+- [x] Verification: `cargo check -p apollo-fft`; `cargo check -p apollo-frft`; `cargo check -p apollo-frft-wgpu`; `cargo test -p apollo-frft unitary -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo clippy -p apollo-frft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo doc -p apollo-frft-wgpu --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `rg -n "nalgebra|SymmetricEigen|DMatrix" Cargo.toml Cargo.lock crates -g Cargo.toml -g "*.rs"` returned no matches.
+- Evidence: type-level provider/storage replacement, value-semantic FRFT unitarity/roundtrip/additivity tests, static dependency/search audit, provider audit, and semver check. No machine-checked proof was performed.
+
 ## GFT Leto eigensolver boundary replacing nalgebra adapter [patch]
 - [x] Pushed Leto commit `fd1d87b` adding `leto-ops::symmetric_eigen_jacobi` with finite/square/symmetric validation, row-major Leto output storage, ascending eigenvalue ordering, and differential tests against `nalgebra`.
 - [x] Updated Apollo to Leto commit `fd1d87b` and added `leto-ops` as the workspace eigensolver provider.
@@ -6,7 +14,7 @@
 - [x] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`, preserving the full table and refreshing the selected measured rows.
 - [x] Verification: Leto `cargo test -p leto-ops eigen -- --nocapture`; Leto `cargo clippy -p leto-ops --all-targets -- -D warnings`; Leto `cargo doc -p leto-ops --no-deps`; Apollo `cargo check -p apollo-gft`; Apollo `cargo test -p apollo-gft -- --nocapture`; Apollo `cargo clippy -p apollo-gft --all-targets -- -D warnings`; Apollo `cargo doc -p apollo-gft --no-deps`; Apollo `cargo run -p xtask -- provider-audit`; Apollo `cargo semver-checks -p apollo-gft --baseline-rev HEAD`.
 - Evidence: value-semantic eigensolver tests, differential validation against `nalgebra`, GFT roundtrip/eigenspectrum tests, static provider audit, semver check, and empirical quick-profile benchmark rows. No machine-checked proof was performed.
-- Residual: `apollo-frft` still uses `nalgebra::SymmetricEigen`; root `nalgebra` remains until FRFT migrates to the Leto eigensolver.
+- Residual: the later FRFT migration removes Apollo's remaining nalgebra dependency.
 
 ## GFT Leto adjacency boundary replacing nalgebra domain storage [major]
 - [x] Pushed Leto commit `646c036` adding structural `Debug`/`Clone` derives for `Array<T, S, N>` and `VecStorage<T>` so Leto arrays can serve as Apollo domain descriptors.

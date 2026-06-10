@@ -15,6 +15,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [major] `apollo-frft` unitary Grünbaum basis construction now uses Leto arrays and `leto-ops::symmetric_eigen_jacobi`; `apollo-frft-wgpu` consumes an explicit column-major Leto flattening boundary; Apollo manifests and lockfile no longer depend on `nalgebra`.
 - [patch] Updated Leto to commit `fd1d87b`, added `leto-ops`, and routed `apollo-gft` graph spectral basis construction through `leto_ops::symmetric_eigen_jacobi`, removing `apollo-gft`'s direct `nalgebra` eigensolver dependency.
 - [major] `apollo-gft` graph adjacency construction now uses Leto arrays: `GraphAdjacency` owns `leto::Array2<f64>` and `GftPlan::from_adjacency` accepts `leto::ArrayView2<'_, f64>`.
 - [patch] Updated Leto to commit `646c036`, which adds structural `Debug`/`Clone` derives for owned arrays and `VecStorage`.

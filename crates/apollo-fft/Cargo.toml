@@ -12,7 +12,6 @@ apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { version = "2.4", features = ["serde", "use-intrinsics"] }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
-nalgebra = { workspace = true }
 ndarray = { workspace = true }
 num-complex = "0.4"
 num-traits = "0.2.19"

@@ -76,7 +76,6 @@ repository = "https://github.com/ryancinsight/kwavers"
 anyhow = "1.0"
 approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
-nalgebra = "0.33"
 ndarray = "0.16"
 num-complex = "0.4"
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "9411c4448c4fe841ce23909668c0f948ad1643bb", default-features = false, features = ["num-complex"] }

@@ -170,12 +170,7 @@ impl UnitaryFrftGpuKernel {
 
         // Compute Grünbaum eigenbasis CPU-side (O(N³)).
         let basis = GrunbaumBasis::new(n);
-        let v = basis.eigenvectors();
-
-        // nalgebra DMatrix<f64> uses column-major storage.
-        // as_slice() layout: [v[0,0], v[1,0], …, v[n-1,0], v[0,1], …]
-        // which satisfies v_flat[row + col*n] = v[(row, col)]. ✓
-        let v_flat: Vec<f32> = v.as_slice().iter().map(|&x| x as f32).collect();
+        let v_flat = basis.eigenvectors_column_major_f32();
 
         let complex_byte_len = (n * std::mem::size_of::<ComplexPod>()) as u64;
 
