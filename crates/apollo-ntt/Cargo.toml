@@ -9,6 +9,7 @@ description = "Number Theoretic Transform plans and utilities for Apollo"
 
 [dependencies]
 ndarray = { workspace = true }
+hermes-simd = { workspace = true }
 leto = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }

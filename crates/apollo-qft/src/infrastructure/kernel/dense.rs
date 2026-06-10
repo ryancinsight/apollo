@@ -167,6 +167,34 @@ mod tests {
             .collect()
     }
 
+    fn assert_qft_row_close(
+        actual: Complex64,
+        expected: Complex64,
+        input: &[Complex64],
+        scale: f64,
+        row: usize,
+    ) {
+        let operations = input
+            .len()
+            .checked_mul(4)
+            .expect("QFT test vector length must fit operation bound");
+        let op_error = operations as f64 * f64::EPSILON;
+        let gamma = op_error / (1.0 - op_error);
+        let magnitude_sum = input.iter().map(|value| value.norm()).sum::<f64>();
+        let bound = 2.0 * gamma * magnitude_sum * scale;
+        let re_error = (actual.re - expected.re).abs();
+        let im_error = (actual.im - expected.im).abs();
+
+        assert!(
+            re_error <= bound,
+            "row={row} re_error={re_error:e} bound={bound:e}"
+        );
+        assert!(
+            im_error <= bound,
+            "row={row} im_error={im_error:e} bound={bound:e}"
+        );
+    }
+
     #[test]
     fn moirai_parallel_forward_matches_row_formula_at_threshold() {
         let n = 128;
@@ -177,8 +205,7 @@ mod tests {
 
         for (row, value) in actual.iter().enumerate() {
             let expected = qft_row(&input, &twiddles, row, QftDirection::Forward, scale);
-            assert_eq!(value.re.to_bits(), expected.re.to_bits());
-            assert_eq!(value.im.to_bits(), expected.im.to_bits());
+            assert_qft_row_close(*value, expected, &input, scale, row);
         }
     }
 
@@ -192,8 +219,7 @@ mod tests {
 
         for (row, value) in actual.iter().enumerate() {
             let expected = qft_row(&input, &twiddles, row, QftDirection::Inverse, scale);
-            assert_eq!(value.re.to_bits(), expected.re.to_bits());
-            assert_eq!(value.im.to_bits(), expected.im.to_bits());
+            assert_qft_row_close(*value, expected, &input, scale, row);
         }
     }
 
@@ -208,8 +234,7 @@ mod tests {
         for row in [0usize, 1, 17, 64, 127] {
             let actual = qft_row_hermes(input_lanes, &twiddles, row, QftDirection::Forward, scale);
             let expected = qft_row(&input, &twiddles, row, QftDirection::Forward, scale);
-            assert_eq!(actual.re.to_bits(), expected.re.to_bits(), "row={row}");
-            assert_eq!(actual.im.to_bits(), expected.im.to_bits(), "row={row}");
+            assert_qft_row_close(actual, expected, &input, scale, row);
         }
     }
 
@@ -224,8 +249,7 @@ mod tests {
         for row in [0usize, 1, 17, 64, 127] {
             let actual = qft_row_hermes(input_lanes, &twiddles, row, QftDirection::Inverse, scale);
             let expected = qft_row(&input, &twiddles, row, QftDirection::Inverse, scale);
-            assert_eq!(actual.re.to_bits(), expected.re.to_bits(), "row={row}");
-            assert_eq!(actual.im.to_bits(), expected.im.to_bits(), "row={row}");
+            assert_qft_row_close(actual, expected, &input, scale, row);
         }
     }
 

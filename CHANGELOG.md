@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-ntt` radix-2 butterfly stages now route through Hermes exact modular `u64` butterfly kernels pinned at Hermes `25c261b3`, preserving `u128` widening and Moirai stage chunk scheduling.
 - [patch] `apollo-hilbert` analytic-mask scaling now uses Hermes in-place SIMD scaling on borrowed interleaved complex lanes above the existing bounded signal-length threshold, with scalar masking retained for smaller signals and as the value reference.
 - [patch] `apollo-fft` f32 mixed-radix length-32 and length-64 small-power paths now route through the canonical const-generic `small_pot_inplace_sized` helper instead of duplicating Winograd dispatch and inverse normalization.
 - [patch] `apollo-stft` forward analysis windowing and inverse WOLA frame windowing now use Hermes elementwise multiplication above a bounded frame-length threshold, with Mnemosyne thread-local real-frame scratch and scalar windowing retained for smaller frames.

@@ -1,4 +1,4 @@
-use crate::domain::contracts::math::{bit_reverse_permute, mod_add, mod_mul, mod_sub};
+use crate::domain::contracts::math::bit_reverse_permute;
 
 const PAR_THRESHOLD: usize = 1024;
 
@@ -15,24 +15,12 @@ pub fn ntt_kernel(data: &mut [u64], twiddles: &[u64], modulus: u64) {
 
         if len >= PAR_THRESHOLD {
             moirai::for_each_chunk_mut_with::<moirai::Adaptive, _, _>(data, len, |chunk| {
-                let (left, right) = chunk.split_at_mut(half);
-                for i in 0..half {
-                    let u = left[i];
-                    let v = mod_mul(right[i], layer_twiddles[i], modulus);
-                    left[i] = mod_add(u, v, modulus);
-                    right[i] = mod_sub(u, v, modulus);
-                }
+                hermes_simd::ntt_butterfly_stage_u64(chunk, len, layer_twiddles, modulus)
+                    .expect("NTT stage chunk shape is validated by plan construction");
             });
         } else {
-            for chunk in data.chunks_mut(len) {
-                let (left, right) = chunk.split_at_mut(half);
-                for i in 0..half {
-                    let u = left[i];
-                    let v = mod_mul(right[i], layer_twiddles[i], modulus);
-                    left[i] = mod_add(u, v, modulus);
-                    right[i] = mod_sub(u, v, modulus);
-                }
-            }
+            hermes_simd::ntt_butterfly_stage_u64(data, len, layer_twiddles, modulus)
+                .expect("NTT stage shape is validated by plan construction");
         }
 
         offset += half;

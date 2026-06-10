@@ -1,4 +1,13 @@
 # Apollo Checklist
+## NTT Hermes modular butterfly routing [patch]
+- [x] Added Hermes exact modular `u64` butterfly-stage provider kernel in commit `25c261b3`.
+- [x] Pinned Apollo's workspace Hermes dependency to `25c261b3e990916729ed5ff613b7e41dfe051b0b`.
+- [x] Added the workspace Hermes dependency to `apollo-ntt`.
+- [x] Routed serial and Moirai chunked NTT stage execution through `hermes_simd::ntt_butterfly_stage_u64`.
+- [x] Preserved `u128` modular multiplication, in-place caller-owned data mutation, Leto boundaries, ndarray validation, and Moirai stage scheduling.
+- [x] Verification: Hermes modular tests/fmt/clippy/doc; Apollo NTT fmt/tests/clippy/doc; Apollo semver check; provider audit; workspace fmt/examples/tests/clippy/docs.
+- Evidence: value-semantic modular butterfly tests plus Apollo NTT roundtrip, convolution, and property tests. No runtime benchmark claim is made.
+
 ## Hilbert analytic-mask Hermes scaling [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-hilbert`.
 - [x] Routed threshold-sized analytic-mask scaling through `hermes_simd::scale` on borrowed interleaved `Complex64` lanes.

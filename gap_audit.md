@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## NTT Hermes modular butterfly routing [patch]
+- Performed: added Hermes commit `25c261b3` with an exact modular `u64` NTT butterfly-stage kernel and routed `apollo-ntt` serial plus Moirai chunked stage execution through it.
+- Architecture effect: every CPU transform crate now reports Hermes usage in provider audit; NTT keeps plan/root/twiddle ownership locally while the arithmetic butterfly loop lives in the provider boundary.
+- Memory effect: no new allocation surface; stage execution mutates caller-owned chunks in place and borrows the precomputed stage twiddle slice.
+- Verification: Hermes `cargo fmt --check -p hermes-simd`; `cargo test -p hermes-simd --test modular_tests`; `cargo clippy -p hermes-simd --all-targets -- -D warnings`; `cargo doc -p hermes-simd --no-deps`; Apollo `cargo fmt --check -p apollo-ntt`; `cargo test -p apollo-ntt`; `cargo clippy -p apollo-ntt --all-targets -- -D warnings`; `cargo doc -p apollo-ntt --no-deps`; `cargo semver-checks -p apollo-ntt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
+- Evidence tier: value-semantic Hermes modular tests, Apollo NTT roundtrip/convolution/property tests, provider audit, and static diagnostics. No runtime benchmark claim is made.
+- Residuals: Hermes modular multiplication is exact scalar `u128` arithmetic because current stable portable SIMD has no native `u64 x u64 -> u128` lane operation; future provider work can add specialized reduction strategies for bounded moduli.
+
 ## Hilbert analytic-mask Hermes scaling [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-hilbert` and routed threshold-sized analytic-mask scaling through `hermes_simd::scale` over borrowed interleaved `Complex64` lanes.
 - Architecture effect: Hilbert CPU execution now composes Apollo FFT execution, Moirai staging/extraction, Mnemosyne scratch reuse, Hermes SIMD mask scaling, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
