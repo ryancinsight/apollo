@@ -357,11 +357,12 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt-wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "apollo-ntt",
  "apollo-wgpu-helpers",
  "bytemuck",
+ "leto",
  "ndarray",
  "proptest",
  "wgpu",

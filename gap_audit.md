@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## NTT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-ntt-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for `u64` forward/inverse NTT and exact `u32` quantized forward/inverse execution.
+- Architecture effect: NTT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and quantized slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-ntt-wgpu`; `cargo test -p apollo-ntt-wgpu leto -- --nocapture`; `cargo test -p apollo-ntt-wgpu -- --nocapture`; `cargo clippy -p apollo-ntt-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-ntt-wgpu --no-deps`; `cargo semver-checks -p apollo-ntt-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus exact value-semantic differential tests against existing NTT-WGPU slice APIs for `u64` forward/inverse, strided forward, and `u32` quantized forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; NTT-WGPU exact integer arithmetic intentionally has no floating mixed-precision boundary.
+
 ## Mellin-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-mellin-wgpu` to `0.3.0`; added the workspace Leto dependency; added Leto host boundaries for forward spectrum, typed forward spectrum, and inverse reconstruction.
 - Architecture effect: Mellin-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.

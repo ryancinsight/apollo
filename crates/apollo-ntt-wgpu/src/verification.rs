@@ -26,6 +26,7 @@
 #[cfg(test)]
 mod tests {
     use apollo_ntt::{NttPlan, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
+    use leto::{SliceArg, Storage};
     use ndarray::Array1;
 
     use crate::{NttWgpuBackend, NttWgpuPlan, WgpuCapabilities, WgpuError};
@@ -177,6 +178,65 @@ mod tests {
         );
     }
 
+    #[test]
+    fn leto_forward_and_inverse_match_allocating_slice_when_device_exists() {
+        let Ok(backend) = NttWgpuBackend::try_default() else {
+            return;
+        };
+        let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
+        let plan = backend.plan(input.len());
+        let expected_forward = backend
+            .execute_forward(&plan, &input)
+            .expect("slice forward");
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+        let actual_forward = backend
+            .execute_forward_leto(&plan, leto_input.view())
+            .expect("leto forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let expected_inverse = backend
+            .execute_inverse(&plan, &expected_forward)
+            .expect("slice inverse");
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                .expect("leto spectrum");
+        let actual_inverse = backend
+            .execute_inverse_leto(&plan, leto_spectrum.view())
+            .expect("leto inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice()
+        );
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_when_device_exists() {
+        let Ok(backend) = NttWgpuBackend::try_default() else {
+            return;
+        };
+        let logical = vec![1_u64, 4, 9, 16, 25, 36, 49, 64];
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in logical.iter().copied() {
+            backing.push(value);
+            backing.push(99);
+        }
+        let plan = backend.plan(logical.len());
+        let expected = backend
+            .execute_forward(&plan, &logical)
+            .expect("slice forward");
+        let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = leto_input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
     /// # Mathematical contract
     ///
     /// Exact `u32` residue storage must produce results identical to the
@@ -213,6 +273,42 @@ mod tests {
         assert_eq!(
             quantized_inv, input_u32,
             "quantized INTT(NTT(x)) must recover x exactly"
+        );
+    }
+
+    #[test]
+    fn quantized_leto_forward_and_inverse_match_quantized_slice_when_device_exists() {
+        let Ok(backend) = NttWgpuBackend::try_default() else {
+            return;
+        };
+        let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
+        let plan = backend.plan(input.len());
+        let mut expected_forward = vec![0_u32; input.len()];
+        backend
+            .execute_forward_quantized_into(&plan, &input, &mut expected_forward)
+            .expect("quantized forward");
+        let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+        let actual_forward = backend
+            .execute_forward_quantized_leto(&plan, leto_input.view())
+            .expect("leto quantized forward");
+        assert_eq!(
+            actual_forward.storage().as_slice(),
+            expected_forward.as_slice()
+        );
+
+        let mut expected_inverse = vec![0_u32; expected_forward.len()];
+        backend
+            .execute_inverse_quantized_into(&plan, &expected_forward, &mut expected_inverse)
+            .expect("quantized inverse");
+        let leto_spectrum =
+            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                .expect("leto spectrum");
+        let actual_inverse = backend
+            .execute_inverse_quantized_leto(&plan, leto_spectrum.view())
+            .expect("leto quantized inverse");
+        assert_eq!(
+            actual_inverse.storage().as_slice(),
+            expected_inverse.as_slice()
         );
     }
 

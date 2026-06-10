@@ -1,6 +1,6 @@
 //! WGPU device acquisition for this transform backend.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use apollo_ntt::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 
@@ -97,6 +97,20 @@ impl NttWgpuBackend {
         )
     }
 
+    /// Execute the direct forward NTT from a Leto residue view.
+    ///
+    /// Contiguous views are borrowed without copying. Strided views are
+    /// materialized once into logical order before GPU upload.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_forward(plan, &input)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute forward NTT from exact `u32` residue storage into caller-owned `u32` output.
     ///
     /// This is quantized integer storage, not floating mixed precision. It is
@@ -109,6 +123,18 @@ impl NttWgpuBackend {
         output: &mut [u32],
     ) -> WgpuResult<()> {
         self.execute_quantized_into(plan, input, output, NttMode::Forward)
+    }
+
+    /// Execute forward NTT from exact `u32` Leto residue storage.
+    pub fn execute_forward_quantized_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u32>,
+    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![0_u32; plan.len()];
+        self.execute_forward_quantized_into(plan, &input, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Execute forward NTT from exact `u32` residues with caller-owned reusable buffers.
@@ -152,6 +178,17 @@ impl NttWgpuBackend {
         )
     }
 
+    /// Execute the direct inverse NTT from a Leto residue view.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let output = self.execute_inverse(plan, &input)?;
+        leto_array1_from_slice(&output)
+    }
+
     /// Execute inverse NTT from exact `u32` residue storage into caller-owned `u32` output.
     pub fn execute_inverse_quantized_into(
         &self,
@@ -160,6 +197,18 @@ impl NttWgpuBackend {
         output: &mut [u32],
     ) -> WgpuResult<()> {
         self.execute_quantized_into(plan, input, output, NttMode::Inverse)
+    }
+
+    /// Execute inverse NTT from exact `u32` Leto residue storage.
+    pub fn execute_inverse_quantized_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u32>,
+    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![0_u32; plan.len()];
+        self.execute_inverse_quantized_into(plan, &input, &mut output)?;
+        leto_array1_from_slice(&output)
     }
 
     /// Execute inverse NTT from exact `u32` residues with caller-owned reusable buffers.
@@ -319,4 +368,57 @@ fn mod_pow_u64(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
         exp >>= 1;
     }
     result
+}
+
+fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
+    if let Some(slice) = view.as_slice() {
+        return Ok(Cow::Borrowed(slice));
+    }
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
+            message: format!("invalid Leto NTT 1D view: {err:?}"),
+        })?);
+    }
+    Ok(Cow::Owned(values))
+}
+
+fn leto_array1_from_slice<T: Copy>(
+    values: &[T],
+) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+        WgpuError::InvalidPlan {
+            message: format!("failed to allocate Mnemosyne-backed Leto NTT output: {err:?}"),
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use leto::SliceArg;
+
+    use super::leto_view1_cow;
+
+    #[test]
+    fn leto_view1_cow_borrows_contiguous_views() {
+        let input = leto::Array1::from_shape_vec([4], vec![1_u64, 2, 3, 4]).expect("input");
+        let cow = leto_view1_cow(input.view()).expect("contiguous view");
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input =
+            leto::Array1::from_shape_vec([8], vec![1_u64, 99, 2, 99, 3, 99, 4, 99]).expect("input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view).expect("strided view");
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
+    }
 }

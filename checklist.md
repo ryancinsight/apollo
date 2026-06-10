@@ -1,4 +1,12 @@
 # Apollo Checklist
+## NTT-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-ntt-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `NttWgpuBackend::execute_forward_leto`, `execute_inverse_leto`, `execute_forward_quantized_leto`, and `execute_inverse_quantized_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU slice execution contract; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical host order before dispatch.
+- [x] Added value tests proving `u64` forward/inverse parity, strided `u64` forward parity, and exact `u32` quantized forward/inverse parity against the existing WGPU slice methods when a device exists.
+- [x] Verification: `cargo check -p apollo-ntt-wgpu`; `cargo test -p apollo-ntt-wgpu leto -- --nocapture`; `cargo test -p apollo-ntt-wgpu -- --nocapture`; `cargo clippy -p apollo-ntt-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-ntt-wgpu --no-deps`; `cargo semver-checks -p apollo-ntt-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus exact value-semantic differential tests against existing NTT-WGPU slice APIs. No runtime benchmark claim is made.
+
 ## Mellin-WGPU Leto host boundary [minor]
 - [x] Bumped `apollo-mellin-wgpu` to `0.3.0` and added the workspace Leto provider dependency.
 - [x] Added `MellinWgpuBackend::execute_forward_leto`, `execute_forward_leto_typed`, and `execute_inverse_leto`, returning Mnemosyne-backed Leto arrays.
