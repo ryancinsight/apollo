@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-sdft-wgpu` `0.2.0` adds Leto forward, typed forward, and inverse host boundaries returning Mnemosyne-backed Leto arrays while preserving WGPU slice execution as the device dispatch path.
 - [minor] `apollo-nufft` `0.2.0` adds Leto 1D type-1/type-2 NUFFT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-sht` `0.2.0` adds Leto SHT sample/coefficient boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-wavelet` `0.2.0` adds Leto DWT/CWT boundaries returning Mnemosyne-backed Leto arrays.

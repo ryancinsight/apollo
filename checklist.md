@@ -1,4 +1,12 @@
 # Apollo Checklist
+## SDFT-WGPU Leto host boundary [minor]
+- [x] Bumped `apollo-sdft-wgpu` to `0.2.0` and added the workspace Leto provider dependency.
+- [x] Added `SdftWgpuBackend::execute_forward_leto`, `SdftWgpuBackend::execute_forward_leto_typed`, and `SdftWgpuBackend::execute_inverse_leto`, returning Mnemosyne-backed Leto arrays.
+- [x] Reused the existing WGPU slice execution contract; contiguous Leto views borrow through `Cow`, and strided Leto views copy once into logical host order before dispatch.
+- [x] Added value tests proving Leto forward parity, strided Leto forward parity, typed Leto forward parity, and Leto inverse parity against the existing WGPU slice methods when a device exists.
+- [x] Verification: `cargo check -p apollo-sdft-wgpu`; `cargo test -p apollo-sdft-wgpu leto -- --nocapture`; `cargo test -p apollo-sdft-wgpu -- --nocapture`; `cargo clippy -p apollo-sdft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-sdft-wgpu --no-deps`; `cargo semver-checks -p apollo-sdft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence: type-level public Leto boundary plus value-semantic differential tests against existing SDFT-WGPU slice APIs. No runtime benchmark claim is made.
+
 ## NUFFT Leto 1D type-1/type-2 boundary [minor]
 - [x] Bumped `apollo-nufft` to `0.2.0` and added the workspace Leto provider dependency.
 - [x] Added `NufftPlan1D::type1_leto`, `NufftPlan1D::type2_leto`, `NufftPlan1D::type1_leto_typed`, and `NufftPlan1D::type2_leto_typed`, returning Mnemosyne-backed Leto arrays.

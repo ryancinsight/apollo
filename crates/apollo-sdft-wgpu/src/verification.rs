@@ -5,6 +5,8 @@ mod tests {
     use crate::{SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError};
     use apollo_fft::{f16, PrecisionProfile};
     use apollo_sdft::SdftPlan;
+    use leto::{SliceArg, Storage};
+    use num_complex::Complex32;
 
     #[test]
     fn capabilities_reflect_forward_only_surface() {
@@ -94,6 +96,48 @@ mod tests {
     }
 
     #[test]
+    fn leto_forward_matches_slice_forward_when_device_exists() {
+        let Ok(backend) = SdftWgpuBackend::try_default() else {
+            return;
+        };
+        let window = vec![1.0_f32, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+        let input = leto::Array1::from_shape_vec([window.len()], window.clone()).expect("input");
+        let plan = backend.plan(window.len(), 4);
+        let expected = backend
+            .execute_forward(&plan, &window)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, input.view())
+            .expect("leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
+        let Ok(backend) = SdftWgpuBackend::try_default() else {
+            return;
+        };
+        let logical = vec![1.0_f32, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+        let mut backing = Vec::with_capacity(logical.len() * 2);
+        for value in &logical {
+            backing.push(*value);
+            backing.push(99.0);
+        }
+        let input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+        let strided = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let plan = backend.plan(logical.len(), 4);
+        let expected = backend
+            .execute_forward(&plan, &logical)
+            .expect("slice forward");
+        let actual = backend
+            .execute_forward_leto(&plan, strided)
+            .expect("strided leto forward");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
+    }
+
+    #[test]
     fn rejects_invalid_plan_and_input_before_dispatch() {
         let Ok(backend) = SdftWgpuBackend::try_default() else {
             return;
@@ -156,6 +200,50 @@ mod tests {
     }
 
     #[test]
+    fn typed_leto_forward_matches_typed_slice_forward_when_device_exists() {
+        let Ok(backend) = SdftWgpuBackend::try_default() else {
+            return;
+        };
+        let window_f32: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+        let window_f16: Vec<f16> = window_f32.iter().map(|&x| f16::from_f32(x)).collect();
+        let input =
+            leto::Array1::from_shape_vec([window_f16.len()], window_f16.clone()).expect("input");
+        let plan = backend.plan(window_f16.len(), 4);
+        let mut expected: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
+        backend
+            .execute_forward_typed_into(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                &window_f16,
+                &mut expected,
+            )
+            .expect("typed slice forward");
+        let actual = backend
+            .execute_forward_leto_typed::<f16, [f16; 2]>(
+                &plan,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                PrecisionProfile::MIXED_PRECISION_F16_F32,
+                input.view(),
+            )
+            .expect("typed leto forward");
+        let actual = actual.storage().as_slice();
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(
+                actual[0].to_bits(),
+                expected[0].to_bits(),
+                "typed re mismatch at {index}"
+            );
+            assert_eq!(
+                actual[1].to_bits(),
+                expected[1].to_bits(),
+                "typed im mismatch at {index}"
+            );
+        }
+    }
+
+    #[test]
     fn typed_path_rejects_profile_mismatch() {
         let Ok(backend) = SdftWgpuBackend::try_default() else {
             return;
@@ -194,6 +282,24 @@ mod tests {
                 "roundtrip mismatch at index {index}: actual={actual}, expected={expected}, error={error}"
             );
         }
+    }
+
+    #[test]
+    fn leto_inverse_matches_slice_inverse_when_device_exists() {
+        let Ok(backend) = SdftWgpuBackend::try_default() else {
+            return;
+        };
+        let original: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+        let plan = backend.plan(original.len(), original.len());
+        let bins = backend.execute_forward(&plan, &original).expect("forward");
+        let input = leto::Array1::from_shape_vec([bins.len()], bins.clone()).expect("bins");
+        let expected = backend
+            .execute_inverse(&plan, &bins)
+            .expect("slice inverse");
+        let actual = backend
+            .execute_inverse_leto(&plan, input.view())
+            .expect("leto inverse");
+        assert_eq!(actual.storage().as_slice(), expected.as_slice());
     }
 
     #[test]
@@ -247,7 +353,6 @@ mod tests {
         let Ok(backend) = SdftWgpuBackend::try_default() else {
             return;
         };
-        use num_complex::Complex32;
         let bins: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); 4];
         let plan = backend.plan(8, 8);
         let error = backend

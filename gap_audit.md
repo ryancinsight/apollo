@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## SDFT-WGPU Leto host boundary [minor]
+- Performed: bumped `apollo-sdft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward bins, typed forward bins, and inverse bins.
+- Architecture effect: SDFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice execution methods instead of adding a separate GPU algorithm body.
+- Verification: `cargo check -p apollo-sdft-wgpu`; `cargo test -p apollo-sdft-wgpu leto -- --nocapture`; `cargo test -p apollo-sdft-wgpu -- --nocapture`; `cargo clippy -p apollo-sdft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-sdft-wgpu --no-deps`; `cargo semver-checks -p apollo-sdft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SDFT-WGPU slice APIs for contiguous forward, strided forward, typed forward, and inverse paths. No runtime benchmark claim is made.
+- Residuals: most other Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; SDFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
+
 ## NUFFT Leto 1D type-1/type-2 boundary [minor]
 - Performed: bumped `apollo-nufft` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for 1D type-1, type-2, typed type-1, and typed type-2 NUFFT.
 - Architecture effect: NUFFT 1D callers can now use Leto as the public position/value/coefficient boundary while existing slice and ndarray APIs remain the validation and compatibility surface.
