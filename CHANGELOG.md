@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [patch] `apollo-dctdst` direct DCT-I/II/III/IV and DST-I/II/III/IV rows now use Hermes dot-product reductions above the existing Moirai parallel threshold, with Mnemosyne thread-local basis-row scratch and scalar formulas retained for smaller vectors.
 - [patch] `apollo-frft` direct fractional and centered-DFT row reductions now use Hermes interleaved complex dot products above the existing Moirai parallel threshold, with Mnemosyne thread-local phasor-weight scratch and scalar row formulas retained for small vectors.
 - [patch] `apollo-czt` direct CZT row reductions now use Hermes interleaved complex dot products above the existing Moirai parallel threshold, with Mnemosyne thread-local geometric-weight scratch and scalar row formulas retained for small direct transforms.
 - [patch] `apollo-sdft` direct-bin initialization now uses Hermes dot-product reductions with Mnemosyne thread-local trigonometric-weight scratch above a bounded window-length threshold, while smaller windows retain the scalar DFT-bin formula and Moirai keeps disjoint bin scheduling.

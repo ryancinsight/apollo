@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## DCT/DST direct Hermes dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-dctdst`; routed threshold-sized direct DCT-I/II/III/IV and DST-I/II/III/IV row reductions through Hermes real dot products with basis rows stored in Mnemosyne thread-local scratch.
+- Architecture effect: DCT/DST direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized direct transforms reuse one thread-local basis buffer per worker row; small direct transforms retain allocation-free scalar accumulation.
+- Implementation effect: one closed `DirectBasisKind` helper owns all trigonometric basis-row materialization, while the existing scalar formulas remain the small-path reference and verification oracle.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-dctdst`; `cargo clippy -p apollo-dctdst --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst --no-deps`; `cargo semver-checks -p apollo-dctdst --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`; `cargo run -p xtask -- benchmark`.
+- Evidence tier: value-semantic DCT/DST unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: fast FFT-derived DCT/DST kernels still use local twiddle extraction loops around `apollo-fft`; WGPU DCT/DST host/device paths remain provider-isolated but do not consume Hermes.
+
 ## FRFT direct Hermes complex dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-frft`; routed threshold-sized direct fractional and centered-DFT row reductions through Hermes provider-owned interleaved complex dot products with phasor weight lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: standard FRFT direct execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.

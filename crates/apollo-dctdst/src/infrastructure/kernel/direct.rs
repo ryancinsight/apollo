@@ -1,7 +1,24 @@
+use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
 
 /// Parallel dispatch threshold. Below this length, serial iteration avoids parallel task-spawn overhead.
 const PAR_THRESHOLD: usize = 256;
+
+thread_local! {
+    static DIRECT_BASIS_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
+
+#[derive(Clone, Copy)]
+enum DirectBasisKind {
+    DctI,
+    DctII,
+    DctIII,
+    DctIV,
+    DstI,
+    DstII,
+    DstIII,
+    DstIV,
+}
 
 /// Direct O(N²) analytical kernel for the Type-II Discrete Cosine Transform (DCT-II).
 ///
@@ -42,11 +59,7 @@ pub fn dct2(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = 0.0;
-            for n_idx in 0..n {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * k as f64).cos();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DctII, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -100,17 +113,13 @@ pub fn dct3(signal: &[f64], output: &mut [f64]) {
         return;
     }
     let factor = std::f64::consts::PI / n as f64;
-    let x0 = signal[0] * 0.5;
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = x0;
-            for n_idx in 1..n {
-                sum += signal[n_idx] * (factor * n_idx as f64 * (k as f64 + 0.5)).cos();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DctIII, k);
         });
     } else {
+        let x0 = signal[0] * 0.5;
         output.iter_mut().enumerate().for_each(|(k, out)| {
             let mut sum = x0;
             for n_idx in 1..n {
@@ -158,11 +167,7 @@ pub fn dst2(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = 0.0;
-            for n_idx in 0..n {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 1.0)).sin();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DstII, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -217,18 +222,13 @@ pub fn dst3(signal: &[f64], output: &mut [f64]) {
         return;
     }
     let factor = std::f64::consts::PI / n as f64;
-    let xn = signal[n - 1] * 0.5;
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let sign = if k % 2 == 1 { -1.0 } else { 1.0 };
-            let mut sum = sign * xn;
-            for n_idx in 0..(n - 1) {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 1.0) * (k as f64 + 0.5)).sin();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DstIII, k);
         });
     } else {
+        let xn = signal[n - 1] * 0.5;
         output.iter_mut().enumerate().for_each(|(k, out)| {
             let sign = if k % 2 == 1 { -1.0 } else { 1.0 };
             let mut sum = sign * xn;
@@ -297,12 +297,7 @@ pub fn dct1(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let sign = if k % 2 == 0 { 1.0_f64 } else { -1.0_f64 };
-            let mut sum = x0 + sign * xn;
-            for n_idx in 1..=(n - 2) {
-                sum += 2.0 * signal[n_idx] * (factor * n_idx as f64 * k as f64).cos();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DctI, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -362,11 +357,7 @@ pub fn dct4(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = 0.0;
-            for n_idx in 0..n {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 0.5)).cos();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DctIV, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -426,11 +417,7 @@ pub fn dst1(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = 0.0;
-            for n_idx in 0..n {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 1.0) * (k as f64 + 1.0)).sin();
-            }
-            *out = 2.0 * sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DstI, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -489,11 +476,7 @@ pub fn dst4(signal: &[f64], output: &mut [f64]) {
 
     if n >= PAR_THRESHOLD {
         output.par_mut().enumerate(|k, out| {
-            let mut sum = 0.0;
-            for n_idx in 0..n {
-                sum += signal[n_idx] * (factor * (n_idx as f64 + 0.5) * (k as f64 + 0.5)).sin();
-            }
-            *out = sum;
+            *out = direct_row_hermes(signal, DirectBasisKind::DstIV, k);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, out)| {
@@ -505,3 +488,83 @@ pub fn dst4(signal: &[f64], output: &mut [f64]) {
         });
     }
 }
+
+fn direct_row_hermes(signal: &[f64], kind: DirectBasisKind, row: usize) -> f64 {
+    DIRECT_BASIS_SCRATCH.with(|pool| {
+        pool.with_scratch(signal.len(), |basis| {
+            fill_direct_basis_row(basis, kind, row);
+            hermes_simd::dot::<f64>(signal, basis)
+                .expect("DCT/DST Hermes dot uses equal-length signal and basis rows")
+        })
+    })
+}
+
+fn fill_direct_basis_row(basis: &mut [f64], kind: DirectBasisKind, row: usize) {
+    let n = basis.len();
+    if n == 0 {
+        return;
+    }
+    match kind {
+        DirectBasisKind::DctI => {
+            if n < 2 {
+                basis.fill(0.0);
+                return;
+            }
+            let factor = std::f64::consts::PI / (n - 1) as f64;
+            let sign = if row % 2 == 0 { 1.0 } else { -1.0 };
+            basis[0] = 1.0;
+            for (index, weight) in basis.iter_mut().enumerate().take(n - 1).skip(1) {
+                *weight = 2.0 * (factor * index as f64 * row as f64).cos();
+            }
+            basis[n - 1] = sign;
+        }
+        DirectBasisKind::DctII => {
+            let factor = std::f64::consts::PI / n as f64;
+            for (index, weight) in basis.iter_mut().enumerate() {
+                *weight = (factor * (index as f64 + 0.5) * row as f64).cos();
+            }
+        }
+        DirectBasisKind::DctIII => {
+            let factor = std::f64::consts::PI / n as f64;
+            basis[0] = 0.5;
+            for (index, weight) in basis.iter_mut().enumerate().skip(1) {
+                *weight = (factor * index as f64 * (row as f64 + 0.5)).cos();
+            }
+        }
+        DirectBasisKind::DctIV => {
+            let factor = std::f64::consts::PI / n as f64;
+            for (index, weight) in basis.iter_mut().enumerate() {
+                *weight = (factor * (index as f64 + 0.5) * (row as f64 + 0.5)).cos();
+            }
+        }
+        DirectBasisKind::DstI => {
+            let factor = std::f64::consts::PI / (n + 1) as f64;
+            for (index, weight) in basis.iter_mut().enumerate() {
+                *weight = 2.0 * (factor * (index as f64 + 1.0) * (row as f64 + 1.0)).sin();
+            }
+        }
+        DirectBasisKind::DstII => {
+            let factor = std::f64::consts::PI / n as f64;
+            for (index, weight) in basis.iter_mut().enumerate() {
+                *weight = (factor * (index as f64 + 0.5) * (row as f64 + 1.0)).sin();
+            }
+        }
+        DirectBasisKind::DstIII => {
+            let factor = std::f64::consts::PI / n as f64;
+            let sign = if row % 2 == 1 { -1.0 } else { 1.0 };
+            for (index, weight) in basis.iter_mut().enumerate().take(n - 1) {
+                *weight = (factor * (index as f64 + 1.0) * (row as f64 + 0.5)).sin();
+            }
+            basis[n - 1] = sign * 0.5;
+        }
+        DirectBasisKind::DstIV => {
+            let factor = std::f64::consts::PI / n as f64;
+            for (index, weight) in basis.iter_mut().enumerate() {
+                *weight = (factor * (index as f64 + 0.5) * (row as f64 + 0.5)).sin();
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
