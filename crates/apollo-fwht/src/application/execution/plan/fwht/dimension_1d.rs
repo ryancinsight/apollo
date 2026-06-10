@@ -6,6 +6,7 @@ use apollo_fft::PrecisionProfile;
 use ndarray::Array1;
 use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use super::storage::FwhtStorage;
 
@@ -51,9 +52,47 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when input.len() != self.n.
     pub fn forward(&self, input: &Array1<f64>) -> Result<Array1<f64>, FwhtError> {
-        let mut data = input.clone();
+        let mut data = Array1::zeros(self.n);
         self.forward_into(input, &mut data)?;
         Ok(data)
+    }
+
+    /// Forward WHT over a Leto real-valued view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn forward_leto(
+        &self,
+        input: leto::ArrayView1<'_, f64>,
+    ) -> Result<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>, FwhtError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![0.0; self.n];
+        self.forward_f64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("FWHT output length must match Leto output shape"),
+        )
+    }
+
+    /// Forward WHT over a typed Leto real-valued view.
+    pub fn forward_leto_typed<T: FwhtStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_f64(0.0); self.n];
+        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed FWHT output length must match Leto output shape"),
+        )
     }
 
     /// Forward WHT into caller-owned output. O(N log N).
@@ -103,9 +142,47 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when input.len() != self.n.
     pub fn inverse(&self, input: &Array1<f64>) -> Result<Array1<f64>, FwhtError> {
-        let mut data = input.clone();
+        let mut data = Array1::zeros(self.n);
         self.inverse_into(input, &mut data)?;
         Ok(data)
+    }
+
+    /// Inverse WHT over a Leto real-valued view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical order
+    /// before entering the canonical slice execution path.
+    pub fn inverse_leto(
+        &self,
+        input: leto::ArrayView1<'_, f64>,
+    ) -> Result<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>, FwhtError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![0.0; self.n];
+        self.inverse_f64_slice_into(&signal, &mut output)?;
+        Ok(
+            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("inverse FWHT output length must match Leto output shape"),
+        )
+    }
+
+    /// Inverse WHT over a typed Leto real-valued view.
+    pub fn inverse_leto_typed<T: FwhtStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![T::from_f64(0.0); self.n];
+        T::inverse_slice_into(self, &signal, &mut output, profile)?;
+        Ok(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+                [output.len()],
+                &output,
+            )
+            .expect("typed inverse FWHT output length must match Leto output shape"),
+        )
     }
 
     /// Inverse WHT into caller-owned output. Applies WHT then divides by N.
@@ -265,6 +342,23 @@ impl FwhtPlan {
     ) -> Result<(), FwhtError> {
         T::inverse_into(self, input, output, profile)
     }
+}
+
+fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    if let Some(slice) = view.as_slice() {
+        return Cow::Borrowed(slice);
+    }
+
+    let len = view.shape()[0];
+    let mut values = Vec::with_capacity(len);
+    for index in 0..len {
+        values.push(
+            *view
+                .get([index])
+                .expect("Leto view shape and storage bounds must be valid"),
+        );
+    }
+    Cow::Owned(values)
 }
 
 #[cfg(test)]

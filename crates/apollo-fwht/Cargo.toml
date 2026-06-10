@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fwht"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -10,6 +10,7 @@ description = "Fast Walsh-Hadamard transform utilities for Apollo"
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 ndarray = { workspace = true }
+leto = { workspace = true }
 num-complex = "0.4"
 moirai = { workspace = true }
 hermes-simd = { workspace = true }

@@ -8,6 +8,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Added
+- [minor] `apollo-fwht` `0.2.0` adds real and typed Leto 1D FWHT boundaries returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-ntt` `0.2.0` adds `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto` for Leto 1D views returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-frft` `0.2.0` adds `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and `frft_leto_typed` for typed Leto 1D views returning Mnemosyne-backed Leto arrays.
 - [minor] `apollo-frft` now exposes `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and `frft_leto` for Leto 1D complex views returning Mnemosyne-backed Leto arrays.
@@ -18,6 +19,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-fft` domain `FftInterleavedCow` storage view for zero-copy borrowed interleaved FFT reads and owned detachment on mutation.
 - kernel/pot/ ZST strategies (PoTStrategy, SizedPoT<...>) and butterflies/ placeholder for shared components (hierarchy, zero-cost, monomorph).
 ### Changed
+- [minor] `apollo-fwht` `FwhtStorage` now exposes canonical typed slice execution hooks reused by ndarray arrays and Leto views.
 - [minor] `apollo-ntt` execution now routes ndarray and Leto allocation paths through shared contiguous slice methods.
 - [minor] `apollo-frft` `FrftStorage` now exposes canonical typed slice execution hooks reused by both ndarray arrays and Leto views.
 - [major] `apollo-frft` unitary Grünbaum basis construction now uses Leto arrays and `leto-ops::symmetric_eigen_jacobi`; `apollo-frft-wgpu` consumes an explicit column-major Leto flattening boundary; Apollo manifests and lockfile no longer depend on `nalgebra`.

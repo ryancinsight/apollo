@@ -5,6 +5,7 @@ use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array1;
+
 thread_local! {
     static TYPED_INPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
     static TYPED_OUTPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
@@ -22,17 +23,15 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
     /// Convert an owner arithmetic result back to storage.
     fn from_f64(value: f64) -> Self;
 
-    /// Execute forward transform into caller-owned storage.
-    fn forward_into(
+    /// Execute forward transform into caller-owned contiguous storage.
+    fn forward_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FwhtError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_f64(value);
@@ -45,17 +44,30 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned storage.
-    fn inverse_into(
+    /// Execute forward transform into caller-owned ndarray storage.
+    fn forward_into(
         plan: &FwhtPlan,
         input: &Array1<Self>,
         output: &mut Array1<Self>,
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
+        Self::forward_slice_into(
+            plan,
+            input.as_slice().expect("Array must be contiguous"),
+            output.as_slice_mut().expect("Array must be contiguous"),
+            profile,
+        )
+    }
+
+    /// Execute inverse transform into caller-owned contiguous storage.
+    fn inverse_slice_into(
+        plan: &FwhtPlan,
+        input: &[Self],
+        output: &mut [Self],
+        profile: PrecisionProfile,
+    ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FwhtError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
                 *slot = Self::to_f64(value);
@@ -66,6 +78,21 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
             }
             Ok(())
         })
+    }
+
+    /// Execute inverse transform into caller-owned ndarray storage.
+    fn inverse_into(
+        plan: &FwhtPlan,
+        input: &Array1<Self>,
+        output: &mut Array1<Self>,
+        profile: PrecisionProfile,
+    ) -> Result<(), FwhtError> {
+        Self::inverse_slice_into(
+            plan,
+            input.as_slice().expect("Array must be contiguous"),
+            output.as_slice_mut().expect("Array must be contiguous"),
+            profile,
+        )
     }
 }
 
@@ -80,24 +107,24 @@ impl FwhtStorage for f64 {
         value
     }
 
-    fn forward_into(
+    fn forward_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        plan.forward_into(input, output)
+        plan.forward_f64_slice_into(input, output)
     }
 
-    fn inverse_into(
+    fn inverse_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        plan.inverse_into(input, output)
+        plan.inverse_f64_slice_into(input, output)
     }
 }
 
@@ -112,30 +139,30 @@ impl FwhtStorage for f32 {
         value as f32
     }
 
-    fn forward_into(
+    fn forward_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FwhtError::LengthMismatch);
-        }
-        output.assign(input);
-        wht_inplace(output.as_slice_mut().expect("Array must be contiguous"));
+        validate_lengths(plan, input.len(), output.len())?;
+        output.copy_from_slice(input);
+        wht_inplace(output);
         Ok(())
     }
 
-    fn inverse_into(
+    fn inverse_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
-        Self::forward_into(plan, input, output, profile)?;
+        Self::forward_slice_into(plan, input, output, profile)?;
         let scale = 1.0_f32 / plan.len() as f32;
-        output.mapv_inplace(|value| value * scale);
+        for value in output.iter_mut() {
+            *value *= scale;
+        }
         Ok(())
     }
 }
@@ -151,16 +178,14 @@ impl FwhtStorage for f16 {
         f16::from_f32(value as f32)
     }
 
-    fn forward_into(
+    fn forward_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FwhtError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_f32_workspace(plan.len(), |compute| {
             for (slot, value) in compute.iter_mut().zip(input.iter()) {
                 *slot = value.to_f32();
@@ -173,16 +198,14 @@ impl FwhtStorage for f16 {
         })
     }
 
-    fn inverse_into(
+    fn inverse_slice_into(
         plan: &FwhtPlan,
-        input: &Array1<Self>,
-        output: &mut Array1<Self>,
+        input: &[Self],
+        output: &mut [Self],
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         validate_profile(profile, Self::PROFILE)?;
-        if input.len() != plan.len() || output.len() != plan.len() {
-            return Err(FwhtError::LengthMismatch);
-        }
+        validate_lengths(plan, input.len(), output.len())?;
         with_f32_workspace(plan.len(), |compute| {
             for (slot, value) in compute.iter_mut().zip(input.iter()) {
                 *slot = value.to_f32();
@@ -197,6 +220,14 @@ impl FwhtStorage for f16 {
     }
 }
 
+fn validate_lengths(plan: &FwhtPlan, input: usize, output: usize) -> Result<(), FwhtError> {
+    if input == plan.len() && output == plan.len() {
+        Ok(())
+    } else {
+        Err(FwhtError::LengthMismatch)
+    }
+}
+
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FwhtError> {
     if actual.storage == expected.storage && actual.compute == expected.compute {
         Ok(())
@@ -208,11 +239,8 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Res
 fn with_f64_workspaces<R>(n: usize, f: impl FnOnce(&mut [f64], &mut [f64]) -> R) -> R {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {
         in_pool.with_scratch(n, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|out_pool| {
-                out_pool.with_scratch(n, |output64| {
-                    f(input64, output64)
-                })
-            })
+            TYPED_OUTPUT64_SCRATCH
+                .with(|out_pool| out_pool.with_scratch(n, |output64| f(input64, output64)))
         })
     })
 }

@@ -18,4 +18,4 @@ pub use application::execution::plan::fwht::dimension_2d::FwhtPlan2D;
 pub use application::execution::plan::fwht::dimension_3d::FwhtPlan3D;
 pub use application::execution::plan::fwht::storage::FwhtStorage;
 pub use domain::contracts::error::FwhtError;
-pub use infrastructure::transport::cpu::{fwht, ifwht};
+pub use infrastructure::transport::cpu::{fwht, fwht_leto, ifwht, ifwht_leto};

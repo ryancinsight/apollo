@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## FWHT Leto public 1D boundary [minor]
+- Performed: bumped `apollo-fwht` to `0.2.0`; added the workspace Leto dependency; added `FwhtPlan::forward_leto`, `FwhtPlan::inverse_leto`, `FwhtPlan::forward_leto_typed`, `FwhtPlan::inverse_leto_typed`, `fwht_leto`, and `ifwht_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
+- Architecture effect: FWHT real and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
+- Implementation effect: `FwhtStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Verification: `cargo check -p apollo-fwht`; `cargo test -p apollo-fwht leto -- --nocapture`; `cargo test -p apollo-fwht -- --nocapture`; `cargo clippy -p apollo-fwht --all-targets -- -D warnings`; `cargo doc -p apollo-fwht --no-deps`; `cargo semver-checks -p apollo-fwht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-fwht --examples`.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray FWHT API for contiguous `f64`, strided `f64`, typed `f32`, and strided mixed `f16`. No runtime benchmark claim is made.
+- Residuals: complex FWHT and 2D/3D FWHT APIs still expose ndarray arrays; broader Apollo ndarray replacement remains per-crate work.
+
 ## NTT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-ntt` to `0.2.0`; added the workspace Leto dependency; added `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto`, accepting `leto::ArrayView1<'_, u64>` and returning `leto::Array<u64, leto::MnemosyneStorage<u64>, 1>`.
 - Architecture effect: NTT now has a public Leto array boundary matching FFT, FRFT, and GFT migration direction while retaining ndarray APIs for validation and compatibility.
