@@ -1,4 +1,15 @@
 # Apollo Checklist
+## NUFFT exact 1D Hermes complex dot routing [patch]
+- [x] Added the workspace Hermes provider dependency to `apollo-nufft`.
+- [x] Routed threshold-sized exact 1D Type-1 NUFFT direct coefficient rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Routed threshold-sized exact 1D Type-2 NUFFT direct sample rows through the same Hermes complex dot boundary.
+- [x] Materialized one shared interleaved value or coefficient lane buffer per threshold-sized exact transform and reused Mnemosyne thread-local scratch for per-row phasor lanes.
+- [x] Kept scalar Type-1 and Type-2 direct formulas for smaller workloads and as the value-semantic formula reference.
+- [x] Preserved existing Moirai disjoint output-row scheduling and public Leto/slice exact NUFFT execution contracts.
+- [x] Added direct threshold-path tests for Hermes Type-1 row parity, Hermes Type-2 row parity, and phasor-lane materialization.
+- [x] Verification: `cargo fmt --check`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence: value-semantic NUFFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+
 ## Mellin log-frequency Hermes complex dot routing [patch]
 - [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
 - [x] Routed threshold-sized inverse log-frequency spectrum rows through the same Hermes complex dot boundary and retained the real component required by the IDFT contract.

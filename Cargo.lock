@@ -387,6 +387,7 @@ version = "0.2.0"
 dependencies = [
  "apollo-fft",
  "approx",
+ "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",

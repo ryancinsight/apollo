@@ -43,6 +43,7 @@ use std::f64::consts::PI;
 
 thread_local! {
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
+    static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
 /// Below this operation count, serial loops avoid parallel scheduling overhead.
@@ -574,8 +575,10 @@ pub fn nufft_type1_1d(
     let mut output = vec![Complex64::new(0.0, 0.0); domain.n];
     let work_items = domain.n.saturating_mul(positions.len());
     if work_items >= DIRECT_PAR_OP_THRESHOLD {
+        let value_lanes = interleaved_lanes(values);
         output.par_mut().enumerate(|k, value| {
-            *value = nufft_type1_coefficient(k, positions, values, domain.n, two_pi_over_l);
+            *value =
+                nufft_type1_coefficient_hermes(k, positions, &value_lanes, domain.n, two_pi_over_l);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(k, value)| {
@@ -600,6 +603,27 @@ fn nufft_type1_coefficient(
             let angle = -two_pi_over_l * k_signed as f64 * x;
             acc + value * Complex64::new(angle.cos(), angle.sin())
         })
+}
+
+fn nufft_type1_coefficient_hermes(
+    k: usize,
+    positions: &[f64],
+    value_lanes: &[f64],
+    n_out: usize,
+    two_pi_over_l: f64,
+) -> Complex64 {
+    let k_signed = fft_signed_index(k, n_out);
+    DIRECT_WEIGHT_LANE_SCRATCH.with(|pool| {
+        pool.with_scratch(value_lanes.len(), |weight_lanes| {
+            fill_type1_weight_lanes(weight_lanes, positions, k_signed, two_pi_over_l);
+            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
+                value_lanes,
+                weight_lanes,
+            )
+            .expect("NUFFT type-1 Hermes dot uses equal-length interleaved lanes");
+            Complex64::new(re, im)
+        })
+    })
 }
 
 fn nufft_type2_sample(
@@ -627,8 +651,12 @@ pub fn nufft_type2_1d(
     let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
     let work_items = positions.len().saturating_mul(fourier_coeffs.len());
     if work_items >= DIRECT_PAR_OP_THRESHOLD {
+        let coeffs = fourier_coeffs
+            .as_slice()
+            .expect("NUFFT direct type-2 Fourier coefficients must be contiguous");
+        let coeff_lanes = interleaved_lanes(coeffs);
         output.par_mut().enumerate(|index, value| {
-            *value = nufft_type2_sample(positions[index], fourier_coeffs, domain);
+            *value = nufft_type2_sample_hermes(positions[index], &coeff_lanes, domain);
         });
     } else {
         output.iter_mut().enumerate().for_each(|(index, value)| {
@@ -636,6 +664,52 @@ pub fn nufft_type2_1d(
         });
     }
     output
+}
+
+fn nufft_type2_sample_hermes(x: f64, coeff_lanes: &[f64], domain: UniformDomain1D) -> Complex64 {
+    DIRECT_WEIGHT_LANE_SCRATCH.with(|pool| {
+        pool.with_scratch(coeff_lanes.len(), |weight_lanes| {
+            fill_type2_weight_lanes(weight_lanes, x, domain);
+            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
+                coeff_lanes,
+                weight_lanes,
+            )
+            .expect("NUFFT type-2 Hermes dot uses equal-length interleaved lanes");
+            Complex64::new(re, im)
+        })
+    })
+}
+
+fn interleaved_lanes(values: &[Complex64]) -> Vec<f64> {
+    let mut lanes = Vec::with_capacity(values.len() * 2);
+    for value in values {
+        lanes.push(value.re);
+        lanes.push(value.im);
+    }
+    lanes
+}
+
+fn fill_type1_weight_lanes(
+    lanes: &mut [f64],
+    positions: &[f64],
+    k_signed: i64,
+    two_pi_over_l: f64,
+) {
+    for (&x, lane_pair) in positions.iter().zip(lanes.chunks_exact_mut(2)) {
+        let angle = -two_pi_over_l * k_signed as f64 * x;
+        lane_pair[0] = angle.cos();
+        lane_pair[1] = angle.sin();
+    }
+}
+
+fn fill_type2_weight_lanes(lanes: &mut [f64], x: f64, domain: UniformDomain1D) {
+    let two_pi_over_l = 2.0 * PI / domain.length();
+    for (k, lane_pair) in lanes.chunks_exact_mut(2).enumerate() {
+        let k_signed = fft_signed_index(k, domain.n);
+        let angle = two_pi_over_l * k_signed as f64 * x;
+        lane_pair[0] = angle.cos();
+        lane_pair[1] = angle.sin();
+    }
 }
 
 /// Fast 1D type-1 NUFFT convenience wrapper.
@@ -665,6 +739,7 @@ pub fn nufft_type2_1d_fast(
 mod tests {
     use super::*;
     use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
+    use approx::assert_abs_diff_eq;
     /// DC mode invariant: f_0 = sum(c_j) because exp(-2pi*i * 0 * x_j / L) = 1 for all j.
     ///
     /// With values [1.0, 0.5-0.25i, -0.5+0.75i, 0.25+0.1i]:
@@ -693,6 +768,75 @@ mod tests {
         // All outputs must be finite
         for (k, v) in output.iter().enumerate() {
             assert!(v.norm().is_finite(), "mode {k} is non-finite: {v:?}");
+        }
+    }
+
+    #[test]
+    fn hermes_type1_coefficients_match_scalar_formula_at_threshold() {
+        let domain = UniformDomain1D::new(128, 1.0).unwrap();
+        let sample_count = DIRECT_PAR_OP_THRESHOLD / domain.n;
+        let positions = (0..sample_count)
+            .map(|index| (index as f64 * 0.37).rem_euclid(domain.length()))
+            .collect::<Vec<_>>();
+        let values = (0..sample_count)
+            .map(|index| Complex64::new((index as f64 * 0.125).sin(), (index as f64 * 0.25).cos()))
+            .collect::<Vec<_>>();
+        let value_lanes = interleaved_lanes(&values);
+        let two_pi_over_l = 2.0 * PI / domain.length();
+
+        for k in [0usize, 1, 17, 64, 96, 127] {
+            let actual = nufft_type1_coefficient_hermes(
+                k,
+                &positions,
+                &value_lanes,
+                domain.n,
+                two_pi_over_l,
+            );
+            let expected = nufft_type1_coefficient(k, &positions, &values, domain.n, two_pi_over_l);
+
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);
+        }
+    }
+
+    #[test]
+    fn hermes_type2_samples_match_scalar_formula_at_threshold() {
+        let domain = UniformDomain1D::new(128, 1.0).unwrap();
+        let coeffs = Array1::from_shape_fn(domain.n, |index| {
+            Complex64::new((index as f64 * 0.125).sin(), (index as f64 * 0.25).cos())
+        });
+        let coeff_lanes = interleaved_lanes(coeffs.as_slice().expect("contiguous coeffs"));
+
+        for x in [0.0_f64, 0.125, 0.37, 0.5, 0.875, 1.25] {
+            let actual = nufft_type2_sample_hermes(x, &coeff_lanes, domain);
+            let expected = nufft_type2_sample(x, &coeffs, domain);
+
+            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
+            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);
+        }
+    }
+
+    #[test]
+    fn direct_weight_lanes_match_type1_and_type2_phasors() {
+        let domain = UniformDomain1D::new(16, 0.5).unwrap();
+        let positions = [0.0_f64, 0.125, 0.25, 0.375];
+        let mut lanes = vec![0.0; positions.len() * 2];
+        let two_pi_over_l = 2.0 * PI / domain.length();
+        let k_signed = fft_signed_index(13, domain.n);
+
+        fill_type1_weight_lanes(&mut lanes, &positions, k_signed, two_pi_over_l);
+        for (index, x) in positions.iter().enumerate() {
+            let angle = -two_pi_over_l * k_signed as f64 * x;
+            assert_eq!(lanes[index * 2].to_bits(), angle.cos().to_bits());
+            assert_eq!(lanes[index * 2 + 1].to_bits(), angle.sin().to_bits());
+        }
+
+        fill_type2_weight_lanes(&mut lanes, 0.25, domain);
+        for index in 0..positions.len() {
+            let signed = fft_signed_index(index, domain.n);
+            let angle = two_pi_over_l * signed as f64 * 0.25;
+            assert_eq!(lanes[index * 2].to_bits(), angle.cos().to_bits());
+            assert_eq!(lanes[index * 2 + 1].to_bits(), angle.sin().to_bits());
         }
     }
 

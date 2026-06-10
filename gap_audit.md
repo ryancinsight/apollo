@@ -1,5 +1,14 @@
 # Apollo Gap Audit
 
+## NUFFT exact 1D Hermes complex dot routing [patch]
+- Performed: added the workspace Hermes provider dependency to `apollo-nufft`; routed threshold-sized exact 1D Type-1 coefficient rows and Type-2 sample rows through Hermes provider-owned interleaved complex dot products with phasor lanes stored in Mnemosyne thread-local scratch.
+- Architecture effect: NUFFT exact 1D execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
+- Memory effect: threshold-sized exact Type-1 transforms materialize one shared complex value lane buffer; Type-2 transforms materialize one shared complex coefficient lane buffer; each worker row reuses thread-local phasor-lane scratch. Small exact transforms retain allocation-free scalar accumulation.
+- Implementation effect: `nufft_type1_coefficient` and `nufft_type2_sample` remain scalar formula references, while Hermes helpers own the provider reduction boundary and phasor-lane materialization.
+- Verification: `cargo fmt --check`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
+- Evidence tier: value-semantic NUFFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
+- Residuals: exact 1D direct rows still materialize interleaved lane buffers because the current Hermes complex dot API consumes primitive interleaved lanes; fast 1D/3D gridding and 3D exact direct references do not yet consume Hermes.
+
 ## Mellin log-frequency Hermes complex dot routing [patch]
 - Performed: routed threshold-sized forward and inverse log-frequency spectrum rows through Hermes provider-owned interleaved complex dot products with twiddle lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: Mellin spectrum execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
