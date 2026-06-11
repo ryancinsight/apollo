@@ -17,4 +17,4 @@ pub mod infrastructure;
 pub use application::execution::plan::czt::dimension_1d::{CztPlan, CztStorage};
 pub use domain::contracts::error::CztError;
 pub use domain::metadata::CztParameters;
-pub use infrastructure::transport::cpu::{czt, czt_direct, czt_leto};
+pub use infrastructure::transport::cpu::{czt, czt_direct, czt_direct_leto, czt_leto};

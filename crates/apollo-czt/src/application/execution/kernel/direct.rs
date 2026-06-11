@@ -26,18 +26,32 @@ pub fn czt_direct_forward(
     let output_slice = output
         .as_slice_mut()
         .expect("CZT direct output must be contiguous");
-    let work_items = input.len().saturating_mul(output_len);
+    czt_direct_forward_slice_into(input, output_slice, a, w)?;
+    Ok(output)
+}
+
+/// Direct CZT evaluation over contiguous Complex64 slices.
+pub(crate) fn czt_direct_forward_slice_into(
+    input: &[Complex64],
+    output: &mut [Complex64],
+    a: Complex64,
+    w: Complex64,
+) -> Result<(), CztError> {
+    if input.is_empty() || output.is_empty() {
+        return Err(CztError::EmptyLength);
+    }
+    let work_items = input.len().saturating_mul(output.len());
     if work_items >= DIRECT_PAR_OP_THRESHOLD {
         let input_lanes = interleaved_lanes(input);
-        output_slice.par_mut().enumerate(|k, slot| {
+        output.par_mut().enumerate(|k, slot| {
             *slot = czt_direct_bin_hermes(input_lanes, k, a, w);
         });
     } else {
-        output_slice.iter_mut().enumerate().for_each(|(k, slot)| {
+        output.iter_mut().enumerate().for_each(|(k, slot)| {
             *slot = czt_direct_bin(input, k, a, w);
         });
     }
-    Ok(output)
+    Ok(())
 }
 
 #[inline]

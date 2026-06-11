@@ -1,4 +1,11 @@
 # Apollo Checklist
+## CZT Leto direct path + Mnemosyne output move [patch]
+- [x] Added `CztPlan::forward_direct_leto` and exported `czt_direct_leto`, giving Apollo a Leto/Mnemosyne strict O(NM) CZT path that no longer requires ndarray ownership for direct execution.
+- [x] Refactored the direct CZT kernel through a canonical contiguous slice implementation shared by ndarray compatibility and Leto entry points.
+- [x] Replaced copy-based Leto CZT output construction with `from_mnemosyne_vec` moves for forward, direct-forward, inverse, and typed Leto outputs.
+- [x] Verification: `cargo fmt -p apollo-czt --check`; `cargo test -p apollo-czt --locked`; `cargo clippy -p apollo-czt --all-targets --locked -- -D warnings`; `cargo doc -p apollo-czt --no-deps --locked`; `cargo fmt --all --check`; `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`.
+- Evidence: value-semantic Leto-vs-ndarray direct CZT tests for contiguous and strided Leto views; workspace tests, examples, clippy diagnostics, and non-PyO3 rustdoc generation. No runtime benchmark claim is made.
+
 ## Default parallel + Mnemosyne feature policy [patch]
 - [x] CPU transform crates that directly use Moirai/Mnemosyne now declare default `parallel` and `mnemosyne-memory` features; `apollo-ntt` declares default `parallel` only because it has no direct Mnemosyne storage dependency.
 - [x] WGPU and Python boundary crates forward `parallel`/`mnemosyne-memory` defaults to their CPU transform dependencies instead of introducing duplicate runtime dependencies.

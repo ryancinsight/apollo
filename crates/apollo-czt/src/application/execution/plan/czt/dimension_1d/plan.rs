@@ -1,11 +1,13 @@
 //! Reusable Chirp Z-Transform Plan
 
-use super::helpers::{leto_array1_from_slice, leto_view1_cow, with_forward_workspace};
+use super::helpers::{leto_array1_from_vec, leto_view1_cow, with_forward_workspace};
 use super::typed::CztStorage;
 use crate::application::execution::kernel::bluestein::{
     czt_bjork_pereyra_inverse_into, czt_bluestein_forward_into_with_workspace, czt_inverse_nodes,
 };
-use crate::application::execution::kernel::direct::czt_direct_forward;
+use crate::application::execution::kernel::direct::{
+    czt_direct_forward, czt_direct_forward_slice_into,
+};
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
 use ndarray::Array1;
@@ -133,6 +135,23 @@ impl CztPlan {
         czt_direct_forward(input, self.m, self.a, self.w)
     }
 
+    /// Forward direct CZT evaluation over a Leto complex view.
+    ///
+    /// Contiguous views are borrowed. Strided views copy once into logical
+    /// order before entering the canonical direct slice kernel.
+    pub fn forward_direct_leto(
+        &self,
+        input: leto::ArrayView1<'_, Complex64>,
+    ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
+        if input.shape()[0] != self.n {
+            return Err(CztError::LengthMismatch);
+        }
+        let signal = leto_view1_cow(&input);
+        let mut output = vec![Complex64::new(0.0, 0.0); self.output_len()];
+        czt_direct_forward_slice_into(&signal, &mut output, self.a, self.w)?;
+        Ok(leto_array1_from_vec(output))
+    }
+
     /// Forward CZT using Bluestein's convolution identity with precomputed caching.
     pub fn forward(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, CztError> {
         if input.len() != self.n {
@@ -155,7 +174,7 @@ impl CztPlan {
         let signal = leto_view1_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.output_len()];
         self.forward_complex64_slice_into(&signal, &mut output)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(leto_array1_from_vec(output))
     }
 
     /// Forward CZT into caller-owned output storage.
@@ -224,7 +243,7 @@ impl CztPlan {
         let signal = leto_view1_cow(&input);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.output_len()];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(leto_array1_from_vec(output))
     }
 
     /// In-place forward CZT.
@@ -281,7 +300,7 @@ impl CztPlan {
         let spectrum = leto_view1_cow(&spectrum);
         let mut output = vec![Complex64::new(0.0, 0.0); self.input_len()];
         self.inverse_complex64_slice_into(&spectrum, &mut output)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(leto_array1_from_vec(output))
     }
 
     /// Inverse CZT over contiguous Complex64 slices.
@@ -324,6 +343,6 @@ impl CztPlan {
         let spectrum = leto_view1_cow(&spectrum);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.input_len()];
         T::inverse_slice_into(self, &spectrum, &mut output, profile)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(leto_array1_from_vec(output))
     }
 }

@@ -39,6 +39,27 @@ fn leto_forward_matches_ndarray_reference() {
 }
 
 #[test]
+fn leto_direct_forward_matches_ndarray_reference() {
+    let input = reference_input(5);
+    let ndarray_input = Array1::from_vec(input.clone());
+    let plan = reference_plan(input.len(), 7);
+    let expected = plan
+        .forward_direct(&ndarray_input)
+        .expect("ndarray direct forward");
+
+    let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+    let actual = plan
+        .forward_direct_leto(leto_input.view())
+        .expect("leto direct forward");
+
+    assert_eq!(actual.shape(), [plan.output_len()]);
+    for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+        assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+        assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+    }
+}
+
+#[test]
 fn leto_strided_forward_matches_ndarray_reference() {
     let input = reference_input(5);
     let ndarray_input = Array1::from_vec(input.clone());
@@ -61,6 +82,40 @@ fn leto_strided_forward_matches_ndarray_reference() {
         )])
         .expect("strided Leto input");
     let actual = plan.forward_leto(strided).expect("leto forward");
+
+    for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+        assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
+        assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
+    }
+}
+
+#[test]
+fn leto_strided_direct_forward_matches_ndarray_reference() {
+    let input = reference_input(5);
+    let ndarray_input = Array1::from_vec(input.clone());
+    let plan = reference_plan(input.len(), 7);
+    let expected = plan
+        .forward_direct(&ndarray_input)
+        .expect("ndarray direct forward");
+
+    let mut interleaved = Vec::with_capacity(input.len() * 2);
+    for value in input {
+        interleaved.push(value);
+        interleaved.push(Complex64::new(-999.0, 999.0));
+    }
+    let leto_input =
+        leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto input");
+    let strided = leto_input
+        .view()
+        .slice_with::<1>(&[SliceArg::range(
+            Some(0),
+            Some(leto_input.shape()[0] as isize),
+            2,
+        )])
+        .expect("strided Leto input");
+    let actual = plan
+        .forward_direct_leto(strided)
+        .expect("leto direct forward");
 
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
         assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);

@@ -59,10 +59,10 @@ pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow
 
 #[must_use]
 #[inline]
-pub(crate) fn leto_array1_from_slice<T: Copy>(
-    output: &[T],
+pub(crate) fn leto_array1_from_vec<T>(
+    output: Vec<T>,
 ) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(output)
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([output.len()], output)
         .expect("CZT output length must match Leto output shape")
 }
 

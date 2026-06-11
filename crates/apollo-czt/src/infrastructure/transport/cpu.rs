@@ -23,6 +23,16 @@ pub fn czt_leto(
     CztPlan::new(input.shape()[0], output_len, a, w)?.forward_leto(input)
 }
 
+/// Computes the forward direct CZT from a Leto view using the synchronous CPU pipeline.
+pub fn czt_direct_leto(
+    input: leto::ArrayView1<'_, Complex64>,
+    output_len: usize,
+    a: Complex64,
+    w: Complex64,
+) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
+    CztPlan::new(input.shape()[0], output_len, a, w)?.forward_direct_leto(input)
+}
+
 /// Computes the forward CZT using strict direct $O(NM)$ methods.
 pub fn czt_direct(
     input: &Array1<Complex64>,
