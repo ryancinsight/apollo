@@ -27,6 +27,7 @@ use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
+use leto::Storage;
 
 pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<PublishedFixtureReport>
 {
@@ -45,33 +46,31 @@ pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<Pu
     let expected = vec![1.0_f64, 0.0, 0.0];
     Ok(published_real_fixture(
         "Radon",
-        "Radon-theta0-column0-impulse-projection(3x3)",
-        "Radon (1917): parallel-beam θ=0 projection = column sums; Natterer (1986) §I.2",
+        "R_\u{03b8}=0([1,0,0;0,0,0;0,0,0])",
+        "Radon (1917); Natterer (1986) §I.2",
         &row,
         &expected,
     ))
 }
 
-/// Radon Fourier Slice Theorem at \u{03b8}=0: DFT_1(R_{\u{03b8}=0}f) equals the horizontal
-/// slice of the 2D DFT of f (Natterer 1986, Radon 1917).
+/// 2. Fourier Slice Theorem projection-slice identity.
 ///
 /// # Mathematical contract
 ///
-/// Projection-Slice Theorem (Natterer 1986, §I.2, Theorem 1.1):
-///   \u{1d4d5}_1{R_\u{03b8} f}(\u{03c9}) = \u{1d4d5}_2{f}(\u{03c9}·cos\u{03b8}, \u{03c9}·sin\u{03b8})
+/// The Fourier Slice Theorem states that the 1D Fourier transform of a parallel
+/// projection of an image f at angle θ equals the slice of the 2D Fourier transform
+/// of f along a line through the origin at angle θ:
+///   DFT_1( R_θ(f) ) (ω) = DFT_2(f) (ω cos θ, ω sin θ)
 ///
-/// For \u{03b8}=0 (parallel-beam at θ=0 = column sums):
-///   p_0[n] = Σ_m f[m,n]   (projection = sum over rows at each column detector n)
-///   DFT_1(p_0)[k] = Σ_n p_0[n]·exp(-2πi·k·n/N)
-///                 = Σ_n (Σ_m f[m,n])·exp(-2πi·k·n/N)
-///                 = F_2[0,k]  (horizontal slice of 2D DFT)
-///
-/// For image f=[[1,2],[3,4]], N=M=2:
+/// Let f = [[1, 2],
+///          [3, 4]]
+/// θ = 0.
+/// Detection bins: 2 (spacing 1.0).
 ///   p_0 = [1+3, 2+4] = [4, 6]  (column sums)
-///   DFT_1([4,6]): P[0] = 4+6 = 10,  P[1] = 4+6·exp(-i\u{03c0}) = 4-6 = -2
+///   DFT_1([4,6]): P[0] = 4+6 = 10,  P[1] = 4+6·exp(-iπ) = 4-6 = -2
 ///   2D DFT check: F_2[0,0]=1+2+3+4=10 ✓,  F_2[0,1]=1-2+3-4=-2 ✓
 ///
-/// All DFT factors are exp(-2πi·k·n/N) ∈ {1, exp(-i\u{03c0})} = {1, -1};
+/// All DFT factors are exp(-2πi·k·n/N) ∈ {1, exp(-iπ)} = {1, -1};
 /// computation is exact in f64; accumulated floating-point error = 0.
 /// Threshold 1×10⁻¹² is conservative.
 ///
@@ -84,7 +83,9 @@ pub(crate) fn radon_fourier_slice_theorem_theta0_fixture() -> SuiteResult<Publis
     let plan = RadonPlan::new(2, 2, vec![0.0_f64], 2, 1.0)?;
     let sinogram = plan.forward(&image)?;
     let projection = sinogram.values().row(0).to_owned();
-    let dft_of_projection = fft_1d_array(&projection);
+    let projection_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([projection.len()], projection.as_slice().unwrap()).unwrap();
+    let dft_of_projection_leto = apollo_fft::fft_1d_leto(projection_leto.view());
+    let dft_of_projection = ndarray::Array1::from_vec(dft_of_projection_leto.storage().as_slice().to_vec());
     let expected = [Complex64::new(10.0, 0.0), Complex64::new(-2.0, 0.0)];
     Ok(published_complex_fixture(
         "Radon",

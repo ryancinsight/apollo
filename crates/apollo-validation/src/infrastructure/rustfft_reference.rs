@@ -172,11 +172,17 @@ impl RustFftPlan3D {
 /// # Theorem: 1D Discrete Fourier Transform
 /// Analytically executes the exact continuous basis projection bounding signals onto Fourier coefficients:
 /// $$ X_k = \sum_{n=0}^{N-1} x_n \cdot e^{-i 2\pi k n / N} $$
-pub fn fft1_real(input: &Array1<f64>) -> Vec<Complex64> {
-    let plan = RustFftPlan1D::new(input.len());
-    let mut buffer = vec![Complex64::new(0.0, 0.0); input.len()];
+pub fn fft1_real(input: &leto::ArrayView1<'_, f64>) -> Vec<Complex64> {
+    let len = input.shape()[0];
+    let plan = RustFftPlan1D::new(len);
+    let mut buffer = vec![Complex64::new(0.0, 0.0); len];
     let mut scratch = vec![Complex64::new(0.0, 0.0); plan.scratch_len];
-    plan.forward_real_into(input, &mut buffer, &mut scratch);
+    let cow = apollo_fft::application::utilities::leto_interop::view1_cow(input);
+    buffer
+        .iter_mut()
+        .zip(cow.iter().copied())
+        .for_each(|(dst, src)| *dst = Complex64::new(src, 0.0));
+    plan.fft.process_with_scratch(&mut buffer, &mut scratch[..plan.scratch_len]);
     buffer
 }
 
@@ -189,12 +195,14 @@ pub fn fft1_real(input: &Array1<f64>) -> Vec<Complex64> {
 ///
 /// **Zero Inner-Loop Allocation Guarantee:** This limits created buffers replacing
 /// dimensional iterations into strict pre-allocated boundary matrices globally without nested heap fragmentations.
-pub fn fft3_real(input: &Array3<f64>) -> Array3<Complex64> {
-    let shape = input.dim();
-    let plan = RustFftPlan3D::new(shape);
-    let mut data = Array3::from_elem(shape, Complex64::new(0.0, 0.0));
-    let mut lane_buffer = vec![Complex64::new(0.0, 0.0); shape.0.max(shape.1).max(shape.2)];
+pub fn fft3_real(input: &leto::ArrayView3<'_, f64>) -> Array3<Complex64> {
+    let shape = input.shape();
+    let nd_array = apollo_fft::application::utilities::leto_interop::array3_from_view(input);
+    let plan = RustFftPlan3D::new((shape[0], shape[1], shape[2]));
+    let mut data = Array3::from_elem((shape[0], shape[1], shape[2]), Complex64::new(0.0, 0.0));
+    let mut lane_buffer = vec![Complex64::new(0.0, 0.0); shape[0].max(shape[1]).max(shape[2])];
     let mut fft_scratch = vec![Complex64::new(0.0, 0.0); plan.scratch_len];
-    plan.forward_real_into(input, &mut data, &mut lane_buffer, &mut fft_scratch);
+    plan.forward_real_into(&nd_array, &mut data, &mut lane_buffer, &mut fft_scratch);
     data
 }
+

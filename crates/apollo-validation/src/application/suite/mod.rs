@@ -64,6 +64,7 @@ use apollo_fft::{
     fft_1d_array, fft_1d_array_typed, fft_3d_array, ifft_1d_array, ifft_1d_array_typed,
     ifft_3d_array, ifft_3d_array_typed, FftBackend, Shape3D,
 };
+use leto::{self, Storage};
 use apollo_nufft::{
     nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d, nufft_type1_3d_fast, nufft_type2_1d,
     nufft_type2_1d_fast, UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
@@ -112,7 +113,7 @@ pub fn run_smoke_suite() -> SuiteResult<ValidationReport> {
 
 /// Validate CPU FFT invariants against analytical identities.
 pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
-    let signal = Array1::from_vec(
+    let signal_nd = Array1::from_vec(
         (0..16)
             .map(|i| {
                 let x = i as f64;
@@ -120,20 +121,25 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
             })
             .collect(),
     );
-    let spectrum = fft_1d_array(&signal);
-    let recovered = ifft_1d_array(&spectrum);
-    let roundtrip_max_abs_error = max_real_abs_delta(&signal, &recovered);
+    let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([signal_nd.len()], signal_nd.as_slice().unwrap()).unwrap();
+    let spectrum = apollo_fft::fft_1d_leto(signal.view());
+    let recovered = apollo_fft::ifft_1d_leto(spectrum.view());
+    let recovered_nd = ndarray::Array1::from_vec(recovered.storage().as_slice().to_vec());
+    let roundtrip_max_abs_error = max_real_abs_delta(&signal_nd, &recovered_nd);
 
-    let time_energy: f64 = signal.iter().map(|value| value * value).sum();
+    let time_energy: f64 = signal_nd.iter().map(|value| value * value).sum();
     let spectral_energy: f64 =
-        spectrum.iter().map(Complex64::norm_sqr).sum::<f64>() / signal.len() as f64;
+        spectrum.storage().as_slice().iter().map(Complex64::norm_sqr).sum::<f64>() / signal_nd.len() as f64;
     let parseval_relative_error = (time_energy - spectral_energy).abs() / time_energy.max(1.0);
 
-    let repeated = fft_1d_array(&signal);
-    let stability_max_abs_delta = max_complex_abs_delta(spectrum.iter(), repeated.iter());
+    let repeated = apollo_fft::fft_1d_leto(signal.view());
+    let stability_max_abs_delta = max_complex_abs_delta(spectrum.storage().as_slice().iter(), repeated.storage().as_slice().iter());
 
-    let non_finite = Array1::from_vec(vec![1.0, f64::NAN, 2.0, f64::INFINITY]);
-    let non_finite_input_propagates = fft_1d_array(&non_finite)
+    let non_finite_nd = Array1::from_vec(vec![1.0, f64::NAN, 2.0, f64::INFINITY]);
+    let non_finite = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([non_finite_nd.len()], non_finite_nd.as_slice().unwrap()).unwrap();
+    let non_finite_input_propagates = apollo_fft::fft_1d_leto(non_finite.view())
+        .storage()
+        .as_slice()
         .iter()
         .any(|value| !value.re.is_finite() || !value.im.is_finite());
 
@@ -207,23 +213,25 @@ pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
 
     // Run an actual GPU forward + inverse roundtrip on a 4×4×4 reference field.
     let reference = representative_field_3d((4, 4, 4));
-    let spectrum = plan.forward(&reference);
-    let cpu_spectrum = fft_3d_array(&reference);
+    let reference_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], reference.as_slice().unwrap()).unwrap();
+    let spectrum_leto = plan.forward_leto(reference_leto.view()).expect("GPU forward");
+    let cpu_spectrum_leto = apollo_fft::fft_3d_leto(reference_leto.view());
 
     // Forward error: max |GPU complex spectrum - CPU f64 reference spectrum|.
-    let forward_max_abs_error = cpu_spectrum
+    let gpu_spectrum_slice = spectrum_leto.storage().as_slice();
+    let forward_max_abs_error = cpu_spectrum_leto.storage().as_slice()
         .iter()
         .enumerate()
         .map(|(idx, cpu_val)| {
-            let gpu_re = f64::from(spectrum[2 * idx]);
-            let gpu_im = f64::from(spectrum[2 * idx + 1]);
+            let gpu_re = f64::from(gpu_spectrum_slice[2 * idx]);
+            let gpu_im = f64::from(gpu_spectrum_slice[2 * idx + 1]);
             ((gpu_re - cpu_val.re).powi(2) + (gpu_im - cpu_val.im).powi(2)).sqrt()
         })
         .fold(0.0_f64, f64::max);
 
     // Inverse error: max |GPU roundtrip recovered - reference|.
-    let mut recovered = Array3::<f64>::zeros((4, 4, 4));
-    plan.inverse(&spectrum, &mut recovered);
+    let recovered_leto = plan.inverse_leto(spectrum_leto.view()).expect("GPU inverse");
+    let recovered = ndarray::Array3::from_shape_vec((4, 4, 4), recovered_leto.storage().as_slice().to_vec()).unwrap();
     let inverse_max_abs_error = max_real_abs_delta_3d(&reference, &recovered);
 
     // GPU f32 tolerance: three axis passes with f32 accumulation.
@@ -337,24 +345,30 @@ pub fn run_nufft_suite() -> SuiteResult<NufftReport> {
 /// Compare Apollo CPU FFT output with optional external reference engines.
 pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> {
     let signal = representative_signal_1d(16);
+    let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([signal.len()], signal.as_slice().unwrap()).unwrap();
 
     let rustfft_available = cfg!(feature = "external-references");
     let rustfft_report = if rustfft_available {
         #[cfg(feature = "external-references")]
         {
-            let apollo = fft_1d_array(&signal);
-            let rustfft = fft1_real(&signal);
+            let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
+            let apollo = ndarray::Array1::from_vec(apollo_leto.storage().as_slice().to_vec());
+            let rustfft = fft1_real(&signal_leto.view());
             let rustfft_fft1_max_abs_error = max_complex_abs_delta(apollo.iter(), rustfft.iter());
 
             let prime_signal = representative_signal_1d(17);
-            let prime_apollo = fft_1d_array(&prime_signal);
-            let prime_rustfft = fft1_real(&prime_signal);
+            let prime_signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([prime_signal.len()], prime_signal.as_slice().unwrap()).unwrap();
+            let prime_apollo_leto = apollo_fft::fft_1d_leto(prime_signal_leto.view());
+            let prime_apollo = ndarray::Array1::from_vec(prime_apollo_leto.storage().as_slice().to_vec());
+            let prime_rustfft = fft1_real(&prime_signal_leto.view());
             let rustfft_prime_error =
                 max_complex_abs_delta(prime_apollo.iter(), prime_rustfft.iter());
 
             let field = representative_field_3d((4, 4, 4));
-            let apollo_3d = fft_3d_array(&field);
-            let rustfft_3d = fft3_real(&field);
+            let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], field.as_slice().unwrap()).unwrap();
+            let apollo_3d_leto = apollo_fft::fft_3d_leto(field_leto.view());
+            let apollo_3d = ndarray::Array3::from_shape_vec((4, 4, 4), apollo_3d_leto.storage().as_slice().to_vec()).unwrap();
+            let rustfft_3d = fft3_real(&field_leto.view());
             let rustfft_fft3_max_abs_error =
                 max_complex_abs_delta(apollo_3d.iter(), rustfft_3d.iter());
 
@@ -523,15 +537,18 @@ pub fn run_published_reference_suite() -> SuiteResult<PublishedReferenceReport> 
 pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
     let signal = representative_signal_1d(16);
     let field = representative_field_3d((4, 4, 4));
+    let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([signal.len()], signal.as_slice().unwrap()).unwrap();
+    let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], field.as_slice().unwrap()).unwrap();
+
     let apollo_fft1_ms = elapsed_ms(|| {
-        let _ = fft_1d_array(&signal);
+        let _ = apollo_fft::fft_1d_leto(signal_leto.view());
     });
     let apollo_fft3_forward_ms = elapsed_ms(|| {
-        let _ = fft_3d_array(&field);
+        let _ = apollo_fft::fft_3d_leto(field_leto.view());
     });
-    let spectrum = fft_3d_array(&field);
+    let spectrum = apollo_fft::fft_3d_leto(field_leto.view());
     let apollo_fft3_inverse_ms = elapsed_ms(|| {
-        let _ = ifft_3d_array(&spectrum);
+        let _ = apollo_fft::ifft_3d_leto(spectrum.view());
     });
 
     let rustfft_available = cfg!(feature = "external-references");
@@ -540,13 +557,13 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
             elapsed_ms(|| {
                 #[cfg(feature = "external-references")]
                 {
-                    let _ = fft1_real(&signal);
+                    let _ = fft1_real(&signal_leto.view());
                 }
             }),
             elapsed_ms(|| {
                 #[cfg(feature = "external-references")]
                 {
-                    let _ = fft3_real(&field);
+                    let _ = fft3_real(&field_leto.view());
                 }
             }),
         )
@@ -641,44 +658,56 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
 
 fn precision_profile_reports() -> Vec<PrecisionRunReport> {
     let reference = representative_field_3d((4, 4, 4));
+    let reference_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], reference.as_slice().unwrap()).unwrap();
 
     // f64 high-accuracy path — the authoritative reference for forward error comparisons.
-    let high_spectrum = fft_3d_array(&reference);
-    let high_recovered = ifft_3d_array(&high_spectrum);
-    let high_error = max_real_abs_delta_3d(&reference, &high_recovered);
+    let high_spectrum = apollo_fft::fft_3d_leto(reference_leto.view());
+    let high_recovered = apollo_fft::ifft_3d_leto(high_spectrum.view());
+    let high_recovered_nd = ndarray::Array3::from_shape_vec((4, 4, 4), high_recovered.storage().as_slice().to_vec()).unwrap();
+    let high_error = max_real_abs_delta_3d(&reference, &high_recovered_nd);
 
     // f32 low-precision path.
     let low_input = reference.mapv(|value| value as f32);
-    let low_spectrum: Array3<Complex32> = apollo_fft::fft_3d_array_typed(&low_input);
+    let low_input_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], low_input.as_slice().unwrap()).unwrap();
+    let low_spectrum = apollo_fft::fft_3d_leto_typed::<f32>(low_input_leto.view());
     // Forward error: max |f32 spectrum - f64 reference spectrum|.
-    let low_forward_error = low_spectrum
+    let low_spectrum_slice = low_spectrum.storage().as_slice();
+    let high_spectrum_slice = high_spectrum.storage().as_slice();
+    let low_forward_error = low_spectrum_slice
         .iter()
-        .zip(high_spectrum.iter())
+        .zip(high_spectrum_slice.iter())
         .map(|(lv, hv)| {
             ((f64::from(lv.re) - hv.re).powi(2) + (f64::from(lv.im) - hv.im).powi(2)).sqrt()
         })
         .fold(0.0_f64, f64::max);
-    let low_recovered = apollo_fft::ifft_3d_array_typed::<f32>(&low_spectrum).mapv(f64::from);
+    let low_recovered = apollo_fft::ifft_3d_leto_typed::<f32>(low_spectrum.view());
+    let low_recovered_nd = ndarray::Array3::from_shape_vec((4, 4, 4), low_recovered.storage().as_slice().to_vec()).unwrap().mapv(f64::from);
     let low_reference = low_input.mapv(f64::from);
-    let low_error = max_real_abs_delta_3d(&low_reference, &low_recovered);
+    let low_error = max_real_abs_delta_3d(&low_reference, &low_recovered_nd);
 
     // f16/f32 mixed-precision path — compare spectrum against f64 FFT of the f16-represented input.
     let mixed_input = reference.mapv(|value| f16::from_f32(value as f32));
-    let mixed_spectrum: Array3<Complex32> = apollo_fft::fft_3d_array_typed(&mixed_input);
+    let mixed_input_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], mixed_input.as_slice().unwrap()).unwrap();
+    let mixed_spectrum = apollo_fft::fft_3d_leto_typed::<f16>(mixed_input_leto.view());
     // Use f64 FFT of the quantized input as the mixed-precision forward reference.
     let mixed_input_f64 = mixed_input.mapv(|v| f64::from(v.to_f32()));
-    let mixed_reference_spectrum = fft_3d_array(&mixed_input_f64);
-    let mixed_forward_error = mixed_spectrum
+    let mixed_input_f64_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice([4, 4, 4], mixed_input_f64.as_slice().unwrap()).unwrap();
+    let mixed_reference_spectrum = apollo_fft::fft_3d_leto(mixed_input_f64_leto.view());
+    
+    let mixed_spectrum_slice = mixed_spectrum.storage().as_slice();
+    let mixed_ref_spec_slice = mixed_reference_spectrum.storage().as_slice();
+    let mixed_forward_error = mixed_spectrum_slice
         .iter()
-        .zip(mixed_reference_spectrum.iter())
+        .zip(mixed_ref_spec_slice.iter())
         .map(|(lv, hv)| {
             ((f64::from(lv.re) - hv.re).powi(2) + (f64::from(lv.im) - hv.im).powi(2)).sqrt()
         })
         .fold(0.0_f64, f64::max);
     let mixed_recovered =
-        ifft_3d_array_typed::<f16>(&mixed_spectrum).mapv(|value| f64::from(value.to_f32()));
+        apollo_fft::ifft_3d_leto_typed::<f16>(mixed_spectrum.view());
+    let mixed_recovered_nd = ndarray::Array3::from_shape_vec((4, 4, 4), mixed_recovered.storage().as_slice().to_vec()).unwrap().mapv(|value| f64::from(value.to_f32()));
     let mixed_reference = mixed_input.mapv(|value| f64::from(value.to_f32()));
-    let mixed_error = max_real_abs_delta_3d(&mixed_reference, &mixed_recovered);
+    let mixed_error = max_real_abs_delta_3d(&mixed_reference, &mixed_recovered_nd);
 
     vec![
         PrecisionRunReport {
@@ -727,7 +756,9 @@ fn numpy_comparison_report(signal: &Array1<f64>) -> ExternalBackendReport {
     let signal_shape = [signal.len()];
     match compare_fft(&signal_shape[..], signal.as_slice().unwrap_or(&[]), 2) {
         Ok(report) => {
-            let apollo = fft_1d_array(signal);
+            let signal_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([signal.len()], signal.as_slice().unwrap()).unwrap();
+            let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
+            let apollo = ndarray::Array1::from_vec(apollo_leto.storage().as_slice().to_vec());
             let numpy_values: Vec<Complex64> = report
                 .numpy_pairs
                 .unwrap_or_default()
