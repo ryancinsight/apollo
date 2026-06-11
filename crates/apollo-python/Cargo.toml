@@ -19,6 +19,7 @@ apollo-dht = { path = "../apollo-dht" }
 apollo-fwht = { path = "../apollo-fwht" }
 apollo-dctdst = { path = "../apollo-dctdst" }
 ndarray = { workspace = true }
+leto = { workspace = true }
 num-complex = "0.4"
 numpy = "0.23"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }

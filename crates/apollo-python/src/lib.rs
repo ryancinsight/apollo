@@ -431,36 +431,31 @@ fn fft1<'py>(
     if let Ok(input64) = input.extract::<PyReadonlyArray1<f64>>() {
         require_contiguous_1d(&input64, "fft1 input")?;
         require_profile_matches_f64(profile, "fft1")?;
-        Ok(
-            PyArray1::from_owned_array(
-                py,
-                apollo_fft::fft_1d_array(&input64.as_array().to_owned()),
-            )
-            .into_any()
-            .unbind(),
-        )
+        let leto_view = leto::ArrayView1::from(input64.as_array());
+        let result = py.allow_threads(|| apollo_fft::fft_1d_leto(leto_view));
+        let nd_view = ndarray::ArrayView1::try_from(result.view()).map_err(|e| {
+            PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+        })?;
+        Ok(PyArray1::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
     } else {
         match profile.storage {
             StoragePrecision::F16 => {
                 let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                 require_contiguous_1d(&input32, "fft1 input")?;
-                Ok(PyArray1::from_owned_array(
-                    py,
-                    apollo_fft::fft_1d_array_typed(&input32.as_array().mapv(f16::from_f32)),
-                )
-                .into_any()
-                .unbind())
+                let owned = input32.as_array().mapv(f16::from_f32);
+                let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&owned));
+                Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                 require_contiguous_1d(&input32, "fft1 input")?;
                 require_profile_matches_f32(profile, "fft1")?;
-                Ok(PyArray1::from_owned_array(
-                    py,
-                    apollo_fft::fft_1d_array_typed(&input32.as_array().to_owned()),
-                )
-                .into_any()
-                .unbind())
+                let leto_view = leto::ArrayView1::from(input32.as_array());
+                let result = py.allow_threads(|| apollo_fft::fft_1d_leto_typed::<f32>(leto_view));
+                let nd_view = ndarray::ArrayView1::try_from(result.view()).map_err(|e| {
+                    PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+                })?;
+                Ok(PyArray1::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
             }
         }
     }
@@ -478,35 +473,36 @@ fn ifft1<'py>(
     if let Ok(input64) = input.extract::<PyReadonlyArray1<Complex64>>() {
         require_contiguous_1d(&input64, "ifft1 input")?;
         require_profile_matches_f64(profile, "ifft1")?;
-        Ok(PyArray1::from_owned_array(
-            py,
-            apollo_fft::ifft_1d_array(&input64.as_array().to_owned()),
-        )
-        .into_any()
-        .unbind())
+        let leto_view = leto::ArrayView1::from(input64.as_array());
+        let result = py.allow_threads(|| apollo_fft::ifft_1d_leto(leto_view));
+        let nd_view = ndarray::ArrayView1::try_from(result.view()).map_err(|e| {
+            PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+        })?;
+        Ok(PyArray1::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
     } else {
         let input32 = input.extract::<PyReadonlyArray1<Complex32>>()?;
         require_contiguous_1d(&input32, "ifft1 input")?;
         match profile.storage {
-            StoragePrecision::F16 => Ok(PyArray1::from_owned_array(
-                py,
-                apollo_fft::ifft_1d_array_typed::<f16>(&input32.as_array().to_owned())
-                    .mapv(|value: f16| value.to_f32()),
-            )
-            .into_any()
-            .unbind()),
+            StoragePrecision::F16 => {
+                let owned = input32.as_array().to_owned();
+                let result = py.allow_threads(|| {
+                    apollo_fft::ifft_1d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                });
+                Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
+            }
             _ => {
                 require_profile_matches_f32(profile, "ifft1")?;
-                Ok(PyArray1::from_owned_array(
-                    py,
-                    apollo_fft::ifft_1d_array_typed::<f32>(&input32.as_array().to_owned()),
-                )
-                .into_any()
-                .unbind())
+                let leto_view = leto::ArrayView1::from(input32.as_array());
+                let result = py.allow_threads(|| apollo_fft::ifft_1d_leto_typed::<f32>(leto_view));
+                let nd_view = ndarray::ArrayView1::try_from(result.view()).map_err(|e| {
+                    PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+                })?;
+                Ok(PyArray1::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
             }
         }
     }
 }
+
 
 /// Forward 2D FFT of a real array.
 #[pyfunction]
@@ -520,9 +516,12 @@ fn fft2<'py>(
     if let Ok(input64) = input.extract::<PyReadonlyArray2<f64>>() {
         require_contiguous_2d(&input64, "fft2 input")?;
         require_profile_matches_f64(profile, "fft2")?;
-        let owned = input64.as_array().to_owned();
-        let result = py.allow_threads(|| apollo_fft::fft_2d_array(&owned));
-        Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+        let leto_view = leto::ArrayView2::from(input64.as_array());
+        let result = py.allow_threads(|| apollo_fft::fft_2d_leto(leto_view));
+        let nd_view = ndarray::ArrayView2::try_from(result.view()).map_err(|e| {
+            PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+        })?;
+        Ok(PyArray2::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
     } else {
         match profile.storage {
             StoragePrecision::F16 => {
@@ -536,9 +535,12 @@ fn fft2<'py>(
                 let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
                 require_contiguous_2d(&input32, "fft2 input")?;
                 require_profile_matches_f32(profile, "fft2")?;
-                let owned = input32.as_array().to_owned();
-                let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
-                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                let leto_view = leto::ArrayView2::from(input32.as_array());
+                let result = py.allow_threads(|| apollo_fft::fft_2d_leto_typed::<f32>(leto_view));
+                let nd_view = ndarray::ArrayView2::try_from(result.view()).map_err(|e| {
+                    PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+                })?;
+                Ok(PyArray2::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
             }
         }
     }
@@ -556,15 +558,18 @@ fn ifft2<'py>(
     if let Ok(input64) = input.extract::<PyReadonlyArray2<Complex64>>() {
         require_contiguous_2d(&input64, "ifft2 input")?;
         require_profile_matches_f64(profile, "ifft2")?;
-        let owned = input64.as_array().to_owned();
-        let result = py.allow_threads(|| apollo_fft::ifft_2d_array(&owned));
-        Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+        let leto_view = leto::ArrayView2::from(input64.as_array());
+        let result = py.allow_threads(|| apollo_fft::ifft_2d_leto(leto_view));
+        let nd_view = ndarray::ArrayView2::try_from(result.view()).map_err(|e| {
+            PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+        })?;
+        Ok(PyArray2::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
     } else {
         let input32 = input.extract::<PyReadonlyArray2<Complex32>>()?;
         require_contiguous_2d(&input32, "ifft2 input")?;
-        let owned = input32.as_array().to_owned();
         match profile.storage {
             StoragePrecision::F16 => {
+                let owned = input32.as_array().to_owned();
                 let result = py.allow_threads(|| {
                     apollo_fft::ifft_2d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
                 });
@@ -572,12 +577,17 @@ fn ifft2<'py>(
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft2")?;
-                let result = py.allow_threads(|| apollo_fft::ifft_2d_array_typed::<f32>(&owned));
-                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                let leto_view = leto::ArrayView2::from(input32.as_array());
+                let result = py.allow_threads(|| apollo_fft::ifft_2d_leto_typed::<f32>(leto_view));
+                let nd_view = ndarray::ArrayView2::try_from(result.view()).map_err(|e| {
+                    PyValueError::new_err(format!("Leto to ndarray conversion failed: {:?}", e))
+                })?;
+                Ok(PyArray2::from_owned_array(py, nd_view.to_owned()).into_any().unbind())
             }
         }
     }
 }
+
 
 /// Forward 3D FFT of a real array.
 #[pyfunction]
