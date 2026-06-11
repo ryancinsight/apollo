@@ -1,4 +1,9 @@
 # Apollo Checklist
+## Moirai scheduler bridge pin [patch]
+- [x] Updated workspace `moirai` Git revision to pushed Moirai commit `d60317ef76f1556901e137ed687c82d7ec4d2bec`.
+- [x] Preserved Apollo's Moirai default features, so Moirai's default `parallel`, `mnemosyne`, and `melinoe` provider stack remains active with executor maintenance and Melinoe partition routing through Moirai's global scheduler.
+- Evidence: `cargo metadata --no-deps --locked --format-version 1`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`; `git diff --check`.
+
 ## Hermes default provider feature pin [patch]
 - [x] Updated workspace `hermes-simd` Git revision to pushed Hermes commit `df67249ef05de8e1addc5a26d6831c70d63c3d18`.
 - [x] Removed Apollo's `default-features = false, features = ["std"]` override so Hermes default `parallel` and `mnemosyne-memory` provider features are active for Apollo transform crates.

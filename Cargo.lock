@@ -1826,6 +1826,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.2.0"
 dependencies = [
+ "melinoe",
  "mnemosyne",
  "moirai-core",
  "moirai-pal",
