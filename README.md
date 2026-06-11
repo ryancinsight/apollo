@@ -206,6 +206,14 @@ opt-in via `with_precision(...)` constructors or the generic `*_typed(...)` help
 Apollo now also exposes explicit `*_f16` helpers for real-domain FFT storage. The maintainable
 Rust surface is the generic typed API.
 
+## Zero-Copy and Modularity Invariants
+
+Apollo implements workspace-wide memory-efficiency and strict structural modularity constraints:
+
+- **Zero-Copy Cow Promotion**: All `*_typed` and `*_typed_into` execution boundaries across GPU/WGPU transform crates route inputs and outputs through `std::borrow::Cow` and dynamically check types at execution boundaries using `std::any::TypeId`. When input/output layouts align with the compute backend's internal precision profile (e.g. `f32` or `Complex32`), unsafe reinterpretation casts bypass heap allocation and quantization loops.
+- **Staging Buffer Pooling & Pipeline Caching**: Concrete GPU backends query a thread-safe compute pipeline cache (`pipeline_cache` in the shared `hephaestus-wgpu` substrate) to avoid recompilation on shader execution. GPU host-staging transfers reuse recycled staging buffers through `WgpuDevice`'s staging pool helper.
+- **Modularity Limits**: Every source file in the workspace targets a maximum of 500 lines. Monolithic files exceeding this limit (such as `device.rs` and `kernel.rs` in WGPU transform crates) are refactored into structured sub-folders (e.g., `device/forward.rs`, `device/inverse.rs`, `device/helpers.rs`) and extend the parent struct definitions via decentralized `impl` blocks.
+
 ## Design Rules
 
 - `apollo/` is intentionally **not** a member of the root `d:\\kwavers\\Cargo.toml` workspace.

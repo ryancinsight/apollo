@@ -77,6 +77,42 @@ fn leto_real_forward_and_inverse_match_ndarray_path() {
 }
 
 #[test]
+fn leto_real_caller_owned_outputs_match_allocating_path() {
+    use leto::Storage;
+
+    let plan = FwhtPlan::new(8).expect("valid plan");
+    let signal = vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0];
+    let leto_input = leto::Array1::from_shape_vec([8], signal).expect("leto input");
+    let mut forward = leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([8]);
+
+    plan.forward_leto_into(leto_input.view(), forward.view_mut())
+        .expect("leto forward into");
+    let expected_forward = plan
+        .forward_leto(leto_input.view())
+        .expect("allocating leto forward");
+    for (actual, expected) in forward
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(expected_forward.storage().as_slice().iter())
+    {
+        assert_relative_eq!(actual, expected, epsilon = 0.0);
+    }
+
+    let mut inverse = leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([8]);
+    plan.inverse_leto_into(forward.view(), inverse.view_mut())
+        .expect("leto inverse into");
+    for (actual, expected) in inverse
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(leto_input.storage().as_slice())
+    {
+        assert_relative_eq!(actual, expected, epsilon = 1.0e-12);
+    }
+}
+
+#[test]
 fn leto_real_forward_accepts_strided_logical_view() {
     use leto::{SliceArg, Storage};
 
@@ -102,6 +138,38 @@ fn leto_real_forward_accepts_strided_logical_view() {
 }
 
 #[test]
+fn leto_real_forward_scatters_into_strided_output() {
+    use leto::{SliceArg, Storage};
+
+    let plan = FwhtPlan::new(8).expect("valid plan");
+    let signal = vec![3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0];
+    let leto_input = leto::Array1::from_shape_vec([8], signal.clone()).unwrap();
+    let mut output = leto::Array1::from_shape_vec([16], vec![-1.0; 16]).unwrap();
+    let strided_output = output
+        .view_mut()
+        .slice_with_mut::<1>(&[SliceArg::range(Some(0), None, 2)])
+        .unwrap();
+
+    plan.forward_leto_into(leto_input.view(), strided_output)
+        .expect("leto strided output forward");
+    let expected = plan
+        .forward(&Array1::from_vec(signal))
+        .expect("ndarray forward");
+    for index in 0..8 {
+        assert_relative_eq!(
+            output.storage().as_slice()[index * 2],
+            expected[index],
+            epsilon = 0.0
+        );
+        assert_relative_eq!(
+            output.storage().as_slice()[index * 2 + 1],
+            -1.0,
+            epsilon = 0.0
+        );
+    }
+}
+
+#[test]
 fn leto_typed_f32_matches_ndarray_typed_path() {
     use leto::Storage;
 
@@ -115,6 +183,29 @@ fn leto_typed_f32_matches_ndarray_typed_path() {
     let actual = plan
         .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
         .expect("leto typed forward");
+    for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
+        assert_relative_eq!(actual, expected, epsilon = 0.0);
+    }
+}
+
+#[test]
+fn leto_typed_f32_caller_owned_output_matches_ndarray_typed_path() {
+    use leto::Storage;
+
+    let plan = FwhtPlan::new(8).expect("valid plan");
+    let signal = Array1::from_vec(vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
+    let leto_input = leto::Array1::from_shape_vec([8], signal.iter().copied().collect()).unwrap();
+    let mut expected = Array1::<f32>::zeros(8);
+    plan.forward_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
+        .expect("ndarray typed forward");
+
+    let mut actual = leto::Array1::from_shape_vec([8], vec![0.0_f32; 8]).unwrap();
+    plan.forward_leto_typed_into(
+        leto_input.view(),
+        actual.view_mut(),
+        PrecisionProfile::LOW_PRECISION_F32,
+    )
+    .expect("leto typed forward into");
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
         assert_relative_eq!(actual, expected, epsilon = 0.0);
     }
@@ -374,6 +465,18 @@ fn length_mismatch_returns_error() {
     ));
     assert!(matches!(
         plan.inverse_complex_into(&wrong_c, &mut output_c),
+        Err(FwhtError::LengthMismatch)
+    ));
+    let leto_wrong = leto::Array1::from_shape_vec([3], vec![1.0, 2.0, 3.0]).unwrap();
+    let mut leto_output = leto::Array1::from_shape_vec([4], vec![0.0; 4]).unwrap();
+    assert!(matches!(
+        plan.forward_leto_into(leto_wrong.view(), leto_output.view_mut()),
+        Err(FwhtError::LengthMismatch)
+    ));
+    let leto_input = leto::Array1::from_shape_vec([4], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let mut leto_wrong_output = leto::Array1::from_shape_vec([3], vec![0.0; 3]).unwrap();
+    assert!(matches!(
+        plan.inverse_leto_into(leto_input.view(), leto_wrong_output.view_mut()),
         Err(FwhtError::LengthMismatch)
     ));
 }

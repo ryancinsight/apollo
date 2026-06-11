@@ -33,9 +33,10 @@ use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use crate::application::execution::plan::fft::workspace::{with_2d_scratch, PlanScratch};
 use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
-use ndarray::{Array2, Axis};
+use ndarray::Array2;
 use num_complex::Complex;
 use std::sync::Arc;
+use leto::ArrayViewMut2;
 
 /// Use Moirai parallel iteration when total elements exceed this threshold.
 /// Below the threshold, sequential iteration avoids parallel task-spawn overhead
@@ -94,21 +95,37 @@ where
     #[inline]
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(data.dim(), (NX, NY), "static 2D forward shape mismatch");
-        Self::axis1_pass_complex::<true>(data);
-        Self::axis0_pass_complex::<true>(data);
+        let view = ArrayViewMut2::from(data.view_mut());
+        self.forward_complex_leto_inplace(view);
     }
 
     /// Inverse transform of a complex array in-place with normalization.
     #[inline]
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(data.dim(), (NX, NY), "static 2D inverse shape mismatch");
-        Self::axis0_pass_complex::<false>(data);
+        let view = ArrayViewMut2::from(data.view_mut());
+        self.inverse_complex_leto_inplace(view);
+    }
+
+    /// Forward transform of a complex Leto view in-place.
+    #[inline]
+    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+        assert_eq!(data.shape(), [NX, NY], "static 2D forward shape mismatch");
+        Self::axis1_pass_complex::<true>(data.reborrow());
+        Self::axis0_pass_complex::<true>(data);
+    }
+
+    /// Inverse transform of a complex Leto view in-place with normalization.
+    #[inline]
+    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+        assert_eq!(data.shape(), [NX, NY], "static 2D inverse shape mismatch");
+        Self::axis0_pass_complex::<false>(data.reborrow());
         Self::axis1_pass_complex::<false>(data);
     }
 
-    fn axis1_pass_complex<const FORWARD: bool>(data: &mut Array2<F::Complex>) {
+    fn axis1_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_slice_memory_order_mut()
+            .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         let lane_plan = StaticFftPlan1D::<F, NY>::new();
         let lane_fn = |lane: &mut [F::Complex]| {
@@ -125,9 +142,9 @@ where
         >(data_slice, NY, lane_fn);
     }
 
-    fn axis0_pass_complex<const FORWARD: bool>(data: &mut Array2<F::Complex>) {
+    fn axis0_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_slice_memory_order_mut()
+            .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         with_2d_scratch::<F::Complex, _>(NX * NY, |scratch| {
             for col_t in (0..NY).step_by(TRANSPOSE_TILE) {
@@ -215,8 +232,8 @@ where
             (self.nx, self.ny),
             "complex forward shape mismatch"
         );
-        self.axis_pass_complex::<true>(data, Axis(1));
-        self.axis_pass_complex::<true>(data, Axis(0));
+        let view = ArrayViewMut2::from(data.view_mut());
+        self.forward_complex_leto_inplace(view);
     }
 
     /// Inverse transform of a complex array in-place with normalization.
@@ -226,16 +243,38 @@ where
             (self.nx, self.ny),
             "complex inverse shape mismatch"
         );
-        self.axis_pass_complex::<false>(data, Axis(0));
-        self.axis_pass_complex::<false>(data, Axis(1));
+        let view = ArrayViewMut2::from(data.view_mut());
+        self.inverse_complex_leto_inplace(view);
     }
 
-    fn axis_pass_complex<const FORWARD: bool>(&self, data: &mut Array2<F::Complex>, axis: Axis) {
-        if axis.index() == 1 {
+    /// Forward transform of a complex Leto view in-place.
+    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny],
+            "complex forward shape mismatch"
+        );
+        self.axis_pass_complex::<true>(data.reborrow(), 1);
+        self.axis_pass_complex::<true>(data, 0);
+    }
+
+    /// Inverse transform of a complex Leto view in-place with normalization.
+    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+        assert_eq!(
+            data.shape(),
+            [self.nx, self.ny],
+            "complex inverse shape mismatch"
+        );
+        self.axis_pass_complex::<false>(data.reborrow(), 0);
+        self.axis_pass_complex::<false>(data, 1);
+    }
+
+    fn axis_pass_complex<const FORWARD: bool>(&self, data: ArrayViewMut2<'_, F::Complex>, axis: usize) {
+        if axis == 1 {
             self.axis1_pass_complex::<FORWARD>(data);
             return;
         }
-        if axis.index() == 0 {
+        if axis == 0 {
             self.axis0_pass_complex::<FORWARD>(data);
             return;
         }
@@ -243,9 +282,9 @@ where
         unreachable!("2D FFT axis index must be 0 or 1");
     }
 
-    fn axis1_pass_complex<const FORWARD: bool>(&self, data: &mut Array2<F::Complex>) {
+    fn axis1_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_slice_memory_order_mut()
+            .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         let lane_fn =
             |lane: &mut [F::Complex]| match (FORWARD, &self.twiddle_row_fwd, &self.twiddle_row_inv)
@@ -271,9 +310,9 @@ where
         >(data_slice, self.ny, lane_fn);
     }
 
-    fn axis0_pass_complex<const FORWARD: bool>(&self, data: &mut Array2<F::Complex>) {
+    fn axis0_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_slice_memory_order_mut()
+            .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         with_2d_scratch::<F::Complex, _>(self.nx * self.ny, |scratch| {
             // Cache-blocked gather: data[row, col] (row-major) → scratch[col, row] (row-major)

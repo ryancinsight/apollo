@@ -65,16 +65,24 @@ impl FwhtPlan {
         &self,
         input: leto::ArrayView1<'_, f64>,
     ) -> Result<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>, FwhtError> {
-        let signal = leto_view1_cow(&input);
-        let mut output = vec![0.0; self.n];
-        self.forward_f64_slice_into(&signal, &mut output)?;
-        Ok(
-            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::from_mnemosyne_slice(
-                [output.len()],
-                &output,
-            )
-            .expect("FWHT output length must match Leto output shape"),
-        )
+        let mut output =
+            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([self.n]);
+        self.forward_leto_into(input, output.view_mut())?;
+        Ok(output)
+    }
+
+    /// Forward WHT over a Leto real-valued view into caller-owned output.
+    ///
+    /// Contiguous outputs are written directly. Strided outputs use one
+    /// transform buffer and scatter the logical result into the view.
+    pub fn forward_leto_into(
+        &self,
+        input: leto::ArrayView1<'_, f64>,
+        output: leto::ArrayViewMut1<'_, f64>,
+    ) -> Result<(), FwhtError> {
+        self.leto_into(input, output, |plan, signal, out| {
+            plan.forward_f64_slice_into(signal, out)
+        })
     }
 
     /// Forward WHT over a typed Leto real-valued view.
@@ -83,9 +91,16 @@ impl FwhtPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
-        let signal = leto_view1_cow(&input);
         let mut output = vec![T::from_f64(0.0); self.n];
-        T::forward_slice_into(self, &signal, &mut output, profile)?;
+        self.forward_leto_typed_into(
+            input,
+            leto::ArrayViewMut1::new(
+                leto::Layout::c_contiguous([self.n])
+                    .expect("typed FWHT output layout must construct"),
+                &mut output,
+            ),
+            profile,
+        )?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
                 [output.len()],
@@ -93,6 +108,18 @@ impl FwhtPlan {
             )
             .expect("typed FWHT output length must match Leto output shape"),
         )
+    }
+
+    /// Forward WHT over a typed Leto real-valued view into caller-owned output.
+    pub fn forward_leto_typed_into<T: FwhtStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        output: leto::ArrayViewMut1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<(), FwhtError> {
+        self.leto_into(input, output, |plan, signal, out| {
+            T::forward_slice_into(plan, signal, out, profile)
+        })
     }
 
     /// Forward WHT into caller-owned output. O(N log N).
@@ -155,16 +182,21 @@ impl FwhtPlan {
         &self,
         input: leto::ArrayView1<'_, f64>,
     ) -> Result<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>, FwhtError> {
-        let signal = leto_view1_cow(&input);
-        let mut output = vec![0.0; self.n];
-        self.inverse_f64_slice_into(&signal, &mut output)?;
-        Ok(
-            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::from_mnemosyne_slice(
-                [output.len()],
-                &output,
-            )
-            .expect("inverse FWHT output length must match Leto output shape"),
-        )
+        let mut output =
+            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([self.n]);
+        self.inverse_leto_into(input, output.view_mut())?;
+        Ok(output)
+    }
+
+    /// Inverse WHT over a Leto real-valued view into caller-owned output.
+    pub fn inverse_leto_into(
+        &self,
+        input: leto::ArrayView1<'_, f64>,
+        output: leto::ArrayViewMut1<'_, f64>,
+    ) -> Result<(), FwhtError> {
+        self.leto_into(input, output, |plan, signal, out| {
+            plan.inverse_f64_slice_into(signal, out)
+        })
     }
 
     /// Inverse WHT over a typed Leto real-valued view.
@@ -173,9 +205,16 @@ impl FwhtPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
-        let signal = leto_view1_cow(&input);
         let mut output = vec![T::from_f64(0.0); self.n];
-        T::inverse_slice_into(self, &signal, &mut output, profile)?;
+        self.inverse_leto_typed_into(
+            input,
+            leto::ArrayViewMut1::new(
+                leto::Layout::c_contiguous([self.n])
+                    .expect("typed inverse FWHT output layout must construct"),
+                &mut output,
+            ),
+            profile,
+        )?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
                 [output.len()],
@@ -183,6 +222,18 @@ impl FwhtPlan {
             )
             .expect("typed inverse FWHT output length must match Leto output shape"),
         )
+    }
+
+    /// Inverse WHT over a typed Leto real-valued view into caller-owned output.
+    pub fn inverse_leto_typed_into<T: FwhtStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        output: leto::ArrayViewMut1<'_, T>,
+        profile: PrecisionProfile,
+    ) -> Result<(), FwhtError> {
+        self.leto_into(input, output, |plan, signal, out| {
+            T::inverse_slice_into(plan, signal, out, profile)
+        })
     }
 
     /// Inverse WHT into caller-owned output. Applies WHT then divides by N.
@@ -341,6 +392,30 @@ impl FwhtPlan {
         profile: PrecisionProfile,
     ) -> Result<(), FwhtError> {
         T::inverse_into(self, input, output, profile)
+    }
+
+    fn leto_into<T: FwhtStorage>(
+        &self,
+        input: leto::ArrayView1<'_, T>,
+        mut output: leto::ArrayViewMut1<'_, T>,
+        transform: impl FnOnce(&Self, &[T], &mut [T]) -> Result<(), FwhtError>,
+    ) -> Result<(), FwhtError> {
+        if input.size() != self.n || output.size() != self.n {
+            return Err(FwhtError::LengthMismatch);
+        }
+        let signal = leto_view1_cow(&input);
+        if let Some(output_slice) = output.as_mut_slice() {
+            return transform(self, &signal, output_slice);
+        }
+
+        let mut logical = vec![T::from_f64(0.0); self.n];
+        transform(self, &signal, &mut logical)?;
+        for (index, value) in logical.into_iter().enumerate() {
+            *output
+                .get_mut([index])
+                .expect("validated FWHT output logical index") = value;
+        }
+        Ok(())
     }
 }
 
