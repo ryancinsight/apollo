@@ -1,4 +1,10 @@
 # Apollo Checklist
+## Leto 0.14.0 eigenvalues-only provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `b9e11a8b825ed656eb557dcea3b055dce81a22cb`.
+- [x] Updated `Cargo.lock` from Leto/Leto Ops `0.13.1` to `0.14.0`, importing the provider-side `symmetric_eigenvalues_jacobi` surface for Apollo linalg consumers.
+- [x] Preserved current Apollo FrFT/GFT calls through `symmetric_eigen_jacobi`; the new eigenvalues-only API is available for later caller-specific memory reductions where vectors are not required.
+- Evidence: pending focused Cargo verification.
+
 ## CZT Leto direct path + Mnemosyne output move [patch]
 - [x] Added `CztPlan::forward_direct_leto` and exported `czt_direct_leto`, giving Apollo a Leto/Mnemosyne strict O(NM) CZT path that no longer requires ndarray ownership for direct execution.
 - [x] Refactored the direct CZT kernel through a canonical contiguous slice implementation shared by ndarray compatibility and Leto entry points.
