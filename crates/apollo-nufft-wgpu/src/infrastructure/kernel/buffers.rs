@@ -1,5 +1,6 @@
-use super::{ComplexPod, Position3Pod};
+use super::Position3Pod;
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
+use num_complex::Complex32;
 
 /// Pre-allocated GPU buffers for repeated 1D NUFFT fast-path execution.
 ///
@@ -35,7 +36,7 @@ impl NufftGpuBuffers1D {
             | wgpu::BufferUsages::COPY_SRC
             | wgpu::BufferUsages::COPY_DST;
 
-        let position_size = (max_samples.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let position_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers1d positions"),
             size: position_size,
@@ -43,7 +44,7 @@ impl NufftGpuBuffers1D {
             mapped_at_creation: false,
         });
 
-        let value_size = (max_samples.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let value_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let value_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers1d values"),
             size: value_size,
@@ -51,7 +52,7 @@ impl NufftGpuBuffers1D {
             mapped_at_creation: false,
         });
 
-        let deconv_size = (m.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let deconv_size = (m.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let deconv_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers1d deconv"),
             size: deconv_size,
@@ -73,7 +74,7 @@ impl NufftGpuBuffers1D {
             mapped_at_creation: false,
         });
 
-        let output_size = (n.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let output_size = (n.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers1d output"),
             size: output_size,
@@ -181,7 +182,7 @@ impl NufftGpuBuffers3D {
             mapped_at_creation: false,
         });
 
-        let value_size = (max_samples.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let value_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let value_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers3d values"),
             size: value_size,
@@ -211,7 +212,7 @@ impl NufftGpuBuffers3D {
             mapped_at_creation: false,
         });
 
-        let output_size = (output_len.max(1) * std::mem::size_of::<ComplexPod>()) as u64;
+        let output_size = (output_len.max(1) * std::mem::size_of::<Complex32>()) as u64;
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu buffers3d output"),
             size: output_size,

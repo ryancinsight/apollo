@@ -1,6 +1,4 @@
-use super::{
-    ComplexPod, FastNufftParams3D, NufftGpuKernel, NufftParams, Position3Pod, WORKGROUP_SIZE,
-};
+use super::{FastNufftParams3D, NufftGpuKernel, NufftParams, Position3Pod, WORKGROUP_SIZE};
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use bytemuck::Pod;
 use num_complex::Complex32;
@@ -18,13 +16,6 @@ impl NufftGpuKernel {
         params: NufftParams,
         pipeline: &wgpu::ComputePipeline,
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let value_data: Vec<ComplexPod> = values
-            .iter()
-            .map(|value| ComplexPod {
-                re: value.re,
-                im: value.im,
-            })
-            .collect();
         let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-nufft-wgpu positions"),
             contents: bytemuck::cast_slice(positions),
@@ -32,12 +23,12 @@ impl NufftGpuKernel {
         });
         let value_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-nufft-wgpu values"),
-            contents: bytemuck::cast_slice(&value_data),
+            contents: bytemuck::cast_slice(values),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu output"),
-            size: (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (output_len * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -45,7 +36,7 @@ impl NufftGpuKernel {
         });
         let staging = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu staging"),
-            size: (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (output_len * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -89,7 +80,7 @@ impl NufftGpuKernel {
             0,
             &staging,
             0,
-            (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            (output_len * std::mem::size_of::<Complex32>()) as u64,
         );
         queue.submit(std::iter::once(encoder.finish()));
 
@@ -115,10 +106,7 @@ impl NufftGpuKernel {
 
         let output = {
             let mapped = slice.get_mapped_range();
-            let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-            pods.iter()
-                .map(|value| Complex32::new(value.re, value.im))
-                .collect()
+            bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
         };
         staging.unmap();
         Ok(output)
@@ -177,40 +165,21 @@ pub(crate) fn binding(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEnt
     }
 }
 
-pub(crate) fn complex_to_pods(values: &[Complex32]) -> Vec<ComplexPod> {
+pub(crate) fn positions_to_complex_1d(positions: &[f32]) -> Vec<Complex32> {
+    positions.iter().map(|x| Complex32::new(*x, 0.0)).collect()
+}
+
+pub(crate) fn real_to_complex(values: &[f32]) -> Vec<Complex32> {
     values
         .iter()
-        .map(|value| ComplexPod {
-            re: value.re,
-            im: value.im,
-        })
+        .map(|value| Complex32::new(*value, 0.0))
         .collect()
 }
 
-pub(crate) fn positions_to_complex_pods_1d(positions: &[f32]) -> Vec<ComplexPod> {
-    positions
-        .iter()
-        .map(|x| ComplexPod { re: *x, im: 0.0 })
-        .collect()
-}
-
-pub(crate) fn real_to_complex_pods(values: &[f32]) -> Vec<ComplexPod> {
+pub(crate) fn real_to_complex_scaled(values: &[f32], scale: f32) -> Vec<Complex32> {
     values
         .iter()
-        .map(|value| ComplexPod {
-            re: *value,
-            im: 0.0,
-        })
-        .collect()
-}
-
-pub(crate) fn real_to_complex_pods_scaled(values: &[f32], scale: f32) -> Vec<ComplexPod> {
-    values
-        .iter()
-        .map(|value| ComplexPod {
-            re: *value * scale,
-            im: 0.0,
-        })
+        .map(|value| Complex32::new(*value * scale, 0.0))
         .collect()
 }
 
@@ -254,7 +223,7 @@ pub(crate) fn read_complex_buffer(
     source: &wgpu::Buffer,
     len: usize,
 ) -> NufftWgpuResult<Vec<Complex32>> {
-    let size = (len * std::mem::size_of::<ComplexPod>()) as u64;
+    let size = (len * std::mem::size_of::<Complex32>()) as u64;
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("apollo-nufft-wgpu fast output staging"),
         size,
@@ -287,10 +256,7 @@ pub(crate) fn read_complex_buffer(
     }
     let output = {
         let mapped = slice.get_mapped_range();
-        let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-        pods.iter()
-            .map(|value| Complex32::new(value.re, value.im))
-            .collect()
+        bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
     };
     staging.unmap();
     Ok(output)
@@ -303,7 +269,7 @@ pub(crate) fn read_complex_buffer_with_staging(
     staging: &wgpu::Buffer,
     len: usize,
 ) -> NufftWgpuResult<Vec<Complex32>> {
-    let size = (len * std::mem::size_of::<ComplexPod>()) as u64;
+    let size = (len * std::mem::size_of::<Complex32>()) as u64;
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("apollo-nufft-wgpu fast readback encoder"),
     });
@@ -330,10 +296,7 @@ pub(crate) fn read_complex_buffer_with_staging(
     }
     let output = {
         let mapped = slice.get_mapped_range();
-        let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-        pods.iter()
-            .map(|value| Complex32::new(value.re, value.im))
-            .collect()
+        bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
     };
     staging.unmap();
     Ok(output)

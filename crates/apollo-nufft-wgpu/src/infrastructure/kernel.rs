@@ -16,6 +16,7 @@ pub mod type1;
 pub mod type2;
 
 use bytemuck::{Pod, Zeroable};
+use num_complex::Complex32;
 use wgpu::util::DeviceExt;
 
 // Re-export GPU buffers so they remain under the same public path.
@@ -26,22 +27,15 @@ pub use buffers::{NufftGridSnapshot, NufftType2GridDiagnostics};
 
 // Re-export helpers to keep imports in submodules simple.
 pub(crate) use helpers::{
-    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d, read_complex_buffer,
-    read_complex_buffer_with_staging, real_to_complex_pods, real_to_complex_pods_scaled,
-    split_grid_buffers, storage_buffer,
+    binding, dispatch_count, positions_to_complex_1d, read_complex_buffer,
+    read_complex_buffer_with_staging, real_to_complex, real_to_complex_scaled, split_grid_buffers,
+    storage_buffer,
 };
 
 #[cfg(any(test, feature = "diagnostics"))]
 pub(crate) use helpers::read_split_grid_snapshot;
 
 pub(crate) const WORKGROUP_SIZE: u32 = 64;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(crate) struct ComplexPod {
-    pub(crate) re: f32,
-    pub(crate) im: f32,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -391,7 +385,7 @@ impl NufftGpuKernel {
         });
         let layout_padding_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-nufft-wgpu layout padding complex"),
-            contents: bytemuck::bytes_of(&ComplexPod { re: 0.0, im: 0.0 }),
+            contents: bytemuck::bytes_of(&Complex32::new(0.0, 0.0)),
             usage: wgpu::BufferUsages::STORAGE,
         });
         Self {

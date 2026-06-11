@@ -1,7 +1,7 @@
 use super::{
-    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d, read_complex_buffer,
-    read_complex_buffer_with_staging, real_to_complex_pods, split_grid_buffers, storage_buffer,
-    ComplexPod, FastNufftParams, FastNufftParams3D, NufftGpuKernel, Position3Pod,
+    binding, dispatch_count, positions_to_complex_1d, read_complex_buffer,
+    read_complex_buffer_with_staging, real_to_complex, split_grid_buffers, storage_buffer,
+    FastNufftParams, FastNufftParams3D, NufftGpuKernel, Position3Pod,
 };
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::kernel::buffers::ensure_sample_capacity;
@@ -27,17 +27,16 @@ impl NufftGpuKernel {
         positions: &[f32],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let position_data = positions_to_complex_pods_1d(positions);
-        let value_data = complex_to_pods(values);
-        let deconv_data = real_to_complex_pods(deconv);
+        let position_data = positions_to_complex_1d(positions);
+        let deconv_data = real_to_complex(deconv);
         let position_buffer =
             storage_buffer(device, "apollo-nufft-wgpu fast positions", &position_data);
-        let value_buffer = storage_buffer(device, "apollo-nufft-wgpu fast values", &value_data);
+        let value_buffer = storage_buffer(device, "apollo-nufft-wgpu fast values", values);
         let deconv_buffer = storage_buffer(device, "apollo-nufft-wgpu fast deconv", &deconv_data);
         let (re_buffer, im_buffer) = split_grid_buffers(device, oversampled_len);
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast type1 output"),
-            size: (n * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (n * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -146,15 +145,14 @@ impl NufftGpuKernel {
                 _pad: 0.0,
             })
             .collect();
-        let value_data = complex_to_pods(values);
 
         let position_buffer =
             storage_buffer(device, "apollo-nufft-wgpu fast3d positions", &position_data);
-        let value_buffer = storage_buffer(device, "apollo-nufft-wgpu fast3d values", &value_data);
+        let value_buffer = storage_buffer(device, "apollo-nufft-wgpu fast3d values", values);
         let deconv_buffer = storage_buffer(device, "apollo-nufft-wgpu fast3d deconv", deconv_xyz);
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast3d type1 output"),
-            size: (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (output_len * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -263,16 +261,15 @@ impl NufftGpuKernel {
         let oversampled_len = buffers.m;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
 
-        let position_data = positions_to_complex_pods_1d(positions);
-        let value_data = complex_to_pods(values);
-        let deconv_data = real_to_complex_pods(deconv);
+        let position_data = positions_to_complex_1d(positions);
+        let deconv_data = real_to_complex(deconv);
 
         queue.write_buffer(
             &buffers.position_buffer,
             0,
             bytemuck::cast_slice(&position_data),
         );
-        queue.write_buffer(&buffers.value_buffer, 0, bytemuck::cast_slice(&value_data));
+        queue.write_buffer(&buffers.value_buffer, 0, bytemuck::cast_slice(values));
         queue.write_buffer(
             &buffers.deconv_buffer,
             0,
@@ -392,14 +389,13 @@ impl NufftGpuKernel {
                 _pad: 0.0,
             })
             .collect();
-        let value_data = complex_to_pods(values);
 
         queue.write_buffer(
             &buffers.position_buffer,
             0,
             bytemuck::cast_slice(&position_data),
         );
-        queue.write_buffer(&buffers.value_buffer, 0, bytemuck::cast_slice(&value_data));
+        queue.write_buffer(&buffers.value_buffer, 0, bytemuck::cast_slice(values));
         queue.write_buffer(&buffers.deconv_buffer, 0, bytemuck::cast_slice(deconv_xyz));
 
         let params = FastNufftParams3D {

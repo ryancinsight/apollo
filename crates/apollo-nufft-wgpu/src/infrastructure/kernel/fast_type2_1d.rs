@@ -1,7 +1,6 @@
 use super::{
-    binding, complex_to_pods, dispatch_count, positions_to_complex_pods_1d, read_complex_buffer,
-    real_to_complex_pods_scaled, split_grid_buffers, storage_buffer, ComplexPod, FastNufftParams,
-    NufftGpuKernel,
+    binding, dispatch_count, positions_to_complex_1d, read_complex_buffer, real_to_complex_scaled,
+    split_grid_buffers, storage_buffer, FastNufftParams, NufftGpuKernel,
 };
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::kernel::buffers::ensure_sample_capacity;
@@ -30,21 +29,17 @@ impl NufftGpuKernel {
         coefficients: &[Complex32],
         positions: &[f32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let coefficient_data = complex_to_pods(coefficients);
-        let position_data = positions_to_complex_pods_1d(positions);
-        let deconv_data = real_to_complex_pods_scaled(deconv, oversampled_len as f32);
-        let coefficients_buffer = storage_buffer(
-            device,
-            "apollo-nufft-wgpu fast coefficients",
-            &coefficient_data,
-        );
+        let position_data = positions_to_complex_1d(positions);
+        let deconv_data = real_to_complex_scaled(deconv, oversampled_len as f32);
+        let coefficients_buffer =
+            storage_buffer(device, "apollo-nufft-wgpu fast coefficients", coefficients);
         let position_buffer =
             storage_buffer(device, "apollo-nufft-wgpu fast positions", &position_data);
         let deconv_buffer = storage_buffer(device, "apollo-nufft-wgpu fast deconv", &deconv_data);
         let (re_buffer, im_buffer) = split_grid_buffers(device, oversampled_len);
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -139,16 +134,11 @@ impl NufftGpuKernel {
     ) -> NufftWgpuResult<Vec<Complex32>> {
         let oversampled_len = buffers.m;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
+        let position_data = positions_to_complex_1d(positions);
+        let deconv_data = real_to_complex_scaled(deconv, oversampled_len as f32);
 
-        let coefficient_data = complex_to_pods(coefficients);
-        let position_data = positions_to_complex_pods_1d(positions);
-        let deconv_data = real_to_complex_pods_scaled(deconv, oversampled_len as f32);
-
-        let coefficients_buffer = storage_buffer(
-            device,
-            "apollo-nufft-wgpu fast coefficients",
-            &coefficient_data,
-        );
+        let coefficients_buffer =
+            storage_buffer(device, "apollo-nufft-wgpu fast coefficients", coefficients);
 
         queue.write_buffer(
             &buffers.position_buffer,
@@ -163,7 +153,7 @@ impl NufftGpuKernel {
 
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -264,13 +254,12 @@ impl NufftGpuKernel {
     ) -> NufftWgpuResult<(Vec<Complex32>, NufftType2GridDiagnostics)> {
         let oversampled_len = buffers.m;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let coefficient_data = complex_to_pods(coefficients);
-        let position_data = positions_to_complex_pods_1d(positions);
-        let deconv_data = real_to_complex_pods_scaled(deconv, oversampled_len as f32);
+        let position_data = positions_to_complex_1d(positions);
+        let deconv_data = real_to_complex_scaled(deconv, oversampled_len as f32);
         let coefficients_buffer = storage_buffer(
             device,
             "apollo-nufft-wgpu diagnostic fast coefficients",
-            &coefficient_data,
+            coefficients,
         );
         queue.write_buffer(
             &buffers.position_buffer,
@@ -285,7 +274,7 @@ impl NufftGpuKernel {
 
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu diagnostic fast type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,

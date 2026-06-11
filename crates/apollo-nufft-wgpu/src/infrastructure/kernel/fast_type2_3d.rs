@@ -1,6 +1,6 @@
 use super::{
-    binding, complex_to_pods, dispatch_count, read_complex_buffer, split_grid_buffers,
-    storage_buffer, ComplexPod, FastNufftParams3D, NufftGpuKernel, Position3Pod,
+    binding, dispatch_count, read_complex_buffer, split_grid_buffers, storage_buffer,
+    FastNufftParams3D, NufftGpuKernel, Position3Pod,
 };
 use crate::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::kernel::buffers::ensure_sample_capacity;
@@ -33,8 +33,6 @@ impl NufftGpuKernel {
         let (mx, my, mz) = oversampled;
         let (lx, ly, lz) = lengths;
         let grid_len = mx * my * mz;
-
-        let coeff_data = complex_to_pods(modes);
         let position_data: Vec<Position3Pod> = positions
             .iter()
             .map(|(x, y, z)| Position3Pod {
@@ -45,8 +43,7 @@ impl NufftGpuKernel {
             })
             .collect();
 
-        let coeff_buffer =
-            storage_buffer(device, "apollo-nufft-wgpu fast3d type2 coeffs", &coeff_data);
+        let coeff_buffer = storage_buffer(device, "apollo-nufft-wgpu fast3d type2 coeffs", modes);
         let position_buffer = storage_buffer(
             device,
             "apollo-nufft-wgpu fast3d type2 positions",
@@ -56,7 +53,7 @@ impl NufftGpuKernel {
             storage_buffer(device, "apollo-nufft-wgpu fast3d type2 deconv", deconv_xyz);
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast3d type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -166,8 +163,6 @@ impl NufftGpuKernel {
         let (lx, ly, lz) = lengths;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         let grid_len = mx * my * mz;
-
-        let coeff_data = complex_to_pods(modes);
         let position_data: Vec<Position3Pod> = positions
             .iter()
             .map(|(x, y, z)| Position3Pod {
@@ -178,8 +173,7 @@ impl NufftGpuKernel {
             })
             .collect();
 
-        let coeff_buffer =
-            storage_buffer(device, "apollo-nufft-wgpu fast3d type2 coeffs", &coeff_data);
+        let coeff_buffer = storage_buffer(device, "apollo-nufft-wgpu fast3d type2 coeffs", modes);
 
         queue.write_buffer(
             &buffers.position_buffer,
@@ -190,7 +184,7 @@ impl NufftGpuKernel {
 
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu fast3d type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -304,8 +298,6 @@ impl NufftGpuKernel {
         let (lx, ly, lz) = lengths;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         let grid_len = mx * my * mz;
-
-        let coeff_data = complex_to_pods(modes);
         let position_data: Vec<Position3Pod> = positions
             .iter()
             .map(|(x, y, z)| Position3Pod {
@@ -318,7 +310,7 @@ impl NufftGpuKernel {
         let coeff_buffer = storage_buffer(
             device,
             "apollo-nufft-wgpu diagnostic fast3d type2 coeffs",
-            &coeff_data,
+            modes,
         );
         queue.write_buffer(
             &buffers.position_buffer,
@@ -329,7 +321,7 @@ impl NufftGpuKernel {
 
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-nufft-wgpu diagnostic fast3d type2 output"),
-            size: (positions.len() * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (positions.len() * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
