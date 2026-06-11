@@ -1,4 +1,12 @@
 # Apollo Checklist
+## RealFftData canonical consolidation [major, pre-1.0]
+- [x] Removed the redundant `Spectrum` associated type from `RealFftData` (it always equaled `Complex<PlanScalar>`); the trait now binds `PlanScalar: MixedRadixScalar<Complex = Complex<PlanScalar>>` and all 22 transform methods are canonical default bodies in `real_storage/mod.rs`.
+- [x] `precise.rs`/`reduced.rs`/`compact.rs` shrink from ~230 lines each to the two storage-boundary conversions (`to_spectrum`, `from_spectrum`); ~660 lines of triplicated method bodies deleted.
+- [x] Six type-named `fill_*` helpers (`fill_complex64`, `fill_real32`, `fill_complex32_from_f16`, …) replaced by two generic `fill_spectrum`/`fill_real` functions, clearing the naming-prohibition violation.
+- [x] `PlanScratch` relocated from `plan/fft/workspace.rs` to `kernel/mixed_radix/scalar/plan_scratch.rs` (dependency direction now strictly kernel ← plan); 2D/3D default methods and generic API callers carry explicit `Complex<T::PlanScalar>: PlanScratch` bounds.
+- [x] All `T::Spectrum` call sites in `api/rfft.rs`/`api/irfft.rs` updated to `Complex<T::PlanScalar>`; no compatibility alias retained.
+- [x] Verification: `cargo clippy --workspace --all-targets` zero warnings; `cargo fmt --all --check` clean; `cargo nextest run --workspace` 996/996 passed.
+- Evidence: value-semantic workspace test suite including FFT property tests. Breaking change is pre-1.0; landed in commit 71e808a.
 ## FFT real-storage scratch consolidation [patch]
 - [x] Consolidated plan scratch ownership under `mixed_radix::scalar::plan_scratch` and removed the duplicate `fft::workspace` module.
 - [x] Routed real and complex FFT public APIs through generic `Complex<T::PlanScalar>` storage bounds with sealed scratch support for supported scalar profiles.

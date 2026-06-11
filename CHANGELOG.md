@@ -7,6 +7,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ---
 
 ## [Unreleased]
+### Breaking
+- [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Added
 - [patch] Canonical `apollo_fft::application::utilities::leto_interop` module consolidates Leto view/array interop helpers (`view1_cow`, dense view copies, fallible Leto array builders, precision-profile matching) previously duplicated across 33 crates; crate-local wrappers now delegate with their own error mapping, and infallible wrappers shed their `Result` returns.
 - [patch] `apollo-dctdst-wgpu` 2D/3D separable transforms reuse a single lane buffer per pass and borrow contiguous rows zero-copy, removing O(n^2)/O(n^3) per-iteration allocations; `apollo-dctdst` typed paths adopt thread-local Mnemosyne scratch pools for f64 conversion workspaces.
