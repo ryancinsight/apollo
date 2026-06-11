@@ -1,4 +1,9 @@
 # Apollo Checklist
+## Leto rank-deficient singular-values provider pin [patch]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `a673325f61e933f6d3d6ecb9569d8f07c78152a8` (`0.14.2`).
+- [x] Imported Leto's rank-deficient singular-values support so Apollo consumes the latest provider-side nalgebra-parity surface without adding a downstream nalgebra adapter.
+- Evidence: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`; `git diff --check`.
+
 ## Leto wide thin SVD provider pin [patch]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `7d4774aae737ef16054f97de92f8f10b32a172d3` (`0.14.1`).
 - [x] Imported Leto's wide full-row-rank thin SVD support so Apollo consumes the latest provider-side nalgebra-parity surface without adding a downstream nalgebra adapter.
