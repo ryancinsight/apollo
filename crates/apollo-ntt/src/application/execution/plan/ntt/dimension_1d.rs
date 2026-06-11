@@ -113,16 +113,21 @@ impl NttPlan {
         &self,
         input: leto::ArrayView1<'_, u64>,
     ) -> Result<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>, NttError> {
-        let signal = leto_view1_cow(&input);
-        let mut output = vec![0; self.n];
-        self.forward_slice_into(&signal, &mut output)?;
-        Ok(
-            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::from_mnemosyne_slice(
-                [output.len()],
-                &output,
-            )
-            .expect("NTT output length must match Leto output shape"),
-        )
+        let mut output =
+            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::zeros_mnemosyne([self.n]);
+        self.forward_leto_into(input, output.view_mut())?;
+        Ok(output)
+    }
+
+    /// Execute the forward transform into caller-owned Leto output storage.
+    pub fn forward_leto_into(
+        &self,
+        input: leto::ArrayView1<'_, u64>,
+        output: leto::ArrayViewMut1<'_, u64>,
+    ) -> Result<(), NttError> {
+        self.leto_into(input, output, |plan, input, output| {
+            plan.forward_slice_into(input, output)
+        })
     }
 
     /// Allocate and execute the inverse transform.
@@ -140,16 +145,21 @@ impl NttPlan {
         &self,
         input: leto::ArrayView1<'_, u64>,
     ) -> Result<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>, NttError> {
-        let signal = leto_view1_cow(&input);
-        let mut output = vec![0; self.n];
-        self.inverse_slice_into(&signal, &mut output)?;
-        Ok(
-            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::from_mnemosyne_slice(
-                [output.len()],
-                &output,
-            )
-            .expect("inverse NTT output length must match Leto output shape"),
-        )
+        let mut output =
+            leto::Array::<u64, leto::MnemosyneStorage<u64>, 1>::zeros_mnemosyne([self.n]);
+        self.inverse_leto_into(input, output.view_mut())?;
+        Ok(output)
+    }
+
+    /// Execute the inverse transform into caller-owned Leto output storage.
+    pub fn inverse_leto_into(
+        &self,
+        input: leto::ArrayView1<'_, u64>,
+        output: leto::ArrayViewMut1<'_, u64>,
+    ) -> Result<(), NttError> {
+        self.leto_into(input, output, |plan, input, output| {
+            plan.inverse_slice_into(input, output)
+        })
     }
 
     /// Execute the forward transform into caller-owned output storage.
@@ -245,6 +255,31 @@ impl NttPlan {
         } else {
             Err(NttError::LengthMismatch)
         }
+    }
+
+    fn leto_into<F>(
+        &self,
+        input: leto::ArrayView1<'_, u64>,
+        mut output: leto::ArrayViewMut1<'_, u64>,
+        execute: F,
+    ) -> Result<(), NttError>
+    where
+        F: Fn(&Self, &[u64], &mut [u64]) -> Result<(), NttError>,
+    {
+        self.check_len(output.shape()[0])?;
+        let signal = leto_view1_cow(&input);
+        if let Some(output_slice) = output.as_mut_slice() {
+            return execute(self, &signal, output_slice);
+        }
+
+        let mut values = vec![0; self.n];
+        execute(self, &signal, &mut values)?;
+        for (index, value) in values.into_iter().enumerate() {
+            *output
+                .get_mut([index])
+                .expect("Leto output view shape and storage bounds must be valid") = value;
+        }
+        Ok(())
     }
 
     /// Precompute twiddle factors omega^j = g^j (mod p) for j = 0..n for the NTT butterfly stages.
@@ -367,6 +402,70 @@ mod tests {
         let actual = plan.forward_leto(strided).unwrap();
         let expected = plan.forward(&Array1::from_vec(logical)).unwrap();
         assert_eq!(actual.storage().as_slice(), expected.as_slice().unwrap());
+    }
+
+    #[test]
+    fn leto_into_paths_reuse_caller_owned_output_storage() {
+        use leto::Storage;
+
+        let plan = NttPlan::new(8).unwrap();
+        let mut input = leto::Array1::from_shape_vec([8], vec![3, 1, 4, 1, 5, 9, 2, 6]).unwrap();
+        let expected_forward = plan
+            .forward(&Array1::from_vec(input.storage().as_slice().to_vec()))
+            .unwrap();
+        let mut output = leto::Array1::zeros([8]);
+
+        plan.forward_leto_into(input.view(), output.view_mut())
+            .unwrap();
+        assert_eq!(
+            output.storage().as_slice(),
+            expected_forward.as_slice().unwrap()
+        );
+
+        let expected_inverse = plan.inverse(&expected_forward).unwrap();
+        plan.inverse_leto_into(output.view(), input.view_mut())
+            .unwrap();
+        assert_eq!(
+            input.storage().as_slice(),
+            expected_inverse.as_slice().unwrap()
+        );
+    }
+
+    #[test]
+    fn leto_into_rejects_output_length_mismatch() {
+        let plan = NttPlan::new(8).unwrap();
+        let input = leto::Array1::from_shape_vec([8], vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+        let mut output = leto::Array1::zeros([4]);
+
+        assert_eq!(
+            plan.forward_leto_into(input.view(), output.view_mut()),
+            Err(NttError::LengthMismatch)
+        );
+    }
+
+    #[test]
+    fn leto_into_scatter_writes_strided_output_in_logical_order() {
+        use leto::{SliceArg, Storage};
+
+        let plan = NttPlan::new(8).unwrap();
+        let logical = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let input = leto::Array1::from_shape_vec([8], logical.clone()).unwrap();
+        let expected = plan.forward(&Array1::from_vec(logical)).unwrap();
+        let mut backing =
+            leto::Array1::from_shape_vec([16], vec![DEFAULT_MODULUS - 1; 16]).unwrap();
+        {
+            let output = backing
+                .view_mut()
+                .slice_with_mut::<1>(&[SliceArg::range(Some(0), None, 2)])
+                .unwrap();
+            plan.forward_leto_into(input.view(), output).unwrap();
+        }
+
+        let values = backing.storage().as_slice();
+        for index in 0..8 {
+            assert_eq!(values[index * 2], expected[index]);
+            assert_eq!(values[index * 2 + 1], DEFAULT_MODULUS - 1);
+        }
     }
 
     #[test]
