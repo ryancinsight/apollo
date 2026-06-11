@@ -3,7 +3,9 @@
 - [x] CPU transform crates that directly use Moirai/Mnemosyne now declare default `parallel` and `mnemosyne-memory` features; `apollo-ntt` declares default `parallel` only because it has no direct Mnemosyne storage dependency.
 - [x] WGPU and Python boundary crates forward `parallel`/`mnemosyne-memory` defaults to their CPU transform dependencies instead of introducing duplicate runtime dependencies.
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `d8d34c617da453360931e50358e645743918962f` (`0.13.1` row-walk traversal provider).
-- Evidence: pending Cargo manifest resolution and focused Apollo transform verification.
+- [x] Verification: `cargo metadata --no-deps --locked`; `git diff --check`; `cargo fmt --all --check`; `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`.
+- Residual: full `cargo doc --workspace --no-deps --locked` ICEs while documenting `apollo-python` through `numpy 0.23.0` intra-doc link collection on rustc `1.95.0`; non-PyO3 workspace docs are clean.
+- Evidence: Cargo resolver metadata, value-semantic workspace tests, example build/test target, clippy diagnostics, and non-PyO3 rustdoc generation.
 
 ## Structural hierarchy + nufft zero-copy sweep [patch]
 - [x] `apollo-nufft-wgpu` drops `ComplexPod`: inputs upload zero-copy via `bytemuck::cast_slice` on `&[Complex32]`, staging readbacks are one cast+copy, conversion helpers return `Vec<Complex32>` with pod-free names; `Position3Pod` retained (genuinely distinct layout).
