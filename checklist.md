@@ -1,4 +1,9 @@
 # Apollo Checklist
+## Leto wide thin SVD provider pin [patch]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `7d4774aae737ef16054f97de92f8f10b32a172d3` (`0.14.1`).
+- [x] Imported Leto's wide full-row-rank thin SVD support so Apollo consumes the latest provider-side nalgebra-parity surface without adding a downstream nalgebra adapter.
+- Evidence: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`; `git diff --check`.
+
 ## Moirai scheduler bridge pin [patch]
 - [x] Updated workspace `moirai` Git revision to pushed Moirai commit `d60317ef76f1556901e137ed687c82d7ec4d2bec`.
 - [x] Preserved Apollo's Moirai default features, so Moirai's default `parallel`, `mnemosyne`, and `melinoe` provider stack remains active with executor maintenance and Melinoe partition routing through Moirai's global scheduler.
