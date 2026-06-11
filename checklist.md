@@ -1,9 +1,9 @@
 # Apollo Checklist
 ## Leto 0.14.0 eigenvalues-only provider pin [minor]
-- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `b9e11a8b825ed656eb557dcea3b055dce81a22cb`.
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `fe74c9d3ff51a9d8366fa5fda2b353d6dc123df2`, which includes the Leto default provider feature policy.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.13.1` to `0.14.0`, importing the provider-side `symmetric_eigenvalues_jacobi` surface for Apollo linalg consumers.
 - [x] Preserved current Apollo FrFT/GFT calls through `symmetric_eigen_jacobi`; the new eigenvalues-only API is available for later caller-specific memory reductions where vectors are not required.
-- Evidence: pending focused Cargo verification.
+- Evidence: `cargo fmt -p apollo-frft -p apollo-gft -p apollo-validation --check`; `cargo check -p apollo-frft -p apollo-gft -p apollo-validation --locked`; `cargo test -p apollo-frft -p apollo-gft --locked`; `cargo clippy -p apollo-frft -p apollo-gft -p apollo-validation --all-targets --locked -- -D warnings`. Focused FrFT/GFT value-semantic tests, Apollo validation compile/clippy diagnostics, and Cargo resolver state; no runtime benchmark claim is made.
 
 ## CZT Leto direct path + Mnemosyne output move [patch]
 - [x] Added `CztPlan::forward_direct_leto` and exported `czt_direct_leto`, giving Apollo a Leto/Mnemosyne strict O(NM) CZT path that no longer requires ndarray ownership for direct execution.
@@ -13,10 +13,15 @@
 - Evidence: value-semantic Leto-vs-ndarray direct CZT tests for contiguous and strided Leto views; workspace tests, examples, clippy diagnostics, and non-PyO3 rustdoc generation. No runtime benchmark claim is made.
 
 ## Default parallel + Mnemosyne feature policy [patch]
-- [x] CPU transform crates that directly use Moirai/Mnemosyne now declare default `parallel` and `mnemosyne-memory` features; `apollo-ntt` declares default `parallel` only because it has no direct Mnemosyne storage dependency.
+- [x] Every Apollo package manifest now declares default `parallel` and `mnemosyne-memory` features; crates with transform dependencies forward them, while provider-free macro/helper crates expose zero-dependency contract markers.
+- [x] `apollo-ntt` and `apollo-ntt-wgpu` now default `mnemosyne-memory`, forwarding into Leto's Mnemosyne-backed storage feature surface.
+- [x] `apollo-validation` now defaults `mnemosyne-memory` and forwards `parallel`/`mnemosyne-memory` across the transform crates it validates.
+- [x] Apollo pins Mnemosyne to pushed commit `938d0c2bc094d3bbe7745d68d60e05a531e0cfc2`, which provides stable TLS feature routing and the backend selector re-export required by the local provider build.
+- [x] Apollo pins Leto/Leto Ops to pushed Leto commit `fe74c9d3ff51a9d8366fa5fda2b353d6dc123df2`, which defaults `parallel` and `mnemosyne-memory` across Leto packages.
+- [x] CPU transform crates that directly use Moirai/Mnemosyne declare default `parallel` and `mnemosyne-memory` features.
 - [x] WGPU and Python boundary crates forward `parallel`/`mnemosyne-memory` defaults to their CPU transform dependencies instead of introducing duplicate runtime dependencies.
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `d8d34c617da453360931e50358e645743918962f` (`0.13.1` row-walk traversal provider).
-- [x] Verification: `cargo metadata --no-deps --locked`; `git diff --check`; `cargo fmt --all --check`; `cargo check --workspace --locked`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`.
+- [x] Verification: manifest audit confirmed every package default includes `parallel` and `mnemosyne-memory`; `cargo metadata --no-deps --locked`; `cargo fmt --all --check`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`.
 - Residual: full `cargo doc --workspace --no-deps --locked` ICEs while documenting `apollo-python` through `numpy 0.23.0` intra-doc link collection on rustc `1.95.0`; non-PyO3 workspace docs are clean.
 - Evidence: Cargo resolver metadata, value-semantic workspace tests, example build/test target, clippy diagnostics, and non-PyO3 rustdoc generation.
 

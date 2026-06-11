@@ -8,8 +8,9 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "WGPU backend boundary for Apollo NTT"
 
 [features]
-default = ["parallel"]
+default = ["parallel", "mnemosyne-memory"]
 parallel = ["apollo-ntt/parallel"]
+mnemosyne-memory = ["apollo-ntt/mnemosyne-memory"]
 proptest_gpu = []
 
 [dependencies]

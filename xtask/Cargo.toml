@@ -12,6 +12,9 @@ rustfft = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
 [features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
 bench-runner = ["dep:apollo-fft", "dep:num-complex", "dep:rustfft"]
 
 [lints]

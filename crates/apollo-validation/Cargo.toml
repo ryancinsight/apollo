@@ -8,9 +8,52 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Validation and benchmark surface for Apollo FFT"
 
 [features]
-default = ["external-references", "parallel"]
+default = ["external-references", "parallel", "mnemosyne-memory"]
 external-references = ["dep:rustfft"]
-parallel = []
+parallel = [
+    "apollo-fft/parallel",
+    "apollo-nufft/parallel",
+    "apollo-fft-wgpu/parallel",
+    "apollo-nufft-wgpu/parallel",
+    "apollo-dctdst/parallel",
+    "apollo-dht/parallel",
+    "apollo-ntt/parallel",
+    "apollo-czt/parallel",
+    "apollo-frft/parallel",
+    "apollo-sdft/parallel",
+    "apollo-wavelet/parallel",
+    "apollo-fwht/parallel",
+    "apollo-qft/parallel",
+    "apollo-gft/parallel",
+    "apollo-hilbert/parallel",
+    "apollo-mellin/parallel",
+    "apollo-radon/parallel",
+    "apollo-sft/parallel",
+    "apollo-sht/parallel",
+    "apollo-stft/parallel",
+]
+mnemosyne-memory = [
+    "apollo-fft/mnemosyne-memory",
+    "apollo-nufft/mnemosyne-memory",
+    "apollo-fft-wgpu/mnemosyne-memory",
+    "apollo-nufft-wgpu/mnemosyne-memory",
+    "apollo-dctdst/mnemosyne-memory",
+    "apollo-dht/mnemosyne-memory",
+    "apollo-ntt/mnemosyne-memory",
+    "apollo-czt/mnemosyne-memory",
+    "apollo-frft/mnemosyne-memory",
+    "apollo-sdft/mnemosyne-memory",
+    "apollo-wavelet/mnemosyne-memory",
+    "apollo-fwht/mnemosyne-memory",
+    "apollo-qft/mnemosyne-memory",
+    "apollo-gft/mnemosyne-memory",
+    "apollo-hilbert/mnemosyne-memory",
+    "apollo-mellin/mnemosyne-memory",
+    "apollo-radon/mnemosyne-memory",
+    "apollo-sft/mnemosyne-memory",
+    "apollo-sht/mnemosyne-memory",
+    "apollo-stft/mnemosyne-memory",
+]
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }

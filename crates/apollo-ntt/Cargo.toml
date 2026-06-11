@@ -9,8 +9,9 @@ description = "Number Theoretic Transform plans and utilities for Apollo"
 
 
 [features]
-default = ["parallel"]
+default = ["parallel", "mnemosyne-memory"]
 parallel = []
+mnemosyne-memory = ["leto/mnemosyne-alloc"]
 
 [dependencies]
 ndarray = { workspace = true }

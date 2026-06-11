@@ -7,6 +7,11 @@ authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/kwavers"
 description = "Shared WGPU device acquisition and error contracts for the Apollo WGPU crate family"
 
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
+
 [dependencies]
 hephaestus-wgpu = { workspace = true }
 thiserror = "1.0"

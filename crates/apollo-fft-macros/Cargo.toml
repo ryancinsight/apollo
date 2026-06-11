@@ -8,6 +8,11 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Proc macros for generated Apollo FFT routing kernels"
 publish = false
 
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
+
 [lib]
 proc-macro = true
 
