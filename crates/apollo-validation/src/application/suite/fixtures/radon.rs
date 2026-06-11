@@ -25,9 +25,9 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use leto::Storage;
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
-use leto::Storage;
 
 pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<PublishedFixtureReport>
 {
@@ -83,9 +83,14 @@ pub(crate) fn radon_fourier_slice_theorem_theta0_fixture() -> SuiteResult<Publis
     let plan = RadonPlan::new(2, 2, vec![0.0_f64], 2, 1.0)?;
     let sinogram = plan.forward(&image)?;
     let projection = sinogram.values().row(0).to_owned();
-    let projection_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([projection.len()], projection.as_slice().unwrap()).unwrap();
+    let projection_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
+        [projection.len()],
+        projection.as_slice().unwrap(),
+    )
+    .unwrap();
     let dft_of_projection_leto = apollo_fft::fft_1d_leto(projection_leto.view());
-    let dft_of_projection = ndarray::Array1::from_vec(dft_of_projection_leto.storage().as_slice().to_vec());
+    let dft_of_projection =
+        ndarray::Array1::from_vec(dft_of_projection_leto.storage().as_slice().to_vec());
     let expected = [Complex64::new(10.0, 0.0), Complex64::new(-2.0, 0.0)];
     Ok(published_complex_fixture(
         "Radon",

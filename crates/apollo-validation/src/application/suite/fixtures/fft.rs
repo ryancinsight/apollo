@@ -25,13 +25,17 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use leto::Storage;
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
-use leto::Storage;
 
 pub(crate) fn fft_four_point_difference_fixture() -> PublishedFixtureReport {
     let signal_nd = Array1::from_vec(vec![1.0, 0.0, -1.0, 0.0]);
-    let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([signal_nd.len()], signal_nd.as_slice().unwrap()).unwrap();
+    let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
+        [signal_nd.len()],
+        signal_nd.as_slice().unwrap(),
+    )
+    .unwrap();
     let actual_leto = apollo_fft::fft_1d_leto(signal.view());
     let actual = ndarray::Array1::from_vec(actual_leto.storage().as_slice().to_vec());
     let expected = [
@@ -64,7 +68,11 @@ pub(crate) fn fft_inverse_four_point_fixture() -> PublishedFixtureReport {
         Complex64::new(1.0, 0.0),
         Complex64::new(1.0, 0.0),
     ]);
-    let spectrum = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice([spectrum_nd.len()], spectrum_nd.as_slice().unwrap()).unwrap();
+    let spectrum = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
+        [spectrum_nd.len()],
+        spectrum_nd.as_slice().unwrap(),
+    )
+    .unwrap();
     let actual_leto = apollo_fft::ifft_1d_leto(spectrum.view());
     let actual = ndarray::Array1::from_vec(actual_leto.storage().as_slice().to_vec());
     let expected = [1.0_f64, 0.0, 0.0, 0.0];

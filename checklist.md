@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Validation Leto FFT reference routing [patch]
+- [x] Routed Apollo validation FFT CPU/GPU, published FFT/Radon fixtures, external comparisons, precision profile checks, and benchmark probes through Leto-backed FFT APIs with Mnemosyne storage.
+- [x] Preserved ndarray only as validation/report materialization and external-reference comparison boundary.
+- [x] Consolidated validation report value-semantic and schema assertions into one test while retaining published fixture value checks.
+- [x] Verification: `cargo fmt -p apollo-validation --check`; `cargo test -p apollo-validation --locked`; `cargo clippy -p apollo-validation --all-targets -- -D warnings`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`.
+- Evidence: empirical validation suite tests, clippy diagnostics, and static diff inspection. No runtime benchmark claim is made.
+
 ## RealFftData canonical consolidation [major, pre-1.0]
 - [x] Removed the redundant `Spectrum` associated type from `RealFftData` (it always equaled `Complex<PlanScalar>`); the trait now binds `PlanScalar: MixedRadixScalar<Complex = Complex<PlanScalar>>` and all 22 transform methods are canonical default bodies in `real_storage/mod.rs`.
 - [x] `precise.rs`/`reduced.rs`/`compact.rs` shrink from ~230 lines each to the two storage-boundary conversions (`to_spectrum`, `from_spectrum`); ~660 lines of triplicated method bodies deleted.

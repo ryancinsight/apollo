@@ -182,7 +182,8 @@ pub fn fft1_real(input: &leto::ArrayView1<'_, f64>) -> Vec<Complex64> {
         .iter_mut()
         .zip(cow.iter().copied())
         .for_each(|(dst, src)| *dst = Complex64::new(src, 0.0));
-    plan.fft.process_with_scratch(&mut buffer, &mut scratch[..plan.scratch_len]);
+    plan.fft
+        .process_with_scratch(&mut buffer, &mut scratch[..plan.scratch_len]);
     buffer
 }
 
@@ -205,4 +206,3 @@ pub fn fft3_real(input: &leto::ArrayView3<'_, f64>) -> Array3<Complex64> {
     plan.forward_real_into(&nd_array, &mut data, &mut lane_buffer, &mut fft_scratch);
     data
 }
-
