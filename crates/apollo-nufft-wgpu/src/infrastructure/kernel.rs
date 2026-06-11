@@ -17,6 +17,8 @@ pub mod type2;
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
+use num_complex::Complex32;
+use crate::domain::error::NufftWgpuResult;
 
 // Re-export GPU buffers so they remain under the same public path.
 pub use buffers::{NufftGpuBuffers1D, NufftGpuBuffers3D};

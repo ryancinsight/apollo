@@ -96,7 +96,7 @@ mod spiral_collapse_tests {
     }
 }
 
-mod tests {
+mod general_czt_tests {
     use super::*;
 
     #[test]

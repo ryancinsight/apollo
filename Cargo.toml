@@ -76,10 +76,10 @@ repository = "https://github.com/ryancinsight/kwavers"
 anyhow = "1.0"
 approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
-ndarray = "0.16"
+ndarray = { version = "0.16", default-features = false }
 num-complex = "0.4"
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "9411c4448c4fe841ce23909668c0f948ad1643bb", default-features = false, features = ["num-complex"] }
-melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "7b7ff33e8e4235a4866e469047deaab42047d889", default-features = false, features = ["num-complex"] }
+melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "3ec2f0a5eccd5746b8e9b70ea885af2a3e0b50af", default-features = false, features = ["std", "ndarray-compat", "mnemosyne-alloc"] }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "3ec2f0a5eccd5746b8e9b70ea885af2a3e0b50af", default-features = false, features = ["std"] }
@@ -99,7 +99,7 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
 # moirai: data-parallel runtime replacing direct scheduler usage (default-features off avoids its
 # global allocator; `parallel` provides the data-parallel API).
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "c3dcb71701ca2d17baf41e054fd43517833a23cc", default-features = false, features = ["parallel", "melinoe", "mnemosyne", "no-global-alloc"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "33e2d987da61bbfd265dea763a8eb1a50904f5df", default-features = false, features = ["parallel", "melinoe", "mnemosyne", "no-global-alloc"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -164,3 +164,29 @@ unneeded_field_pattern = "allow"
 explicit_write = "allow"
 manual_range_contains = "allow"
 uninlined_format_args = "allow"
+
+[patch."https://github.com/ryancinsight/Mnemosyne.git"]
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
+mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
+mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
+mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
+
+[patch."https://github.com/ryancinsight/Moirai.git"]
+moirai = { path = "../moirai/moirai" }
+moirai-core = { path = "../moirai/moirai-core" }
+moirai-scheduler = { path = "../moirai/moirai-scheduler" }
+moirai-parallel = { path = "../moirai/moirai-parallel" }
+
+[patch."https://github.com/ryancinsight/leto.git"]
+leto = { path = "../leto/crates/leto" }
+leto-ops = { path = "../leto/crates/leto-ops" }
+
+[patch."https://github.com/ryancinsight/hephaestus.git"]
+hephaestus-wgpu = { path = "../hephaestus/crates/hephaestus-wgpu" }
+
+[patch."https://github.com/ryancinsight/hermes.git"]
+hermes-simd = { path = "../hermes/crates/hermes-simd" }
+
+[patch."https://github.com/ryancinsight/melinoe.git"]
+melinoe = { path = "../melinoe" }

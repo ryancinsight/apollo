@@ -338,9 +338,7 @@ impl StftPlan {
                     self.frame_len,
                     |m, frame_complex, frame_out| {
                         let offset = m * self.spectrum_len();
-                        for k in 0..self.spectrum_len() {
-                            frame_complex[k] = spectrum[offset + k];
-                        }
+                        frame_complex[..self.spectrum_len()].copy_from_slice(&spectrum[offset..(offset + self.spectrum_len())]);
                         self.fft_plan.inverse_complex_slice_inplace(frame_complex);
                         window_complex_real_frame_into(frame_complex, window, frame_out);
                     },

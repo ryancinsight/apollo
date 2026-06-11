@@ -106,15 +106,33 @@ impl WgpuDevice {
         label: &str,
         required_limits: wgpu::Limits,
     ) -> WgpuDeviceResult<Self> {
-        let acquired = hephaestus_wgpu::WgpuDevice::try_default_with_limits(label, required_limits)
-            .map_err(|e| match e {
-                hephaestus_wgpu::HephaestusError::AdapterUnavailable { message } => {
-                    WgpuDeviceError::AdapterUnavailable { message }
-                }
-                other => WgpuDeviceError::DeviceUnavailable {
-                    message: other.to_string(),
-                },
-            })?;
+        Self::try_default_with_features_and_limits(label, wgpu::Features::empty(), required_limits)
+    }
+
+    /// Acquire a default adapter and device with custom features and limits.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WgpuDeviceError::AdapterUnavailable`] or
+    /// [`WgpuDeviceError::DeviceUnavailable`] on failure.
+    pub fn try_default_with_features_and_limits(
+        label: &str,
+        required_features: wgpu::Features,
+        required_limits: wgpu::Limits,
+    ) -> WgpuDeviceResult<Self> {
+        let acquired = hephaestus_wgpu::WgpuDevice::try_default_with_features_and_limits(
+            label,
+            required_features,
+            required_limits,
+        )
+        .map_err(|e| match e {
+            hephaestus_wgpu::HephaestusError::AdapterUnavailable { message } => {
+                WgpuDeviceError::AdapterUnavailable { message }
+            }
+            other => WgpuDeviceError::DeviceUnavailable {
+                message: other.to_string(),
+            },
+        })?;
         Ok(Self::from_hephaestus(acquired))
     }
 

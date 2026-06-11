@@ -31,27 +31,13 @@ pub struct GpuRadix5Batch {
 impl GpuRadix5Batch {
     /// Request a default WGPU device and queue for validation or local dispatch.
     pub fn try_default_device() -> Result<(Arc<wgpu::Device>, Arc<wgpu::Queue>), String> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .map_err(|error| format!("wgpu adapter unavailable: {error}"))?;
-        let features = adapter.features();
-        if !features.contains(wgpu::Features::SHADER_F16) {
-            return Err("wgpu adapter lacks SHADER_F16; f32 widening is forbidden".to_owned());
-        }
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("apollo-fft-wgpu radix5 batch"),
-            required_features: wgpu::Features::SHADER_F16,
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            trace: wgpu::Trace::Off,
-        };
-        let (device, queue) = pollster::block_on(adapter.request_device(&descriptor))
-            .map_err(|error| error.to_string())?;
-        Ok((Arc::new(device), Arc::new(queue)))
+        let dev = hephaestus_wgpu::WgpuDevice::try_default_with_features_and_limits(
+            "apollo-fft-wgpu radix5 batch",
+            wgpu::Features::SHADER_F16,
+            wgpu::Limits::downlevel_defaults(),
+        )
+        .map_err(|e| e.to_string())?;
+        Ok((dev.device().clone(), dev.queue().clone()))
     }
 
     /// Create a radix-5 batch dispatcher for `lanes` independent columns.

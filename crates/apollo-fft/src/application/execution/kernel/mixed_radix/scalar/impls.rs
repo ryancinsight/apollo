@@ -15,9 +15,13 @@ use super::simd::{pointwise_mul_precise, pointwise_mul_reduced};
 use super::trait_def::MixedRadixScalar;
 use super::transpose::{transpose_matrix_precise, transpose_matrix_reduced};
 use super::twiddle_constants::{
-    TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_FWD_64, TWIDDLES_COMBINE_INV_32,
-    TWIDDLES_COMBINE_INV_64, TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE,
+    TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE,
     TWIDDLES_INV_REDUCED,
+};
+#[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
+use super::twiddle_constants::{
+    TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_FWD_64, TWIDDLES_COMBINE_INV_32,
+    TWIDDLES_COMBINE_INV_64,
 };
 use crate::application::execution::kernel::components::{radix_composite, stockham};
 use crate::application::execution::kernel::mixed_radix::caches::{
@@ -933,7 +937,7 @@ impl MixedRadixScalar for f32 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 8]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 8]>();
                     crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                         f32,
                         INVERSE,
@@ -942,7 +946,7 @@ impl MixedRadixScalar for f32 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(0.125, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -983,7 +987,7 @@ impl MixedRadixScalar for f32 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 32]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 32]>();
                     crate::application::execution::kernel::components::winograd::dft32_impl::<
                         Self,
                         INVERSE,
@@ -991,7 +995,7 @@ impl MixedRadixScalar for f32 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(1.0 / 32.0, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -1016,7 +1020,7 @@ impl MixedRadixScalar for f32 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex32; 64]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 64]>();
                     crate::application::execution::kernel::components::winograd::dft64_impl::<
                         Self,
                         INVERSE,
@@ -1024,7 +1028,7 @@ impl MixedRadixScalar for f32 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex32::new(1.0 / 64.0, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -1558,7 +1562,7 @@ impl MixedRadixScalar for f64 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 8]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 8]>();
                     crate::application::execution::kernel::components::winograd::dft8_array_impl::<
                         f64,
                         INVERSE,
@@ -1567,7 +1571,7 @@ impl MixedRadixScalar for f64 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.125, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -1795,7 +1799,7 @@ impl MixedRadixScalar for f64 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 16]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 16]>();
                     crate::application::execution::kernel::components::winograd::dft16_impl::<
                         Self,
                         INVERSE,
@@ -1803,7 +1807,7 @@ impl MixedRadixScalar for f64 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(0.0625, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -1951,7 +1955,7 @@ impl MixedRadixScalar for f64 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 32]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 32]>();
                     crate::application::execution::kernel::components::winograd::dft32_impl::<
                         Self,
                         INVERSE,
@@ -1959,7 +1963,7 @@ impl MixedRadixScalar for f64 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 32.0, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }
@@ -2143,7 +2147,7 @@ impl MixedRadixScalar for f64 {
                     target_feature = "fma"
                 )))]
                 {
-                    let data_ref = &mut *(data.as_mut_ptr() as *mut [Complex64; 64]);
+                    let data_ref = &mut *data.as_mut_ptr().cast::<[Complex64; 64]>();
                     crate::application::execution::kernel::components::winograd::dft64_impl::<
                         Self,
                         INVERSE,
@@ -2151,7 +2155,7 @@ impl MixedRadixScalar for f64 {
                     if INVERSE && NORMALIZE {
                         let scale = Complex64::new(1.0 / 64.0, 0.0);
                         for x in data_ref.iter_mut() {
-                            *x = *x * scale;
+                            *x *= scale;
                         }
                     }
                 }

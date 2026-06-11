@@ -150,7 +150,7 @@ impl StockhamKernel for f64 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            let log2 = data.len().trailing_zeros() as u32;
+            let log2 = data.len().trailing_zeros();
             transform_sized::<precision::PreciseStockhamAvx512>(
                 data, scratch, twiddles, None, log2,
             );
@@ -178,7 +178,7 @@ impl StockhamKernel for f64 {
                     unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
-                let log2 = data.len().trailing_zeros() as u32;
+                let log2 = data.len().trailing_zeros();
                 transform_sized::<precision::PreciseStockham>(data, scratch, twiddles, None, log2);
             }
         }
@@ -308,7 +308,7 @@ impl StockhamKernel for f32 {
         }
         #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
         {
-            let log2 = data.len().trailing_zeros() as u32;
+            let log2 = data.len().trailing_zeros();
             transform_sized::<precision::ReducedStockhamAvx512>(
                 data, scratch, twiddles, None, log2,
             );
@@ -336,7 +336,7 @@ impl StockhamKernel for f32 {
                     unsafe { forward32_avx_with_scratch(data, scratch, twiddles) };
                     return;
                 }
-                let log2 = data.len().trailing_zeros() as u32;
+                let log2 = data.len().trailing_zeros();
                 transform_sized::<precision::ReducedStockham>(data, scratch, twiddles, None, log2);
             }
         }
