@@ -1,4 +1,10 @@
 # Apollo Checklist
+## Structural hierarchy + nufft zero-copy sweep [patch]
+- [x] `apollo-nufft-wgpu` drops `ComplexPod`: inputs upload zero-copy via `bytemuck::cast_slice` on `&[Complex32]`, staging readbacks are one cast+copy, conversion helpers return `Vec<Complex32>` with pod-free names; `Position3Pod` retained (genuinely distinct layout).
+- [x] `apollo-python` lib.rs (1383 lines) split into `bindings/{plans,fft,fft_complex,nufft,dht,fwht,dctdst,backend,support}` leaf modules, all <500 lines, one shared helper module, Python-visible API unchanged (3 classes, 40 functions).
+- [x] `apollo-fft` lib.rs/lib_tests.rs split confirmed already complete (commit b6f5352); earlier gap_audit line counts were stale. `api/irfft.rs` at 532 lines retained as one cohesive family.
+- [x] Verification: workspace clippy zero warnings; `cargo nextest run --workspace` 996/996; nufft GPU execution suite ran on a real device.
+- Evidence: value-semantic tests. Stockham AVX residual: shared `StockhamAvxBackend` trait + `generic/` layer already exist; remaining item is splitting `stockham/avx/generic/triple.rs` (3260 lines) into radix/variant leaf modules.
 ## Leto 0.13.0 thin SVD provider pin [minor]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `c1dfc25c59d4bf6311b95e9784e27452f723b57e`.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.12.0` to `0.13.0`, importing the new `leto_ops::svd_decompose`/`singular_values` nalgebra-replacement surface for Apollo consumers.
