@@ -1,4 +1,10 @@
 # Apollo Checklist
+## Default parallel + Mnemosyne feature policy [patch]
+- [x] CPU transform crates that directly use Moirai/Mnemosyne now declare default `parallel` and `mnemosyne-memory` features; `apollo-ntt` declares default `parallel` only because it has no direct Mnemosyne storage dependency.
+- [x] WGPU and Python boundary crates forward `parallel`/`mnemosyne-memory` defaults to their CPU transform dependencies instead of introducing duplicate runtime dependencies.
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `d8d34c617da453360931e50358e645743918962f` (`0.13.1` row-walk traversal provider).
+- Evidence: pending Cargo manifest resolution and focused Apollo transform verification.
+
 ## Structural hierarchy + nufft zero-copy sweep [patch]
 - [x] `apollo-nufft-wgpu` drops `ComplexPod`: inputs upload zero-copy via `bytemuck::cast_slice` on `&[Complex32]`, staging readbacks are one cast+copy, conversion helpers return `Vec<Complex32>` with pod-free names; `Position3Pod` retained (genuinely distinct layout).
 - [x] `apollo-python` lib.rs (1383 lines) split into `bindings/{plans,fft,fft_complex,nufft,dht,fwht,dctdst,backend,support}` leaf modules, all <500 lines, one shared helper module, Python-visible API unchanged (3 classes, 40 functions).
