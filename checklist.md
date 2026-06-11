@@ -1,4 +1,10 @@
 # Apollo Checklist
+## QFT Mnemosyne output move [patch]
+- [x] Replaced QFT Leto forward/inverse output slice-copy construction with owned `from_mnemosyne_vec` moves for complex64 and typed paths.
+- [x] Preserved QFT slice execution, ndarray validation comparisons, Leto view input handling, and Mnemosyne-backed return storage.
+- [x] Verification: `cargo fmt -p apollo-qft --check`; `git diff --check -- crates/apollo-qft/src/application/execution/plan/qft.rs`; `cargo test -p apollo-qft --locked`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo test --locked --workspace --examples`.
+- Evidence: empirical value-semantic QFT tests and static diff inspection. No runtime benchmark claim is made.
+
 ## Leto interop helper consolidation [patch]
 - [x] Added canonical `apollo_fft::application::utilities::leto_interop` module (view1_cow, array2/3_from_view, try_array{1,2,3} builders, profile_matches) with unit tests.
 - [x] Replaced duplicated private helper bodies in 33 crates (16 CPU + 17 WGPU) with thin error-mapping delegations; infallible wrappers dropped `Result` and dead label parameters with all call sites updated.
