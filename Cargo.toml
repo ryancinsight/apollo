@@ -81,8 +81,8 @@ num-complex = { version = "0.4", features = ["bytemuck"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "e0ffdf9aa0c571a90ec3961ae758ef2379347983", features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "5e417577da8862714f9649319e78eb8c7f6a1bb8", features = ["ndarray-compat"] }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "5e417577da8862714f9649319e78eb8c7f6a1bb8" }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "c1dfc25c59d4bf6311b95e9784e27452f723b57e", features = ["ndarray-compat"] }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "c1dfc25c59d4bf6311b95e9784e27452f723b57e" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.

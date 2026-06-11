@@ -1,4 +1,11 @@
 # Apollo Checklist
+## Leto 0.13.0 thin SVD provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `c1dfc25c59d4bf6311b95e9784e27452f723b57e`.
+- [x] Updated `Cargo.lock` from Leto/Leto Ops `0.12.0` to `0.13.0`, importing the new `leto_ops::svd_decompose`/`singular_values` nalgebra-replacement surface for Apollo consumers.
+- [x] Preserved existing Apollo FrFT/GFT eigensolver call sites; no compatibility shim added.
+- [x] Verification: `cargo check -p apollo-frft -p apollo-gft -p apollo-validation`; `cargo test -p apollo-frft -p apollo-gft --locked`; `cargo fmt -p apollo-frft -p apollo-gft -p apollo-validation --check`; `cargo clippy -p apollo-frft -p apollo-gft -p apollo-validation --all-targets -- -D warnings`.
+- Evidence: focused value-semantic FrFT/GFT tests, clippy diagnostics, and Cargo resolver state. No runtime benchmark claim is made.
+
 ## WGPU dispatch-path memory efficiency [patch]
 - [x] `apollo-dctdst-wgpu` kernel caches input/output/staging buffers and the bind group keyed by byte length; same-length dispatches (the O(n)..O(n^2) separable 2D/3D lanes) reuse them via `queue.write_buffer`. Cache lock held across encode/submit/map also serializes the shared params buffer, removing a latent write race; failed maps evict the set.
 - [x] Workspace `num-complex` now enables the `bytemuck` feature and all 28 crates inherit it via `workspace = true` (dependency SSOT). `Complex32` is Pod, so `apollo-czt-wgpu` and `apollo-frft-wgpu` kernels upload input slices zero-copy and read back with one cast+copy, deleting their local `ComplexPod` marshaling types and per-dispatch conversion Vecs.
