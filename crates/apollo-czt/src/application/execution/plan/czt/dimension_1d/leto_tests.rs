@@ -1,9 +1,9 @@
 use super::*;
+use apollo_fft::PrecisionProfile;
 use approx::{assert_abs_diff_eq, assert_relative_eq};
 use leto::{SliceArg, Storage};
 use ndarray::Array1;
 use num_complex::{Complex32, Complex64};
-use apollo_fft::PrecisionProfile;
 
 fn reference_plan(n: usize, m: usize) -> CztPlan {
     CztPlan::new(

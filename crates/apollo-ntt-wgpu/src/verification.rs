@@ -79,421 +79,346 @@ mod tests {
 
     // -----------------------------------------------------------------------
     // GPU tests — require a live WGPU device
-    // -----------------------------------------------------------------------
-
     #[test]
-    fn backend_reports_forward_and_inverse_when_device_exists() {
+    fn ntt_wgpu_execution_suite_when_device_exists() {
         let Ok(backend) = NttWgpuBackend::try_default() else {
             return;
         };
-        let cap = backend.capabilities();
-        assert!(cap.device_available);
-        assert!(cap.supports_forward);
-        assert!(cap.supports_inverse);
-        assert!(cap.supports_quantized_storage);
-    }
 
-    /// # Mathematical contract
-    ///
-    /// Forward NTT of the unit impulse [1, 0, 0, 0, 0, 0, 0, 0]:
-    ///   X[k] = Σ_{j=0}^{N-1} f[j] · ω^{jk} = ω^{0·k} = 1  for all k.
-    /// GPU output must match CPU `NttPlan::forward` exactly (both are exact
-    /// integer computations in the same residue field).
-    #[test]
-    fn forward_impulse_matches_cpu_reference_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![1_u64, 0, 0, 0, 0, 0, 0, 0];
-        let plan = backend.plan(input.len());
-        let gpu = backend
-            .execute_forward(&plan, &input)
-            .expect("gpu forward execution");
-
-        // Analytical: impulse NTT gives all-ones.
-        assert_eq!(gpu.len(), 8, "output length must equal input length");
-        for (k, &val) in gpu.iter().enumerate() {
-            assert_eq!(val, 1u64, "NTT8(impulse)[{k}] must equal 1");
+        // 1. backend_reports_forward_and_inverse
+        {
+            let cap = backend.capabilities();
+            assert!(cap.device_available);
+            assert!(cap.supports_forward);
+            assert!(cap.supports_inverse);
+            assert!(cap.supports_quantized_storage);
         }
 
-        // Also verify against CPU reference.
-        let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
-        let cpu = cpu_plan
-            .forward(&Array1::from_vec(input.clone()))
-            .expect("cpu forward");
-        assert_eq!(gpu, cpu.to_vec(), "gpu must match cpu reference exactly");
-    }
+        // 2. forward_impulse_matches_cpu_reference
+        {
+            let input = vec![1_u64, 0, 0, 0, 0, 0, 0, 0];
+            let plan = backend.plan(input.len());
+            let gpu = backend
+                .execute_forward(&plan, &input)
+                .expect("gpu forward execution");
 
-    /// # Mathematical contract
-    ///
-    /// Forward NTT of the Fibonacci sequence [1, 1, 2, 3, 5, 8, 13, 21]:
-    /// GPU result must equal CPU `NttPlan::forward` element-wise.
-    /// Both implement the same Cooley-Tukey DIT algorithm over F_{998244353};
-    /// the results are exact integers, so equality is the correct assertion.
-    #[test]
-    fn forward_fibonacci_matches_cpu_reference_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-        let plan = backend.plan(input.len());
-        let gpu = backend
-            .execute_forward(&plan, &input)
-            .expect("gpu forward execution");
+            assert_eq!(gpu.len(), 8, "output length must equal input length");
+            for (k, &val) in gpu.iter().enumerate() {
+                assert_eq!(val, 1u64, "NTT8(impulse)[{k}] must equal 1");
+            }
 
-        let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
-        let cpu = cpu_plan
-            .forward(&Array1::from_vec(input.clone()))
-            .expect("cpu forward");
-
-        assert_eq!(
-            gpu,
-            cpu.to_vec(),
-            "gpu forward NTT must match cpu reference exactly for Fibonacci input"
-        );
-    }
-
-    /// # Mathematical contract
-    ///
-    /// INTT(NTT(x)) = x  exactly for all x in F_m.
-    /// The forward+inverse roundtrip must recover every input residue without
-    /// error, by the orthogonality of the DFT matrix over F_m (Pollard 1971).
-    #[test]
-    fn inverse_recovers_input_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-        let plan = backend.plan(input.len());
-        let spectrum = backend
-            .execute_forward(&plan, &input)
-            .expect("gpu forward execution");
-        let recovered = backend
-            .execute_inverse(&plan, &spectrum)
-            .expect("gpu inverse execution");
-
-        assert_eq!(
-            recovered, input,
-            "INTT(NTT(x)) must recover x exactly for Fibonacci input"
-        );
-    }
-
-    #[test]
-    fn leto_forward_and_inverse_match_allocating_slice_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-        let plan = backend.plan(input.len());
-        let expected_forward = backend
-            .execute_forward(&plan, &input)
-            .expect("slice forward");
-        let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
-        let actual_forward = backend
-            .execute_forward_leto(&plan, leto_input.view())
-            .expect("leto forward");
-        assert_eq!(
-            actual_forward.storage().as_slice(),
-            expected_forward.as_slice()
-        );
-
-        let expected_inverse = backend
-            .execute_inverse(&plan, &expected_forward)
-            .expect("slice inverse");
-        let leto_spectrum =
-            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
-                .expect("leto spectrum");
-        let actual_inverse = backend
-            .execute_inverse_leto(&plan, leto_spectrum.view())
-            .expect("leto inverse");
-        assert_eq!(
-            actual_inverse.storage().as_slice(),
-            expected_inverse.as_slice()
-        );
-    }
-
-    #[test]
-    fn leto_strided_forward_matches_logical_slice_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let logical = vec![1_u64, 4, 9, 16, 25, 36, 49, 64];
-        let mut backing = Vec::with_capacity(logical.len() * 2);
-        for value in logical.iter().copied() {
-            backing.push(value);
-            backing.push(99);
+            let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
+            let cpu = cpu_plan
+                .forward(&Array1::from_vec(input.clone()))
+                .expect("cpu forward");
+            assert_eq!(gpu, cpu.to_vec(), "gpu must match cpu reference exactly");
         }
-        let plan = backend.plan(logical.len());
-        let expected = backend
-            .execute_forward(&plan, &logical)
-            .expect("slice forward");
-        let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
-        let strided = leto_input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let actual = backend
-            .execute_forward_leto(&plan, strided)
-            .expect("strided leto forward");
-        assert_eq!(actual.storage().as_slice(), expected.as_slice());
-    }
 
-    /// # Mathematical contract
-    ///
-    /// Exact `u32` residue storage must produce results identical to the
-    /// allocating `u64` path because both normalize values modulo m.
-    /// Quantized forward followed by quantized inverse must recover the input.
-    #[test]
-    fn quantized_u32_storage_matches_allocating_u64_execution_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input_u32 = vec![1_u32, 1, 2, 3, 5, 8, 13, 21];
-        let input_u64: Vec<u64> = input_u32.iter().map(|&v| u64::from(v)).collect();
-        let plan = backend.plan(input_u32.len());
+        // 3. forward_fibonacci_matches_cpu_reference
+        {
+            let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
+            let plan = backend.plan(input.len());
+            let gpu = backend
+                .execute_forward(&plan, &input)
+                .expect("gpu forward execution");
 
-        // Forward: quantized must match allocating.
-        let expected_fwd = backend
-            .execute_forward(&plan, &input_u64)
-            .expect("allocating forward");
-        let mut quantized_fwd = vec![0_u32; input_u32.len()];
-        backend
-            .execute_forward_quantized_into(&plan, &input_u32, &mut quantized_fwd)
-            .expect("quantized forward");
-        let quantized_fwd_u64: Vec<u64> = quantized_fwd.iter().map(|&v| u64::from(v)).collect();
-        assert_eq!(
-            quantized_fwd_u64, expected_fwd,
-            "quantized forward must match allocating forward exactly"
-        );
+            let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
+            let cpu = cpu_plan
+                .forward(&Array1::from_vec(input.clone()))
+                .expect("cpu forward");
 
-        // Inverse roundtrip via quantized path.
-        let mut quantized_inv = vec![0_u32; input_u32.len()];
-        backend
-            .execute_inverse_quantized_into(&plan, &quantized_fwd, &mut quantized_inv)
-            .expect("quantized inverse");
-        assert_eq!(
-            quantized_inv, input_u32,
-            "quantized INTT(NTT(x)) must recover x exactly"
-        );
-    }
+            assert_eq!(
+                gpu,
+                cpu.to_vec(),
+                "gpu forward NTT must match cpu reference exactly for Fibonacci input"
+            );
+        }
 
-    #[test]
-    fn quantized_leto_forward_and_inverse_match_quantized_slice_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
-        let plan = backend.plan(input.len());
-        let mut expected_forward = vec![0_u32; input.len()];
-        backend
-            .execute_forward_quantized_into(&plan, &input, &mut expected_forward)
-            .expect("quantized forward");
-        let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
-        let actual_forward = backend
-            .execute_forward_quantized_leto(&plan, leto_input.view())
-            .expect("leto quantized forward");
-        assert_eq!(
-            actual_forward.storage().as_slice(),
-            expected_forward.as_slice()
-        );
+        // 4. inverse_recovers_input
+        {
+            let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
+            let plan = backend.plan(input.len());
+            let spectrum = backend
+                .execute_forward(&plan, &input)
+                .expect("gpu forward execution");
+            let recovered = backend
+                .execute_inverse(&plan, &spectrum)
+                .expect("gpu inverse execution");
 
-        let mut expected_inverse = vec![0_u32; expected_forward.len()];
-        backend
-            .execute_inverse_quantized_into(&plan, &expected_forward, &mut expected_inverse)
-            .expect("quantized inverse");
-        let leto_spectrum =
-            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
-                .expect("leto spectrum");
-        let actual_inverse = backend
-            .execute_inverse_quantized_leto(&plan, leto_spectrum.view())
-            .expect("leto quantized inverse");
-        assert_eq!(
-            actual_inverse.storage().as_slice(),
-            expected_inverse.as_slice()
-        );
-    }
+            assert_eq!(
+                recovered, input,
+                "INTT(NTT(x)) must recover x exactly for Fibonacci input"
+            );
+        }
 
-    /// # Mathematical contract
-    ///
-    /// Reusable-buffer paths must produce results identical to the allocating
-    /// paths — the abstraction must be transparent.
-    #[test]
-    fn reusable_buffers_match_allocating_forward_and_inverse_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![1_u64, 4, 9, 16, 25, 36, 49, 64];
-        let plan = backend.plan(input.len());
-        let mut buffers = backend
-            .create_buffers(&plan)
-            .expect("reusable buffers for plan");
+        // 5. leto_forward_and_inverse_match_allocating_slice
+        {
+            let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
+            let plan = backend.plan(input.len());
+            let expected_forward = backend
+                .execute_forward(&plan, &input)
+                .expect("slice forward");
+            let leto_input =
+                leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+            let actual_forward = backend
+                .execute_forward_leto(&plan, leto_input.view())
+                .expect("leto forward");
+            assert_eq!(
+                actual_forward.storage().as_slice(),
+                expected_forward.as_slice()
+            );
 
-        let alloc_fwd = backend
-            .execute_forward(&plan, &input)
-            .expect("allocating forward");
-        backend
-            .execute_forward_with_buffers(&plan, &input, &mut buffers)
-            .expect("buffered forward");
-        assert_eq!(
-            backend.buffer_output(&buffers),
-            alloc_fwd.as_slice(),
-            "buffered forward must match allocating forward"
-        );
+            let expected_inverse = backend
+                .execute_inverse(&plan, &expected_forward)
+                .expect("slice inverse");
+            let leto_spectrum =
+                leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                    .expect("leto spectrum");
+            let actual_inverse = backend
+                .execute_inverse_leto(&plan, leto_spectrum.view())
+                .expect("leto inverse");
+            assert_eq!(
+                actual_inverse.storage().as_slice(),
+                expected_inverse.as_slice()
+            );
+        }
 
-        let spectrum = backend.buffer_output(&buffers).to_vec();
-        let alloc_inv = backend
-            .execute_inverse(&plan, &spectrum)
-            .expect("allocating inverse");
-        backend
-            .execute_inverse_with_buffers(&plan, &spectrum, &mut buffers)
-            .expect("buffered inverse");
-        assert_eq!(
-            backend.buffer_output(&buffers),
-            alloc_inv.as_slice(),
-            "buffered inverse must match allocating inverse"
-        );
-        assert_eq!(
-            backend.buffer_output(&buffers),
-            input.as_slice(),
-            "INTT(NTT(x)) via reusable buffers must recover x"
-        );
-    }
+        // 6. leto_strided_forward_matches_logical_slice
+        {
+            let logical = vec![1_u64, 4, 9, 16, 25, 36, 49, 64];
+            let mut backing = Vec::with_capacity(logical.len() * 2);
+            for value in logical.iter().copied() {
+                backing.push(value);
+                backing.push(99);
+            }
+            let plan = backend.plan(logical.len());
+            let expected = backend
+                .execute_forward(&plan, &logical)
+                .expect("slice forward");
+            let leto_input = leto::Array1::from_shape_vec([backing.len()], backing).expect("input");
+            let strided = leto_input
+                .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+                .expect("strided view");
+            let actual = backend
+                .execute_forward_leto(&plan, strided)
+                .expect("strided leto forward");
+            assert_eq!(actual.storage().as_slice(), expected.as_slice());
+        }
 
-    /// # Mathematical contract
-    ///
-    /// Quantized reusable-buffer paths must produce results identical to the
-    /// allocating quantized paths.
-    #[test]
-    fn quantized_u32_reusable_buffers_match_allocating_quantized_path_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
-        let plan = backend.plan(input.len());
-        let mut buffers = backend.create_buffers(&plan).expect("reusable buffers");
+        // 7. quantized_u32_storage_matches_allocating_u64_execution
+        {
+            let input_u32 = vec![1_u32, 1, 2, 3, 5, 8, 13, 21];
+            let input_u64: Vec<u64> = input_u32.iter().map(|&v| u64::from(v)).collect();
+            let plan = backend.plan(input_u32.len());
 
-        let mut alloc_fwd = vec![0_u32; input.len()];
-        backend
-            .execute_forward_quantized_into(&plan, &input, &mut alloc_fwd)
-            .expect("allocating quantized forward");
-        backend
-            .execute_forward_quantized_with_buffers(&plan, &input, &mut buffers)
-            .expect("buffered quantized forward");
-        let alloc_fwd_u64: Vec<u64> = alloc_fwd.iter().map(|&v| u64::from(v)).collect();
-        assert_eq!(
-            backend.buffer_output(&buffers),
-            alloc_fwd_u64.as_slice(),
-            "buffered quantized forward must match allocating quantized forward"
-        );
+            let expected_fwd = backend
+                .execute_forward(&plan, &input_u64)
+                .expect("allocating forward");
+            let mut quantized_fwd = vec![0_u32; input_u32.len()];
+            backend
+                .execute_forward_quantized_into(&plan, &input_u32, &mut quantized_fwd)
+                .expect("quantized forward");
+            let quantized_fwd_u64: Vec<u64> = quantized_fwd.iter().map(|&v| u64::from(v)).collect();
+            assert_eq!(
+                quantized_fwd_u64, expected_fwd,
+                "quantized forward must match allocating forward exactly"
+            );
 
-        let mut alloc_inv = vec![0_u32; input.len()];
-        backend
-            .execute_inverse_quantized_into(&plan, &alloc_fwd, &mut alloc_inv)
-            .expect("allocating quantized inverse");
-        backend
-            .execute_inverse_quantized_with_buffers(&plan, &alloc_fwd, &mut buffers)
-            .expect("buffered quantized inverse");
-        let alloc_inv_u64: Vec<u64> = alloc_inv.iter().map(|&v| u64::from(v)).collect();
-        assert_eq!(
-            backend.buffer_output(&buffers),
-            alloc_inv_u64.as_slice(),
-            "buffered quantized inverse must match allocating quantized inverse"
-        );
-        assert_eq!(alloc_inv, input, "quantized INTT(NTT(x)) must recover x");
-    }
+            let mut quantized_inv = vec![0_u32; input_u32.len()];
+            backend
+                .execute_inverse_quantized_into(&plan, &quantized_fwd, &mut quantized_inv)
+                .expect("quantized inverse");
+            assert_eq!(
+                quantized_inv, input_u32,
+                "quantized INTT(NTT(x)) must recover x exactly"
+            );
+        }
 
-    // -----------------------------------------------------------------------
-    // Error-path tests (GPU device required for full path; plan validation
-    // is tested below without dispatching)
-    // -----------------------------------------------------------------------
+        // 8. quantized_leto_forward_and_inverse_match_quantized_slice
+        {
+            let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
+            let plan = backend.plan(input.len());
+            let mut expected_forward = vec![0_u32; input.len()];
+            backend
+                .execute_forward_quantized_into(&plan, &input, &mut expected_forward)
+                .expect("quantized forward");
+            let leto_input =
+                leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
+            let actual_forward = backend
+                .execute_forward_quantized_leto(&plan, leto_input.view())
+                .expect("leto quantized forward");
+            assert_eq!(
+                actual_forward.storage().as_slice(),
+                expected_forward.as_slice()
+            );
 
-    #[test]
-    fn quantized_u32_storage_rejects_output_length_mismatch_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let plan = backend.plan(8);
-        let mut output = vec![0_u32; 4];
-        let err = backend
-            .execute_forward_quantized_into(&plan, &[0; 8], &mut output)
-            .expect_err("output length mismatch must produce an error");
-        assert_eq!(
-            err,
-            WgpuError::LengthMismatch {
-                expected: 8,
-                actual: 4,
-            },
-            "error must identify expected and actual lengths"
-        );
-    }
+            let mut expected_inverse = vec![0_u32; expected_forward.len()];
+            backend
+                .execute_inverse_quantized_into(&plan, &expected_forward, &mut expected_inverse)
+                .expect("quantized inverse");
+            let leto_spectrum =
+                leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
+                    .expect("leto spectrum");
+            let actual_inverse = backend
+                .execute_inverse_quantized_leto(&plan, leto_spectrum.view())
+                .expect("leto quantized inverse");
+            assert_eq!(
+                actual_inverse.storage().as_slice(),
+                expected_inverse.as_slice()
+            );
+        }
 
-    #[test]
-    fn reusable_buffers_reject_plan_length_mismatch_when_device_exists() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
-        let plan = backend.plan(8);
-        let short_plan = backend.plan(4);
-        let mut short_buffers = backend
-            .create_buffers(&short_plan)
-            .expect("short reusable buffers");
-        let err = backend
-            .execute_forward_with_buffers(&plan, &[0; 8], &mut short_buffers)
-            .expect_err("buffer length mismatch must produce an error");
-        assert_eq!(
-            err,
-            WgpuError::LengthMismatch {
-                expected: 8,
-                actual: 4,
-            },
-            "error must identify expected and actual buffer lengths"
-        );
-    }
+        // 9. reusable_buffers_match_allocating_forward_and_inverse
+        {
+            let input = vec![1_u64, 4, 9, 16, 25, 36, 49, 64];
+            let plan = backend.plan(input.len());
+            let mut buffers = backend
+                .create_buffers(&plan)
+                .expect("reusable buffers for plan");
 
-    #[test]
-    fn rejects_invalid_plan_and_length_before_dispatch() {
-        let Ok(backend) = NttWgpuBackend::try_default() else {
-            return;
-        };
+            let alloc_fwd = backend
+                .execute_forward(&plan, &input)
+                .expect("allocating forward");
+            backend
+                .execute_forward_with_buffers(&plan, &input, &mut buffers)
+                .expect("buffered forward");
+            assert_eq!(
+                backend.buffer_output(&buffers),
+                alloc_fwd.as_slice(),
+                "buffered forward must match allocating forward"
+            );
 
-        // Empty plan.
-        let empty_err = backend
-            .execute_forward(
-                &NttWgpuPlan::new(0, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
-                &[],
-            )
-            .expect_err("empty plan must fail");
-        assert!(
-            matches!(empty_err, WgpuError::InvalidPlan { ref message } if message.contains("length must be greater than zero")),
-            "empty plan must report zero length"
-        );
+            let spectrum = backend.buffer_output(&buffers).to_vec();
+            let alloc_inv = backend
+                .execute_inverse(&plan, &spectrum)
+                .expect("allocating inverse");
+            backend
+                .execute_inverse_with_buffers(&plan, &spectrum, &mut buffers)
+                .expect("buffered inverse");
+            assert_eq!(
+                backend.buffer_output(&buffers),
+                alloc_inv.as_slice(),
+                "buffered inverse must match allocating inverse"
+            );
+            assert_eq!(
+                backend.buffer_output(&buffers),
+                input.as_slice(),
+                "INTT(NTT(x)) via reusable buffers must recover x"
+            );
+        }
 
-        // Non-power-of-two plan.
-        let non_pow_err = backend
-            .execute_forward(
-                &NttWgpuPlan::new(6, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
-                &[0; 6],
-            )
-            .expect_err("non-power-of-two plan must fail");
-        assert!(
-            matches!(non_pow_err, WgpuError::InvalidPlan { ref message } if message.contains("power of two")),
-            "non-power-of-two plan must be rejected"
-        );
+        // 10. quantized_u32_reusable_buffers_match_allocating_quantized_path
+        {
+            let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
+            let plan = backend.plan(input.len());
+            let mut buffers = backend.create_buffers(&plan).expect("reusable buffers");
 
-        // Input length mismatch.
-        let mismatch_err = backend
-            .execute_forward(
-                &NttWgpuPlan::new(8, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
-                &[0; 4],
-            )
-            .expect_err("input length mismatch must fail");
-        assert_eq!(
-            mismatch_err,
-            WgpuError::LengthMismatch {
-                expected: 8,
-                actual: 4,
-            },
-            "input length mismatch must report expected and actual"
-        );
+            let mut alloc_fwd = vec![0_u32; input.len()];
+            backend
+                .execute_forward_quantized_into(&plan, &input, &mut alloc_fwd)
+                .expect("allocating quantized forward");
+            backend
+                .execute_forward_quantized_with_buffers(&plan, &input, &mut buffers)
+                .expect("buffered quantized forward");
+            let alloc_fwd_u64: Vec<u64> = alloc_fwd.iter().map(|&v| u64::from(v)).collect();
+            assert_eq!(
+                backend.buffer_output(&buffers),
+                alloc_fwd_u64.as_slice(),
+                "buffered quantized forward must match allocating quantized forward"
+            );
+
+            let mut alloc_inv = vec![0_u32; input.len()];
+            backend
+                .execute_inverse_quantized_into(&plan, &alloc_fwd, &mut alloc_inv)
+                .expect("allocating quantized inverse");
+            backend
+                .execute_inverse_quantized_with_buffers(&plan, &alloc_fwd, &mut buffers)
+                .expect("buffered quantized inverse");
+            let alloc_inv_u64: Vec<u64> = alloc_inv.iter().map(|&v| u64::from(v)).collect();
+            assert_eq!(
+                backend.buffer_output(&buffers),
+                alloc_inv_u64.as_slice(),
+                "buffered quantized inverse must match allocating quantized inverse"
+            );
+            assert_eq!(alloc_inv, input, "quantized INTT(NTT(x)) must recover x");
+        }
+
+        // 11. quantized_u32_storage_rejects_output_length_mismatch
+        {
+            let plan = backend.plan(8);
+            let mut output = vec![0_u32; 4];
+            let err = backend
+                .execute_forward_quantized_into(&plan, &[0; 8], &mut output)
+                .expect_err("output length mismatch must produce an error");
+            assert_eq!(
+                err,
+                WgpuError::LengthMismatch {
+                    expected: 8,
+                    actual: 4,
+                }
+            );
+        }
+
+        // 12. reusable_buffers_reject_plan_length_mismatch
+        {
+            let plan = backend.plan(8);
+            let short_plan = backend.plan(4);
+            let mut short_buffers = backend
+                .create_buffers(&short_plan)
+                .expect("short reusable buffers");
+            let err = backend
+                .execute_forward_with_buffers(&plan, &[0; 8], &mut short_buffers)
+                .expect_err("buffer length mismatch must produce an error");
+            assert_eq!(
+                err,
+                WgpuError::LengthMismatch {
+                    expected: 8,
+                    actual: 4,
+                }
+            );
+        }
+
+        // 13. rejects_invalid_plan_and_length_before_dispatch
+        {
+            // Empty plan.
+            let empty_err = backend
+                .execute_forward(
+                    &NttWgpuPlan::new(0, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
+                    &[],
+                )
+                .expect_err("empty plan must fail");
+            assert!(
+                matches!(empty_err, WgpuError::InvalidPlan { ref message } if message.contains("length must be greater than zero")),
+                "empty plan must report zero length"
+            );
+
+            // Non-power-of-two plan.
+            let non_pow_err = backend
+                .execute_forward(
+                    &NttWgpuPlan::new(6, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
+                    &[0; 6],
+                )
+                .expect_err("non-power-of-two plan must fail");
+            assert!(
+                matches!(non_pow_err, WgpuError::InvalidPlan { ref message } if message.contains("power of two")),
+                "non-power-of-two plan must be rejected"
+            );
+
+            // Input length mismatch.
+            let mismatch_err = backend
+                .execute_forward(
+                    &NttWgpuPlan::new(8, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT),
+                    &[0; 4],
+                )
+                .expect_err("input length mismatch must fail");
+            assert_eq!(
+                mismatch_err,
+                WgpuError::LengthMismatch {
+                    expected: 8,
+                    actual: 4,
+                }
+            );
+        }
     }
 
     // -----------------------------------------------------------------------

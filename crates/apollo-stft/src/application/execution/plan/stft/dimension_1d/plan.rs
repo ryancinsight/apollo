@@ -1,12 +1,13 @@
 //! 1D Short-Time Fourier Transform plan.
 
-use super::helpers::{
-    leto_array1_from_slice, leto_view1_cow, window_complex_real_frame_into, window_signal_frame_into,
-    with_forward_typed_workspaces, with_inverse_typed_workspaces, with_inverse_wola_workspaces,
-};
 use super::super::storage::{
     validate_profile, StftRealOutputStorage, StftRealStorage, StftSpectrumInput,
     StftSpectrumStorage,
+};
+use super::helpers::{
+    leto_array1_from_slice, leto_view1_cow, window_complex_real_frame_into,
+    window_signal_frame_into, with_forward_typed_workspaces, with_inverse_typed_workspaces,
+    with_inverse_wola_workspaces,
 };
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
@@ -215,7 +216,11 @@ impl StftPlan {
         leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
     }
 
-    pub(crate) fn forward_f64_slice_into(&self, signal: &[f64], output: &mut [Complex64]) -> StftResult<()> {
+    pub(crate) fn forward_f64_slice_into(
+        &self,
+        signal: &[f64],
+        output: &mut [Complex64],
+    ) -> StftResult<()> {
         if signal.len() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
@@ -338,7 +343,8 @@ impl StftPlan {
                     self.frame_len,
                     |m, frame_complex, frame_out| {
                         let offset = m * self.spectrum_len();
-                        frame_complex[..self.spectrum_len()].copy_from_slice(&spectrum[offset..(offset + self.spectrum_len())]);
+                        frame_complex[..self.spectrum_len()]
+                            .copy_from_slice(&spectrum[offset..(offset + self.spectrum_len())]);
                         self.fft_plan.inverse_complex_slice_inplace(frame_complex);
                         window_complex_real_frame_into(frame_complex, window, frame_out);
                     },

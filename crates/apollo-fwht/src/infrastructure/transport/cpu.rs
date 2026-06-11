@@ -62,14 +62,11 @@ mod tests {
 
     #[test]
     fn leto_transport_caller_owned_output_matches_allocating_forward() {
-        let signal = leto::Array1::from_shape_vec(
-            [8],
-            vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0],
-        )
-        .expect("signal");
+        let signal =
+            leto::Array1::from_shape_vec([8], vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0])
+                .expect("signal");
         let expected = fwht_leto(signal.view()).expect("allocating fwht");
-        let mut actual =
-            leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([8]);
+        let mut actual = leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([8]);
 
         fwht_leto_into(signal.view(), actual.view_mut()).expect("caller-owned fwht");
 
@@ -85,11 +82,9 @@ mod tests {
 
     #[test]
     fn leto_transport_caller_owned_output_roundtrips_inverse() {
-        let signal = leto::Array1::from_shape_vec(
-            [8],
-            vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0],
-        )
-        .expect("signal");
+        let signal =
+            leto::Array1::from_shape_vec([8], vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0])
+                .expect("signal");
         let spectrum = fwht_leto(signal.view()).expect("allocating fwht");
         let mut recovered =
             leto::Array::<f64, leto::MnemosyneStorage<f64>, 1>::zeros_mnemosyne([8]);

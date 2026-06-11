@@ -70,1016 +70,834 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_plan_before_dispatch() {
-        match StftWgpuBackend::try_default() {
-            Err(_) => return, // no GPU: skip GPU-dependent part
-            Ok(backend) => {
-                // zero frame_len
-                let r = backend.execute_forward(&StftWgpuPlan::new(0, 4), &[0.0f32; 8]);
-                assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
+    fn stft_wgpu_execution_suite_when_device_exists() {
+        let Ok(backend) = StftWgpuBackend::try_default() else {
+            return;
+        };
 
-                // zero hop_len
-                let r = backend.execute_forward(&StftWgpuPlan::new(8, 0), &[0.0f32; 8]);
-                assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
+        // 1. rejects_invalid_plan_before_dispatch
+        {
+            // zero frame_len
+            let r = backend.execute_forward(&StftWgpuPlan::new(0, 4), &[0.0f32; 8]);
+            assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
 
-                // hop > frame
-                let r = backend.execute_forward(&StftWgpuPlan::new(4, 8), &[0.0f32; 4]);
-                assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
+            // zero hop_len
+            let r = backend.execute_forward(&StftWgpuPlan::new(8, 0), &[0.0f32; 8]);
+            assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
 
-                // signal too short
-                let r = backend.execute_forward(&StftWgpuPlan::new(8, 4), &[0.0f32; 4]);
-                assert!(matches!(r, Err(WgpuError::InputTooShort { .. })), "{r:?}");
+            // hop > frame
+            let r = backend.execute_forward(&StftWgpuPlan::new(4, 8), &[0.0f32; 4]);
+            assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
+
+            // signal too short
+            let r = backend.execute_forward(&StftWgpuPlan::new(8, 4), &[0.0f32; 4]);
+            assert!(matches!(r, Err(WgpuError::InputTooShort { .. })), "{r:?}");
+        }
+
+        // 2. backend_reports_forward_and_inverse_when_device_exists
+        {
+            let caps = backend.capabilities();
+            assert!(caps.device_available);
+            assert!(caps.supports_forward);
+            assert!(caps.supports_inverse);
+        }
+
+        // 3. forward_matches_cpu_reference_when_device_exists
+        {
+            // 16-sample alternating signal: values 0, 1, 0, -1, ...
+            let signal_f32: Vec<f32> = vec![
+                0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
+            ];
+            let signal_f64: Array1<f64> =
+                Array1::from_vec(signal_f32.iter().map(|x| *x as f64).collect());
+
+            let plan = StftWgpuPlan::new(8, 4);
+
+            let gpu_out = backend
+                .execute_forward(&plan, &signal_f32)
+                .expect("GPU forward STFT");
+
+            let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
+            let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward STFT");
+
+            assert_eq!(
+                gpu_out.len(),
+                cpu_out.len(),
+                "output length mismatch: gpu={}, cpu={}",
+                gpu_out.len(),
+                cpu_out.len()
+            );
+
+            const TOL: f32 = 1e-3;
+            for (i, (g, c)) in gpu_out.iter().zip(cpu_out.iter()).enumerate() {
+                let re_err = (g.re - c.re as f32).abs();
+                let im_err = (g.im - c.im as f32).abs();
+                assert!(
+                    re_err < TOL,
+                    "re mismatch at index {i}: gpu={:.6}, cpu={:.6}, err={:.2e}",
+                    g.re,
+                    c.re,
+                    re_err
+                );
+                assert!(
+                    im_err < TOL,
+                    "im mismatch at index {i}: gpu={:.6}, cpu={:.6}, err={:.2e}",
+                    g.im,
+                    c.im,
+                    im_err
+                );
             }
         }
-    }
 
-    #[test]
-    fn backend_reports_forward_and_inverse_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let caps = backend.capabilities();
-        assert!(caps.device_available);
-        assert!(caps.supports_forward);
-        assert!(caps.supports_inverse);
-    }
+        // 4. inverse_roundtrip_recovers_cola_signal_when_device_exists
+        {
+            // Alternating signal, smooth, non-trivial, well inside f32 dynamic range.
+            let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
+            let signal_f64: Array1<f64> =
+                Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+            let signal_len = 8usize;
 
-    // -----------------------------------------------------------------------
-    // GPU parity test: forward matches CPU StftPlan::forward
-    // -----------------------------------------------------------------------
+            let plan = StftWgpuPlan::new(8, 4);
 
-    #[test]
-    fn forward_matches_cpu_reference_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
+            // Compute spectrum on CPU (f64) as the authoritative input.
+            // frame_count = 1 + 8.div_ceil(4) = 3; spectrum_len = 3 * 8 = 24.
+            let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
+            let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
 
-        // 16-sample alternating signal: values 0, 1, 0, -1, ...
-        let signal_f32: Vec<f32> = vec![
-            0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
-        ];
-        let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|x| *x as f64).collect());
+            // Downcast spectrum to f32 for GPU inverse.
+            let gpu_spectrum: Vec<Complex32> = cpu_spectrum
+                .iter()
+                .map(|c| Complex32::new(c.re as f32, c.im as f32))
+                .collect();
 
-        let plan = StftWgpuPlan::new(8, 4);
+            let recovered = backend
+                .execute_inverse(&plan, &gpu_spectrum, signal_len)
+                .expect("GPU inverse STFT");
 
-        let gpu_out = backend
-            .execute_forward(&plan, &signal_f32)
-            .expect("GPU forward STFT");
+            // CPU inverse as reference for value-semantic comparison.
+            let cpu_recovered = cpu_plan
+                .inverse(&cpu_spectrum, signal_len)
+                .expect("CPU inverse");
 
-        let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
-        let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward STFT");
-
-        assert_eq!(
-            gpu_out.len(),
-            cpu_out.len(),
-            "output length mismatch: gpu={}, cpu={}",
-            gpu_out.len(),
-            cpu_out.len()
-        );
-
-        const TOL: f32 = 1e-3;
-        for (i, (g, c)) in gpu_out.iter().zip(cpu_out.iter()).enumerate() {
-            let re_err = (g.re - c.re as f32).abs();
-            let im_err = (g.im - c.im as f32).abs();
-            assert!(
-                re_err < TOL,
-                "re mismatch at index {i}: gpu={:.6}, cpu={:.6}, err={:.2e}",
-                g.re,
-                c.re,
-                re_err
-            );
-            assert!(
-                im_err < TOL,
-                "im mismatch at index {i}: gpu={:.6}, cpu={:.6}, err={:.2e}",
-                g.im,
-                c.im,
-                im_err
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // GPU inverse: WOLA roundtrip tests
-    // -----------------------------------------------------------------------
-
-    /// frame_len=8, hop_len=4 (Hann COLA condition: hop = frame_len/2).
-    /// CPU forward spectrum → GPU inverse → compare against CPU inverse as reference.
-    #[test]
-    fn inverse_roundtrip_recovers_cola_signal_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        // Alternating signal, smooth, non-trivial, well inside f32 dynamic range.
-        let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
-        let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-        let signal_len = 8usize;
-
-        let plan = StftWgpuPlan::new(8, 4);
-
-        // Compute spectrum on CPU (f64) as the authoritative input.
-        // frame_count = 1 + 8.div_ceil(4) = 3; spectrum_len = 3 * 8 = 24.
-        let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
-        let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
-
-        // Downcast spectrum to f32 for GPU inverse.
-        let gpu_spectrum: Vec<Complex32> = cpu_spectrum
-            .iter()
-            .map(|c| Complex32::new(c.re as f32, c.im as f32))
-            .collect();
-
-        let recovered = backend
-            .execute_inverse(&plan, &gpu_spectrum, signal_len)
-            .expect("GPU inverse STFT");
-
-        // CPU inverse as reference for value-semantic comparison.
-        let cpu_recovered = cpu_plan
-            .inverse(&cpu_spectrum, signal_len)
-            .expect("CPU inverse");
-
-        assert_eq!(
-            recovered.len(),
-            signal_len,
-            "recovered length mismatch: got {}, expected {signal_len}",
-            recovered.len()
-        );
-        assert_eq!(
-            cpu_recovered.len(),
-            signal_len,
-            "cpu_recovered length mismatch"
-        );
-
-        // Tolerance accounts for f64→f32 downcast of spectrum and f32 GPU arithmetic.
-        const TOL: f32 = 5e-4;
-        for (i, (gpu_val, cpu_val)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
-            let err = (gpu_val - *cpu_val as f32).abs();
-            assert!(
-                err < TOL,
-                "mismatch at {i}: gpu={gpu_val:.6}, cpu={cpu_val:.6}, err={err:.2e}"
-            );
-        }
-    }
-
-    /// Similar WOLA roundtrip test with a 16-sample signal and frame_len=8, hop_len=4.
-    #[test]
-    fn inverse_matches_cpu_reference_for_16sample_signal() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        let signal_f32: Vec<f32> = vec![
-            0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
-        ];
-        let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-        let signal_len = 16usize;
-
-        let plan = StftWgpuPlan::new(8, 4);
-
-        // frame_count = 1 + 16.div_ceil(4) = 5; spectrum_len = 5 * 8 = 40.
-        let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
-        let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
-
-        let gpu_spectrum: Vec<Complex32> = cpu_spectrum
-            .iter()
-            .map(|c| Complex32::new(c.re as f32, c.im as f32))
-            .collect();
-
-        let recovered = backend
-            .execute_inverse(&plan, &gpu_spectrum, signal_len)
-            .expect("GPU inverse STFT");
-
-        let cpu_recovered = cpu_plan
-            .inverse(&cpu_spectrum, signal_len)
-            .expect("CPU inverse");
-
-        assert_eq!(
-            recovered.len(),
-            signal_len,
-            "recovered length mismatch: got {}, expected {signal_len}",
-            recovered.len()
-        );
-
-        const TOL: f32 = 5e-4;
-        for (i, (gpu_val, cpu_val)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
-            let err = (gpu_val - *cpu_val as f32).abs();
-            assert!(
-                err < TOL,
-                "mismatch at {i}: gpu={gpu_val:.6}, cpu={cpu_val:.6}, err={err:.2e}"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Typed mixed-precision dispatch tests
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn typed_mixed_storage_matches_represented_f32_execution_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        // 8-sample signal: f16 quantization of the alternating pattern is exact for these values.
-        let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
-        let signal_f16: Vec<f16> = signal_f32.iter().map(|&x| f16::from_f32(x)).collect();
-        // Represented input: f16 promoted back to f32 (round-trip defines the reference).
-        let represented: Vec<f32> = signal_f16.iter().map(|v| v.to_f32()).collect();
-        let plan = StftWgpuPlan::new(4, 2);
-        // frame_count = 1 + 8.div_ceil(2) = 5; output_len = 5 * 4 = 20.
-        let f32_result = backend
-            .execute_forward(&plan, &represented)
-            .expect("f32 reference");
-        let mut typed_out: Vec<[f16; 2]> =
-            vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; f32_result.len()];
-        backend
-            .execute_forward_typed_into(
-                &plan,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                &signal_f16,
-                &mut typed_out,
-            )
-            .expect("typed mixed forward");
-        for (actual, expected) in typed_out.iter().zip(f32_result.iter()) {
-            let expected_f16 = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
             assert_eq!(
-                actual[0].to_bits(),
-                expected_f16[0].to_bits(),
-                "re bits mismatch: actual={:?} expected={:?}",
-                actual[0],
-                expected_f16[0]
+                recovered.len(),
+                signal_len,
+                "recovered length mismatch: got {}, expected {signal_len}",
+                recovered.len()
             );
             assert_eq!(
-                actual[1].to_bits(),
-                expected_f16[1].to_bits(),
-                "im bits mismatch: actual={:?} expected={:?}",
-                actual[1],
-                expected_f16[1]
+                cpu_recovered.len(),
+                signal_len,
+                "cpu_recovered length mismatch"
+            );
+
+            // Tolerance accounts for f64→f32 downcast of spectrum and f32 GPU arithmetic.
+            const TOL: f32 = 5e-4;
+            for (i, (gpu_val, cpu_val)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
+                let err = (gpu_val - *cpu_val as f32).abs();
+                assert!(
+                    err < TOL,
+                    "mismatch at {i}: gpu={gpu_val:.6}, cpu={cpu_val:.6}, err={err:.2e}"
+                );
+            }
+        }
+
+        // 5. inverse_matches_cpu_reference_for_16sample_signal
+        {
+            let signal_f32: Vec<f32> = vec![
+                0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
+            ];
+            let signal_f64: Array1<f64> =
+                Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+            let signal_len = 16usize;
+
+            let plan = StftWgpuPlan::new(8, 4);
+
+            // frame_count = 1 + 16.div_ceil(4) = 5; spectrum_len = 5 * 8 = 40.
+            let cpu_plan = apollo_stft::StftPlan::new(8, 4).expect("CPU plan");
+            let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
+
+            let gpu_spectrum: Vec<Complex32> = cpu_spectrum
+                .iter()
+                .map(|c| Complex32::new(c.re as f32, c.im as f32))
+                .collect();
+
+            let recovered = backend
+                .execute_inverse(&plan, &gpu_spectrum, signal_len)
+                .expect("GPU inverse STFT");
+
+            let cpu_recovered = cpu_plan
+                .inverse(&cpu_spectrum, signal_len)
+                .expect("CPU inverse");
+
+            assert_eq!(
+                recovered.len(),
+                signal_len,
+                "recovered length mismatch: got {}, expected {signal_len}",
+                recovered.len()
+            );
+
+            const TOL: f32 = 5e-4;
+            for (i, (gpu_val, cpu_val)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
+                let err = (gpu_val - *cpu_val as f32).abs();
+                assert!(
+                    err < TOL,
+                    "mismatch at {i}: gpu={gpu_val:.6}, cpu={cpu_val:.6}, err={err:.2e}"
+                );
+            }
+        }
+
+        // 6. typed_mixed_storage_matches_represented_f32_execution_when_device_exists
+        {
+            // 8-sample signal: f16 quantization of the alternating pattern is exact for these values.
+            let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
+            let signal_f16: Vec<f16> = signal_f32.iter().map(|&x| f16::from_f32(x)).collect();
+            // Represented input: f16 promoted back to f32 (round-trip defines the reference).
+            let represented: Vec<f32> = signal_f16.iter().map(|v| v.to_f32()).collect();
+            let plan = StftWgpuPlan::new(4, 2);
+            // frame_count = 1 + 8.div_ceil(2) = 5; output_len = 5 * 4 = 20.
+            let f32_result = backend
+                .execute_forward(&plan, &represented)
+                .expect("f32 reference");
+            let mut typed_out: Vec<[f16; 2]> =
+                vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; f32_result.len()];
+            backend
+                .execute_forward_typed_into(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &signal_f16,
+                    &mut typed_out,
+                )
+                .expect("typed mixed forward");
+            for (actual, expected) in typed_out.iter().zip(f32_result.iter()) {
+                let expected_f16 = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
+                assert_eq!(
+                    actual[0].to_bits(),
+                    expected_f16[0].to_bits(),
+                    "re bits mismatch: actual={:?} expected={:?}",
+                    actual[0],
+                    expected_f16[0]
+                );
+                assert_eq!(
+                    actual[1].to_bits(),
+                    expected_f16[1].to_bits(),
+                    "im bits mismatch: actual={:?} expected={:?}",
+                    actual[1],
+                    expected_f16[1]
+                );
+            }
+        }
+
+        // 7. leto_forward_and_inverse_match_slice_paths_when_device_exists
+        {
+            let signal: Vec<f32> = vec![
+                0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75, 0.0, 1.0, 0.0, -1.0, 0.25, 0.75,
+                -0.25, -0.75,
+            ];
+            let plan = StftWgpuPlan::new(8, 4);
+            let leto_signal =
+                leto::Array1::from_shape_vec([signal.len()], signal.clone()).expect("signal");
+
+            let expected_forward = backend
+                .execute_forward(&plan, &signal)
+                .expect("slice forward");
+            let actual_forward = backend
+                .execute_forward_leto(&plan, leto_signal.view())
+                .expect("leto forward");
+            assert_eq!(
+                actual_forward.storage().as_slice(),
+                expected_forward.as_slice()
+            );
+
+            let leto_spectrum =
+                leto::Array1::from_shape_vec([expected_forward.len()], expected_forward.clone())
+                    .expect("spectrum");
+            let expected_inverse = backend
+                .execute_inverse(&plan, &expected_forward, signal.len())
+                .expect("slice inverse");
+            let actual_inverse = backend
+                .execute_inverse_leto(&plan, leto_spectrum.view(), signal.len())
+                .expect("leto inverse");
+            assert_eq!(
+                actual_inverse.storage().as_slice(),
+                expected_inverse.as_slice()
             );
         }
-    }
 
-    #[test]
-    fn leto_forward_and_inverse_match_slice_paths_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let signal: Vec<f32> = vec![
-            0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75, 0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25,
-            -0.75,
-        ];
-        let plan = StftWgpuPlan::new(8, 4);
-        let leto_signal =
-            leto::Array1::from_shape_vec([signal.len()], signal.clone()).expect("signal");
+        // 8. leto_strided_forward_matches_logical_slice_path_when_device_exists
+        {
+            let logical: Vec<f32> = vec![
+                0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75, 0.0, 1.0, 0.0, -1.0, 0.25, 0.75,
+                -0.25, -0.75,
+            ];
+            let mut backing = Vec::with_capacity(logical.len() * 2);
+            for value in &logical {
+                backing.push(*value);
+                backing.push(99.0);
+            }
+            let leto_signal =
+                leto::Array1::from_shape_vec([backing.len()], backing).expect("signal");
+            let strided = leto_signal
+                .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+                .expect("strided signal");
 
-        let expected_forward = backend
-            .execute_forward(&plan, &signal)
-            .expect("slice forward");
-        let actual_forward = backend
-            .execute_forward_leto(&plan, leto_signal.view())
-            .expect("leto forward");
-        assert_eq!(
-            actual_forward.storage().as_slice(),
-            expected_forward.as_slice()
-        );
-
-        let leto_spectrum =
-            leto::Array1::from_shape_vec([expected_forward.len()], expected_forward.clone())
-                .expect("spectrum");
-        let expected_inverse = backend
-            .execute_inverse(&plan, &expected_forward, signal.len())
-            .expect("slice inverse");
-        let actual_inverse = backend
-            .execute_inverse_leto(&plan, leto_spectrum.view(), signal.len())
-            .expect("leto inverse");
-        assert_eq!(
-            actual_inverse.storage().as_slice(),
-            expected_inverse.as_slice()
-        );
-    }
-
-    #[test]
-    fn leto_strided_forward_matches_logical_slice_path_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let logical: Vec<f32> = vec![
-            0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75, 0.0, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25,
-            -0.75,
-        ];
-        let mut backing = Vec::with_capacity(logical.len() * 2);
-        for value in &logical {
-            backing.push(*value);
-            backing.push(99.0);
+            let plan = StftWgpuPlan::new(8, 4);
+            let expected = backend
+                .execute_forward(&plan, &logical)
+                .expect("slice forward");
+            let actual = backend
+                .execute_forward_leto(&plan, strided)
+                .expect("leto strided forward");
+            assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
-        let leto_signal = leto::Array1::from_shape_vec([backing.len()], backing).expect("signal");
-        let strided = leto_signal
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided signal");
 
-        let plan = StftWgpuPlan::new(8, 4);
-        let expected = backend
-            .execute_forward(&plan, &logical)
-            .expect("slice forward");
-        let actual = backend
-            .execute_forward_leto(&plan, strided)
-            .expect("leto strided forward");
-        assert_eq!(actual.storage().as_slice(), expected.as_slice());
-    }
+        // 9. typed_leto_forward_and_inverse_match_typed_slice_paths_when_device_exists
+        {
+            let signal_f16: Vec<f16> = [0.0_f32, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75]
+                .into_iter()
+                .map(f16::from_f32)
+                .collect();
+            let plan = StftWgpuPlan::new(4, 2);
+            let frame_count = 1 + signal_f16.len().div_ceil(plan.hop_len());
+            let output_len = frame_count * plan.frame_len();
 
-    #[test]
-    fn typed_leto_forward_and_inverse_match_typed_slice_paths_when_device_exists() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let signal_f16: Vec<f16> = [0.0_f32, 1.0, 0.0, -1.0, 0.25, 0.75, -0.25, -0.75]
-            .into_iter()
-            .map(f16::from_f32)
-            .collect();
-        let plan = StftWgpuPlan::new(4, 2);
-        let frame_count = 1 + signal_f16.len().div_ceil(plan.hop_len());
-        let output_len = frame_count * plan.frame_len();
+            let mut expected_forward: Vec<[f16; 2]> =
+                vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
+            backend
+                .execute_forward_typed_into(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &signal_f16,
+                    &mut expected_forward,
+                )
+                .expect("typed slice forward");
 
-        let mut expected_forward: Vec<[f16; 2]> =
-            vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
-        backend
-            .execute_forward_typed_into(
-                &plan,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                &signal_f16,
-                &mut expected_forward,
-            )
-            .expect("typed slice forward");
+            let leto_signal = leto::Array1::from_shape_vec([signal_f16.len()], signal_f16.clone())
+                .expect("signal");
+            let actual_forward = backend
+                .execute_forward_leto_typed::<f16, [f16; 2]>(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    leto_signal.view(),
+                )
+                .expect("typed leto forward");
+            assert_eq!(
+                actual_forward.storage().as_slice(),
+                expected_forward.as_slice()
+            );
 
-        let leto_signal =
-            leto::Array1::from_shape_vec([signal_f16.len()], signal_f16.clone()).expect("signal");
-        let actual_forward = backend
-            .execute_forward_leto_typed::<f16, [f16; 2]>(
-                &plan,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                leto_signal.view(),
-            )
-            .expect("typed leto forward");
-        assert_eq!(
-            actual_forward.storage().as_slice(),
-            expected_forward.as_slice()
-        );
+            let mut expected_inverse = vec![f16::from_f32(0.0); signal_f16.len()];
+            backend
+                .execute_inverse_typed_into(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &expected_forward,
+                    signal_f16.len(),
+                    &mut expected_inverse,
+                )
+                .expect("typed slice inverse");
 
-        let mut expected_inverse = vec![f16::from_f32(0.0); signal_f16.len()];
-        backend
-            .execute_inverse_typed_into(
-                &plan,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                &expected_forward,
-                signal_f16.len(),
-                &mut expected_inverse,
-            )
-            .expect("typed slice inverse");
+            let actual_inverse = backend
+                .execute_inverse_leto_typed::<[f16; 2], f16>(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    actual_forward.view(),
+                    signal_f16.len(),
+                )
+                .expect("typed leto inverse");
+            assert_eq!(
+                actual_inverse.storage().as_slice(),
+                expected_inverse.as_slice()
+            );
+        }
 
-        let actual_inverse = backend
-            .execute_inverse_leto_typed::<[f16; 2], f16>(
-                &plan,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                actual_forward.view(),
-                signal_f16.len(),
-            )
-            .expect("typed leto inverse");
-        assert_eq!(
-            actual_inverse.storage().as_slice(),
-            expected_inverse.as_slice()
-        );
-    }
+        // 10. typed_path_rejects_profile_mismatch
+        {
+            // f16 signal: I::PROFILE == MIXED_PRECISION_F16_F32.
+            // Passing LOW_PRECISION_F32 as input_precision must trigger InvalidPrecisionProfile
+            // before any GPU work is attempted.
+            let signal_f16: Vec<f16> = vec![
+                f16::from_f32(0.0),
+                f16::from_f32(1.0),
+                f16::from_f32(0.0),
+                f16::from_f32(-1.0),
+                f16::from_f32(0.0),
+                f16::from_f32(1.0),
+                f16::from_f32(0.0),
+                f16::from_f32(-1.0),
+            ];
+            let plan = StftWgpuPlan::new(4, 2);
+            let frame_count = 1 + signal_f16.len().div_ceil(plan.hop_len());
+            let output_len = frame_count * plan.frame_len();
+            let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
+            let error = backend
+                .execute_forward_typed_into(
+                    &plan,
+                    PrecisionProfile::LOW_PRECISION_F32,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &signal_f16,
+                    &mut out,
+                )
+                .expect_err("profile mismatch must fail");
+            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+        }
 
-    #[test]
-    fn typed_path_rejects_profile_mismatch() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        // f16 signal: I::PROFILE == MIXED_PRECISION_F16_F32.
-        // Passing LOW_PRECISION_F32 as input_precision must trigger InvalidPrecisionProfile
-        // before any GPU work is attempted.
-        let signal_f16: Vec<f16> = vec![
-            f16::from_f32(0.0),
-            f16::from_f32(1.0),
-            f16::from_f32(0.0),
-            f16::from_f32(-1.0),
-            f16::from_f32(0.0),
-            f16::from_f32(1.0),
-            f16::from_f32(0.0),
-            f16::from_f32(-1.0),
-        ];
-        let plan = StftWgpuPlan::new(4, 2);
-        let frame_count = 1 + signal_f16.len().div_ceil(plan.hop_len());
-        let output_len = frame_count * plan.frame_len();
-        let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; output_len];
-        let error = backend
-            .execute_forward_typed_into(
-                &plan,
-                PrecisionProfile::LOW_PRECISION_F32,
-                PrecisionProfile::MIXED_PRECISION_F16_F32,
-                &signal_f16,
-                &mut out,
-            )
-            .expect_err("profile mismatch must fail");
-        assert_eq!(error, WgpuError::InvalidPrecisionProfile);
-    }
+        // 11. inverse_roundtrip_for_multiple_cola_parameter_sets
+        {
+            let run_roundtrip = |frame_len: usize, hop_len: usize, signal: &[f32]| {
+                let signal_len = signal.len();
+                let plan = StftWgpuPlan::new(frame_len, hop_len);
+                let cpu_plan = apollo_stft::StftPlan::new(frame_len, hop_len).expect("cpu plan");
+                let signal_f64 = Array1::from_vec(signal.iter().map(|&x| x as f64).collect());
+                let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
+                let gpu_spectrum: Vec<Complex32> = cpu_spectrum
+                    .iter()
+                    .map(|c| Complex32::new(c.re as f32, c.im as f32))
+                    .collect();
+                let recovered = backend
+                    .execute_inverse(&plan, &gpu_spectrum, signal_len)
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "GPU inverse failed for frame_len={frame_len}, hop_len={hop_len}: {e}"
+                        )
+                    });
+                let cpu_recovered = cpu_plan
+                    .inverse(&cpu_spectrum, signal_len)
+                    .expect("cpu inverse");
+                assert_eq!(
+                    recovered.len(),
+                    signal_len,
+                    "length mismatch (frame={frame_len}, hop={hop_len})"
+                );
+                const TOL: f32 = 5e-3;
+                for (i, (g, c)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
+                    let err = (g - *c as f32).abs();
+                    assert!(
+                        err < TOL,
+                        "mismatch at sample {i} (frame={frame_len}, hop={hop_len}): \
+                         gpu={g:.6}, cpu={c:.6}, err={err:.2e}"
+                    );
+                }
+            };
 
-    /// GPU inverse STFT WOLA roundtrip for three COLA-compliant parameter sets.
-    ///
-    /// COLA (Constant Overlap-Add) condition for Hann window: hop_len <= frame_len / 2.
-    /// Exact COLA at 50% overlap: hop_len = frame_len / 2.
-    ///
-    /// For each parameter set, the test:
-    /// 1. Computes the CPU STFT spectrum of the analytical signal (f64 reference).
-    /// 2. Downcasts the spectrum to f32 for GPU inverse dispatch.
-    /// 3. Asserts that GPU inverse output matches CPU inverse within TOL = 5e-3.
-    ///    Tolerance: 5e-3 accounts for f64→f32 spectrum downcast (ε_f32 ≈ 1.2e-7 per
-    ///    coefficient, amplified by the N-term IDFT sum).
-    #[test]
-    fn inverse_roundtrip_for_multiple_cola_parameter_sets() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
+            // Case 1: frame_len=8, hop_len=4 — canonical 50% overlap, single frame.
+            run_roundtrip(8, 4, &[0.5_f32, -0.5, 0.5, -0.5, 0.5, -0.5, 0.5, -0.5]);
 
-        fn run_roundtrip(
-            backend: &StftWgpuBackend,
-            frame_len: usize,
-            hop_len: usize,
-            signal: &[f32],
-        ) {
-            let signal_len = signal.len();
-            let plan = StftWgpuPlan::new(frame_len, hop_len);
-            let cpu_plan = apollo_stft::StftPlan::new(frame_len, hop_len).expect("cpu plan");
-            let signal_f64 = Array1::from_vec(signal.iter().map(|&x| x as f64).collect());
+            // Case 2: frame_len=16, hop_len=8 — 50% overlap, sine wave reference signal.
+            let sig16: Vec<f32> = (0..16)
+                .map(|i| ((i as f32) * std::f32::consts::FRAC_PI_4).sin())
+                .collect();
+            run_roundtrip(16, 8, &sig16);
+
+            // Case 3: frame_len=32, hop_len=16 — 50% overlap, cosine reference signal.
+            let sig32: Vec<f32> = (0..32)
+                .map(|i| ((i as f32) * std::f32::consts::PI / 8.0).cos())
+                .collect();
+            run_roundtrip(32, 16, &sig32);
+        }
+
+        // 12. inverse_accepts_non_power_of_two_frame_len_chirpz
+        {
+            let plan = StftWgpuPlan::new(6, 3);
+            let dummy_spectrum = vec![Complex32::new(0.0, 0.0); 18];
+            let result = backend.execute_inverse(&plan, &dummy_spectrum, 6);
+            assert!(
+                result.is_ok(),
+                "expected Chirp-Z inverse acceptance; got {:?}",
+                result
+            );
+        }
+
+        // 13. inverse_roundtrip_large_frame_1024_samples_when_device_exists
+        {
+            const FRAME_LEN: usize = 1024;
+            const HOP_LEN: usize = 512;
+            const SIGNAL_LEN: usize = 8192;
+            const TOL: f32 = 5e-3;
+
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (std::f32::consts::TAU * n as f32 / SIGNAL_LEN as f32).sin())
+                .collect();
+
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let cpu_plan = apollo_stft::StftPlan::new(FRAME_LEN, HOP_LEN).expect("cpu plan");
+            let signal_f64 = Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
             let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
             let gpu_spectrum: Vec<Complex32> = cpu_spectrum
                 .iter()
                 .map(|c| Complex32::new(c.re as f32, c.im as f32))
                 .collect();
-            let recovered = backend
-                .execute_inverse(&plan, &gpu_spectrum, signal_len)
-                .unwrap_or_else(|e| {
-                    panic!("GPU inverse failed for frame_len={frame_len}, hop_len={hop_len}: {e}")
-                });
-            let cpu_recovered = cpu_plan
-                .inverse(&cpu_spectrum, signal_len)
+
+            let gpu_result = backend
+                .execute_inverse(&plan, &gpu_spectrum, SIGNAL_LEN)
+                .expect("GPU inverse must succeed for power-of-two frame_len");
+
+            let cpu_reference = cpu_plan
+                .inverse(&cpu_spectrum, SIGNAL_LEN)
                 .expect("cpu inverse");
+
             assert_eq!(
-                recovered.len(),
-                signal_len,
-                "length mismatch (frame={frame_len}, hop={hop_len})"
+                gpu_result.len(),
+                SIGNAL_LEN,
+                "output length must equal signal_len"
             );
-            const TOL: f32 = 5e-3;
-            for (i, (g, c)) in recovered.iter().zip(cpu_recovered.iter()).enumerate() {
-                let err = (g - *c as f32).abs();
+            let max_err = gpu_result
+                .iter()
+                .zip(cpu_reference.iter())
+                .map(|(g, c)| (g - *c as f32).abs())
+                .fold(0.0_f32, f32::max);
+            assert!(
+                max_err <= TOL,
+                "max |GPU - CPU_ref| = {max_err:.2e} exceeds TOL = {TOL:.2e} for frame_len={FRAME_LEN}"
+            );
+        }
+
+        // 14. forward_accepts_non_power_of_two_frame_len_chirpz
+        {
+            let signal = vec![0.0f32; 12];
+            let plan = StftWgpuPlan::new(6, 3);
+            let r = backend.execute_forward(&plan, &signal);
+            assert!(r.is_ok(), "expected Chirp-Z forward acceptance; got {r:?}");
+        }
+
+        // 15. forward_fft_roundtrip_large_frame_when_device_exists
+        {
+            const FRAME_LEN: usize = 1024;
+            const HOP_LEN: usize = 512;
+            const SIGNAL_LEN: usize = 4096;
+            const TOL: f32 = 1e-2;
+
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| {
+                    let t = n as f32;
+                    (2.0 * std::f32::consts::PI * 16.0 * t / FRAME_LEN as f32).sin()
+                        + 0.5 * (2.0 * std::f32::consts::PI * 64.0 * t / FRAME_LEN as f32).sin()
+                })
+                .collect();
+
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
+
+            let spectrum = backend
+                .execute_forward(&plan, &signal_f32)
+                .expect("GPU forward FFT");
+            assert_eq!(
+                spectrum.len(),
+                frame_count * FRAME_LEN,
+                "spectrum length mismatch"
+            );
+
+            let recovered = backend
+                .execute_inverse(&plan, &spectrum, SIGNAL_LEN)
+                .expect("GPU inverse FFT");
+            assert_eq!(recovered.len(), SIGNAL_LEN, "recovered length mismatch");
+
+            let margin = FRAME_LEN / 2;
+            for i in margin..(SIGNAL_LEN - margin) {
+                let err = (recovered[i] - signal_f32[i]).abs();
                 assert!(
                     err < TOL,
-                    "mismatch at sample {i} (frame={frame_len}, hop={hop_len}): \
-                     gpu={g:.6}, cpu={c:.6}, err={err:.2e}"
+                    "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
+                    recovered[i],
+                    signal_f32[i],
+                    err
                 );
             }
         }
 
-        // Case 1: frame_len=8, hop_len=4 — canonical 50% overlap, single frame.
-        run_roundtrip(
-            &backend,
-            8,
-            4,
-            &[0.5_f32, -0.5, 0.5, -0.5, 0.5, -0.5, 0.5, -0.5],
-        );
+        // 16. reusable_buffers_match_allocating_forward_and_inverse_when_device_exists
+        {
+            const FRAME_LEN: usize = 512;
+            const HOP_LEN: usize = 256;
+            const SIGNAL_LEN: usize = 2048;
+            const TOL: f32 = 1e-6;
 
-        // Case 2: frame_len=16, hop_len=8 — 50% overlap, sine wave reference signal.
-        let sig16: Vec<f32> = (0..16)
-            .map(|i| ((i as f32) * std::f32::consts::FRAC_PI_4).sin())
-            .collect();
-        run_roundtrip(&backend, 16, 8, &sig16);
+            let signal: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (2.0 * std::f32::consts::PI * 16.0 * n as f32 / FRAME_LEN as f32).sin())
+                .collect();
 
-        // Case 3: frame_len=32, hop_len=16 — 50% overlap, cosine reference signal.
-        let sig32: Vec<f32> = (0..32)
-            .map(|i| ((i as f32) * std::f32::consts::PI / 8.0).cos())
-            .collect();
-        run_roundtrip(&backend, 32, 16, &sig32);
-    }
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
 
-    #[test]
-    fn inverse_accepts_non_power_of_two_frame_len_chirpz() {
-        // Closure XVIII: execute_inverse now accepts non-PoT frame_len via Chirp-Z path.
-        //
-        // frame_count = 1 + 6.div_ceil(3) = 3; spectrum_len = 3 * 6 = 18.
-        match StftWgpuBackend::try_default() {
-            Err(_) => return,
-            Ok(backend) => {
-                let plan = StftWgpuPlan::new(6, 3);
-                let dummy_spectrum = vec![Complex32::new(0.0, 0.0); 18];
-                let result = backend.execute_inverse(&plan, &dummy_spectrum, 6);
+            // ── Allocating path (reference) ───────────────────────────────────────
+            let alloc_fwd = backend
+                .execute_forward(&plan, &signal)
+                .expect("allocating forward");
+            assert_eq!(alloc_fwd.len(), frame_count * FRAME_LEN);
+
+            let alloc_inv = backend
+                .execute_inverse(&plan, &alloc_fwd, SIGNAL_LEN)
+                .expect("allocating inverse");
+            assert_eq!(alloc_inv.len(), SIGNAL_LEN);
+
+            // ── Buffered path ─────────────────────────────────────────────────────
+            let mut buffers = backend
+                .make_buffers(&plan, SIGNAL_LEN)
+                .expect("make_buffers");
+
+            backend
+                .execute_forward_with_buffers(&plan, &signal, &mut buffers)
+                .expect("buffered forward");
+            let buffered_fwd = buffers.fwd_output();
+            assert_eq!(buffered_fwd.len(), frame_count * FRAME_LEN);
+
+            // Forward output must match allocating path.
+            let max_fwd_err = alloc_fwd
+                .iter()
+                .zip(buffered_fwd.iter())
+                .map(|(a, b)| {
+                    let re_err = (a.re - b.re).abs();
+                    let im_err = (a.im - b.im).abs();
+                    re_err.max(im_err)
+                })
+                .fold(0.0f32, f32::max);
+            assert!(
+                max_fwd_err < TOL,
+                "forward max error {max_fwd_err:.2e} exceeds tolerance {TOL:.2e}"
+            );
+
+            backend
+                .execute_inverse_with_buffers(&plan, &alloc_fwd, SIGNAL_LEN, &mut buffers)
+                .expect("buffered inverse");
+            let buffered_inv = buffers.inv_output();
+            assert_eq!(buffered_inv.len(), SIGNAL_LEN);
+
+            // Inverse output must match allocating path.
+            let max_inv_err = alloc_inv
+                .iter()
+                .zip(buffered_inv.iter())
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0f32, f32::max);
+            assert!(
+                max_inv_err < TOL,
+                "inverse max error {max_inv_err:.2e} exceeds tolerance {TOL:.2e}"
+            );
+
+            // Second call with same buffers: verify buffer reuse (no panic / corruption).
+            backend
+                .execute_forward_with_buffers(&plan, &signal, &mut buffers)
+                .expect("buffered forward second call");
+            let buffered_fwd2 = buffers.fwd_output();
+            let max_fwd2_err = alloc_fwd
+                .iter()
+                .zip(buffered_fwd2.iter())
+                .map(|(a, b)| {
+                    let re_err = (a.re - b.re).abs();
+                    let im_err = (a.im - b.im).abs();
+                    re_err.max(im_err)
+                })
+                .fold(0.0f32, f32::max);
+            assert!(
+                max_fwd2_err < TOL,
+                "second-call forward max error {max_fwd2_err:.2e} exceeds tolerance {TOL:.2e}"
+            );
+        }
+
+        // 17. forward_accepts_non_power_of_two_frame_len_structurally
+        {
+            let signal = vec![0.0f32; 24];
+            let plan = StftWgpuPlan::new(6, 3);
+            let r = backend.execute_forward(&plan, &signal);
+            assert!(
+                r.is_ok(),
+                "expected Chirp-Z structural forward acceptance; got {r:?}"
+            );
+        }
+
+        // 18. forward_chirpz_non_pot_frame_len_400_when_device_exists
+        {
+            use apollo_stft::StftPlan;
+
+            const FRAME_LEN: usize = 400;
+            const HOP_LEN: usize = 200;
+            const SIGNAL_LEN: usize = 2000;
+            const TOL: f32 = 2e-2;
+
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
+                .collect();
+            let signal_f64: ndarray::Array1<f64> =
+                ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+
+            let gpu_plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let gpu_out = backend
+                .execute_forward(&gpu_plan, &signal_f32)
+                .expect("GPU forward Chirp-Z");
+
+            let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
+            let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward STFT");
+
+            assert_eq!(
+                gpu_out.len(),
+                cpu_out.len(),
+                "length mismatch: gpu={}, cpu={}",
+                gpu_out.len(),
+                cpu_out.len()
+            );
+
+            let max_err = gpu_out
+                .iter()
+                .zip(cpu_out.iter())
+                .map(|(g, c)| {
+                    let re = (g.re - c.re as f32).abs();
+                    let im = (g.im - c.im as f32).abs();
+                    re.max(im)
+                })
+                .fold(0.0f32, f32::max);
+
+            assert!(
+                max_err < TOL,
+                "max Chirp-Z forward error {max_err:.2e} exceeds tolerance {TOL:.2e}"
+            );
+        }
+
+        // 19. inverse_chirpz_non_pot_frame_len_400_when_device_exists
+        {
+            const FRAME_LEN: usize = 400;
+            const HOP_LEN: usize = 200;
+            const SIGNAL_LEN: usize = 2000;
+            const TOL: f32 = 5e-2;
+            const INTERIOR_START: usize = FRAME_LEN;
+            const INTERIOR_END: usize = SIGNAL_LEN - FRAME_LEN;
+
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
+                .collect();
+            let signal_f64: ndarray::Array1<f64> =
+                ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+
+            let cpu_plan = apollo_stft::StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
+            let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
+            let spectrum_f32: Vec<Complex32> = cpu_spectrum
+                .iter()
+                .map(|c| Complex32::new(c.re as f32, c.im as f32))
+                .collect();
+
+            let recovered = backend
+                .execute_inverse(&plan, &spectrum_f32, SIGNAL_LEN)
+                .expect("GPU inverse Chirp-Z");
+
+            assert_eq!(recovered.len(), SIGNAL_LEN);
+
+            for i in INTERIOR_START..INTERIOR_END {
+                let err = (recovered[i] - signal_f32[i]).abs();
                 assert!(
-                    result.is_ok(),
-                    "expected Chirp-Z inverse acceptance; got {:?}",
-                    result
+                    err < TOL,
+                    "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
+                    recovered[i],
+                    signal_f32[i],
+                    err
                 );
             }
         }
-    }
 
-    #[test]
-    fn inverse_roundtrip_large_frame_1024_samples_when_device_exists() {
-        // Verifies the FFT-accelerated inverse path for a large power-of-two
-        // frame_len (1024) that exercises multiple butterfly stages (log₂(1024) = 10).
-        //
-        // Reference signal: analytic sine x[n] = sin(2π·n/SIGNAL_LEN).
-        // Forward (CPU, f64) → Inverse (GPU, f32). Max absolute deviation ≤ 5e-3.
-        const FRAME_LEN: usize = 1024;
-        const HOP_LEN: usize = 512;
-        const SIGNAL_LEN: usize = 8192;
-        const TOL: f32 = 5e-3;
+        // 20. make_buffers_accepts_non_power_of_two_frame_len_structurally
+        {
+            let plan = StftWgpuPlan::new(6, 3);
+            let signal_len = 24usize;
+            let r = backend.make_buffers(&plan, signal_len);
+            assert!(r.is_ok(), "expected non-PoT buffer acceptance; got {r:?}");
+        }
 
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
+        // 21. forward_buffers_non_pot_frame_len_400_when_device_exists
+        {
+            use apollo_stft::StftPlan;
 
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (std::f32::consts::TAU * n as f32 / SIGNAL_LEN as f32).sin())
-            .collect();
+            const FRAME_LEN: usize = 400;
+            const HOP_LEN: usize = 200;
+            const SIGNAL_LEN: usize = 1000;
+            const TOL: f32 = 2e-2;
 
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let cpu_plan = apollo_stft::StftPlan::new(FRAME_LEN, HOP_LEN).expect("cpu plan");
-        let signal_f64 = Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-        let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
-        let gpu_spectrum: Vec<Complex32> = cpu_spectrum
-            .iter()
-            .map(|c| Complex32::new(c.re as f32, c.im as f32))
-            .collect();
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
+                .collect();
+            let signal_f64: ndarray::Array1<f64> =
+                ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
 
-        let gpu_result = backend
-            .execute_inverse(&plan, &gpu_spectrum, SIGNAL_LEN)
-            .expect("GPU inverse must succeed for power-of-two frame_len");
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let mut buffers = backend
+                .make_buffers(&plan, SIGNAL_LEN)
+                .expect("make_buffers non-PoT");
 
-        let cpu_reference = cpu_plan
-            .inverse(&cpu_spectrum, SIGNAL_LEN)
-            .expect("cpu inverse");
+            backend
+                .execute_forward_with_buffers(&plan, &signal_f32, &mut buffers)
+                .expect("forward with buffers");
 
-        assert_eq!(
-            gpu_result.len(),
-            SIGNAL_LEN,
-            "output length must equal signal_len"
-        );
-        let max_err = gpu_result
-            .iter()
-            .zip(cpu_reference.iter())
-            .map(|(g, c)| (g - *c as f32).abs())
-            .fold(0.0_f32, f32::max);
-        assert!(
-            max_err <= TOL,
-            "max |GPU - CPU_ref| = {max_err:.2e} exceeds TOL = {TOL:.2e} for frame_len={FRAME_LEN}"
-        );
-    }
+            let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
+            let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward");
 
-    /// Verifies that `execute_forward` accepts non-PoT `frame_len` via the Chirp-Z path.
-    ///
-    /// Closure XVIII: non-PoT dispatches through Chirp-Z.
-    /// CPU-side structural check: does not require a GPU device.
-    #[test]
-    fn forward_accepts_non_power_of_two_frame_len_chirpz() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        // frame_len = 6 is not a power of two; signal length satisfies InputTooShort check.
-        let signal = vec![0.0f32; 12];
-        let plan = StftWgpuPlan::new(6, 3);
-        let r = backend.execute_forward(&plan, &signal);
-        assert!(r.is_ok(), "expected Chirp-Z forward acceptance; got {r:?}");
-    }
+            let gpu_spectrum = buffers.fwd_output();
+            assert_eq!(gpu_spectrum.len(), cpu_out.len());
 
-    /// GPU forward FFT (1024-frame, log₂(1024) = 10 butterfly stages) followed by GPU inverse
-    /// FFT must recover the original signal within tolerance on interior samples.
-    ///
-    /// Signal: sum of two bin-aligned sinusoids; hop = frame_len/2 satisfies Hann COLA.
-    /// Tolerance: 1e-2 (f32 accumulation over 10 butterfly stages + WOLA normalisation).
-    #[test]
-    fn forward_fft_roundtrip_large_frame_when_device_exists() {
-        const FRAME_LEN: usize = 1024;
-        const HOP_LEN: usize = 512;
-        const SIGNAL_LEN: usize = 4096;
-        const TOL: f32 = 1e-2;
+            let max_err = gpu_spectrum
+                .iter()
+                .zip(cpu_out.iter())
+                .map(|(g, c)| {
+                    let re = (g.re - c.re as f32).abs();
+                    let im = (g.im - c.im as f32).abs();
+                    re.max(im)
+                })
+                .fold(0.0f32, f32::max);
 
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        // Analytical signal: two bin-aligned sinusoids (k₁=16, k₂=64).
-        // Bin alignment ensures the DFT concentrates energy at known frequencies
-        // with no spectral leakage, making the analytical spectrum exact.
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| {
-                let t = n as f32;
-                (2.0 * std::f32::consts::PI * 16.0 * t / FRAME_LEN as f32).sin()
-                    + 0.5 * (2.0 * std::f32::consts::PI * 64.0 * t / FRAME_LEN as f32).sin()
-            })
-            .collect();
-
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
-
-        let spectrum = backend
-            .execute_forward(&plan, &signal_f32)
-            .expect("GPU forward FFT");
-        assert_eq!(
-            spectrum.len(),
-            frame_count * FRAME_LEN,
-            "spectrum length mismatch"
-        );
-
-        let recovered = backend
-            .execute_inverse(&plan, &spectrum, SIGNAL_LEN)
-            .expect("GPU inverse FFT");
-        assert_eq!(recovered.len(), SIGNAL_LEN, "recovered length mismatch");
-
-        // Exclude edge samples affected by zero-padding at frame boundaries.
-        let margin = FRAME_LEN / 2;
-        for i in margin..(SIGNAL_LEN - margin) {
-            let err = (recovered[i] - signal_f32[i]).abs();
             assert!(
-                err < TOL,
-                "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
-                recovered[i],
-                signal_f32[i],
-                err
+                max_err < TOL,
+                "max forward buffered error {max_err:.2e} exceeds tolerance {TOL:.2e}"
             );
         }
-    }
 
-    /// Reusable-buffer forward and inverse dispatch must produce values identical to the
-    /// allocating path for the same input.
-    ///
-    /// Analytical signal: bin-aligned sinusoid k=16 over frame_len=512.
-    /// `frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN)`; hop=256 satisfies Hann COLA.
-    ///
-    /// Verification: `max |allocating[i] - buffered[i]|` must be exactly 0.0 for both
-    /// forward output (same GPU computation, same data → bit-exact on any deterministic
-    /// GPU driver) and inverse output. Tolerance is set to 1e-6 to account for any
-    /// non-determinism in GPU scheduling while still catching functional divergence.
-    #[test]
-    fn reusable_buffers_match_allocating_forward_and_inverse_when_device_exists() {
-        const FRAME_LEN: usize = 512;
-        const HOP_LEN: usize = 256;
-        const SIGNAL_LEN: usize = 2048;
-        const TOL: f32 = 1e-6;
+        // 22. inverse_buffers_non_pot_frame_len_400_when_device_exists
+        {
+            use apollo_stft::StftPlan;
 
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
+            const FRAME_LEN: usize = 400;
+            const HOP_LEN: usize = 200;
+            const SIGNAL_LEN: usize = 1000;
+            const TOL: f32 = 5e-2;
+            const INTERIOR_START: usize = FRAME_LEN;
+            const INTERIOR_END: usize = SIGNAL_LEN - FRAME_LEN;
 
-        let signal: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (2.0 * std::f32::consts::PI * 16.0 * n as f32 / FRAME_LEN as f32).sin())
-            .collect();
+            let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
+                .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
+                .collect();
+            let signal_f64: ndarray::Array1<f64> =
+                ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
 
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
+            let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+            let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
+            let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
+            let spectrum_f32: Vec<Complex32> = cpu_spectrum
+                .iter()
+                .map(|c| Complex32::new(c.re as f32, c.im as f32))
+                .collect();
 
-        // ── Allocating path (reference) ───────────────────────────────────────
-        let alloc_fwd = backend
-            .execute_forward(&plan, &signal)
-            .expect("allocating forward");
-        assert_eq!(alloc_fwd.len(), frame_count * FRAME_LEN);
+            let mut buffers = backend
+                .make_buffers(&plan, SIGNAL_LEN)
+                .expect("make_buffers non-PoT");
 
-        let alloc_inv = backend
-            .execute_inverse(&plan, &alloc_fwd, SIGNAL_LEN)
-            .expect("allocating inverse");
-        assert_eq!(alloc_inv.len(), SIGNAL_LEN);
+            backend
+                .execute_inverse_with_buffers(&plan, &spectrum_f32, SIGNAL_LEN, &mut buffers)
+                .expect("inverse with buffers");
 
-        // ── Buffered path ─────────────────────────────────────────────────────
-        let mut buffers = backend
-            .make_buffers(&plan, SIGNAL_LEN)
-            .expect("make_buffers");
+            let recovered = buffers.inv_output().to_vec();
+            assert_eq!(recovered.len(), SIGNAL_LEN);
 
-        backend
-            .execute_forward_with_buffers(&plan, &signal, &mut buffers)
-            .expect("buffered forward");
-        let buffered_fwd = buffers.fwd_output();
-        assert_eq!(buffered_fwd.len(), frame_count * FRAME_LEN);
-
-        // Forward output must match allocating path.
-        let max_fwd_err = alloc_fwd
-            .iter()
-            .zip(buffered_fwd.iter())
-            .map(|(a, b)| {
-                let re_err = (a.re - b.re).abs();
-                let im_err = (a.im - b.im).abs();
-                re_err.max(im_err)
-            })
-            .fold(0.0f32, f32::max);
-        assert!(
-            max_fwd_err < TOL,
-            "forward max error {max_fwd_err:.2e} exceeds tolerance {TOL:.2e}"
-        );
-
-        backend
-            .execute_inverse_with_buffers(&plan, &alloc_fwd, SIGNAL_LEN, &mut buffers)
-            .expect("buffered inverse");
-        let buffered_inv = buffers.inv_output();
-        assert_eq!(buffered_inv.len(), SIGNAL_LEN);
-
-        // Inverse output must match allocating path.
-        let max_inv_err = alloc_inv
-            .iter()
-            .zip(buffered_inv.iter())
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0f32, f32::max);
-        assert!(
-            max_inv_err < TOL,
-            "inverse max error {max_inv_err:.2e} exceeds tolerance {TOL:.2e}"
-        );
-
-        // Second call with same buffers: verify buffer reuse (no panic / corruption).
-        backend
-            .execute_forward_with_buffers(&plan, &signal, &mut buffers)
-            .expect("buffered forward second call");
-        let buffered_fwd2 = buffers.fwd_output();
-        let max_fwd2_err = alloc_fwd
-            .iter()
-            .zip(buffered_fwd2.iter())
-            .map(|(a, b)| {
-                let re_err = (a.re - b.re).abs();
-                let im_err = (a.im - b.im).abs();
-                re_err.max(im_err)
-            })
-            .fold(0.0f32, f32::max);
-        assert!(
-            max_fwd2_err < TOL,
-            "second-call forward max error {max_fwd2_err:.2e} exceeds tolerance {TOL:.2e}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // Non-power-of-two Chirp-Z path tests (Closure XVIII)
-    // -----------------------------------------------------------------------
-
-    /// Verifies that a non-PoT `frame_len` executes through the Chirp-Z path.
-    /// The Bluestein/Chirp-Z path accepts arbitrary frame_len ≥ 1.
-    /// CPU-side structural check: does not require a GPU device.
-    #[test]
-    fn forward_accepts_non_power_of_two_frame_len_structurally() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let signal = vec![0.0f32; 24];
-        let plan = StftWgpuPlan::new(6, 3);
-        let r = backend.execute_forward(&plan, &signal);
-        assert!(
-            r.is_ok(),
-            "expected Chirp-Z structural forward acceptance; got {r:?}"
-        );
-    }
-
-    /// GPU forward Chirp-Z at `frame_len=400` (non-PoT, common in audio: 20 ms @ 20 kHz).
-    ///
-    /// Reference: CPU `apollo-stft` with the same plan.
-    /// Signal: analytic sine at 100 Hz (bin-approximate at frame_len=400, Fs=20000).
-    /// Tolerance: 1e-3 (f32 accumulation over chirp convolution and butterfly stages).
-    #[test]
-    fn forward_chirpz_non_pot_frame_len_400_when_device_exists() {
-        use apollo_stft::StftPlan;
-
-        const FRAME_LEN: usize = 400;
-        const HOP_LEN: usize = 200;
-        const SIGNAL_LEN: usize = 2000;
-        // Tolerance: 2e-2. For N=400 Bluestein on GPU f32, the chirp phase argument
-        // pi*n^2/N reaches ~1254 rad (n=399); GPU argument-reduction error at that
-        // magnitude yields ~1e-4 per trig eval, accumulating over premul + sub-FFT +
-        // pointmul + sub-IFFT + postmul to observed max ~1.24e-2.  2e-2 is the
-        // analytically derived safe bound for f32 GPU Bluestein at this problem size.
-        const TOL: f32 = 2e-2;
-
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        // Analytic sine at bin k=10 (freq = 10/400 cycles/sample ≈ 500 Hz at 20 kHz).
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
-            .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-
-        let gpu_plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let gpu_out = backend
-            .execute_forward(&gpu_plan, &signal_f32)
-            .expect("GPU forward Chirp-Z");
-
-        let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
-        let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward STFT");
-
-        assert_eq!(
-            gpu_out.len(),
-            cpu_out.len(),
-            "length mismatch: gpu={}, cpu={}",
-            gpu_out.len(),
-            cpu_out.len()
-        );
-
-        let max_err = gpu_out
-            .iter()
-            .zip(cpu_out.iter())
-            .map(|(g, c)| {
-                let re = (g.re - c.re as f32).abs();
-                let im = (g.im - c.im as f32).abs();
-                re.max(im)
-            })
-            .fold(0.0f32, f32::max);
-
-        assert!(
-            max_err < TOL,
-            "max Chirp-Z forward error {max_err:.2e} exceeds tolerance {TOL:.2e}"
-        );
-    }
-
-    /// GPU inverse Chirp-Z at `frame_len=400`.
-    ///
-    /// Reference: CPU forward → GPU inverse must recover interior samples within tolerance.
-    /// Tolerance: 5e-2 (WOLA normalisation + f32 Chirp-Z accumulation).
-    #[test]
-    fn inverse_chirpz_non_pot_frame_len_400_when_device_exists() {
-        const FRAME_LEN: usize = 400;
-        const HOP_LEN: usize = 200;
-        const SIGNAL_LEN: usize = 2000;
-        const TOL: f32 = 5e-2;
-        // Interior samples: skip the first frame_len and last frame_len samples
-        // to avoid edge roll-off from WOLA boundary conditions.
-        const INTERIOR_START: usize = FRAME_LEN;
-        const INTERIOR_END: usize = SIGNAL_LEN - FRAME_LEN;
-
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
-            .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-
-        // Obtain spectrum from CPU forward (verified reference).
-        let cpu_plan = apollo_stft::StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
-        let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
-        let spectrum_f32: Vec<Complex32> = cpu_spectrum
-            .iter()
-            .map(|c| Complex32::new(c.re as f32, c.im as f32))
-            .collect();
-
-        let recovered = backend
-            .execute_inverse(&plan, &spectrum_f32, SIGNAL_LEN)
-            .expect("GPU inverse Chirp-Z");
-
-        assert_eq!(recovered.len(), SIGNAL_LEN);
-
-        for i in INTERIOR_START..INTERIOR_END {
-            let err = (recovered[i] - signal_f32[i]).abs();
-            assert!(
-                err < TOL,
-                "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
-                recovered[i],
-                signal_f32[i],
-                err
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Non-PoT buffer-reuse path tests (Closure XIX)
-    // -----------------------------------------------------------------------
-
-    /// Structural test: non-PoT frame_len is accepted by make_buffers.
-    /// Closure XIX: buffer-reuse API now accepts arbitrary frame_len via chirp_padded_len scratch sizing.
-    #[test]
-    fn make_buffers_accepts_non_power_of_two_frame_len_structurally() {
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-        let plan = StftWgpuPlan::new(6, 3);
-        let signal_len = 24usize;
-        let r = backend.make_buffers(&plan, signal_len);
-        assert!(r.is_ok(), "expected non-PoT buffer acceptance; got {r:?}");
-    }
-
-    /// GPU-gated buffer-reuse test: forward dispatch at non-PoT frame_len=400 produces valid output.
-    ///
-    /// Minimal exercise: verify the buffered forward path dispatches correctly
-    /// (either Radix-2 or Chirp-Z branch should execute without panic/abort).
-    /// Reference: CPU `apollo-stft` with the same plan and signal.
-    /// Tolerance: 1e-2 (same as GPU-gated allocating forward test).
-    #[test]
-    fn forward_buffers_non_pot_frame_len_400_when_device_exists() {
-        use apollo_stft::StftPlan;
-
-        const FRAME_LEN: usize = 400;
-        const HOP_LEN: usize = 200;
-        const SIGNAL_LEN: usize = 1000;
-        // Tolerance: 2e-2. Same analytical bound as forward_chirpz_non_pot_frame_len_400:
-        // f32 GPU argument-reduction at phases up to ~1254 rad for N=400.
-        const TOL: f32 = 2e-2;
-
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
-            .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let mut buffers = backend
-            .make_buffers(&plan, SIGNAL_LEN)
-            .expect("make_buffers non-PoT");
-
-        backend
-            .execute_forward_with_buffers(&plan, &signal_f32, &mut buffers)
-            .expect("forward with buffers");
-
-        let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
-        let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward");
-
-        let gpu_spectrum = buffers.fwd_output();
-        assert_eq!(gpu_spectrum.len(), cpu_out.len());
-
-        let max_err = gpu_spectrum
-            .iter()
-            .zip(cpu_out.iter())
-            .map(|(g, c)| {
-                let re = (g.re - c.re as f32).abs();
-                let im = (g.im - c.im as f32).abs();
-                re.max(im)
-            })
-            .fold(0.0f32, f32::max);
-
-        assert!(
-            max_err < TOL,
-            "max forward buffered error {max_err:.2e} exceeds tolerance {TOL:.2e}"
-        );
-    }
-
-    /// GPU-gated buffer-reuse test: inverse dispatch at non-PoT frame_len=400 recovers interior samples.
-    ///
-    /// Reference: CPU forward → GPU inverse (buffered) must recover signal.
-    /// Tolerance: 5e-2 (same as GPU-gated allocating inverse test).
-    #[test]
-    fn inverse_buffers_non_pot_frame_len_400_when_device_exists() {
-        use apollo_stft::StftPlan;
-
-        const FRAME_LEN: usize = 400;
-        const HOP_LEN: usize = 200;
-        const SIGNAL_LEN: usize = 1000;
-        const TOL: f32 = 5e-2;
-        const INTERIOR_START: usize = FRAME_LEN;
-        const INTERIOR_END: usize = SIGNAL_LEN - FRAME_LEN;
-
-        let Ok(backend) = StftWgpuBackend::try_default() else {
-            return;
-        };
-
-        let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
-            .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
-            .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
-
-        let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
-        let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
-        let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
-        let spectrum_f32: Vec<Complex32> = cpu_spectrum
-            .iter()
-            .map(|c| Complex32::new(c.re as f32, c.im as f32))
-            .collect();
-
-        let mut buffers = backend
-            .make_buffers(&plan, SIGNAL_LEN)
-            .expect("make_buffers non-PoT");
-
-        backend
-            .execute_inverse_with_buffers(&plan, &spectrum_f32, SIGNAL_LEN, &mut buffers)
-            .expect("inverse with buffers");
-
-        let recovered = buffers.inv_output().to_vec();
-        assert_eq!(recovered.len(), SIGNAL_LEN);
-
-        for i in INTERIOR_START..INTERIOR_END {
-            let err = (recovered[i] - signal_f32[i]).abs();
-            assert!(
-                err < TOL,
-                "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
-                recovered[i],
-                signal_f32[i],
-                err
-            );
+            for i in INTERIOR_START..INTERIOR_END {
+                let err = (recovered[i] - signal_f32[i]).abs();
+                assert!(
+                    err < TOL,
+                    "sample {i}: recovered={:.6}, expected={:.6}, err={:.2e}",
+                    recovered[i],
+                    signal_f32[i],
+                    err
+                );
+            }
         }
     }
 }

@@ -78,7 +78,11 @@ pub(crate) fn window_signal_frame_scalar(
     }
 }
 
-pub(crate) fn window_complex_real_frame_into(frame_complex: &[Complex64], window: &[f64], output: &mut [f64]) {
+pub(crate) fn window_complex_real_frame_into(
+    frame_complex: &[Complex64],
+    window: &[f64],
+    output: &mut [f64],
+) {
     debug_assert_eq!(frame_complex.len(), output.len());
     debug_assert_eq!(window.len(), output.len());
     if output.len() >= HERMES_WINDOW_FRAME_THRESHOLD {

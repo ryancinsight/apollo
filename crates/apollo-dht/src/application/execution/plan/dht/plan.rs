@@ -1,8 +1,8 @@
 //! Reusable Discrete Hartley Transform plan.
 
 use super::helpers::{
-    FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH, array2_from_leto_view,
-    array3_from_leto_view, leto_array2_from_ndarray, leto_array3_from_ndarray,
+    array2_from_leto_view, array3_from_leto_view, leto_array2_from_ndarray,
+    leto_array3_from_ndarray, FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
 };
 use super::typed::HartleyStorage;
 use crate::domain::contracts::error::{DhtError, DhtResult};

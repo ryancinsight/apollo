@@ -26,7 +26,10 @@ pub fn is_valid_length(n: usize) -> bool {
 }
 
 #[inline]
-pub(crate) fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), CztError> {
+pub(crate) fn validate_profile(
+    actual: PrecisionProfile,
+    expected: PrecisionProfile,
+) -> Result<(), CztError> {
     if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
@@ -56,7 +59,9 @@ pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow
 
 #[must_use]
 #[inline]
-pub(crate) fn leto_array1_from_slice<T: Copy>(output: &[T]) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
+pub(crate) fn leto_array1_from_slice<T: Copy>(
+    output: &[T],
+) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
     apollo_fft::application::utilities::leto_interop::try_array1_from_slice(output)
         .expect("CZT output length must match Leto output shape")
 }

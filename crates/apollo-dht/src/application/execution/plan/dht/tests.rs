@@ -70,8 +70,8 @@ fn leto_2d_forward_matches_ndarray_reference() {
     .expect("ndarray input");
     let expected = plan.forward_2d(&input).expect("ndarray forward");
 
-    let leto_input = leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect())
-        .expect("leto input");
+    let leto_input =
+        leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect()).expect("leto input");
     let actual = plan
         .forward_2d_leto(leto_input.view())
         .expect("leto forward");
@@ -118,9 +118,8 @@ fn leto_2d_strided_inverse_matches_ndarray_reference() {
 #[test]
 fn leto_3d_forward_matches_ndarray_reference() {
     let plan = DhtPlan::new(2).expect("valid plan");
-    let input =
-        Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
-            .expect("ndarray input");
+    let input = Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+        .expect("ndarray input");
     let expected = plan.forward_3d(&input).expect("ndarray forward");
 
     let leto_input = leto::Array3::from_shape_vec([2, 2, 2], input.iter().copied().collect())
@@ -138,15 +137,13 @@ fn leto_3d_forward_matches_ndarray_reference() {
 #[test]
 fn leto_3d_inverse_matches_ndarray_reference() {
     let plan = DhtPlan::new(2).expect("valid plan");
-    let input =
-        Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
-            .expect("ndarray input");
+    let input = Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+        .expect("ndarray input");
     let spectrum = plan.forward_3d(&input).expect("ndarray forward");
     let expected = plan.inverse_3d(&spectrum).expect("ndarray inverse");
 
-    let leto_input =
-        leto::Array3::from_shape_vec([2, 2, 2], spectrum.iter().copied().collect())
-            .expect("leto input");
+    let leto_input = leto::Array3::from_shape_vec([2, 2, 2], spectrum.iter().copied().collect())
+        .expect("leto input");
     let actual = plan
         .inverse_3d_leto(leto_input.view())
         .expect("leto inverse");

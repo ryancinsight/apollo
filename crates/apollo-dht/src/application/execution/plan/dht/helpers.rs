@@ -15,7 +15,10 @@ thread_local! {
 }
 
 #[inline]
-pub(crate) fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DhtResult<()> {
+pub(crate) fn validate_profile(
+    actual: PrecisionProfile,
+    expected: PrecisionProfile,
+) -> DhtResult<()> {
     if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())
     } else {
