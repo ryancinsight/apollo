@@ -20,7 +20,9 @@ thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 
 [features]
-default = []
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["apollo-nufft/parallel"]
+mnemosyne-memory = ["apollo-nufft/mnemosyne-memory"]
 diagnostics = []
 ## Enable intermediate GPU grid readbacks after load and IFFT stages for numerical triage.
 ## This feature is intended for testing and debugging only; it adds GPU→CPU synchronization

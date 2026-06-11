@@ -7,6 +7,11 @@ authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/kwavers"
 description = "Number Theoretic Transform plans and utilities for Apollo"
 
+
+[features]
+default = ["parallel"]
+parallel = []
+
 [dependencies]
 ndarray = { workspace = true }
 hermes-simd = { workspace = true }

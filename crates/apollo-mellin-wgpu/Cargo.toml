@@ -7,6 +7,12 @@ authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/kwavers"
 description = "WGPU backend boundary for Apollo Mellin"
 
+
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["apollo-fft/parallel", "apollo-mellin/parallel"]
+mnemosyne-memory = ["apollo-fft/mnemosyne-memory", "apollo-mellin/mnemosyne-memory"]
+
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 apollo-mellin = { path = "../apollo-mellin" }

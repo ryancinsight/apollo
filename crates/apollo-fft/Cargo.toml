@@ -31,6 +31,9 @@ proptest = "1.6"
 rustfft = { workspace = true }
 
 [features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = []
+mnemosyne-memory = []
 kernel-strategy-bench = []
 cache-profiling = []
 

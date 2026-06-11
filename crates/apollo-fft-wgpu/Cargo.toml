@@ -8,7 +8,9 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "WGPU dense FFT backend surface for Apollo"
 
 [features]
-default = []
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["apollo-fft/parallel"]
+mnemosyne-memory = ["apollo-fft/mnemosyne-memory"]
 native-f16 = []
 
 [dependencies]

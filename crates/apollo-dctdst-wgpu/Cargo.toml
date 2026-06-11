@@ -7,6 +7,12 @@ authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository = "https://github.com/ryancinsight/kwavers"
 description = "WGPU backend boundary for Apollo DCT/DST"
 
+
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["apollo-fft/parallel", "apollo-dctdst/parallel"]
+mnemosyne-memory = ["apollo-fft/mnemosyne-memory", "apollo-dctdst/mnemosyne-memory"]
+
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 apollo-dctdst = { path = "../apollo-dctdst" }

@@ -11,6 +11,12 @@ description = "Python bindings for Apollo FFT and NUFFT"
 name = "pyapollofft"
 crate-type = ["cdylib"]
 
+
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["apollo-fft/parallel", "apollo-dctdst/parallel", "apollo-dht/parallel", "apollo-fwht/parallel", "apollo-nufft/parallel"]
+mnemosyne-memory = ["apollo-fft/mnemosyne-memory", "apollo-dctdst/mnemosyne-memory", "apollo-dht/mnemosyne-memory", "apollo-fwht/mnemosyne-memory", "apollo-nufft/mnemosyne-memory"]
+
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
 apollo-nufft = { path = "../apollo-nufft" }

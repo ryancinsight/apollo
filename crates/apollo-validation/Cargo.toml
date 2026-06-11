@@ -8,8 +8,9 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Validation and benchmark surface for Apollo FFT"
 
 [features]
-default = ["external-references"]
+default = ["external-references", "parallel"]
 external-references = ["dep:rustfft"]
+parallel = []
 
 [dependencies]
 apollo-fft = { path = "../apollo-fft" }
