@@ -1,4 +1,10 @@
 # Apollo Checklist
+## FrFT Mnemosyne output move [patch]
+- [x] Replaced FrFT Leto forward/inverse output slice-copy construction with owned `from_mnemosyne_vec` moves for complex64 and typed paths.
+- [x] Preserved FrFT slice execution, ndarray validation comparisons, Leto view input handling, typed precision profiles, and Mnemosyne-backed return storage.
+- [x] Verification: `cargo fmt -p apollo-frft --check`; `git diff --check -- crates/apollo-frft/src/application/execution/plan/frft/dimension_1d/plan.rs crates/apollo-frft/src/application/execution/plan/frft/dimension_1d.rs crates/apollo-frft/src/application/execution/plan/frft/dimension_1d/tests.rs`; `cargo test -p apollo-frft --locked`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo test --locked --workspace --examples`.
+- Evidence: empirical value-semantic FrFT tests and static diff inspection. No runtime benchmark claim is made.
+
 ## QFT Mnemosyne output move [patch]
 - [x] Replaced QFT Leto forward/inverse output slice-copy construction with owned `from_mnemosyne_vec` moves for complex64 and typed paths.
 - [x] Preserved QFT slice execution, ndarray validation comparisons, Leto view input handling, and Mnemosyne-backed return storage.

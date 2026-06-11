@@ -88,9 +88,9 @@ impl FrftPlan {
         let mut output = vec![Complex64::new(0.0, 0.0); self.n];
         self.forward_complex64_slice_into(&signal, &mut output)?;
         Ok(
-            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_vec(
                 [output.len()],
-                &output,
+                output,
             )
             .expect("FrFT output length must match Leto output shape"),
         )
@@ -106,9 +106,9 @@ impl FrftPlan {
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
         Ok(
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
                 [output.len()],
-                &output,
+                output,
             )
             .expect("typed FrFT output length must match Leto output shape"),
         )
@@ -164,9 +164,9 @@ impl FrftPlan {
         let mut output = vec![Complex64::new(0.0, 0.0); self.n];
         self.inverse_complex64_slice_into(&signal, &mut output)?;
         Ok(
-            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_slice(
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::from_mnemosyne_vec(
                 [output.len()],
-                &output,
+                output,
             )
             .expect("inverse FrFT output length must match Leto output shape"),
         )
@@ -182,9 +182,9 @@ impl FrftPlan {
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
         T::inverse_slice_into(self, &signal, &mut output, profile)?;
         Ok(
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice(
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
                 [output.len()],
-                &output,
+                output,
             )
             .expect("typed inverse FrFT output length must match Leto output shape"),
         )

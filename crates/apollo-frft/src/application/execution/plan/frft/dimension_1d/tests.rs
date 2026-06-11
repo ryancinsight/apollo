@@ -1,6 +1,6 @@
 //! Unit tests for 1D Fractional Fourier Transform.
 
-use super::plan::{FrftPlan, frft, frft_leto};
+use super::plan::{frft, frft_leto, FrftPlan};
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
 use ndarray::Array1;
@@ -220,9 +220,8 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
         ]
     });
     let mut out16 = Array1::from_elem(n, [f16::from_f32(0.0); 2]);
-    let input16_reference = input16.mapv(|value| {
-        Complex64::new(f64::from(value[0].to_f32()), f64::from(value[1].to_f32()))
-    });
+    let input16_reference = input16
+        .mapv(|value| Complex64::new(f64::from(value[0].to_f32()), f64::from(value[1].to_f32())));
     let expected16 = plan.forward(&input16_reference).expect("mixed reference");
     plan.forward_typed_into(
         &input16,
@@ -265,8 +264,7 @@ fn typed_complex32_path_reuses_complex64_workspaces() {
 
     plan.forward_typed_into(&input, &mut first, PrecisionProfile::LOW_PRECISION_F32)
         .expect("first typed forward");
-    let first_caps =
-        crate::application::execution::plan::frft::storage::typed_scratch_capacities();
+    let first_caps = crate::application::execution::plan::frft::storage::typed_scratch_capacities();
     plan.forward_typed_into(&input, &mut second, PrecisionProfile::LOW_PRECISION_F32)
         .expect("second typed forward");
     let second_caps =

@@ -6,4 +6,4 @@ pub mod plan;
 #[cfg(test)]
 mod tests;
 
-pub use plan::{FrftPlan, frft, frft_leto, frft_leto_typed};
+pub use plan::{frft, frft_leto, frft_leto_typed, FrftPlan};
