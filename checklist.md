@@ -1,5 +1,6 @@
 # Apollo Checklist
 ## Leto 0.14.0 eigenvalues-only provider pin [minor]
+- [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `cf9573ada2b5742535857d566f15ee5cac924ae8`, which adds provider-side Apollo FFT three-axis mutable lane migration coverage.
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `fe74c9d3ff51a9d8366fa5fda2b353d6dc123df2`, which includes the Leto default provider feature policy.
 - [x] Updated `Cargo.lock` from Leto/Leto Ops `0.13.1` to `0.14.0`, importing the provider-side `symmetric_eigenvalues_jacobi` surface for Apollo linalg consumers.
 - [x] Preserved current Apollo FrFT/GFT calls through `symmetric_eigen_jacobi`; the new eigenvalues-only API is available for later caller-specific memory reductions where vectors are not required.
