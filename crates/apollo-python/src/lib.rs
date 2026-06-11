@@ -735,7 +735,7 @@ fn irfft3<'py>(
     nz: usize,
 ) -> PyResult<Bound<'py, PyArray3<f64>>> {
     require_contiguous_3d(&input, "irfft3 input")?;
-    let (nx, ny, nz_c) = input.as_array().dim();
+    let (_nx, _ny, nz_c) = input.as_array().dim();
     if nz_c != nz {
         return Err(PyValueError::new_err(
             "irfft3 input shape and nz are inconsistent",
