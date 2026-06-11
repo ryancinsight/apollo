@@ -192,7 +192,7 @@ where
 {
     let spectrum = view1_cow(&field_hat);
     let signal = ifft_1d_slice_typed::<T>(&spectrum);
-    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_slice([signal.len()], &signal)
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([signal.len()], signal)
         .expect("IFFT signal length must match Leto output shape")
 }
 

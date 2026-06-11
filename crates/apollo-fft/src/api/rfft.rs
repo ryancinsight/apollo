@@ -132,9 +132,9 @@ where
 {
     let signal = view1_cow(&field);
     let spectrum = fft_1d_slice_typed::<T>(&signal);
-    leto::Array::<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>::from_mnemosyne_slice(
+    leto::Array::<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>::from_mnemosyne_vec(
         [spectrum.len()],
-        &spectrum,
+        spectrum,
     )
     .expect("FFT spectrum length must match Leto output shape")
 }
