@@ -11,7 +11,7 @@ description = "Discrete and continuous wavelet transform plans for Apollo"
 apollo-fft = { path = "../apollo-fft" }
 leto = { workspace = true }
 ndarray = { workspace = true }
-num-complex = "0.4"
+num-complex = { workspace = true }
 moirai = { workspace = true }
 mnemosyne = { workspace = true }
 hermes-simd = { workspace = true }

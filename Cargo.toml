@@ -77,7 +77,7 @@ anyhow = "1.0"
 approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
 ndarray = { version = "0.16", default-features = false }
-num-complex = "0.4"
+num-complex = { version = "0.4", features = ["bytemuck"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "e0ffdf9aa0c571a90ec3961ae758ef2379347983", features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }

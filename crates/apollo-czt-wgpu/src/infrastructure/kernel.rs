@@ -18,13 +18,6 @@ const WORKGROUP_SIZE: u32 = 64;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ComplexPod {
-    re: f32,
-    im: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 struct CztParams {
     input_len: u32,
     output_len: u32,
@@ -140,22 +133,15 @@ impl CztGpuKernel {
         plan: &CztWgpuPlan,
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
-        let input_data: Vec<ComplexPod> = input
-            .iter()
-            .map(|value| ComplexPod {
-                re: value.re,
-                im: value.im,
-            })
-            .collect();
         let output_len = plan.output_len();
         let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-czt-wgpu input"),
-            contents: bytemuck::cast_slice(&input_data),
+            contents: bytemuck::cast_slice(input),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-czt-wgpu output"),
-            size: (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (output_len * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -163,7 +149,7 @@ impl CztGpuKernel {
         });
         let staging = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-czt-wgpu staging"),
-            size: (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (output_len * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -218,7 +204,7 @@ impl CztGpuKernel {
             0,
             &staging,
             0,
-            (output_len * std::mem::size_of::<ComplexPod>()) as u64,
+            (output_len * std::mem::size_of::<Complex32>()) as u64,
         );
         queue.submit(std::iter::once(encoder.finish()));
 
@@ -244,10 +230,7 @@ impl CztGpuKernel {
 
         let output = {
             let mapped = slice.get_mapped_range();
-            let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-            pods.iter()
-                .map(|value| Complex32::new(value.re, value.im))
-                .collect()
+            bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
         };
         staging.unmap();
         Ok(output)
@@ -267,19 +250,14 @@ impl CztGpuKernel {
         let n = plan.input_len();
         let m = plan.output_len();
 
-        let spectrum_pods: Vec<ComplexPod> = spectrum
-            .iter()
-            .map(|v| ComplexPod { re: v.re, im: v.im })
-            .collect();
-
         let spectrum_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-czt-wgpu inverse input (spectrum)"),
-            contents: bytemuck::cast_slice(&spectrum_pods),
+            contents: bytemuck::cast_slice(spectrum),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let signal_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-czt-wgpu inverse output (signal)"),
-            size: (n * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (n * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -287,7 +265,7 @@ impl CztGpuKernel {
         });
         let staging = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-czt-wgpu inverse staging"),
-            size: (n * std::mem::size_of::<ComplexPod>()) as u64,
+            size: (n * std::mem::size_of::<Complex32>()) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -346,7 +324,7 @@ impl CztGpuKernel {
             0,
             &staging,
             0,
-            (n * std::mem::size_of::<ComplexPod>()) as u64,
+            (n * std::mem::size_of::<Complex32>()) as u64,
         );
         queue.submit(std::iter::once(encoder.finish()));
 
@@ -372,8 +350,7 @@ impl CztGpuKernel {
 
         let output = {
             let mapped = slice.get_mapped_range();
-            let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-            pods.iter().map(|v| Complex32::new(v.re, v.im)).collect()
+            bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
         };
         staging.unmap();
         Ok(output)

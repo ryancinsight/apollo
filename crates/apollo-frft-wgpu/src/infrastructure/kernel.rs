@@ -13,13 +13,6 @@ use crate::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ComplexPod {
-    re: f32,
-    im: f32,
-}
-
 /// Uniform parameter block (32 bytes). Fields match WGSL FrftParams exactly.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -136,14 +129,10 @@ impl FrftGpuKernel {
         scale_re: f32,
         scale_im: f32,
     ) -> WgpuResult<Vec<Complex32>> {
-        let input_pods: Vec<ComplexPod> = input
-            .iter()
-            .map(|v| ComplexPod { re: v.re, im: v.im })
-            .collect();
-        let byte_len = (len * std::mem::size_of::<ComplexPod>()) as u64;
+        let byte_len = (len * std::mem::size_of::<Complex32>()) as u64;
         let input_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("apollo-frft-wgpu input"),
-            contents: bytemuck::cast_slice(&input_pods),
+            contents: bytemuck::cast_slice(input),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -227,8 +216,7 @@ impl FrftGpuKernel {
         }
         let output = {
             let mapped = slice.get_mapped_range();
-            let pods: &[ComplexPod] = bytemuck::cast_slice(&mapped);
-            pods.iter().map(|p| Complex32::new(p.re, p.im)).collect()
+            bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
         };
         staging.unmap();
         Ok(output)

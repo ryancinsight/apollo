@@ -15,7 +15,7 @@ apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers" }
 bytemuck = { version = "1.19", features = ["derive"] }
 leto = { workspace = true }
 ndarray = { workspace = true }
-num-complex = "0.4"
+num-complex = { workspace = true }
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
 

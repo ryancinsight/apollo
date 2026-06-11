@@ -11,7 +11,7 @@ description = "Fast Walsh-Hadamard transform utilities for Apollo"
 apollo-fft = { path = "../apollo-fft" }
 ndarray = { workspace = true }
 leto = { workspace = true }
-num-complex = "0.4"
+num-complex = { workspace = true }
 moirai = { workspace = true }
 hermes-simd = { workspace = true }
 mnemosyne = { workspace = true }

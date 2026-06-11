@@ -15,7 +15,7 @@ thiserror = "1.0"
 apollo-fft = { path = "../apollo-fft" }
 leto = { workspace = true }
 ndarray = { workspace = true }
-num-complex = "0.4"
+num-complex = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
