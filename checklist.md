@@ -1,4 +1,9 @@
 # Apollo Checklist
+## WGPU dispatch-path memory efficiency [patch]
+- [x] `apollo-dctdst-wgpu` kernel caches input/output/staging buffers and the bind group keyed by byte length; same-length dispatches (the O(n)..O(n^2) separable 2D/3D lanes) reuse them via `queue.write_buffer`. Cache lock held across encode/submit/map also serializes the shared params buffer, removing a latent write race; failed maps evict the set.
+- [x] Workspace `num-complex` now enables the `bytemuck` feature and all 28 crates inherit it via `workspace = true` (dependency SSOT). `Complex32` is Pod, so `apollo-czt-wgpu` and `apollo-frft-wgpu` kernels upload input slices zero-copy and read back with one cast+copy, deleting their local `ComplexPod` marshaling types and per-dispatch conversion Vecs.
+- [x] Verification: `cargo clippy --workspace --all-targets` zero warnings; `cargo nextest run -p apollo-czt-wgpu -p apollo-frft-wgpu -p apollo-dctdst-wgpu` 18/18 passed including device-execution suites.
+- Evidence: value-semantic GPU execution tests; allocation removal verified by source inspection, not GPU profiling. `apollo-nufft-wgpu` retains its `ComplexPod` helpers (file concurrently edited in another session; backlog item remains open).
 ## Validation Leto FFT reference routing [patch]
 - [x] Routed Apollo validation FFT CPU/GPU, published FFT/Radon fixtures, external comparisons, precision profile checks, and benchmark probes through Leto-backed FFT APIs with Mnemosyne storage.
 - [x] Preserved ndarray only as validation/report materialization and external-reference comparison boundary.

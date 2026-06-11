@@ -10,6 +10,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Breaking
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] Canonical `apollo_fft::application::utilities::leto_interop` module consolidates Leto view/array interop helpers (`view1_cow`, dense view copies, fallible Leto array builders, precision-profile matching) previously duplicated across 33 crates; crate-local wrappers now delegate with their own error mapping, and infallible wrappers shed their `Result` returns.
 - [patch] `apollo-dctdst-wgpu` 2D/3D separable transforms reuse a single lane buffer per pass and borrow contiguous rows zero-copy, removing O(n^2)/O(n^3) per-iteration allocations; `apollo-dctdst` typed paths adopt thread-local Mnemosyne scratch pools for f64 conversion workspaces.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `6c7899d` (`0.5.0`), importing provider-side dense reshape/into_shape, permute aliases, and row-major to_contiguous materialization for later ndarray replacement work.
@@ -1246,6 +1247,7 @@ See checklist/gap for details.
 
 ## [0.12.5] - 2026-05-15
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] `apollo-fft`: N=23 now routes through a dedicated Winograd
   pair-symmetry codelet with f64/f32 scalar constants, direct `FftPrecision`
   fast paths, and `ShortWinogradScalar::dft23`.
@@ -1265,6 +1267,7 @@ See checklist/gap for details.
 
 ## [0.12.4] - 2026-05-15
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] `apollo-fft`: N=17 now routes through a dedicated Winograd
   pair-symmetry codelet with f64/f32 scalar constants, direct `FftPrecision`
   fast paths, and `ShortWinogradScalar::dft17`.
@@ -1284,6 +1287,7 @@ See checklist/gap for details.
 
 ## [0.12.3] - 2026-05-15
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] `apollo-fft`: N=13 now routes through a dedicated Winograd
   pair-symmetry codelet for f64 and f32, with const-generic direction
   monomorphization so forward and inverse kernels compile without runtime
@@ -1304,6 +1308,7 @@ See checklist/gap for details.
 
 ## [0.12.2] - 2026-05-14
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] `apollo-fft`: `dft7_impl` replaced with Winograd constant algorithm.
   Exploits Hermitian symmetry of the 7-point twiddle matrix: sum/difference
   decomposition into xr[n]=x[n]+x[7−n] and xi[n]=x[n]−x[7−n], then circulant
@@ -1322,6 +1327,7 @@ See checklist/gap for details.
 
 ## [0.12.1] - 2026-05-14
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] `apollo-fft`: `dft100_impl` in `winograd/composite.rs` using
   Good-Thomas PFA (N=100=4×25, gcd(4,25)=1). CRT input permutation
   `n=(25·n1+4·n2)%100` eliminates inter-stage twiddles; output mapping
@@ -1429,6 +1435,7 @@ See checklist/gap for details.
   satisfies the 500-line structural limit.
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-hilbert`: caller-owned `AnalyticSignal` projections for real,
   quadrature, envelope, phase, and instantaneous frequency, plus
   `HilbertPlan::envelope_into` and `HilbertPlan::phase_into`.
@@ -2149,6 +2156,7 @@ See checklist/gap for details.
 ### Closure LV — apollo-fft: add explicit radix-4 and mixed radix-2/radix-4 kernels with validation coverage [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - New kernel module `application/execution/kernel/radix4.rs`:
   - `forward_inplace_64`, `inverse_inplace_unnorm_64`, `inverse_inplace_64`
   - `forward_inplace_32`, `inverse_inplace_unnorm_32`, `inverse_inplace_32`
@@ -2558,6 +2566,7 @@ See checklist/gap for details.
 ### Closure XLII — apollo-python: complete Python bindings; numpy FFT benchmark [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-python`: `fft_complex1`, `ifft_complex1` — complex128→complex128 1D FFT, numpy-compatible.
 - `apollo-python`: `fft_complex2`, `ifft_complex2` — complex128 2D FFT.
 - `apollo-python`: `fft_complex3`, `ifft_complex3` — complex128 3D FFT.
@@ -2596,6 +2605,7 @@ See checklist/gap for details.
 ### Closure XLI — DHT CPU 2D/3D; FWHT CPU 2D/3D; FFT fftfreq/rfftfreq/fftshift/ifftshift [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-dht`: `DhtPlan::forward_2d`, `forward_2d_into`, `inverse_2d`, `inverse_2d_into`,
   `forward_3d`, `forward_3d_into`, `inverse_3d`, `inverse_3d_into` — separable N×N and N×N×N CPU DHT.
 - `apollo-dht`: `DhtError::ShapeMismatch2d { expected, rows, cols }` and
@@ -2624,6 +2634,7 @@ See checklist/gap for details.
 ### Closure XL — GPU DCT/DST 2D and 3D Separable Execution [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-dctdst-wgpu` `DctDstWgpuBackend` now exposes separable multidimensional GPU APIs:
   `execute_forward_2d`, `execute_inverse_2d`, `execute_forward_3d`, `execute_inverse_3d`.
 - `WgpuError::ShapeMismatch { expected, rows, cols }` — returned when a 2D input is not `N×N`.
@@ -2651,6 +2662,7 @@ See checklist/gap for details.
 ### Closure XXXIX — CPU DCT/DST 2D and 3D Separable Plans [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-dctdst` `DctDstPlan` now exposes separable multidimensional CPU APIs:
   `forward_2d`, `forward_2d_into`, `inverse_2d`, `inverse_2d_into`,
   `forward_3d`, `forward_3d_into`, `inverse_3d`, and `inverse_3d_into`.
@@ -2677,6 +2689,7 @@ See checklist/gap for details.
 ### Closure XXXVIII — DCT-I and DST-I Forward Known-Value Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 58 in `apollo-validation`: `dct1_three_point_forward_known_values_fixture` —
   DCT-I, N=3, x=[1,2,3]: y=[8,−2,0]; boundary formula y[k]=x[0]+(−1)^k·x[N−1]+2·Σx[n]cos(πnk/(N−1));
   y[2]=0 algebraically exact (cos(π)=−1 cancels interior term 4); threshold 1×10⁻¹⁵.
@@ -2698,6 +2711,7 @@ See checklist/gap for details.
 ### Closure XXXVII — DCT-III and DST-III Published-Reference Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 56 in `apollo-validation`: `dct3_dc_input_flat_output_fixture` —
   DCT-III, N=4, DC input [1,0,0,0]: y[k]=x[0]/2=1/2 for all k; flat output [½,½,½,½].
   Single-term kernel evaluation (x[n]=0 for n≥1 eliminates all cosine terms);
@@ -2719,6 +2733,7 @@ See checklist/gap for details.
 ### Closure XXXVI — CWT Ricker Impulse Peak and Scale-Normalization Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 54 in `apollo-validation`: `cwt_ricker_impulse_peak_value_fixture` —
   CWT Ricker, N=7, impulse at n₀=3, a=1: W(1,2)=0, W(1,3)=ψ(0)=2/(√3·π^¼), W(1,4)=0.
   W(1,3) is single-tap (no summation error); W(1,2) and W(1,4) are exact zeros
@@ -2740,6 +2755,7 @@ See checklist/gap for details.
 ### Closure XXXV — Daubechies-4 DWT Coefficient and Reconstruction Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 52 in `apollo-validation`: `wavelet_daubechies4_one_level_known_coefficients_fixture` —
   DWT db4, N=4, level=1, x=[1,0,0,0]: [a0,a1,d0,d1]=[h0,h2,h3,h1] with
   Daubechies taps h=[0.4829629131, 0.8365163037, 0.2241438680, -0.1294095226].
@@ -2762,6 +2778,7 @@ See checklist/gap for details.
 ### Closure XXXIV — CZT Off-Unit-Circle and Hilbert Envelope Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 50 in `apollo-validation`: `czt_off_unit_circle_z_transform_fixture` —
   CZT N=2, M=2, A=2, W=exp(−πi): X=[1.5+0i, 0.5+0i].
   Evaluates Z-transform off the unit circle at z={2,−2} (|z|=2);
@@ -2785,6 +2802,7 @@ See checklist/gap for details.
 ### Closure XXXIII — SDFT Sliding Recurrence and FrFT Order-4 Identity Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 48 in `apollo-validation`: `sdft_sliding_recurrence_unit_impulse_all_bins_fixture` —
   SDFT N=4, zero_state, 4 updates fed [1,0,0,0]: all 4 bins = 1+0i.
   Tests the sliding-update recurrence path (not direct_bins); factors ∈{1,i,−1,−i};
@@ -2808,6 +2826,7 @@ See checklist/gap for details.
 ### Closure XXXII — NUFFT Adjoint Identity and Radon Fourier Slice Theorem Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 46 in `apollo-validation`: `nufft_type1_type2_adjoint_inner_product_fixture` —
   NUFFT N=2, pos=[0,0.5], c=[1,2], f=[3,4]: Re(〈A·c,f〉)=Re(〈c,A*·f〉)=5.
   All exp factors ∈{1,−1}; computation exact in f64; accumulated FP error=0;
@@ -2831,6 +2850,7 @@ See checklist/gap for details.
 ### Closure XXXI — DCT-I and DST-I Self-Inverse Published-Reference Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 44 in `apollo-validation`: `dct1_inverse_roundtrip_three_point_fixture` —
   DCT-I N=3: `IDCT-I(DCT-I([1,2,3])) = [1,2,3]`. Makhoul (1980) IEEE Trans. ASSP 28(1):
   DCT-I self-inverse C1²=2(N−1)·I; FFTW REDFT00: IDCT-I=(1/(2(N−1)))·DCT-I.
@@ -2853,6 +2873,7 @@ See checklist/gap for details.
 ### Closure XXX — DCT-IV and DST-IV Self-Inverse Published-Reference Fixtures [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 42 in `apollo-validation`: `dct4_inverse_roundtrip_two_point_fixture` —
   DCT-IV N=2: `IDCT-IV(DCT-IV([1,3])) = [1,3]`. Makhoul (1980) IEEE Trans. ASSP 28(1):
   DCT-IV self-inverse property C4²=N·I; FFTW REDFT11 IDCT-IV=(1/2N)·DCT-IV;
@@ -2874,6 +2895,7 @@ See checklist/gap for details.
 ### Closure XXIX — Inverse-Roundtrip Published-Reference Fixtures: NTT, STFT [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 40 in `apollo-validation`: `ntt_inverse_roundtrip_fixture` —
   NTT N=4: `INTT(NTT([1,2,3,4])) = [1,2,3,4]`. Pollard (1971) Math. Proc. Cambridge
   Phil. Soc. 70(3): NTT inversion theorem in ℤ/pℤ; threshold 1×10⁻¹².
@@ -2894,6 +2916,7 @@ See checklist/gap for details.
 ### Closure XXVIII — Inverse-Roundtrip Published-Reference Fixtures: DHT, SFT [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 38 in `apollo-validation`: `dht_inverse_roundtrip_fixture` —
   DHT N=4: `IDHT(DHT([3,-1,2,0])) = [3,-1,2,0]`. Bracewell (1983) JOSA 73(12):
   H²=NI; inverse = (1/N)·DHT; threshold 1×10⁻¹⁴.
@@ -2914,6 +2937,7 @@ See checklist/gap for details.
 ### Closure XXVII — Inverse-Roundtrip Published-Reference Fixtures: FWHT, QFT, SHT [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 35 in `apollo-validation`: `fwht_inverse_roundtrip_fixture` —
   FWHT N=4: `IFWHT(FWHT([1,2,3,4])) = [1,2,3,4]`. Walsh (1923) Am. J. Math. 45 §2:
   W_N² = N·I; threshold 1×10⁻¹⁴.
@@ -2936,6 +2960,7 @@ See checklist/gap for details.
 ### Closure XXVI — Inverse-Roundtrip Published-Reference Fixtures: DWT, GFT, FrFT [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Validation fixture 32 in `apollo-validation`: `wavelet_haar_inverse_perfect_reconstruction_fixture` —
   Haar DWT N=4, 1-level: `IDWT(DWT([1,−1,0,0])) = [1,−1,0,0]`. Mallat (1989) §3.1 Theorem 2
   perfect reconstruction. Threshold 1×10⁻¹².
@@ -2958,6 +2983,7 @@ See checklist/gap for details.
 ### Closure XXV — Hilbert Instantaneous Frequency + Doc/Test/PM Cleanup [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `AnalyticSignal::instantaneous_frequency()` in `apollo-hilbert`
   (`domain/signal/analytic.rs`): computes instantaneous frequency in cycles per
   sample using the complex-derivative formula
@@ -2969,7 +2995,8 @@ See checklist/gap for details.
   `cos(2π5·n/64)` has instantaneous frequency `5/64` at every sample
   (threshold 1e-10). Root `README.md` fixture count updated 30 → 31.
 
-#### Added (Tests — apollo-hilbert)
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. (Tests — apollo-hilbert)
 - `instantaneous_frequency_constant_tone`: asserts `IF = k/N` for all N−1
   samples of a single-tone cosine at `k=5`, `N=64`; tolerance 1e-10.
 - `double_hilbert_negates_zero_mean_signal`: asserts `H{H{x}} = −x` for a
@@ -3042,6 +3069,7 @@ See checklist/gap for details.
   pattern already established for other transform pairs.
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-validation`: two new published-reference fixtures (fixtures 29 and 30).
   - `czt_inverse_vandermonde_roundtrip_fixture`: N=4 Björck-Pereyra Vandermonde solve,
     threshold 1e-12. Validates exact numeric contract from Björck & Pereyra (1970).
@@ -3058,6 +3086,7 @@ See checklist/gap for details.
 ### Closure XXII — GPU Benchmark Runner Workflow + Root README Correction [patch]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `.github/workflows/gpu-benchmarks.yml`: manual `workflow_dispatch` workflow targeting a
   labeled self-hosted runner (`[self-hosted, gpu, apollo]`) to execute the WGPU Criterion
   benchmark suites and upload the output bundle as a workflow artifact.
@@ -3099,7 +3128,8 @@ See checklist/gap for details.
 
 ### Closure XX — CPU + GPU Inverse Transforms: CZT and Mellin [minor]
 
-#### Added — apollo-czt v0.2.0
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. — apollo-czt v0.2.0
 - `CztPlan::inverse(spectrum)` — exact Vandermonde solve via Björck-Pereyra algorithm
   (`O(N²)` in-place Newton evaluation). Returns `CztError::NotInvertible` when
   `M ≠ N` or when Vandermonde nodes collide (denominator below `f64::EPSILON * 1024`).
@@ -3108,7 +3138,8 @@ See checklist/gap for details.
 - 5 value-semantic tests: roundtrip at DFT parameters, general `A` offset, non-unit `W`
   spacing, rejection of rectangular plans, rejection of wrong spectrum length.
 
-#### Added — apollo-mellin v0.2.0
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. — apollo-mellin v0.2.0
 - `MellinPlan::inverse_spectrum(spectrum, out_min, out_max, output)` — IDFT of
   log-domain spectrum then exp-resample from log-grid to linear domain.
   Rayon-parallel IDFT for `N ≥ 256`.
@@ -3118,7 +3149,8 @@ See checklist/gap for details.
   roundtrip (interpolation error `< 0.1` for `N = 64`), wrong-length rejection,
   invalid-bounds rejection.
 
-#### Added — apollo-czt-wgpu v0.2.0
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. — apollo-czt-wgpu v0.2.0
 - `czt_inverse` WGSL entry point: adjoint formula `x[n] = (A^n/N)·∑_k X[k]·W^{-nk}`,
   exact for unitary DFT parameters.
 - `MellinGpuKernel::inverse_pipeline` field; `execute_inverse` dispatches over `N` threads.
@@ -3126,7 +3158,8 @@ See checklist/gap for details.
 - `WgpuCapabilities::forward_inverse` constructor.
 - 2 new GPU tests: roundtrip at DFT parameters, rejection of non-square plan.
 
-#### Added — apollo-mellin-wgpu v0.2.0
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. — apollo-mellin-wgpu v0.2.0
 - `mellin_inverse_spectrum` WGSL kernel: IDFT pass, spectrum → log-domain samples.
 - `mellin_exp_resample` WGSL kernel: exp-resample pass, log-domain → linear output.
 - `InverseMellinParamsPod` uniform struct (32 bytes, reuses params buffer slot).
@@ -3152,7 +3185,8 @@ See checklist/gap for details.
   via the buffer-reuse path (kernel auto-selects Chirp-Z for non-PoT at dispatch time).
 - Module docstring in `buffers.rs` updated: PoT constraint removed; Closure XIX note added.
 
-#### Added (Tests)
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. (Tests)
 - `make_buffers_accepts_non_power_of_two_frame_len_structurally`: structural verification
   that `make_buffers` accepts non-PoT without returning `FrameLenNotPowerOfTwo`.
 - `forward_buffers_non_pot_frame_len_400_when_device_exists` (GPU-gated): buffer-reuse
@@ -3170,6 +3204,7 @@ See checklist/gap for details.
 ### Closure XVIII — Non-Power-of-Two STFT GPU Path (Bluestein/Chirp-Z) [minor]
 
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `crates/apollo-stft-wgpu/src/infrastructure/shaders/stft_chirp.wgsl`: Five-pass WGSL
   compute shader implementing the Bluestein Chirp-Z mapping for the STFT: `premul_fwd`,
   `premul_inv`, `pointmul`, `postmul_fwd`, `postmul_inv`. Hann analysis/synthesis windows
@@ -3199,7 +3234,8 @@ See checklist/gap for details.
   `forward_accepts_non_power_of_two_frame_len_chirpz` and
   `inverse_accepts_non_power_of_two_frame_len_chirpz`.
 
-#### Added (Tests)
+#### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling. (Tests)
 - `forward_accepts_non_power_of_two_frame_len_structurally`: structural check that
   non-PoT no longer returns `FrameLenNotPowerOfTwo`.
 - `forward_accepts_non_power_of_two_frame_len_chirpz`: same for `execute_forward`.
@@ -3215,6 +3251,7 @@ See checklist/gap for details.
 
 ### Closure XVII — STFT GPU Buffer-Reuse Criterion Benchmarks + README Usage Documentation [patch]
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `bench_forward_reuse` benchmark group in `crates/apollo-stft-wgpu/benches/stft_bench.rs`:
   head-to-head comparison of `execute_forward` (allocating) vs `execute_forward_with_buffers`
   (buffer-reuse) at `frame_len` ∈ {256, 512, 1024}. Pre-allocates `StftGpuBuffers` outside
@@ -3236,6 +3273,7 @@ See checklist/gap for details.
 
 ### Closure XVI — StftGpuBuffers Pre-allocated Buffer Reuse [minor]
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `StftGpuBuffers` struct in `crates/apollo-stft-wgpu/src/infrastructure/buffers.rs`:
   pre-allocates all GPU data buffers, staging buffers, bind groups, and per-stage butterfly
   uniform buffers for a fixed `(frame_count, frame_len, signal_len, hop_len)` quad.
@@ -3261,6 +3299,7 @@ See checklist/gap for details.
 
 ### Closure XV — Radon FBP GPU Criterion Benchmarks
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `crates/apollo-radon-wgpu/benches/radon_wgpu_bench.rs`: criterion benchmark suite with
   `radon_wgpu_forward` and `radon_wgpu_fbp` groups.
 - `criterion = "0.5"` in `apollo-radon-wgpu` dev-dependencies.
@@ -3286,6 +3325,7 @@ See checklist/gap for details.
 
 ### Closure XIII — STFT GPU Criterion Benchmarks
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `crates/apollo-stft-wgpu/benches/stft_bench.rs`: criterion benchmark suite with
   `bench_forward_fft` and `bench_inverse_fft` groups.
 - `criterion = { version = "0.5", features = ["html_reports"] }` in `apollo-stft-wgpu`
@@ -3298,6 +3338,7 @@ See checklist/gap for details.
 
 ### Closure XII — STFT Forward-Path GPU FFT Acceleration
 #### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `stft_forward_fft.wgsl`: new GPU shader with `stft_fwd_pack_window`, `stft_fwd_bitrev`,
   `stft_fwd_butterfly`, `stft_fwd_interleave` entry points (DFT twiddle `exp(−2πi·k/N)`).
 - `FwdFftStageParams` struct (16 bytes, fields: frame_count, frame_len, hop_len, stage).
@@ -3316,6 +3357,7 @@ See checklist/gap for details.
 ## [0.7.0] — Closure XI
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-stft-wgpu`: GPU STFT inverse O(N log N) acceleration. New `stft_inverse_fft.wgsl` with four entry points implementing a batched Cooley-Tukey Radix-2 DIT IFFT: `stft_deinterleave` (interleaved complex f32 → split re/im scratch), `stft_bitrev` (bit-reversal permutation, batched), `stft_butterfly` (one Radix-2 DIT stage per dispatch; IDFT twiddle exp(+2πi·k/N)), `stft_scale_and_window` (1/N scale + Hann synthesis window → frame_data). Two-bind-group architecture: group 0 = 4 data bindings (shared), group 1 = per-stage `FftStageParams` uniform (pre-allocated, one per butterfly pass). All passes in one `CommandEncoder`; implicit per-pass memory barriers ensure write visibility. OLA pass unchanged. Replaces the O(N²) `stft_inverse_frames` pipeline. Formal basis: Cooley & Tukey (1965); Allen & Rabiner (1977) Theorem 1. [minor]
 - `apollo-stft-wgpu`: `WgpuError::FrameLenNotPowerOfTwo { frame_len: usize }` error variant. Returned by `execute_inverse` when `frame_len` is not a power of two (Radix-2 invariant); checked before GPU buffer allocation in `device.rs` and at IFFT entry in `kernel.rs`. [minor]
 - `apollo-stft-wgpu`: `inverse_rejects_non_power_of_two_frame_len` test (CPU-only; asserts `FrameLenNotPowerOfTwo { frame_len: 6 }` for frame_len=6). [patch]
@@ -3326,6 +3368,7 @@ See checklist/gap for details.
 ## [0.6.0] — Closure X
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-radon-wgpu`: GPU ramp-filtered backprojection (FBP). New `radon_fbp_filter.wgsl` entry point `radon_fbp_filter` applies the Ram-Lak ramp filter to each sinogram projection row via circular convolution with the impulse response `h = IFFT(R)`, `R[k] = 2π·|signed_k|/(N·Δ)` (Bracewell & Riddle 1967; Shepp & Logan 1974). Filter kernel computed host-side from `apollo_radon::ramp_filter_projection([1,0,...], Δ)` and cast to f32. Two-pass single `CommandEncoder` (filter → backproject). Host-side `π/angle_count` normalization. `RadonWgpuBackend::execute_filtered_backproject`. `supports_filtered_backprojection: bool` field added to `WgpuCapabilities`. `WgpuCapabilities::forward_inverse_and_fbp` constructor added. [minor]
 - `apollo-radon-wgpu`: `backproject_satisfies_adjoint_identity_when_device_exists` test verifies the Radon adjoint identity ⟨A·f, g⟩_sinogram = ⟨f, A†·g⟩_image (Natterer 2001, §II.2) to relative tolerance 5e-3. [patch]
 - `apollo-stft-wgpu`: `inverse_roundtrip_for_multiple_cola_parameter_sets` tests three COLA-compliant parameter sets (frame_len=8/hop=4, 16/8, 32/16) with analytical reference signals. TOL=5e-3. [patch]
@@ -3339,6 +3382,7 @@ See checklist/gap for details.
 ## [0.5.0] — Closure IX
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-stft-wgpu`: GPU inverse STFT via two-pass Weighted Overlap-Add (WOLA). New WGSL file `stft_inverse.wgsl` with entry points `stft_inverse_frames` (per-(frame, local_j) windowed IDFT: `frame_data[m·N+j] = (1/N)·Re{Σ_k X[m,k]·exp(+2πi·k·j/N)}·hann(j)`, spectrum as interleaved f32 pairs) and `stft_inverse_ola` (per-sample `y[n] = Σ_m frame_data[m·N+(n−start_m)] / Σ_m hann(n−start_m)²`, `start_m = m·hop−N/2`). Both passes share the existing 3-binding layout in one `CommandEncoder`. `StftGpuKernel::execute_inverse` (2-pass single encoder). `StftWgpuBackend::execute_inverse(plan, spectrum, signal_len)` + `execute_inverse_typed_into`. `WgpuCapabilities::forward_and_inverse` constructor added. Basis: WOLA identity (Allen–Rabiner 1977, Theorem 1). [minor]
 - `apollo-radon-wgpu`: GPU Radon adjoint backprojection. New WGSL file `radon_backproject.wgsl` with entry `radon_backproject`: per-pixel `bp[r,c] = Σ_θ interp(sinogram[θ,·], x·cosθ + y·sinθ)` with linear interpolation and out-of-range zero-clamping, reusing the forward bind group layout. `RadonGpuKernel::execute_backproject`. `RadonWgpuBackend::execute_inverse(plan, sinogram, angles)` + `execute_inverse_flat_typed`. `WgpuCapabilities::forward_and_inverse` constructor added. `SinogramShapeMismatch` error variant added. Basis: Radon adjoint operator (Natterer 2001, §II.2). [minor]
 
@@ -3350,6 +3394,7 @@ See checklist/gap for details.
 ## [0.4.0] — Closure VIII
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-hilbert-wgpu`: GPU inverse Hilbert transform. New WGSL entry point `hilbert_inverse_mask` recovers the original real-signal DFT spectrum from the DFT of the quadrature signal: positive bins X[k]=j·Q[k], negative bins X[k]=-j·Q[k], DC and Nyquist zeroed (unrecoverable; Bracewell 1965). New `HilbertGpuKernel::execute_inverse` runs 3 sequential passes in one command encoder (DFT of quadrature → inverse mask → IDFT of recovered spectrum). Exposed via `HilbertWgpuBackend::execute_inverse` and `execute_inverse_typed_into`. `WgpuCapabilities::forward_and_inverse` constructor added. [minor]
 - `apollo-sdft-wgpu`: GPU inverse SDFT. New WGSL entry point `sdft_inverse_bins` computes x[n]=(1/K)·Σ_{b=0}^{K-1} X[b]·exp(+2πi·b·n/K). Complex bins passed as interleaved f32 pairs. Separate `forward_pipeline` and `inverse_pipeline` in `SdftGpuKernel`. Exposed via `SdftWgpuBackend::execute_inverse` and `execute_inverse_typed_into`. `WgpuCapabilities::forward_and_inverse` constructor added. [minor]
 
@@ -3362,6 +3407,7 @@ See checklist/gap for details.
 ## [0.3.0] — Closure VII
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Six new published-reference fixtures in `apollo-validation`: SFT 1-sparse alternating tone, SHT monopole Y₀⁰ coefficient, STFT rectangular-window impulse frame, Hilbert cosine-to-sine 4-point, Mellin constant-function first moment, Radon θ=0 column-impulse projection. Fixture count rises from 22 to 28. [minor]
 - Proptest coverage for four CPU transform crates previously lacking property tests: `apollo-czt` (Bluestein-vs-direct parity, spiral-collapse to DFT, linearity), `apollo-frft` (roundtrip, additivity, linearity), `apollo-nufft` (DC-mode invariant, fast-path tracks exact, Type-1 linearity), `apollo-sft` (K-sparse exact recovery, Parseval top-K, retained bins equal DFT). [minor]
 
@@ -3377,6 +3423,7 @@ See checklist/gap for details.
 ## [0.2.0] — Closure VI (NTT WGPU O(N log N), workspace unblock, expanded fixtures)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-ntt-wgpu`: O(N log N) Cooley-Tukey DIT butterfly shader (`ntt_butterfly` + `ntt_scale` entry points), replacing the O(N²) DFT loop. Log₂(N) butterfly passes plus optional scale pass encoded in one command buffer with dynamic uniform offsets. [major]
 - Two published-reference fixtures: NTT N=16 impulse (Pollard 1971) and NTT N=16 polynomial product via convolution theorem. Fixture count 20 → 22. [minor]
 - CPU-only proptest tests in `apollo-ntt-wgpu` verification: `cpu_roundtrip_preserves_residue_class` and `convolution_theorem_holds_for_arbitrary_pairs`. [minor]
@@ -3394,6 +3441,7 @@ See checklist/gap for details.
 ## [0.1.9] — Closure V (GPU Unitary FrFT, ADR, published fixtures)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-frft-wgpu`: `UnitaryFrftGpuKernel` implementing DFrFT_a(x)=V·diag(exp(−iakπ/2))·V^T·x on GPU via three-submission pattern. `FrftWgpuBackend` exposes `plan_unitary`, `execute_unitary_forward`, `execute_unitary_inverse`. [minor]
 - Three published-reference fixtures (count 17 → 20): FrFT unitary order-2 reversal (Candan 2000), DWT Haar one-level detail (Haar 1910/Mallat 1989), SDFT bin-zero unit impulse. [minor]
 - `design_history_file/adr_unitary_frft.md`: ADR documenting Grünbaum eigendecomposition algorithm selection, unitarity proof, GPU ordering guarantee, and tolerance derivation. [patch]
@@ -3404,6 +3452,7 @@ See checklist/gap for details.
 ## [0.1.8] — Closure IV (FrFT unitarity, DCT-I/IV/DST-I/IV WGPU)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-frft`: `GrunbaumBasis` and `UnitaryFrftPlan` (Candan 2000 eigendecomposition). O(N³) construction, O(N²) per call, provably unitary for all real orders. [minor]
 - `apollo-dctdst-wgpu`: WGSL shader modes for DCT-I (mode 4), DCT-IV (mode 5), DST-I (mode 6), DST-IV (mode 7) with correct self-inverse scales. [minor]
 
@@ -3412,6 +3461,7 @@ See checklist/gap for details.
 ## [0.1.7] — Closure III (validation mock removal, published fixtures, DCT-I/IV/DST-I/IV CPU)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - 7 published-reference fixtures (count 10 → 17): FFT inverse, DCT-II inverse pair, DHT self-reciprocal, FWHT 2-point, QFT 2-point, CZT spiral-collapse, GFT path graph. [minor]
 - `apollo-validation` GPU suite: real 4×4×4 GpuFft3d roundtrip replacing hardcoded `passed: true` stub. [major]
 
@@ -3423,6 +3473,7 @@ See checklist/gap for details.
 ## [0.1.6] — Closure II (fixture expansion, capability table)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Published-reference fixtures expanded to 10. [minor]
 - `ARCHITECTURE.md` Mixed-Precision Capability Table (authoritative per-crate precision record). [patch]
 
@@ -3431,6 +3482,7 @@ See checklist/gap for details.
 ## [0.1.5] — Performance & Native GPU Precision
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - `apollo-fft-wgpu`: `GpuFft3dF16Native` behind `native-f16` feature; native f16 arithmetic with `enable f16` WGSL. Bluestein chirp-Z f16 shader for non-power-of-two sizes. [minor]
 - Criterion buffer-reuse benchmarks for `apollo-nufft-wgpu` and `apollo-fft-wgpu`. [minor]
 - NUFFT and FFT reusable-buffer `with_buffers` façade methods. [minor]
@@ -3440,6 +3492,7 @@ See checklist/gap for details.
 ## [0.1.4] — Extension Phase (mixed precision rollout, typed storage)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Mixed-precision typed storage APIs across all CPU and WGPU transform crates. [minor]
 - Exact quantized `u32` NTT-WGPU residue storage and reusable buffer dispatch. [minor]
 
@@ -3448,6 +3501,7 @@ See checklist/gap for details.
 ## [0.1.3] — GPU Numerical Kernels (NUFFT, SHT, SFT, STFT, Wavelet, DCT/DST)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - GPU fast NUFFT 1D/3D Kaiser-Bessel gridding paths. [minor]
 - WGPU backends for SHT, STFT, Haar DWT, DCT-II/III/DST-II/DST-III. [minor]
 
@@ -3456,6 +3510,7 @@ See checklist/gap for details.
 ## [0.1.2] — Core Transform Crates (GFT, QFT, SDFT, SFT, Radon, Mellin, Hilbert, Wavelet, STFT, CZT, FWHT)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - New CPU transform crates with WGPU backends. [minor]
 
 ---
@@ -3463,6 +3518,7 @@ See checklist/gap for details.
 ## [0.1.1] — Foundation (FFT, DHT, DCT/DST, NTT, NUFFT)
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Core CPU transform crates with O(N log N) kernels. [minor]
 - `apollo-validation` published-reference suite with 10 initial fixtures. [minor]
 
@@ -3471,4 +3527,5 @@ See checklist/gap for details.
 ## [0.1.0] — Initial release
 
 ### Added
+- [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - Workspace skeleton: `apollo-fft`, `apollo-fft-wgpu`, `apollo-nufft`, `apollo-nufft-wgpu`, `apollo-validation`, `apollo-python`. [minor]
