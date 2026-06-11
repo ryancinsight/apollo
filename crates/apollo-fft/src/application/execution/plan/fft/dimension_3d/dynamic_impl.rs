@@ -1,15 +1,15 @@
-use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
-use crate::application::execution::plan::fft::workspace::{
+use super::helpers::cached_power_of_two_twiddle;
+use super::GATHER_TILE;
+use super::MOIRAI_PARALLEL_THRESHOLD;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
+use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
 use crate::domain::metadata::shape::Shape3D;
-use std::sync::Arc;
+use leto::ArrayViewMut3;
 use ndarray::Array3;
 use num_complex::Complex;
-use leto::ArrayViewMut3;
-use super::MOIRAI_PARALLEL_THRESHOLD;
-use super::GATHER_TILE;
-use super::helpers::cached_power_of_two_twiddle;
+use std::sync::Arc;
 
 /// Reusable separable 3D FFT plan generic over `MixedRadixScalar`.
 pub struct FftPlan3D<F: MixedRadixScalar> {
@@ -129,7 +129,11 @@ where
         self.axis_pass_complex::<false>(data, 2);
     }
 
-    fn axis_pass_complex<const FORWARD: bool>(&self, data: ArrayViewMut3<'_, F::Complex>, axis: usize) {
+    fn axis_pass_complex<const FORWARD: bool>(
+        &self,
+        data: ArrayViewMut3<'_, F::Complex>,
+        axis: usize,
+    ) {
         if data.shape()[axis] <= 1 {
             return;
         }

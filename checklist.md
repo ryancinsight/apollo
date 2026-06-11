@@ -1,4 +1,11 @@
 # Apollo Checklist
+## FFT real-storage scratch consolidation [patch]
+- [x] Consolidated plan scratch ownership under `mixed_radix::scalar::plan_scratch` and removed the duplicate `fft::workspace` module.
+- [x] Routed real and complex FFT public APIs through generic `Complex<T::PlanScalar>` storage bounds with sealed scratch support for supported scalar profiles.
+- [x] Moved Radon and SHT non-contiguous ndarray fallback buffers into Mnemosyne-backed Leto arrays with `from_mnemosyne_vec`.
+- [x] Verification: `cargo check -p apollo-fft --locked`; `cargo fmt -p apollo-fft -p apollo-radon -p apollo-sht --check`; `cargo test -p apollo-fft --locked`; `cargo test -p apollo-radon -p apollo-sht --locked`; `cargo clippy -p apollo-fft -p apollo-radon -p apollo-sht --all-targets -- -D warnings`; `cargo test --locked --workspace --examples`.
+- Evidence: empirical value-semantic FFT/Radon/SHT tests, clippy diagnostics, and static module ownership inspection. No runtime benchmark claim is made.
+
 ## FrFT Mnemosyne output move [patch]
 - [x] Replaced FrFT Leto forward/inverse output slice-copy construction with owned `from_mnemosyne_vec` moves for complex64 and typed paths.
 - [x] Preserved FrFT slice execution, ndarray validation comparisons, Leto view input handling, typed precision profiles, and Mnemosyne-backed return storage.

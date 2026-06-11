@@ -68,8 +68,8 @@ pub use num_complex::Complex32;
 pub use num_complex::Complex64;
 
 // Re-export all API functions directly from crate root for backwards compatibility.
-pub use api::rfft::*;
-pub use api::irfft::*;
 pub use api::cfft::*;
 pub use api::icfft::*;
+pub use api::irfft::*;
+pub use api::rfft::*;
 pub use api::utils::*;

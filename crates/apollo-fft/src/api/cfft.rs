@@ -1,16 +1,14 @@
 //! Forward complex FFT API functions.
 
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::plan::fft::{
+    dimension_1d::StaticFftPlan1D, dimension_2d::StaticFftPlan2D, dimension_3d::StaticFftPlan3D,
+};
+use crate::application::orchestration::cache::plans::PlanCacheProvider;
+use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use ndarray::{Array1, Array2, Array3};
 use num_complex::{Complex, Complex64};
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::plan::fft::workspace::PlanScratch;
-use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::application::execution::plan::fft::{
-    dimension_1d::StaticFftPlan1D,
-    dimension_2d::StaticFftPlan2D,
-    dimension_3d::StaticFftPlan3D,
-};
-use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 
 /// Forward complex 1D FFT in-place.
 pub fn fft_1d_complex_inplace(data: &mut Array1<Complex64>) {

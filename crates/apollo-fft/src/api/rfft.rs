@@ -1,13 +1,15 @@
 //! Forward real FFT API functions.
 
-use ndarray::{Array1, Array2, Array3};
-use num_complex::Complex64;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use crate::application::utilities::leto_interop::{
-    view1_cow, array2_from_view, array3_from_view, try_array2_from_ndarray, try_array3_from_ndarray,
+    array2_from_view, array3_from_view, try_array2_from_ndarray, try_array3_from_ndarray, view1_cow,
 };
+use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
+use ndarray::{Array1, Array2, Array3};
+use num_complex::Complex;
+use num_complex::Complex64;
 
 /// Forward 1D FFT of a real signal.
 #[must_use]
@@ -21,9 +23,10 @@ pub fn fft_1d_array(field: &Array1<f64>) -> Array1<Complex64> {
 
 /// Forward 1D FFT of a real array using generic storage dispatch.
 #[must_use]
-pub fn fft_1d_array_typed<T>(field: &Array1<T>) -> Array1<T::Spectrum>
+pub fn fft_1d_array_typed<T>(field: &Array1<T>) -> Array1<Complex<T::PlanScalar>>
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     T::forward_1d(
@@ -48,9 +51,10 @@ pub fn fft_1d_array_into(field: &Array1<f64>, out: &mut Array1<Complex64>) {
 }
 
 /// Forward 1D FFT of a real array into caller-owned typed spectrum storage.
-pub fn fft_1d_array_typed_into<T>(field: &Array1<T>, out: &mut Array1<T::Spectrum>)
+pub fn fft_1d_array_typed_into<T>(field: &Array1<T>, out: &mut Array1<Complex<T::PlanScalar>>)
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     T::forward_1d_into(
@@ -73,9 +77,10 @@ pub fn fft_1d_array_static_into<const N: usize>(field: &Array1<f64>, out: &mut A
 /// a compile-time-known length.
 pub fn fft_1d_array_static_typed_into<T, const N: usize>(
     field: &Array1<T>,
-    out: &mut Array1<T::Spectrum>,
+    out: &mut Array1<Complex<T::PlanScalar>>,
 ) where
     T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
         field.len(),
@@ -94,9 +99,10 @@ pub fn fft_1d_array_static_typed_into<T, const N: usize>(
 ///
 /// Slice/`Vec`-based wrapper for callers that do not depend on `ndarray`.
 #[must_use]
-pub fn fft_1d_slice_typed<T>(signal: &[T]) -> Vec<T::Spectrum>
+pub fn fft_1d_slice_typed<T>(signal: &[T]) -> Vec<Complex<T::PlanScalar>>
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     T::forward_1d_slice_owned(
@@ -124,15 +130,15 @@ pub fn fft_1d_leto(
 #[must_use]
 pub fn fft_1d_leto_typed<T>(
     field: leto::ArrayView1<'_, T>,
-) -> leto::Array<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>
+) -> leto::Array<Complex<T::PlanScalar>, leto::MnemosyneStorage<Complex<T::PlanScalar>>, 1>
 where
     T: RealFftData + PlanCacheProvider + Copy,
-    T::Spectrum: Copy,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let signal = view1_cow(&field);
     let spectrum = fft_1d_slice_typed::<T>(&signal);
-    leto::Array::<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 1>::from_mnemosyne_vec(
+    leto::Array::<Complex<T::PlanScalar>, leto::MnemosyneStorage<Complex<T::PlanScalar>>, 1>::from_mnemosyne_vec(
         [spectrum.len()],
         spectrum,
     )
@@ -152,9 +158,10 @@ pub fn fft_2d_array(field: &Array2<f64>) -> Array2<Complex64> {
 
 /// Forward 2D FFT of a real array using generic storage dispatch.
 #[must_use]
-pub fn fft_2d_array_typed<T>(field: &Array2<T>) -> Array2<T::Spectrum>
+pub fn fft_2d_array_typed<T>(field: &Array2<T>) -> Array2<Complex<T::PlanScalar>>
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let (nx, ny) = field.dim();
@@ -181,9 +188,10 @@ pub fn fft_2d_array_into(field: &Array2<f64>, out: &mut Array2<Complex64>) {
 }
 
 /// Forward 2D FFT of a real array into caller-owned typed spectrum storage.
-pub fn fft_2d_array_typed_into<T>(field: &Array2<T>, out: &mut Array2<T::Spectrum>)
+pub fn fft_2d_array_typed_into<T>(field: &Array2<T>, out: &mut Array2<Complex<T::PlanScalar>>)
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let (nx, ny) = field.dim();
@@ -210,9 +218,10 @@ pub fn fft_2d_array_static_into<const NX: usize, const NY: usize>(
 /// a compile-time-known shape.
 pub fn fft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
     field: &Array2<T>,
-    out: &mut Array2<T::Spectrum>,
+    out: &mut Array2<Complex<T::PlanScalar>>,
 ) where
     T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
         field.dim(),
@@ -242,9 +251,10 @@ pub fn fft_3d_array(field: &Array3<f64>) -> Array3<Complex64> {
 
 /// Forward 3D FFT of a real array using generic storage dispatch.
 #[must_use]
-pub fn fft_3d_array_typed<T>(field: &Array3<T>) -> Array3<T::Spectrum>
+pub fn fft_3d_array_typed<T>(field: &Array3<T>) -> Array3<Complex<T::PlanScalar>>
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let (nx, ny, nz) = field.dim();
@@ -258,9 +268,10 @@ where
 }
 
 /// Forward 3D FFT of a real array into caller-owned typed spectrum storage.
-pub fn fft_3d_array_typed_into<T>(field: &Array3<T>, out: &mut Array3<T::Spectrum>)
+pub fn fft_3d_array_typed_into<T>(field: &Array3<T>, out: &mut Array3<Complex<T::PlanScalar>>)
 where
     T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let (nx, ny, nz) = field.dim();
@@ -292,9 +303,10 @@ pub fn fft_3d_array_static_into<const NX: usize, const NY: usize, const NZ: usiz
 /// a compile-time-known shape.
 pub fn fft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, const NZ: usize>(
     field: &Array3<T>,
-    out: &mut Array3<T::Spectrum>,
+    out: &mut Array3<Complex<T::PlanScalar>>,
 ) where
     T: RealFftData,
+    Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
         field.dim(),
@@ -321,16 +333,15 @@ pub fn fft_2d_leto(
 #[must_use]
 pub fn fft_2d_leto_typed<T>(
     field: leto::ArrayView2<'_, T>,
-) -> leto::Array<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 2>
+) -> leto::Array<Complex<T::PlanScalar>, leto::MnemosyneStorage<Complex<T::PlanScalar>>, 2>
 where
     T: RealFftData + PlanCacheProvider + Copy,
-    T::Spectrum: Copy,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let nd_array = array2_from_view(&field);
     let output = fft_2d_array_typed::<T>(&nd_array);
-    try_array2_from_ndarray(&output)
-        .expect("FFT spectrum shape must match Leto output shape")
+    try_array2_from_ndarray(&output).expect("FFT spectrum shape must match Leto output shape")
 }
 
 /// Forward 3D FFT of a Leto real view, returning Mnemosyne-backed Leto storage.
@@ -345,14 +356,13 @@ pub fn fft_3d_leto(
 #[must_use]
 pub fn fft_3d_leto_typed<T>(
     field: leto::ArrayView3<'_, T>,
-) -> leto::Array<T::Spectrum, leto::MnemosyneStorage<T::Spectrum>, 3>
+) -> leto::Array<Complex<T::PlanScalar>, leto::MnemosyneStorage<Complex<T::PlanScalar>>, 3>
 where
     T: RealFftData + PlanCacheProvider + Copy,
-    T::Spectrum: Copy,
+    Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let nd_array = array3_from_view(&field);
     let output = fft_3d_array_typed::<T>(&nd_array);
-    try_array3_from_ndarray(&output)
-        .expect("FFT spectrum shape must match Leto output shape")
+    try_array3_from_ndarray(&output).expect("FFT spectrum shape must match Leto output shape")
 }

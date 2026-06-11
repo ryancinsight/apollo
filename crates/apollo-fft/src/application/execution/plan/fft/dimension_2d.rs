@@ -28,15 +28,17 @@
 //! place, while non-contiguous passes gather lanes into scratch buffers before
 //! scattering them back.
 
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
+    with_2d_scratch, PlanScratch,
+};
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
-use crate::application::execution::plan::fft::workspace::{with_2d_scratch, PlanScratch};
 use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
+use leto::ArrayViewMut2;
 use ndarray::Array2;
 use num_complex::Complex;
 use std::sync::Arc;
-use leto::ArrayViewMut2;
 
 /// Use Moirai parallel iteration when total elements exceed this threshold.
 /// Below the threshold, sequential iteration avoids parallel task-spawn overhead
@@ -269,7 +271,11 @@ where
         self.axis_pass_complex::<false>(data, 1);
     }
 
-    fn axis_pass_complex<const FORWARD: bool>(&self, data: ArrayViewMut2<'_, F::Complex>, axis: usize) {
+    fn axis_pass_complex<const FORWARD: bool>(
+        &self,
+        data: ArrayViewMut2<'_, F::Complex>,
+        axis: usize,
+    ) {
         if axis == 1 {
             self.axis1_pass_complex::<FORWARD>(data);
             return;

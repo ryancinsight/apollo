@@ -1,4 +1,5 @@
 mod impls;
+pub(crate) mod plan_scratch;
 mod rader;
 pub(crate) mod simd;
 mod trait_def;

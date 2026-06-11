@@ -1,12 +1,14 @@
-use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
-use crate::application::execution::plan::fft::workspace::{with_3d_x_scratch, with_3d_y_scratch, PlanScratch};
+use super::GATHER_TILE;
+use super::MOIRAI_PARALLEL_THRESHOLD;
+use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
+    with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
+};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use core::marker::PhantomData;
+use leto::ArrayViewMut3;
 use ndarray::Array3;
 use num_complex::Complex;
-use leto::ArrayViewMut3;
-use super::MOIRAI_PARALLEL_THRESHOLD;
-use super::GATHER_TILE;
 
 /// Zero-sized 3D FFT plan for compile-time-known shapes.
 ///
@@ -70,7 +72,11 @@ where
     /// Forward transform of a complex Leto view in-place.
     #[inline]
     pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
-        assert_eq!(data.shape(), [NX, NY, NZ], "static 3D forward shape mismatch");
+        assert_eq!(
+            data.shape(),
+            [NX, NY, NZ],
+            "static 3D forward shape mismatch"
+        );
         Self::axis2_pass_complex::<true>(data.reborrow());
         Self::axis1_pass_complex::<true>(data.reborrow());
         Self::axis0_pass_complex::<true>(data);
@@ -79,7 +85,11 @@ where
     /// Inverse transform of a complex Leto view in-place with normalization.
     #[inline]
     pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
-        assert_eq!(data.shape(), [NX, NY, NZ], "static 3D inverse shape mismatch");
+        assert_eq!(
+            data.shape(),
+            [NX, NY, NZ],
+            "static 3D inverse shape mismatch"
+        );
         Self::axis0_pass_complex::<false>(data.reborrow());
         Self::axis1_pass_complex::<false>(data.reborrow());
         Self::axis2_pass_complex::<false>(data);

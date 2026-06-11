@@ -1,11 +1,11 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
 use core::marker::PhantomData;
+use leto::ArrayViewMut1;
 use ndarray::Array1;
 use num_complex::Complex;
 use std::borrow::Cow;
 use std::sync::Arc;
-use leto::ArrayViewMut1;
 
 use super::executors::{
     exec_composite_forward, exec_composite_inverse, exec_composite_inverse_unnorm,
@@ -397,18 +397,25 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
 
     /// Forward transform of a complex Leto view in-place.
     pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
-        self.forward_complex_slice_inplace(data.as_mut_slice_memory_order().expect("Array must be contiguous"));
+        self.forward_complex_slice_inplace(
+            data.as_mut_slice_memory_order()
+                .expect("Array must be contiguous"),
+        );
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
     pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
-        self.inverse_complex_slice_inplace(data.as_mut_slice_memory_order().expect("Array must be contiguous"));
+        self.inverse_complex_slice_inplace(
+            data.as_mut_slice_memory_order()
+                .expect("Array must be contiguous"),
+        );
     }
 
     /// Inverse transform of a complex Leto view in-place without normalization.
     pub fn inverse_complex_leto_unnorm_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.inverse_complex_slice_unnorm_inplace(
-            data.as_mut_slice_memory_order().expect("Array must be contiguous"),
+            data.as_mut_slice_memory_order()
+                .expect("Array must be contiguous"),
         );
     }
 

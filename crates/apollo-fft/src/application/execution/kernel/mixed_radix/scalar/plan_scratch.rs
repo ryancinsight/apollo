@@ -1,4 +1,10 @@
-//! Plan-owned FFT workspace allocation helpers.
+//! Thread-local plan scratch buffers per complex scalar type.
+//!
+//! 2D and 3D plans use per-precision thread-local buffers instead of
+//! plan-owned mutex-protected buffers. The trait is sealed to the two complex
+//! scalar layouts supported by [`MixedRadixScalar`].
+//!
+//! [`MixedRadixScalar`]: super::MixedRadixScalar
 
 use num_complex::{Complex32, Complex64};
 
@@ -14,14 +20,6 @@ mod sealed {
     impl Sealed for num_complex::Complex64 {}
 }
 
-// ── Thread-local plan scratch buffers ───────────────────────────────────────
-//
-// The 2D and 3D plans previously stored `Mutex<Vec<F::Complex>>` fields that
-// serialized every axis-pass call on a mutex even for single-threaded use.
-// Replaced by per-precision `thread_local!` buffers that grow on demand and
-// are reused across calls, matching the kernel scratch pattern in
-// `mixed_radix/caches/scratch.rs`.
-
 thread_local! {
     static TL_PLAN_SCRATCH_BANK_64: mnemosyne::scratch::ScratchBank<Complex64, PLAN_SCRATCH_ROLE_COUNT> =
         const { mnemosyne::scratch::ScratchBank::new() };
@@ -32,11 +30,19 @@ thread_local! {
 /// Sealed trait providing thread-local plan scratch buffer access per complex type.
 pub trait PlanScratch: sealed::Sealed + 'static {
     /// Run a closure with a thread-local 2D column-scratch buffer sized to `n`.
-    fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R;
+    fn with_2d_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
+    where
+        Self: Sized;
+
     /// Run a closure with a thread-local 3D Y-axis scratch buffer sized to `n`.
-    fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R;
+    fn with_3d_y_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
+    where
+        Self: Sized;
+
     /// Run a closure with a thread-local 3D X-axis scratch buffer sized to `n`.
-    fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R;
+    fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
+    where
+        Self: Sized;
 }
 
 impl PlanScratch for Complex64 {

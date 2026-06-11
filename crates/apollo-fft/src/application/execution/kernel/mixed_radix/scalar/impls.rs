@@ -14,14 +14,13 @@ use super::rader::{
 use super::simd::{pointwise_mul_precise, pointwise_mul_reduced};
 use super::trait_def::MixedRadixScalar;
 use super::transpose::{transpose_matrix_precise, transpose_matrix_reduced};
-use super::twiddle_constants::{
-    TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE,
-    TWIDDLES_INV_REDUCED,
-};
 #[cfg(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))]
 use super::twiddle_constants::{
     TWIDDLES_COMBINE_FWD_32, TWIDDLES_COMBINE_FWD_64, TWIDDLES_COMBINE_INV_32,
     TWIDDLES_COMBINE_INV_64,
+};
+use super::twiddle_constants::{
+    TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE, TWIDDLES_INV_REDUCED,
 };
 use crate::application::execution::kernel::components::{radix_composite, stockham};
 use crate::application::execution::kernel::mixed_radix::caches::{

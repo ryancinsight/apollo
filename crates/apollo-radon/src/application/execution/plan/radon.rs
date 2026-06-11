@@ -361,7 +361,7 @@ fn leto_array2_from_ndarray<T: Copy>(
     } else {
         let (rows, cols) = array.dim();
         let values: Vec<T> = array.iter().copied().collect();
-        leto::Array::from_mnemosyne_slice([rows, cols], &values)
+        leto::Array::from_mnemosyne_vec([rows, cols], values)
             .map_err(|_| RadonError::ImageShapeMismatch)
     }
 }
