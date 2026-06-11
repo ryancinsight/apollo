@@ -1,4 +1,9 @@
 # Apollo Checklist
+## Hermes default provider feature pin [patch]
+- [x] Updated workspace `hermes-simd` Git revision to pushed Hermes commit `df67249ef05de8e1addc5a26d6831c70d63c3d18`.
+- [x] Removed Apollo's `default-features = false, features = ["std"]` override so Hermes default `parallel` and `mnemosyne-memory` provider features are active for Apollo transform crates.
+- Evidence: `cargo metadata --no-deps --locked`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`; `git diff --check`.
+
 ## Leto 0.14.0 eigenvalues-only provider pin [minor]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `cf9573ada2b5742535857d566f15ee5cac924ae8`, which adds provider-side Apollo FFT three-axis mutable lane migration coverage.
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `fe74c9d3ff51a9d8366fa5fda2b353d6dc123df2`, which includes the Leto default provider feature policy.

@@ -1400,6 +1400,7 @@ dependencies = [
  "bytemuck",
  "half",
  "hermes-numeric",
+ "mnemosyne",
  "rkyv",
 ]
 

@@ -80,7 +80,7 @@ ndarray = { version = "0.16", default-features = false }
 num-complex = { version = "0.4", features = ["bytemuck"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "938d0c2bc094d3bbe7745d68d60e05a531e0cfc2", features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "25c261b3e990916729ed5ff613b7e41dfe051b0b", default-features = false, features = ["std"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "df67249ef05de8e1addc5a26d6831c70d63c3d18" }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "cf9573ada2b5742535857d566f15ee5cac924ae8", features = ["ndarray-compat"] }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "cf9573ada2b5742535857d566f15ee5cac924ae8" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
