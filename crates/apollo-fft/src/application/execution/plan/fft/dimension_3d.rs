@@ -415,3 +415,99 @@ mod axis_pass_tests {
         }
     }
 }
+
+impl FftPlan3D<f64> {
+    /// Packed-real forward FFT along the **contiguous z-axis**, producing the
+    /// half-spectrum `(nx, ny, nz/2+1)` of a real field.
+    ///
+    /// Instead of a full length-`nz` complex FFT followed by truncation, this
+    /// packs each real z-pencil (`nz` reals) into `nz/2` complex
+    /// (`h[t] = x[2t] + i·x[2t+1]`), runs a length-`nz/2` complex FFT, and unpacks
+    /// the real spectrum by Hermitian symmetry — ~half the z-axis FFT work and
+    /// half the z scratch. The y/x axes are **not** transformed (the caller
+    /// composes them with [`Self::forward_axis_complex_inplace`]).
+    ///
+    /// Requires even `nz`.
+    ///
+    /// # Panics
+    /// - Shape mismatch, or odd `nz`.
+    pub fn forward_real_z_into(&self, real: &Array3<f64>, half_out: &mut Array3<num_complex::Complex64>) {
+        use num_complex::Complex64;
+        let (nx, ny, nz) = self.dimensions();
+        assert_eq!(real.dim(), (nx, ny, nz), "real shape mismatch");
+        assert_eq!(nz % 2, 0, "forward_real_z_into requires even nz");
+        let m = nz / 2;
+        let nz_c = m + 1;
+        assert_eq!(half_out.dim(), (nx, ny, nz_c), "half_out shape mismatch");
+
+        // Pack each z-pencil: h[t] = x[2t] + i·x[2t+1].
+        let mut packed = Array3::<Complex64>::zeros((nx, ny, m));
+        for i in 0..nx {
+            for j in 0..ny {
+                for t in 0..m {
+                    packed[[i, j, t]] = Complex64::new(real[[i, j, 2 * t]], real[[i, j, 2 * t + 1]]);
+                }
+            }
+        }
+
+        // Length-m complex FFT along z (cached plan).
+        let m_plan = <f64 as crate::PlanCacheProvider>::get_3d_plan(crate::Shape3D { nx, ny, nz: m });
+        m_plan.forward_axis_complex_inplace(&mut packed, 2);
+
+        // Unpack the real-FFT spectrum X[k], k = 0..m, by Hermitian symmetry:
+        //   E[k] = 0.5(H[k] + conj(H[m-k])),  O[k] = -0.5i(H[k] - conj(H[m-k])),
+        //   X[k] = E[k] + W_N^k O[k],  W_N = exp(-2πi/nz).
+        let n_f = nz as f64;
+        for i in 0..nx {
+            for j in 0..ny {
+                let h0 = packed[[i, j, 0]];
+                half_out[[i, j, 0]] = Complex64::new(h0.re + h0.im, 0.0); // DC
+                half_out[[i, j, m]] = Complex64::new(h0.re - h0.im, 0.0); // Nyquist
+                for k in 1..m {
+                    let hk = packed[[i, j, k]];
+                    let hmk = packed[[i, j, m - k]];
+                    let fe = 0.5 * (hk + hmk.conj());
+                    let fo = Complex64::new(0.0, -0.5) * (hk - hmk.conj());
+                    let wk = Complex64::from_polar(1.0, -std::f64::consts::TAU * (k as f64) / n_f);
+                    half_out[[i, j, k]] = fe + wk * fo;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod real_z_tests {
+    use super::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+    use ndarray::{s, Array3};
+    use num_complex::Complex64;
+
+    #[test]
+    fn packed_real_z_matches_full_c2c_truncation() {
+        for &(nx, ny, nz) in &[(5usize, 4usize, 8usize), (3, 1, 16), (4, 6, 6)] {
+            let nz_c = nz / 2 + 1;
+            let plan = FftPlan3D::<f64>::new(Shape3D { nx, ny, nz });
+            let real = Array3::from_shape_fn((nx, ny, nz), |(i, j, k)| {
+                let x = ((i * 71 + j * 13 + k * 5) % 97) as f64 / 97.0 - 0.5;
+                (x * 6.1).sin() + 0.2 * x + 0.3
+            });
+
+            // Packed-real z-FFT.
+            let mut half_new = Array3::zeros((nx, ny, nz_c));
+            plan.forward_real_z_into(&real, &mut half_new);
+
+            // Reference: full c2c z-pass, truncated to nz_c.
+            let mut full = real.mapv(|v| Complex64::new(v, 0.0));
+            plan.forward_axis_complex_inplace(&mut full, 2);
+            let ref_half = full.slice(s![.., .., 0..nz_c]).to_owned();
+
+            let err = half_new
+                .iter()
+                .zip(ref_half.iter())
+                .map(|(a, b)| (a - b).norm())
+                .fold(0.0_f64, f64::max);
+            assert!(err <= 1e-10, "packed-real z ({nx},{ny},{nz}) vs full-c2c: {err:.2e}");
+        }
+    }
+}
