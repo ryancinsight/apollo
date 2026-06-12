@@ -427,11 +427,18 @@ impl FftPlan3D<f64> {
     /// half the z scratch. The y/x axes are **not** transformed (the caller
     /// composes them with [`Self::forward_axis_complex_inplace`]).
     ///
+    /// `packed_scratch` must be `(nx, ny, nz/2)` and is used as the packed
+    /// working buffer (supply a reused buffer to avoid per-call allocation).
     /// Requires even `nz`.
     ///
     /// # Panics
     /// - Shape mismatch, or odd `nz`.
-    pub fn forward_real_z_into(&self, real: &Array3<f64>, half_out: &mut Array3<num_complex::Complex64>) {
+    pub fn forward_real_z_into(
+        &self,
+        real: &Array3<f64>,
+        half_out: &mut Array3<num_complex::Complex64>,
+        packed_scratch: &mut Array3<num_complex::Complex64>,
+    ) {
         use num_complex::Complex64;
         let (nx, ny, nz) = self.dimensions();
         assert_eq!(real.dim(), (nx, ny, nz), "real shape mismatch");
@@ -439,9 +446,10 @@ impl FftPlan3D<f64> {
         let m = nz / 2;
         let nz_c = m + 1;
         assert_eq!(half_out.dim(), (nx, ny, nz_c), "half_out shape mismatch");
+        assert_eq!(packed_scratch.dim(), (nx, ny, m), "packed scratch must be (nx,ny,nz/2)");
 
         // Pack each z-pencil: h[t] = x[2t] + i·x[2t+1].
-        let mut packed = Array3::<Complex64>::zeros((nx, ny, m));
+        let packed = packed_scratch;
         for i in 0..nx {
             for j in 0..ny {
                 for t in 0..m {
@@ -452,7 +460,7 @@ impl FftPlan3D<f64> {
 
         // Length-m complex FFT along z (cached plan).
         let m_plan = <f64 as crate::PlanCacheProvider>::get_3d_plan(crate::Shape3D { nx, ny, nz: m });
-        m_plan.forward_axis_complex_inplace(&mut packed, 2);
+        m_plan.forward_axis_complex_inplace(packed, 2);
 
         // Unpack the real-FFT spectrum X[k], k = 0..m, by Hermitian symmetry:
         //   E[k] = 0.5(H[k] + conj(H[m-k])),  O[k] = -0.5i(H[k] - conj(H[m-k])),
@@ -495,7 +503,8 @@ mod real_z_tests {
 
             // Packed-real z-FFT.
             let mut half_new = Array3::zeros((nx, ny, nz_c));
-            plan.forward_real_z_into(&real, &mut half_new);
+            let mut packed = Array3::zeros((nx, ny, nz / 2));
+            plan.forward_real_z_into(&real, &mut half_new, &mut packed);
 
             // Reference: full c2c z-pass, truncated to nz_c.
             let mut full = real.mapv(|v| Complex64::new(v, 0.0));
