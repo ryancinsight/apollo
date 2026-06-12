@@ -75,3 +75,43 @@ fn static_fft_3d_inverse_roundtrip_recovers_input() {
     let err = max_err(&actual, &input);
     assert!(err <= 1.0e-10, "static 3D roundtrip mismatch err={err:.2e}");
 }
+
+#[test]
+fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    let (nx, ny, nz) = (6usize, 4usize, 8usize);
+    let plan = FftPlan3D::<f64>::new(Shape3D { nx, ny, nz });
+    let original = Array3::from_shape_fn((nx, ny, nz), |(i, j, k)| {
+        let x = ((i * ny + j) * nz + k) as f64;
+        Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
+    });
+
+    // Sequential per-axis forward (z, y, x) equals the full separable forward.
+    let mut full = original.clone();
+    plan.forward_complex_inplace(&mut full);
+    let mut composed = original.clone();
+    plan.forward_axis_complex_inplace(&mut composed, 2);
+    plan.forward_axis_complex_inplace(&mut composed, 1);
+    plan.forward_axis_complex_inplace(&mut composed, 0);
+    let err = composed
+        .iter()
+        .zip(full.iter())
+        .map(|(a, b)| (a - b).norm())
+        .fold(0.0_f64, f64::max);
+    assert!(err <= 1.0e-10, "axis compose != full forward, err={err:.2e}");
+
+    // forward_axis then inverse_axis along the same axis is the identity.
+    for axis in 0..3 {
+        let mut d = original.clone();
+        plan.forward_axis_complex_inplace(&mut d, axis);
+        plan.inverse_axis_complex_inplace(&mut d, axis);
+        let err = d
+            .iter()
+            .zip(original.iter())
+            .map(|(a, b)| (a - b).norm())
+            .fold(0.0_f64, f64::max);
+        assert!(err <= 1.0e-10, "axis {axis} roundtrip not identity, err={err:.2e}");
+    }
+}

@@ -105,6 +105,44 @@ where
         self.inverse_complex_leto_inplace(view);
     }
 
+    /// Forward complex FFT along a single `axis` (0, 1, or 2) in-place.
+    ///
+    /// This is the batched, cache-tiled, parallel per-axis building block of
+    /// [`Self::forward_complex_inplace`] — it transforms all pencils along `axis`
+    /// at once (32×32 tiled gather/scatter for non-contiguous axes, Moirai
+    /// parallelism over pencils, cached power-of-two twiddles). Exposing it lets
+    /// callers that need only one axis (e.g. spectral derivatives `∂/∂xₐ`) avoid
+    /// the cost of a full 3-D transform. Unnormalized, matching the 1-D forward
+    /// convention; an `axis` whose extent is 1 is a no-op.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn forward_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
+        assert_eq!(
+            data.dim(),
+            (self.nx, self.ny, self.nz),
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        self.axis_pass_complex::<true>(ArrayViewMut3::from(data.view_mut()), axis);
+    }
+
+    /// Inverse complex FFT along a single `axis` in-place, normalized by that
+    /// axis's length, so `forward_axis` followed by `inverse_axis` along the same
+    /// axis is the identity. See [`Self::forward_axis_complex_inplace`].
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn inverse_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
+        assert_eq!(
+            data.dim(),
+            (self.nx, self.ny, self.nz),
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        self.axis_pass_complex::<false>(ArrayViewMut3::from(data.view_mut()), axis);
+    }
+
     /// Forward transform of a complex Leto view in-place.
     pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
         assert_eq!(
