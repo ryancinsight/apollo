@@ -168,6 +168,43 @@ where
         self.axis_pass_complex(data, Axis(2), false);
     }
 
+    /// Forward complex FFT along a single `axis` (0, 1, or 2) in-place.
+    ///
+    /// The batched, cache-tiled per-axis building block of
+    /// [`Self::forward_complex_inplace`] — it transforms all pencils along `axis`
+    /// at once (32×32 tiled gather/scatter for non-contiguous axes). Exposing it
+    /// lets callers that need only one axis (e.g. spectral derivatives `∂/∂xₐ`)
+    /// avoid a full 3-D transform. Unnormalized (1-D forward convention); an axis
+    /// of extent 1 is a no-op.
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn forward_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
+        assert_eq!(
+            data.dim(),
+            (self.nx, self.ny, self.nz),
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        self.axis_pass_complex(data, Axis(axis), true);
+    }
+
+    /// Inverse complex FFT along a single `axis` in-place, normalized by that
+    /// axis's length, so `forward_axis` then `inverse_axis` along the same axis is
+    /// the identity. See [`Self::forward_axis_complex_inplace`].
+    ///
+    /// # Panics
+    /// - Shape mismatch with the plan, or `axis >= 3`.
+    pub fn inverse_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
+        assert_eq!(
+            data.dim(),
+            (self.nx, self.ny, self.nz),
+            "axis FFT shape mismatch"
+        );
+        assert!(axis < 3, "axis must be 0, 1, or 2");
+        self.axis_pass_complex(data, Axis(axis), false);
+    }
+
     fn axis_pass_complex(&self, data: &mut Array3<F::Complex>, axis: Axis, forward: bool) {
         if data.len_of(axis) <= 1 {
             return;
@@ -330,6 +367,51 @@ where
             data_slice.par_chunks_mut(self.nz).for_each(lane_fn);
         } else {
             data_slice.chunks_mut(self.nz).for_each(lane_fn);
+        }
+    }
+}
+
+#[cfg(test)]
+mod axis_pass_tests {
+    use super::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+    use ndarray::Array3;
+    use num_complex::Complex64;
+
+    #[test]
+    fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
+        let (nx, ny, nz) = (6usize, 4usize, 8usize);
+        let plan = FftPlan3D::<f64>::new(Shape3D { nx, ny, nz });
+        let original = Array3::from_shape_fn((nx, ny, nz), |(i, j, k)| {
+            let x = ((i * ny + j) * nz + k) as f64;
+            Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
+        });
+
+        // Sequential per-axis forward (z, y, x) equals the full separable forward.
+        let mut full = original.clone();
+        plan.forward_complex_inplace(&mut full);
+        let mut composed = original.clone();
+        plan.forward_axis_complex_inplace(&mut composed, 2);
+        plan.forward_axis_complex_inplace(&mut composed, 1);
+        plan.forward_axis_complex_inplace(&mut composed, 0);
+        let err = composed
+            .iter()
+            .zip(full.iter())
+            .map(|(a, b)| (a - b).norm())
+            .fold(0.0_f64, f64::max);
+        assert!(err <= 1.0e-10, "axis compose != full forward, err={err:.2e}");
+
+        // forward_axis then inverse_axis along the same axis is the identity.
+        for axis in 0..3 {
+            let mut d = original.clone();
+            plan.forward_axis_complex_inplace(&mut d, axis);
+            plan.inverse_axis_complex_inplace(&mut d, axis);
+            let err = d
+                .iter()
+                .zip(original.iter())
+                .map(|(a, b)| (a - b).norm())
+                .fold(0.0_f64, f64::max);
+            assert!(err <= 1.0e-10, "axis {axis} roundtrip not identity, err={err:.2e}");
         }
     }
 }
