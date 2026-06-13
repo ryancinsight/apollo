@@ -10,6 +10,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Breaking
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Added
+- [patch] Refreshed `benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `a673325` (`0.14.2`), importing rank-deficient singular-value support without restoring any downstream nalgebra dependency.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `7d4774a` (`0.14.1`), importing wide full-row-rank thin SVD support as the next provider-side nalgebra-parity increment.
 - [patch] Apollo now pins Moirai to pushed commit `d60317e`, importing default Mnemosyne-backed executor worker idle maintenance and Melinoe partition routing through Moirai's global scheduler for Moirai-routed parallel transform paths.

@@ -1351,7 +1351,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.5.0"
+version = "0.6.3"
 dependencies = [
  "bytemuck",
  "thiserror 2.0.18",
@@ -1359,13 +1359,13 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.5.0"
+version = "0.6.3"
 dependencies = [
  "bytemuck",
  "hephaestus-core",
  "leto",
  "pollster 0.3.0",
- "themis 0.6.0 (git+https://github.com/ryancinsight/themis?rev=bdcddfe294f941ef2f84fd4ce38537906b0fec23)",
+ "themis 0.6.0",
  "wgpu",
 ]
 
@@ -1402,6 +1402,7 @@ dependencies = [
  "hermes-numeric",
  "mnemosyne",
  "rkyv",
+ "themis 0.8.0",
 ]
 
 [[package]]
@@ -1563,7 +1564,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "leto"
-version = "0.14.2"
+version = "0.18.1"
 dependencies = [
  "bytemuck",
  "half",
@@ -1576,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.14.2"
+version = "0.18.1"
 dependencies = [
  "bytemuck",
  "half",
@@ -1658,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "melinoe"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "memchr"
@@ -1721,7 +1722,7 @@ dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
  "num-complex",
- "themis 0.6.0 (git+https://github.com/ryancinsight/themis)",
+ "themis 0.8.0",
 ]
 
 [[package]]
@@ -1767,11 +1768,13 @@ dependencies = [
 name = "mnemosyne-local"
 version = "0.1.0"
 dependencies = [
+ "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
+ "themis 0.8.0",
 ]
 
 [[package]]
@@ -1845,6 +1848,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
+ "themis 0.8.0",
  "thiserror 1.0.69",
 ]
 
@@ -1877,7 +1881,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis 0.6.0 (git+https://github.com/ryancinsight/themis)",
+ "themis 0.8.0",
 ]
 
 [[package]]
@@ -2771,8 +2775,8 @@ dependencies = [
 
 [[package]]
 name = "themis"
-version = "0.6.0"
-source = "git+https://github.com/ryancinsight/themis#bdcddfe294f941ef2f84fd4ce38537906b0fec23"
+version = "0.8.0"
+source = "git+https://github.com/ryancinsight/themis#7392d33723dc9467c6fae3f6ab8ff734f1f42dda"
 dependencies = [
  "melinoe",
 ]

@@ -1,4 +1,9 @@
 # Apollo Checklist
+## Benchmark results refresh [patch]
+- [x] Regenerated `benchmark_results.md` with Apollo `xtask benchmark` quick profile output dated `2026-06-12 14:22 UTC`.
+- [x] Synchronized `Cargo.lock` with the active local Atlas provider patches so locked Apollo verification resolves Leto/Leto Ops `0.16.1` and Themis `0.7.0`.
+- Evidence tier: empirical Criterion median estimates from the generated clone-inclusive Apollo/RustFFT benchmark table. No optimization or speedup claim is made beyond the recorded benchmark values.
+
 ## Leto rank-deficient singular-values provider pin [patch]
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `a673325f61e933f6d3d6ecb9569d8f07c78152a8` (`0.14.2`).
 - [x] Imported Leto's rank-deficient singular-values support so Apollo consumes the latest provider-side nalgebra-parity surface without adding a downstream nalgebra adapter.
