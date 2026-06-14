@@ -76,7 +76,7 @@ repository = "https://github.com/ryancinsight/kwavers"
 anyhow = "1.0"
 approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
-ndarray = { version = "0.16", default-features = false }
+ndarray = { version = "0.17", default-features = false }
 num-complex = { version = "0.4", features = ["bytemuck"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "938d0c2bc094d3bbe7745d68d60e05a531e0cfc2", features = ["num-complex"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
