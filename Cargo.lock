@@ -74,7 +74,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -90,7 +90,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -105,7 +105,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -121,7 +121,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -135,7 +135,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -151,7 +151,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -167,7 +167,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "num-traits",
  "once_cell",
@@ -199,7 +199,7 @@ dependencies = [
  "criterion",
  "half",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "pollster 0.4.0",
  "wgpu",
@@ -216,7 +216,7 @@ dependencies = [
  "leto-ops",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -232,7 +232,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -247,7 +247,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -263,7 +263,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -278,7 +278,7 @@ dependencies = [
  "leto-ops",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -294,7 +294,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -363,7 +363,7 @@ dependencies = [
  "hermes-simd",
  "leto",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -378,7 +378,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "proptest",
  "wgpu",
 ]
@@ -393,7 +393,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -413,7 +413,7 @@ dependencies = [
  "criterion",
  "half",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "thiserror 1.0.69",
  "wgpu",
@@ -430,7 +430,7 @@ dependencies = [
  "apollo-fwht",
  "apollo-nufft",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "numpy",
  "pyo3",
@@ -446,7 +446,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -462,7 +462,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -477,7 +477,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -494,7 +494,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -523,7 +523,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -538,7 +538,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -568,7 +568,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -584,7 +584,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -599,7 +599,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -616,7 +616,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "wgpu",
 ]
@@ -648,7 +648,7 @@ dependencies = [
  "leto",
  "melinoe",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "rustfft",
  "serde",
@@ -665,7 +665,7 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "proptest",
  "serde",
@@ -681,7 +681,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
  "leto",
- "ndarray",
+ "ndarray 0.17.2",
  "wgpu",
 ]
 
@@ -1351,7 +1351,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.6.3"
+version = "0.8.0"
 dependencies = [
  "bytemuck",
  "thiserror 2.0.18",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.6.3"
+version = "0.8.0"
 dependencies = [
  "bytemuck",
  "hephaestus-core",
@@ -1402,7 +1402,7 @@ dependencies = [
  "hermes-numeric",
  "mnemosyne",
  "rkyv",
- "themis 0.8.0",
+ "themis 0.9.10",
 ]
 
 [[package]]
@@ -1564,12 +1564,12 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "leto"
-version = "0.18.1"
+version = "0.19.7"
 dependencies = [
  "bytemuck",
  "half",
  "mnemosyne",
- "ndarray",
+ "ndarray 0.17.2",
  "num-complex",
  "num-traits",
  "thiserror 2.0.18",
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.18.1"
+version = "0.19.7"
 dependencies = [
  "bytemuck",
  "half",
@@ -1722,7 +1722,7 @@ dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
  "num-complex",
- "themis 0.8.0",
+ "themis 0.9.10",
 ]
 
 [[package]]
@@ -1774,7 +1774,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis 0.8.0",
+ "themis 0.9.10",
 ]
 
 [[package]]
@@ -1848,7 +1848,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis 0.8.0",
+ "themis 0.9.10",
  "thiserror 1.0.69",
 ]
 
@@ -1858,6 +1858,7 @@ version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
+ "melinoe",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1881,7 +1882,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis 0.8.0",
+ "themis 0.9.10",
 ]
 
 [[package]]
@@ -1948,6 +1949,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndarray"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
+dependencies = [
+ "matrixmultiply",
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "portable-atomic",
+ "portable-atomic-util",
+ "rawpointer",
+]
+
+[[package]]
 name = "ndk-sys"
 version = "0.6.0+11769913"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2003,7 +2019,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94caae805f998a07d33af06e6a3891e38556051b8045c615470a71590e13e78"
 dependencies = [
  "libc",
- "ndarray",
+ "ndarray 0.16.1",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -2775,8 +2791,8 @@ dependencies = [
 
 [[package]]
 name = "themis"
-version = "0.8.0"
-source = "git+https://github.com/ryancinsight/themis#7392d33723dc9467c6fae3f6ab8ff734f1f42dda"
+version = "0.9.10"
+source = "git+https://github.com/ryancinsight/themis#a36a272a153b2f97f266928592d179b56dbdf24b"
 dependencies = [
  "melinoe",
 ]
