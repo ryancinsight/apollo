@@ -1038,7 +1038,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1351,7 +1351,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "bytemuck",
  "thiserror 2.0.18",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "bytemuck",
  "hephaestus-core",
@@ -1402,7 +1402,7 @@ dependencies = [
  "hermes-numeric",
  "mnemosyne",
  "rkyv",
- "themis 0.9.10",
+ "themis 0.9.11",
 ]
 
 [[package]]
@@ -1481,7 +1481,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1722,7 +1722,7 @@ dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
  "num-complex",
- "themis 0.9.10",
+ "themis 0.9.11",
 ]
 
 [[package]]
@@ -1774,7 +1774,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis 0.9.10",
+ "themis 0.9.11",
 ]
 
 [[package]]
@@ -1848,7 +1848,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis 0.9.10",
+ "themis 0.9.11",
  "thiserror 1.0.69",
 ]
 
@@ -1882,7 +1882,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis 0.9.10",
+ "themis 0.9.11",
 ]
 
 [[package]]
@@ -2561,7 +2561,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys",
 ]
 
 [[package]]
@@ -2686,7 +2686,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys",
 ]
 
 [[package]]
@@ -2754,7 +2754,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys",
 ]
 
 [[package]]
@@ -2776,8 +2776,8 @@ dependencies = [
 
 [[package]]
 name = "themis"
-version = "0.9.10"
-source = "git+https://github.com/ryancinsight/themis#a36a272a153b2f97f266928592d179b56dbdf24b"
+version = "0.9.11"
+source = "git+https://github.com/ryancinsight/themis#7c38eb23e40f30034a9b7fe57efc55fbc80ad012"
 dependencies = [
  "melinoe",
 ]
@@ -3200,7 +3200,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3280,15 +3280,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
 dependencies = [
  "windows-targets",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.61.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
-dependencies = [
- "windows-link",
 ]
 
 [[package]]
