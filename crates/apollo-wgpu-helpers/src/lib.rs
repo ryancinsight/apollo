@@ -165,7 +165,9 @@ impl WgpuDevice {
     #[must_use]
     #[inline]
     pub fn get_staging_buffer(&self, size: u64) -> wgpu::Buffer {
-        self.inner_device.get_staging_buffer(size)
+        self.inner_device
+            .get_staging_buffer(size)
+            .expect("Failed to allocate or acquire staging buffer from Hephaestus device")
     }
 
     /// Return a staging buffer back to the pool for reuse.
