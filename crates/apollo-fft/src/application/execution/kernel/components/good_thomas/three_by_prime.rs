@@ -7,6 +7,7 @@ apollo_fft_macros::generate_three_by_prime_dispatch! {
 
 /// Primes handled by three_by_prime dispatch (producing canonical
 /// 3×prime pairs).  Referenced by `fixed::FIXED_EXCLUDE_PRIMES`.
+#[allow(dead_code)]
 pub(crate) const THREE_BY_PRIME_PRIMES: &[usize] =
     &[5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 

@@ -728,15 +728,13 @@ fn assert_f32_codelet_forward_matches_direct(n: usize, tolerance: f64) {
 }
 
 #[test]
-fn planned_n72_f64_good_thomas_forward_matches_direct() {
+fn planned_n72_f64_codelet_forward_matches_direct() {
     let n = 72usize;
     let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
-    match &plan.strategy {
-        PlanStrategy::GoodThomas { n1, n2 } => {
-            assert_eq!((*n1, *n2), (9, 8));
-        }
-        _ => panic!("f64 N=72 must retain the static Good-Thomas route"),
-    }
+    assert!(
+        matches!(plan.strategy, PlanStrategy::ShortWinograd),
+        "f64 N=72 did not map to ShortWinograd"
+    );
     let input: Vec<Complex64> = (0..n)
         .map(|k| {
             let x = k as f64;
@@ -906,3 +904,42 @@ fn planned_n512_f32_pot_zst_forward_matches_direct() {
         "planned f32 PoT N=512 (ZST) forward mismatch max_err={max_err:.2e}"
     );
 }
+
+#[test]
+fn planned_new_winograd_composite_sizes_match_direct() {
+    let sizes = [
+        72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484
+    ];
+    for &n in &sizes {
+        // test f64
+        let plan64 = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
+        if n != 128 && n != 144 && n != 180 {
+            assert!(
+                matches!(plan64.strategy, PlanStrategy::ShortWinograd),
+                "f64 size {n} did not map to ShortWinograd"
+            );
+        }
+        let input64 = signal64(n);
+        let expected64 = dft_forward(&input64);
+        let mut actual64 = input64;
+        plan64.forward_complex_slice_inplace(&mut actual64);
+        let err64 = actual64.iter().zip(expected64.iter()).map(|(a, b)| (*a - *b).norm()).fold(0.0f64, f64::max);
+        assert!(err64 <= 1.0e-9, "f64 size {n} mismatch err={err64:.2e}");
+
+        // test f32
+        let plan32 = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
+        if n != 128 && n != 144 && n != 180 {
+            assert!(
+                matches!(plan32.strategy, PlanStrategy::ShortWinograd),
+                "f32 size {n} did not map to ShortWinograd"
+            );
+        }
+        let input32 = signal32(n);
+        let expected32 = dft_forward(&input32);
+        let mut actual32 = input32;
+        plan32.forward_complex_slice_inplace(&mut actual32);
+        let err32 = actual32.iter().zip(expected32.iter()).map(|(a, b)| f64::from((*a - *b).norm())).fold(0.0f64, f64::max);
+        assert!(err32 <= 1.0e-3, "f32 size {n} mismatch err={err32:.2e}");
+    }
+}
+

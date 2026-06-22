@@ -28,3 +28,11 @@ pub const DEFAULT_NUFFT_KERNEL_WIDTH: usize = 6;
 
 /// Default oversampling factor.
 pub const DEFAULT_NUFFT_OVERSAMPLING: usize = 2;
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

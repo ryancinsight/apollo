@@ -7,7 +7,7 @@ use pyo3::types::PyDict;
 use super::support::precision_name;
 
 fn wgpu_backend_usable() -> bool {
-    apollo_fft_wgpu::WgpuBackend::try_default().is_ok()
+    apollo_fft::WgpuBackend::try_default().is_ok()
 }
 
 /// Return the backend names that are genuinely usable from Python on this host.
@@ -54,7 +54,7 @@ pub(crate) fn backend_capabilities(py: Python<'_>) -> PyResult<PyObject> {
     backends.set_item("cpu", cpu)?;
 
     let wgpu = PyDict::new(py);
-    if let Ok(backend) = apollo_fft_wgpu::WgpuBackend::try_default() {
+    if let Ok(backend) = apollo_fft::WgpuBackend::try_default() {
         let caps = backend.capabilities();
         wgpu.set_item("available", true)?;
         wgpu.set_item("supports_1d", caps.supports_1d)?;

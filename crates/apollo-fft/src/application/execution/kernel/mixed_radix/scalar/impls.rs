@@ -314,8 +314,7 @@ unsafe fn rotate_plus_i(v: std::arch::x86_64::__m128d) -> std::arch::x86_64::__m
 }
 
 impl MixedRadixScalar for f32 {
-    const HALF_CYCLIC_RADER_THRESHOLD: usize =
-        crate::application::execution::kernel::components::rader::HALF_CYCLIC_THRESHOLD;
+    const HALF_CYCLIC_RADER_THRESHOLD: usize = 32;
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[];
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 2, 5, 5];
     const FORCE_COMPOSITE_63: bool = true;
@@ -1129,20 +1128,45 @@ impl MixedRadixScalar for f32 {
         }
     }
 
-    fn use_generated_codelet_plan(_n: usize) -> bool {
-        // Default; actual policy in higher layers or for f32 reduced.
-        false
+    fn use_generated_codelet_plan(n: usize) -> bool {
+        matches!(
+            n,
+            72 | 81
+                | 96
+                | 99
+                | 108
+                | 112
+                | 120
+                | 121
+                | 126
+                | 128
+                | 144
+                | 154
+                | 168
+                | 180
+                | 189
+                | 222
+                | 242
+                | 246
+                | 259
+                | 275
+                | 280
+                | 296
+                | 363
+                | 400
+                | 484
+        )
     }
 }
 
 impl MixedRadixScalar for f64 {
-    const HALF_CYCLIC_RADER_THRESHOLD: usize = 1024;
+    const HALF_CYCLIC_RADER_THRESHOLD: usize = 32;
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[67];
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 5, 5, 2];
     const FORCE_COMPOSITE_63: bool = false;
     const FORCE_COMPOSITE_72: bool = false;
     const PREFER_BLUESTEIN_MID_RADER: bool = false;
-    const BLUESTEIN_PAD_POWER_OF_TWO: bool = false;
+    const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
     const BLUESTEIN_NATIVE_PHASE_TRIG: bool = false;
 
     type Complex = Complex64;
@@ -2257,8 +2281,34 @@ impl MixedRadixScalar for f64 {
         }
     }
 
-    fn use_generated_codelet_plan(_n: usize) -> bool {
-        false
+    fn use_generated_codelet_plan(n: usize) -> bool {
+        matches!(
+            n,
+            72 | 81
+                | 96
+                | 99
+                | 108
+                | 112
+                | 120
+                | 121
+                | 126
+                | 128
+                | 144
+                | 154
+                | 168
+                | 180
+                | 189
+                | 222
+                | 242
+                | 246
+                | 259
+                | 275
+                | 280
+                | 296
+                | 363
+                | 400
+                | 484
+        )
     }
 }
 

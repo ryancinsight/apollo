@@ -26,3 +26,11 @@ pub use infrastructure::kernel::resample::{
     calculate_log_resample, exp_resample, inverse_log_frequency_spectrum, log_frequency_spectrum,
     mellin_moment,
 };
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

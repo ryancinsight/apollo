@@ -280,18 +280,7 @@ fn pfa_fft_ordered_rader_n1<
 /// `THREE_BY_PRIME_PRIMES` changes size.
 // NOTE: const-block `a.len()` cannot appear in array-size position on
 // the current stable toolchain, so the length is hardcoded here.
-pub(super) const ORDERED_RADER_SKIP_PRIMES: [usize; 16] = {
-    let a = three_by_prime::THREE_BY_PRIME_PRIMES;
-    let mut merged = [0usize; 16];
-    merged[0] = 2;
-    merged[1] = 3;
-    let mut i = 0;
-    while i < a.len() {
-        merged[2 + i] = a[i];
-        i += 1;
-    }
-    merged
-};
+pub(super) const ORDERED_RADER_SKIP_PRIMES: [usize; 2] = [2, 3];
 
 fn ordered_rader_n1_config(n1: usize) -> Option<(usize, usize)> {
     if ORDERED_RADER_SKIP_PRIMES.contains(&n1) {

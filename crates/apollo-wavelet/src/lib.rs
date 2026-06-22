@@ -25,3 +25,11 @@ pub use application::execution::plan::dwt::{DwtLetoCoefficients, DwtPlan, Wavele
 pub use domain::contracts::error::{WaveletError, WaveletResult};
 pub use domain::metadata::wavelet::{ContinuousWavelet, DiscreteWavelet};
 pub use domain::spectrum::coefficients::{CwtCoefficients, DwtCoefficients};
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

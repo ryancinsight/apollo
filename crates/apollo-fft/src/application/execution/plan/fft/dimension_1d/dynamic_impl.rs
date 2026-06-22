@@ -249,9 +249,13 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 assign_winograd!(168);
                 assign_winograd!(180);
                 assign_winograd!(189);
+                assign_winograd!(222);
                 assign_winograd!(242);
+                assign_winograd!(246);
+                assign_winograd!(259);
                 assign_winograd!(275);
                 assign_winograd!(280);
+                assign_winograd!(296);
                 assign_winograd!(363);
                 assign_winograd!(400);
                 assign_winograd!(484);

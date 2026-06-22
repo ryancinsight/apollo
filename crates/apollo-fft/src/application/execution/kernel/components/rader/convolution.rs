@@ -65,14 +65,6 @@ macro_rules! with_winograd_pair_primes {
     }};
 }
 
-/// Minimum Rader convolution length `M = N - 1` for the half-cyclic CRT split.
-///
-/// The Liu-Tolimieri half-cyclic strategy factors
-/// `x^(2m)-1 = (x^m-1)(x^m+1)`, computes one cyclic and one negacyclic
-/// length-`m` convolution, then recombines the two residue classes. Below this
-/// threshold, the split/twist/recombine passes cost more than the saved FFT
-/// length in the current CPU kernel family.
-pub(crate) const HALF_CYCLIC_THRESHOLD: usize = 1024;
 
 /// In-place circular convolution via forward FFT -> pointwise multiply -> inverse FFT.
 ///

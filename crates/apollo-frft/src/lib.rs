@@ -27,3 +27,11 @@ pub use crate::application::execution::plan::frft::dimension_1d::{
 pub use crate::application::execution::plan::frft::storage::FrftStorage;
 pub use crate::application::execution::plan::frft::unitary::{GrunbaumBasis, UnitaryFrftPlan};
 pub use crate::domain::contracts::error::FrftError;
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

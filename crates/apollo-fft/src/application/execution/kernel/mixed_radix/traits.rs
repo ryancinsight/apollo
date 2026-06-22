@@ -15,7 +15,8 @@ pub use crate::application::execution::kernel::components::winograd::ShortWinogr
 pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
     28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 128,
+    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154,
+    168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484,
 ];
 
 /// O(log N) membership test for `SHORT_WINOGRAD_SIZES` via binary search.
@@ -81,9 +82,11 @@ pub(crate) fn short_winograd<
         return false;
     }
     let handled = short_winograd_match!(
-        data, F, INVERSE, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+        data, F, INVERSE,
+        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
         22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 128
+        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 96, 99, 108, 112,
+        120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484
     );
 
     if handled && INVERSE && NORMALIZE {
@@ -219,6 +222,10 @@ impl_short_dft!(280, winograd_impl, dft280_impl);
 impl_short_dft!(363, winograd_impl, dft363_impl);
 impl_short_dft!(400, winograd_impl, dft400_impl);
 impl_short_dft!(484, winograd_impl, dft484_impl);
+impl_short_dft!(222, winograd_impl, dft222_impl);
+impl_short_dft!(246, winograd_impl, dft246_impl);
+impl_short_dft!(259, winograd_impl, dft259_impl);
+impl_short_dft!(296, winograd_impl, dft296_impl);
 
 #[cfg(test)]
 mod tests {

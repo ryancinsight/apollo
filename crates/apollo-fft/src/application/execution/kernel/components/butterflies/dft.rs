@@ -376,4 +376,5 @@ pub(crate) use super::super::winograd::composite::{
     dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
     dft168_impl, dft180_impl, dft189_impl, dft242_impl, dft275_impl, dft280_impl, dft363_impl,
     dft400_impl, dft484_impl, dft72_impl, dft96_impl, dft99_impl,
+    dft222_impl, dft246_impl, dft259_impl, dft296_impl,
 };

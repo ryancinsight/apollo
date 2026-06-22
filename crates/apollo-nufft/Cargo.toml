@@ -9,11 +9,25 @@ description = "Non-uniform FFT plans and utilities for Apollo"
 
 
 [features]
+wgpu = [
+    "dep:apollo-wgpu-helpers",
+    "dep:hephaestus-wgpu",
+    "dep:wgpu",
+    "dep:pollster",
+    "dep:bytemuck"
+]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
+diagnostics = []
+debug-readbacks = []
 
 [dependencies]
+apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
+hephaestus-wgpu = { workspace = true, optional = true }
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
 apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
@@ -27,6 +41,12 @@ thiserror = "1.0"
 [dev-dependencies]
 approx = "0.5"
 proptest = "1.6"
+criterion = { workspace = true }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "buffer_reuse"
+harness = false
+required-features = ["wgpu"]

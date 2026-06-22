@@ -8,6 +8,11 @@ repository = "https://github.com/ryancinsight/kwavers"
 description = "Reusable FFT planning, execution, and cache abstractions for Apollo"
 
 [dependencies]
+apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
+hephaestus-wgpu = { workspace = true, optional = true }
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { version = "2.4", features = ["serde", "use-intrinsics"] }
 hermes-simd = { workspace = true }
@@ -23,6 +28,10 @@ mnemosyne = { workspace = true }
 rustc-hash = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
+coeus-core = { path = "../../../coeus/coeus-core" }
+coeus-tensor = { path = "../../../coeus/coeus-tensor" }
+coeus-autograd = { path = "../../../coeus/coeus-autograd" }
+coeus-ops = { path = "../../../coeus/coeus-ops" }
 
 [dev-dependencies]
 approx = "0.5"
@@ -31,6 +40,14 @@ proptest = "1.6"
 rustfft = { workspace = true }
 
 [features]
+wgpu = [
+    "dep:apollo-wgpu-helpers",
+    "dep:hephaestus-wgpu",
+    "dep:wgpu",
+    "dep:pollster",
+    "dep:bytemuck"
+]
+native-f16 = ["wgpu"]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
@@ -55,3 +72,8 @@ harness = false
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "buffer_reuse"
+harness = false
+required-features = ["wgpu"]

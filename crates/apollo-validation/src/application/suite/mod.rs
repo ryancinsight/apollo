@@ -177,9 +177,9 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
 
 /// Validate WGPU availability and record adapter-backed status.
 pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
-    let surface_reported_available = apollo_fft_wgpu::gpu_fft_available();
+    let surface_reported_available = apollo_fft::gpu_fft_available();
 
-    let backend = match apollo_fft_wgpu::WgpuBackend::try_default() {
+    let backend = match apollo_fft::WgpuBackend::try_default() {
         Err(error) => {
             return Ok(GpuFftReport {
                 surface_reported_available,

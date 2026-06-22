@@ -19,3 +19,11 @@ pub use application::execution::plan::dctdst::{DctDstPlan, RealTransformStorage}
 pub use domain::contracts::error::{DctDstError, DctDstResult};
 pub use domain::metadata::kind::{RealTransformConfig, RealTransformKind};
 pub use infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

@@ -45,6 +45,10 @@ pub mod infrastructure;
 /// API wrappers.
 pub mod api;
 
+/// Coeus integration.
+pub mod coeus;
+pub use coeus_core;
+
 #[cfg(test)]
 mod lib_tests;
 
@@ -73,3 +77,11 @@ pub use api::icfft::*;
 pub use api::irfft::*;
 pub use api::rfft::*;
 pub use api::utils::*;
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

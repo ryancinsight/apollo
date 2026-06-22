@@ -16,6 +16,8 @@ mnemosyne-memory = []
 hephaestus-wgpu = { workspace = true }
 thiserror = "1.0"
 wgpu = { version = "26.0", features = ["wgsl"] }
+coeus-core = { path = "../../../coeus/coeus-core" }
+bytemuck = { workspace = true }
 
 [lints]
 workspace = true

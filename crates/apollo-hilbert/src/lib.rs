@@ -27,3 +27,11 @@ pub use domain::signal::analytic::AnalyticSignal;
 pub use infrastructure::kernel::direct::{
     analytic_signal, analytic_signal_into, hilbert_transform,
 };
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

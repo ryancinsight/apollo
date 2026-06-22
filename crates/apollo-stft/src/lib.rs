@@ -14,3 +14,11 @@ pub use application::execution::plan::stft::storage::{
 };
 pub use domain::contracts::error::StftError;
 pub use infrastructure::transport::cpu::{istft, istft_leto, stft, stft_leto};
+
+/// GPU-accelerated backend using WGPU.
+#[cfg(feature = "wgpu")]
+pub mod wgpu_backend {
+    pub use crate::infrastructure::transport::gpu::*;
+}
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::{*};

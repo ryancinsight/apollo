@@ -18,9 +18,8 @@ parallel = ["apollo-fft/parallel", "apollo-dctdst/parallel", "apollo-dht/paralle
 mnemosyne-memory = ["apollo-fft/mnemosyne-memory", "apollo-dctdst/mnemosyne-memory", "apollo-dht/mnemosyne-memory", "apollo-fwht/mnemosyne-memory", "apollo-nufft/mnemosyne-memory"]
 
 [dependencies]
-apollo-fft = { path = "../apollo-fft" }
+apollo-fft = { path = "../apollo-fft", features = ["wgpu"] }
 apollo-nufft = { path = "../apollo-nufft" }
-apollo-fft-wgpu = { path = "../apollo-fft-wgpu" }
 apollo-dht = { path = "../apollo-dht" }
 apollo-fwht = { path = "../apollo-fwht" }
 apollo-dctdst = { path = "../apollo-dctdst" }
