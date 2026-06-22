@@ -12,7 +12,7 @@ apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
-bytemuck = { workspace = true, optional = true }
+bytemuck = { workspace = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { version = "2.4", features = ["serde", "use-intrinsics"] }
 hermes-simd = { workspace = true }
@@ -44,8 +44,7 @@ wgpu = [
     "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
     "dep:wgpu",
-    "dep:pollster",
-    "dep:bytemuck"
+    "dep:pollster"
 ]
 native-f16 = ["wgpu"]
 default = ["parallel", "mnemosyne-memory"]

@@ -116,5 +116,6 @@ pub(crate) unsafe fn stockham_twiddle_subslice<T>(
     len: usize,
 ) -> &[T] {
     debug_assert!(start + len <= twiddles.len());
-    unsafe { std::slice::from_raw_parts(twiddles.as_ptr().add(start), len) }
+    // SAFETY: Covered by caller precondition that start + len <= twiddles.len().
+    unsafe { twiddles.get_unchecked(start..start + len) }
 }

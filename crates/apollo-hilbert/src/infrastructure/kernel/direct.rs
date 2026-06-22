@@ -144,10 +144,7 @@ fn apply_analytic_mask_hermes(spectrum: &mut [Complex64], positive_end: usize) {
 }
 
 fn complex_lanes_mut(values: &mut [Complex64]) -> &mut [f64] {
-    let scalar_len = values.len() * 2;
-    // SAFETY: num_complex::Complex64 stores adjacent `re, im` f64 lanes; this
-    // helper preserves the slice lifetime and does not change alignment.
-    unsafe { core::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<f64>(), scalar_len) }
+    bytemuck::cast_slice_mut(values)
 }
 
 fn analytic_mask_scale(len: usize, positive_end: usize, k: usize) -> f64 {

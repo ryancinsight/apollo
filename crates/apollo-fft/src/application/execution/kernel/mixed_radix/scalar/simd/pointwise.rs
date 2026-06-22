@@ -3,26 +3,16 @@ use num_complex::{Complex32, Complex64};
 
 #[inline]
 fn pointwise_mul_precise_hermes<const CONJ_B: bool>(a: &mut [Complex64], b: &[Complex64]) {
-    let scalar_len = a.len() * 2;
-    // SAFETY: num_complex::Complex64 stores adjacent `re, im` f64 lanes; this
-    // file already uses the same representation for the AVX/FMA hot path.
-    let a_lanes =
-        unsafe { core::slice::from_raw_parts_mut(a.as_mut_ptr().cast::<f64>(), scalar_len) };
-    // SAFETY: same representation as `a_lanes`; `b` is immutable and length-matched by caller.
-    let b_lanes = unsafe { core::slice::from_raw_parts(b.as_ptr().cast::<f64>(), scalar_len) };
+    let a_lanes = bytemuck::cast_slice_mut(a);
+    let b_lanes = bytemuck::cast_slice(b);
     interleaved_complex_mul_assign::<f64, PreferredArch, CONJ_B>(a_lanes, b_lanes)
         .expect("pointwise operands must have matching complex lengths");
 }
 
 #[inline]
 fn pointwise_mul_reduced_hermes<const CONJ_B: bool>(a: &mut [Complex32], b: &[Complex32]) {
-    let scalar_len = a.len() * 2;
-    // SAFETY: num_complex::Complex32 stores adjacent `re, im` f32 lanes; this
-    // file already uses the same representation for the AVX/FMA hot path.
-    let a_lanes =
-        unsafe { core::slice::from_raw_parts_mut(a.as_mut_ptr().cast::<f32>(), scalar_len) };
-    // SAFETY: same representation as `a_lanes`; `b` is immutable and length-matched by caller.
-    let b_lanes = unsafe { core::slice::from_raw_parts(b.as_ptr().cast::<f32>(), scalar_len) };
+    let a_lanes = bytemuck::cast_slice_mut(a);
+    let b_lanes = bytemuck::cast_slice(b);
     interleaved_complex_mul_assign::<f32, PreferredArch, CONJ_B>(a_lanes, b_lanes)
         .expect("pointwise operands must have matching complex lengths");
 }

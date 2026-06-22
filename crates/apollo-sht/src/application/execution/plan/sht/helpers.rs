@@ -124,8 +124,7 @@ pub(super) fn sht_inverse_sample_hermes(
 
 #[inline]
 pub(super) fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
-    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
+    bytemuck::cast_slice(values)
 }
 
 #[cfg(test)]

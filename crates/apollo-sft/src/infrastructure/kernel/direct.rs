@@ -85,8 +85,7 @@ fn dft_row_hermes(input_lanes: &[f64], k: usize, n: usize, sign: f64, tau: f64) 
 #[inline]
 #[cfg(test)]
 fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
-    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
-    unsafe { core::slice::from_raw_parts(values.as_ptr().cast::<f64>(), values.len() * 2) }
+    bytemuck::cast_slice(values)
 }
 
 #[cfg(test)]

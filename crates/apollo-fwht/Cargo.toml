@@ -13,8 +13,7 @@ wgpu = [
     "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
     "dep:wgpu",
-    "dep:pollster",
-    "dep:bytemuck"
+    "dep:pollster"
 ]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
@@ -25,7 +24,7 @@ apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
-bytemuck = { workspace = true, optional = true }
+bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
 ndarray = { workspace = true }
 leto = { workspace = true }

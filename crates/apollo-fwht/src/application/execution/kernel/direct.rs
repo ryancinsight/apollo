@@ -201,10 +201,6 @@ pub fn fwht_inplace(data: &mut [f64]) {
 
 /// In-place Walsh-Hadamard transform over a complex slice.
 pub fn fwht_complex_inplace(data: &mut [Complex64]) {
-    let n = data.len();
-    let ptr = data.as_mut_ptr().cast::<f64>();
-    // SAFETY: Complex64 is represented as two adjacent f64 values in num-complex,
-    // so N complex elements expose exactly 2N contiguous f64 lanes.
-    let slice_f64 = unsafe { core::slice::from_raw_parts_mut(ptr, n * 2) };
+    let slice_f64 = bytemuck::cast_slice_mut(data);
     wht_inplace_f64(slice_f64, 2);
 }
