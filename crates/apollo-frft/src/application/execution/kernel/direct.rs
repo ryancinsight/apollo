@@ -168,8 +168,7 @@ fn fractional_row_hermes(
 
 #[inline]
 fn interleaved_lanes(input: &[Complex64]) -> &[f64] {
-    // SAFETY: Complex64 is #[repr(C)] and has the same layout and alignment as [f64; 2].
-    unsafe { core::slice::from_raw_parts(input.as_ptr().cast::<f64>(), input.len() * 2) }
+    bytemuck::cast_slice(input)
 }
 
 fn fill_centered_dft_weight_lanes(lanes: &mut [f64], n: usize, center: f64, sign: f64, u: f64) {

@@ -120,11 +120,7 @@ impl CztWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
-            // Safety: T is Complex32, so &[T] is layout-compatible with &[Complex32].
-            let slice_c32 = unsafe {
-                std::slice::from_raw_parts(input.as_ptr().cast::<Complex32>(), input.len())
-            };
+        let represented = if let Some(slice_c32) = T::as_c32_slice(input) {
             std::borrow::Cow::Borrowed(slice_c32)
         } else {
             let vec: Vec<Complex32> = input
@@ -137,14 +133,7 @@ impl CztWgpuBackend {
             std::borrow::Cow::Owned(vec)
         };
         let computed = self.execute_forward(plan, &represented)?;
-        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
-            // Safety: T is Complex32, so &mut [T] is layout-compatible with &mut [Complex32].
-            let slice_c32 = unsafe {
-                std::slice::from_raw_parts_mut(
-                    output.as_mut_ptr().cast::<Complex32>(),
-                    output.len(),
-                )
-            };
+        if let Some(slice_c32) = T::as_c32_slice_mut(output) {
             slice_c32.copy_from_slice(&computed);
         } else {
             for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {

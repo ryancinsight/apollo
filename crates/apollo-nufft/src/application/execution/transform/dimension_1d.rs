@@ -468,6 +468,34 @@ pub trait NufftComplexStorage: Copy + Send + Sync + 'static {
 
     /// Convert owner arithmetic result back to storage.
     fn from_complex64(value: Complex64) -> Self;
+
+    /// View slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View slice as `Complex64` if layout is identical.
+    #[inline]
+    fn as_c64_slice(slice: &[Self]) -> Option<&[Complex64]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `Complex64` if layout is identical.
+    #[inline]
+    fn as_c64_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex64]> {
+        let _ = slice;
+        None
+    }
 }
 
 impl NufftComplexStorage for Complex64 {
@@ -480,6 +508,16 @@ impl NufftComplexStorage for Complex64 {
     fn from_complex64(value: Complex64) -> Self {
         value
     }
+
+    #[inline]
+    fn as_c64_slice(slice: &[Self]) -> Option<&[Complex64]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_c64_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex64]> {
+        Some(slice)
+    }
 }
 
 impl NufftComplexStorage for Complex32 {
@@ -491,6 +529,16 @@ impl NufftComplexStorage for Complex32 {
 
     fn from_complex64(value: Complex64) -> Self {
         Complex32::new(value.re as f32, value.im as f32)
+    }
+
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        Some(slice)
     }
 }
 

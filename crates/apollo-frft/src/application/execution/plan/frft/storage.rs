@@ -23,6 +23,20 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic result back to storage.
     fn from_complex64(value: Complex64) -> Self;
 
+    /// View slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        let _ = slice;
+        None
+    }
+
     /// Execute forward transform into caller-owned contiguous storage.
     fn forward_slice_into(
         plan: &FrftPlan,
@@ -157,6 +171,16 @@ impl FrftStorage for Complex32 {
 
     fn from_complex64(value: Complex64) -> Self {
         Complex32::new(value.re as f32, value.im as f32)
+    }
+
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        Some(slice)
     }
 }
 

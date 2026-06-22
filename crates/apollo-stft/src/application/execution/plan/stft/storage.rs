@@ -11,6 +11,20 @@ pub trait StftRealStorage: Copy + Send + Sync + 'static {
 
     /// Convert storage into owner `f64` arithmetic.
     fn to_f64(self) -> f64;
+
+    /// View slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        let _ = slice;
+        None
+    }
 }
 
 impl StftRealStorage for f64 {
@@ -26,6 +40,16 @@ impl StftRealStorage for f32 {
 
     fn to_f64(self) -> f64 {
         f64::from(self)
+    }
+
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        Some(slice)
     }
 }
 
@@ -44,6 +68,13 @@ pub trait StftRealOutputStorage: Copy + Send + Sync + 'static {
 
     /// Convert owner arithmetic output into storage.
     fn from_f64(value: f64) -> Self;
+
+    /// View mutable slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        let _ = slice;
+        None
+    }
 }
 
 impl StftRealOutputStorage for f64 {
@@ -59,6 +90,11 @@ impl StftRealOutputStorage for f32 {
 
     fn from_f64(value: f64) -> Self {
         value as f32
+    }
+
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        Some(slice)
     }
 }
 
@@ -77,6 +113,13 @@ pub trait StftSpectrumStorage: Copy + Send + Sync + 'static {
 
     /// Convert owner complex result into storage.
     fn from_complex64(value: Complex64) -> Self;
+
+    /// View mutable slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        let _ = slice;
+        None
+    }
 }
 
 impl StftSpectrumStorage for Complex64 {
@@ -92,6 +135,11 @@ impl StftSpectrumStorage for Complex32 {
 
     fn from_complex64(value: Complex64) -> Self {
         Complex32::new(value.re as f32, value.im as f32)
+    }
+
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        Some(slice)
     }
 }
 
@@ -113,6 +161,20 @@ pub trait StftSpectrumInput: Copy + Send + Sync + 'static {
 
     /// Convert storage into owner `Complex64` arithmetic.
     fn to_complex64(self) -> Complex64;
+
+    /// View slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        let _ = slice;
+        None
+    }
 }
 
 impl StftSpectrumInput for Complex64 {
@@ -128,6 +190,16 @@ impl StftSpectrumInput for Complex32 {
 
     fn to_complex64(self) -> Complex64 {
         Complex64::new(f64::from(self.re), f64::from(self.im))
+    }
+
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        Some(slice)
     }
 }
 

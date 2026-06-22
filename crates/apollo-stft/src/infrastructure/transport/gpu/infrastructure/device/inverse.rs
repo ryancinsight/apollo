@@ -109,11 +109,7 @@ impl StftWgpuBackend {
                 actual: output.len(),
             });
         }
-        let promoted = if std::any::TypeId::of::<I>() == std::any::TypeId::of::<Complex32>() {
-            // Safety: I is Complex32, so &[I] is layout-compatible with &[Complex32].
-            let slice_c32 = unsafe {
-                std::slice::from_raw_parts(spectrum.as_ptr().cast::<Complex32>(), spectrum.len())
-            };
+        let promoted = if let Some(slice_c32) = I::as_c32_slice(spectrum) {
             std::borrow::Cow::Borrowed(slice_c32)
         } else {
             let vec: Vec<Complex32> = spectrum

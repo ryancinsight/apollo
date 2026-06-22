@@ -220,10 +220,7 @@ impl DhtWgpuBackend {
 }
 
 fn typed_to_f32<T: HartleyStorage>(input: &[T]) -> Cow<'_, [f32]> {
-    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-        // Safety: T is f32, so &[T] is layout-compatible with &[f32].
-        let slice_f32 =
-            unsafe { std::slice::from_raw_parts(input.as_ptr().cast::<f32>(), input.len()) };
+    if let Some(slice_f32) = T::as_f32_slice(input) {
         Cow::Borrowed(slice_f32)
     } else {
         let vec: Vec<f32> = input.iter().map(|value| value.to_f64() as f32).collect();
@@ -232,11 +229,7 @@ fn typed_to_f32<T: HartleyStorage>(input: &[T]) -> Cow<'_, [f32]> {
 }
 
 fn write_typed_output<T: HartleyStorage>(source: &[f32], output: &mut [T]) {
-    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-        // Safety: T is f32, so &mut [T] is layout-compatible with &mut [f32].
-        let slice_f32 = unsafe {
-            std::slice::from_raw_parts_mut(output.as_mut_ptr().cast::<f32>(), output.len())
-        };
+    if let Some(slice_f32) = T::as_f32_slice_mut(output) {
         slice_f32.copy_from_slice(source);
     } else {
         for (slot, value) in output.iter_mut().zip(source.iter().copied()) {

@@ -23,6 +23,20 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
     /// Convert an owner arithmetic result back to storage.
     fn from_f64(value: f64) -> Self;
 
+    /// View slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        let _ = slice;
+        None
+    }
+
     /// Execute forward transform into caller-owned contiguous storage.
     fn forward_slice_into(
         plan: &FwhtPlan,
@@ -164,6 +178,16 @@ impl FwhtStorage for f32 {
             *value *= scale;
         }
         Ok(())
+    }
+
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        Some(slice)
     }
 }
 

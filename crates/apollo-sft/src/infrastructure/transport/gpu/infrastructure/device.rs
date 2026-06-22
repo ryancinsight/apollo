@@ -152,13 +152,18 @@ impl SftWgpuBackend {
         if precision.storage != expected.storage || precision.compute != expected.compute {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
-        let represented: Vec<Complex32> = input
-            .iter()
-            .map(|v| {
-                let c = v.to_complex64();
-                Complex32::new(c.re as f32, c.im as f32)
-            })
-            .collect();
+        let represented = if let Some(slice_c32) = T::as_c32_slice(input) {
+            Cow::Borrowed(slice_c32)
+        } else {
+            let vec: Vec<Complex32> = input
+                .iter()
+                .map(|v| {
+                    let c = v.to_complex64();
+                    Complex32::new(c.re as f32, c.im as f32)
+                })
+                .collect();
+            Cow::Owned(vec)
+        };
         self.execute_forward(plan, &represented)
     }
 

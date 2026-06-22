@@ -89,10 +89,7 @@ impl StftWgpuBackend {
         {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
-        let represented = if std::any::TypeId::of::<I>() == std::any::TypeId::of::<f32>() {
-            // Safety: I is f32, so &[I] is layout-compatible with &[f32].
-            let slice_f32 =
-                unsafe { std::slice::from_raw_parts(signal.as_ptr().cast::<f32>(), signal.len()) };
+        let represented = if let Some(slice_f32) = I::as_f32_slice(signal) {
             std::borrow::Cow::Borrowed(slice_f32)
         } else {
             let vec: Vec<f32> = signal.iter().map(|v| v.to_f64() as f32).collect();

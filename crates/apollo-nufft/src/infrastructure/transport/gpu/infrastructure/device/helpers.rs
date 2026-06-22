@@ -45,11 +45,7 @@ pub(crate) fn validate_typed_profile<T: NufftComplexStorage>(
 }
 
 pub(crate) fn typed_to_complex32<T: NufftComplexStorage>(values: &[T]) -> Cow<'_, [Complex32]> {
-    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex32>() {
-        // Safety: T is Complex32, so &[T] is layout-compatible with &[Complex32].
-        let slice_c32 = unsafe {
-            std::slice::from_raw_parts(values.as_ptr().cast::<Complex32>(), values.len())
-        };
+    if let Some(slice_c32) = T::as_c32_slice(values) {
         Cow::Borrowed(slice_c32)
     } else {
         let vec: Vec<Complex32> = values
@@ -65,11 +61,7 @@ pub(crate) fn typed_to_complex32<T: NufftComplexStorage>(values: &[T]) -> Cow<'_
 }
 
 pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], target: &mut [T]) {
-    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Complex64>() {
-        // Safety: T is Complex64, so &mut [T] is layout-compatible with &mut [Complex64].
-        let slice_c64 = unsafe {
-            std::slice::from_raw_parts_mut(target.as_mut_ptr().cast::<Complex64>(), target.len())
-        };
+    if let Some(slice_c64) = T::as_c64_slice_mut(target) {
         slice_c64.copy_from_slice(source);
     } else {
         for (slot, value) in target.iter_mut().zip(source.iter().copied()) {

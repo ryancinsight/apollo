@@ -360,13 +360,7 @@ impl StftGpuBuffers {
     /// Length = `frame_count * frame_len`.
     #[must_use]
     pub fn fwd_output(&self) -> &[Complex32] {
-        // SAFETY: ComplexPod and Complex32 have identical memory layout.
-        unsafe {
-            std::slice::from_raw_parts(
-                self.fwd_output_host.as_ptr().cast::<Complex32>(),
-                self.fwd_output_host.len(),
-            )
-        }
+        bytemuck::cast_slice(&self.fwd_output_host)
     }
 
     /// Return the reconstructed signal computed by the most recent

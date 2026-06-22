@@ -255,6 +255,20 @@ pub trait HilbertStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic result back to storage.
     fn from_f64(value: f64) -> Self;
 
+    /// View slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        let _ = slice;
+        None
+    }
+
     /// Compute the analytic signal from typed input storage.
     fn analytic_signal(
         plan: &HilbertPlan,
@@ -337,6 +351,16 @@ impl HilbertStorage for f32 {
 
     fn from_f64(value: f64) -> Self {
         value as f32
+    }
+
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        Some(slice)
     }
 }
 

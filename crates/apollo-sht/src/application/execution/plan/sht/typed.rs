@@ -22,6 +22,20 @@ pub trait ShtRealStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic back to storage.
     fn from_f64(value: f64) -> Self;
 
+    /// View slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `f32` if layout is identical.
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        let _ = slice;
+        None
+    }
+
     /// Execute typed forward real SHT.
     fn forward_real_into<O: ShtComplexStorage>(
         plan: &ShtPlan,
@@ -79,6 +93,16 @@ impl ShtRealStorage for f32 {
     fn from_f64(value: f64) -> Self {
         value as f32
     }
+
+    #[inline]
+    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
+        Some(slice)
+    }
 }
 
 impl ShtRealStorage for f16 {
@@ -103,6 +127,20 @@ pub trait ShtComplexStorage: Copy + Send + Sync + 'static {
 
     /// Convert owner arithmetic back to storage.
     fn from_complex64(value: Complex64) -> Self;
+
+    /// View slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        let _ = slice;
+        None
+    }
+
+    /// View mutable slice as `Complex32` if layout is identical.
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        let _ = slice;
+        None
+    }
 
     /// Execute typed forward complex SHT.
     fn forward_complex_into<O: ShtComplexStorage>(
@@ -244,6 +282,16 @@ impl ShtComplexStorage for Complex32 {
 
     fn from_complex64(value: Complex64) -> Self {
         Complex32::new(value.re as f32, value.im as f32)
+    }
+
+    #[inline]
+    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
+        Some(slice)
+    }
+
+    #[inline]
+    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
+        Some(slice)
     }
 }
 

@@ -167,14 +167,7 @@ impl RadonWgpuBackend {
                 ),
             });
         }
-        let promoted = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
-            let slice_f32 = unsafe {
-                std::slice::from_raw_parts(
-                    flat_sinogram.as_ptr().cast::<f32>(),
-                    flat_sinogram.len(),
-                )
-            };
+        let promoted = if let Some(slice_f32) = T::as_f32_slice(flat_sinogram) {
             slice_f32.to_vec()
         } else {
             flat_sinogram.iter().map(|v| v.to_f64() as f32).collect()
@@ -266,11 +259,7 @@ impl RadonWgpuBackend {
                 ),
             });
         }
-        let promoted = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            // Safety: T is f32, so &[T] is layout-compatible with &[f32].
-            let slice_f32 = unsafe {
-                std::slice::from_raw_parts(flat_image.as_ptr().cast::<f32>(), flat_image.len())
-            };
+        let promoted = if let Some(slice_f32) = T::as_f32_slice(flat_image) {
             slice_f32.to_vec()
         } else {
             flat_image.iter().map(|v| v.to_f64() as f32).collect()
