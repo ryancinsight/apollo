@@ -1268,6 +1268,7 @@ name = "hephaestus-core"
 version = "0.10.0"
 dependencies = [
  "bytemuck",
+ "themis 0.6.0",
  "thiserror 2.0.18",
 ]
 
