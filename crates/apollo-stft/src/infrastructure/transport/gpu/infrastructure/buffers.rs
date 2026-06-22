@@ -363,7 +363,7 @@ impl StftGpuBuffers {
         // SAFETY: ComplexPod and Complex32 have identical memory layout.
         unsafe {
             std::slice::from_raw_parts(
-                self.fwd_output_host.as_ptr() as *const Complex32,
+                self.fwd_output_host.as_ptr().cast::<Complex32>(),
                 self.fwd_output_host.len(),
             )
         }

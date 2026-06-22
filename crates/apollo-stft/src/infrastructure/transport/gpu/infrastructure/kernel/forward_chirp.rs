@@ -1,5 +1,4 @@
 use num_complex::Complex32;
-use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::chirp::{chirp_padded_len, StftChirpData};

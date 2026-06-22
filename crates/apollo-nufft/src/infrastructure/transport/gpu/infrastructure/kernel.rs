@@ -368,7 +368,7 @@ impl NufftGpuKernel {
         re_buffer: &wgpu::Buffer,
         im_buffer: &wgpu::Buffer,
         len: usize,
-    ) -> NufftWgpuResult<Vec<Complex32>> {
+    ) -> crate::infrastructure::transport::gpu::NufftWgpuResult<Vec<Complex32>> {
         helpers::read_split_grid(device, queue, re_buffer, im_buffer, len)
     }
 
@@ -380,7 +380,7 @@ impl NufftGpuKernel {
         re_buffer: &wgpu::Buffer,
         im_buffer: &wgpu::Buffer,
         len: usize,
-    ) -> NufftWgpuResult<Vec<Complex32>> {
+    ) -> crate::infrastructure::transport::gpu::NufftWgpuResult<Vec<Complex32>> {
         helpers::read_split_grid(device, queue, re_buffer, im_buffer, len)
     }
 }

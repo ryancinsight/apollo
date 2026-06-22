@@ -14,7 +14,7 @@ pub mod domain;
 pub mod infrastructure;
 
 #[cfg(test)]
-mod verification;
+mod tests;
 
 pub use application::execution::transform::sparse::{
     SparseComplexStorage, SparseFftPlan, SparseLetoSpectrum,

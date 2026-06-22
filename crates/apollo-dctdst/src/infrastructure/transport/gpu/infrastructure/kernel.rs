@@ -80,7 +80,7 @@ pub struct DctGpuKernel {
 
 impl Drop for DctGpuKernel {
     fn drop(&mut self) {
-        let self_id = self as *const Self as usize;
+        let self_id = std::ptr::from_ref(self) as usize;
         let _ = DCT_BUFFERS_CACHE.with(|cache| cache.borrow_mut().remove(&self_id));
     }
 }
@@ -170,7 +170,7 @@ impl DctGpuKernel {
         let hep_device = device.hephaestus();
         let len = input.len();
         let byte_len = (len * std::mem::size_of::<f32>()) as u64;
-        let self_id = self as *const Self as usize;
+        let self_id = std::ptr::from_ref(self) as usize;
 
         let mut map_err = None;
         let output = DCT_BUFFERS_CACHE.with(|cache| {

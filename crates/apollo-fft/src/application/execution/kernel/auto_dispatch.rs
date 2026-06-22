@@ -71,18 +71,19 @@ macro_rules! fft_precision_impl {
             fn fft_forward(data: &mut [Self]) {
                 let n = data.len();
                 match n {
-                    2 => unsafe {
-                        let a = *data.get_unchecked(0);
-                        let b = *data.get_unchecked(1);
-                        *data.get_unchecked_mut(0) = a + b;
-                        *data.get_unchecked_mut(1) = a - b;
+                    2 => {
+                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let a = data_ref[0];
+                        let b = data_ref[1];
+                        data_ref[0] = a + b;
+                        data_ref[1] = a - b;
                     }
                     4 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 4]>()) };
+                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
                         dft4_array_impl::<$scalar, false, false>(data_ref);
                     }
                     8 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 8]>()) };
+                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
                         dft8_array_impl::<$scalar, false, false>(data_ref);
                     }
                     $(
@@ -92,20 +93,20 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; $fn_size]>()) };
+                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
                             $dft_fn::<$scalar, false>(data_ref);
                         }
                     )*
                     3 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 3]>()) };
+                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
                         dft3_impl::<$scalar, false, false>(data_ref);
                     }
                     5 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 5]>()) };
+                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
                         dft5_array_impl::<$scalar, false, false>(data_ref);
                     }
                     7 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 7]>()) };
+                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
                         dft7_impl::<$scalar, false, false>(data_ref);
                     }
                     _ => {
@@ -118,24 +119,25 @@ macro_rules! fft_precision_impl {
             fn fft_inverse(data: &mut [Self]) {
                 let n = data.len();
                 match n {
-                    2 => unsafe {
-                        let a = *data.get_unchecked(0);
-                        let b = *data.get_unchecked(1);
-                        *data.get_unchecked_mut(0) = <$complex>::new(
+                    2 => {
+                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let a = data_ref[0];
+                        let b = data_ref[1];
+                        data_ref[0] = <$complex>::new(
                             (a.re + b.re) * 0.5,
                             (a.im + b.im) * 0.5,
                         );
-                        *data.get_unchecked_mut(1) = <$complex>::new(
+                        data_ref[1] = <$complex>::new(
                             (a.re - b.re) * 0.5,
                             (a.im - b.im) * 0.5,
                         );
                     }
                     4 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 4]>()) };
+                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
                         dft4_array_impl::<$scalar, true, true>(data_ref);
                     }
                     8 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 8]>()) };
+                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
                         dft8_array_impl::<$scalar, true, true>(data_ref);
                     }
                     $(
@@ -145,7 +147,7 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; $fn_size]>()) };
+                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
                             $dft_fn::<$scalar, true>(data_ref);
                             let scale = <$scalar as mixed_radix::MixedRadixScalar>::complex(
                                 1.0 / ($fn_size as f64),
@@ -157,15 +159,15 @@ macro_rules! fft_precision_impl {
                         }
                     )*
                     3 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 3]>()) };
+                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
                         dft3_impl::<$scalar, true, true>(data_ref);
                     }
                     5 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 5]>()) };
+                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
                         dft5_array_impl::<$scalar, true, true>(data_ref);
                     }
                     7 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 7]>()) };
+                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
                         dft7_impl::<$scalar, true, true>(data_ref);
                     }
                     _ => {
@@ -178,18 +180,19 @@ macro_rules! fft_precision_impl {
             fn fft_inverse_unnorm(data: &mut [Self]) {
                 let n = data.len();
                 match n {
-                    2 => unsafe {
-                        let a = *data.get_unchecked(0);
-                        let b = *data.get_unchecked(1);
-                        *data.get_unchecked_mut(0) = a + b;
-                        *data.get_unchecked_mut(1) = a - b;
+                    2 => {
+                        let data_ref: &mut [$complex; 2] = data.try_into().unwrap();
+                        let a = data_ref[0];
+                        let b = data_ref[1];
+                        data_ref[0] = a + b;
+                        data_ref[1] = a - b;
                     }
                     4 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 4]>()) };
+                        let data_ref: &mut [$complex; 4] = data.try_into().unwrap();
                         dft4_array_impl::<$scalar, true, false>(data_ref);
                     }
                     8 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 8]>()) };
+                        let data_ref: &mut [$complex; 8] = data.try_into().unwrap();
                         dft8_array_impl::<$scalar, true, false>(data_ref);
                     }
                     $(
@@ -199,20 +202,20 @@ macro_rules! fft_precision_impl {
                     )*
                     $(
                         $fn_size => {
-                            let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; $fn_size]>()) };
+                            let data_ref: &mut [$complex; $fn_size] = data.try_into().unwrap();
                             $dft_fn::<$scalar, true>(data_ref);
                         }
                     )*
                     3 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 3]>()) };
+                        let data_ref: &mut [$complex; 3] = data.try_into().unwrap();
                         dft3_impl::<$scalar, true, false>(data_ref);
                     }
                     5 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 5]>()) };
+                        let data_ref: &mut [$complex; 5] = data.try_into().unwrap();
                         dft5_array_impl::<$scalar, true, false>(data_ref);
                     }
                     7 => {
-                        let data_ref = unsafe { &mut *(data.as_mut_ptr().cast::<[$complex; 7]>()) };
+                        let data_ref: &mut [$complex; 7] = data.try_into().unwrap();
                         dft7_impl::<$scalar, true, false>(data_ref);
                     }
                     _ => {

@@ -19,6 +19,7 @@ wgpu = [
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = ["leto/mnemosyne-alloc"]
+proptest_gpu = []
 
 [dependencies]
 apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
