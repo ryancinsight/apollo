@@ -56,56 +56,38 @@ All public types and methods must document:
 
 ## Mixed-Precision Capability Table
 
-The table below is the authoritative record of per-crate precision support. "Advertised profile" is the `default_precision_profile` value exposed in each crate's capability struct. "Supported storage" lists accepted host-storage types for typed/caller-owned APIs. "GPU compute" is the arithmetic precision used inside shaders or GPU kernels.
+The table below is the authoritative record of per-crate precision support. Each core transform crate now exposes its CPU backend by default, and its GPU backend when the optional `wgpu` feature is enabled.
 
-| Crate | Backend | Advertised profile | Supported storage | GPU compute | Notes |
-|---|---|---|---|---|---|
-| apollo-fft | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 at plan boundary |
-| apollo-czt | CPU | HIGH_ACCURACY | Complex64, Complex32, [f16;2] | — | f16 promoted to Complex32 |
-| apollo-dctdst | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-dht | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-frft | CPU | HIGH_ACCURACY | Complex64, Complex32, [f16;2] | — | f16 promoted to Complex32 |
-| apollo-fwht | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-gft | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-hilbert | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-mellin | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-ntt | CPU | exact u64 residues | u64 mod p | — | floating mixed precision unsupported by design |
-| apollo-nufft | CPU | HIGH_ACCURACY | Complex64, Complex32, [f16;2] | — | f16 promoted to Complex32 |
-| apollo-qft | CPU | HIGH_ACCURACY | Complex64, Complex32, [f16;2] | — | f16 promoted to Complex32 |
-| apollo-radon | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-sdft | CPU | HIGH_ACCURACY | f64/Complex64, f32/Complex32, f16/[f16;2] | — | f16 promoted to f32/Complex32 |
-| apollo-sft | CPU | HIGH_ACCURACY | Complex64, Complex32, [f16;2] | — | f16 promoted to Complex32 |
-| apollo-sht | CPU | HIGH_ACCURACY | f64/Complex64, f32/Complex32, f16/[f16;2] | — | f16 promoted to f32/Complex32 |
-| apollo-stft | CPU | HIGH_ACCURACY | f64/Complex64, f32/Complex32, f16/[f16;2] | — | f16 promoted to f32/Complex32 |
-| apollo-wavelet | CPU | HIGH_ACCURACY | f64, f32, half::f16 | — | f16 promoted to f32 |
-| apollo-fft-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 (mixed) | f32 | native-f16 feature: arithmetic in f16 via SHADER_F16 |
-| apollo-czt-wgpu | WGPU | LOW_PRECISION_F32 | f32, [f16;2] host (mixed) | f32 | forward + inverse CZT; f16 promoted to f32 at host boundary |
-| apollo-dctdst-wgpu | WGPU | LOW_PRECISION_F32 | f32 | f32 | mixed f16 host path present |
-| apollo-dht-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-frft-wgpu | WGPU | LOW_PRECISION_F32 | f32, [f16;2] host (mixed) | f32 | f16 promoted at host boundary; UnitaryFrftGpuKernel available |
-| apollo-fwht-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-gft-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-hilbert-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | forward + inverse analytic-mask; f16 promoted at host boundary |
-| apollo-mellin-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | forward + inverse Mellin spectrum; f16 promoted at host boundary |
-| apollo-ntt-wgpu | WGPU | exact u32 residues | u32 quantized | u32 modular | floating mixed precision explicitly unsupported |
-| apollo-nufft-wgpu | WGPU | LOW_PRECISION_F32 | Complex32, [f16;2] host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-qft-wgpu | WGPU | LOW_PRECISION_F32 | Complex32, [f16;2] host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-radon-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | forward + adjoint backprojection + FBP; f16 promoted at host boundary |
-| apollo-sdft-wgpu | WGPU | LOW_PRECISION_F32 | f32, [f16;2] host (mixed) | f32 | forward + inverse direct-bins IDFT; f16 promoted at host boundary |
-| apollo-sft-wgpu | WGPU | LOW_PRECISION_F32 | Complex32, [f16;2] host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-sht-wgpu | WGPU | LOW_PRECISION_F32 | Complex32, [f16;2] host (mixed) | f32 | f16 promoted at host boundary |
-| apollo-stft-wgpu | WGPU | LOW_PRECISION_F32 | Complex32, [f16;2] host (mixed) | f32 | forward + inverse FFT-accelerated (Radix-2 DIT, O(N log N)); PoT frame_len required; f16 promoted at host boundary |
-| apollo-wavelet-wgpu | WGPU | LOW_PRECISION_F32 | f32, half::f16 host (mixed) | f32 | f16 promoted at host boundary |
+| Crate | CPU Backend | GPU Backend (enabled via `wgpu` feature) | Notes |
+|---|---|---|---|
+| apollo-fft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | `native-f16` feature enables native GPU f16 compute |
+| apollo-czt | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse CZT; f16 promoted at host boundary |
+| apollo-dctdst | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32 storage, f32 compute) | Mixed f16 host path present |
+| apollo-dht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
+| apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | f16 promoted at host boundary; UnitaryFrftGpuKernel |
+| apollo-fwht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
+| apollo-gft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
+| apollo-hilbert | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse analytic-mask; f16 promoted at boundary |
+| apollo-mellin | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse Mellin spectrum; f16 promoted at boundary |
+| apollo-ntt | exact u64 residues (u64 mod p) | exact u32 residues (u32 quantized, u32 modular) | Floating mixed-precision unsupported by design |
+| apollo-nufft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
+| apollo-qft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
+| apollo-radon | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/adjoint backprojection; f16 promoted at boundary |
+| apollo-sdft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse direct-bins IDFT; f16 promoted at boundary |
+| apollo-sft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
+| apollo-sht | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
+| apollo-stft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Forward/inverse FFT-accelerated (Radix-2 DIT); f16 promoted |
+| apollo-wavelet | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 
-### Key: native-f16 GPU (apollo-fft-wgpu)
+### Key: native-f16 GPU (apollo-fft wgpu feature)
 
 When the `native-f16` feature is enabled and the WGPU adapter exposes `wgpu::Features::SHADER_F16`, `GpuFft3dF16Native` executes all butterfly arithmetic in `f16` inside the shader. The host boundary converts `f32` input to `f16` before upload and `f16` output to `f32` after readback. Twiddle factors are computed in `f32` then narrowed to `f16` at plan build time to bound two-source error. Accumulation error is `O(log N)·ε_f16` where `ε_f16 ≈ 9.77×10⁻⁴`. Non-power-of-two sizes are supported via a Bluestein chirp-Z f16 shader (`chirp_native_f16.wgsl`).
 
 ### Key: NTT precision contract
 
-`apollo-ntt` and `apollo-ntt-wgpu` operate exclusively on exact modular residues. Floating-point mixed precision is architecturally unsupported because modular arithmetic requires exact integer representation. The WGPU surface uses `u32` residues (values mod p where p ≤ u32::MAX); the CPU surface uses `u64` residues for the default 998244353 modulus with 128-bit-widened intermediate products.
+`apollo-ntt` operates exclusively on exact modular residues. Floating-point mixed precision is architecturally unsupported because modular arithmetic requires exact integer representation. The GPU backend (with the `wgpu` feature enabled) uses `u32` residues (values mod p where p ≤ u32::MAX); the CPU backend uses `u64` residues for the default 998244353 modulus with 128-bit-widened intermediate products.
 
-### Key: Unitary FrFT (apollo-frft, apollo-frft-wgpu)
+### Key: Unitary FrFT (apollo-frft wgpu feature)
 
 Two plans coexist for the fractional Fourier transform:
 
@@ -118,7 +100,7 @@ Two plans coexist for the fractional Fourier transform:
 Its eigenvector basis V satisfies V^T V = I and eigenvectors are symmetric or antisymmetric
 under index reversal. DFrFT_a(x) = V · diag(exp(−iakπ/2)) · V^T · x.
 
-The GPU backend `apollo-frft-wgpu` exposes `execute_unitary_forward` and `execute_unitary_inverse`
+The GPU backend (with the `wgpu` feature enabled) exposes `execute_unitary_forward` and `execute_unitary_inverse`
 via `UnitaryFrftGpuKernel`. V is precomputed on CPU (O(N³)) and uploaded as an f32 storage buffer.
 Three sequential GPU submissions execute the 3-pass algorithm with `device.poll` barriers between
 passes to guarantee cross-workgroup storage ordering.
