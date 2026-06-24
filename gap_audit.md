@@ -1,5 +1,19 @@
 # Apollo Gap Audit
 
+## Coeus GradBuffer autograd compatibility [patch]
+- Performed: updated `apollo-fft` Coeus FFT autograd nodes to use
+  `coeus_autograd::GradBuffer` for output and input gradient accumulation instead of raw
+  `Arc<Mutex<Tensor<_>>>` buffers.
+- Architecture effect: Apollo now matches Coeus `0.2.3`'s serialized-gradient accumulator
+  contract and removes an obsolete synchronization primitive from these autograd nodes.
+- Verification: `cargo clippy -p apollo-fft --all-targets -- -D warnings`;
+  `cargo nextest run -p apollo-fft` -> 397/397 passed; `cargo test --doc -p apollo-fft`;
+  `cargo doc -p apollo-fft --no-deps`; `git diff --check`.
+- Evidence tier: compile/lint plus value-semantic FFT/autograd tests. No runtime benchmark
+  claim is made.
+- Residuals: broader Coeus/Apollo autograd API design remains provider-owned; this slice only
+  restores compatibility with the current trait contract.
+
 ## Leto 0.5.0 shape/materialization provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `a46dea9` (`0.4.0`) to pushed Leto `6c7899d` (`0.5.0`).
 - Architecture effect: Apollo now consumes provider-side dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization through the canonical Git dependency path.

@@ -1,4 +1,17 @@
 # Apollo Checklist
+
+## Coeus GradBuffer autograd compatibility [patch]
+- [x] Migrated `apollo-fft` Coeus FFT autograd nodes from raw `Arc<Mutex<Tensor<_>>>`
+  gradient buffers to `coeus_autograd::GradBuffer`, matching the current local Coeus
+  `0.2.3` `BackwardNode` contract.
+- [x] Synchronized `Cargo.lock` with the active local Coeus `0.2.3` provider packages used
+  by the verified build.
+- Evidence tier: compile/lint plus value-semantic tests. Verification:
+  `cargo clippy -p apollo-fft --all-targets -- -D warnings`;
+  `cargo nextest run -p apollo-fft` -> 397/397 passed;
+  `cargo test --doc -p apollo-fft`; `cargo doc -p apollo-fft --no-deps`;
+  `git diff --check`.
+
 ## Benchmark results refresh [patch]
 - [x] Regenerated `benchmark_results.md` with Apollo `xtask benchmark` quick profile output dated `2026-06-12 14:22 UTC`.
 - [x] Synchronized `Cargo.lock` with the active local Atlas provider patches so locked Apollo verification resolves Leto/Leto Ops `0.16.1` and Themis `0.7.0`.

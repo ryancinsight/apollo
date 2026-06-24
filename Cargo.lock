@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-autograd"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "coeus-core",
  "coeus-ops",
@@ -776,11 +776,12 @@ dependencies = [
 
 [[package]]
 name = "coeus-core"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "bytemuck",
  "half",
  "hermes-simd",
+ "libm",
  "mnemosyne",
  "moirai",
  "num-traits",
@@ -790,7 +791,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-leto"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "coeus-core",
  "leto",
@@ -799,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-ops"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "bytemuck",
  "coeus-core",
@@ -808,6 +809,7 @@ dependencies = [
  "coeus-tensor",
  "half",
  "leto-ops",
+ "melinoe",
  "num-traits",
  "smallvec",
  "thiserror 2.0.18",
@@ -815,7 +817,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-sparse"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "coeus-core",
  "coeus-tensor",
@@ -825,7 +827,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-tensor"
-version = "0.2.0"
+version = "0.2.3"
 dependencies = [
  "bytemuck",
  "coeus-core",
@@ -1282,6 +1284,8 @@ dependencies = [
  "hephaestus-core",
  "leto",
  "leto-ops",
+ "mnemosyne",
+ "mnemosyne-backend",
  "mnemosyne-core",
  "moirai",
  "moirai-gpu",
@@ -1728,6 +1732,7 @@ dependencies = [
 name = "moirai-core"
 version = "0.2.0"
 dependencies = [
+ "bytemuck",
  "libc",
  "mnemosyne",
  "moirai-utils",
@@ -1816,6 +1821,7 @@ dependencies = [
 name = "moirai-transport"
 version = "0.2.0"
 dependencies = [
+ "bytemuck",
  "moirai-core",
  "moirai-scheduler",
  "moirai-utils",

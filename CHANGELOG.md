@@ -9,6 +9,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ## [Unreleased]
 ### Breaking
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
+### Fixed
+- [patch] `apollo-fft` Coeus FFT autograd nodes now use `coeus_autograd::GradBuffer`
+  instead of raw `Arc<Mutex<Tensor<_>>>` gradient buffers, matching the current Coeus
+  `0.2.3` `BackwardNode` contract. `Cargo.lock` is synchronized with the active local Coeus
+  provider packages. Evidence: `cargo clippy -p apollo-fft --all-targets -- -D warnings`;
+  `cargo nextest run -p apollo-fft` -> 397/397 passed; doctest/doc passed.
 ### Added
 - [patch] Refreshed `benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `a673325` (`0.14.2`), importing rank-deficient singular-value support without restoring any downstream nalgebra dependency.

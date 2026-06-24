@@ -2,10 +2,10 @@
 // Facilitates FFT operations on Coeus Tensors and Vars using Apollo.
 
 use crate::{Complex32, Complex64};
+use coeus_autograd::{node::BackwardNode, var::Var, GradBuffer};
 use coeus_core::{Complex, ComputeBackend, Float, MoiraiBackend, Storage};
 use coeus_tensor::Tensor;
-use coeus_autograd::{node::BackwardNode, var::Var};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Sealed trait for compile-time monomorphized FFT dispatch on Coeus types.
 pub trait FftScalar: Float {
@@ -174,7 +174,10 @@ pub fn ifft_1d<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default>(
     assert_eq!(spectrum.ndim(), 1, "ifft_1d requires 1D input");
     let spectrum_cont = spectrum.to_contiguous();
     let out_storage = B::default().ifft_1d(spectrum_cont.storage());
-    Tensor::from_raw_parts(out_storage, coeus_core::Layout::new(spectrum.shape_cloned()))
+    Tensor::from_raw_parts(
+        out_storage,
+        coeus_core::Layout::new(spectrum.shape_cloned()),
+    )
 }
 
 /// Autograd node for 1D Forward FFT on Coeus.
@@ -182,10 +185,11 @@ pub struct Fft1DNode<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default
     /// Input variable being transformed.
     pub x: Var<T, B>,
     /// Accumulated gradient of the transformed output.
-    pub output_grad: Arc<Mutex<Tensor<Complex<T>, B>>>,
+    pub output_grad: Arc<GradBuffer<Complex<T>, B>>,
 }
 
-impl<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default> BackwardNode<Complex<T>, B> for Fft1DNode<T, B>
+impl<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default> BackwardNode<Complex<T>, B>
+    for Fft1DNode<T, B>
 where
     B: coeus_ops::BackendOps<T>,
 {
@@ -193,7 +197,7 @@ where
         "fft_1d"
     }
 
-    fn output_grad(&self) -> &Arc<Mutex<Tensor<Complex<T>, B>>> {
+    fn output_grad(&self) -> &Arc<GradBuffer<Complex<T>, B>> {
         &self.output_grad
     }
 
@@ -204,7 +208,7 @@ where
     fn backward(
         &self,
         grad_out: &Tensor<Complex<T>, B>,
-        _input_grads: &[Option<Arc<Mutex<Tensor<Complex<T>, B>>>>],
+        _input_grads: &[Option<Arc<GradBuffer<Complex<T>, B>>>],
     ) {
         let backend = B::default();
         // dX = ifft_1d(grad_out) * N
@@ -214,8 +218,7 @@ where
         let scaled_d_x = coeus_ops::mul(&d_x, &n_tensor, &backend);
 
         if let Some(ref g) = self.x.grad {
-            let mut gl = g.lock().unwrap();
-            coeus_ops::add_assign(&mut gl, &scaled_d_x, &backend);
+            coeus_ops::add_assign(g.write(), &scaled_d_x, &backend);
         }
 
         if self.x.creator.is_some() {
@@ -230,10 +233,11 @@ pub struct Ifft1DNode<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Defaul
     /// Input variable in the frequency domain.
     pub y: Var<Complex<T>, B>,
     /// Accumulated gradient of the reconstructed spatial output.
-    pub output_grad: Arc<Mutex<Tensor<T, B>>>,
+    pub output_grad: Arc<GradBuffer<T, B>>,
 }
 
-impl<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default> BackwardNode<T, B> for Ifft1DNode<T, B>
+impl<T: FftScalar, B: ComputeBackend + FftDeviceOps<T> + Default> BackwardNode<T, B>
+    for Ifft1DNode<T, B>
 where
     B: coeus_ops::BackendOps<T>,
 {
@@ -241,7 +245,7 @@ where
         "ifft_1d"
     }
 
-    fn output_grad(&self) -> &Arc<Mutex<Tensor<T, B>>> {
+    fn output_grad(&self) -> &Arc<GradBuffer<T, B>> {
         &self.output_grad
     }
 
@@ -249,11 +253,7 @@ where
         &[]
     }
 
-    fn backward(
-        &self,
-        grad_out: &Tensor<T, B>,
-        _input_grads: &[Option<Arc<Mutex<Tensor<T, B>>>>],
-    ) {
+    fn backward(&self, grad_out: &Tensor<T, B>, _input_grads: &[Option<Arc<GradBuffer<T, B>>>]) {
         let backend = B::default();
         let numel = grad_out.numel();
 
@@ -270,7 +270,7 @@ where
 
         if let Some(ref g) = self.y.grad {
             let mut current_g = vec![Complex::new(T::zero(), T::zero()); numel];
-            let mut gl = g.lock().unwrap();
+            let gl = g.write();
             backend.copy_to_host(gl.storage(), &mut current_g);
             for i in 0..numel {
                 current_g[i].re = current_g[i].re + fft_vec[i].re;
@@ -288,9 +288,7 @@ where
 
 /// Differentiable 1-D forward Fast Fourier Transform.
 #[must_use]
-pub fn fft_1d_var<T: FftScalar, B>(
-    x: &Var<T, B>,
-) -> Var<Complex<T>, B>
+pub fn fft_1d_var<T: FftScalar, B>(x: &Var<T, B>) -> Var<Complex<T>, B>
 where
     B: ComputeBackend + FftDeviceOps<T> + Default + coeus_ops::BackendOps<T>,
 {
@@ -298,7 +296,7 @@ where
     let out_tensor = fft_1d(&x.tensor);
     let requires_grad = x.grad.is_some();
     let grad = if requires_grad {
-        Some(Arc::new(Mutex::new(Tensor::zeros_on(
+        Some(Arc::new(GradBuffer::new(Tensor::zeros_on(
             out_tensor.shape_cloned(),
             &backend,
         ))))
@@ -326,9 +324,7 @@ where
 
 /// Differentiable 1-D inverse Fast Fourier Transform.
 #[must_use]
-pub fn ifft_1d_var<T: FftScalar, B>(
-    y: &Var<Complex<T>, B>,
-) -> Var<T, B>
+pub fn ifft_1d_var<T: FftScalar, B>(y: &Var<Complex<T>, B>) -> Var<T, B>
 where
     B: ComputeBackend + FftDeviceOps<T> + Default + coeus_ops::BackendOps<T>,
 {
@@ -336,7 +332,7 @@ where
     let out_tensor = ifft_1d(&y.tensor);
     let requires_grad = y.grad.is_some();
     let grad = if requires_grad {
-        Some(Arc::new(Mutex::new(Tensor::zeros_on(
+        Some(Arc::new(GradBuffer::new(Tensor::zeros_on(
             out_tensor.shape_cloned(),
             &backend,
         ))))
