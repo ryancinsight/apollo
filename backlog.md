@@ -54,6 +54,26 @@ Remaining replacement work:
   Sequencing note: the helper bodies are being rewritten by the in-flight
   num_complex/ndarray→leto migration (branch `refactor/apollo-fft-eunomia`), so do
   D7 **after** that lands to avoid editing `leto_interop`'s home on two branches.
+- [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
+  Assessment of "are the transform crates fluff removable via monomorphization
+  with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
+  of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
+  and their GPU `device.rs`/`verification.rs`/`kernel.rs` hold transform-specific
+  WGSL dispatch (substantially different per crate — NOT boilerplate). They are not
+  collapsible into apollo-fft. **YES for the surrounding scaffolding**, which is
+  duplicated ~16× under `infrastructure/transport/gpu/` (~22k LOC total across the
+  crates, but a mix): the consolidatable boilerplate is `gpu/domain/error.rs`
+  (byte-identical across all 16), `gpu/domain/capabilities.rs` (near-identical),
+  the repeated GPU-backend acquisition/interface, and the verification *harness*
+  skeleton. Plan: this boilerplate belongs in **hephaestus** (device/capabilities/
+  error/backend — the ComputeBackend surface, see D6) + the shared apollo crate
+  from D7, with each transform crate retaining ONLY its algorithm and its specific
+  WGSL kernels. Express the shared transport generically (parameterized over a
+  per-transform `Kernel`/`Plan` trait so it monomorphizes per crate — one written
+  surface, N specializations). Net: delete ~16 copies of the device/error/
+  capabilities boilerplate; each transform shrinks to {algorithm + kernels}.
+  Sequenced with/after D6 (it IS the hephaestus-backend consolidation) and D7;
+  feature-gated GPU code, verify under the wgpu feature, differential vs CPU.
 
 ## Delivered
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
