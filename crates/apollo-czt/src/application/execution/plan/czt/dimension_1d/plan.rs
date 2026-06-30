@@ -10,8 +10,8 @@ use crate::application::execution::kernel::direct::{
 };
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 
 /// Reusable chirp z-transform plan.
 ///
@@ -87,7 +87,7 @@ impl CztPlan {
             kernel[convolution_len - k_idx] = w.powf(-0.5 * (k_idx as f64) * (k_idx as f64));
         }
 
-        let mut fft_kernel = Array1::from_vec(kernel);
+        let mut fft_kernel = Array1::from(kernel);
         fft_plan.forward_complex_inplace(&mut fft_kernel);
         let inverse_nodes = if n == m {
             Some(czt_inverse_nodes(n, w))
@@ -129,7 +129,7 @@ impl CztPlan {
 
     /// Forward direct CZT evaluation.
     pub fn forward_direct(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, CztError> {
-        if input.len() != self.n {
+        if input.size() != self.n {
             return Err(CztError::LengthMismatch);
         }
         czt_direct_forward(input, self.m, self.a, self.w)
@@ -154,11 +154,11 @@ impl CztPlan {
 
     /// Forward CZT using Bluestein's convolution identity with precomputed caching.
     pub fn forward(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, CztError> {
-        if input.len() != self.n {
+        if input.size() != self.n {
             return Err(CztError::LengthMismatch);
         }
 
-        let mut output = Array1::<Complex64>::zeros(self.m);
+        let mut output = Array1::<Complex64>::zeros([self.m]);
         self.forward_into(input, &mut output)?;
         Ok(output)
     }
@@ -183,7 +183,7 @@ impl CztPlan {
         input: &Array1<Complex64>,
         output: &mut Array1<Complex64>,
     ) -> Result<(), CztError> {
-        if input.len() != self.n || output.len() != self.m {
+        if input.size() != self.n || output.size() != self.m {
             return Err(CztError::LengthMismatch);
         }
         self.forward_complex64_slice_into(
@@ -269,7 +269,7 @@ impl CztPlan {
     ///
     /// O(N²) time, O(N) additional space.
     pub fn inverse(&self, spectrum: &Array1<Complex64>) -> Result<Array1<Complex64>, CztError> {
-        if spectrum.len() != self.m {
+        if spectrum.size() != self.m {
             return Err(CztError::LengthMismatch);
         }
         if self.n != self.m {
@@ -277,7 +277,7 @@ impl CztPlan {
                 reason: "inverse is only defined for square (M == N) CZT plans",
             });
         }
-        let mut output = Array1::<Complex64>::zeros(self.n);
+        let mut output = Array1::<Complex64>::zeros([self.n]);
         self.inverse_complex64_slice_into(
             spectrum
                 .as_slice()

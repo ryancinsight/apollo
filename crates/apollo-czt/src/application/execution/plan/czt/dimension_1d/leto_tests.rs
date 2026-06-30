@@ -2,8 +2,8 @@ use super::*;
 use apollo_fft::PrecisionProfile;
 use approx::{assert_abs_diff_eq, assert_relative_eq};
 use leto::{SliceArg, Storage};
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use leto::Array1;
+use eunomia::{Complex32, Complex64};
 
 fn reference_plan(n: usize, m: usize) -> CztPlan {
     CztPlan::new(
@@ -24,7 +24,7 @@ fn reference_input(n: usize) -> Vec<Complex64> {
 #[test]
 fn leto_forward_matches_ndarray_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from_vec(input.clone());
+    let ndarray_input = Array1::from(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan.forward(&ndarray_input).expect("ndarray forward");
 
@@ -41,7 +41,7 @@ fn leto_forward_matches_ndarray_reference() {
 #[test]
 fn leto_direct_forward_matches_ndarray_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from_vec(input.clone());
+    let ndarray_input = Array1::from(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan
         .forward_direct(&ndarray_input)
@@ -62,7 +62,7 @@ fn leto_direct_forward_matches_ndarray_reference() {
 #[test]
 fn leto_strided_forward_matches_ndarray_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from_vec(input.clone());
+    let ndarray_input = Array1::from(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan.forward(&ndarray_input).expect("ndarray forward");
 
@@ -92,7 +92,7 @@ fn leto_strided_forward_matches_ndarray_reference() {
 #[test]
 fn leto_strided_direct_forward_matches_ndarray_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from_vec(input.clone());
+    let ndarray_input = Array1::from(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan
         .forward_direct(&ndarray_input)
@@ -130,9 +130,9 @@ fn leto_typed_complex32_forward_matches_ndarray_reference() {
         .iter()
         .map(|value| Complex32::new(value.re as f32, value.im as f32))
         .collect();
-    let ndarray_input = Array1::from_vec(input32.clone());
+    let ndarray_input = Array1::from(input32.clone());
     let plan = reference_plan(input32.len(), 7);
-    let mut expected = Array1::<Complex32>::zeros(plan.output_len());
+    let mut expected = Array1::<Complex32>::zeros([plan.output_len()]);
     plan.forward_typed_into(
         &ndarray_input,
         &mut expected,
@@ -156,7 +156,7 @@ fn leto_typed_complex32_forward_matches_ndarray_reference() {
 fn leto_inverse_matches_ndarray_reference() {
     let n = 5usize;
     let input = reference_input(n);
-    let ndarray_input = Array1::from_vec(input.clone());
+    let ndarray_input = Array1::from(input.clone());
     let plan = CztPlan::new(
         n,
         n,

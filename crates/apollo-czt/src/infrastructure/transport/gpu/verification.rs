@@ -5,8 +5,8 @@ mod tests {
     use crate::CztPlan;
     use apollo_fft::{f16, PrecisionProfile};
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
-    use num_complex::{Complex32, Complex64};
+    use leto::Array1;
+    use eunomia::{Complex32, Complex64};
 
     use crate::infrastructure::transport::gpu::{
         Complex32 as GpuComplex32, CztWgpuBackend, CztWgpuPlan, WgpuCapabilities, WgpuError,
@@ -88,7 +88,7 @@ mod tests {
                 Complex64::new(f64::from(w32.re), f64::from(w32.im)),
             )
             .expect("cpu plan");
-            let cpu_input = Array1::from_vec(
+            let cpu_input = Array1::from(
                 input
                     .iter()
                     .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))

@@ -3,7 +3,7 @@
 use crate::domain::contracts::error::CztError;
 use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::borrow::Cow;
 
 thread_local! {

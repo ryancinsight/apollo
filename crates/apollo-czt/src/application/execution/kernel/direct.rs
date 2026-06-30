@@ -1,8 +1,8 @@
 use crate::domain::contracts::error::CztError;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 
 /// Below this O(NM) operation count, serial loops avoid scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
@@ -19,7 +19,7 @@ pub fn czt_direct_forward(
     a: Complex64,
     w: Complex64,
 ) -> Result<Array1<Complex64>, CztError> {
-    let mut output = Array1::zeros(output_len);
+    let mut output = Array1::zeros([output_len]);
     let input = input
         .as_slice()
         .expect("CZT direct input must be contiguous");
@@ -106,7 +106,7 @@ mod tests {
     fn moirai_parallel_direct_rows_match_bin_formula_at_threshold() {
         let input_len = 128usize;
         let output_len = DIRECT_PAR_OP_THRESHOLD / input_len;
-        let input = Array1::from_shape_fn(input_len, |index| {
+        let input = Array1::from_shape_fn([input_len], |[index]| {
             Complex64::new((index as f64 * 0.125).sin(), (index as f64 * 0.03125).cos())
         });
         let a = Complex64::from_polar(1.0, 0.125);

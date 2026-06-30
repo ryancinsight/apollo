@@ -1,8 +1,8 @@
 //! Proptest suite for 1D Chirp Z-Transform.
 
 use super::plan::CztPlan;
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 use proptest::prelude::*;
 
 proptest! {
@@ -22,13 +22,13 @@ proptest! {
     ) {
         let a = Complex64::from_polar(a_mag, a_arg);
         let w = Complex64::from_polar(w_mag, w_arg);
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new(re_parts[i % 8] as f64, im_parts[i % 8] as f64)
         });
         let plan = CztPlan::new(n, m, a, w).expect("plan");
         let fast = plan.forward(&input).expect("fast");
         let direct = plan.forward_direct(&input).expect("direct");
-        prop_assert_eq!(fast.len(), direct.len());
+        prop_assert_eq!(fast.size(), direct.size());
         for k in 0..m {
             let diff = (fast[k] - direct[k]).norm();
             let scale = direct[k].norm().max(1.0_f64);
@@ -51,13 +51,13 @@ proptest! {
     ) {
         let a = Complex64::new(1.0, 0.0);
         let w = Complex64::from_polar(1.0, -std::f64::consts::TAU / n as f64);
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new(re_parts[i % 8] as f64, im_parts[i % 8] as f64)
         });
         let plan = CztPlan::new(n, n, a, w).expect("plan");
         let czt_out = plan.forward(&input).expect("czt");
         let fft_out = apollo_fft::fft_1d_complex(&input);
-        prop_assert_eq!(czt_out.len(), fft_out.len());
+        prop_assert_eq!(czt_out.size(), fft_out.size());
         for k in 0..n {
             let diff = (czt_out[k] - fft_out[k]).norm();
             prop_assert!(
@@ -84,14 +84,14 @@ proptest! {
             -std::f64::consts::TAU / (n.max(m) as f64 + 1.0),
         );
         let scalar = Complex64::new(scalar_re as f64, scalar_im as f64);
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new(re_parts[i % 8] as f64, im_parts[i % 8] as f64)
         });
         let scaled_input = input.mapv(|v| scalar * v);
         let plan = CztPlan::new(n, m, a, w).expect("plan");
         let czt_scaled = plan.forward(&scaled_input).expect("czt scaled");
         let czt_base = plan.forward(&input).expect("czt base");
-        prop_assert_eq!(czt_scaled.len(), czt_base.len());
+        prop_assert_eq!(czt_scaled.size(), czt_base.size());
         for k in 0..m {
             let expected = scalar * czt_base[k];
             let diff = (czt_scaled[k] - expected).norm();
