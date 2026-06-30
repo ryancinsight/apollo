@@ -3,7 +3,7 @@
 
 use crate::ramp_filter_projection;
 use bytemuck::{Pod, Zeroable};
-use ndarray::Array2;
+use leto::Array2;
 use wgpu::util::DeviceExt;
 
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
@@ -179,7 +179,7 @@ impl RadonGpuKernel {
         hep_device.download(&image_buf, &mut values).map_err(|e| WgpuError::BufferMapFailed {
             message: e.to_string(),
         })?;
-        Array2::from_shape_vec((rows, cols), values).map_err(|_| WgpuError::BufferMapFailed {
+        Array2::from_shape_vec([rows, cols], values).map_err(|_| WgpuError::BufferMapFailed {
             message: "failed to reshape backprojection readback".to_string(),
         })
     }
@@ -421,7 +421,7 @@ impl RadonGpuKernel {
 
         // Normalize: π / angle_count (uniform-angle FBP integral approximation).
         let norm = std::f32::consts::PI / angle_count as f32;
-        Array2::from_shape_vec((rows, cols), raw.into_iter().map(|v| v * norm).collect()).map_err(
+        Array2::from_shape_vec([rows, cols], raw.into_iter().map(|v| v * norm).collect()).map_err(
             |_| WgpuError::BufferMapFailed {
                 message: "failed to reshape FBP readback".to_string(),
             },

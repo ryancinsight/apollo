@@ -2,7 +2,7 @@
 
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
 use mnemosyne::scratch::ScratchPool;
-use ndarray::Array2;
+use leto::Array2;
 
 /// Below this angle count, scalar accumulation avoids Hermes dispatch and scratch setup.
 const RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD: usize = 256;
@@ -19,7 +19,7 @@ thread_local! {
 /// `detector_count` provides data-race-free mutable access without synchronisation.
 #[must_use]
 pub fn forward_project(image: &Array2<f64>, geometry: &ParallelBeamGeometry) -> Array2<f64> {
-    let mut sinogram = Array2::zeros((geometry.angle_count(), geometry.detector_count()));
+    let mut sinogram = Array2::zeros([geometry.angle_count(), geometry.detector_count()]);
     forward_project_into(image, geometry, &mut sinogram);
     sinogram
 }
@@ -34,7 +34,7 @@ pub fn forward_project_into(
     sinogram: &mut Array2<f64>,
 ) {
     sinogram.fill(0.0);
-    let ncols = sinogram.ncols();
+    let ncols = sinogram.shape()[1];
     let flat = sinogram
         .as_slice_mut()
         .expect("sinogram must be contiguous (standard layout)");
@@ -46,7 +46,7 @@ pub fn forward_project_into(
             for r in 0..geometry.rows() {
                 for c in 0..geometry.cols() {
                     let det_coord = geometry.x(c) * cos_theta + geometry.y(r) * sin_theta;
-                    deposit(geometry.detector_index(det_coord), image[(r, c)], row);
+                    deposit(geometry.detector_index(det_coord), image[[r, c]], row);
                 }
             }
         },
@@ -61,7 +61,7 @@ pub fn forward_project_into(
 #[must_use]
 pub fn adjoint_backproject(sinogram: &Array2<f64>, geometry: &ParallelBeamGeometry) -> Array2<f64> {
     let cols = geometry.cols();
-    let mut image = Array2::zeros((geometry.rows(), cols));
+    let mut image = Array2::zeros([geometry.rows(), cols]);
     adjoint_backproject_into(sinogram, geometry, &mut image);
     image
 }
@@ -73,7 +73,7 @@ pub fn adjoint_backproject_into(
     image: &mut Array2<f64>,
 ) {
     let cols = geometry.cols();
-    let ncols = image.ncols();
+    let ncols = image.shape()[1];
     let flat = image
         .as_slice_mut()
         .expect("image must be contiguous (standard layout)");
@@ -180,15 +180,15 @@ fn deposit(index: f64, mass: f64, row: &mut [f64]) {
 }
 
 fn sample_linear(index: f64, sinogram: &Array2<f64>, angle_index: usize) -> f64 {
-    if index < 0.0 || index > (sinogram.ncols() - 1) as f64 {
+    if index < 0.0 || index > (sinogram.shape()[1] - 1) as f64 {
         return 0.0;
     }
     let left = index.floor() as usize;
     let right_weight = index - left as f64;
     let left_weight = 1.0 - right_weight;
-    let mut value = sinogram[(angle_index, left)] * left_weight;
-    if right_weight > 0.0 && left + 1 < sinogram.ncols() {
-        value += sinogram[(angle_index, left + 1)] * right_weight;
+    let mut value = sinogram[[angle_index, left]] * left_weight;
+    if right_weight > 0.0 && left + 1 < sinogram.shape()[1] {
+        value += sinogram[[angle_index, left + 1]] * right_weight;
     }
     value
 }
@@ -202,7 +202,7 @@ fn fill_linear_sample_weight(
 ) {
     debug_assert_eq!(samples.len(), 2);
     debug_assert_eq!(weights.len(), 2);
-    if index < 0.0 || index > (sinogram.ncols() - 1) as f64 {
+    if index < 0.0 || index > (sinogram.shape()[1] - 1) as f64 {
         samples.fill(0.0);
         weights.fill(0.0);
         return;
@@ -210,10 +210,10 @@ fn fill_linear_sample_weight(
     let left = index.floor() as usize;
     let right_weight = index - left as f64;
     let left_weight = 1.0 - right_weight;
-    samples[0] = sinogram[(angle_index, left)];
+    samples[0] = sinogram[[angle_index, left]];
     weights[0] = left_weight;
-    if right_weight > 0.0 && left + 1 < sinogram.ncols() {
-        samples[1] = sinogram[(angle_index, left + 1)];
+    if right_weight > 0.0 && left + 1 < sinogram.shape()[1] {
+        samples[1] = sinogram[[angle_index, left + 1]];
         weights[1] = right_weight;
     } else {
         samples[1] = 0.0;
@@ -233,8 +233,8 @@ mod tests {
             .collect::<Vec<_>>();
         let geometry = ParallelBeamGeometry::new(3, 3, angles, 7, 0.75).expect("valid geometry");
         let sinogram = Array2::from_shape_fn(
-            (geometry.angle_count(), geometry.detector_count()),
-            |(angle, detector)| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
+            [geometry.angle_count(), geometry.detector_count()],
+            |[angle, detector]| (angle as f64 * 0.017).sin() + (detector as f64 * 0.031).cos(),
         );
 
         for (x, y) in [(-0.5, -0.25), (0.0, 0.0), (0.75, 0.5)] {
@@ -251,8 +251,8 @@ mod tests {
             .collect::<Vec<_>>();
         let geometry = ParallelBeamGeometry::new(3, 3, angles, 5, 1.0).expect("valid geometry");
         let sinogram = Array2::from_shape_fn(
-            (geometry.angle_count(), geometry.detector_count()),
-            |(angle, detector)| angle as f64 * 0.25 - detector as f64 * 0.5,
+            [geometry.angle_count(), geometry.detector_count()],
+            |[angle, detector]| angle as f64 * 0.25 - detector as f64 * 0.5,
         );
         let mut samples = vec![f64::NAN; geometry.angle_count() * 2];
         let mut weights = vec![f64::NAN; geometry.angle_count() * 2];

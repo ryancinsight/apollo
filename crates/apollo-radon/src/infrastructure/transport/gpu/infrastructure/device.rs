@@ -5,7 +5,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
 use crate::RadonStorage;
-use ndarray::Array2;
+use leto::Array2;
 
 use crate::infrastructure::transport::gpu::application::plan::RadonWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -307,7 +307,7 @@ impl RadonWgpuBackend {
                     message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                 });
         }
-        let (actual_angles, actual_detectors) = sinogram.dim();
+        let [actual_angles, actual_detectors] = sinogram.shape();
         if (actual_angles, actual_detectors) != (plan.angle_count(), plan.detector_count()) {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
@@ -347,7 +347,7 @@ impl RadonWgpuBackend {
                     message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                 });
         }
-        let (actual_rows, actual_cols) = image.dim();
+        let [actual_rows, actual_cols] = image.shape();
         if (actual_rows, actual_cols) != (plan.rows(), plan.cols()) {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
@@ -379,7 +379,7 @@ fn leto_array2_from_ndarray(
     values: &Array2<f32>,
     label: &str,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-    leto_interop::try_array2_from_ndarray(values).ok_or_else(|| WgpuError::InvalidPlan {
+    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
         message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }

@@ -4,16 +4,16 @@
 mod tests {
     use crate::{ramp_filter_projection, ramp_filter_projection_into, RadonError, RadonPlan};
     use approx::assert_abs_diff_eq;
-    use ndarray::{array, Array2};
+    use leto::Array2;
     use proptest::prelude::*;
     use proptest::proptest;
 
     #[test]
     fn zero_angle_projection_equals_column_sums() {
-        let image = array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+        let image = leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap();
         let plan = RadonPlan::new(3, 3, vec![0.0], 3, 1.0).expect("plan");
         let sinogram = plan.forward(&image).expect("forward");
-        let row = sinogram.values().row(0);
+        let row = sinogram.values().as_slice().expect("contiguous sinogram");
 
         assert_abs_diff_eq!(row[0], 12.0, epsilon = 1.0e-12);
         assert_abs_diff_eq!(row[1], 15.0, epsilon = 1.0e-12);
@@ -22,10 +22,10 @@ mod tests {
 
     #[test]
     fn right_angle_projection_equals_row_sums() {
-        let image = array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+        let image = leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap();
         let plan = RadonPlan::new(3, 3, vec![std::f64::consts::FRAC_PI_2], 3, 1.0).expect("plan");
         let sinogram = plan.forward(&image).expect("forward");
-        let row = sinogram.values().row(0);
+        let row = sinogram.values().as_slice().expect("contiguous sinogram");
 
         assert_abs_diff_eq!(row[0], 6.0, epsilon = 1.0e-12);
         assert_abs_diff_eq!(row[1], 15.0, epsilon = 1.0e-12);
@@ -34,8 +34,8 @@ mod tests {
 
     #[test]
     fn forward_and_backproject_satisfy_adjoint_identity() {
-        let image = array![[1.0, -2.0], [0.5, 3.0]];
-        let detector_values = array![[2.0, -1.0, 0.25], [1.5, 0.0, -0.75]];
+        let image = leto::Array2::from_shape_vec([2, 2], vec![1.0, -2.0, 0.5, 3.0]).unwrap();
+        let detector_values = leto::Array2::from_shape_vec([2, 3], vec![2.0, -1.0, 0.25, 1.5, 0.0, -0.75]).unwrap();
         let plan =
             RadonPlan::new(2, 2, vec![0.0, std::f64::consts::FRAC_PI_4], 3, 1.0).expect("plan");
         let forward = plan.forward(&image).expect("forward");
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn filtered_backprojection_rejects_shape_mismatch() {
         let plan = RadonPlan::new(2, 2, vec![0.0], 2, 1.0).expect("plan");
-        let sinogram = crate::Sinogram::new(Array2::zeros((2, 2)));
+        let sinogram = crate::Sinogram::new(Array2::zeros([2, 2]));
         assert_eq!(
             plan.filtered_backprojection(&sinogram).unwrap_err(),
             RadonError::SinogramShapeMismatch
@@ -121,7 +121,7 @@ mod tests {
         fn zero_angle_mass_is_conserved_for_square_images(
             values in prop::collection::vec(-10.0f64..10.0f64, 9)
         ) {
-            let image = Array2::from_shape_vec((3, 3), values).expect("shape");
+            let image = Array2::from_shape_vec([3, 3], values).expect("shape");
             let plan = RadonPlan::new(3, 3, vec![0.0], 3, 1.0).expect("plan");
             let sinogram = plan.forward(&image).expect("forward");
             let image_sum: f64 = image.iter().sum();
