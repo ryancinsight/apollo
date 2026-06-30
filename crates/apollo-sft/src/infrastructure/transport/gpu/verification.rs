@@ -5,7 +5,7 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use crate::{SparseFftPlan, SparseSpectrum};
     use leto::{SliceArg, Storage};
-    use num_complex::{Complex32, Complex64};
+    use eunomia::{Complex32, Complex64};
 
     use crate::infrastructure::transport::gpu::{SftWgpuBackend, SftWgpuPlan, WgpuCapabilities, WgpuError};
 

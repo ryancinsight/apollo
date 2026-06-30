@@ -1,7 +1,7 @@
 //! Sparse spectral representation.
 
 use apollo_fft::{ApolloError, ApolloResult};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Sparse spectral representation of a complex-valued signal.
 #[derive(Clone, Debug, PartialEq)]

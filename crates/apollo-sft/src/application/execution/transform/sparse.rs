@@ -59,8 +59,8 @@ use crate::domain::plan::config::SparseFftConfig;
 use crate::domain::spectrum::sparse::SparseSpectrum;
 use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use leto::Array1;
+use eunomia::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -211,11 +211,9 @@ impl SparseFftPlan {
 
         // O(N log N) via apollo-fft auto-selecting kernel.
         let dense: Vec<Complex64> = {
-            let mut arr = Array1::from_vec(signal.to_vec());
+            let mut arr = Array1::from(signal.to_vec());
             apollo_fft::fft_1d_complex_inplace(&mut arr);
-            let (data, offset) = arr.into_raw_vec_and_offset();
-            debug_assert_eq!(offset.unwrap_or(0), 0);
-            data
+            arr.to_vec()
         };
 
         // O(N log K) top-K selection via min-heap of size K.
@@ -273,11 +271,9 @@ impl SparseFftPlan {
             });
         }
 
-        let mut arr = Array1::from_vec(spectrum.to_dense());
+        let mut arr = Array1::from(spectrum.to_dense());
         apollo_fft::ifft_1d_complex_inplace(&mut arr);
-        let (data, offset) = arr.into_raw_vec_and_offset();
-        debug_assert_eq!(offset.unwrap_or(0), 0);
-        Ok(data)
+        Ok(arr.to_vec())
     }
 
     /// Inverse sparse transform into a Mnemosyne-backed Leto 1D complex array.
@@ -615,7 +611,7 @@ mod tests {
     use super::*;
     use apollo_fft::fft_1d_complex_inplace;
     use approx::assert_abs_diff_eq;
-    use ndarray::Array1;
+    use leto::Array1;
     use proptest::prelude::*;
 
     fn exactly_sparse_signal() -> Vec<Complex64> {
@@ -936,7 +932,7 @@ mod tests {
                 freq_domain[i + 1] = Complex64::new(re_parts[i % 4], 0.0);
             }
             // IFFT to get the time-domain signal.
-            let mut arr = Array1::from_vec(freq_domain.clone());
+            let mut arr = Array1::from(freq_domain.clone());
             apollo_fft::ifft_1d_complex_inplace(&mut arr);
             let signal: Vec<Complex64> = arr.iter().copied().collect();
 
@@ -976,7 +972,7 @@ mod tests {
             let spectrum = plan.forward(&signal).expect("forward");
 
             // Compute the full DFT to get all coefficients.
-            let mut arr = Array1::from_vec(signal.clone());
+            let mut arr = Array1::from(signal.clone());
             fft_1d_complex_inplace(&mut arr);
             let full_dft: Vec<Complex64> = arr.iter().copied().collect();
 
@@ -1015,7 +1011,7 @@ mod tests {
             let spectrum = plan.forward(&signal).expect("forward");
 
             // Compute the full DFT independently.
-            let mut arr = Array1::from_vec(signal);
+            let mut arr = Array1::from(signal);
             fft_1d_complex_inplace(&mut arr);
             let full_dft: Vec<Complex64> = arr.iter().copied().collect();
 

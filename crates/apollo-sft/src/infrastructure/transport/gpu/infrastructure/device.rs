@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use apollo_fft::PrecisionProfile;
 use crate::{SparseComplexStorage, SparseSpectrum};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::SftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -296,7 +296,7 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
 
 #[cfg(test)]
 mod tests {
-    use num_complex::Complex32;
+    use eunomia::Complex32;
 
     use super::leto_view1_cow;
 

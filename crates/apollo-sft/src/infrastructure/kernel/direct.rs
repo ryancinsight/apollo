@@ -8,7 +8,7 @@
 #[cfg(test)]
 use mnemosyne::scratch::ScratchPool;
 #[cfg(test)]
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Below this reference-row length, scalar accumulation avoids Hermes dispatch and scratch setup.
 #[cfg(test)]
