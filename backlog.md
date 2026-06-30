@@ -16,6 +16,27 @@ Remaining replacement work:
   - [x] Re-base the `-wgpu` device plumbing onto `hephaestus-wgpu` (re-homes device/buffer/queue/pipeline acquisition, keeping Apollo WGSL kernels).
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
+- [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
+  (not a workspace member, zero consumers, never built); branded interior
+  mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
+- [ ] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
+  it no longer fits the "apollo on leto + hephaestus backends" architecture, it
+  is a redundant indirection over `hephaestus_wgpu` (`pub use hephaestus_wgpu`,
+  `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
+  `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
+  device plumbing is on hephaestus):
+  - 18 consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+    `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
+  - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
+    `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
+    buffer / `ComputeBackend` directly; this also unwinds the lingering
+    apollo↔`coeus_core` GPU-storage coupling (only 2 apollo crates touch
+    coeus-core). A leto-array GPU path puts the buffer as a leto `Storage` impl
+    in hephaestus, not in apollo.
+  - `get_global_device()` singleton → keep apollo-local (a `OnceLock` over a
+    `hephaestus_wgpu::WgpuDevice`) or promote to hephaestus.
+  - delete `crates/apollo-wgpu-helpers` + its 18 dependency entries.
+  Feature-gated GPU code; verify under the wgpu feature, differential vs CPU.
 
 ## Delivered
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
