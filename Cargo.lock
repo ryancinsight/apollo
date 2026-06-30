@@ -307,13 +307,12 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -758,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-core"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "bytemuck",
  "eunomia",

@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::buffers::ensure_sample_capacity;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{NufftGpuBuffers1D, NufftGpuBuffers3D};
 use apollo_fft::GpuFft3d;
-use num_complex::Complex32;
+use eunomia::Complex32;
 use std::sync::Arc;
 
 impl NufftGpuKernel {

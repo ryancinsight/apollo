@@ -1,7 +1,7 @@
 use apollo_fft::PrecisionProfile;
 use crate::NufftComplexStorage;
-use ndarray::{Array1, Array3};
-use num_complex::{Complex32, Complex64};
+use leto::{Array1, Array3};
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -38,7 +38,7 @@ impl NufftWgpuBackend {
             positions,
             values,
         )?;
-        Ok(Array1::from_vec(
+        Ok(Array1::from(
             output
                 .into_iter()
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
@@ -128,8 +128,8 @@ impl NufftWgpuBackend {
         let output = self.kernel.execute_fast_type1_3d(
             self.device.device(),
             self.device.queue(),
-            (grid.nx, grid.ny, grid.nz),
-            (fast.mx, fast.my, fast.mz),
+            [grid.nx, grid.ny, grid.nz],
+            [fast.mx, fast.my, fast.mz],
             plan.kernel_width(),
             (lx as f32, ly as f32, lz as f32),
             fast.beta as f32,
@@ -142,7 +142,7 @@ impl NufftWgpuBackend {
             .into_iter()
             .map(|v| Complex64::new(v.re as f64, v.im as f64))
             .collect();
-        Array3::from_shape_vec((grid.nx, grid.ny, grid.nz), converted).map_err(|_| {
+        Array3::from_shape_vec([grid.nx, grid.ny, grid.nz], converted).map_err(|_| {
             NufftWgpuError::InvalidPlan {
                 message: "fast 3D type1 output shape does not match grid dimensions",
             }
@@ -160,7 +160,7 @@ impl NufftWgpuBackend {
     ) -> NufftWgpuResult<()> {
         validate_typed_profile::<T>(precision)?;
         let grid = plan.grid();
-        if output.dim() != (grid.nx, grid.ny, grid.nz) {
+        if output.shape() != (grid.nx, grid.ny, grid.nz) {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "typed output shape must match 3D plan grid dimensions",
             });
@@ -198,7 +198,7 @@ impl NufftWgpuBackend {
         let values = leto_view1_cow(values);
         let grid = plan.grid();
         let mut output = Array3::from_elem(
-            (grid.nx, grid.ny, grid.nz),
+            [grid.nx, grid.ny, grid.nz],
             T::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.execute_fast_type1_3d_typed_into(
@@ -273,7 +273,7 @@ impl NufftWgpuBackend {
             .into_iter()
             .map(|v| Complex64::new(v.re as f64, v.im as f64))
             .collect();
-        Array3::from_shape_vec((grid.nx, grid.ny, grid.nz), converted).map_err(|_| {
+        Array3::from_shape_vec([grid.nx, grid.ny, grid.nz], converted).map_err(|_| {
             NufftWgpuError::InvalidPlan {
                 message: "fast 3D type1 with_buffers output shape does not match grid",
             }

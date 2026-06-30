@@ -16,7 +16,7 @@ pub mod type1;
 pub mod type2;
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 // Re-export GPU buffers so they remain under the same public path.

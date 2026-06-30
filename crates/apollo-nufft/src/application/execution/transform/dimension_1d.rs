@@ -36,8 +36,8 @@
 use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use leto::Array1;
+use eunomia::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::f64::consts::PI;
 
@@ -143,7 +143,7 @@ impl NufftPlan1D {
         let beta = PI * (1.0 - 1.0 / (2.0 * sigma as f64)) * (2 * kernel_width) as f64;
         let i0_beta = i0(beta);
 
-        let deconv = Array1::from_shape_fn(domain.n, |k| {
+        let deconv = Array1::from_shape_fn([domain.n], |[k]| {
             let k_signed = fft_signed_index(k, domain.n);
             let xi = k_signed as f64 / m as f64;
             1.0 / kb_kernel_ft(xi, kernel_width, beta, i0_beta)
@@ -170,7 +170,7 @@ impl NufftPlan1D {
         let mut grid = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![Complex64::new(0.0, 0.0); self.n_out];
         self.type1_into(positions, values, &mut grid, &mut output);
-        Array1::from_vec(output)
+        Array1::from(output)
     }
 
     /// Run type-1 NUFFT from Leto position and value views.
@@ -624,7 +624,7 @@ pub fn nufft_type1_1d(
             *value = nufft_type1_coefficient(k, positions, values, domain.n, two_pi_over_l);
         });
     }
-    Array1::from_vec(output)
+    Array1::from(output)
 }
 
 fn nufft_type1_coefficient(
@@ -688,7 +688,7 @@ pub fn nufft_type2_1d(
     domain: UniformDomain1D,
 ) -> Vec<Complex64> {
     let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
-    let work_items = positions.len().saturating_mul(fourier_coeffs.len());
+    let work_items = positions.len().saturating_mul(fourier_coeffs.size());
     if work_items >= DIRECT_PAR_OP_THRESHOLD {
         let coeffs = fourier_coeffs
             .as_slice()
@@ -790,7 +790,7 @@ mod tests {
             Complex64::new(0.25, 0.1),
         ];
         let output = nufft_type1_1d(&positions, &values, domain);
-        assert_eq!(output.len(), 8);
+        assert_eq!(output.size(), 8);
         // DC mode: sum of all values (analytical)
         let expected_dc = Complex64::new(1.25, 0.6);
         let err = (output[0] - expected_dc).norm();
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn hermes_type2_samples_match_scalar_formula_at_threshold() {
         let domain = UniformDomain1D::new(128, 1.0).unwrap();
-        let coeffs = Array1::from_shape_fn(domain.n, |index| {
+        let coeffs = Array1::from_shape_fn([domain.n], |[index]| {
             Complex64::new((index as f64 * 0.125).sin(), (index as f64 * 0.25).cos())
         });
         let coeff_lanes = interleaved_lanes(coeffs.as_slice().expect("contiguous coeffs"));
@@ -978,7 +978,7 @@ mod tests {
             PrecisionProfile::LOW_PRECISION_F32,
         )
         .expect("typed complex32 type2");
-        let expected_type2 = plan.type2(&Array1::from_vec(expected32.to_vec()), &positions);
+        let expected_type2 = plan.type2(&Array1::from(expected32.to_vec()), &positions);
         for (actual, expected) in recovered32.iter().zip(expected_type2.iter()) {
             assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-3);
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-3);
@@ -1104,15 +1104,15 @@ mod tests {
             DEFAULT_NUFFT_KERNEL_WIDTH,
         );
         let positions = vec![0.0, 0.09, 0.21, 0.47];
-        let coefficients = Array1::from_vec(
+        let coefficients = Array1::from(
             (0..plan.n_out)
                 .map(|i| Complex64::new((i as f64 * 0.2).cos(), (i as f64 * 0.3).sin()))
-                .collect(),
+                .collect::<Vec<_>>(),
         );
         let leto_positions =
             leto::Array1::from_shape_vec([positions.len()], positions.clone()).unwrap();
         let leto_coefficients =
-            leto::Array1::from_shape_vec([coefficients.len()], coefficients.to_vec()).unwrap();
+            leto::Array1::from_shape_vec([coefficients.size()], coefficients.to_vec()).unwrap();
         let expected = plan.type2(&coefficients, &positions);
 
         let actual = plan

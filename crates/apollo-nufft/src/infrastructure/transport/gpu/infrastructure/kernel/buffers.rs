@@ -1,6 +1,6 @@
 use super::Position3Pod;
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 /// Pre-allocated GPU buffers for repeated 1D NUFFT fast-path execution.
 ///
