@@ -27,7 +27,7 @@
 mod tests {
     use crate::{NttPlan, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
+    use leto::Array1;
 
     use crate::infrastructure::transport::gpu::{NttWgpuBackend, NttWgpuPlan, WgpuCapabilities, WgpuError};
 
@@ -109,7 +109,7 @@ mod tests {
 
             let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
             let cpu = cpu_plan
-                .forward(&Array1::from_vec(input.clone()))
+                .forward(&Array1::from(input.clone()))
                 .expect("cpu forward");
             assert_eq!(gpu, cpu.to_vec(), "gpu must match cpu reference exactly");
         }
@@ -124,7 +124,7 @@ mod tests {
 
             let cpu_plan = NttPlan::new(input.len()).expect("cpu plan");
             let cpu = cpu_plan
-                .forward(&Array1::from_vec(input.clone()))
+                .forward(&Array1::from(input.clone()))
                 .expect("cpu forward");
 
             assert_eq!(
@@ -486,7 +486,7 @@ mod tests {
 
     mod cpu_reference {
         use crate::{NttPlan, DEFAULT_MODULUS};
-        use ndarray::Array1;
+        use leto::Array1;
         use proptest::prelude::*;
 
         proptest! {

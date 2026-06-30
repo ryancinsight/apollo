@@ -290,12 +290,11 @@ version = "0.2.0"
 dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
