@@ -10,7 +10,7 @@
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use apollo_fft::{FftPlan1D, Shape1D};
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 thread_local! {
     static QUADRATURE_ANALYTIC_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };

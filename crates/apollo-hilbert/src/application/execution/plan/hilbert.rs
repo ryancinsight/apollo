@@ -10,7 +10,7 @@ use crate::infrastructure::kernel::direct::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };

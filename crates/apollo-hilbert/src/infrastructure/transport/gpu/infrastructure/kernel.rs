@@ -11,7 +11,7 @@
 //!   3. hilbert_inverse_dft: IDFT of recovered spectrum -> original real signal in output
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;

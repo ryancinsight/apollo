@@ -1,7 +1,7 @@
 //! Analytic signal storage and derived envelope/phase observables.
 
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Dense analytic signal `z[n] = x[n] + i H{x}[n]`.
 #[derive(Debug, Clone, PartialEq)]

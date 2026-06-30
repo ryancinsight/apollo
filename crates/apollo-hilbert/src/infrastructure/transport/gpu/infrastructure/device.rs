@@ -3,7 +3,7 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 use apollo_fft::PrecisionProfile;
 use crate::HilbertStorage;
