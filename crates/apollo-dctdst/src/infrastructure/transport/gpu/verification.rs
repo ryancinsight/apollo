@@ -511,10 +511,9 @@ mod tests {
 
         // 23. dct2_forward_2d_matches_cpu_parity
         {
-            use ndarray::array;
             // 3×3 analytically-separable: each row and column independently verified by
             // the 1D DCT-II; the 2D separable result equals applying 1D twice.
-            let input = array![[1.0_f32, -2.0, 0.5], [0.25, 3.0, -1.5], [-0.75, 0.5, 2.0]];
+            let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f32, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
             let gpu_2d = backend
                 .execute_forward_2d(&plan, &input)
@@ -538,7 +537,7 @@ mod tests {
                     cpu_2d[r][c] = out[r];
                 }
             }
-            assert_eq!(gpu_2d.dim(), (3, 3));
+            assert_eq!(gpu_2d.shape(), [3, 3]);
             for r in 0..3 {
                 for c in 0..3 {
                     assert!(
@@ -553,8 +552,7 @@ mod tests {
 
         // 24. dct2_inverse_2d_recovers_input
         {
-            use ndarray::array;
-            let input = array![[1.0_f32, -2.0, 0.5], [0.25, 3.0, -1.5], [-0.75, 0.5, 2.0]];
+            let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f32, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
             let spectrum = backend
                 .execute_forward_2d(&plan, &input)
@@ -563,7 +561,7 @@ mod tests {
                 .execute_inverse_2d(&plan, &spectrum)
                 .expect("gpu 2d inverse");
 
-            assert_eq!(recovered.dim(), (3, 3));
+            assert_eq!(recovered.shape(), [3, 3]);
             for r in 0..3 {
                 for c in 0..3 {
                     assert!(
@@ -578,8 +576,7 @@ mod tests {
 
         // 25. leto_2d_forward_and_inverse_match_ndarray
         {
-            use ndarray::array;
-            let input = array![[1.0_f32, -2.0, 0.5], [0.25, 3.0, -1.5], [-0.75, 0.5, 2.0]];
+            let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f32, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
             let expected_forward = backend
                 .execute_forward_2d(&plan, &input)
@@ -621,9 +618,9 @@ mod tests {
 
         // 26. dct2_forward_3d_matches_cpu_parity
         {
-            use ndarray::Array3;
+            use leto::Array3;
             // 3×3×3 analytically-separable: same separable kernel applied along each axis.
-            let mut input = Array3::<f32>::zeros((3, 3, 3));
+            let mut input = Array3::<f32>::zeros([3, 3, 3]);
             // Fill with a known non-trivial signal.
             let flat: [f32; 27] = [
                 1.0, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1,
@@ -675,7 +672,7 @@ mod tests {
                     }
                 }
             }
-            assert_eq!(gpu_3d.dim(), (3, 3, 3));
+            assert_eq!(gpu_3d.shape(), [3, 3, 3]);
             for i in 0..3 {
                 for j in 0..3 {
                     for k in 0..3 {
@@ -692,8 +689,8 @@ mod tests {
 
         // 27. dct2_inverse_3d_recovers_input
         {
-            use ndarray::Array3;
-            let mut input = Array3::<f32>::zeros((3, 3, 3));
+            use leto::Array3;
+            let mut input = Array3::<f32>::zeros([3, 3, 3]);
             let flat: [f32; 27] = [
                 1.0, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1,
                 0.7, -0.9, 0.3, 1.5, -0.2, 0.8, -1.4, 0.6, -0.1, 0.9, -2.5, 1.3,
@@ -715,7 +712,7 @@ mod tests {
                 .execute_inverse_3d(&plan, &spectrum)
                 .expect("gpu 3d inverse");
 
-            assert_eq!(recovered.dim(), (3, 3, 3));
+            assert_eq!(recovered.shape(), [3, 3, 3]);
             for i in 0..3 {
                 for j in 0..3 {
                     for k in 0..3 {
@@ -732,12 +729,12 @@ mod tests {
 
         // 28. leto_3d_forward_and_inverse_match_ndarray
         {
-            use ndarray::Array3;
+            use leto::Array3;
             let flat: [f32; 27] = [
                 1.0, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1,
                 0.7, -0.9, 0.3, 1.5, -0.2, 0.8, -1.4, 0.6, -0.1, 0.9, -2.5, 1.3,
             ];
-            let input = Array3::from_shape_vec((3, 3, 3), flat.to_vec()).expect("ndarray 3d input");
+            let input = Array3::from_shape_vec([3, 3, 3], flat.to_vec()).expect("ndarray 3d input");
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
             let expected_forward = backend
                 .execute_forward_3d(&plan, &input)
@@ -779,9 +776,9 @@ mod tests {
 
         // 29. execute_forward_2d_rejects_non_square_input
         {
-            use ndarray::Array2;
+            use leto::Array2;
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
-            let input = Array2::<f32>::zeros((2, 3));
+            let input = Array2::<f32>::zeros([2, 3]);
             let err = backend
                 .execute_forward_2d(&plan, &input)
                 .expect_err("non-square 2D must fail");
@@ -790,9 +787,9 @@ mod tests {
 
         // 30. execute_forward_3d_rejects_non_cubic_input
         {
-            use ndarray::Array3;
+            use leto::Array3;
             let plan = DctDstWgpuPlan::new(3, RealTransformKind::DctII);
-            let input = Array3::<f32>::zeros((2, 3, 3));
+            let input = Array3::<f32>::zeros([2, 3, 3]);
             let err = backend
                 .execute_forward_3d(&plan, &input)
                 .expect_err("non-cubic 3D must fail");

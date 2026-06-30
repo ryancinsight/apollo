@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{RealTransformKind, RealTransformStorage};
 use apollo_fft::PrecisionProfile;
-use ndarray::{Array2, Array3};
+use leto::{Array2, Array3};
 
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
@@ -127,7 +127,7 @@ impl DctDstWgpuBackend {
         input: &Array2<f32>,
     ) -> WgpuResult<Array2<f32>> {
         let n = plan.len();
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != n || cols != n {
             return Err(WgpuError::ShapeMismatch {
                 message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
@@ -136,7 +136,7 @@ impl DctDstWgpuBackend {
         // Column pass (inverse): columns are strided, so a single lane buffer
         // is reused instead of a per-column allocation.
         let mut lane = Vec::with_capacity(n);
-        let mut tmp = Array2::<f32>::zeros((n, n));
+        let mut tmp = Array2::<f32>::zeros([n, n]);
         for c in 0..n {
             lane.clear();
             lane.extend(input.column(c).iter().copied());
@@ -147,7 +147,7 @@ impl DctDstWgpuBackend {
                 .for_each(|(s, v)| *s = *v);
         }
         // Row pass (inverse): contiguous rows are borrowed without copying.
-        let mut result = Array2::<f32>::zeros((n, n));
+        let mut result = Array2::<f32>::zeros([n, n]);
         for r in 0..n {
             let row = tmp.row(r);
             let out = match row.as_slice() {
@@ -188,7 +188,7 @@ impl DctDstWgpuBackend {
         input: &Array3<f32>,
     ) -> WgpuResult<Array3<f32>> {
         let n = plan.len();
-        let (d0, d1, d2) = input.dim();
+        let [d0, d1, d2] = input.shape();
         if d0 != n || d1 != n || d2 != n {
             return Err(WgpuError::ShapeMismatch {
                 message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
@@ -198,7 +198,7 @@ impl DctDstWgpuBackend {
         // strided so each is gathered into it instead of a fresh allocation.
         let mut lane = Vec::with_capacity(n);
         // Axis-2 pass (inverse).
-        let mut tmp0 = Array3::<f32>::zeros((n, n, n));
+        let mut tmp0 = Array3::<f32>::zeros([n, n, n]);
         for i in 0..n {
             for j in 0..n {
                 lane.clear();
@@ -210,7 +210,7 @@ impl DctDstWgpuBackend {
             }
         }
         // Axis-1 pass (inverse).
-        let mut tmp1 = Array3::<f32>::zeros((n, n, n));
+        let mut tmp1 = Array3::<f32>::zeros([n, n, n]);
         for i in 0..n {
             for k in 0..n {
                 lane.clear();
@@ -222,7 +222,7 @@ impl DctDstWgpuBackend {
             }
         }
         // Axis-0 pass (inverse).
-        let mut result = Array3::<f32>::zeros((n, n, n));
+        let mut result = Array3::<f32>::zeros([n, n, n]);
         for j in 0..n {
             for k in 0..n {
                 lane.clear();

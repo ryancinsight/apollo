@@ -6,7 +6,7 @@ mod tests {
     use crate::infrastructure::kernel::fast::{dct2_dst2_fast, dct2_fast, dst2_fast};
     use crate::{DctDstError, DctDstPlan, RealTransformKind};
     use approx::assert_abs_diff_eq;
-    use ndarray::{Array2, Array3};
+    use leto::{Array2, Array3};
     use proptest::prelude::*;
 
     #[test]
@@ -235,7 +235,7 @@ mod tests {
     fn forward_2d_matches_separable_manual_application() {
         let plan = DctDstPlan::new(4, RealTransformKind::DctII).unwrap();
         let input = Array2::from_shape_vec(
-            (4, 4),
+            [4, 4],
             vec![
                 1.0, 2.0, 3.0, 4.0, //
                 0.5, -1.0, 2.0, 1.5, //
@@ -247,20 +247,20 @@ mod tests {
 
         let actual = plan.forward_2d(&input).unwrap();
 
-        let mut row_stage = Array2::<f64>::zeros((4, 4));
-        let mut expected = Array2::<f64>::zeros((4, 4));
+        let mut row_stage = Array2::<f64>::zeros([4, 4]);
+        let mut expected = Array2::<f64>::zeros([4, 4]);
         for i in 0..4 {
-            let row: Vec<f64> = (0..4).map(|j| input[(i, j)]).collect();
+            let row: Vec<f64> = (0..4).map(|j| input[[i, j]]).collect();
             let transformed = plan.forward(&row).unwrap();
             for j in 0..4 {
-                row_stage[(i, j)] = transformed[j];
+                row_stage[[i, j]] = transformed[j];
             }
         }
         for j in 0..4 {
-            let col: Vec<f64> = (0..4).map(|i| row_stage[(i, j)]).collect();
+            let col: Vec<f64> = (0..4).map(|i| row_stage[[i, j]]).collect();
             let transformed = plan.forward(&col).unwrap();
             for i in 0..4 {
-                expected[(i, j)] = transformed[i];
+                expected[[i, j]] = transformed[i];
             }
         }
 
@@ -273,7 +273,7 @@ mod tests {
     fn inverse_2d_roundtrip_recovers_signal() {
         let plan = DctDstPlan::new(4, RealTransformKind::DstII).unwrap();
         let input = Array2::from_shape_vec(
-            (4, 4),
+            [4, 4],
             vec![
                 0.25, -1.0, 3.0, 2.0, //
                 1.0, 0.0, -2.5, 4.0, //
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn inverse_3d_roundtrip_recovers_signal() {
         let plan = DctDstPlan::new(3, RealTransformKind::DctIII).unwrap();
-        let input = Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
+        let input = Array3::from_shape_fn([3, 3, 3], |[i, j, k]| {
             (0.7 * i as f64).sin() + 0.5 * (1.3 * j as f64).cos() - 0.25 * k as f64
         });
         let coeff = plan.forward_3d(&input).unwrap();
@@ -305,14 +305,14 @@ mod tests {
     #[test]
     fn rejects_non_square_or_non_cubic_shapes() {
         let plan2 = DctDstPlan::new(4, RealTransformKind::DctII).unwrap();
-        let nonsquare = Array2::<f64>::zeros((4, 3));
+        let nonsquare = Array2::<f64>::zeros([4, 3]);
         assert!(matches!(
             plan2.forward_2d(&nonsquare),
             Err(DctDstError::LengthMismatch)
         ));
 
         let plan3 = DctDstPlan::new(3, RealTransformKind::DstIII).unwrap();
-        let noncubic = Array3::<f64>::zeros((3, 3, 2));
+        let noncubic = Array3::<f64>::zeros([3, 3, 2]);
         assert!(matches!(
             plan3.inverse_3d(&noncubic),
             Err(DctDstError::LengthMismatch)

@@ -1,6 +1,6 @@
 use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_ndarray,
-    leto_array3_from_ndarray, leto_view1_cow,
+    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_dense,
+    leto_array3_from_dense, leto_view1_cow,
 };
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
@@ -9,7 +9,7 @@ use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, 
 use crate::infrastructure::kernel::fast::{
     dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
 };
-use ndarray::{Array2, Array3};
+use leto::{Array2, Array3};
 
 impl DctDstPlan {
     /// Compute the inverse of the given forward transform.
@@ -46,13 +46,13 @@ impl DctDstPlan {
 
     /// Execute a separable 2D inverse transform over a square `N x N` field.
     ///
-    /// Returns `LengthMismatch` unless `input.dim() == (N, N)`.
+    /// Returns `LengthMismatch` unless `input.shape() == (N, N)`.
     pub fn inverse_2d(&self, input: &Array2<f64>) -> DctDstResult<Array2<f64>> {
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != self.len() || cols != self.len() {
             return Err(DctDstError::LengthMismatch);
         }
-        let mut output = Array2::<f64>::zeros((rows, cols));
+        let mut output = Array2::<f64>::zeros([rows, cols]);
         self.inverse_2d_into(input, &mut output)?;
         Ok(output)
     }
@@ -64,7 +64,7 @@ impl DctDstPlan {
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let input = array2_from_leto_view(input);
         let output = self.inverse_2d(&input)?;
-        Ok(leto_array2_from_ndarray(&output))
+        Ok(leto_array2_from_dense(&output))
     }
 
     /// Execute a separable 2D inverse transform into caller-owned output.
@@ -77,31 +77,31 @@ impl DctDstPlan {
         output: &mut Array2<f64>,
     ) -> DctDstResult<()> {
         let n = self.len();
-        if input.dim() != (n, n) || output.dim() != (n, n) {
+        if input.shape() != [n, n] || output.shape() != [n, n] {
             return Err(DctDstError::LengthMismatch);
         }
 
-        let mut stage = Array2::<f64>::zeros((n, n));
+        let mut stage = Array2::<f64>::zeros([n, n]);
         let mut line_in = vec![0.0_f64; n];
         let mut line_out = vec![0.0_f64; n];
 
         for i in 0..n {
             for j in 0..n {
-                line_in[j] = input[(i, j)];
+                line_in[j] = input[[i, j]];
             }
             self.inverse_into(&line_in, &mut line_out)?;
             for j in 0..n {
-                stage[(i, j)] = line_out[j];
+                stage[[i, j]] = line_out[j];
             }
         }
 
         for j in 0..n {
             for i in 0..n {
-                line_in[i] = stage[(i, j)];
+                line_in[i] = stage[[i, j]];
             }
             self.inverse_into(&line_in, &mut line_out)?;
             for i in 0..n {
-                output[(i, j)] = line_out[i];
+                output[[i, j]] = line_out[i];
             }
         }
 
@@ -110,10 +110,10 @@ impl DctDstPlan {
 
     /// Execute a separable 3D inverse transform over a cubic `N x N x N` field.
     ///
-    /// Returns `LengthMismatch` unless `input.dim() == (N, N, N)`.
+    /// Returns `LengthMismatch` unless `input.shape() == (N, N, N)`.
     pub fn inverse_3d(&self, input: &Array3<f64>) -> DctDstResult<Array3<f64>> {
-        let dims = input.dim();
-        if dims.0 != self.len() || dims.1 != self.len() || dims.2 != self.len() {
+        let dims = input.shape();
+        if dims[0] != self.len() || dims[1] != self.len() || dims[2] != self.len() {
             return Err(DctDstError::LengthMismatch);
         }
         let mut output = Array3::<f64>::zeros(dims);
@@ -128,7 +128,7 @@ impl DctDstPlan {
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let input = array3_from_leto_view(input);
         let output = self.inverse_3d(&input)?;
-        Ok(leto_array3_from_ndarray(&output))
+        Ok(leto_array3_from_dense(&output))
     }
 
     /// Execute a separable 3D inverse transform into caller-owned output.
@@ -141,23 +141,23 @@ impl DctDstPlan {
         output: &mut Array3<f64>,
     ) -> DctDstResult<()> {
         let n = self.len();
-        if input.dim() != (n, n, n) || output.dim() != (n, n, n) {
+        if input.shape() != [n, n, n] || output.shape() != [n, n, n] {
             return Err(DctDstError::LengthMismatch);
         }
 
-        let mut stage1 = Array3::<f64>::zeros((n, n, n));
-        let mut stage2 = Array3::<f64>::zeros((n, n, n));
+        let mut stage1 = Array3::<f64>::zeros([n, n, n]);
+        let mut stage2 = Array3::<f64>::zeros([n, n, n]);
         let mut line_in = vec![0.0_f64; n];
         let mut line_out = vec![0.0_f64; n];
 
         for i in 0..n {
             for j in 0..n {
                 for k in 0..n {
-                    line_in[k] = input[(i, j, k)];
+                    line_in[k] = input[[i, j, k]];
                 }
                 self.inverse_into(&line_in, &mut line_out)?;
                 for k in 0..n {
-                    stage1[(i, j, k)] = line_out[k];
+                    stage1[[i, j, k]] = line_out[k];
                 }
             }
         }
@@ -165,11 +165,11 @@ impl DctDstPlan {
         for i in 0..n {
             for k in 0..n {
                 for j in 0..n {
-                    line_in[j] = stage1[(i, j, k)];
+                    line_in[j] = stage1[[i, j, k]];
                 }
                 self.inverse_into(&line_in, &mut line_out)?;
                 for j in 0..n {
-                    stage2[(i, j, k)] = line_out[j];
+                    stage2[[i, j, k]] = line_out[j];
                 }
             }
         }
@@ -177,11 +177,11 @@ impl DctDstPlan {
         for j in 0..n {
             for k in 0..n {
                 for i in 0..n {
-                    line_in[i] = stage2[(i, j, k)];
+                    line_in[i] = stage2[[i, j, k]];
                 }
                 self.inverse_into(&line_in, &mut line_out)?;
                 for i in 0..n {
-                    output[(i, j, k)] = line_out[i];
+                    output[[i, j, k]] = line_out[i];
                 }
             }
         }
