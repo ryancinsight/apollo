@@ -5,7 +5,7 @@ use apollo_fft::{
     ifft_1d_leto_typed, ifft_1d_slice_typed,
 };
 use leto::{SliceArg, Storage};
-use ndarray::Array1;
+use leto::Array1;
 
 #[test]
 fn slice_fft_roundtrip_f64() {
@@ -26,8 +26,8 @@ fn slice_fft_roundtrip_f64() {
 fn slice_matches_array_api_f32() {
     let signal = vec![0.3f32, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5];
     let via_slice = fft_1d_slice_typed::<f32>(&signal);
-    let via_array = fft_1d_array_typed::<f32>(&Array1::from_vec(signal.clone()));
-    assert_eq!(via_slice.len(), via_array.len());
+    let via_array = fft_1d_array_typed::<f32>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
+    assert_eq!(via_slice.len(), via_array.size());
     for i in 0..via_slice.len() {
         assert_eq!(via_slice[i].re, via_array[i].re, "re mismatch at {i}");
         assert_eq!(via_slice[i].im, via_array[i].im, "im mismatch at {i}");
@@ -53,8 +53,8 @@ fn slice_matches_array_api_f16_storage() {
         f16::from_f32(-2.5),
     ];
     let via_slice = fft_1d_slice_typed::<f16>(&signal);
-    let via_array = fft_1d_array_typed::<f16>(&Array1::from_vec(signal.clone()));
-    assert_eq!(via_slice.len(), via_array.len());
+    let via_array = fft_1d_array_typed::<f16>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
+    assert_eq!(via_slice.len(), via_array.size());
     for i in 0..via_slice.len() {
         assert_eq!(via_slice[i].re, via_array[i].re, "re mismatch at {i}");
         assert_eq!(via_slice[i].im, via_array[i].im, "im mismatch at {i}");
@@ -72,9 +72,9 @@ fn leto_fft_matches_ndarray_array_api_f32() {
     let signal = vec![0.3f32, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5];
     let leto_input = leto::Array1::from_shape_vec([signal.len()], signal.clone()).unwrap();
     let via_leto = fft_1d_leto_typed::<f32>(leto_input.view());
-    let via_array = fft_1d_array_typed::<f32>(&Array1::from_vec(signal));
+    let via_array = fft_1d_array_typed::<f32>(&Array1::from_shape_vec([signal.len()], signal).unwrap());
 
-    assert_eq!(via_leto.shape(), [via_array.len()]);
+    assert_eq!(via_leto.shape(), [via_array.size()]);
     assert_eq!(via_leto.strides(), [1]);
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 
@@ -99,6 +99,6 @@ fn leto_fft_accepts_strided_view_and_matches_logical_ndarray_values() {
         .unwrap();
 
     let via_leto = fft_1d_leto_typed::<f32>(strided);
-    let via_array = fft_1d_array_typed::<f32>(&Array1::from_vec(logical));
+    let via_array = fft_1d_array_typed::<f32>(&Array1::from_shape_vec([logical.len()], logical).unwrap());
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 }

@@ -403,15 +403,15 @@ fn test_small_sizes_correctness() {
         let n = input.len();
         let mut output = vec![eunomia::Complex::<T>::ZERO; n];
         let sign = if inverse {
-            T::from(1.0).unwrap()
+            T::from_f64((1.0) as f64)
         } else {
-            T::from(-1.0).unwrap()
+            T::from_f64((-1.0) as f64)
         };
-        let two_pi = T::from(2.0 * std::f64::consts::PI).unwrap();
+        let two_pi = T::from_f64((2.0 * std::f64::consts::PI) as f64);
         for k in 0..n {
             let mut sum = eunomia::Complex::<T>::ZERO;
             for j in 0..n {
-                let theta = two_pi * T::from(k * j).unwrap() / T::from(n).unwrap();
+                let theta = two_pi * T::from_f64((k * j) as f64) / T::from_f64((n) as f64);
                 let w = eunomia::Complex::new(theta.cos(), sign * theta.sin());
                 sum = sum + input[j] * w;
             }

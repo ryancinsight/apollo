@@ -11,7 +11,7 @@ fn real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
     let expected_recovered1 = ifft_1d_array(&expected_spectrum1);
     let mut spectrum1 = expected_spectrum1.clone();
     let spectrum_ptr1 = spectrum1.as_slice().unwrap().as_ptr();
-    let mut actual_recovered1 = Array1::<f64>::zeros(18);
+    let mut actual_recovered1 = Array1::<f64>::zeros([18]);
     ifft_1d_array_into_spectrum_scratch(&mut spectrum1, &mut actual_recovered1);
     assert_eq!(spectrum_ptr1, spectrum1.as_slice().unwrap().as_ptr());
     for (expected, actual) in expected_recovered1.iter().zip(actual_recovered1.iter()) {
@@ -40,7 +40,7 @@ fn typed_real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
     let expected_recovered32 = ifft_1d_array_typed::<f32>(&expected_spectrum32);
     let mut spectrum32 = expected_spectrum32.clone();
     let spectrum_ptr32 = spectrum32.as_slice().unwrap().as_ptr();
-    let mut actual_recovered32 = Array1::<f32>::zeros(20);
+    let mut actual_recovered32 = Array1::<f32>::zeros([20]);
     ifft_1d_array_typed_into_spectrum_scratch::<f32>(&mut spectrum32, &mut actual_recovered32);
     assert_eq!(spectrum_ptr32, spectrum32.as_slice().unwrap().as_ptr());
     for (expected, actual) in expected_recovered32.iter().zip(actual_recovered32.iter()) {

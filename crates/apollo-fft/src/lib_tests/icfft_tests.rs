@@ -139,14 +139,14 @@ fn typed_static_complex_wrappers_match_dynamic_f32_paths() {
     let plan1 = FftPlan1D::<f32>::new(Shape1D::new(16).expect("valid 1D shape"));
     let mut expected1 = signal1.clone();
     plan1.forward_complex_inplace(&mut expected1);
-    let mut actual1 = Array1::<Complex32>::zeros(16);
+    let mut actual1 = Array1::<Complex32>::zeros([16]);
     fft_1d_complex_static_typed_into::<f32, 16>(&signal1, &mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 2e-5);
     }
     let mut recovered1 = expected1.clone();
     plan1.inverse_complex_inplace(&mut recovered1);
-    let mut actual_recovered1 = Array1::<Complex32>::zeros(16);
+    let mut actual_recovered1 = Array1::<Complex32>::zeros([16]);
     ifft_1d_complex_static_typed_into::<f32, 16>(&expected1, &mut actual_recovered1);
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 2e-5);
@@ -222,7 +222,7 @@ fn typed_dynamic_complex_wrappers_match_f32_plans_and_reuse_owned_allocation() {
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 2e-5);
     }
-    let mut actual1_into = Array1::<Complex32>::zeros(16);
+    let mut actual1_into = Array1::<Complex32>::zeros([16]);
     fft_1d_complex_typed_into(&signal1, &mut actual1_into);
     for (expected, actual) in expected1.iter().zip(actual1_into.iter()) {
         assert!((expected - actual).norm() < 2e-5);
@@ -246,7 +246,7 @@ fn typed_dynamic_complex_wrappers_match_f32_plans_and_reuse_owned_allocation() {
     for (expected, actual) in recovered1.iter().zip(inverse1.iter()) {
         assert!((expected - actual).norm() < 2e-5);
     }
-    let mut inverse1_into = Array1::<Complex32>::zeros(16);
+    let mut inverse1_into = Array1::<Complex32>::zeros([16]);
     ifft_1d_complex_typed_into(&expected1, &mut inverse1_into);
     for (expected, actual) in recovered1.iter().zip(inverse1_into.iter()) {
         assert!((expected - actual).norm() < 2e-5);

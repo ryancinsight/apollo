@@ -796,7 +796,7 @@ impl GpuFft3dF16Native {
         // Compute h[j] = exp(-πi j²/N) in f32, then narrow to f16.
         // The symmetric extension h[m-j] = h[j] for j=1..N-1 ensures the
         // circular convolution of length M produces the correct linear sum.
-        let mut h = Array1::<Complex64>::zeros(m);
+        let mut h = Array1::<Complex64>::zeros([m]);
         for idx in 0..n {
             let arg = std::f32::consts::PI * (idx * idx) as f32 / n as f32;
             let value = Complex64::new(arg.cos() as f64, arg.sin() as f64);

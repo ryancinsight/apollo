@@ -4,7 +4,7 @@ use eunomia::Complex64;
 use std::f64::consts::PI;
 
 fn signal<const NX: usize, const NY: usize, const NZ: usize>() -> Array3<Complex64> {
-    Array3::from_shape_fn((NX, NY, NZ), |(i, j, k)| {
+    Array3::from_shape_fn([NX, NY, NZ], |[i, j, k]| {
         let x = ((i * NY + j) * NZ + k) as f64;
         Complex64::new(
             (0.17 * x).sin() + 0.11 * (0.07 * x).cos(),
@@ -50,7 +50,7 @@ fn max_err(a: &Array3<Complex64>, b: &Array3<Complex64>) -> f64 {
 #[test]
 fn static_fft_3d_plan_is_zero_sized() {
     assert_eq!(std::mem::size_of::<StaticFftPlan3D<f64, 3, 4, 5>>(), 0);
-    assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().shape(), [3, 4, 5]);
+    assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().shape(), (3, 4, 5));
     assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().nz_c(), 3);
 }
 

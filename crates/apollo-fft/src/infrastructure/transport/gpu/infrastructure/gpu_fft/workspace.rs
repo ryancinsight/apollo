@@ -926,8 +926,8 @@ mod tests {
             );
         }
 
-        let mut allocating_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
-        let mut reusable_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
+        let mut allocating_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
+        let mut reusable_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
         plan.inverse(&allocating_forward, &mut allocating_inverse);
         plan.inverse_with_buffers(&reusable_forward, &mut reusable_inverse, &mut buffers);
 
@@ -981,7 +981,7 @@ mod tests {
             );
         }
 
-        let mut reconstructed = leto::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
+        let mut reconstructed = leto::Array3::from_elem([2, 2, 2], f16::from_f32(0.0));
         plan.inverse_f16_with_buffers(&actual, &mut reconstructed, &mut buffers);
 
         for (actual, expected) in reconstructed.iter().zip(field_f16.iter()) {
@@ -1032,7 +1032,7 @@ mod tests {
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
         let values = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field = leto::Array3::from_shape_vec((2, 2, 2), values.clone()).expect("field");
+        let field = leto::Array3::from_shape_vec([2, 2, 2], values.clone()).expect("field");
         let leto_field = leto::Array3::from_shape_vec([2, 2, 2], values).expect("leto field");
 
         let expected_forward = plan.forward(&field);
@@ -1042,7 +1042,7 @@ mod tests {
             expected_forward.as_slice()
         );
 
-        let mut expected_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
+        let mut expected_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
         plan.inverse(&expected_forward, &mut expected_inverse);
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
@@ -1076,7 +1076,7 @@ mod tests {
             -0.5, 99.0,
         ];
         let logical = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field = leto::Array3::from_shape_vec((2, 2, 2), logical).expect("field");
+        let field = leto::Array3::from_shape_vec([2, 2, 2], logical).expect("field");
         let leto_field = leto::Array3::from_shape_vec([2, 2, 4], backing).expect("leto field");
         let view = leto_field
             .slice_with::<3>(&[
@@ -1120,7 +1120,7 @@ mod tests {
             expected_forward.as_slice()
         );
 
-        let mut expected_inverse = leto::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
+        let mut expected_inverse = leto::Array3::from_elem([2, 2, 2], f16::from_f32(0.0));
         plan.inverse_f16(&expected_forward, &mut expected_inverse);
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)

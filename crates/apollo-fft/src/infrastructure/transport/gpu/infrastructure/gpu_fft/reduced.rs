@@ -188,7 +188,7 @@ mod tests {
         });
 
         let forward = plan.forward(&field);
-        let mut roundtrip = leto::Array3::<f32>::zeros((3, 3, 3));
+        let mut roundtrip = leto::Array3::<f32>::zeros([3, 3, 3]);
         plan.inverse(&forward, &mut roundtrip);
 
         assert_eq!(

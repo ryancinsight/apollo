@@ -599,7 +599,7 @@ impl GpuFft3d {
         m: usize,
         batch_count: u32,
     ) -> ChirpData {
-        let mut h = Array1::<Complex64>::zeros(m);
+        let mut h = Array1::<Complex64>::zeros([m]);
         for idx in 0..n {
             let arg = std::f32::consts::PI * (idx * idx) as f32 / n as f32;
             let value = Complex64::new(arg.cos() as f64, arg.sin() as f64);

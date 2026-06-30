@@ -11,14 +11,14 @@ fn complex_into_wrappers_match_allocating_paths() {
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
     let expected1 = fft_1d_complex(&signal1);
-    let mut actual1 = Array1::<Complex64>::zeros(16);
+    let mut actual1 = Array1::<Complex64>::zeros([16]);
     fft_1d_complex_into(&signal1, &mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered1 = ifft_1d_complex(&expected1);
-    let mut actual_recovered1 = Array1::<Complex64>::zeros(16);
+    let mut actual_recovered1 = Array1::<Complex64>::zeros([16]);
     ifft_1d_complex_into(&expected1, &mut actual_recovered1);
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
@@ -179,14 +179,14 @@ fn static_complex_into_wrappers_match_allocating_paths() {
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
     let expected1 = fft_1d_complex(&signal1);
-    let mut actual1 = Array1::<Complex64>::zeros(16);
+    let mut actual1 = Array1::<Complex64>::zeros([16]);
     fft_1d_complex_static_into::<16>(&signal1, &mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered1 = ifft_1d_complex(&expected1);
-    let mut actual_recovered1 = Array1::<Complex64>::zeros(16);
+    let mut actual_recovered1 = Array1::<Complex64>::zeros([16]);
     ifft_1d_complex_static_into::<16>(&expected1, &mut actual_recovered1);
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
@@ -266,7 +266,7 @@ fn test_f64_pot_dfts_correctness() {
             .map(|k| Complex64::new((k as f64 * 0.17).sin(), (k as f64 * 0.29).cos()))
             .collect();
 
-        let mut got_fwd = leto::Array1::from_vec(input.clone());
+        let mut got_fwd = leto::Array1::from_shape_vec([input.len()], input.clone()).unwrap();
         fft_1d_complex_inplace(&mut got_fwd);
 
         // Compare with naive DFT
@@ -293,7 +293,7 @@ fn test_f64_pot_dfts_correctness() {
             );
         }
 
-        let mut got_inv = leto::Array1::from_vec(input.clone());
+        let mut got_inv = leto::Array1::from_shape_vec([input.len()], input.clone()).unwrap();
         ifft_1d_complex_inplace(&mut got_inv);
         // Naive IDFT (with normalization)
         let mut expected_inv = vec![Complex64::new(0.0, 0.0); n];

@@ -47,7 +47,7 @@ mod tests {
     use crate::domain::contracts::backend::FftBackend;
     use crate::domain::metadata::precision::BackendKind;
     use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-    use leto::{Array1, Array2, Array3};
+    use leto::{Array2, Array3};
     use eunomia::Complex64;
 
     #[test]
@@ -72,7 +72,8 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape1D::new(8).expect("valid shape");
         let plan = backend.plan_1d(shape).expect("plan_1d succeeded");
-        let input = Array1::from_iter((0..8usize).map(|i| (i as f64 * 0.7).sin()));
+        let input_vec: Vec<f64> = (0..8usize).map(|i| (i as f64 * 0.7).sin()).collect();
+        let input = leto::Array1::from_shape_vec([input_vec.len()], input_vec).unwrap();
         let complex = input.mapv(|value| Complex64::new(value, 0.0));
         let spectrum = plan.forward_complex(&complex);
         let recovered = plan.inverse_complex(&spectrum).mapv(|value| value.re);

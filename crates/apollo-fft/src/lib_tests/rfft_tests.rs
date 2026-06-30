@@ -31,15 +31,15 @@ fn fft_3d_array_into_matches_allocating_path() {
 fn real_1d_2d_into_wrappers_match_allocating_paths() {
     let signal1 = Array1::from_shape_fn([18], |[i]| (i as f64 * 0.17).sin());
     let expected1 = fft_1d_array(&signal1);
-    let mut actual1 = Array1::<Complex64>::zeros(18);
+    let mut actual1 = Array1::<Complex64>::zeros([18]);
     fft_1d_array_into(&signal1, &mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered1 = ifft_1d_array(&expected1);
-    let mut actual_recovered1 = Array1::<f64>::zeros(18);
-    let mut scratch1 = Array1::<Complex64>::zeros(18);
+    let mut actual_recovered1 = Array1::<f64>::zeros([18]);
+    let mut scratch1 = Array1::<Complex64>::zeros([18]);
     ifft_1d_array_into(&expected1, &mut actual_recovered1, &mut scratch1);
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).abs() < 1e-13);
@@ -68,14 +68,14 @@ fn real_1d_2d_into_wrappers_match_allocating_paths() {
 fn static_real_1d_into_wrappers_match_dynamic_paths() {
     let signal64 = Array1::from_shape_fn([20], |[i]| (i as f64 * 0.11).sin());
     let expected64 = fft_1d_array(&signal64);
-    let mut spectrum64 = Array1::<Complex64>::zeros(20);
+    let mut spectrum64 = Array1::<Complex64>::zeros([20]);
     fft_1d_array_static_into::<20>(&signal64, &mut spectrum64);
     for (expected, actual) in expected64.iter().zip(spectrum64.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
     let recovered64 = ifft_1d_array(&expected64);
-    let mut actual_recovered64 = Array1::<f64>::zeros(20);
-    let mut scratch64 = Array1::<Complex64>::zeros(20);
+    let mut actual_recovered64 = Array1::<f64>::zeros([20]);
+    let mut scratch64 = Array1::<Complex64>::zeros([20]);
     ifft_1d_array_static_into::<20>(&expected64, &mut actual_recovered64, &mut scratch64);
     for (expected, actual) in recovered64.iter().zip(actual_recovered64.iter()) {
         assert!((expected - actual).abs() < 1e-13);
@@ -83,14 +83,14 @@ fn static_real_1d_into_wrappers_match_dynamic_paths() {
 
     let signal32 = Array1::from_shape_fn([20], |[i]| (i as f32 * 0.13).cos());
     let expected32 = fft_1d_array_typed(&signal32);
-    let mut spectrum32 = Array1::<Complex32>::zeros(20);
+    let mut spectrum32 = Array1::<Complex32>::zeros([20]);
     fft_1d_array_static_typed_into::<f32, 20>(&signal32, &mut spectrum32);
     for (expected, actual) in expected32.iter().zip(spectrum32.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
     let recovered32 = ifft_1d_array_typed::<f32>(&expected32);
-    let mut actual_recovered32 = Array1::<f32>::zeros(20);
-    let mut scratch32 = Array1::<Complex32>::zeros(20);
+    let mut actual_recovered32 = Array1::<f32>::zeros([20]);
+    let mut scratch32 = Array1::<Complex32>::zeros([20]);
     ifft_1d_array_static_typed_into::<f32, 20>(
         &expected32,
         &mut actual_recovered32,
@@ -102,14 +102,14 @@ fn static_real_1d_into_wrappers_match_dynamic_paths() {
 
     let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
     let expected16 = fft_1d_array_typed(&signal16);
-    let mut spectrum16 = Array1::<Complex32>::zeros(20);
+    let mut spectrum16 = Array1::<Complex32>::zeros([20]);
     fft_1d_array_static_typed_into::<f16, 20>(&signal16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
     let recovered16 = ifft_1d_array_typed::<f16>(&expected16);
-    let mut actual_recovered16 = Array1::<f16>::from_elem(20, f16::from_f32(0.0));
-    let mut scratch16 = Array1::<Complex32>::zeros(20);
+    let mut actual_recovered16 = Array1::<f16>::from_elem([20], f16::from_f32(0.0));
+    let mut scratch16 = Array1::<Complex32>::zeros([20]);
     ifft_1d_array_static_typed_into::<f16, 20>(
         &expected16,
         &mut actual_recovered16,
@@ -242,14 +242,14 @@ fn static_real_3d_into_wrappers_match_dynamic_paths() {
 fn typed_real_1d_2d_into_supports_f64_f32_and_f16_profiles() {
     let signal64 = Array1::from_shape_fn([20], |[i]| (i as f64 * 0.11).sin());
     let expected64 = fft_1d_array_typed(&signal64);
-    let mut spectrum64 = Array1::<Complex64>::zeros(20);
+    let mut spectrum64 = Array1::<Complex64>::zeros([20]);
     fft_1d_array_typed_into(&signal64, &mut spectrum64);
     for (expected, actual) in expected64.iter().zip(spectrum64.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
     let recovered64 = ifft_1d_array_typed::<f64>(&spectrum64);
-    let mut actual_recovered64 = Array1::<f64>::zeros(20);
-    let mut scratch64 = Array1::<Complex64>::zeros(20);
+    let mut actual_recovered64 = Array1::<f64>::zeros([20]);
+    let mut scratch64 = Array1::<Complex64>::zeros([20]);
     ifft_1d_array_typed_into(&spectrum64, &mut actual_recovered64, &mut scratch64);
     for (expected, actual) in recovered64.iter().zip(actual_recovered64.iter()) {
         assert!((expected - actual).abs() < 1e-13);
@@ -274,14 +274,14 @@ fn typed_real_1d_2d_into_supports_f64_f32_and_f16_profiles() {
 
     let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
     let expected16 = fft_1d_array_typed(&signal16);
-    let mut spectrum16 = Array1::<Complex32>::zeros(20);
+    let mut spectrum16 = Array1::<Complex32>::zeros([20]);
     fft_1d_array_typed_into(&signal16, &mut spectrum16);
     for (expected, actual) in expected16.iter().zip(spectrum16.iter()) {
         assert!((expected - actual).norm() < 1e-5);
     }
     let recovered16 = ifft_1d_array_typed::<f16>(&spectrum16);
-    let mut actual_recovered16 = Array1::<f16>::from_elem(20, f16::from_f32(0.0));
-    let mut scratch16 = Array1::<Complex32>::zeros(20);
+    let mut actual_recovered16 = Array1::<f16>::from_elem([20], f16::from_f32(0.0));
+    let mut scratch16 = Array1::<Complex32>::zeros([20]);
     ifft_1d_array_typed_into(&spectrum16, &mut actual_recovered16, &mut scratch16);
     for (expected, actual) in recovered16.iter().zip(actual_recovered16.iter()) {
         assert!((expected.to_f32() - actual.to_f32()).abs() < 1e-3);

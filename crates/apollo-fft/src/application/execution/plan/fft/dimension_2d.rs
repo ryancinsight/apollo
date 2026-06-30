@@ -397,7 +397,7 @@ mod tests {
     use std::f64::consts::PI;
 
     fn signal<const NX: usize, const NY: usize>() -> Array2<Complex64> {
-        Array2::from_shape_fn((NX, NY), |(i, j)| {
+        Array2::from_shape_fn([NX, NY], |[i, j]| {
             let x = (i * NY + j) as f64;
             Complex64::new(
                 (0.17 * x).sin() + 0.11 * (0.07 * x).cos(),
@@ -409,7 +409,7 @@ mod tests {
     fn direct_forward<const NX: usize, const NY: usize>(
         input: &Array2<Complex64>,
     ) -> Array2<Complex64> {
-        let mut out = Array2::from_elem((NX, NY), Complex64::new(0.0, 0.0));
+        let mut out = Array2::from_elem([NX, NY], Complex64::new(0.0, 0.0));
         for kx in 0..NX {
             for ky in 0..NY {
                 let mut acc = Complex64::new(0.0, 0.0);
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn static_fft_2d_plan_is_zero_sized() {
         assert_eq!(std::mem::size_of::<StaticFftPlan2D<f64, 4, 5>>(), 0);
-        assert_eq!(StaticFftPlan2D::<f64, 4, 5>::new().shape(), [4, 5]);
+        assert_eq!(StaticFftPlan2D::<f64, 4, 5>::new().shape(), (4, 5));
     }
 
     #[test]
