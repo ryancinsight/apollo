@@ -11,7 +11,7 @@ use crate::infrastructure::kernel::sliding::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::collections::VecDeque;
 

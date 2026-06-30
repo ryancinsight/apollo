@@ -5,7 +5,7 @@ mod tests {
     use crate::{SdftError, SdftPlan};
     use approx::assert_abs_diff_eq;
 
-    fn assert_bins_match(actual: &[num_complex::Complex64], expected: &[num_complex::Complex64]) {
+    fn assert_bins_match(actual: &[eunomia::Complex64], expected: &[eunomia::Complex64]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);
@@ -130,10 +130,10 @@ mod tests {
             let bins = state.bins();
             for k in 0..n {
                 let angle = -std::f64::consts::TAU * k as f64 / n as f64;
-                let expected: num_complex::Complex64 = samples.iter().enumerate()
+                let expected: eunomia::Complex64 = samples.iter().enumerate()
                     .map(|(i, &x)| {
                         let phase = angle * i as f64;
-                        num_complex::Complex64::new(x * phase.cos(), x * phase.sin())
+                        eunomia::Complex64::new(x * phase.cos(), x * phase.sin())
                     })
                     .sum();
                 let err = (bins[k] - expected).norm();

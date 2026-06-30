@@ -6,7 +6,7 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use crate::SdftPlan;
     use leto::{SliceArg, Storage};
-    use num_complex::Complex32;
+    use eunomia::Complex32;
 
     #[test]
     fn capabilities_reflect_forward_only_surface() {

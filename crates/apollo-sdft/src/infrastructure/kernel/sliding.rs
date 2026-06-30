@@ -8,7 +8,7 @@
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Below this O(bin_count * window_len) count, serial loops avoid scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;

@@ -7,7 +7,7 @@
 //! Reconstructs the real signal from K complex DFT bins.
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};

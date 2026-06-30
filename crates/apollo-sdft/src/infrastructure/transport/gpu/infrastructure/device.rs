@@ -4,7 +4,7 @@ use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 use apollo_fft::PrecisionProfile;
 use crate::{SdftBinStorage, SdftRealStorage};
