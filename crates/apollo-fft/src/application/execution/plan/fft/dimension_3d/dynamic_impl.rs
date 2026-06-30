@@ -7,7 +7,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
 use crate::domain::metadata::shape::Shape3D;
 use leto::ArrayViewMut3;
-use ndarray::Array3;
+use leto::Array3;
 use eunomia::Complex;
 use std::sync::Arc;
 
@@ -86,7 +86,7 @@ where
     /// Forward transform of a complex field in-place.
     pub fn forward_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny, self.nz),
             "complex forward shape mismatch"
         );
@@ -97,7 +97,7 @@ where
     /// Inverse transform of a complex field in-place with FFTW-compatible normalization.
     pub fn inverse_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny, self.nz),
             "complex inverse shape mismatch"
         );
@@ -119,7 +119,7 @@ where
     /// - Shape mismatch with the plan, or `axis >= 3`.
     pub fn forward_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny, self.nz),
             "axis FFT shape mismatch"
         );
@@ -135,7 +135,7 @@ where
     /// - Shape mismatch with the plan, or `axis >= 3`.
     pub fn inverse_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny, self.nz),
             "axis FFT shape mismatch"
         );

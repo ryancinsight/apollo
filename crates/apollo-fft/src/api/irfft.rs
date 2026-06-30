@@ -7,7 +7,7 @@ use crate::application::utilities::leto_interop::{
     array2_from_view, array3_from_view, try_array2_from_ndarray, try_array3_from_ndarray, view1_cow,
 };
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::Complex;
 use eunomia::Complex64;
 
@@ -16,7 +16,7 @@ use eunomia::Complex64;
 pub fn ifft_1d_array(field_hat: &Array1<Complex64>) -> Array1<f64> {
     <f64 as RealFftData>::inverse_1d(
         f64::get_1d_plan(
-            Shape1D::new(field_hat.len()).expect("ifft_1d_array requires non-zero length"),
+            Shape1D::new(field_hat.size()).expect("ifft_1d_array requires non-zero length"),
         )
         .as_ref(),
         field_hat,
@@ -33,7 +33,7 @@ where
 {
     T::inverse_1d(
         T::get_1d_plan(
-            Shape1D::new(field_hat.len()).expect("ifft_1d_array_typed requires non-zero length"),
+            Shape1D::new(field_hat.size()).expect("ifft_1d_array_typed requires non-zero length"),
         )
         .as_ref(),
         field_hat,
@@ -48,7 +48,7 @@ pub fn ifft_1d_array_into(
 ) {
     <f64 as RealFftData>::inverse_1d_into(
         f64::get_1d_plan(
-            Shape1D::new(field_hat.len()).expect("ifft_1d_array_into requires non-zero length"),
+            Shape1D::new(field_hat.size()).expect("ifft_1d_array_into requires non-zero length"),
         )
         .as_ref(),
         field_hat,
@@ -81,13 +81,13 @@ pub fn ifft_1d_array_typed_into_spectrum_scratch<T>(
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     debug_assert_eq!(
-        field_hat.len(),
-        out.len(),
+        field_hat.size(),
+        out.size(),
         "ifft_1d_array_typed_into_spectrum_scratch: length mismatch"
     );
     T::inverse_1d_spectrum_into(
         T::get_1d_plan(
-            Shape1D::new(field_hat.len())
+            Shape1D::new(field_hat.size())
                 .expect("ifft_1d_array_typed_into_spectrum_scratch requires non-zero length"),
         )
         .as_ref(),
@@ -108,7 +108,7 @@ pub fn ifft_1d_array_typed_into<T>(
 {
     T::inverse_1d_into(
         T::get_1d_plan(
-            Shape1D::new(field_hat.len())
+            Shape1D::new(field_hat.size())
                 .expect("ifft_1d_array_typed_into requires non-zero length"),
         )
         .as_ref(),
@@ -139,17 +139,17 @@ pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.len(),
+        field_hat.size(),
         N,
         "ifft_1d_array_static_typed_into: input length mismatch"
     );
     debug_assert_eq!(
-        out.len(),
+        out.size(),
         N,
         "ifft_1d_array_static_typed_into: output length mismatch"
     );
     debug_assert_eq!(
-        scratch.len(),
+        scratch.size(),
         N,
         "ifft_1d_array_static_typed_into: scratch length mismatch"
     );
@@ -206,7 +206,7 @@ where
 /// Inverse 2D FFT of a complex array.
 #[must_use]
 pub fn ifft_2d_array(field_hat: &Array2<Complex64>) -> Array2<f64> {
-    let (nx, ny) = field_hat.dim();
+    let [nx, ny] = field_hat.shape();
     <f64 as RealFftData>::inverse_2d(
         f64::get_2d_plan(Shape2D::new(nx, ny).expect("ifft_2d_array requires non-zero dimensions"))
             .as_ref(),
@@ -222,7 +222,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny) = field_hat.dim();
+    let [nx, ny] = field_hat.shape();
     T::inverse_2d(
         T::get_2d_plan(
             Shape2D::new(nx, ny).expect("ifft_2d_array_typed requires non-zero dimensions"),
@@ -238,7 +238,7 @@ pub fn ifft_2d_array_into(
     out: &mut Array2<f64>,
     scratch: &mut Array2<Complex64>,
 ) {
-    let (nx, ny) = field_hat.dim();
+    let [nx, ny] = field_hat.shape();
     <f64 as RealFftData>::inverse_2d_into(
         f64::get_2d_plan(
             Shape2D::new(nx, ny).expect("ifft_2d_array_into requires non-zero dimensions"),
@@ -273,9 +273,9 @@ pub fn ifft_2d_array_typed_into_spectrum_scratch<T>(
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny) = field_hat.dim();
+    let [nx, ny] = field_hat.shape();
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (nx, ny),
         "ifft_2d_array_typed_into_spectrum_scratch: shape mismatch"
     );
@@ -300,7 +300,7 @@ pub fn ifft_2d_array_typed_into<T>(
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny) = field_hat.dim();
+    let [nx, ny] = field_hat.shape();
     T::inverse_2d_into(
         T::get_2d_plan(
             Shape2D::new(nx, ny).expect("ifft_2d_array_typed_into requires non-zero dimensions"),
@@ -333,17 +333,17 @@ pub fn ifft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
+        field_hat.shape(),
         (NX, NY),
         "ifft_2d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY),
         "ifft_2d_array_static_typed_into: output shape mismatch"
     );
     debug_assert_eq!(
-        scratch.dim(),
+        scratch.shape(),
         (NX, NY),
         "ifft_2d_array_static_typed_into: scratch shape mismatch"
     );
@@ -353,7 +353,7 @@ pub fn ifft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
 /// Inverse 3D FFT of a complex array.
 #[must_use]
 pub fn ifft_3d_array(field_hat: &Array3<Complex64>) -> Array3<f64> {
-    let (nx, ny, nz) = field_hat.dim();
+    let [nx, ny, nz] = field_hat.shape();
     <f64 as RealFftData>::inverse_3d(
         f64::get_3d_plan(
             Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
@@ -371,7 +371,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny, nz) = field_hat.dim();
+    let [nx, ny, nz] = field_hat.shape();
     T::inverse_3d(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz).expect("ifft_3d_array_typed requires non-zero dimensions"),
@@ -391,7 +391,7 @@ pub fn ifft_3d_array_typed_into<T>(
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny, nz) = field_hat.dim();
+    let [nx, ny, nz] = field_hat.shape();
     T::inverse_3d_into(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz)
@@ -416,9 +416,9 @@ pub fn ifft_3d_array_typed_into_spectrum_scratch<T>(
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny, nz) = field_hat.dim();
+    let [nx, ny, nz] = field_hat.shape();
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (nx, ny, nz),
         "ifft_3d_array_typed_into_spectrum_scratch: shape mismatch"
     );
@@ -454,17 +454,17 @@ pub fn ifft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, cons
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
+        field_hat.shape(),
         (NX, NY, NZ),
         "ifft_3d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY, NZ),
         "ifft_3d_array_static_typed_into: output shape mismatch"
     );
     debug_assert_eq!(
-        scratch.dim(),
+        scratch.shape(),
         (NX, NY, NZ),
         "ifft_3d_array_static_typed_into: scratch shape mismatch"
     );

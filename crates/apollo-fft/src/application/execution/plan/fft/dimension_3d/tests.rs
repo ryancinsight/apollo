@@ -1,5 +1,5 @@
 use crate::application::execution::plan::fft::dimension_3d::StaticFftPlan3D;
-use ndarray::Array3;
+use leto::Array3;
 use eunomia::Complex64;
 use std::f64::consts::PI;
 
@@ -50,7 +50,7 @@ fn max_err(a: &Array3<Complex64>, b: &Array3<Complex64>) -> f64 {
 #[test]
 fn static_fft_3d_plan_is_zero_sized() {
     assert_eq!(std::mem::size_of::<StaticFftPlan3D<f64, 3, 4, 5>>(), 0);
-    assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().shape(), (3, 4, 5));
+    assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().shape(), [3, 4, 5]);
     assert_eq!(StaticFftPlan3D::<f64, 3, 4, 5>::new().nz_c(), 3);
 }
 

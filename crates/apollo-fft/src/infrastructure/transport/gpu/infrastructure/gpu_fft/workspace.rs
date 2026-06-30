@@ -4,7 +4,7 @@ use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::Gp
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy};
 use crate::application::utilities::leto_interop;
 use crate::{f16, ApolloError, ApolloResult};
-use ndarray::Array3;
+use leto::Array3;
 use std::borrow::Cow;
 
 /// Reusable GPU and host buffers for repeated `GpuFft3d` dispatch.
@@ -126,7 +126,7 @@ impl GpuFft3d {
 
     /// Forward transform of a real field into a caller-owned interleaved complex buffer.
     pub fn forward_into(&self, field: &Array3<f64>, out: &mut [f32]) {
-        assert_eq!(field.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * self.nx * self.ny * self.nz);
         let n = self.nx * self.ny * self.nz;
         let mut re_data = vec![0.0_f32; n];
@@ -165,7 +165,7 @@ impl GpuFft3d {
         buffers: &mut GpuFft3dBuffers,
     ) {
         buffers.assert_matches(self);
-        assert_eq!(field.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * buffers.len());
 
         buffers.im_host.fill(0.0);
@@ -225,7 +225,7 @@ impl GpuFft3d {
         buffers: &mut GpuFft3dBuffers,
     ) {
         buffers.assert_matches(self);
-        assert_eq!(field.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * buffers.len());
 
         buffers.im_host.fill(0.0);
@@ -291,7 +291,7 @@ impl GpuFft3d {
     /// Inverse transform of an interleaved complex buffer into a real field.
     pub fn inverse(&self, field_hat: &[f32], out: &mut Array3<f64>) {
         assert_eq!(field_hat.len(), 2 * self.nx * self.ny * self.nz);
-        assert_eq!(out.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
 
         let n = self.nx * self.ny * self.nz;
         let mut re_data = vec![0.0_f32; n];
@@ -326,7 +326,7 @@ impl GpuFft3d {
     ) {
         buffers.assert_matches(self);
         assert_eq!(field_hat.len(), 2 * buffers.len());
-        assert_eq!(out.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
 
         for (idx, pair) in field_hat.chunks_exact(2).enumerate() {
             buffers.re_host[idx] = pair[0];
@@ -369,7 +369,7 @@ impl GpuFft3d {
     ) {
         buffers.assert_matches(self);
         assert_eq!(field_hat.len(), 2 * buffers.len());
-        assert_eq!(out.dim(), (self.nx, self.ny, self.nz));
+        assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
 
         for (idx, pair) in field_hat.chunks_exact(2).enumerate() {
             buffers.re_host[idx] = pair[0];
@@ -907,7 +907,7 @@ mod tests {
         let plan = backend
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
-        let field = ndarray::Array3::from_shape_vec(
+        let field = leto::Array3::from_shape_vec(
             (2, 2, 2),
             vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5],
         )
@@ -926,8 +926,8 @@ mod tests {
             );
         }
 
-        let mut allocating_inverse = ndarray::Array3::<f64>::zeros((2, 2, 2));
-        let mut reusable_inverse = ndarray::Array3::<f64>::zeros((2, 2, 2));
+        let mut allocating_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
+        let mut reusable_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
         plan.inverse(&allocating_forward, &mut allocating_inverse);
         plan.inverse_with_buffers(&reusable_forward, &mut reusable_inverse, &mut buffers);
 
@@ -954,12 +954,12 @@ mod tests {
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
         let values = [1.0_f32, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field_f16 = ndarray::Array3::from_shape_vec(
+        let field_f16 = leto::Array3::from_shape_vec(
             (2, 2, 2),
             values.iter().copied().map(f16::from_f32).collect(),
         )
         .expect("f16 field");
-        let represented = ndarray::Array3::from_shape_vec(
+        let represented = leto::Array3::from_shape_vec(
             (2, 2, 2),
             field_f16
                 .iter()
@@ -981,7 +981,7 @@ mod tests {
             );
         }
 
-        let mut reconstructed = ndarray::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
+        let mut reconstructed = leto::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
         plan.inverse_f16_with_buffers(&actual, &mut reconstructed, &mut buffers);
 
         for (actual, expected) in reconstructed.iter().zip(field_f16.iter()) {
@@ -1032,7 +1032,7 @@ mod tests {
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
         let values = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field = ndarray::Array3::from_shape_vec((2, 2, 2), values.clone()).expect("field");
+        let field = leto::Array3::from_shape_vec((2, 2, 2), values.clone()).expect("field");
         let leto_field = leto::Array3::from_shape_vec([2, 2, 2], values).expect("leto field");
 
         let expected_forward = plan.forward(&field);
@@ -1042,7 +1042,7 @@ mod tests {
             expected_forward.as_slice()
         );
 
-        let mut expected_inverse = ndarray::Array3::<f64>::zeros((2, 2, 2));
+        let mut expected_inverse = leto::Array3::<f64>::zeros((2, 2, 2));
         plan.inverse(&expected_forward, &mut expected_inverse);
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
@@ -1076,7 +1076,7 @@ mod tests {
             -0.5, 99.0,
         ];
         let logical = vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field = ndarray::Array3::from_shape_vec((2, 2, 2), logical).expect("field");
+        let field = leto::Array3::from_shape_vec((2, 2, 2), logical).expect("field");
         let leto_field = leto::Array3::from_shape_vec([2, 2, 4], backing).expect("leto field");
         let view = leto_field
             .slice_with::<3>(&[
@@ -1100,7 +1100,7 @@ mod tests {
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
         let values = [1.0_f32, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
-        let field_f16 = ndarray::Array3::from_shape_vec(
+        let field_f16 = leto::Array3::from_shape_vec(
             (2, 2, 2),
             values.iter().copied().map(f16::from_f32).collect(),
         )
@@ -1120,7 +1120,7 @@ mod tests {
             expected_forward.as_slice()
         );
 
-        let mut expected_inverse = ndarray::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
+        let mut expected_inverse = leto::Array3::from_elem((2, 2, 2), f16::from_f32(0.0));
         plan.inverse_f16(&expected_forward, &mut expected_inverse);
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)

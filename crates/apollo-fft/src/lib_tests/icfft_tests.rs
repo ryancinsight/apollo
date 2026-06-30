@@ -1,7 +1,7 @@
 //! Tests for forward/inverse complex FFT API (part 2).
 
 use crate::*;
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::{Complex32, Complex64};
 
 #[test]

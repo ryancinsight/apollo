@@ -36,7 +36,7 @@ use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
 use leto::ArrayViewMut2;
-use ndarray::Array2;
+use leto::Array2;
 use eunomia::Complex;
 use std::sync::Arc;
 
@@ -96,7 +96,7 @@ where
     /// Forward transform of a complex array in-place.
     #[inline]
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
-        assert_eq!(data.dim(), (NX, NY), "static 2D forward shape mismatch");
+        assert_eq!(data.shape(), [NX, NY], "static 2D forward shape mismatch");
         let view = ArrayViewMut2::from(data.view_mut());
         self.forward_complex_leto_inplace(view);
     }
@@ -104,7 +104,7 @@ where
     /// Inverse transform of a complex array in-place with normalization.
     #[inline]
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
-        assert_eq!(data.dim(), (NX, NY), "static 2D inverse shape mismatch");
+        assert_eq!(data.shape(), [NX, NY], "static 2D inverse shape mismatch");
         let view = ArrayViewMut2::from(data.view_mut());
         self.inverse_complex_leto_inplace(view);
     }
@@ -230,7 +230,7 @@ where
     /// Forward transform of a complex array in-place.
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny),
             "complex forward shape mismatch"
         );
@@ -241,7 +241,7 @@ where
     /// Inverse transform of a complex array in-place with normalization.
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
-            data.dim(),
+            data.shape(),
             (self.nx, self.ny),
             "complex inverse shape mismatch"
         );
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn static_fft_2d_plan_is_zero_sized() {
         assert_eq!(std::mem::size_of::<StaticFftPlan2D<f64, 4, 5>>(), 0);
-        assert_eq!(StaticFftPlan2D::<f64, 4, 5>::new().shape(), (4, 5));
+        assert_eq!(StaticFftPlan2D::<f64, 4, 5>::new().shape(), [4, 5]);
     }
 
     #[test]

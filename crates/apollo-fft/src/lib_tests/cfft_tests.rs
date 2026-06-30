@@ -1,7 +1,7 @@
 //! Tests for forward/inverse complex FFT API (part 1).
 
 use crate::*;
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::{Complex32, Complex64};
 
 #[test]
@@ -266,7 +266,7 @@ fn test_f64_pot_dfts_correctness() {
             .map(|k| Complex64::new((k as f64 * 0.17).sin(), (k as f64 * 0.29).cos()))
             .collect();
 
-        let mut got_fwd = ndarray::Array1::from_vec(input.clone());
+        let mut got_fwd = leto::Array1::from_vec(input.clone());
         fft_1d_complex_inplace(&mut got_fwd);
 
         // Compare with naive DFT
@@ -293,7 +293,7 @@ fn test_f64_pot_dfts_correctness() {
             );
         }
 
-        let mut got_inv = ndarray::Array1::from_vec(input.clone());
+        let mut got_inv = leto::Array1::from_vec(input.clone());
         ifft_1d_complex_inplace(&mut got_inv);
         // Naive IDFT (with normalization)
         let mut expected_inv = vec![Complex64::new(0.0, 0.0); n];

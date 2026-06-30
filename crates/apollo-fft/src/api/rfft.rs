@@ -7,7 +7,7 @@ use crate::application::utilities::leto_interop::{
     array2_from_view, array3_from_view, try_array2_from_ndarray, try_array3_from_ndarray, view1_cow,
 };
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::Complex;
 use eunomia::Complex64;
 
@@ -15,7 +15,7 @@ use eunomia::Complex64;
 #[must_use]
 pub fn fft_1d_array(field: &Array1<f64>) -> Array1<Complex64> {
     <f64 as RealFftData>::forward_1d(
-        f64::get_1d_plan(Shape1D::new(field.len()).expect("fft_1d_array requires non-zero length"))
+        f64::get_1d_plan(Shape1D::new(field.size()).expect("fft_1d_array requires non-zero length"))
             .as_ref(),
         field,
     )
@@ -31,7 +31,7 @@ where
 {
     T::forward_1d(
         T::get_1d_plan(
-            Shape1D::new(field.len()).expect("fft_1d_array_typed requires non-zero length"),
+            Shape1D::new(field.size()).expect("fft_1d_array_typed requires non-zero length"),
         )
         .as_ref(),
         field,
@@ -42,7 +42,7 @@ where
 pub fn fft_1d_array_into(field: &Array1<f64>, out: &mut Array1<Complex64>) {
     <f64 as RealFftData>::forward_1d_into(
         f64::get_1d_plan(
-            Shape1D::new(field.len()).expect("fft_1d_array_into requires non-zero length"),
+            Shape1D::new(field.size()).expect("fft_1d_array_into requires non-zero length"),
         )
         .as_ref(),
         field,
@@ -59,7 +59,7 @@ where
 {
     T::forward_1d_into(
         T::get_1d_plan(
-            Shape1D::new(field.len()).expect("fft_1d_array_typed_into requires non-zero length"),
+            Shape1D::new(field.size()).expect("fft_1d_array_typed_into requires non-zero length"),
         )
         .as_ref(),
         field,
@@ -83,12 +83,12 @@ pub fn fft_1d_array_static_typed_into<T, const N: usize>(
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field.len(),
+        field.size(),
         N,
         "fft_1d_array_static_typed_into: input length mismatch"
     );
     debug_assert_eq!(
-        out.len(),
+        out.size(),
         N,
         "fft_1d_array_static_typed_into: output length mismatch"
     );
@@ -148,7 +148,7 @@ where
 /// Forward 2D FFT of a real array.
 #[must_use]
 pub fn fft_2d_array(field: &Array2<f64>) -> Array2<Complex64> {
-    let (nx, ny) = field.dim();
+    let [nx, ny] = field.shape();
     <f64 as RealFftData>::forward_2d(
         f64::get_2d_plan(Shape2D::new(nx, ny).expect("fft_2d_array requires non-zero dimensions"))
             .as_ref(),
@@ -164,7 +164,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny) = field.dim();
+    let [nx, ny] = field.shape();
     T::forward_2d(
         T::get_2d_plan(
             Shape2D::new(nx, ny).expect("fft_2d_array_typed requires non-zero dimensions"),
@@ -176,7 +176,7 @@ where
 
 /// Forward 2D FFT of a real array into caller-owned complex storage.
 pub fn fft_2d_array_into(field: &Array2<f64>, out: &mut Array2<Complex64>) {
-    let (nx, ny) = field.dim();
+    let [nx, ny] = field.shape();
     <f64 as RealFftData>::forward_2d_into(
         f64::get_2d_plan(
             Shape2D::new(nx, ny).expect("fft_2d_array_into requires non-zero dimensions"),
@@ -194,7 +194,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny) = field.dim();
+    let [nx, ny] = field.shape();
     T::forward_2d_into(
         T::get_2d_plan(
             Shape2D::new(nx, ny).expect("fft_2d_array_typed_into requires non-zero dimensions"),
@@ -224,12 +224,12 @@ pub fn fft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field.dim(),
+        field.shape(),
         (NX, NY),
         "fft_2d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY),
         "fft_2d_array_static_typed_into: output shape mismatch"
     );
@@ -239,7 +239,7 @@ pub fn fft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
 /// Forward 3D FFT of a real array.
 #[must_use]
 pub fn fft_3d_array(field: &Array3<f64>) -> Array3<Complex64> {
-    let (nx, ny, nz) = field.dim();
+    let [nx, ny, nz] = field.shape();
     <f64 as RealFftData>::forward_3d(
         f64::get_3d_plan(
             Shape3D::new(nx, ny, nz).expect("fft_3d_array requires non-zero dimensions"),
@@ -257,7 +257,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny, nz) = field.dim();
+    let [nx, ny, nz] = field.shape();
     T::forward_3d(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz).expect("fft_3d_array_typed requires non-zero dimensions"),
@@ -274,7 +274,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let (nx, ny, nz) = field.dim();
+    let [nx, ny, nz] = field.shape();
     T::forward_3d_into(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz).expect("fft_3d_array_typed_into requires non-zero dimensions"),
@@ -309,12 +309,12 @@ pub fn fft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, const
     Complex<T::PlanScalar>: PlanScratch,
 {
     debug_assert_eq!(
-        field.dim(),
+        field.shape(),
         (NX, NY, NZ),
         "fft_3d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY, NZ),
         "fft_3d_array_static_typed_into: output shape mismatch"
     );

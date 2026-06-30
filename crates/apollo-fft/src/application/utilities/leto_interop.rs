@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use ndarray::{Array2, Array3};
+use leto::{Array2, Array3};
 
 /// Borrow a contiguous Leto 1D view or materialize a strided one.
 ///
@@ -32,7 +32,7 @@ pub fn view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
     }
 }
 
-/// Copy a Leto 2D view of any stride into a dense `ndarray::Array2`.
+/// Copy a Leto 2D view of any stride into a dense `leto::Array2`.
 #[must_use]
 pub fn array2_from_view<T: Copy>(view: &leto::ArrayView2<'_, T>) -> Array2<T> {
     let [rows, cols] = view.shape();
@@ -43,7 +43,7 @@ pub fn array2_from_view<T: Copy>(view: &leto::ArrayView2<'_, T>) -> Array2<T> {
     })
 }
 
-/// Copy a Leto 3D view of any stride into a dense `ndarray::Array3`.
+/// Copy a Leto 3D view of any stride into a dense `leto::Array3`.
 #[must_use]
 pub fn array3_from_view<T: Copy>(view: &leto::ArrayView3<'_, T>) -> Array3<T> {
     let [d0, d1, d2] = view.shape();
@@ -70,7 +70,7 @@ pub fn try_array1_from_slice<T: Copy>(
 pub fn try_array2_from_ndarray<T: Copy>(
     output: &Array2<T>,
 ) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let (rows, cols) = output.dim();
+    let [rows, cols] = output.shape();
     leto::Array::<T, leto::MnemosyneStorage<T>, 2>::from_mnemosyne_slice(
         [rows, cols],
         output.as_slice()?,
@@ -84,7 +84,7 @@ pub fn try_array2_from_ndarray<T: Copy>(
 pub fn try_array3_from_ndarray<T: Copy>(
     output: &Array3<T>,
 ) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    let (d0, d1, d2) = output.dim();
+    let (d0, d1, d2) = output.shape();
     leto::Array::<T, leto::MnemosyneStorage<T>, 3>::from_mnemosyne_slice(
         [d0, d1, d2],
         output.as_slice()?,

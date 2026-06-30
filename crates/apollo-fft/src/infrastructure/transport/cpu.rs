@@ -47,7 +47,7 @@ mod tests {
     use crate::domain::contracts::backend::FftBackend;
     use crate::domain::metadata::precision::BackendKind;
     use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-    use ndarray::{Array1, Array2, Array3};
+    use leto::{Array1, Array2, Array3};
     use eunomia::Complex64;
 
     #[test]

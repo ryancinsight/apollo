@@ -2,7 +2,7 @@
 
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy, ChirpData, RadixStages};
 use crate::{fft_1d_complex_inplace, Complex64};
-use ndarray::Array1;
+use leto::Array1;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 

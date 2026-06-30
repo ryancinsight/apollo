@@ -7,7 +7,7 @@ use crate::application::execution::plan::fft::{
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::{Complex, Complex64};
 
 /// Inverse complex 1D FFT in-place with FFTW-compatible normalization.
@@ -21,7 +21,7 @@ where
     T: MixedRadixScalar<Complex = Complex<T>> + PlanCacheProvider<PlanScalar = T>,
 {
     T::get_1d_plan(
-        Shape1D::new(data.len()).expect("ifft_1d_complex_typed_inplace requires non-zero length"),
+        Shape1D::new(data.size()).expect("ifft_1d_complex_typed_inplace requires non-zero length"),
     )
     .inverse_complex_inplace(data);
 }
@@ -114,8 +114,8 @@ where
     T: MixedRadixScalar<Complex = Complex<T>> + PlanCacheProvider<PlanScalar = T>,
 {
     debug_assert_eq!(
-        field_hat.len(),
-        out.len(),
+        field_hat.size(),
+        out.size(),
         "ifft_1d_complex_typed_into: length mismatch"
     );
     out.assign(field_hat);
@@ -142,12 +142,12 @@ pub fn ifft_1d_complex_static_typed_into<T, const N: usize>(
     T: MixedRadixScalar<Complex = Complex<T>>,
 {
     debug_assert_eq!(
-        field_hat.len(),
+        field_hat.size(),
         N,
         "ifft_1d_complex_static_typed_into: input length mismatch"
     );
     debug_assert_eq!(
-        out.len(),
+        out.size(),
         N,
         "ifft_1d_complex_static_typed_into: output length mismatch"
     );
@@ -166,7 +166,7 @@ where
     T: MixedRadixScalar<Complex = Complex<T>> + PlanCacheProvider<PlanScalar = T>,
     T::Complex: PlanScratch,
 {
-    let (nx, ny) = data.dim();
+    let [nx, ny] = data.shape();
     T::get_2d_plan(
         Shape2D::new(nx, ny).expect("ifft_2d_complex_typed_inplace requires non-zero dimensions"),
     )
@@ -268,8 +268,8 @@ where
     T::Complex: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
-        out.dim(),
+        field_hat.shape(),
+        out.shape(),
         "ifft_2d_complex_typed_into: shape mismatch"
     );
     out.assign(field_hat);
@@ -297,12 +297,12 @@ pub fn ifft_2d_complex_static_typed_into<T, const NX: usize, const NY: usize>(
     T::Complex: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
+        field_hat.shape(),
         (NX, NY),
         "ifft_2d_complex_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY),
         "ifft_2d_complex_static_typed_into: output shape mismatch"
     );
@@ -321,7 +321,7 @@ where
     T: MixedRadixScalar<Complex = Complex<T>> + PlanCacheProvider<PlanScalar = T>,
     T::Complex: PlanScratch,
 {
-    let (nx, ny, nz) = data.dim();
+    let [nx, ny, nz] = data.shape();
     T::get_3d_plan(
         Shape3D::new(nx, ny, nz)
             .expect("ifft_3d_complex_typed_inplace requires non-zero dimensions"),
@@ -424,8 +424,8 @@ where
     T::Complex: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
-        out.dim(),
+        field_hat.shape(),
+        out.shape(),
         "ifft_3d_complex_typed_into: shape mismatch"
     );
     out.assign(field_hat);
@@ -453,12 +453,12 @@ pub fn ifft_3d_complex_static_typed_into<T, const NX: usize, const NY: usize, co
     T::Complex: PlanScratch,
 {
     debug_assert_eq!(
-        field_hat.dim(),
+        field_hat.shape(),
         (NX, NY, NZ),
         "ifft_3d_complex_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
-        out.dim(),
+        out.shape(),
         (NX, NY, NZ),
         "ifft_3d_complex_static_typed_into: output shape mismatch"
     );

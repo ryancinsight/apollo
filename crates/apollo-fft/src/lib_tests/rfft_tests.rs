@@ -2,7 +2,7 @@
 
 use crate::*;
 use half::f16;
-use ndarray::{Array1, Array2, Array3};
+use leto::{Array1, Array2, Array3};
 use eunomia::Complex64;
 
 #[test]

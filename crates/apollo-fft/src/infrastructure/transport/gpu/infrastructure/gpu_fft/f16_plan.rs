@@ -31,7 +31,7 @@
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::AxisPackStage;
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy, ChirpData, RadixStages};
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
-use ndarray::{Array1, Array3};
+use leto::{Array1, Array3};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
@@ -609,7 +609,7 @@ impl GpuFft3dF16Native {
     #[must_use]
     pub fn forward_native_f16(&self, field: &Array3<f32>) -> Vec<f32> {
         assert_eq!(
-            field.dim(),
+            field.shape(),
             (self.nx, self.ny, self.nz),
             "field dimensions must match plan"
         );
@@ -1226,11 +1226,11 @@ mod tests {
         };
 
         // Analytical test field: deterministic, non-trivial, ‖f‖_∞ ≤ 1.
-        let field_f64 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f64 = leto::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
             let x = (i + j * 3 + k * 7) as f64;
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });
-        let field_f32 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f32 = leto::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
             let x = (i + j * 3 + k * 7) as f64;
             ((0.3 * x).sin() + 0.5 * (0.7 * x).cos()) as f32
         });
@@ -1278,7 +1278,7 @@ mod tests {
         };
 
         // Deterministic 3×3×3 field with values in [−1, 1].
-        let field = ndarray::Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
+        let field = leto::Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
             let x = (i + j * 3 + k * 7) as f32;
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });
