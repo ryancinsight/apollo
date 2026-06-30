@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// CZT with DFT parameters equals the DFT for the unit impulse [1,0,0,0].
 ///
@@ -42,7 +42,7 @@ pub(crate) fn czt_unit_impulse_is_dft_fixture() -> SuiteResult<PublishedFixtureR
     let a = Complex64::new(1.0, 0.0);
     let w = Complex64::from_polar(1.0, -std::f64::consts::TAU / n as f64);
     let plan = CztPlan::new(n, n, a, w)?;
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(0.0, 0.0),
         Complex64::new(0.0, 0.0),
@@ -81,7 +81,7 @@ pub(crate) fn czt_inverse_vandermonde_roundtrip_fixture() -> SuiteResult<Publish
     let w = Complex64::from_polar(1.0, -std::f64::consts::TAU / n as f64);
     let plan = CztPlan::new(n, n, a, w)?;
     // Non-trivial input: unit impulse → DFT = [1,1,1,1]; invert back to [1,0,0,0].
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(0.0, 0.0),
         Complex64::new(0.0, 0.0),
@@ -135,7 +135,7 @@ pub(crate) fn czt_off_unit_circle_z_transform_fixture() -> SuiteResult<Published
     let a = Complex64::new(2.0, 0.0);
     let w = Complex64::from_polar(1.0, -std::f64::consts::PI);
     let plan = CztPlan::new(2, 2, a, w)?;
-    let input = Array1::from_vec(vec![Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0)]);
+    let input = Array1::from(vec![Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0)]);
     let actual = plan.forward(&input)?;
     let expected = [Complex64::new(1.5, 0.0), Complex64::new(0.5, 0.0)];
     Ok(published_complex_fixture(

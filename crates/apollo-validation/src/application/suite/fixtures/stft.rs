@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 pub(crate) fn stft_rectangular_window_impulse_frame_fixture() -> SuiteResult<PublishedFixtureReport>
 {
@@ -42,7 +42,7 @@ pub(crate) fn stft_rectangular_window_impulse_frame_fixture() -> SuiteResult<Pub
     // Reference: Cooley-Tukey (1965) DFT shift theorem X[k]=exp(-2πikn₀/N) for δ[n-n₀];
     //            Allen & Rabiner (1977) STFT centered-frame analysis.
     let plan = StftPlan::new(4, 4)?;
-    let signal = Array1::from_vec(vec![1.0_f64, 0.0, 0.0, 0.0]);
+    let signal = Array1::from(vec![1.0_f64, 0.0, 0.0, 0.0]);
     let window = [1.0_f64, 1.0, 1.0, 1.0];
     let output = plan.forward_with_window(&signal, &window)?;
     let actual: Vec<Complex64> = output.iter().copied().collect();
@@ -93,7 +93,7 @@ pub(crate) fn stft_rectangular_window_impulse_frame_fixture() -> SuiteResult<Pub
 ///            Hann window COLA condition, Portnoff (1980) IEEE Trans. ASSP 28(1).
 pub(crate) fn stft_hann_wola_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
     let plan = StftPlan::new(4, 2)?;
-    let signal = Array1::from_vec(vec![1.0_f64, 0.0, 0.0, 0.0]);
+    let signal = Array1::from(vec![1.0_f64, 0.0, 0.0, 0.0]);
     let spectrum = plan.forward(&signal)?;
     let recovered = plan.inverse(&spectrum, 4)?;
     let expected = [1.0_f64, 0.0, 0.0, 0.0];

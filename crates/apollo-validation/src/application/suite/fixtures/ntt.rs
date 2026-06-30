@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// NTT of the unit impulse [1,0,0,0] with N=4, modulus=998244353, primitive root=3.
 ///
@@ -35,7 +35,7 @@ use num_complex::Complex64;
 /// With f[0]=1 and f[1..3]=0, every term except n=0 vanishes, giving F[k] = ω^0 = 1 for all k.
 /// Reference: "NTT definition, Pollard (1971): F[k] = Σ f[n]·ω^{nk} mod p, impulse response F[k]=1"
 pub(crate) fn ntt_impulse_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![1u64, 0, 0, 0]);
+    let input = Array1::from(vec![1u64, 0, 0, 0]);
     let actual = ntt(&input)?;
     let actual_f64: Vec<f64> = actual.iter().map(|&v| v as f64).collect();
     let expected = [1.0_f64, 1.0, 1.0, 1.0];
@@ -56,7 +56,7 @@ pub(crate) fn ntt_impulse_fixture() -> SuiteResult<PublishedFixtureReport> {
 /// Σ_{n=0}^{N-1} (ω^k)^n = (ω^{Nk}-1)/(ω^k-1) = 0 mod p, because ω^N ≡ 1 (mod p).
 /// Reference: "NTT DFT-of-constant theorem: F[0]=N, F[k≠0]=0 for constant input (Pollard 1971)"
 pub(crate) fn ntt_constant_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![1u64, 1, 1, 1]);
+    let input = Array1::from(vec![1u64, 1, 1, 1]);
     let actual = ntt(&input)?;
     let actual_f64: Vec<f64> = actual.iter().map(|&v| v as f64).collect();
     let expected = [4.0_f64, 0.0, 0.0, 0.0];
@@ -77,7 +77,7 @@ pub(crate) fn ntt_constant_fixture() -> SuiteResult<PublishedFixtureReport> {
 /// This is the same impulse theorem as N=4, generalized to N=8.
 /// Reference: "NTT definition, Pollard (1971): F[k] = Σ f[n]·ω^{nk} mod p, impulse response F[k]=1 (N=8)"
 pub(crate) fn ntt_n8_impulse_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![1u64, 0, 0, 0, 0, 0, 0, 0]);
+    let input = Array1::from(vec![1u64, 0, 0, 0, 0, 0, 0, 0]);
     let actual = ntt(&input)?;
     let actual_f64: Vec<f64> = actual.iter().map(|&v| v as f64).collect();
     let expected = [1.0_f64; 8];
@@ -101,8 +101,8 @@ pub(crate) fn ntt_n8_impulse_fixture() -> SuiteResult<PublishedFixtureReport> {
 pub(crate) fn ntt_polynomial_convolution_fixture() -> SuiteResult<PublishedFixtureReport> {
     let p = DEFAULT_MODULUS;
     let plan = NttPlan::new(4)?;
-    let a = Array1::from_vec(vec![1u64, 2, 0, 0]);
-    let b = Array1::from_vec(vec![3u64, 4, 0, 0]);
+    let a = Array1::from(vec![1u64, 2, 0, 0]);
+    let b = Array1::from(vec![3u64, 4, 0, 0]);
     let fa = plan.forward(&a)?;
     let fb = plan.forward(&b)?;
     let fc: Vec<u64> = fa
@@ -135,7 +135,7 @@ pub(crate) fn ntt_polynomial_convolution_fixture() -> SuiteResult<PublishedFixtu
 pub(crate) fn ntt_n16_impulse_fixture() -> SuiteResult<PublishedFixtureReport> {
     let mut input_vec = vec![0u64; 16];
     input_vec[0] = 1;
-    let input = Array1::from_vec(input_vec);
+    let input = Array1::from(input_vec);
     let plan = NttPlan::new(16)?;
     let actual = plan.forward(&input)?;
     let actual_f64: Vec<f64> = actual.iter().map(|&v| v as f64).collect();
@@ -166,8 +166,8 @@ pub(crate) fn ntt_n16_polynomial_product_fixture() -> SuiteResult<PublishedFixtu
     a_vec[..4].copy_from_slice(&[1u64, 2, 3, 4]);
     let mut b_vec = vec![0u64; 16];
     b_vec[..2].copy_from_slice(&[2u64, 1]);
-    let a = Array1::from_vec(a_vec);
-    let b = Array1::from_vec(b_vec);
+    let a = Array1::from(a_vec);
+    let b = Array1::from(b_vec);
     let fa = plan.forward(&a)?;
     let fb = plan.forward(&b)?;
     let fc: Vec<u64> = fa
@@ -175,7 +175,7 @@ pub(crate) fn ntt_n16_polynomial_product_fixture() -> SuiteResult<PublishedFixtu
         .zip(fb.iter())
         .map(|(&x, &y)| ((x as u128 * y as u128) % p as u128) as u64)
         .collect();
-    let c = plan.inverse(&Array1::from_vec(fc))?;
+    let c = plan.inverse(&Array1::from(fc))?;
     let actual_f64: Vec<f64> = c.iter().map(|&v| v as f64).collect();
     // (1+2x+3x²+4x³)(2+x) = 2 + 5x + 8x² + 11x³ + 4x⁴, all higher coefficients 0
     let mut expected = [0.0_f64; 16];
@@ -204,7 +204,7 @@ pub(crate) fn ntt_n16_polynomial_product_fixture() -> SuiteResult<PublishedFixtu
 /// Reference: Pollard (1971) Math. Proc. Cambridge Phil. Soc. 70(3): NTT inversion theorem.
 pub(crate) fn ntt_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
     let plan = NttPlan::new(4)?;
-    let input = Array1::from_vec(vec![1u64, 2, 3, 4]);
+    let input = Array1::from(vec![1u64, 2, 3, 4]);
     let spectrum = plan.forward(&input)?;
     let recovered = intt(&spectrum)?;
     let recovered_f64: Vec<f64> = recovered.iter().map(|&v| v as f64).collect();

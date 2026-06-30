@@ -26,8 +26,8 @@ use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
 use leto::Storage;
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<PublishedFixtureReport>
 {
@@ -38,11 +38,11 @@ pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<Pu
     // Reference: Radon (1917) parallel-beam projection definition (Über die Bestimmung
     //            von Funktionen durch ihre Integralwerte);
     //            Natterer (1986) §I.2: discrete projection at θ=0 equals column sums.
-    let mut image = Array2::<f64>::zeros((3, 3));
+    let mut image = Array2::<f64>::zeros([3, 3]);
     image[[0, 0]] = 1.0;
     let plan = RadonPlan::new(3, 3, vec![0.0], 3, 1.0)?;
     let sinogram = plan.forward(&image)?;
-    let row: Vec<f64> = sinogram.values().row(0).iter().copied().collect();
+    let row: Vec<f64> = { let v = sinogram.values(); let c = v.shape()[1]; v.as_slice().expect("contiguous")[0..c].to_vec() };
     let expected = vec![1.0_f64, 0.0, 0.0];
     Ok(published_real_fixture(
         "Radon",
@@ -78,19 +78,19 @@ pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<Pu
 ///            Theorem 1.1 (Projection-Slice Theorem); Radon (1917) original
 ///            parallel-beam projection definition.
 pub(crate) fn radon_fourier_slice_theorem_theta0_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let image = Array2::from_shape_vec((2, 2), vec![1.0_f64, 2.0, 3.0, 4.0])
+    let image = Array2::from_shape_vec([2, 2], vec![1.0_f64, 2.0, 3.0, 4.0])
         .expect("(2,2) shape is valid for 4 elements");
     let plan = RadonPlan::new(2, 2, vec![0.0_f64], 2, 1.0)?;
     let sinogram = plan.forward(&image)?;
-    let projection = sinogram.values().row(0).to_owned();
+    let projection = { let v = sinogram.values(); let c = v.shape()[1]; v.as_slice().expect("contiguous")[0..c].to_vec() };
     let projection_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [projection.len()],
-        projection.as_slice().unwrap(),
+        projection.as_slice(),
     )
     .unwrap();
     let dft_of_projection_leto = apollo_fft::fft_1d_leto(projection_leto.view());
     let dft_of_projection =
-        ndarray::Array1::from_vec(dft_of_projection_leto.storage().as_slice().to_vec());
+        leto::Array1::from(dft_of_projection_leto.storage().as_slice().to_vec());
     let expected = [Complex64::new(10.0, 0.0), Complex64::new(-2.0, 0.0)];
     Ok(published_complex_fixture(
         "Radon",

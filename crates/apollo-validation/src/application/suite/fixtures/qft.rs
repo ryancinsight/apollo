@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// QFT two-point known-value fixture: QFT₂(|0⟩) = (1/√2)(|0⟩ + |1⟩).
 ///
@@ -38,7 +38,7 @@ use num_complex::Complex64;
 /// Both output components equal 1/√2 = 1/√2 + 0i.
 /// Reference: Shor (1994), quantum Fourier transform for N=2 as Hadamard gate.
 pub(crate) fn qft_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
+    let input = Array1::from(vec![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
     let actual = qft_transform(&input)?;
     let inv_sqrt2 = 1.0 / std::f64::consts::SQRT_2;
     let expected = [
@@ -66,7 +66,7 @@ pub(crate) fn qft_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
 /// Reference: Shor (1994) §2; Nielsen & Chuang (2000) §5.1.
 pub(crate) fn qft_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
     use apollo_qft::iqft as iqft_fn;
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(0.0, 0.0),
         Complex64::new(0.0, 0.0),

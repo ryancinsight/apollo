@@ -4,27 +4,27 @@
 //! external state — extracted for SRP isolation so the orchestrating suite
 //! module remains focused on report assembly.
 
-use ndarray::{Array1, Array3};
-use num_complex::Complex64;
+use leto::{Array1, Array3};
+use eunomia::Complex64;
 use std::time::Instant;
 
 /// Synthesised deterministic 1D real signal used by orchestrator paths that
 /// need a representative real input.
 pub(super) fn representative_signal_1d(len: usize) -> Array1<f64> {
-    Array1::from_vec(
+    Array1::from(
         (0..len)
             .map(|i| {
                 let x = i as f64;
                 (0.31 * x).sin() + 0.17 * (0.73 * x).cos()
             })
-            .collect(),
+            .collect::<Vec<_>>(),
     )
 }
 
 /// Synthesised deterministic real field used as a reference signal for
 /// precision-profile comparisons.
-pub(super) fn representative_field_3d(shape: (usize, usize, usize)) -> Array3<f64> {
-    Array3::from_shape_fn(shape, |(i, j, k)| {
+pub(super) fn representative_field_3d(shape: [usize; 3]) -> Array3<f64> {
+    Array3::from_shape_fn(shape, |[i, j, k]| {
         let x = i as f64;
         let y = j as f64;
         let z = k as f64;
@@ -86,7 +86,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     #[test]
     fn max_complex_abs_delta_returns_zero_for_identical_streams() {
@@ -103,8 +103,8 @@ mod tests {
 
     #[test]
     fn max_real_abs_delta_handles_signs_and_zero() {
-        let a = Array1::from_vec(vec![1.0, -2.0, 3.0]);
-        let b = Array1::from_vec(vec![1.0, 2.0, 3.0]);
+        let a = Array1::from(vec![1.0, -2.0, 3.0]);
+        let b = Array1::from(vec![1.0, 2.0, 3.0]);
         assert_eq!(max_real_abs_delta(&a, &b), 4.0);
     }
 
@@ -118,9 +118,9 @@ mod tests {
 
     #[test]
     fn representative_field_3d_is_deterministic_and_shape_preserving() {
-        let a = representative_field_3d((2, 3, 4));
-        let b = representative_field_3d((2, 3, 4));
-        assert_eq!(a.shape(), &[2, 3, 4]);
+        let a = representative_field_3d([2, 3, 4]);
+        let b = representative_field_3d([2, 3, 4]);
+        assert_eq!(a.shape(), [2, 3, 4]);
         assert_eq!(a, b);
     }
 }

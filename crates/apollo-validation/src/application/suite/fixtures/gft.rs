@@ -26,8 +26,8 @@ use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
 use leto::Array2 as LetoArray2;
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// GFT K₂ path graph Laplacian eigenvalues are {0, 2}.
 ///
@@ -68,7 +68,7 @@ pub(crate) fn gft_path_graph_forward_fixture() -> SuiteResult<PublishedFixtureRe
 pub(crate) fn gft_path_graph_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
     let adjacency = LetoArray2::from_shape_vec([2, 2], vec![0.0_f64, 1.0, 1.0, 0.0])?;
     let plan = GftPlan::from_adjacency(adjacency.view())?;
-    let signal = Array1::from_vec(vec![3.0_f64, -1.0]);
+    let signal = Array1::from(vec![3.0_f64, -1.0]);
     let spectrum = plan.forward(&signal)?;
     let recovered = plan.inverse(&spectrum)?;
     let expected = [3.0_f64, -1.0];

@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// Unitary FrFT of order 2 is the reversal operator.
 ///
@@ -39,7 +39,7 @@ use num_complex::Complex64;
 /// Input [1+0i, 2+0i, 3+0i, 4+0i], N=4, order=2.
 /// Expected output: [4+0i, 3+0i, 2+0i, 1+0i].
 pub(crate) fn frft_unitary_order2_reversal_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(2.0, 0.0),
         Complex64::new(3.0, 0.0),
@@ -76,7 +76,7 @@ pub(crate) fn frft_unitary_order2_reversal_fixture() -> SuiteResult<PublishedFix
 /// threshold is 1×10⁻¹² (three orders of margin).
 /// Reference: Namias (1980), J. Inst. Math. Appl. 25(3); Candan et al. (2000) §II.
 pub(crate) fn frft_inverse_roundtrip_order_half_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(2.0, 0.0),
         Complex64::new(3.0, 0.0),
@@ -119,7 +119,7 @@ pub(crate) fn frft_inverse_roundtrip_order_half_fixture() -> SuiteResult<Publish
 ///            \"The Discrete Fractional Fourier Transform.\"
 ///            IEEE Trans. Signal Process. 48(5), 1329\u20131337. \u00a7II Corollary.
 pub(crate) fn frft_order4_identity_fixture() -> SuiteResult<PublishedFixtureReport> {
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(2.0, 0.0),
         Complex64::new(3.0, 0.0),

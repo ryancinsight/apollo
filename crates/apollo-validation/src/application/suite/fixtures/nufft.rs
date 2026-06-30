@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
+use eunomia::Complex64;
 
 /// NUFFT Type-1 1D with a single source at x=0 and value 1+0i, N=4, dx=π/2 (L=2π).
 ///
@@ -109,7 +109,7 @@ pub(crate) fn nufft_type1_type2_adjoint_inner_product_fixture(
     let domain = UniformDomain1D::new(2, 0.5)?;
     let positions = vec![0.0_f64, 0.5];
     let c = vec![Complex64::new(1.0, 0.0), Complex64::new(2.0, 0.0)];
-    let f_arr = Array1::from_vec(vec![Complex64::new(3.0, 0.0), Complex64::new(4.0, 0.0)]);
+    let f_arr = Array1::from(vec![Complex64::new(3.0, 0.0), Complex64::new(4.0, 0.0)]);
     let capital_f = nufft_type1_1d(&positions, &c, domain);
     let g = nufft_type2_1d(&f_arr, &positions, domain);
     let lhs: f64 = capital_f
