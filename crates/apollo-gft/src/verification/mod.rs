@@ -5,7 +5,7 @@ mod tests {
     use crate::{GftError, GftPlan, GraphAdjacency};
     use approx::assert_abs_diff_eq;
     use leto::Array2;
-    use ndarray::Array1;
+    use leto::Array1;
     use proptest::prelude::*;
 
     #[test]
@@ -17,7 +17,7 @@ mod tests {
         assert_abs_diff_eq!(plan.eigenvalues()[0], 0.0, epsilon = 1.0e-12);
         assert_abs_diff_eq!(plan.eigenvalues()[1], 2.0, epsilon = 1.0e-12);
 
-        let input = Array1::from_vec(vec![2.0, -1.0]);
+        let input = Array1::from(vec![2.0, -1.0]);
         let recovered = plan
             .inverse(&plan.forward(&input).expect("forward"))
             .expect("inverse");
@@ -38,12 +38,12 @@ mod tests {
         assert_abs_diff_eq!(plan.eigenvalues()[1], 1.0, epsilon = 1.0e-12);
         assert_abs_diff_eq!(plan.eigenvalues()[2], 3.0, epsilon = 1.0e-12);
 
-        let constant = Array1::from_vec(vec![4.0, 4.0, 4.0]);
+        let constant = Array1::from(vec![4.0, 4.0, 4.0]);
         let spectrum = plan.forward(&constant).expect("forward");
         assert_abs_diff_eq!(spectrum[1], 0.0, epsilon = 1.0e-12);
         assert_abs_diff_eq!(spectrum[2], 0.0, epsilon = 1.0e-12);
 
-        let signal = Array1::from_vec(vec![1.0, -2.0, 0.5]);
+        let signal = Array1::from(vec![1.0, -2.0, 0.5]);
         let recovered = plan
             .inverse(&plan.forward(&signal).expect("forward"))
             .expect("inverse");
@@ -83,11 +83,11 @@ mod tests {
         let adjacency = Array2::from_shape_vec([2, 2], vec![0.0, 1.0, 1.0, 0.0]).unwrap();
         let plan = GftPlan::from_adjacency(adjacency.view()).expect("plan");
         assert_eq!(
-            plan.forward(&Array1::from_vec(vec![1.0])).unwrap_err(),
+            plan.forward(&Array1::from(vec![1.0])).unwrap_err(),
             GftError::LengthMismatch
         );
         assert_eq!(
-            plan.inverse(&Array1::from_vec(vec![1.0])).unwrap_err(),
+            plan.inverse(&Array1::from(vec![1.0])).unwrap_err(),
             GftError::LengthMismatch
         );
     }
@@ -109,7 +109,7 @@ mod tests {
                 }
             }
             let plan = GftPlan::from_adjacency(adj.view()).unwrap();
-            let signal = Array1::from_vec((0..n).map(|i| i as f64 + 1.0).collect::<Vec<_>>());
+            let signal = Array1::from((0..n).map(|i| i as f64 + 1.0).collect::<Vec<_>>());
             let spectrum = plan.forward(&signal).unwrap();
             let recovered = plan.inverse(&spectrum).unwrap();
             let err: f64 = signal.iter().zip(recovered.iter())
@@ -156,7 +156,7 @@ mod tests {
         *adj.get_mut([0, 2]).unwrap() = 1.3;
         *adj.get_mut([2, 0]).unwrap() = 1.3;
         let plan = GftPlan::from_adjacency(adj.view()).expect("plan");
-        let signal = Array1::from_vec(vec![1.0, -2.0, 0.5]);
+        let signal = Array1::from(vec![1.0, -2.0, 0.5]);
         let spectrum = plan.forward(&signal).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");
         for (a, b) in signal.iter().zip(recovered.iter()) {

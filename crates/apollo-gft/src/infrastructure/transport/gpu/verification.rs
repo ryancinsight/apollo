@@ -60,7 +60,7 @@ mod tests {
                 .execute_forward(&gpu_plan, &signal_f32, &basis_f32)
                 .expect("gft forward");
             let signal_f64 =
-                ndarray::Array1::from_vec(signal_f32.iter().map(|&v| v as f64).collect());
+                leto::Array1::from(signal_f32.iter().map(|&v| v as f64).collect());
             let cpu_fwd = cpu_plan.forward(&signal_f64).expect("cpu gft forward");
             assert_eq!(gpu_fwd.len(), 4);
             for (k, (g, c)) in gpu_fwd.iter().zip(cpu_fwd.iter()).enumerate() {
@@ -78,7 +78,7 @@ mod tests {
         {
             let (cpu_plan, basis_f32, signal_f32) = path4_plan_and_basis();
             let signal_f64 =
-                ndarray::Array1::from_vec(signal_f32.iter().map(|&v| v as f64).collect());
+                leto::Array1::from(signal_f32.iter().map(|&v| v as f64).collect());
             // Use the CPU forward spectrum as input for the inverse.
             let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu spectrum");
             let spectrum_f32: Vec<f32> = cpu_spectrum.iter().map(|&v| v as f32).collect();
