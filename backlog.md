@@ -39,6 +39,21 @@ Remaining replacement work:
     `hephaestus_wgpu::WgpuDevice`) or promote to hephaestus.
   - delete `crates/apollo-wgpu-helpers` + its 18 dependency entries.
   Feature-gated GPU code; verify under the wgpu feature, differential vs CPU.
+- [ ] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
+  crate** (`apollo-leto-interop` or fold into a small `apollo-core`). Today they
+  live in `apollo-fft::application::utilities::leto_interop` (SRP violation —
+  apollo-fft is a transform crate doubling as a shared utility lib), **17** other
+  transform crates reach into `apollo_fft::…::leto_interop` (wrong dependency
+  direction: transform→transform), and they wrap it in **32** redundant per-crate
+  `leto_view1_cow`-style forwarders (apollo-czt defines that forwarder twice).
+  Plan: move the canonical, **rank-polymorphic** helpers (`view_cow<…,const N>`,
+  `try_dense_from_contiguous<T,S,const N>`, `try_array1_from_slice`,
+  `leto_array1_from_vec`) into the shared crate; every transform (incl. apollo-fft)
+  depends on it; delete the 32 forwarders and call the shared SSOT directly.
+  Net: ~32 duplicate fns → one generic set; one inward dependency edge per crate.
+  Sequencing note: the helper bodies are being rewritten by the in-flight
+  num_complex/ndarray→leto migration (branch `refactor/apollo-fft-eunomia`), so do
+  D7 **after** that lands to avoid editing `leto_interop`'s home on two branches.
 
 ## Delivered
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
