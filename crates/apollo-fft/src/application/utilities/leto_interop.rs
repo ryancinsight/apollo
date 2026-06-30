@@ -1,14 +1,15 @@
-//! Canonical Leto ↔ slice/ndarray interop helpers shared by every Apollo
-//! transform crate.
+//! Canonical Leto interop helpers shared by every Apollo transform crate.
 //!
 //! These helpers are error-agnostic: fallible conversions return [`Option`]
 //! so each consumer maps `None` onto its own domain error type. Contiguous
 //! views are always borrowed (`Cow::Borrowed`); only strided views are
 //! materialized, preserving zero-copy on the common path.
+//!
+//! Rank-polymorphic by design: one [`try_dense_from_contiguous`] covers every
+//! rank `N` (monomorphized per use), and view→owned materialization defers to
+//! [`leto::ArrayView::to_contiguous`] rather than a per-rank copy helper.
 
 use std::borrow::Cow;
-
-use leto::{Array2, Array3};
 
 /// Borrow a contiguous Leto 1D view or materialize a strided one.
 ///
@@ -32,28 +33,6 @@ pub fn view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
     }
 }
 
-/// Copy a Leto 2D view of any stride into a dense `leto::Array2`.
-#[must_use]
-pub fn array2_from_view<T: Copy>(view: &leto::ArrayView2<'_, T>) -> Array2<T> {
-    let [rows, cols] = view.shape();
-    Array2::from_shape_fn([rows, cols], |[row, col]| {
-        *view
-            .get([row, col])
-            .expect("Leto 2D view index must be valid after shape validation")
-    })
-}
-
-/// Copy a Leto 3D view of any stride into a dense `leto::Array3`.
-#[must_use]
-pub fn array3_from_view<T: Copy>(view: &leto::ArrayView3<'_, T>) -> Array3<T> {
-    let [d0, d1, d2] = view.shape();
-    Array3::from_shape_fn([d0, d1, d2], |[i, j, k]| {
-        *view
-            .get([i, j, k])
-            .expect("Leto 3D view index must be valid after shape validation")
-    })
-}
-
 /// Build a Leto 1D array from a slice; `None` when the length is rejected.
 #[must_use]
 #[inline]
@@ -64,30 +43,24 @@ pub fn try_array1_from_slice<T: Copy>(
         .ok()
 }
 
-/// Build a Leto 2D array from a standard-layout ndarray; `None` when the
-/// source is non-contiguous or the shape is rejected.
+/// Build a dense, mnemosyne-backed Leto array from any **C-contiguous** Leto
+/// array of the same rank — one rank-polymorphic entry point replacing the
+/// former per-rank `try_array{2,3}_from_*` helpers. `None` when the source is
+/// non-contiguous (no `as_slice`) or the shape is rejected.
+///
+/// Generic over rank `N` and source storage `S`; each instantiation
+/// monomorphizes to the same code the hand-written per-rank helper would.
 #[must_use]
-pub fn try_array2_from_ndarray<T: Copy>(
-    output: &Array2<T>,
-) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    let [rows, cols] = output.shape();
-    leto::Array::<T, leto::MnemosyneStorage<T>, 2>::from_mnemosyne_slice(
-        [rows, cols],
-        output.as_slice()?,
-    )
-    .ok()
-}
-
-/// Build a Leto 3D array from a standard-layout ndarray; `None` when the
-/// source is non-contiguous or the shape is rejected.
-#[must_use]
-pub fn try_array3_from_ndarray<T: Copy>(
-    output: &Array3<T>,
-) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    let [d0, d1, d2] = output.shape();
-    leto::Array::<T, leto::MnemosyneStorage<T>, 3>::from_mnemosyne_slice(
-        [d0, d1, d2],
-        output.as_slice()?,
+pub fn try_dense_from_contiguous<T, S, const N: usize>(
+    source: &leto::Array<T, S, N>,
+) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, N>>
+where
+    T: Copy,
+    S: leto::Storage<T>,
+{
+    leto::Array::<T, leto::MnemosyneStorage<T>, N>::from_mnemosyne_slice(
+        source.shape(),
+        source.as_slice()?,
     )
     .ok()
 }

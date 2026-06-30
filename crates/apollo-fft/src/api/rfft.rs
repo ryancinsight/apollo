@@ -4,7 +4,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::Pl
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::application::utilities::leto_interop::{
-    array2_from_view, array3_from_view, try_array2_from_ndarray, try_array3_from_ndarray, view1_cow,
+    try_dense_from_contiguous, view1_cow,
 };
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use leto::{Array1, Array2, Array3};
@@ -339,9 +339,9 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = array2_from_view(&field);
+    let nd_array = field.to_contiguous();
     let output = fft_2d_array_typed::<T>(&nd_array);
-    try_array2_from_ndarray(&output).expect("FFT spectrum shape must match Leto output shape")
+    try_dense_from_contiguous(&output).expect("FFT spectrum shape must match Leto output shape")
 }
 
 /// Forward 3D FFT of a Leto real view, returning Mnemosyne-backed Leto storage.
@@ -362,7 +362,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = array3_from_view(&field);
+    let nd_array = field.to_contiguous();
     let output = fft_3d_array_typed::<T>(&nd_array);
-    try_array3_from_ndarray(&output).expect("FFT spectrum shape must match Leto output shape")
+    try_dense_from_contiguous(&output).expect("FFT spectrum shape must match Leto output shape")
 }
