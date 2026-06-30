@@ -31,8 +31,10 @@ Remaining replacement work:
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
     buffer / `ComputeBackend` directly; this also unwinds the lingering
     apollo↔`coeus_core` GPU-storage coupling (only 2 apollo crates touch
-    coeus-core). A leto-array GPU path puts the buffer as a leto `Storage` impl
-    in hephaestus, not in apollo.
+    coeus-core). leto is **CPU-only** and does not enter the GPU side at all —
+    GPU buffers are hephaestus's own types; the only leto seam is the CPU↔GPU
+    boundary, where a CPU `leto::Array` uploads to / downloads from a hephaestus
+    GPU buffer.
   - `get_global_device()` singleton → keep apollo-local (a `OnceLock` over a
     `hephaestus_wgpu::WgpuDevice`) or promote to hephaestus.
   - delete `crates/apollo-wgpu-helpers` + its 18 dependency entries.
