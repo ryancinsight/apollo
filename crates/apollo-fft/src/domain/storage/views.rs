@@ -1,7 +1,7 @@
 //! Concrete mutable FFT storage views.
 
 use super::{FftSample, FftStorage};
-use num_complex::Complex;
+use eunomia::Complex;
 use std::borrow::Cow;
 
 /// Mutable planar structure-of-arrays FFT view.
@@ -234,7 +234,7 @@ impl<T: FftSample> FftStorage<T> for FftInterleavedCow<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::{FftInterleavedCow, FftStorage};
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     #[test]
     fn interleaved_cow_borrows_without_copying_on_read() {

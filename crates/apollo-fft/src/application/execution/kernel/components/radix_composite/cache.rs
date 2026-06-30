@@ -2,7 +2,7 @@ use crate::application::execution::kernel::components::winograd::{
     apply_twiddle_impl, WinogradScalar,
 };
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
-use num_complex::Complex;
+use eunomia::Complex;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -117,15 +117,15 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
 }
 
 thread_local! {
-    static TL_TWIDDLES_FWD_64: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex64>>> = const { RefCell::new(Vec::new()) };
-    static TL_TWIDDLES_INV_64: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex64>>> = const { RefCell::new(Vec::new()) };
+    static TL_TWIDDLES_FWD_64: RefCell<Vec<CompositeTwiddleEntry<eunomia::Complex64>>> = const { RefCell::new(Vec::new()) };
+    static TL_TWIDDLES_INV_64: RefCell<Vec<CompositeTwiddleEntry<eunomia::Complex64>>> = const { RefCell::new(Vec::new()) };
 
-    static TL_TWIDDLES_FWD_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
-    static TL_TWIDDLES_INV_32: RefCell<Vec<CompositeTwiddleEntry<num_complex::Complex32>>> = const { RefCell::new(Vec::new()) };
+    static TL_TWIDDLES_FWD_32: RefCell<Vec<CompositeTwiddleEntry<eunomia::Complex32>>> = const { RefCell::new(Vec::new()) };
+    static TL_TWIDDLES_INV_32: RefCell<Vec<CompositeTwiddleEntry<eunomia::Complex32>>> = const { RefCell::new(Vec::new()) };
 
-    static TL_COMPOSITE_SCRATCH_64: mnemosyne::scratch::ScratchPool<num_complex::Complex64> =
+    static TL_COMPOSITE_SCRATCH_64: mnemosyne::scratch::ScratchPool<eunomia::Complex64> =
         const { mnemosyne::scratch::ScratchPool::new() };
-    static TL_COMPOSITE_SCRATCH_32: mnemosyne::scratch::ScratchPool<num_complex::Complex32> =
+    static TL_COMPOSITE_SCRATCH_32: mnemosyne::scratch::ScratchPool<eunomia::Complex32> =
         const { mnemosyne::scratch::ScratchPool::new() };
 }
 

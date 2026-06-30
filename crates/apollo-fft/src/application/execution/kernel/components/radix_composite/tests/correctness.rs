@@ -7,7 +7,7 @@ use super::{
 };
 use crate::application::execution::kernel::components::radix_composite::forward_inplace_with_radices;
 use crate::application::execution::kernel::direct::dft_forward;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[test]
 fn forward_n7() {

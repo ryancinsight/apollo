@@ -60,7 +60,8 @@ approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
 ndarray = { version = "0.16", default-features = false }
 num-complex = { version = "0.4", features = ["bytemuck"] }
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "938d0c2bc094d3bbe7745d68d60e05a531e0cfc2", features = ["num-complex"] }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "938d0c2bc094d3bbe7745d68d60e05a531e0cfc2", features = ["eunomia"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "df67249ef05de8e1addc5a26d6831c70d63c3d18" }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "a673325f61e933f6d3d6ecb9569d8f07c78152a8", features = ["ndarray-compat"] }
@@ -158,6 +159,9 @@ moirai = { path = "../moirai/moirai" }
 moirai-core = { path = "../moirai/moirai-core" }
 moirai-scheduler = { path = "../moirai/moirai-scheduler" }
 moirai-parallel = { path = "../moirai/moirai-parallel" }
+
+[patch."https://github.com/ryancinsight/eunomia"]
+eunomia = { path = "../eunomia/crates/eunomia" }
 
 [patch."https://github.com/ryancinsight/leto.git"]
 leto = { path = "../leto/crates/leto" }

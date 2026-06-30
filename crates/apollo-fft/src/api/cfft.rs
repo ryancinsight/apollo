@@ -8,7 +8,7 @@ use crate::application::execution::plan::fft::{
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use ndarray::{Array1, Array2, Array3};
-use num_complex::{Complex, Complex64};
+use eunomia::{Complex, Complex64};
 
 /// Forward complex 1D FFT in-place.
 pub fn fft_1d_complex_inplace(data: &mut Array1<Complex64>) {

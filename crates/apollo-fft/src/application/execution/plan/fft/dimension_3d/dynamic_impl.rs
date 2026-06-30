@@ -8,7 +8,7 @@ use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, Mixed
 use crate::domain::metadata::shape::Shape3D;
 use leto::ArrayViewMut3;
 use ndarray::Array3;
-use num_complex::Complex;
+use eunomia::Complex;
 use std::sync::Arc;
 
 /// Reusable separable 3D FFT plan generic over `MixedRadixScalar`.

@@ -19,7 +19,7 @@ pub(crate) trait RaderConvolutionBackend {
         n: usize,
         generator_inverse: usize,
     ) where
-        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar;
+        F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,7 +35,7 @@ impl RaderConvolutionBackend for FullCyclic {
     #[inline]
     fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
     where
-        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+        F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         let kernel_spectrum = F::cached_rader_spectrum::<INVERSE>(n, generator_inverse);
         rader_convolve_inplace::<F>(data, kernel_spectrum.as_ref());
@@ -46,7 +46,7 @@ impl RaderConvolutionBackend for HalfCyclicWinograd {
     #[inline]
     fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
     where
-        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+        F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         debug_assert_eq!(data.len() % 2, 0);
         let m = data.len() / 2;
@@ -67,7 +67,7 @@ impl RaderConvolutionBackend for Bluestein {
     #[inline]
     fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
     where
-        F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+        F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         bluestein::rader_bluestein_convolve_inplace::<F, INVERSE>(data, n, generator_inverse);
     }
@@ -75,7 +75,7 @@ impl RaderConvolutionBackend for Bluestein {
 
 /// Rader's algorithm for prime N.
 pub(crate) fn rader_fft<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -92,7 +92,7 @@ pub(crate) fn rader_fft<
 
 #[cfg(any(test, debug_assertions, feature = "kernel-strategy-bench"))]
 pub(crate) fn rader_fft_with_convolution_backend<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
     B: RaderConvolutionBackend,
 >(
@@ -105,7 +105,7 @@ pub(crate) fn rader_fft_with_convolution_backend<
 
 #[inline]
 fn rader_runtime_impl<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -145,7 +145,7 @@ pub(crate) fn prefers_half_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bo
 
 #[inline(never)]
 fn rader_runtime_impl_with_backend<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
     B: RaderConvolutionBackend,
 >(
@@ -173,7 +173,7 @@ fn rader_runtime_impl_with_backend<
 /// The permuted gather stores `data[gather[q]]` to `padded[q]`.
 /// Both loops are vectorized with 4-way unrolling for better ILP.
 #[inline]
-fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn gather_sum_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &[F::Complex],
     padded: &mut [F::Complex],
     gather: &[usize],
@@ -215,7 +215,7 @@ fn gather_sum_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
 }
 
 #[inline]
-fn scatter_slice<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn scatter_slice<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
     padded: &[F::Complex],
     x0: F::Complex,
@@ -299,7 +299,7 @@ mod const_consistency_tests {
     use super::generator::PRIMITIVE_ROOTS;
     use crate::application::execution::kernel::direct::dft_forward;
     use crate::application::execution::kernel::test_utils::max_abs_err_64;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     fn signal(n: usize) -> Vec<Complex64> {
         (0..n)

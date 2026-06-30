@@ -1,7 +1,7 @@
 use super::super::avx::{fixed_len32_precise_avx_fma, fixed_len64_precise_avx_fma};
 use super::super::precision::PreciseStockhamAvxFma;
 use super::super::transform::{transform_len4096_four_triples, transform_sized};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 pub(crate) unsafe fn forward64_avx_with_scratch(
     data: &mut [Complex64],

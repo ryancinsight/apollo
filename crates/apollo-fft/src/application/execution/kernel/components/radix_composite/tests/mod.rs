@@ -10,7 +10,7 @@
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::radix_shape::factorize_composite;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 mod composite;
 mod correctness;

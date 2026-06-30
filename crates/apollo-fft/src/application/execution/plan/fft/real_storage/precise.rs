@@ -1,7 +1,7 @@
 //! `f64` real-storage implementation: native `Complex64` spectrum, `f64` plan scalar.
 
 use super::RealFftData;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 impl RealFftData for f64 {
     type PlanScalar = f64;

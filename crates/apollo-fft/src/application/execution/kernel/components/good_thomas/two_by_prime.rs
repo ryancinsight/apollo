@@ -32,7 +32,7 @@ enum TwoByPrimeConfig {
 }
 
 pub(super) fn try_fft<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -82,7 +82,7 @@ pub(super) fn direct_pair_prime(prime: usize) -> bool {
 }
 
 fn two_by_prime_ordered_rader<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -124,7 +124,7 @@ fn two_by_prime_ordered_rader<
 }
 
 fn two_by_prime_natural_prime<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -155,7 +155,7 @@ fn two_by_prime_natural_prime<
 }
 
 #[inline]
-fn load_even_odd_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn load_even_odd_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     src: &[F::Complex],
     even: &mut [F::Complex],
     odd: &mut [F::Complex],
@@ -201,7 +201,7 @@ fn load_even_compact_odd_natural<C: Copy>(data: &mut [C], even: &mut [C], prime:
 
 #[inline]
 fn transform_natural_prime_half<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -215,7 +215,7 @@ fn transform_natural_prime_half<
 }
 
 #[inline]
-fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     dst: &mut [F::Complex],
     even: &[F::Complex],
     odd: &[F::Complex],
@@ -256,7 +256,7 @@ fn combine_two_prime_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<
 }
 
 #[inline]
-fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn combine_two_prime_natural_compacted<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     dst: &mut [F::Complex],
     even: &[F::Complex],
     twiddles: &[F::Complex],

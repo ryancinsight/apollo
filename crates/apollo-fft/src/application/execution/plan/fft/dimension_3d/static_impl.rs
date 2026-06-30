@@ -8,7 +8,7 @@ use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use core::marker::PhantomData;
 use leto::ArrayViewMut3;
 use ndarray::Array3;
-use num_complex::Complex;
+use eunomia::Complex;
 
 /// Zero-sized 3D FFT plan for compile-time-known shapes.
 ///

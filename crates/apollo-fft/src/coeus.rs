@@ -8,7 +8,7 @@ use coeus_tensor::Tensor;
 use std::sync::Arc;
 
 /// Sealed trait for compile-time monomorphized FFT dispatch on Coeus types.
-pub trait FftScalar: Float {
+pub trait FftScalar: Float + eunomia::NumericElement {
     /// Internal Complex type used by Apollo FFT.
     type Complex;
 
@@ -258,7 +258,7 @@ where
         let numel = grad_out.numel();
 
         let scaled_d_y = backend.fft_1d(grad_out.storage());
-        let mut fft_vec = vec![Complex::new(T::zero(), T::zero()); numel];
+        let mut fft_vec = vec![Complex::new(<T as eunomia::NumericElement>::ZERO, <T as eunomia::NumericElement>::ZERO); numel];
         backend.copy_to_host(&scaled_d_y, &mut fft_vec);
 
         // Scale by 1 / N
@@ -269,7 +269,7 @@ where
         }
 
         if let Some(ref g) = self.y.grad {
-            let mut current_g = vec![Complex::new(T::zero(), T::zero()); numel];
+            let mut current_g = vec![Complex::new(<T as eunomia::NumericElement>::ZERO, <T as eunomia::NumericElement>::ZERO); numel];
             let gl = g.write();
             backend.copy_to_host(gl.storage(), &mut current_g);
             for i in 0..numel {

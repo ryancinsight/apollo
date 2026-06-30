@@ -1,5 +1,5 @@
 use super::super::backend::StockhamAvxBackend;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::arch::x86_64::{
     __m512d, _mm512_add_pd, _mm512_fmaddsub_pd, _mm512_loadu_pd, _mm512_mul_pd, _mm512_permute_pd,
     _mm512_set1_pd, _mm512_set_pd, _mm512_shuffle_f64x2, _mm512_storeu_pd, _mm512_sub_pd,

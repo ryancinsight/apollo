@@ -1,5 +1,5 @@
 use super::fixed::cmul_vec_precise;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// AVX/FMA f64 two-stage Stockham leaf for `groups == 2`.
 ///

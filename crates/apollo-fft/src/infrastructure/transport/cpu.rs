@@ -48,7 +48,7 @@ mod tests {
     use crate::domain::metadata::precision::BackendKind;
     use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
     use ndarray::{Array1, Array2, Array3};
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     #[test]
     fn default_produces_cpu_backend() {

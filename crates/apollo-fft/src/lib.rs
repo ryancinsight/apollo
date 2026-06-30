@@ -68,8 +68,8 @@ pub use domain::metadata::shape::{HalfSpectrum3D, Shape1D, Shape2D, Shape3D};
 pub use half::f16;
 pub use infrastructure::transport::cpu::CpuBackend;
 
-pub use num_complex::Complex32;
-pub use num_complex::Complex64;
+pub use eunomia::Complex32;
+pub use eunomia::Complex64;
 
 // Re-export all API functions directly from crate root for backwards compatibility.
 pub use api::cfft::*;

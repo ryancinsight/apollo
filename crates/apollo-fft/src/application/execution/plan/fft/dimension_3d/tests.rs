@@ -1,6 +1,6 @@
 use crate::application::execution::plan::fft::dimension_3d::StaticFftPlan3D;
 use ndarray::Array3;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::f64::consts::PI;
 
 fn signal<const NX: usize, const NY: usize, const NZ: usize>() -> Array3<Complex64> {

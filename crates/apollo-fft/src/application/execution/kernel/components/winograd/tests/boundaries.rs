@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::winograd::*;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 // ── Impulse → all-ones ───────────────────────────────────────────────────────
 

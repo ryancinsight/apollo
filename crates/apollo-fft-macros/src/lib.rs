@@ -152,7 +152,7 @@ pub fn generate_three_by_prime_dispatch(input: TokenStream) -> TokenStream {
 
         pub(super) fn try_fft<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-                Complex = num_complex::Complex<F>,
+                Complex = eunomia::Complex<F>,
             >,
             const INVERSE: bool,
         >(
@@ -184,7 +184,7 @@ fn route_kernel(p: usize) -> proc_macro2::TokenStream {
         #[inline]
         fn #route<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-                Complex = num_complex::Complex<F>,
+                Complex = eunomia::Complex<F>,
             >,
             const INVERSE: bool,
         >(

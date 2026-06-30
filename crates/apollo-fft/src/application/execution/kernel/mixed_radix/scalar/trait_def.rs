@@ -71,7 +71,6 @@ pub trait MixedRadixScalar:
         + Send
         + Sync
         + 'static
-        + num_traits::Zero
         + std::ops::Add<Output = Self::Complex>
         + std::ops::Mul<Output = Self::Complex>;
 

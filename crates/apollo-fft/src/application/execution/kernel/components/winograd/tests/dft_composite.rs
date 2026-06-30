@@ -1,6 +1,6 @@
 use crate::application::execution::kernel::components::winograd::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
     a.iter()

@@ -37,7 +37,7 @@ use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
 use leto::ArrayViewMut2;
 use ndarray::Array2;
-use num_complex::Complex;
+use eunomia::Complex;
 use std::sync::Arc;
 
 /// Use Moirai parallel iteration when total elements exceed this threshold.
@@ -393,7 +393,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
     use std::f64::consts::PI;
 
     fn signal<const NX: usize, const NY: usize>() -> Array2<Complex64> {

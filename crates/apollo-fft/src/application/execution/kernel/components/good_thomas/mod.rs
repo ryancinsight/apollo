@@ -35,7 +35,7 @@ pub(crate) fn has_static_coprime_codelet(n1: usize, n2: usize) -> bool {
 /// Requires gcd(n1, n2) == 1. Permutation index tables are precomputed and cached
 /// on first use via `cached_pfa_perm`, eliminating O(N) modulo per subsequent call.
 pub(crate) fn pfa_fft<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -71,7 +71,7 @@ pub(crate) fn pfa_fft<
 /// transform strategy.
 #[inline]
 fn pfa_gather_and_transform_rows<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &[F::Complex],
@@ -110,7 +110,7 @@ fn pfa_gather_and_transform_rows<
 /// 2. Transform rows in-place (contiguous memory - cache-friendly)
 /// 3. Transform columns using n1-sized buffer, scatter to final positions
 fn pfa_fft_natural_inplace<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -213,7 +213,7 @@ fn pfa_fft_natural_inplace<
 }
 
 fn pfa_fft_ordered_rader_n1<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],

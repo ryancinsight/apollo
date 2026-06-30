@@ -30,7 +30,7 @@ use crate::application::execution::kernel::mixed_radix::caches::{
 };
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use std::sync::Arc;
 
 // ── AVX/SIMD helpers (shared by f32 and f64 impls) ─────────────────────────

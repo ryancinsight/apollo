@@ -7,9 +7,9 @@ use super::super::avx::{
 };
 use super::super::precision::ReducedStockhamAvxFma;
 use super::super::transform::{transform, transform_len4096_four_triples, transform_sized};
-use num_complex::Complex32;
+use eunomia::Complex32;
 #[cfg(all(test, target_arch = "x86_64"))]
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Power-of-two sizes that have hand-unrolled AVX fixed-length codelets for
 /// f32. Each size dispatches to a dedicated `fixed_len*_32_avx_fma` kernel

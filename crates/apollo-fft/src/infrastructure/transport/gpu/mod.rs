@@ -86,7 +86,7 @@ impl ComputeBackend for WgpuBackend {
 impl<T: crate::coeus::FftScalar> crate::coeus::FftDeviceOps<T> for WgpuBackend {
     fn fft_1d(&self, signal: &Self::DeviceBuffer<T>) -> Self::DeviceBuffer<coeus_core::Complex<T>> {
         let len = signal.len();
-        let mut host_signal = vec![T::zero(); len];
+        let mut host_signal = vec![<T as eunomia::NumericElement>::ZERO; len];
         self.copy_to_host(signal, &mut host_signal);
         let out_vec = T::fft_1d_impl(&host_signal);
         let mut out = self.allocate::<coeus_core::Complex<T>>(out_vec.len());
@@ -96,7 +96,7 @@ impl<T: crate::coeus::FftScalar> crate::coeus::FftDeviceOps<T> for WgpuBackend {
 
     fn ifft_1d(&self, spectrum: &Self::DeviceBuffer<coeus_core::Complex<T>>) -> Self::DeviceBuffer<T> {
         let len = spectrum.len();
-        let mut host_spectrum = vec![coeus_core::Complex::new(T::zero(), T::zero()); len];
+        let mut host_spectrum = vec![coeus_core::Complex::new(<T as eunomia::NumericElement>::ZERO, <T as eunomia::NumericElement>::ZERO); len];
         self.copy_to_host(spectrum, &mut host_spectrum);
         let out_vec = T::ifft_1d_impl(&host_spectrum);
         let mut out = self.allocate::<T>(out_vec.len());

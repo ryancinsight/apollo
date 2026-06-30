@@ -1,4 +1,4 @@
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]

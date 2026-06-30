@@ -4,7 +4,7 @@
 
 use half::f16;
 use mnemosyne::scratch::ScratchPool;
-use num_complex::{Complex, Complex32};
+use eunomia::{Complex, Complex32};
 
 thread_local! {
     static COMPLEX32_BRIDGE_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };

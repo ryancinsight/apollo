@@ -1,5 +1,5 @@
 use super::fixed::cmul_vec_precise;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

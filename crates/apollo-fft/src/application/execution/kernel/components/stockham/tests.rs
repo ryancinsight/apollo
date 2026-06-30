@@ -13,7 +13,7 @@ use super::precision::{
 };
 use super::*;
 use crate::application::execution::kernel::components::stockham::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]
 #[test]
@@ -396,12 +396,12 @@ fn precise_avx_schedule_roundtrip_holds_for_n8192() {
 fn test_small_sizes_correctness() {
     // We will test sizes 2, 4, 8, 16 for both f32 (reduced) and f64 (precise)
     // against a simple scalar DFT.
-    fn dft<T: num_traits::Float>(
-        input: &[num_complex::Complex<T>],
+    fn dft<T: eunomia::RealField>(
+        input: &[eunomia::Complex<T>],
         inverse: bool,
-    ) -> Vec<num_complex::Complex<T>> {
+    ) -> Vec<eunomia::Complex<T>> {
         let n = input.len();
-        let mut output = vec![num_complex::Complex::new(T::zero(), T::zero()); n];
+        let mut output = vec![eunomia::Complex::<T>::ZERO; n];
         let sign = if inverse {
             T::from(1.0).unwrap()
         } else {
@@ -409,10 +409,10 @@ fn test_small_sizes_correctness() {
         };
         let two_pi = T::from(2.0 * std::f64::consts::PI).unwrap();
         for k in 0..n {
-            let mut sum = num_complex::Complex::new(T::zero(), T::zero());
+            let mut sum = eunomia::Complex::<T>::ZERO;
             for j in 0..n {
                 let theta = two_pi * T::from(k * j).unwrap() / T::from(n).unwrap();
-                let w = num_complex::Complex::new(theta.cos(), sign * theta.sin());
+                let w = eunomia::Complex::new(theta.cos(), sign * theta.sin());
                 sum = sum + input[j] * w;
             }
             output[k] = sum;

@@ -8,8 +8,8 @@ mod private {
 pub trait WinogradScalar:
     private::Sealed
     + super::radix::odd_prime_pair::PrimePairTables
-    + num_traits::Float
-    + num_traits::NumAssign
+    + eunomia::RealField
+    + core::ops::AddAssign + core::ops::SubAssign + core::ops::MulAssign + core::ops::DivAssign
     + Send
     + Sync
     + 'static
@@ -21,13 +21,13 @@ pub trait WinogradScalar:
     /// Runs a closure with a thread-local complex scratch buffer.
     fn with_winograd_scratch<R>(
         n: usize,
-        f: impl FnOnce(&mut [num_complex::Complex<Self>]) -> R,
+        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
     ) -> R;
 }
 
 thread_local! {
-    static TL_WINOGRAD_SCRATCH_64: mnemosyne::scratch::ScratchPool<num_complex::Complex64> = mnemosyne::scratch::ScratchPool::new();
-    static TL_WINOGRAD_SCRATCH_32: mnemosyne::scratch::ScratchPool<num_complex::Complex32> = mnemosyne::scratch::ScratchPool::new();
+    static TL_WINOGRAD_SCRATCH_64: mnemosyne::scratch::ScratchPool<eunomia::Complex64> = mnemosyne::scratch::ScratchPool::new();
+    static TL_WINOGRAD_SCRATCH_32: mnemosyne::scratch::ScratchPool<eunomia::Complex32> = mnemosyne::scratch::ScratchPool::new();
 }
 
 impl WinogradScalar for f64 {
@@ -42,7 +42,7 @@ impl WinogradScalar for f64 {
     #[inline]
     fn with_winograd_scratch<R>(
         n: usize,
-        f: impl FnOnce(&mut [num_complex::Complex<Self>]) -> R,
+        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
     ) -> R {
         TL_WINOGRAD_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
     }
@@ -59,7 +59,7 @@ impl WinogradScalar for f32 {
     #[inline]
     fn with_winograd_scratch<R>(
         n: usize,
-        f: impl FnOnce(&mut [num_complex::Complex<Self>]) -> R,
+        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
     ) -> R {
         TL_WINOGRAD_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
     }
@@ -67,7 +67,7 @@ impl WinogradScalar for f32 {
 
 // Canonical implementation lives in butterflies::dft (shared across GT/Rader/etc).
 #[inline]
-pub(crate) fn dft2_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>; 2]) {
+pub(crate) fn dft2_impl<F: WinogradScalar>(data: &mut [eunomia::Complex<F>; 2]) {
     crate::application::execution::kernel::components::butterflies::dft2_impl::<F>(data);
 }
 
@@ -75,10 +75,10 @@ pub(crate) fn dft2_impl<F: WinogradScalar>(data: &mut [num_complex::Complex<F>; 
 /// Used by the radix outer loop to apply inter-group twiddles.
 #[inline]
 pub(crate) fn apply_twiddle_impl<F: WinogradScalar>(
-    v: num_complex::Complex<F>,
-    tw: num_complex::Complex<F>,
-) -> num_complex::Complex<F> {
-    num_complex::Complex::new(v.re * tw.re - v.im * tw.im, v.re * tw.im + v.im * tw.re)
+    v: eunomia::Complex<F>,
+    tw: eunomia::Complex<F>,
+) -> eunomia::Complex<F> {
+    eunomia::Complex::new(v.re * tw.re - v.im * tw.im, v.re * tw.im + v.im * tw.re)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

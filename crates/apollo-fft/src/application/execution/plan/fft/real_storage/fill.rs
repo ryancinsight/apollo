@@ -6,7 +6,7 @@
 use super::RealFftData;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use ndarray::{Array, Dimension, Zip};
-use num_complex::Complex;
+use eunomia::Complex;
 
 /// Fill a caller-owned spectrum array from real storage values.
 #[inline]

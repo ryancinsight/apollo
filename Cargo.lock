@@ -143,6 +143,7 @@ dependencies = [
  "coeus-ops",
  "coeus-tensor",
  "criterion",
+ "eunomia",
  "half",
  "hephaestus-wgpu",
  "hermes-simd",
@@ -150,8 +151,6 @@ dependencies = [
  "mnemosyne",
  "moirai",
  "ndarray",
- "num-complex",
- "num-traits",
  "once_cell",
  "parking_lot",
  "pollster",
@@ -763,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-autograd"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "coeus-core",
  "coeus-ops",
@@ -776,22 +775,21 @@ dependencies = [
 
 [[package]]
 name = "coeus-core"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
  "hermes-simd",
- "libm",
  "mnemosyne",
  "moirai",
- "num-traits",
  "smallvec",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "coeus-leto"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "coeus-core",
  "leto",
@@ -800,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-ops"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "bytemuck",
  "coeus-core",
@@ -810,14 +808,13 @@ dependencies = [
  "half",
  "leto-ops",
  "melinoe",
- "num-traits",
  "smallvec",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "coeus-sparse"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "coeus-core",
  "coeus-tensor",
@@ -827,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "coeus-tensor"
-version = "0.2.3"
+version = "0.5.4"
 dependencies = [
  "bytemuck",
  "coeus-core",
@@ -959,6 +956,16 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "eunomia"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "half",
+ "libm",
+ "rkyv",
 ]
 
 [[package]]
@@ -1290,19 +1297,8 @@ dependencies = [
  "moirai",
  "moirai-gpu",
  "moirai-sync",
- "num-complex",
  "themis 0.6.0",
  "wgpu",
-]
-
-[[package]]
-name = "hermes-numeric"
-version = "0.3.0"
-dependencies = [
- "bytemuck",
- "half",
- "libm",
- "rkyv",
 ]
 
 [[package]]
@@ -1310,8 +1306,8 @@ name = "hermes-simd"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
@@ -1324,8 +1320,8 @@ name = "hermes-simd-core"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "mnemosyne",
  "rkyv",
  "themis 0.9.17",
@@ -1336,8 +1332,8 @@ name = "hermes-simd-intrinsics"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
  "rkyv",
 ]
@@ -1478,11 +1474,10 @@ name = "leto"
 version = "0.35.1"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
  "mnemosyne",
  "ndarray",
- "num-complex",
- "num-traits",
  "thiserror 2.0.18",
 ]
 
@@ -1495,8 +1490,6 @@ dependencies = [
  "hermes-simd",
  "leto",
  "moirai",
- "num-complex",
- "num-traits",
  "themis 0.9.17",
  "thiserror 2.0.18",
 ]
@@ -1616,6 +1609,7 @@ dependencies = [
 name = "mnemosyne"
 version = "0.2.0"
 dependencies = [
+ "eunomia",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
@@ -1624,16 +1618,15 @@ dependencies = [
  "mnemosyne-heap",
  "mnemosyne-local",
  "mnemosyne-prof",
- "num-complex",
 ]
 
 [[package]]
 name = "mnemosyne-arena"
 version = "0.2.0"
 dependencies = [
+ "eunomia",
  "mnemosyne-backend",
  "mnemosyne-core",
- "num-complex",
  "themis 0.9.17",
 ]
 
@@ -1674,6 +1667,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
+ "themis 0.9.17",
 ]
 
 [[package]]

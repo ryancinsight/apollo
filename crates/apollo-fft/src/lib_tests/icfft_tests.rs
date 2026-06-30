@@ -2,7 +2,7 @@
 
 use crate::*;
 use ndarray::{Array1, Array2, Array3};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[test]
 fn owned_static_complex_wrappers_reuse_input_allocation() {

@@ -20,7 +20,7 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// Ordered Rader implementation for fused prime paths.
 #[inline]
 pub(crate) fn rader_ordered_impl<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],
@@ -54,7 +54,7 @@ pub(crate) fn rader_ordered_impl<
 
 #[inline]
 fn rader_ordered_convolve<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
     B: super::RaderConvolutionBackend,
 >(
@@ -66,14 +66,14 @@ fn rader_ordered_convolve<
 }
 
 #[inline]
-fn sum_ordered<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn sum_ordered<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     nonzero: &[F::Complex],
 ) -> F::Complex {
     nonzero.iter().copied().sum()
 }
 
 #[inline]
-fn add_dc_offset<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn add_dc_offset<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     nonzero: &mut [F::Complex],
     x0: F::Complex,
 ) {
@@ -84,7 +84,7 @@ fn add_dc_offset<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
 mod tests {
     use super::rader_ordered_impl;
     use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
         a.iter()

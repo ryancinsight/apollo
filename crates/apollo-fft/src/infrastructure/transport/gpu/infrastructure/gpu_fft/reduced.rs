@@ -29,7 +29,7 @@ impl GpuPrecision for ReducedPrecision {
 
     fn create_chirp_buffers(
         device: &wgpu::Device,
-        h: &[num_complex::Complex<f64>],
+        h: &[eunomia::Complex<f64>],
     ) -> (wgpu::Buffer, wgpu::Buffer) {
         use wgpu::util::DeviceExt;
         let h_re_bits: Vec<u16> = h

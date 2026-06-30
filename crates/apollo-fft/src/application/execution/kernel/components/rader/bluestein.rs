@@ -35,7 +35,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::{
     BluesteinEntry, BluesteinKey, BluesteinStore,
 };
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
-use num_complex::Complex;
+use eunomia::Complex;
 use std::sync::Arc;
 
 // ── Cache fetch ────────────────────────────────────────────────────────────
@@ -352,7 +352,7 @@ pub(super) fn rader_bluestein_convolve_inplace<
 #[cfg(test)]
 mod tests {
     use crate::application::execution::kernel::direct::dft_forward;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     fn signal(n: usize) -> Vec<Complex64> {
         (0..n)

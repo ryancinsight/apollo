@@ -3,7 +3,7 @@ use crate::domain::metadata::shape::Shape1D;
 use core::marker::PhantomData;
 use leto::ArrayViewMut1;
 use ndarray::Array1;
-use num_complex::Complex;
+use eunomia::Complex;
 use std::borrow::Cow;
 use std::sync::Arc;
 

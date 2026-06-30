@@ -5,7 +5,7 @@
 
 use super::RealFftData;
 use half::f16;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 impl RealFftData for f16 {
     type PlanScalar = f32;

@@ -33,11 +33,11 @@ use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradSca
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
 ) {
     debug_assert!(data.len() >= 84);
 
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 84];
+    let mut scratch = [eunomia::Complex::<F>::ZERO; 84];
 
     // Stage 1: Load with input permutation and perform DFT-7 row transforms
     for i1 in 0..4 {
@@ -49,7 +49,7 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
             }
 
             let mut src_idx = src_idx2;
-            let mut row_arr = [num_complex::Complex::new(F::zero(), F::zero()); 7];
+            let mut row_arr = [eunomia::Complex::<F>::ZERO; 7];
             for i3 in 0..7 {
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 12;
@@ -148,11 +148,11 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
 ) {
     debug_assert!(data.len() >= 60);
 
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 60];
+    let mut scratch = [eunomia::Complex::<F>::ZERO; 60];
 
     // Stage 1: Load with input permutation and perform DFT-5 row transforms
     for i1 in 0..4 {
@@ -164,7 +164,7 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
             }
 
             let mut src_idx = src_idx2;
-            let mut row_arr = [num_complex::Complex::new(F::zero(), F::zero()); 5];
+            let mut row_arr = [eunomia::Complex::<F>::ZERO; 5];
             for i3 in 0..5 {
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 12;
@@ -261,11 +261,11 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
 ) {
     debug_assert!(data.len() >= 90);
 
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 90];
+    let mut scratch = [eunomia::Complex::<F>::ZERO; 90];
 
     // Stage 1: Load with input permutation and perform DFT-5 row transforms
     for i1 in 0..2 {
@@ -277,7 +277,7 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             }
 
             let mut src_idx = src_idx2;
-            let mut row_arr = [num_complex::Complex::new(F::zero(), F::zero()); 5];
+            let mut row_arr = [eunomia::Complex::<F>::ZERO; 5];
             for i3 in 0..5 {
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 18;
@@ -363,11 +363,11 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
 ) {
     debug_assert!(data.len() >= 150);
 
-    let mut scratch = [num_complex::Complex::new(F::zero(), F::zero()); 150];
+    let mut scratch = [eunomia::Complex::<F>::ZERO; 150];
 
     // Stage 1: Load with input permutation and perform DFT-25 row transforms
     for i1 in 0..2 {
@@ -379,7 +379,7 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
             }
 
             let mut src_idx = src_idx2;
-            let mut row_arr = [num_complex::Complex::new(F::zero(), F::zero()); 25];
+            let mut row_arr = [eunomia::Complex::<F>::ZERO; 25];
             for i3 in 0..25 {
                 row_arr[i3] = unsafe { *data.get_unchecked(src_idx) };
                 src_idx += 6;
@@ -458,7 +458,7 @@ pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
 /// non-supported decompositions.
 #[inline]
 pub(crate) fn try_fft<F: ShortWinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
     n1: usize,
     n2: usize,
 ) -> bool {

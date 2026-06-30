@@ -24,11 +24,11 @@ pub(crate) use dft::{dft2_impl, dft3_impl, dft4_array_impl, dft5_array_impl, dft
 
 /// Conjugate multiply: (a.re + i a.im) * (b.re - i b.im)
 #[inline]
-pub(crate) fn mul_conj<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(crate) fn mul_conj<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     value: F::Complex,
     twiddle: F::Complex,
 ) -> F::Complex {
-    num_complex::Complex::new(
+    eunomia::Complex::new(
         value.re * twiddle.re + value.im * twiddle.im,
         value.im * twiddle.re - value.re * twiddle.im,
     )

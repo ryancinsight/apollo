@@ -42,7 +42,7 @@
 //! can be replaced by a faster recursive kernel without changing the public
 //! contract.
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 /// Scalar interface required by the Apollo FFT kernel.
 pub trait KernelScalar: Copy + Clone + Default {

@@ -13,7 +13,7 @@
 //! Normalization (when const NORMALIZE=true) fuses the 1/N scale into the
 //! final stores for inverse paths, avoiding a separate pass.
 
-use num_complex::Complex;
+use eunomia::Complex;
 
 use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
 
@@ -291,7 +291,7 @@ pub(crate) fn dft7_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE:
 /// Moved to shared for dupe reduction (used by winograd composite and GT paths).
 #[inline]
 pub(crate) fn dft15_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 15],
+    data: &mut [eunomia::Complex<F>; 15],
 ) {
     // Read CRT-mapped inputs into locals before any writes.
     // Row mapping: grid[i1*5+i2] = data[(5*i1 + 3*i2) mod 15]

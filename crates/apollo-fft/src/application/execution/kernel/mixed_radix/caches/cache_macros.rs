@@ -62,8 +62,8 @@ macro_rules! declare_cache_store {
             fn $global() -> &'static $global_ret_self;
         }
 
-        impl $sealed_mod::$sealed_trait for num_complex::Complex64 {}
-        impl $store_trait for num_complex::Complex64 {
+        impl $sealed_mod::$sealed_trait for eunomia::Complex64 {}
+        impl $store_trait for eunomia::Complex64 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_precise> {
                 $tl_precise.with(|c| c.borrow().get(&key).cloned())
@@ -80,8 +80,8 @@ macro_rules! declare_cache_store {
             }
         }
 
-        impl $sealed_mod::$sealed_trait for num_complex::Complex32 {}
-        impl $store_trait for num_complex::Complex32 {
+        impl $sealed_mod::$sealed_trait for eunomia::Complex32 {}
+        impl $store_trait for eunomia::Complex32 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
                 $tl_reduced.with(|c| c.borrow().get(&key).cloned())
@@ -131,8 +131,8 @@ macro_rules! declare_cache_store {
             fn $global() -> &'static $global_ret_self;
         }
 
-        impl $sealed_mod::$sealed_trait for num_complex::Complex64 {}
-        impl $store_trait for num_complex::Complex64 {
+        impl $sealed_mod::$sealed_trait for eunomia::Complex64 {}
+        impl $store_trait for eunomia::Complex64 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_precise> {
                 if ($flat_check)(key) {
@@ -159,8 +159,8 @@ macro_rules! declare_cache_store {
             }
         }
 
-        impl $sealed_mod::$sealed_trait for num_complex::Complex32 {}
-        impl $store_trait for num_complex::Complex32 {
+        impl $sealed_mod::$sealed_trait for eunomia::Complex32 {}
+        impl $store_trait for eunomia::Complex32 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
                 if ($flat_check)(key) {

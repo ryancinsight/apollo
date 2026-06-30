@@ -13,7 +13,7 @@ use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFf
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
 use ndarray::{Array1, Array2, Array3};
-use num_complex::Complex;
+use eunomia::Complex;
 
 mod compact;
 pub(super) mod fill;

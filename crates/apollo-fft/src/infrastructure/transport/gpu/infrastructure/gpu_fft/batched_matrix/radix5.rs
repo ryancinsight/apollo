@@ -1,7 +1,7 @@
 //! WGPU radix-5 batch dispatch for matrix-factorized column kernels.
 
 use crate::f16;
-use num_complex::Complex32;
+use eunomia::Complex32;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 

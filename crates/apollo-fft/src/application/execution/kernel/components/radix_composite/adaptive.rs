@@ -1,4 +1,4 @@
-use num_complex::Complex;
+use eunomia::Complex;
 
 use super::arity::dispatch_single_radix;
 use super::cache::CompositeCache;

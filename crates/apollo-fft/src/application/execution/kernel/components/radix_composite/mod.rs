@@ -1,4 +1,4 @@
-use num_complex::Complex;
+use eunomia::Complex;
 
 mod adaptive;
 pub(crate) mod arity;

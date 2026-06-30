@@ -46,7 +46,7 @@
 #![allow(clippy::uninit_vec)]
 use half::f16;
 
-use num_complex::{Complex, Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64};
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
 

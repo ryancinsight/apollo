@@ -8,7 +8,7 @@ use crate::f16;
 use crate::infrastructure::cpu::simd::batched::{
     radix11_batched_f32, radix3_batched_f32, radix5_batched_f32,
 };
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 fn to_column_major_complex(re: &[[f16; 8]; 5], im: &[[f16; 8]; 5], lane: usize) -> [Complex32; 5] {
     let mut out = [Complex32::new(0.0, 0.0); 5];

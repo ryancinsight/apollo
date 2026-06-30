@@ -6,7 +6,7 @@ use super::helpers::{
     apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32, cmul_f32_128, rot_neg_i,
     rot_neg_i_f32, rot_pos_i, rot_pos_i_f32,
 };
-use num_complex::Complex;
+use eunomia::Complex;
 use std::arch::x86_64::{
     __m128, __m256, __m256d, _mm256_add_pd, _mm256_add_ps, _mm256_castpd256_pd128,
     _mm256_castps256_ps128, _mm256_extractf128_pd, _mm256_extractf128_ps, _mm256_loadu_pd,

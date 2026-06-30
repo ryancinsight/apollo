@@ -24,7 +24,7 @@ use super::super::stage::stockham_precise_stage_is_l1_resident;
 use super::traits::PreciseStockham;
 use super::traits::{private, StockhamPrecision};
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 #[cfg(any(
     test,

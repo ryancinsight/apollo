@@ -1,7 +1,7 @@
 use super::super::cook_toom_gt::{dft150_impl, dft60_impl, dft84_impl, dft90_impl, try_fft};
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::test_utils::max_abs_err_64;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 fn signal84() -> Vec<Complex64> {
     (0..84)
@@ -98,7 +98,7 @@ fn try_fft_dispatch_60() {
 #[test]
 fn try_fft_rejects_non_matching() {
     // Try to dispatch with n1=3, n2=20 (not Cook-Toom-GT sizes)
-    let mut data = vec![num_complex::Complex::new(1.0, 0.0); 60];
+    let mut data = vec![eunomia::Complex::new(1.0, 0.0); 60];
     let result = try_fft::<f64, false>(&mut data, 3, 20);
     assert!(!result, "try_fft should return false for n1=3, n2=20");
 }

@@ -2,7 +2,7 @@ use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::plan::fft::dimension_1d::helpers::PlanStrategy;
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::domain::metadata::shape::Shape1D;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 fn signal64(n: usize) -> Vec<Complex64> {
     (0..n)

@@ -9,7 +9,7 @@ use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
-use num_complex::Complex;
+use eunomia::Complex;
 
 use super::FftPlan1D;
 

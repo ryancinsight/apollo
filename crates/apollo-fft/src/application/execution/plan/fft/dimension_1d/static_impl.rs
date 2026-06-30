@@ -3,7 +3,7 @@ use crate::application::execution::plan::fft::dimension_1d::executors::static_ff
 use core::marker::PhantomData;
 use leto::ArrayViewMut1;
 use ndarray::Array1;
-use num_complex::Complex;
+use eunomia::Complex;
 
 /// Zero-sized 1D FFT plan for compile-time-known lengths.
 ///

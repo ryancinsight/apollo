@@ -66,27 +66,27 @@ pub(crate) fn dft_pair_impl<
     const H: usize,
     const INVERSE: bool,
 >(
-    data: &mut [num_complex::Complex<F>; N],
+    data: &mut [eunomia::Complex<F>; N],
     cos: &[[F; H]; H],
     sin: &[[F; H]; H],
 ) {
     debug_assert_eq!(N, 2 * H + 1);
-    let zero = F::zero();
+    let zero = <F as eunomia::NumericElement>::ZERO;
     let x0 = data[0];
-    let mut sums = [num_complex::Complex::new(zero, zero); H];
-    let mut idiffs = [num_complex::Complex::new(zero, zero); H];
+    let mut sums = [eunomia::Complex::new(zero, zero); H];
+    let mut idiffs = [eunomia::Complex::new(zero, zero); H];
 
-    let sign = if INVERSE { F::one() } else { -F::one() };
+    let sign = if INVERSE { <F as eunomia::NumericElement>::ONE } else { -<F as eunomia::NumericElement>::ONE };
 
     for m in 0..H {
         let a = unsafe { *data.get_unchecked(m + 1) };
         let b = unsafe { *data.get_unchecked(N - 1 - m) };
         unsafe {
-            *sums.get_unchecked_mut(m) = num_complex::Complex::new(a.re + b.re, a.im + b.im);
+            *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
             let diff_re = a.re - b.re;
             let diff_im = a.im - b.im;
             *idiffs.get_unchecked_mut(m) =
-                num_complex::Complex::new(-diff_im * sign, diff_re * sign);
+                eunomia::Complex::new(-diff_im * sign, diff_re * sign);
         }
     }
 
@@ -96,7 +96,7 @@ pub(crate) fn dft_pair_impl<
         y0_re += s.re;
         y0_im += s.im;
     }
-    data[0] = num_complex::Complex::new(y0_re, y0_im);
+    data[0] = eunomia::Complex::new(y0_re, y0_im);
 
     for k in 0..H {
         let cos_row = unsafe { cos.get_unchecked(k) };
@@ -125,9 +125,9 @@ pub(crate) fn dft_pair_impl<
 
         unsafe {
             *data.get_unchecked_mut(k + 1) =
-                num_complex::Complex::new(base_re + delta_re, base_im + delta_im);
+                eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
             *data.get_unchecked_mut(N - 1 - k) =
-                num_complex::Complex::new(base_re - delta_re, base_im - delta_im);
+                eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
         }
     }
 }
@@ -139,19 +139,19 @@ pub(crate) fn dft_pair_impl_reduced<
     const H: usize,
     const INVERSE: bool,
 >(
-    data: &mut [num_complex::Complex<F>; N],
+    data: &mut [eunomia::Complex<F>; N],
     cos: &[[F; H]; H],
     sin: &[[F; H]; H],
 ) {
     debug_assert_eq!(N, 2 * H + 1);
-    let zero = F::zero();
+    let zero = <F as eunomia::NumericElement>::ZERO;
     let x0 = data[0];
     let mut sums_re = [zero; H];
     let mut sums_im = [zero; H];
     let mut idiffs_re = [zero; H];
     let mut idiffs_im = [zero; H];
 
-    let sign = if INVERSE { F::one() } else { -F::one() };
+    let sign = if INVERSE { <F as eunomia::NumericElement>::ONE } else { -<F as eunomia::NumericElement>::ONE };
     let mut y0_re = x0.re;
     let mut y0_im = x0.im;
 
@@ -172,7 +172,7 @@ pub(crate) fn dft_pair_impl_reduced<
         }
     }
 
-    data[0] = num_complex::Complex::new(y0_re, y0_im);
+    data[0] = eunomia::Complex::new(y0_re, y0_im);
 
     for k in 0..H {
         let mut base_re = x0.re;
@@ -203,9 +203,9 @@ pub(crate) fn dft_pair_impl_reduced<
 
         unsafe {
             *data.get_unchecked_mut(k + 1) =
-                num_complex::Complex::new(base_re + delta_re, base_im + delta_im);
+                eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
             *data.get_unchecked_mut(N - 1 - k) =
-                num_complex::Complex::new(base_re - delta_re, base_im - delta_im);
+                eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
         }
     }
 }
@@ -220,30 +220,30 @@ pub(crate) fn dft_pair_impl_reduced<
 /// `N` must equal `2*H + 1` (odd prime). `kernel_spectrum` must have length `N`.
 #[inline]
 pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize, const H: usize>(
-    data: &mut [num_complex::Complex<F>; N],
-    kernel_spectrum: &[num_complex::Complex<F>; N],
+    data: &mut [eunomia::Complex<F>; N],
+    kernel_spectrum: &[eunomia::Complex<F>; N],
     cos: &[[F; H]; H],
     sin: &[[F; H]; H],
 ) {
     debug_assert_eq!(N, 2 * H + 1);
-    let zero = F::zero();
-    let one = F::one();
+    let zero = <F as eunomia::NumericElement>::ZERO;
+    let one = <F as eunomia::NumericElement>::ONE;
     let neg_one = -one;
     let sign = neg_one; // forward: sign = -1
 
     let x0 = data[0];
-    let mut sums = [num_complex::Complex::new(zero, zero); H];
-    let mut idiffs = [num_complex::Complex::new(zero, zero); H];
+    let mut sums = [eunomia::Complex::new(zero, zero); H];
+    let mut idiffs = [eunomia::Complex::new(zero, zero); H];
 
     for m in 0..H {
         let a = unsafe { *data.get_unchecked(m + 1) };
         let b = unsafe { *data.get_unchecked(N - 1 - m) };
         unsafe {
-            *sums.get_unchecked_mut(m) = num_complex::Complex::new(a.re + b.re, a.im + b.im);
+            *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
             let diff_re = a.re - b.re;
             let diff_im = a.im - b.im;
             *idiffs.get_unchecked_mut(m) =
-                num_complex::Complex::new(-diff_im * sign, diff_re * sign);
+                eunomia::Complex::new(-diff_im * sign, diff_re * sign);
         }
     }
 
@@ -255,7 +255,7 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
         y0_im += s.im;
     }
     let ks0 = unsafe { *kernel_spectrum.get_unchecked(0) };
-    data[0] = num_complex::Complex::new(y0_re, y0_im) * ks0;
+    data[0] = eunomia::Complex::new(y0_re, y0_im) * ks0;
 
     // Remaining bins: compute Winograd output then multiply by kernel_spectrum[k]
     for k in 0..H {
@@ -288,9 +288,9 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
 
         unsafe {
             *data.get_unchecked_mut(k + 1) =
-                num_complex::Complex::new(base_re + delta_re, base_im + delta_im) * ks_kp1;
+                eunomia::Complex::new(base_re + delta_re, base_im + delta_im) * ks_kp1;
             *data.get_unchecked_mut(N - 1 - k) =
-                num_complex::Complex::new(base_re - delta_re, base_im - delta_im) * ks_nmk;
+                eunomia::Complex::new(base_re - delta_re, base_im - delta_im) * ks_nmk;
         }
     }
 }

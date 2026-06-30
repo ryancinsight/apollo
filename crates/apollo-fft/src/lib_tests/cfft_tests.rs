@@ -2,7 +2,7 @@
 
 use crate::*;
 use ndarray::{Array1, Array2, Array3};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[test]
 fn complex_into_wrappers_match_allocating_paths() {
@@ -364,11 +364,11 @@ fn test_f32_pot_plans_correctness() {
         // Compare with naive DFT
         let mut expected_fwd = vec![Complex32::new(0.0, 0.0); n];
         for k in 0..n {
-            let mut sum = num_complex::Complex64::new(0.0, 0.0);
+            let mut sum = eunomia::Complex64::new(0.0, 0.0);
             for j in 0..n {
                 let angle = -2.0 * std::f64::consts::PI * j as f64 * k as f64 / n as f64;
-                let w = num_complex::Complex64::new(angle.cos(), angle.sin());
-                sum += num_complex::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
+                let w = eunomia::Complex64::new(angle.cos(), angle.sin());
+                sum += eunomia::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
             }
             expected_fwd[k] = Complex32::new(sum.re as f32, sum.im as f32);
         }
@@ -390,11 +390,11 @@ fn test_f32_pot_plans_correctness() {
         // Naive IDFT (with normalization)
         let mut expected_inv = vec![Complex32::new(0.0, 0.0); n];
         for k in 0..n {
-            let mut sum = num_complex::Complex64::new(0.0, 0.0);
+            let mut sum = eunomia::Complex64::new(0.0, 0.0);
             for j in 0..n {
                 let angle = 2.0 * std::f64::consts::PI * j as f64 * k as f64 / n as f64;
-                let w = num_complex::Complex64::new(angle.cos(), angle.sin());
-                sum += num_complex::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
+                let w = eunomia::Complex64::new(angle.cos(), angle.sin());
+                sum += eunomia::Complex64::new(input[j].re as f64, input[j].im as f64) * w;
             }
             expected_inv[k] =
                 Complex32::new((sum.re / n as f64) as f32, (sum.im / n as f64) as f32);

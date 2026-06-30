@@ -6,7 +6,7 @@
 //! direction is carried by the precomputed twiddle table.
 
 use super::helpers::{apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32};
-use num_complex::Complex;
+use eunomia::Complex;
 use std::arch::x86_64::{
     _mm256_add_pd, _mm256_add_ps, _mm256_loadu_pd, _mm256_loadu_ps, _mm256_storeu_pd,
     _mm256_storeu_ps, _mm256_sub_pd, _mm256_sub_ps,

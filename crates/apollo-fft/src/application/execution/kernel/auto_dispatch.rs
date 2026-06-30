@@ -6,7 +6,7 @@
 //! precision-specific scaffolding (`dispatch_dft11`).
 
 use half::f16;
-use num_complex::{Complex, Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64};
 
 use super::components::winograd::radix::{dft4_array_impl, dft8_array_impl};
 use super::components::winograd::{dft3_impl, dft5_array_impl, dft7_impl};
@@ -234,7 +234,7 @@ fn dispatch_dft11<
     F: crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar,
     const INVERSE: bool,
 >(
-    data: &mut [num_complex::Complex<F>; 11],
+    data: &mut [eunomia::Complex<F>; 11],
 ) {
     F::dft11::<INVERSE>(data);
 }

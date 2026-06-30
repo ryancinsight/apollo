@@ -8,8 +8,8 @@ use crate::application::utilities::leto_interop::{
 };
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use ndarray::{Array1, Array2, Array3};
-use num_complex::Complex;
-use num_complex::Complex64;
+use eunomia::Complex;
+use eunomia::Complex64;
 
 /// Forward 1D FFT of a real signal.
 #[must_use]

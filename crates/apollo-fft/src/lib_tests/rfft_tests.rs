@@ -3,7 +3,7 @@
 use crate::*;
 use half::f16;
 use ndarray::{Array1, Array2, Array3};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 #[test]
 fn fft_3d_array_into_matches_allocating_path() {

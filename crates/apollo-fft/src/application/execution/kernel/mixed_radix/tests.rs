@@ -4,7 +4,7 @@ use super::super::test_utils::max_abs_err_64;
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use half::f16;
-use num_complex::{Complex, Complex32, Complex64};
+use eunomia::{Complex, Complex32, Complex64};
 
 #[test]
 fn mixed_forward_n32_matches_direct() {

@@ -1,7 +1,7 @@
 //! `f32` real-storage implementation: native `Complex32` spectrum, `f32` plan scalar.
 
 use super::RealFftData;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 impl RealFftData for f32 {
     type PlanScalar = f32;

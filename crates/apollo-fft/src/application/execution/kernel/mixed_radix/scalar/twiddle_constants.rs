@@ -3,7 +3,7 @@
 //! Contains combination-stage twiddle arrays for N=32 and N=64 (forward/inverse)
 //! and LazyLock twiddle tables for small power-of-two sizes (2/4/8/16/32/64).
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 // ── Combination-stage twiddles for N=32 (forward) ────────────────────────────
 

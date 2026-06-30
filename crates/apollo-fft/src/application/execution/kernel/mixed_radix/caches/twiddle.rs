@@ -1,4 +1,4 @@
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;

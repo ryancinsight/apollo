@@ -5,7 +5,7 @@
 //! - `NormalizeSlice`: sealed trait abstracting the AVX-dispatched scale pass.
 //! - `normalize_inplace`: SSOT 1/N scale pass, used by all inverse paths.
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 // ── Private AVX fast paths ─────────────────────────────────────────────────────
 
