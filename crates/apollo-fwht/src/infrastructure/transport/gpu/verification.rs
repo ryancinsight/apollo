@@ -6,7 +6,7 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use crate::FwhtPlan;
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
+    use leto::Array1;
 
     #[test]
     fn capabilities_reflect_implemented_kernel_surface() {
@@ -87,7 +87,7 @@ mod tests {
                 .expect("wgpu forward execution");
 
             let cpu_plan = FwhtPlan::new(input.len()).expect("cpu plan");
-            let cpu_input = Array1::from_vec(input.iter().map(|&value| value as f64).collect());
+            let cpu_input = Array1::from(input.iter().map(|&value| value as f64).collect());
             let cpu = cpu_plan.forward(&cpu_input).expect("cpu forward");
 
             assert_eq!(gpu.len(), cpu.len());

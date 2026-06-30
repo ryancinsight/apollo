@@ -3,8 +3,8 @@
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::PrecisionProfile;
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -52,7 +52,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when input.len() != self.n.
     pub fn forward(&self, input: &Array1<f64>) -> Result<Array1<f64>, FwhtError> {
-        let mut data = Array1::zeros(self.n);
+        let mut data = Array1::zeros([self.n]);
         self.forward_into(input, &mut data)?;
         Ok(data)
     }
@@ -157,7 +157,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when data.len() != self.n.
     pub fn forward_inplace(&self, data: &mut Array1<f64>) -> Result<(), FwhtError> {
-        if data.len() != self.n {
+        if data.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));
@@ -169,7 +169,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when input.len() != self.n.
     pub fn inverse(&self, input: &Array1<f64>) -> Result<Array1<f64>, FwhtError> {
-        let mut data = Array1::zeros(self.n);
+        let mut data = Array1::zeros([self.n]);
         self.inverse_into(input, &mut data)?;
         Ok(data)
     }
@@ -275,7 +275,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when data.len() != self.n.
     pub fn inverse_inplace(&self, data: &mut Array1<f64>) -> Result<(), FwhtError> {
-        if data.len() != self.n {
+        if data.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));
@@ -307,10 +307,10 @@ impl FwhtPlan {
         input: &Array1<Complex64>,
         output: &mut Array1<Complex64>,
     ) -> Result<(), FwhtError> {
-        if input.len() != self.n || output.len() != self.n {
+        if input.size() != self.n || output.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
-        output.assign(input);
+        output.assign(&input.view());
         self.forward_complex_inplace(output)
     }
 
@@ -319,7 +319,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when data.len() != self.n.
     pub fn forward_complex_inplace(&self, data: &mut Array1<Complex64>) -> Result<(), FwhtError> {
-        if data.len() != self.n {
+        if data.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));
@@ -349,10 +349,10 @@ impl FwhtPlan {
         input: &Array1<Complex64>,
         output: &mut Array1<Complex64>,
     ) -> Result<(), FwhtError> {
-        if input.len() != self.n || output.len() != self.n {
+        if input.size() != self.n || output.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
-        output.assign(input);
+        output.assign(&input.view());
         self.inverse_complex_inplace(output)
     }
 
@@ -361,7 +361,7 @@ impl FwhtPlan {
     /// # Errors
     /// Returns Err(FwhtError::LengthMismatch) when data.len() != self.n.
     pub fn inverse_complex_inplace(&self, data: &mut Array1<Complex64>) -> Result<(), FwhtError> {
-        if data.len() != self.n {
+        if data.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));

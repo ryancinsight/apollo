@@ -15,7 +15,7 @@
 //! Therefore WHT(WHT(x)) = H_N * (H_N * x) = N * x.
 
 use hermes_simd::{PreferredArch, SimdArch, SimdKernel, SimdScalar, Vector};
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::any::TypeId;
 use std::ops::{Add, Sub};
 

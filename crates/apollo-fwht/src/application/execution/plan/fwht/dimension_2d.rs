@@ -14,8 +14,8 @@
 
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
-use ndarray::Array2;
-use num_complex::Complex64;
+use leto::Array2;
+use eunomia::Complex64;
 use serde::{Deserialize, Serialize};
 
 /// Reusable 2D FWHT plan.
@@ -59,10 +59,10 @@ impl FwhtPlan2D {
     /// Applies the 1D WHT to each row, then to each column.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n)`.
     pub fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>, FwhtError> {
         let n = self.n;
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != n || cols != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -96,17 +96,17 @@ impl FwhtPlan2D {
         output: &mut Array2<f64>,
     ) -> Result<(), FwhtError> {
         let result = self.forward(input)?;
-        output.assign(&result);
+        output.assign(&result.view());
         Ok(())
     }
 
     /// Forward 2D WHT in-place. O(N² log N) butterfly operations.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `data.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `data.shape() != (n, n)`.
     pub fn forward_inplace(&self, data: &mut Array2<f64>) -> Result<(), FwhtError> {
         let n = self.n;
-        let (rows, cols) = data.dim();
+        let [rows, cols] = data.shape();
         if rows != n || cols != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -134,7 +134,7 @@ impl FwhtPlan2D {
     /// Correctness: `WHT_2D(WHT_2D(X)) = N²·X`, so scaling by `1/N²` recovers X.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n)`.
     pub fn inverse(&self, input: &Array2<f64>) -> Result<Array2<f64>, FwhtError> {
         let n = self.n;
         let mut result = self.forward(input)?;
@@ -153,14 +153,14 @@ impl FwhtPlan2D {
         output: &mut Array2<f64>,
     ) -> Result<(), FwhtError> {
         let result = self.inverse(input)?;
-        output.assign(&result);
+        output.assign(&result.view());
         Ok(())
     }
 
     /// Inverse 2D WHT in-place.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `data.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `data.shape() != (n, n)`.
     pub fn inverse_inplace(&self, data: &mut Array2<f64>) -> Result<(), FwhtError> {
         let n = self.n;
         self.forward_inplace(data)?;
@@ -175,13 +175,13 @@ impl FwhtPlan2D {
     /// parts, which preserves correctness because WHT is linear over ℝ and ℂ.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n)`.
     pub fn forward_complex(
         &self,
         input: &Array2<Complex64>,
     ) -> Result<Array2<Complex64>, FwhtError> {
         let n = self.n;
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != n || cols != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -189,21 +189,19 @@ impl FwhtPlan2D {
         let im_in: Array2<f64> = input.mapv(|v| v.im);
         let re_out = self.forward(&re_in)?;
         let im_out = self.forward(&im_in)?;
-        Ok(ndarray::Zip::from(&re_out)
-            .and(&im_out)
-            .map_collect(|&re, &im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, |re, im| Complex64::new(re, im)))
     }
 
     /// Inverse 2D WHT of a complex-valued `n×n` spectrum.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n)`.
     pub fn inverse_complex(
         &self,
         input: &Array2<Complex64>,
     ) -> Result<Array2<Complex64>, FwhtError> {
         let n = self.n;
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != n || cols != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -211,9 +209,7 @@ impl FwhtPlan2D {
         let im_in: Array2<f64> = input.mapv(|v| v.im);
         let re_out = self.inverse(&re_in)?;
         let im_out = self.inverse(&im_in)?;
-        Ok(ndarray::Zip::from(&re_out)
-            .and(&im_out)
-            .map_collect(|&re, &im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, |re, im| Complex64::new(re, im)))
     }
 }
 
@@ -221,7 +217,6 @@ impl FwhtPlan2D {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::array;
 
     #[test]
     fn plan_new_rejects_zero_and_non_power_of_two() {
@@ -236,12 +231,7 @@ mod tests {
         let n = 4_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
         // Analytically constructed: use a non-trivial non-zero signal.
-        let input = array![
-            [1.0_f64, -2.0, 0.5, 0.25],
-            [3.0, -1.5, -0.75, 0.5],
-            [2.0, 0.1, -0.3, 1.2],
-            [-0.5, 2.1, -1.1, 0.7]
-        ];
+        let input = leto::Array2::from_shape_vec([4, 4], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7]).unwrap();
         let first = plan.forward(&input).expect("first forward");
         let second = plan.forward(&first).expect("second forward");
         let n2 = (n * n) as f64;
@@ -257,12 +247,7 @@ mod tests {
     fn inverse_2d_roundtrip_recovers_signal() {
         let n = 4_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
-        let input = array![
-            [1.0_f64, -2.0, 0.5, 0.25],
-            [3.0, -1.5, -0.75, 0.5],
-            [2.0, 0.1, -0.3, 1.2],
-            [-0.5, 2.1, -1.1, 0.7]
-        ];
+        let input = leto::Array2::from_shape_vec([4, 4], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7]).unwrap();
         let spectrum = plan.forward(&input).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");
         for r in 0..n {
@@ -277,14 +262,14 @@ mod tests {
     #[test]
     fn forward_2d_matches_separable_outer_product() {
         use super::super::dimension_1d::FwhtPlan;
-        use ndarray::Array1;
+        use leto::Array1;
         let n = 4_usize;
         let plan_2d = FwhtPlan2D::new(n).expect("2D plan");
         let plan_1d = FwhtPlan::new(n).expect("1D plan");
         let row = Array1::from(vec![1.0_f64, -2.0, 0.5, 0.25]);
         let col = Array1::from(vec![3.0_f64, -1.5, -0.75, 0.5]);
         // Build outer product input.
-        let mut input = Array2::<f64>::zeros((n, n));
+        let mut input = Array2::<f64>::zeros([n, n]);
         for r in 0..n {
             for c in 0..n {
                 input[[r, c]] = row[r] * col[c];
@@ -305,7 +290,7 @@ mod tests {
     #[test]
     fn forward_2d_rejects_non_square_input() {
         let plan = FwhtPlan2D::new(4).expect("plan");
-        let wrong = Array2::<f64>::zeros((2, 4));
+        let wrong = Array2::<f64>::zeros([2, 4]);
         assert_eq!(plan.forward(&wrong).unwrap_err(), FwhtError::LengthMismatch);
     }
 
@@ -313,10 +298,7 @@ mod tests {
     fn forward_complex_2d_roundtrip_recovers_signal() {
         let n = 2_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
-        let input = array![
-            [Complex64::new(1.0, 0.5), Complex64::new(-1.0, 2.0)],
-            [Complex64::new(0.25, -0.75), Complex64::new(3.0, -1.5)]
-        ];
+        let input = leto::Array2::from_shape_vec([2, 2], vec![Complex64::new(1.0, 0.5), Complex64::new(-1.0, 2.0), Complex64::new(0.25, -0.75), Complex64::new(3.0, -1.5)]).unwrap();
         let spectrum = plan.forward_complex(&input).expect("complex forward");
         let recovered = plan.inverse_complex(&spectrum).expect("complex inverse");
         for r in 0..n {
