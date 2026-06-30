@@ -14,7 +14,7 @@
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 const PAR_THRESHOLD: usize = 256;
 const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
@@ -178,11 +178,12 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     }
 
     let dft_coeff = |k: usize| -> Complex64 {
-        du * log_samples
+        log_samples
             .iter()
             .enumerate()
             .map(|(n, sample)| Complex64::from_polar(*sample, factor * k as f64 * n as f64))
             .sum::<Complex64>()
+            * du
     };
     if len >= PAR_THRESHOLD {
         moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, dft_coeff)
@@ -439,12 +440,12 @@ mod tests {
 
         for k in [0usize, 1, 17, 64, 127, 255] {
             let actual = log_frequency_coeff_hermes(&input_lanes, factor, du, k);
-            let expected = du
-                * samples
-                    .iter()
-                    .enumerate()
-                    .map(|(n, sample)| Complex64::from_polar(*sample, factor * k as f64 * n as f64))
-                    .sum::<Complex64>();
+            let expected = samples
+                .iter()
+                .enumerate()
+                .map(|(n, sample)| Complex64::from_polar(*sample, factor * k as f64 * n as f64))
+                .sum::<Complex64>()
+                * du;
 
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);

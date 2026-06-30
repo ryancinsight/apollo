@@ -5,7 +5,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use apollo_fft::PrecisionProfile;
 use crate::MellinStorage;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::MellinWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;

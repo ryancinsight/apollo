@@ -6,7 +6,7 @@ use crate::infrastructure::kernel::resample::{
     calculate_log_resample, log_frequency_spectrum, mellin_moment,
 };
 use apollo_fft::{f16, PrecisionProfile};
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::borrow::Cow;
 
 /// Dense Mellin log-frequency spectrum.

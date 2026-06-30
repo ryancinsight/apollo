@@ -302,7 +302,7 @@ mod tests {
         {
             let n = 8usize;
             let plan = backend.plan(n, 1.0, 8.0);
-            let spectrum = vec![num_complex::Complex32::new(0.0, 0.0); n];
+            let spectrum = vec![eunomia::Complex32::new(0.0, 0.0); n];
             assert!(matches!(
                 backend.execute_inverse(&plan, &spectrum, 0.0, 8.0, n),
                 Err(WgpuError::InvalidSignalDomain { .. })
