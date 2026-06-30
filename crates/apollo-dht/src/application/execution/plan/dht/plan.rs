@@ -11,7 +11,7 @@ use crate::domain::spectrum::coefficients::HartleySpectrum;
 use crate::infrastructure::kernel::direct::transform_real;
 use crate::infrastructure::kernel::fast::dht_fast_with_scratch;
 use apollo_fft::PrecisionProfile;
-use ndarray::{Array2, Array3};
+use leto::{Array2, Array3};
 
 const FAST_KERNEL_THRESHOLD: usize = 512;
 
@@ -24,8 +24,8 @@ pub struct DhtPlan {
 impl DhtPlan {
     fn forward_2d_impl(&self, input: &Array2<f64>, output: &mut Array2<f64>) -> DhtResult<()> {
         let n = self.len();
-        let (rows, cols) = input.dim();
-        let (out_rows, out_cols) = output.dim();
+        let [rows, cols] = input.shape();
+        let [out_rows, out_cols] = output.shape();
         if rows != n || cols != n {
             return Err(DhtError::ShapeMismatch2d {
                 expected: n,
@@ -74,8 +74,8 @@ impl DhtPlan {
 
     fn forward_3d_impl(&self, input: &Array3<f64>, output: &mut Array3<f64>) -> DhtResult<()> {
         let n = self.len();
-        let (d0, d1, d2) = input.dim();
-        let (o0, o1, o2) = output.dim();
+        let [d0, d1, d2] = input.shape();
+        let [o0, o1, o2] = output.shape();
         if d0 != n || d1 != n || d2 != n {
             return Err(DhtError::ShapeMismatch3d {
                 expected: n,
@@ -216,7 +216,7 @@ impl DhtPlan {
     /// Execute the unnormalized separable 2D forward DHT on an N×N array.
     pub fn forward_2d(&self, input: &Array2<f64>) -> DhtResult<Array2<f64>> {
         let n = self.len();
-        let mut result = Array2::<f64>::zeros((n, n));
+        let mut result = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(input, &mut result)?;
         Ok(result)
     }
@@ -228,7 +228,7 @@ impl DhtPlan {
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
         let input = array2_from_leto_view(input);
-        let mut output = Array2::<f64>::zeros((n, n));
+        let mut output = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         Ok(leto_array2_from_ndarray(&output))
     }
@@ -241,7 +241,7 @@ impl DhtPlan {
     /// Execute the normalized separable 2D inverse DHT on an N×N spectrum.
     pub fn inverse_2d(&self, input: &Array2<f64>) -> DhtResult<Array2<f64>> {
         let n = self.len();
-        let mut result = Array2::<f64>::zeros((n, n));
+        let mut result = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(input, &mut result)?;
         let scale = 1.0 / (n * n) as f64;
         result.mapv_inplace(|v| v * scale);
@@ -255,7 +255,7 @@ impl DhtPlan {
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
         let input = array2_from_leto_view(input);
-        let mut output = Array2::<f64>::zeros((n, n));
+        let mut output = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n) as f64;
         output.mapv_inplace(|v| v * scale);
@@ -273,7 +273,7 @@ impl DhtPlan {
     /// Execute the unnormalized separable 3D forward DHT on an N×N×N array.
     pub fn forward_3d(&self, input: &Array3<f64>) -> DhtResult<Array3<f64>> {
         let n = self.len();
-        let mut result = Array3::<f64>::zeros((n, n, n));
+        let mut result = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(input, &mut result)?;
         Ok(result)
     }
@@ -285,7 +285,7 @@ impl DhtPlan {
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
         let input = array3_from_leto_view(input);
-        let mut output = Array3::<f64>::zeros((n, n, n));
+        let mut output = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         Ok(leto_array3_from_ndarray(&output))
     }
@@ -298,7 +298,7 @@ impl DhtPlan {
     /// Execute the normalized separable 3D inverse DHT on an N×N×N spectrum.
     pub fn inverse_3d(&self, input: &Array3<f64>) -> DhtResult<Array3<f64>> {
         let n = self.len();
-        let mut result = Array3::<f64>::zeros((n, n, n));
+        let mut result = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(input, &mut result)?;
         let scale = 1.0 / (n * n * n) as f64;
         result.mapv_inplace(|v| v * scale);
@@ -312,7 +312,7 @@ impl DhtPlan {
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
         let input = array3_from_leto_view(input);
-        let mut output = Array3::<f64>::zeros((n, n, n));
+        let mut output = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n * n) as f64;
         output.mapv_inplace(|v| v * scale);

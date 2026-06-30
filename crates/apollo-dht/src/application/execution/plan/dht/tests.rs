@@ -5,7 +5,7 @@ use crate::domain::contracts::error::DhtError;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_abs_diff_eq;
 use leto::{SliceArg, Storage};
-use ndarray::{Array2, Array3};
+use leto::{Array2, Array3};
 
 #[test]
 fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
@@ -64,7 +64,7 @@ fn typed_path_rejects_profile_storage_mismatch() {
 fn leto_2d_forward_matches_ndarray_reference() {
     let plan = DhtPlan::new(3).expect("valid plan");
     let input = Array2::from_shape_vec(
-        (3, 3),
+        [3, 3],
         vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
     )
     .expect("ndarray input");
@@ -86,7 +86,7 @@ fn leto_2d_forward_matches_ndarray_reference() {
 fn leto_2d_strided_inverse_matches_ndarray_reference() {
     let plan = DhtPlan::new(3).expect("valid plan");
     let dense = Array2::from_shape_vec(
-        (3, 3),
+        [3, 3],
         vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
     )
     .expect("dense input");
@@ -118,7 +118,7 @@ fn leto_2d_strided_inverse_matches_ndarray_reference() {
 #[test]
 fn leto_3d_forward_matches_ndarray_reference() {
     let plan = DhtPlan::new(2).expect("valid plan");
-    let input = Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+    let input = Array3::from_shape_vec([2, 2, 2], vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
         .expect("ndarray input");
     let expected = plan.forward_3d(&input).expect("ndarray forward");
 
@@ -137,7 +137,7 @@ fn leto_3d_forward_matches_ndarray_reference() {
 #[test]
 fn leto_3d_inverse_matches_ndarray_reference() {
     let plan = DhtPlan::new(2).expect("valid plan");
-    let input = Array3::from_shape_vec((2, 2, 2), vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
+    let input = Array3::from_shape_vec([2, 2, 2], vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
         .expect("ndarray input");
     let spectrum = plan.forward_3d(&input).expect("ndarray forward");
     let expected = plan.inverse_3d(&spectrum).expect("ndarray inverse");

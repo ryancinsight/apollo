@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn dht_equals_re_minus_im_of_independent_dft() {
         use apollo_fft::application::execution::kernel::fft_forward;
-        use num_complex::Complex64;
+        use eunomia::Complex64;
         let signal = [3.0_f64, -1.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
         let plan = crate::DhtPlan::new(signal.len()).expect("plan");
         let h = plan.forward(&signal).expect("forward");
@@ -256,8 +256,7 @@ mod tests {
     /// H_{2D}(H_{2D}(X))[m,n] = N·(N·X[m,n]) = N²·X[m,n].
     #[test]
     fn forward_2d_involution_equals_n_squared_times_input() {
-        use ndarray::array;
-        let input = array![[1.0_f64, -2.0, 0.5], [0.25, 3.0, -1.5], [-0.75, 0.5, 2.0]];
+        let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
         let plan = DhtPlan::new(3).expect("plan");
         let first = plan.forward_2d(&input).expect("first 2D forward");
         let second = plan.forward_2d(&first).expect("second 2D forward");
@@ -281,8 +280,7 @@ mod tests {
     /// inverse_2d(forward_2d(X)) = (1/N²)·N²·X = X exactly.
     #[test]
     fn inverse_2d_recovers_input() {
-        use ndarray::array;
-        let input = array![[1.0_f64, -2.0, 0.5], [0.25, 3.0, -1.5], [-0.75, 0.5, 2.0]];
+        let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
         let plan = DhtPlan::new(3).expect("plan");
         let spectrum = plan.forward_2d(&input).expect("2D forward");
         let recovered = plan.inverse_2d(&spectrum).expect("2D inverse");
@@ -301,17 +299,12 @@ mod tests {
 
     #[test]
     fn forward_and_inverse_2d_into_match_allocating_paths() {
-        use ndarray::array;
 
-        let input = array![
-            [1.25_f64, -0.5, 2.0],
-            [-1.0, 0.75, 3.5],
-            [0.125, -2.25, 1.5]
-        ];
+        let input = leto::Array2::from_shape_vec([3, 3], vec![1.25_f64, -0.5, 2.0, -1.0, 0.75, 3.5, 0.125, -2.25, 1.5]).unwrap();
         let plan = DhtPlan::new(3).expect("plan");
 
         let expected_forward = plan.forward_2d(&input).expect("forward 2D");
-        let mut forward_into = ndarray::Array2::<f64>::zeros((3, 3));
+        let mut forward_into = leto::Array2::<f64>::zeros([3, 3]);
         plan.forward_2d_into(&input, &mut forward_into)
             .expect("forward_2d_into");
         for r in 0..3 {
@@ -325,7 +318,7 @@ mod tests {
         }
 
         let expected_inverse = plan.inverse_2d(&expected_forward).expect("inverse 2D");
-        let mut inverse_into = ndarray::Array2::<f64>::zeros((3, 3));
+        let mut inverse_into = leto::Array2::<f64>::zeros([3, 3]);
         plan.inverse_2d_into(&expected_forward, &mut inverse_into)
             .expect("inverse_2d_into");
         for r in 0..3 {
@@ -343,11 +336,11 @@ mod tests {
     /// column matches manual computation using the known 1D DHT formula.
     #[test]
     fn forward_2d_matches_separable_manual_application() {
-        use ndarray::Array2;
+        use leto::Array2;
         let n = 4_usize;
         // Separable signal: outer product of a 1D signal with itself.
         let row = [1.0_f64, 2.0, -1.0, 0.5];
-        let mut input = Array2::<f64>::zeros((n, n));
+        let mut input = Array2::<f64>::zeros([n, n]);
         for r in 0..n {
             for c in 0..n {
                 input[[r, c]] = row[r] * row[c];
@@ -384,13 +377,13 @@ mod tests {
     /// 3D DHT inverse roundtrip recovers the original signal.
     #[test]
     fn inverse_3d_recovers_input() {
-        use ndarray::Array3;
+        use leto::Array3;
         let n = 3_usize;
         let flat: [f64; 27] = [
             1.0, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7,
             -0.9, 0.3, 1.5, -0.2, 0.8, -1.4, 0.6, -0.1, 0.9, -2.5, 1.3,
         ];
-        let mut input = Array3::<f64>::zeros((n, n, n));
+        let mut input = Array3::<f64>::zeros([n, n, n]);
         let mut idx = 0;
         for i in 0..n {
             for j in 0..n {
@@ -420,10 +413,10 @@ mod tests {
 
     #[test]
     fn forward_and_inverse_3d_into_match_allocating_paths() {
-        use ndarray::Array3;
+        use leto::Array3;
 
         let n = 3_usize;
-        let mut input = Array3::<f64>::zeros((n, n, n));
+        let mut input = Array3::<f64>::zeros([n, n, n]);
         for i in 0..n {
             for j in 0..n {
                 for k in 0..n {
@@ -434,7 +427,7 @@ mod tests {
 
         let plan = DhtPlan::new(n).expect("plan");
         let expected_forward = plan.forward_3d(&input).expect("forward 3D");
-        let mut forward_into = Array3::<f64>::zeros((n, n, n));
+        let mut forward_into = Array3::<f64>::zeros([n, n, n]);
         plan.forward_3d_into(&input, &mut forward_into)
             .expect("forward_3d_into");
         for i in 0..n {
@@ -450,7 +443,7 @@ mod tests {
         }
 
         let expected_inverse = plan.inverse_3d(&expected_forward).expect("inverse 3D");
-        let mut inverse_into = Array3::<f64>::zeros((n, n, n));
+        let mut inverse_into = Array3::<f64>::zeros([n, n, n]);
         plan.inverse_3d_into(&expected_forward, &mut inverse_into)
             .expect("inverse_3d_into");
         for i in 0..n {
@@ -469,9 +462,9 @@ mod tests {
     /// Shape mismatch errors are returned for non-square 2D and non-cubic 3D inputs.
     #[test]
     fn rejects_non_square_2d_and_non_cubic_3d() {
-        use ndarray::{Array2, Array3};
+        use leto::{Array2, Array3};
         let plan = DhtPlan::new(3).expect("plan");
-        let non_square = Array2::<f64>::zeros((2, 3));
+        let non_square = Array2::<f64>::zeros([2, 3]);
         assert!(matches!(
             plan.forward_2d(&non_square),
             Err(DhtError::ShapeMismatch2d {
@@ -480,7 +473,7 @@ mod tests {
                 cols: 3
             })
         ));
-        let non_cubic = Array3::<f64>::zeros((2, 3, 3));
+        let non_cubic = Array3::<f64>::zeros([2, 3, 3]);
         assert!(matches!(
             plan.forward_3d(&non_cubic),
             Err(DhtError::ShapeMismatch3d {
