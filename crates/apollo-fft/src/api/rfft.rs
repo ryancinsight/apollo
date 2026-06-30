@@ -225,12 +225,12 @@ pub fn fft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
 {
     debug_assert_eq!(
         field.shape(),
-        (NX, NY),
+        [NX, NY],
         "fft_2d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY),
+        [NX, NY],
         "fft_2d_array_static_typed_into: output shape mismatch"
     );
     T::forward_2d_static_into::<NX, NY>(field, out);
@@ -310,12 +310,12 @@ pub fn fft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, const
 {
     debug_assert_eq!(
         field.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "fft_3d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "fft_3d_array_static_typed_into: output shape mismatch"
     );
     T::forward_3d_static_into::<NX, NY, NZ>(field, out);

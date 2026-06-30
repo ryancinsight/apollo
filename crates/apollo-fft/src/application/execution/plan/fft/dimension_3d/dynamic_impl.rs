@@ -87,7 +87,7 @@ where
     pub fn forward_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny, self.nz),
+            [self.nx, self.ny, self.nz],
             "complex forward shape mismatch"
         );
         let view = ArrayViewMut3::from(data.view_mut());
@@ -98,7 +98,7 @@ where
     pub fn inverse_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny, self.nz),
+            [self.nx, self.ny, self.nz],
             "complex inverse shape mismatch"
         );
         let view = ArrayViewMut3::from(data.view_mut());
@@ -120,7 +120,7 @@ where
     pub fn forward_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny, self.nz),
+            [self.nx, self.ny, self.nz],
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
@@ -136,7 +136,7 @@ where
     pub fn inverse_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny, self.nz),
+            [self.nx, self.ny, self.nz],
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");

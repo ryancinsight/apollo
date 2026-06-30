@@ -36,7 +36,7 @@ pub fn view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
 #[must_use]
 pub fn array2_from_view<T: Copy>(view: &leto::ArrayView2<'_, T>) -> Array2<T> {
     let [rows, cols] = view.shape();
-    Array2::from_shape_fn((rows, cols), |(row, col)| {
+    Array2::from_shape_fn([rows, cols], |[row, col]| {
         *view
             .get([row, col])
             .expect("Leto 2D view index must be valid after shape validation")
@@ -47,7 +47,7 @@ pub fn array2_from_view<T: Copy>(view: &leto::ArrayView2<'_, T>) -> Array2<T> {
 #[must_use]
 pub fn array3_from_view<T: Copy>(view: &leto::ArrayView3<'_, T>) -> Array3<T> {
     let [d0, d1, d2] = view.shape();
-    Array3::from_shape_fn((d0, d1, d2), |(i, j, k)| {
+    Array3::from_shape_fn([d0, d1, d2], |[i, j, k]| {
         *view
             .get([i, j, k])
             .expect("Leto 3D view index must be valid after shape validation")
@@ -84,7 +84,7 @@ pub fn try_array2_from_ndarray<T: Copy>(
 pub fn try_array3_from_ndarray<T: Copy>(
     output: &Array3<T>,
 ) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    let (d0, d1, d2) = output.shape();
+    let [d0, d1, d2] = output.shape();
     leto::Array::<T, leto::MnemosyneStorage<T>, 3>::from_mnemosyne_slice(
         [d0, d1, d2],
         output.as_slice()?,

@@ -276,7 +276,7 @@ pub fn ifft_2d_array_typed_into_spectrum_scratch<T>(
     let [nx, ny] = field_hat.shape();
     debug_assert_eq!(
         out.shape(),
-        (nx, ny),
+        [nx, ny],
         "ifft_2d_array_typed_into_spectrum_scratch: shape mismatch"
     );
     T::inverse_2d_spectrum_into(
@@ -334,17 +334,17 @@ pub fn ifft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
 {
     debug_assert_eq!(
         field_hat.shape(),
-        (NX, NY),
+        [NX, NY],
         "ifft_2d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY),
+        [NX, NY],
         "ifft_2d_array_static_typed_into: output shape mismatch"
     );
     debug_assert_eq!(
         scratch.shape(),
-        (NX, NY),
+        [NX, NY],
         "ifft_2d_array_static_typed_into: scratch shape mismatch"
     );
     T::inverse_2d_static_into::<NX, NY>(field_hat, out, scratch);
@@ -419,7 +419,7 @@ pub fn ifft_3d_array_typed_into_spectrum_scratch<T>(
     let [nx, ny, nz] = field_hat.shape();
     debug_assert_eq!(
         out.shape(),
-        (nx, ny, nz),
+        [nx, ny, nz],
         "ifft_3d_array_typed_into_spectrum_scratch: shape mismatch"
     );
     T::inverse_3d_spectrum_into(
@@ -455,17 +455,17 @@ pub fn ifft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, cons
 {
     debug_assert_eq!(
         field_hat.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "ifft_3d_array_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "ifft_3d_array_static_typed_into: output shape mismatch"
     );
     debug_assert_eq!(
         scratch.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "ifft_3d_array_static_typed_into: scratch shape mismatch"
     );
     T::inverse_3d_static_into::<NX, NY, NZ>(field_hat, out, scratch);

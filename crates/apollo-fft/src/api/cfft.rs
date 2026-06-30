@@ -118,7 +118,7 @@ where
         out.size(),
         "fft_1d_complex_typed_into: length mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_1d_complex_typed_inplace::<T>(out);
 }
 
@@ -151,7 +151,7 @@ pub fn fft_1d_complex_static_typed_into<T, const N: usize>(
         N,
         "fft_1d_complex_static_typed_into: output length mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_1d_complex_static_typed_inplace::<T, N>(out);
 }
 
@@ -272,7 +272,7 @@ where
         out.shape(),
         "fft_2d_complex_typed_into: shape mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_2d_complex_typed_inplace::<T>(out);
 }
 
@@ -298,15 +298,15 @@ pub fn fft_2d_complex_static_typed_into<T, const NX: usize, const NY: usize>(
 {
     debug_assert_eq!(
         field.shape(),
-        (NX, NY),
+        [NX, NY],
         "fft_2d_complex_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY),
+        [NX, NY],
         "fft_2d_complex_static_typed_into: output shape mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_2d_complex_static_typed_inplace::<T, NX, NY>(out);
 }
 
@@ -428,7 +428,7 @@ where
         out.shape(),
         "fft_3d_complex_typed_into: shape mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_3d_complex_typed_inplace::<T>(out);
 }
 
@@ -454,14 +454,14 @@ pub fn fft_3d_complex_static_typed_into<T, const NX: usize, const NY: usize, con
 {
     debug_assert_eq!(
         field.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "fft_3d_complex_static_typed_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
-        (NX, NY, NZ),
+        [NX, NY, NZ],
         "fft_3d_complex_static_typed_into: output shape mismatch"
     );
-    out.assign(field);
+    out.assign(&field.view());
     fft_3d_complex_static_typed_inplace::<T, NX, NY, NZ>(out);
 }

@@ -231,7 +231,7 @@ where
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny),
+            [self.nx, self.ny],
             "complex forward shape mismatch"
         );
         let view = ArrayViewMut2::from(data.view_mut());
@@ -242,7 +242,7 @@ where
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
             data.shape(),
-            (self.nx, self.ny),
+            [self.nx, self.ny],
             "complex inverse shape mismatch"
         );
         let view = ArrayViewMut2::from(data.view_mut());
