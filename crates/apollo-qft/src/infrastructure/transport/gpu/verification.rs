@@ -5,8 +5,8 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use crate::{QftPlan, QuantumStateDimension};
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
-    use num_complex::{Complex32, Complex64};
+    use leto::Array1;
+    use eunomia::{Complex32, Complex64};
 
     use crate::infrastructure::transport::gpu::{QftWgpuBackend, QftWgpuPlan, WgpuCapabilities, WgpuError};
 
@@ -71,7 +71,7 @@ mod tests {
 
             let cpu_plan =
                 QftPlan::new(QuantumStateDimension::new(input.len()).expect("dimension"));
-            let cpu_input = Array1::from_vec(
+            let cpu_input = Array1::from(
                 input
                     .iter()
                     .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
@@ -111,7 +111,7 @@ mod tests {
 
             let cpu_plan =
                 QftPlan::new(QuantumStateDimension::new(input.len()).expect("dimension"));
-            let cpu_input = Array1::from_vec(
+            let cpu_input = Array1::from(
                 input
                     .iter()
                     .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))

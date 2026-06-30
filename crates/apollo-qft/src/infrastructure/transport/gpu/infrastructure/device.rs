@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use apollo_fft::PrecisionProfile;
 use crate::QftStorage;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::QftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -263,7 +263,7 @@ fn leto_array1_from_slice<T: Copy>(
 
 #[cfg(test)]
 mod tests {
-    use num_complex::Complex32;
+    use eunomia::Complex32;
 
     use super::leto_view1_cow;
 

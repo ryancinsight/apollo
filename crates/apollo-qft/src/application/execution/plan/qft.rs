@@ -12,8 +12,8 @@ use crate::domain::state::dimension::QuantumStateDimension;
 use crate::infrastructure::kernel::dense::{qft_forward_dense_into, qft_inverse_dense_into};
 use apollo_fft::{f16, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use leto::Array1;
+use eunomia::{Complex32, Complex64};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -64,7 +64,7 @@ impl QftPlan {
 
     /// Forward QFT of a complex amplitude vector.
     pub fn forward(&self, input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
-        let mut output = Array1::zeros(self.len());
+        let mut output = Array1::zeros([self.len()]);
         self.forward_into(input, &mut output)?;
         Ok(output)
     }
@@ -146,7 +146,7 @@ impl QftPlan {
 
     /// Inverse QFT of a complex amplitude vector.
     pub fn inverse(&self, input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
-        let mut output = Array1::zeros(self.len());
+        let mut output = Array1::zeros([self.len()]);
         self.inverse_into(input, &mut output)?;
         Ok(output)
     }
@@ -455,7 +455,7 @@ fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
 
 /// Convenience wrapper for forward QFT.
 pub fn qft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
-    QftPlan::new(QuantumStateDimension::new(input.len())?).forward(input)
+    QftPlan::new(QuantumStateDimension::new(input.size())?).forward(input)
 }
 
 /// Convenience wrapper for forward QFT over a Leto view.
@@ -467,7 +467,7 @@ pub fn qft_leto(
 
 /// Convenience wrapper for inverse QFT.
 pub fn iqft(input: &Array1<Complex64>) -> QftResult<Array1<Complex64>> {
-    QftPlan::new(QuantumStateDimension::new(input.len())?).inverse(input)
+    QftPlan::new(QuantumStateDimension::new(input.size())?).inverse(input)
 }
 
 /// Convenience wrapper for inverse QFT over a Leto view.
@@ -487,7 +487,7 @@ mod tests {
     }
 
     fn input64() -> Array1<Complex64> {
-        Array1::from_vec(vec![
+        Array1::from(vec![
             Complex64::new(1.0, -0.5),
             Complex64::new(0.25, 0.75),
             Complex64::new(-0.5, 1.25),
@@ -500,7 +500,7 @@ mod tests {
         let plan = plan4();
         let input = input64();
         let expected = plan.forward(&input).expect("forward");
-        let mut forward_output = Array1::<Complex64>::zeros(plan.len());
+        let mut forward_output = Array1::<Complex64>::zeros([plan.len()]);
         plan.forward_into(&input, &mut forward_output)
             .expect("caller-owned forward");
         for (actual, expected) in forward_output.iter().zip(expected.iter()) {
@@ -509,7 +509,7 @@ mod tests {
         }
 
         let recovered = plan.inverse(&expected).expect("inverse");
-        let mut inverse_output = Array1::<Complex64>::zeros(plan.len());
+        let mut inverse_output = Array1::<Complex64>::zeros([plan.len()]);
         plan.inverse_into(&expected, &mut inverse_output)
             .expect("caller-owned inverse");
         for ((actual, expected), original) in inverse_output
@@ -530,7 +530,7 @@ mod tests {
 
         let plan = plan4();
         let signal = input64().to_vec();
-        let ndarray_input = Array1::from_vec(signal.clone());
+        let ndarray_input = Array1::from(signal.clone());
         let leto_input = leto::Array1::from_shape_vec([plan.len()], signal).expect("leto input");
 
         let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
@@ -577,7 +577,7 @@ mod tests {
             .expect("strided view");
 
         let actual = qft_leto(strided).expect("leto qft");
-        let expected = qft(&Array1::from_vec(logical)).expect("ndarray qft");
+        let expected = qft(&Array1::from(logical)).expect("ndarray qft");
         for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
             assert_relative_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_relative_eq!(actual.im, expected.im, epsilon = 1.0e-12);
@@ -593,7 +593,7 @@ mod tests {
         let leto_input =
             leto::Array1::from_shape_vec([plan.len()], input.iter().copied().collect())
                 .expect("leto input");
-        let mut expected = Array1::<Complex32>::zeros(plan.len());
+        let mut expected = Array1::<Complex32>::zeros([plan.len()]);
         plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
             .expect("ndarray typed forward");
 
@@ -627,7 +627,7 @@ mod tests {
         let strided = leto_input
             .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
             .expect("strided view");
-        let mut expected = Array1::from_elem(plan.len(), [f16::from_f32(0.0); 2]);
+        let mut expected = Array1::from_elem([plan.len()], [f16::from_f32(0.0); 2]);
         plan.forward_typed_into(
             &input,
             &mut expected,
@@ -650,7 +650,7 @@ mod tests {
         let input = input64();
         let expected = plan.forward(&input).expect("forward");
 
-        let mut out64 = Array1::<Complex64>::zeros(plan.len());
+        let mut out64 = Array1::<Complex64>::zeros([plan.len()]);
         plan.forward_typed_into(&input, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
             .expect("typed complex64 forward");
         for (actual, expected) in out64.iter().zip(expected.iter()) {
@@ -660,11 +660,11 @@ mod tests {
 
         let input32 = input.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
         let represented32 =
-            Array1::from_iter(input32.iter().copied().map(QftStorage::to_complex64));
+            Array1::from((input32.iter().copied().map(QftStorage::to_complex64)).collect::<Vec<_>>());
         let expected32 = plan
             .forward(&represented32)
             .expect("represented f32 forward");
-        let mut out32 = Array1::<Complex32>::zeros(plan.len());
+        let mut out32 = Array1::<Complex32>::zeros([plan.len()]);
         plan.forward_typed_into(&input32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
             .expect("typed complex32 forward");
         for (actual, expected) in out32.iter().zip(expected32.iter()) {
@@ -679,11 +679,11 @@ mod tests {
             ]
         });
         let represented16 =
-            Array1::from_iter(input16.iter().copied().map(QftStorage::to_complex64));
+            Array1::from((input16.iter().copied().map(QftStorage::to_complex64)).collect::<Vec<_>>());
         let expected16 = plan
             .forward(&represented16)
             .expect("represented f16 forward");
-        let mut out16 = Array1::from_elem(plan.len(), [f16::from_f32(0.0); 2]);
+        let mut out16 = Array1::from_elem([plan.len()], [f16::from_f32(0.0); 2]);
         plan.forward_typed_into(
             &input16,
             &mut out16,
@@ -697,7 +697,7 @@ mod tests {
             assert!((f64::from(actual[1].to_f32()) - expected.im).abs() <= im_bound);
         }
 
-        let mut recovered32 = Array1::<Complex32>::zeros(plan.len());
+        let mut recovered32 = Array1::<Complex32>::zeros([plan.len()]);
         plan.inverse_typed_into(
             &out32,
             &mut recovered32,
@@ -714,10 +714,10 @@ mod tests {
     fn typed_complex32_paths_reuse_complex64_workspaces() {
         let plan = plan4();
         let input = input64().mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-        let mut first_spectrum = Array1::<Complex32>::zeros(plan.len());
-        let mut second_spectrum = Array1::<Complex32>::zeros(plan.len());
-        let mut first_recovered = Array1::<Complex32>::zeros(plan.len());
-        let mut second_recovered = Array1::<Complex32>::zeros(plan.len());
+        let mut first_spectrum = Array1::<Complex32>::zeros([plan.len()]);
+        let mut second_spectrum = Array1::<Complex32>::zeros([plan.len()]);
+        let mut first_recovered = Array1::<Complex32>::zeros([plan.len()]);
+        let mut second_recovered = Array1::<Complex32>::zeros([plan.len()]);
 
         plan.forward_typed_into(
             &input,
@@ -773,8 +773,8 @@ mod tests {
     #[test]
     fn typed_path_rejects_profile_storage_mismatch() {
         let plan = plan4();
-        let input = Array1::from_vec(vec![Complex32::new(1.0, 0.0); 4]);
-        let mut output = Array1::<Complex32>::zeros(plan.len());
+        let input = Array1::from(vec![Complex32::new(1.0, 0.0); 4]);
+        let mut output = Array1::<Complex32>::zeros([plan.len()]);
         assert!(matches!(
             plan.forward_typed_into(&input, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(QftError::PrecisionMismatch)

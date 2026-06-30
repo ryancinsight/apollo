@@ -348,6 +348,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
@@ -967,6 +968,7 @@ dependencies = [
  "half",
  "libm",
  "rkyv",
+ "serde",
 ]
 
 [[package]]

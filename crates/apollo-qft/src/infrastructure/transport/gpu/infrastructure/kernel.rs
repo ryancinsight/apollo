@@ -5,7 +5,7 @@
 //! Both maps are unitary on the implemented `f32` complex surface.
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;

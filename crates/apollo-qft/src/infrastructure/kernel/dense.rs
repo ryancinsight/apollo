@@ -6,7 +6,7 @@
 
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Below this operation count, serial loops avoid parallel scheduling overhead.
 const QFT_PAR_OP_THRESHOLD: usize = 16_384;
