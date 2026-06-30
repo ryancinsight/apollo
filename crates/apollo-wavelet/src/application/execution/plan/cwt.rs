@@ -7,7 +7,7 @@ use crate::infrastructure::kernel::continuous::coefficient;
 use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use moirai::ParallelSlice;
-use ndarray::Array2;
+use leto::Array2;
 use std::borrow::Cow;
 
 /// Reusable real-valued 1D CWT plan.
@@ -75,7 +75,7 @@ impl CwtPlan {
                 .map(|shift| coefficient(signal, self.wavelet, scale, shift))
                 .collect()
         });
-        let values = Array2::from_shape_fn((self.scales.len(), self.len), |(s, b)| rows[s][b]);
+        let values = Array2::from_shape_fn([self.scales.len(), self.len], |[s, b]| rows[s][b]);
         Ok(CwtCoefficients::new(self.scales.clone(), values))
     }
 
@@ -110,7 +110,7 @@ impl CwtPlan {
         profile: PrecisionProfile,
     ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
         let signal = leto_view1_cow(signal)?;
-        let mut output = Array2::<T>::from_elem((self.scales.len(), self.len), T::from_f64(0.0));
+        let mut output = Array2::<T>::from_elem([self.scales.len(), self.len], T::from_f64(0.0));
         self.transform_typed_into(signal.as_ref(), &mut output, profile)?;
         leto_array2_from_ndarray(&output)
     }
@@ -128,7 +128,7 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'
 fn leto_array2_from_ndarray<T: Copy>(
     array: &Array2<T>,
 ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+    apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
         .ok_or(WaveletError::CoefficientShapeMismatch)
 }
 
@@ -145,7 +145,7 @@ mod tests {
         let signal64 = [1.0_f64, -0.5, 0.25, 2.0];
         let expected = plan.transform(&signal64).expect("CWT");
 
-        let mut out64 = Array2::<f64>::zeros((2, 4));
+        let mut out64 = Array2::<f64>::zeros([2, 4]);
         plan.transform_typed_into(&signal64, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
             .expect("typed f64 CWT");
         for (actual, expected) in out64.iter().zip(expected.values().iter()) {
@@ -155,7 +155,7 @@ mod tests {
         let signal32 = signal64.map(|value| value as f32);
         let represented32 = signal32.map(f64::from);
         let expected32 = plan.transform(&represented32).expect("represented f32 CWT");
-        let mut out32 = Array2::<f32>::zeros((2, 4));
+        let mut out32 = Array2::<f32>::zeros([2, 4]);
         plan.transform_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
             .expect("typed f32 CWT");
         for (actual, expected) in out32.iter().zip(expected32.values().iter()) {
@@ -165,7 +165,7 @@ mod tests {
         let signal16 = signal64.map(|value| f16::from_f32(value as f32));
         let represented16 = signal16.map(|value| f64::from(value.to_f32()));
         let expected16 = plan.transform(&represented16).expect("represented f16 CWT");
-        let mut out16 = Array2::from_elem((2, 4), f16::from_f32(0.0));
+        let mut out16 = Array2::from_elem([2, 4], f16::from_f32(0.0));
         plan.transform_typed_into(
             &signal16,
             &mut out16,
@@ -228,7 +228,7 @@ mod tests {
         let signal = [1.0_f32, -0.5, 0.25, 2.0];
         let leto_signal =
             leto::Array1::from_shape_vec([signal.len()], signal.to_vec()).expect("leto signal");
-        let mut expected = Array2::<f32>::zeros((2, 4));
+        let mut expected = Array2::<f32>::zeros([2, 4]);
         plan.transform_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
             .expect("typed slice CWT");
 
@@ -246,13 +246,13 @@ mod tests {
     fn typed_cwt_rejects_profile_and_shape_mismatch() {
         let plan = CwtPlan::new(4, vec![1.0], ContinuousWavelet::Ricker).expect("valid CWT plan");
         let signal = [1.0_f32, -1.0, 0.5, -0.25];
-        let mut output = Array2::<f32>::zeros((1, 4));
+        let mut output = Array2::<f32>::zeros([1, 4]);
         assert!(matches!(
             plan.transform_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(WaveletError::PrecisionMismatch)
         ));
 
-        let mut wrong_shape = Array2::<f32>::zeros((1, 3));
+        let mut wrong_shape = Array2::<f32>::zeros([1, 3]);
         assert!(matches!(
             plan.transform_typed_into(
                 &signal,
