@@ -5,8 +5,8 @@ use crate::application::execution::kernel::direct::direct_frft_forward_into;
 use crate::application::execution::plan::frft::storage::FrftStorage;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::PrecisionProfile;
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::FRAC_PI_2;
 
@@ -41,7 +41,7 @@ impl FrftPlan {
             (
                 cot,
                 csc,
-                (1.0 - Complex64::i() * cot).sqrt() / (n as f64).sqrt(),
+                (Complex64::new(1.0, 0.0) - Complex64::i() * cot).sqrt() / (n as f64).sqrt(),
             )
         };
 
@@ -74,7 +74,7 @@ impl FrftPlan {
 
     /// Execute the forward FrFT.
     pub fn forward(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, FrftError> {
-        let mut output = Array1::<Complex64>::zeros(self.n);
+        let mut output = Array1::<Complex64>::zeros([self.n]);
         self.forward_into(input, &mut output)?;
         Ok(output)
     }
@@ -150,7 +150,7 @@ impl FrftPlan {
 
     /// Execute the inverse FrFT, equivalent to a forward FrFT of order `-a`.
     pub fn inverse(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, FrftError> {
-        let mut output = Array1::<Complex64>::zeros(self.n);
+        let mut output = Array1::<Complex64>::zeros([self.n]);
         self.inverse_into(input, &mut output)?;
         Ok(output)
     }
@@ -235,7 +235,7 @@ impl FrftPlan {
 
 /// Execute a single forward fractional Fourier transform on a 1D array.
 pub fn frft(input: &Array1<Complex64>, order: f64) -> Result<Array1<Complex64>, FrftError> {
-    FrftPlan::new(input.len(), order)?.forward(input)
+    FrftPlan::new(input.size(), order)?.forward(input)
 }
 
 /// Execute a single forward fractional Fourier transform on a Leto 1D view.

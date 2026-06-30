@@ -28,6 +28,7 @@ bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
+eunomia = { workspace = true, features = ["serde"] }
 leto-ops = { workspace = true }
 ndarray = { workspace = true }
 num-complex = { version = "0.4", features = ["serde"] }

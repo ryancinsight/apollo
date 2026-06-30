@@ -182,6 +182,7 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",

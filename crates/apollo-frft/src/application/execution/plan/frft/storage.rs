@@ -4,8 +4,8 @@ use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use leto::Array1;
+use eunomia::{Complex32, Complex64};
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
