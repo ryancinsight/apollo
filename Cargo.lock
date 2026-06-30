@@ -463,8 +463,6 @@ dependencies = [
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",

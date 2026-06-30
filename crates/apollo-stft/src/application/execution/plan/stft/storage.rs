@@ -2,7 +2,7 @@
 
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{f16, PrecisionProfile};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 /// Real input storage accepted by typed STFT forward paths.
 pub trait StftRealStorage: Copy + Send + Sync + 'static {

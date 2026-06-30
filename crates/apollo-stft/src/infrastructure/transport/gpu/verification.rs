@@ -5,8 +5,8 @@ mod tests {
     use crate::infrastructure::transport::gpu::{StftWgpuBackend, StftWgpuPlan, WgpuCapabilities, WgpuError};
     use apollo_fft::{f16, PrecisionProfile};
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
-    use num_complex::Complex32;
+    use leto::Array1;
+    use eunomia::Complex32;
 
     // -----------------------------------------------------------------------
     // Structural / plan tests (no GPU required)
@@ -112,7 +112,7 @@ mod tests {
             0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
         ];
         let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|x| *x as f64).collect());
+            Array1::from(signal_f32.iter().map(|x| *x as f64).collect());
 
         let plan = StftWgpuPlan::new(8, 4);
 
@@ -160,7 +160,7 @@ mod tests {
         // Alternating signal, smooth, non-trivial, well inside f32 dynamic range.
         let signal_f32: Vec<f32> = vec![0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
         let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+            Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
         let signal_len = 8usize;
 
         let plan = StftWgpuPlan::new(8, 4);
@@ -217,7 +217,7 @@ mod tests {
             0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
         ];
         let signal_f64: Array1<f64> =
-            Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+            Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
         let signal_len = 16usize;
 
         let plan = StftWgpuPlan::new(8, 4);
@@ -480,7 +480,7 @@ mod tests {
             let signal_len = signal.len();
             let plan = StftWgpuPlan::new(frame_len, hop_len);
             let cpu_plan = crate::StftPlan::new(frame_len, hop_len).expect("cpu plan");
-            let signal_f64 = Array1::from_vec(signal.iter().map(|&x| x as f64).collect());
+            let signal_f64 = Array1::from(signal.iter().map(|&x| x as f64).collect());
             let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
             let gpu_spectrum: Vec<Complex32> = cpu_spectrum
                 .iter()
@@ -559,7 +559,7 @@ mod tests {
 
         let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
         let cpu_plan = crate::StftPlan::new(FRAME_LEN, HOP_LEN).expect("cpu plan");
-        let signal_f64 = Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+        let signal_f64 = Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
         let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
         let gpu_spectrum: Vec<Complex32> = cpu_spectrum
             .iter()
@@ -769,8 +769,8 @@ mod tests {
         let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
             .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
             .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+        let signal_f64: leto::Array1<f64> =
+            leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
 
         let gpu_plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
         let gpu_out = backend
@@ -819,8 +819,8 @@ mod tests {
         let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
             .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
             .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+        let signal_f64: leto::Array1<f64> =
+            leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
 
         let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
 
@@ -875,8 +875,8 @@ mod tests {
         let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
             .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
             .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+        let signal_f64: leto::Array1<f64> =
+            leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
 
         let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
         let mut buffers = backend
@@ -926,8 +926,8 @@ mod tests {
         let signal_f32: Vec<f32> = (0..SIGNAL_LEN)
             .map(|n| (2.0 * std::f32::consts::PI * 10.0 * n as f32 / FRAME_LEN as f32).sin())
             .collect();
-        let signal_f64: ndarray::Array1<f64> =
-            ndarray::Array1::from_vec(signal_f32.iter().map(|&x| x as f64).collect());
+        let signal_f64: leto::Array1<f64> =
+            leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect());
 
         let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
         let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");

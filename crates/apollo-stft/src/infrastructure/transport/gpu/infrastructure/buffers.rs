@@ -22,7 +22,7 @@
 //! | log₂(N) uniform buffer allocs     | 0 uniform allocs           |
 //! | 1 `Vec<Complex32>` output alloc   | 0 host Vec allocations     |
 
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use super::chirp::chirp_padded_len;

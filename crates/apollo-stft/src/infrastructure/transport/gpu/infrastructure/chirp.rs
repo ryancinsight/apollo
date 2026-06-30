@@ -134,10 +134,10 @@ impl StftChirpData {
         // h is the Bluestein convolution kernel: h[j] = exp(−πi·j²/N).
         // Circular-convolution symmetry: h[M−j] = h[j] for 1 ≤ j < n.
         // H = DFT_M(h) computed host-side via apollo_fft::fft_1d_complex (Complex64 API).
-        let mut h_arr = ndarray::Array1::<num_complex::Complex64>::zeros(m);
+        let mut h_arr = leto::Array1::<eunomia::Complex64>::zeros([m]);
         for j in 0..n {
             let arg = PI * (j * j) as f64 / n as f64;
-            let val = num_complex::Complex64::new(arg.cos(), -arg.sin());
+            let val = eunomia::Complex64::new(arg.cos(), -arg.sin());
             h_arr[j] = val;
             if j > 0 {
                 h_arr[m - j] = val;

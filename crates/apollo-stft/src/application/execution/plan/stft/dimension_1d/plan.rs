@@ -12,8 +12,8 @@ use super::helpers::{
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
-use ndarray::Array1;
-use num_complex::Complex64;
+use leto::Array1;
+use eunomia::Complex64;
 
 /// Reusable short-time Fourier transform plan.
 ///
@@ -97,13 +97,13 @@ impl StftPlan {
     /// Returns a flat array of shape `[frames * spectrum_len]`.
     ///
     /// # Errors
-    /// Returns `Err(StftError::InputTooShort)` when `signal.len() < frame_len`.
+    /// Returns `Err(StftError::InputTooShort)` when `signal.size() < frame_len`.
     pub fn forward(&self, signal: &Array1<f64>) -> StftResult<Array1<Complex64>> {
-        if signal.len() < self.frame_len {
+        if signal.size() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
-        let frames = self.frame_count(signal.len());
-        let mut output = Array1::<Complex64>::zeros(frames * self.spectrum_len());
+        let frames = self.frame_count(signal.size());
+        let mut output = Array1::<Complex64>::zeros([frames * self.spectrum_len()]);
         self.forward_into(signal, &mut output)?;
         Ok(output)
     }
@@ -127,7 +127,7 @@ impl StftPlan {
     ///
     /// # Errors
     /// Returns `Err(StftError::WindowLengthMismatch)` when `window.len() != frame_len`.
-    /// Returns `Err(StftError::InputTooShort)` when `signal.len() < frame_len`.
+    /// Returns `Err(StftError::InputTooShort)` when `signal.size() < frame_len`.
     pub fn forward_with_window(
         &self,
         signal: &Array1<f64>,
@@ -136,11 +136,11 @@ impl StftPlan {
         if window.len() != self.frame_len {
             return Err(StftError::WindowLengthMismatch);
         }
-        if signal.len() < self.frame_len {
+        if signal.size() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
-        let frames = self.frame_count(signal.len());
-        let mut output = Array1::<Complex64>::zeros(frames * self.spectrum_len());
+        let frames = self.frame_count(signal.size());
+        let mut output = Array1::<Complex64>::zeros([frames * self.spectrum_len()]);
         let signal_slice = signal.as_slice().expect("signal buffer must be contiguous");
         let output_slice = output
             .as_slice_mut()
@@ -152,14 +152,14 @@ impl StftPlan {
     /// Forward STFT into a pre-allocated output buffer.
     ///
     /// # Errors
-    /// Returns `Err(StftError::InputTooShort)` when `signal.len() < frame_len`.
-    /// Returns `Err(StftError::LengthMismatch)` when `output.len() != frames * spectrum_len`.
+    /// Returns `Err(StftError::InputTooShort)` when `signal.size() < frame_len`.
+    /// Returns `Err(StftError::LengthMismatch)` when `output.size() != frames * spectrum_len`.
     pub fn forward_into(
         &self,
         signal: &Array1<f64>,
         output: &mut Array1<Complex64>,
     ) -> StftResult<()> {
-        if signal.len() < self.frame_len {
+        if signal.size() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
         let signal_slice = signal.as_slice().expect("signal buffer must be contiguous");
@@ -178,19 +178,19 @@ impl StftPlan {
     ) -> StftResult<()> {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
-        if signal.len() < self.frame_len {
+        if signal.size() < self.frame_len {
             return Err(StftError::InputTooShort);
         }
-        let frames = self.frame_count(signal.len());
-        if output.len() != frames * self.spectrum_len() {
+        let frames = self.frame_count(signal.size());
+        if output.size() != frames * self.spectrum_len() {
             return Err(StftError::LengthMismatch);
         }
-        with_forward_typed_workspaces(signal.len(), output.len(), |signal64, output64| {
+        with_forward_typed_workspaces(signal.size(), output.size(), |signal64, output64| {
             for (slot, value) in signal64.iter_mut().zip(signal.iter().copied()) {
                 *slot = T::to_f64(value);
             }
             self.forward_f64_slice_into(signal64, output64)?;
-            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
                 *slot = O::from_complex64(value);
             }
             Ok(())
@@ -206,10 +206,10 @@ impl StftPlan {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
         let signal = leto_view1_cow(signal)?;
-        let signal = Array1::from_vec(signal.into_owned());
-        let frames = self.frame_count(signal.len());
+        let signal = Array1::from(signal.into_owned());
+        let frames = self.frame_count(signal.size());
         let mut output = Array1::<O>::from_elem(
-            frames * self.spectrum_len(),
+            [frames * self.spectrum_len()],
             O::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.forward_typed_into(&signal, &mut output, profile)?;
@@ -269,10 +269,10 @@ impl StftPlan {
         signal_len: usize,
     ) -> StftResult<Array1<f64>> {
         let frames = self.frame_count(signal_len);
-        if spectrum.len() != frames * self.spectrum_len() {
+        if spectrum.size() != frames * self.spectrum_len() {
             return Err(StftError::LengthMismatch);
         }
-        let mut output = Array1::<f64>::zeros(signal_len);
+        let mut output = Array1::<f64>::zeros([signal_len]);
         self.inverse_into(spectrum, signal_len, &mut output)?;
         Ok(output)
     }
@@ -385,18 +385,18 @@ impl StftPlan {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
         let frames = self.frame_count(signal_len);
-        if spectrum.len() != frames * self.spectrum_len() || output.len() != signal_len {
+        if spectrum.size() != frames * self.spectrum_len() || output.size() != signal_len {
             return Err(StftError::LengthMismatch);
         }
         if signal_len < self.frame_len {
             return Err(StftError::InputTooShort);
         }
-        with_inverse_typed_workspaces(spectrum.len(), signal_len, |spectrum64, output64| {
+        with_inverse_typed_workspaces(spectrum.size(), signal_len, |spectrum64, output64| {
             for (slot, value) in spectrum64.iter_mut().zip(spectrum.iter().copied()) {
                 *slot = T::to_complex64(value);
             }
             self.inverse_complex64_slice_into(spectrum64, signal_len, output64)?;
-            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
                 *slot = O::from_f64(value);
             }
             Ok(())
@@ -413,8 +413,8 @@ impl StftPlan {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
         let spectrum = leto_view1_cow(spectrum)?;
-        let spectrum = Array1::from_vec(spectrum.into_owned());
-        let mut output = Array1::<O>::from_elem(signal_len, O::from_f64(0.0));
+        let spectrum = Array1::from(spectrum.into_owned());
+        let mut output = Array1::<O>::from_elem([signal_len], O::from_f64(0.0));
         self.inverse_typed_into(&spectrum, signal_len, &mut output, profile)?;
         leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
     }

@@ -1,4 +1,4 @@
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::StftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
