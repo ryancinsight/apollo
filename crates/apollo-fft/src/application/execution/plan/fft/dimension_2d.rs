@@ -417,10 +417,10 @@ mod tests {
                     for y in 0..NY {
                         let phase =
                             -2.0 * PI * ((kx * x) as f64 / NX as f64 + (ky * y) as f64 / NY as f64);
-                        acc += input[(x, y)] * Complex64::from_polar(1.0, phase);
+                        acc += input[[x, y]] * Complex64::from_polar(1.0, phase);
                     }
                 }
-                out[(kx, ky)] = acc;
+                out[[kx, ky]] = acc;
             }
         }
         out

@@ -6,7 +6,7 @@ use eunomia::{Complex32, Complex64};
 
 #[test]
 fn complex_into_wrappers_match_allocating_paths() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f64;
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -63,7 +63,7 @@ fn complex_into_wrappers_match_allocating_paths() {
 
 #[test]
 fn owned_complex_wrappers_reuse_input_allocation() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f64;
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -126,7 +126,7 @@ fn owned_complex_wrappers_reuse_input_allocation() {
 
 #[test]
 fn static_complex_wrappers_match_dynamic_paths() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f64;
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -174,7 +174,7 @@ fn static_complex_wrappers_match_dynamic_paths() {
 
 #[test]
 fn static_complex_into_wrappers_match_allocating_paths() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f64;
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });

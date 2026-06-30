@@ -27,7 +27,7 @@ fn dft2_inverse_roundtrip() {
     let mut buf: [Complex64; 2] = input.as_slice().try_into().unwrap();
     dft2_impl(&mut buf);
     dft2_impl(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 2.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 2.0).collect();
     assert!(max_err(&recovered, &input) < 1e-14);
 }
 
@@ -53,7 +53,7 @@ fn dft3_inverse_roundtrip() {
     let mut buf: [Complex64; 3] = input.as_slice().try_into().unwrap();
     dft3_impl::<_, false, false>(&mut buf);
     dft3_impl::<_, true, false>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 3.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 3.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-13, "DFT-3 roundtrip max_err={err:.2e}");
 }
@@ -102,7 +102,7 @@ fn dft4_inverse_roundtrip() {
     let mut buf: [Complex64; 4] = input.as_slice().try_into().unwrap();
     dft4_impl::<_, false>(&mut buf);
     dft4_impl::<_, true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 4.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 4.0).collect();
     assert!(
         max_err(&recovered, &input) < 1e-13,
         "DFT-4 roundtrip mismatch"
@@ -146,7 +146,7 @@ fn dft5_inverse_roundtrip() {
     let mut buf: [Complex64; 5] = input.as_slice().try_into().unwrap();
     dft5_impl::<_, false>(&mut buf);
     dft5_impl::<_, true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 5.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 5.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-5 roundtrip max_err={err:.2e}");
 }
@@ -213,7 +213,7 @@ fn dft7_inverse_roundtrip() {
     let mut buf: [Complex64; 7] = input.as_slice().try_into().unwrap();
     dft7_impl::<_, false, false>(&mut buf);
     dft7_impl::<_, true, false>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 7.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 7.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-7 roundtrip max_err={err:.2e}");
 }
@@ -290,7 +290,7 @@ fn dft8_inverse_roundtrip() {
     let mut buf: [Complex64; 8] = input.as_slice().try_into().unwrap();
     dft8_impl::<_, false>(&mut buf);
     dft8_impl::<_, true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 8.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 8.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-8 roundtrip max_err={err:.2e}");
 }
@@ -347,7 +347,7 @@ fn dft11_inverse_roundtrip() {
     let mut buf: [Complex64; 11] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft11::<false>(&mut buf);
     <f64 as ShortWinogradScalar>::dft11::<true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 11.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 11.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-11 roundtrip max_err={err:.2e}");
 }
@@ -404,7 +404,7 @@ fn dft13_inverse_roundtrip() {
     let mut buf: [Complex64; 13] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft13::<false>(&mut buf);
     <f64 as ShortWinogradScalar>::dft13::<true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 13.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 13.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-13 roundtrip max_err={err:.2e}");
 }

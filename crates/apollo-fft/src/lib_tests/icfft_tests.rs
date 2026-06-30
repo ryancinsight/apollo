@@ -6,7 +6,7 @@ use eunomia::{Complex32, Complex64};
 
 #[test]
 fn owned_static_complex_wrappers_reuse_input_allocation() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f64;
         Complex64::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -63,7 +63,7 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
         assert!((expected - actual).norm() < 1e-13);
     }
 
-    let signal32 = Array1::from_shape_fn(16, |i| {
+    let signal32 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f32;
         Complex32::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -132,7 +132,7 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
 
 #[test]
 fn typed_static_complex_wrappers_match_dynamic_f32_paths() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f32;
         Complex32::new((0.17 * x).sin(), (0.29 * x).cos())
     });
@@ -210,7 +210,7 @@ fn typed_static_complex_wrappers_match_dynamic_f32_paths() {
 
 #[test]
 fn typed_dynamic_complex_wrappers_match_f32_plans_and_reuse_owned_allocation() {
-    let signal1 = Array1::from_shape_fn(16, |i| {
+    let signal1 = Array1::from_shape_fn([16], |[i]| {
         let x = i as f32;
         Complex32::new((0.17 * x).sin(), (0.29 * x).cos())
     });

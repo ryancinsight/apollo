@@ -29,11 +29,11 @@ fn direct_forward<const NX: usize, const NY: usize, const NZ: usize>(
                                 * ((kx * x) as f64 / NX as f64
                                     + (ky * y) as f64 / NY as f64
                                     + (kz * z) as f64 / NZ as f64);
-                            acc += input[(x, y, z)] * Complex64::from_polar(1.0, phase);
+                            acc += input[[x, y, z]] * Complex64::from_polar(1.0, phase);
                         }
                     }
                 }
-                out[(kx, ky, kz)] = acc;
+                out[[kx, ky, kz]] = acc;
             }
         }
     }

@@ -6,7 +6,7 @@ use leto::{Array1, Array2, Array3};
 
 #[test]
 fn real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
-    let signal1 = Array1::from_shape_fn(18, |i| (i as f64 * 0.17).sin());
+    let signal1 = Array1::from_shape_fn([18], |[i]| (i as f64 * 0.17).sin());
     let expected_spectrum1 = fft_1d_array(&signal1);
     let expected_recovered1 = ifft_1d_array(&expected_spectrum1);
     let mut spectrum1 = expected_spectrum1.clone();
@@ -35,7 +35,7 @@ fn real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
 
 #[test]
 fn typed_real_inverse_mutating_spectrum_wrappers_reuse_spectrum_storage() {
-    let signal32 = Array1::from_shape_fn(20, |i| (i as f32 * 0.17).sin());
+    let signal32 = Array1::from_shape_fn([20], |[i]| (i as f32 * 0.17).sin());
     let expected_spectrum32 = fft_1d_array_typed(&signal32);
     let expected_recovered32 = ifft_1d_array_typed::<f32>(&expected_spectrum32);
     let mut spectrum32 = expected_spectrum32.clone();

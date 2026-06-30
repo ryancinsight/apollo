@@ -7,7 +7,7 @@ use super::super::traits::WinogradScalar;
 /// constant is consumed by the in-file invariant tests and serves as the
 /// single authoritative pair table.
 #[cfg(test)]
-pub(crate) const ODD_PRIME_PAIR_SIZES: &[(usize, usize)] = &[
+pub(crate) const ODD_PRIME_PAIR_SIZES: &[[usize, usize]] = &[
     (11, 5),
     (13, 6),
     (17, 8),

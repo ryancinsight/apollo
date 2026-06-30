@@ -119,7 +119,7 @@ fn dft17_inverse_roundtrip() {
     let mut buf: [Complex64; 17] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft17::<false>(&mut buf);
     <f64 as ShortWinogradScalar>::dft17::<true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 17.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 17.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 2e-12, "DFT-17 roundtrip max_err={err:.2e}");
 }
@@ -174,7 +174,7 @@ fn dft23_inverse_roundtrip() {
     let mut buf: [Complex64; 23] = input.as_slice().try_into().unwrap();
     <f64 as ShortWinogradScalar>::dft23::<false>(&mut buf);
     <f64 as ShortWinogradScalar>::dft23::<true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 23.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 23.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 4e-12, "DFT-23 roundtrip max_err={err:.2e}");
 }
@@ -258,7 +258,7 @@ fn rader_fft_n10007_roundtrip() {
             let mut buf = input.clone();
             rader::rader_fft::<f64, false>(&mut buf);
             rader::rader_fft::<f64, true>(&mut buf);
-            let recovered: Vec<_> = buf.iter().map(|x| x / n as f64).collect();
+            let recovered: Vec<_> = buf.iter().map(|x| *x / n as f64).collect();
             let err = max_err(&recovered, &input);
             assert!(err < 1e-8, "Rader N=10007 roundtrip max_err={err:.2e}");
         })

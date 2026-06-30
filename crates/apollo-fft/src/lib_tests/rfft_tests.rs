@@ -29,7 +29,7 @@ fn fft_3d_array_into_matches_allocating_path() {
 
 #[test]
 fn real_1d_2d_into_wrappers_match_allocating_paths() {
-    let signal1 = Array1::from_shape_fn(18, |i| (i as f64 * 0.17).sin());
+    let signal1 = Array1::from_shape_fn([18], |[i]| (i as f64 * 0.17).sin());
     let expected1 = fft_1d_array(&signal1);
     let mut actual1 = Array1::<Complex64>::zeros(18);
     fft_1d_array_into(&signal1, &mut actual1);
@@ -66,7 +66,7 @@ fn real_1d_2d_into_wrappers_match_allocating_paths() {
 
 #[test]
 fn static_real_1d_into_wrappers_match_dynamic_paths() {
-    let signal64 = Array1::from_shape_fn(20, |i| (i as f64 * 0.11).sin());
+    let signal64 = Array1::from_shape_fn([20], |[i]| (i as f64 * 0.11).sin());
     let expected64 = fft_1d_array(&signal64);
     let mut spectrum64 = Array1::<Complex64>::zeros(20);
     fft_1d_array_static_into::<20>(&signal64, &mut spectrum64);
@@ -81,7 +81,7 @@ fn static_real_1d_into_wrappers_match_dynamic_paths() {
         assert!((expected - actual).abs() < 1e-13);
     }
 
-    let signal32 = Array1::from_shape_fn(20, |i| (i as f32 * 0.13).cos());
+    let signal32 = Array1::from_shape_fn([20], |[i]| (i as f32 * 0.13).cos());
     let expected32 = fft_1d_array_typed(&signal32);
     let mut spectrum32 = Array1::<Complex32>::zeros(20);
     fft_1d_array_static_typed_into::<f32, 20>(&signal32, &mut spectrum32);
@@ -240,7 +240,7 @@ fn static_real_3d_into_wrappers_match_dynamic_paths() {
 
 #[test]
 fn typed_real_1d_2d_into_supports_f64_f32_and_f16_profiles() {
-    let signal64 = Array1::from_shape_fn(20, |i| (i as f64 * 0.11).sin());
+    let signal64 = Array1::from_shape_fn([20], |[i]| (i as f64 * 0.11).sin());
     let expected64 = fft_1d_array_typed(&signal64);
     let mut spectrum64 = Array1::<Complex64>::zeros(20);
     fft_1d_array_typed_into(&signal64, &mut spectrum64);
