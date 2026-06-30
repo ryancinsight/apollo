@@ -87,7 +87,7 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape2D::new(4, 4).expect("valid shape");
         let plan = backend.plan_2d(shape).expect("plan_2d succeeded");
-        let input = Array2::from_shape_fn((4, 4), |(i, j)| (i as f64 * 0.3 + j as f64 * 0.5).sin());
+        let input = Array2::from_shape_fn([4, 4], |[i, j]| (i as f64 * 0.3 + j as f64 * 0.5).sin());
         let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));
         plan.forward_complex_inplace(&mut spectrum);
         plan.inverse_complex_inplace(&mut spectrum);
@@ -103,7 +103,7 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape3D::new(4, 4, 4).expect("valid shape");
         let plan = backend.plan_3d(shape).expect("plan_3d succeeded");
-        let input = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let input = Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             (i as f64 * 0.3 + j as f64 * 0.2 + k as f64 * 0.5).sin()
         });
         let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));

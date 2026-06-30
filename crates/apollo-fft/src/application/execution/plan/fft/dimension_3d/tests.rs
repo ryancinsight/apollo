@@ -16,7 +16,7 @@ fn signal<const NX: usize, const NY: usize, const NZ: usize>() -> Array3<Complex
 fn direct_forward<const NX: usize, const NY: usize, const NZ: usize>(
     input: &Array3<Complex64>,
 ) -> Array3<Complex64> {
-    let mut out = Array3::from_elem((NX, NY, NZ), Complex64::new(0.0, 0.0));
+    let mut out = Array3::from_elem([NX, NY, NZ], Complex64::new(0.0, 0.0));
     for kx in 0..NX {
         for ky in 0..NY {
             for kz in 0..NZ {
@@ -83,7 +83,7 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
 
     let (nx, ny, nz) = (6usize, 4usize, 8usize);
     let plan = FftPlan3D::<f64>::new(Shape3D { nx, ny, nz });
-    let original = Array3::from_shape_fn((nx, ny, nz), |(i, j, k)| {
+    let original = Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
         let x = ((i * ny + j) * nz + k) as f64;
         Complex64::new((0.17 * x).sin() + 0.3, 0.23 * (0.31 * x).cos())
     });
