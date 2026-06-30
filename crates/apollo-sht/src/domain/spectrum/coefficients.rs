@@ -5,8 +5,8 @@
 //! `m + max_degree`. Entries where `|m| > l` are invalid and left
 //! at zero by transform construction.
 
-use ndarray::Array2;
-use num_complex::Complex64;
+use leto::Array2;
+use eunomia::Complex64;
 
 /// Dense spherical harmonic coefficient matrix.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +21,7 @@ impl SphericalHarmonicCoefficients {
     pub fn zeros(max_degree: usize) -> Self {
         Self {
             max_degree,
-            values: Array2::zeros((max_degree + 1, 2 * max_degree + 1)),
+            values: Array2::zeros([max_degree + 1, 2 * max_degree + 1]),
         }
     }
 

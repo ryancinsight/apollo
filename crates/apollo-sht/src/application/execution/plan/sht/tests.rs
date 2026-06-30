@@ -9,14 +9,14 @@ use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_abs_diff_eq;
-use ndarray::Array2;
-use num_complex::{Complex32, Complex64};
+use leto::Array2;
+use eunomia::{Complex32, Complex64};
 
-fn coefficient_shape(plan: &ShtPlan) -> (usize, usize) {
-    (
+fn coefficient_shape(plan: &ShtPlan) -> [usize; 2] {
+    [
         plan.grid().max_degree() + 1,
         2 * plan.grid().max_degree() + 1,
-    )
+    ]
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn typed_real_forward_supports_f64_f32_and_mixed_f16_storage() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let constant = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
     let samples64 = Array2::from_elem(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
         constant,
     );
     let expected = plan.forward_real(&samples64).expect("forward");
@@ -143,7 +143,7 @@ fn leto_real_forward_matches_ndarray_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let constant = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
     let samples = Array2::from_elem(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
         constant,
     );
     let input = leto::Array2::from_shape_vec(
@@ -168,10 +168,10 @@ fn leto_real_forward_matches_ndarray_reference() {
 fn leto_strided_real_forward_matches_ndarray_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
-        |(lat, lon)| (lat as f64 * 0.2).sin() + (lon as f64 * 0.1).cos(),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
+        |[lat, lon]| (lat as f64 * 0.2).sin() + (lon as f64 * 0.1).cos(),
     );
-    let mut backing = Vec::with_capacity(samples.len() * 2);
+    let mut backing = Vec::with_capacity(samples.size() * 2);
     for value in samples.iter().copied() {
         backing.push(value);
         backing.push(99.0);
@@ -203,8 +203,8 @@ fn leto_strided_real_forward_matches_ndarray_reference() {
 fn leto_complex_forward_and_inverse_match_ndarray_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
-        |(lat, lon)| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
+        |[lat, lon]| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
     );
     let input = leto::Array2::from_shape_vec(
         [plan.grid().latitudes(), plan.grid().longitudes()],
@@ -256,8 +256,8 @@ fn leto_complex_forward_and_inverse_match_ndarray_reference() {
 fn typed_leto_forward_and_inverse_match_ndarray_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
-        |(lat, lon)| (lat as f32 * 0.2).sin() + (lon as f32 * 0.1).cos(),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
+        |[lat, lon]| (lat as f32 * 0.2).sin() + (lon as f32 * 0.1).cos(),
     );
     let input = leto::Array2::from_shape_vec(
         [plan.grid().latitudes(), plan.grid().longitudes()],
@@ -294,12 +294,12 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
     }
 
     let coefficients = leto::Array2::from_shape_vec(
-        [shape.0, shape.1],
+        [shape[0], shape[1]],
         expected_coefficients.iter().copied().collect(),
     )
     .expect("leto coefficients");
     let mut expected_samples =
-        Array2::<f32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
+        Array2::<f32>::zeros([plan.grid().latitudes(), plan.grid().longitudes()]);
     plan.inverse_real_typed_into(
         &expected_coefficients,
         &mut expected_samples,
@@ -325,8 +325,8 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
 fn typed_complex_forward_and_inverse_support_complex32_storage() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples64 = Array2::from_shape_fn(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
-        |(lat, lon)| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
+        |[lat, lon]| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
     );
     let samples32 = samples64.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
     let represented32 = samples32.mapv(Complex32::to_complex64);
@@ -347,7 +347,7 @@ fn typed_complex_forward_and_inverse_support_complex32_storage() {
     }
 
     let mut recovered32 =
-        Array2::<Complex32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
+        Array2::<Complex32>::zeros([plan.grid().latitudes(), plan.grid().longitudes()]);
     plan.inverse_complex_typed_into(
         &coefficients32,
         &mut recovered32,
@@ -370,7 +370,7 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
     let coefficients32 = coefficients
         .values()
         .mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-    let mut samples32 = Array2::<f32>::zeros((plan.grid().latitudes(), plan.grid().longitudes()));
+    let mut samples32 = Array2::<f32>::zeros([plan.grid().latitudes(), plan.grid().longitudes()]);
 
     plan.inverse_real_typed_into(
         &coefficients32,
@@ -395,7 +395,7 @@ fn typed_real_inverse_and_mismatch_rejections_are_value_semantic() {
     assert_eq!(err, ShtError::PrecisionMismatch);
 
     let bad_coefficients =
-        Array2::<Complex32>::zeros((coefficient_shape.0, coefficient_shape.1 + 1));
+        Array2::<Complex32>::zeros([coefficient_shape[0], coefficient_shape[1] + 1]);
     let err = plan
         .inverse_real_typed_into(
             &bad_coefficients,

@@ -6,8 +6,8 @@ use std::{borrow::Cow, sync::Arc};
 use apollo_fft::PrecisionProfile;
 use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
 use crate::{ShtComplexStorage, SphericalGridSpec, SphericalHarmonicCoefficients};
-use ndarray::Array2;
-use num_complex::{Complex32, Complex64};
+use leto::Array2;
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::ShtWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -76,8 +76,8 @@ impl ShtWgpuBackend {
         samples: &Array2<Complex32>,
     ) -> WgpuResult<SphericalHarmonicCoefficients> {
         validate_plan(plan)?;
-        if samples.dim() != (plan.latitudes(), plan.longitudes()) {
-            let (actual_latitudes, actual_longitudes) = samples.dim();
+        if samples.shape() != (plan.latitudes(), plan.longitudes()) {
+            let [actual_latitudes, actual_longitudes] = samples.shape();
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
                     "samples expected {}x{}, got {}x{}",
@@ -300,7 +300,7 @@ fn grid_samples(plan: &ShtWgpuPlan) -> Vec<GridPod> {
 }
 
 fn coefficients_from_modes(max_degree: usize, raw: &[Complex32]) -> SphericalHarmonicCoefficients {
-    let mut coefficients = SphericalHarmonicCoefficients::zeros(max_degree);
+    let mut coefficients = SphericalHarmonicCoefficients::zeros([max_degree]);
     for ((degree, order), value) in mode_pairs(max_degree).zip(raw.iter().copied()) {
         coefficients.set(
             degree,
@@ -332,8 +332,8 @@ fn coefficients_from_leto_view(
 ) -> WgpuResult<SphericalHarmonicCoefficients> {
     let values = array2_from_leto_view(coefficients);
     let expected = (plan.max_degree() + 1, 2 * plan.max_degree() + 1);
-    if values.dim() != expected {
-        let (rows, cols) = values.dim();
+    if values.shape() != expected {
+        let [rows, cols] = values.shape();
         return Err(WgpuError::ShapeMismatch {
             message: format!(
                 "coefficient shape mismatch: expected {}x{}, got {}x{}",
@@ -360,7 +360,7 @@ fn leto_array2_from_ndarray<T: Copy>(
     values: &Array2<T>,
     label: &str,
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    leto_interop::try_array2_from_ndarray(values).ok_or_else(|| WgpuError::InvalidPlan {
+    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
         message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }

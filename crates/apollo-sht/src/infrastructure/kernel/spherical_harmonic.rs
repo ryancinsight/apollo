@@ -145,7 +145,7 @@
 
 const MAX_GL_ITERATIONS: usize = 50;
 
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// Return Gauss-Legendre nodes and weights on `[-1, 1]`.
 ///

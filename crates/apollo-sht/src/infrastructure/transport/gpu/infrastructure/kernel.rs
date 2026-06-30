@@ -1,7 +1,7 @@
 //! Direct complex spherical harmonic transform WGPU kernels.
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};

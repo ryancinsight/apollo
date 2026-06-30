@@ -8,8 +8,8 @@ mod tests {
     };
     use crate::{ShtError, ShtPlan};
     use approx::assert_abs_diff_eq;
-    use ndarray::Array2;
-    use num_complex::Complex64;
+    use leto::Array2;
+    use eunomia::Complex64;
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -42,7 +42,7 @@ mod tests {
         let plan = ShtPlan::new(12, 25, 4).expect("plan");
         let constant = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
         let samples = Array2::from_elem(
-            (plan.grid().latitudes(), plan.grid().longitudes()),
+            [plan.grid().latitudes(), plan.grid().longitudes()],
             constant,
         );
 
@@ -61,7 +61,7 @@ mod tests {
         }
 
         let recovered = plan.inverse_real(&coefficients).expect("inverse");
-        for value in recovered {
+        for value in recovered.iter().copied() {
             assert_abs_diff_eq!(value, constant, epsilon = 1.0e-12);
         }
     }
@@ -72,8 +72,8 @@ mod tests {
         let degree = 2;
         let order = 1;
         let samples = Array2::from_shape_fn(
-            (plan.grid().latitudes(), plan.grid().longitudes()),
-            |(i, j)| spherical_harmonic(degree, order, plan.theta(i), plan.phi(j)),
+            [plan.grid().latitudes(), plan.grid().longitudes()],
+            |[i, j]| spherical_harmonic(degree, order, plan.theta(i), plan.phi(j)),
         );
 
         let coefficients = plan.forward_complex(&samples).expect("forward");
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn rejects_mismatched_sample_and_coefficient_shapes() {
         let plan = ShtPlan::new(8, 17, 3).expect("plan");
-        let bad_samples = Array2::<f64>::zeros((7, 17));
+        let bad_samples = Array2::<f64>::zeros([7, 17]);
         assert_eq!(
             plan.forward_real(&bad_samples).unwrap_err(),
             ShtError::SampleShapeMismatch
@@ -245,8 +245,8 @@ mod tests {
         // Therefore: Σ |a_lm|^2 = 1, consistent with ∫ |Y_0^0|^2 dΩ = 1.
         let plan = ShtPlan::new(6, 7, 2).expect("plan");
         let samples: Array2<f64> = Array2::from_shape_fn(
-            (plan.grid().latitudes(), plan.grid().longitudes()),
-            |(i, j)| spherical_harmonic(0, 0, plan.theta(i), plan.phi(j)).re,
+            [plan.grid().latitudes(), plan.grid().longitudes()],
+            |[i, j]| spherical_harmonic(0, 0, plan.theta(i), plan.phi(j)).re,
         );
         let coefficients = plan.forward_real(&samples).expect("forward");
 

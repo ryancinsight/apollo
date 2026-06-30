@@ -5,8 +5,8 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use crate::{ShtPlan, SphericalHarmonicCoefficients};
     use leto::{SliceArg, Storage};
-    use ndarray::Array2;
-    use num_complex::{Complex32, Complex64};
+    use leto::Array2;
+    use eunomia::{Complex32, Complex64};
 
     use crate::infrastructure::transport::gpu::{ShtWgpuBackend, ShtWgpuPlan, WgpuCapabilities, WgpuError};
 
@@ -55,7 +55,7 @@ mod tests {
 
         // 1. invalid_plan_rejects_under_sampled_bandlimit
         {
-            let samples = Array2::from_elem((2, 3), Complex32::new(1.0, 0.0));
+            let samples = Array2::from_elem([2, 3], Complex32::new(1.0, 0.0));
             let error = backend
                 .execute_forward(&ShtWgpuPlan::new(2, 3, 2), &samples)
                 .expect_err("undersampled bandlimit must fail");
@@ -64,7 +64,7 @@ mod tests {
 
         // 2. sample_shape_mismatch_reports_dimensions
         {
-            let samples = Array2::from_elem((3, 4), Complex32::new(1.0, 0.0));
+            let samples = Array2::from_elem([3, 4], Complex32::new(1.0, 0.0));
             let error = backend
                 .execute_forward(&ShtWgpuPlan::new(4, 5, 1), &samples)
                 .expect_err("shape mismatch must fail");
@@ -123,7 +123,7 @@ mod tests {
                 .execute_inverse(&plan, &coefficients)
                 .expect("GPU inverse");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 2.0e-5);
             }
@@ -335,7 +335,7 @@ mod tests {
                 .expect_err("profile mismatch must fail");
             assert_eq!(fwd_err, WgpuError::InvalidPrecisionProfile);
 
-            let coefficients = SphericalHarmonicCoefficients::zeros(plan.max_degree());
+            let coefficients = SphericalHarmonicCoefficients::zeros([plan.max_degree()]);
             let mut output: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; flat_len];
             let inv_err = backend
                 .execute_inverse_flat_typed_into::<[f16; 2]>(
