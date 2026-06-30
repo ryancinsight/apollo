@@ -45,10 +45,6 @@ pub mod infrastructure;
 /// API wrappers.
 pub mod api;
 
-/// Coeus integration.
-pub mod coeus;
-pub use coeus_core;
-
 #[cfg(test)]
 mod lib_tests;
 

@@ -27,10 +27,6 @@ mnemosyne = { workspace = true }
 rustc-hash = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-coeus-core = { path = "../../../coeus/coeus-core" }
-coeus-tensor = { path = "../../../coeus/coeus-tensor" }
-coeus-autograd = { path = "../../../coeus/coeus-autograd" }
-coeus-ops = { path = "../../../coeus/coeus-ops" }
 
 [dev-dependencies]
 approx = "0.5"

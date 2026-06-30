@@ -1,4 +1,5 @@
 //! Tests for Coeus tensor and autograd FFT integration.
+#![cfg(feature = "coeus")]
 
 use apollo_fft::coeus::{fft_1d, fft_1d_var, ifft_1d, ifft_1d_var};
 use coeus_core::{Complex, MoiraiBackend};

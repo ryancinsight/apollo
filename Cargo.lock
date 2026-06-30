@@ -139,10 +139,6 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
- "coeus-autograd",
- "coeus-core",
- "coeus-ops",
- "coeus-tensor",
  "criterion",
  "eunomia",
  "half",
@@ -461,6 +457,7 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
@@ -763,19 +760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "coeus-autograd"
-version = "0.5.4"
-dependencies = [
- "coeus-core",
- "coeus-ops",
- "coeus-sparse",
- "coeus-tensor",
- "leto-ops",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "coeus-core"
 version = "0.5.4"
 dependencies = [
@@ -785,52 +769,6 @@ dependencies = [
  "hermes-simd",
  "mnemosyne",
  "moirai",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-leto"
-version = "0.5.4"
-dependencies = [
- "coeus-core",
- "leto",
- "leto-ops",
-]
-
-[[package]]
-name = "coeus-ops"
-version = "0.5.4"
-dependencies = [
- "bytemuck",
- "coeus-core",
- "coeus-leto",
- "coeus-sparse",
- "coeus-tensor",
- "half",
- "leto-ops",
- "melinoe",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-sparse"
-version = "0.5.4"
-dependencies = [
- "coeus-core",
- "coeus-tensor",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-tensor"
-version = "0.5.4"
-dependencies = [
- "bytemuck",
- "coeus-core",
- "coeus-leto",
  "smallvec",
  "thiserror 2.0.18",
 ]

@@ -312,7 +312,7 @@ impl GpuFft3d {
 
         let (re_out, _) = self.read_back_full_buffers();
 
-        for (dst, &value) in out.iter_mut().zip(re_out.iter()) {
+        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(re_out.iter()) {
             *dst = value as f64;
         }
     }
@@ -347,7 +347,7 @@ impl GpuFft3d {
         self.queue.submit(std::iter::once(encoder.finish()));
 
         buffers.read_split_into_host(self);
-        for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
+        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(buffers.re_host.iter()) {
             *dst = value as f64;
         }
     }
@@ -390,7 +390,7 @@ impl GpuFft3d {
         self.queue.submit(std::iter::once(encoder.finish()));
 
         buffers.read_split_into_host(self);
-        for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
+        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(buffers.re_host.iter()) {
             *dst = f16::from_f32(value);
         }
     }
