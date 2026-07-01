@@ -39,7 +39,7 @@ pub fn ramp_filter_projection_into(projection: &[f64], detector_spacing: f64, ou
         return;
     }
 
-    let arr = Array1::from((projection.iter().copied()).collect::<Vec<_>>());
+    let arr = Array1::from(projection.to_vec());
     let mut spectrum: Vec<Complex64> = fft_1d_array(&arr).to_vec();
 
     for (k, coefficient) in spectrum.iter_mut().enumerate() {

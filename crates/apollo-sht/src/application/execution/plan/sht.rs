@@ -81,7 +81,7 @@ impl ShtPlan {
         &self,
         samples: leto::ArrayView2<'_, f64>,
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_real(&samples)?;
         leto_array2_from_ndarray(coefficients.values())
     }
@@ -152,7 +152,7 @@ impl ShtPlan {
         &self,
         samples: leto::ArrayView2<'_, Complex64>,
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_complex(&samples)?;
         leto_array2_from_ndarray(coefficients.values())
     }
@@ -270,7 +270,7 @@ impl ShtPlan {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
             O::from_complex64(Complex64::new(0.0, 0.0)),
@@ -297,7 +297,7 @@ impl ShtPlan {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
             O::from_complex64(Complex64::new(0.0, 0.0)),
@@ -335,7 +335,7 @@ impl ShtPlan {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
             [self.grid.latitudes(), self.grid.longitudes()],
             O::from_complex64(Complex64::new(0.0, 0.0)),
@@ -373,7 +373,7 @@ impl ShtPlan {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
             [self.grid.latitudes(), self.grid.longitudes()],
             O::from_f64(0.0),

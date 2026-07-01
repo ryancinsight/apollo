@@ -189,7 +189,7 @@ impl FwhtPlan2D {
         let im_in: Array2<f64> = input.mapv(|v| v.im);
         let re_out = self.forward(&re_in)?;
         let im_out = self.forward(&im_in)?;
-        Ok(re_out.zip_map(&im_out, |re, im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, Complex64::new))
     }
 
     /// Inverse 2D WHT of a complex-valued `n×n` spectrum.
@@ -209,7 +209,7 @@ impl FwhtPlan2D {
         let im_in: Array2<f64> = input.mapv(|v| v.im);
         let re_out = self.inverse(&re_in)?;
         let im_out = self.inverse(&im_in)?;
-        Ok(re_out.zip_map(&im_out, |re, im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, Complex64::new))
     }
 }
 

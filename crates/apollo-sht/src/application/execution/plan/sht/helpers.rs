@@ -173,13 +173,10 @@ pub(super) fn phi_for_longitude(longitude_index: usize, n_lon: usize) -> f64 {
     std::f64::consts::TAU * longitude_index as f64 / n_lon as f64
 }
 
-pub(super) fn array2_from_leto_view<T: Copy>(
-    view: leto::ArrayView2<'_, T>,
-    _shape_error: ShtError,
-) -> ShtResult<Array2<T>> {
+pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     // Contiguous views borrow without copy; strided views materialize once into
     // logical row-major order. One canonical Leto entry point covers both.
-    Ok(view.to_contiguous())
+    view.to_contiguous()
 }
 
 pub(super) fn leto_array2_from_ndarray<T: Copy>(
@@ -200,7 +197,7 @@ pub(super) fn coefficients_from_leto_view(
     plan: &ShtPlan,
     coefficients: leto::ArrayView2<'_, Complex64>,
 ) -> ShtResult<SphericalHarmonicCoefficients> {
-    let values = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+    let values = array2_from_leto_view(coefficients);
     if values.shape() != plan.coefficient_shape() {
         return Err(ShtError::CoefficientShapeMismatch);
     }
