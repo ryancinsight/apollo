@@ -8,13 +8,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Breaking
+- [arch] **Complete `num_complex`/`ndarray` removal — the whole Apollo workspace now runs on the Atlas-native `leto` + `eunomia` substrate.** All 17 transform crates, `apollo-validation`, and `apollo-python` are migrated: complex values are `eunomia::Complex`; owned/viewed arrays are `leto::Array`/`ArrayView`. `ndarray` is retained *only* at genuine external FFI boundaries — the `rust-numpy` element/array surface in `apollo-python` and the `rustfft` differential oracle in `apollo-validation` — converting to/from `leto` at the seam via `leto::ndarray_compat`. Migration: replace `num_complex::Complex` with `eunomia::Complex`; replace `ndarray::Array{1,2,3}` with `leto::Array{1,2,3}`; `.dim()`→`.shape()` (returns `[usize; N]`, not a tuple); `.len()`→`.size()` on arrays. Evidence: workspace builds (default + `wgpu`); `cargo nextest run --workspace` → 901/901; `cargo clippy --workspace` → 0 warnings; `apollo-python` pytest → 34/34.
+- [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
-### Fixed
-- [patch] `apollo-fft` Coeus FFT autograd nodes now use `coeus_autograd::GradBuffer`
-  instead of raw `Arc<Mutex<Tensor<_>>>` gradient buffers, matching the current Coeus
-  `0.2.3` `BackwardNode` contract. `Cargo.lock` is synchronized with the active local Coeus
-  provider packages. Evidence: `cargo clippy -p apollo-fft --all-targets -- -D warnings`;
-  `cargo nextest run -p apollo-fft` -> 397/397 passed; doctest/doc passed.
 ### Added
 - [patch] Refreshed `benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `a673325` (`0.14.2`), importing rank-deficient singular-value support without restoring any downstream nalgebra dependency.

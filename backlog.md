@@ -5,11 +5,19 @@
 Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),
 hermes (SIMD), moirai (parallel), mnemosyne (scratch). nalgebra is fully removed.
 Remaining replacement work:
-- [ ] [minor] Stage A3: replace residual internal ndarray in validation builders and
-  the Python/numpy boundary with leto where not a public contract; keep ndarray a
-  dev-only differential oracle.
-- [ ] [major] Stage A3: deprecate the public `Array1/2/3` ndarray surface behind an
-  `ndarray-compat` feature once consumers move to the `*_leto` APIs; ADR + migration guide.
+- [x] [arch] Stage A3 (complete): the whole workspace runs on `leto` + `eunomia`.
+  `num_complex`→`eunomia::Complex` and `ndarray::Array`→`leto::Array` across all 17
+  transform crates, `apollo-validation`, and `apollo-python`. `ndarray` survives only at
+  the `rust-numpy` element surface (`apollo-python`) and the `rustfft` differential oracle
+  (`apollo-validation`), converted to `leto` at the seam. `eunomia` gained an opt-in
+  `numpy` feature (`unsafe impl numpy::Element for Complex`) so the SSOT complex type is a
+  first-class numpy element with no `num_complex` in the binding layer. Verification:
+  workspace build (default + wgpu); `cargo nextest run --workspace` 901/901; clippy 0
+  warnings; `apollo-python` pytest 34/34.
+- [x] [arch] Coeus decoupling: removed `apollo-fft/src/coeus.rs`, the `coeus` feature, the
+  `ComputeBackend`/`FftDeviceOps`-for-`WgpuBackend` bridge, and `apollo-wgpu-helpers`'
+  `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
+  `coeus-autograd` consuming Apollo one-way (cycle broken).
 - [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
   through moirai.
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0001):
