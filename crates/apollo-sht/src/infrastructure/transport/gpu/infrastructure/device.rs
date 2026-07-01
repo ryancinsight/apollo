@@ -76,7 +76,7 @@ impl ShtWgpuBackend {
         samples: &Array2<Complex32>,
     ) -> WgpuResult<SphericalHarmonicCoefficients> {
         validate_plan(plan)?;
-        if samples.shape() != (plan.latitudes(), plan.longitudes()) {
+        if samples.shape() != [plan.latitudes(), plan.longitudes()] {
             let [actual_latitudes, actual_longitudes] = samples.shape();
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
@@ -142,7 +142,7 @@ impl ShtWgpuBackend {
             &grid,
         )?;
         Array2::from_shape_vec(
-            (plan.latitudes(), plan.longitudes()),
+            [plan.latitudes(), plan.longitudes()],
             raw.into_iter()
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
                 .collect(),
@@ -196,7 +196,8 @@ impl ShtWgpuBackend {
                 Complex32::new(c.re as f32, c.im as f32)
             })
             .collect();
-        let samples_2d = Array2::from_shape_vec((plan.latitudes(), plan.longitudes()), promoted)
+        let samples_2d = Array2::from_shape_vec(
+            [plan.latitudes(), plan.longitudes()], promoted)
             .map_err(|_| WgpuError::InvalidPlan {
                     message: format!("invalid plan latitudes={}, longitudes={}, max_degree={}: flat sample reshape failed", plan.latitudes(), plan.longitudes(), plan.max_degree()),
                 })?;
@@ -300,7 +301,7 @@ fn grid_samples(plan: &ShtWgpuPlan) -> Vec<GridPod> {
 }
 
 fn coefficients_from_modes(max_degree: usize, raw: &[Complex32]) -> SphericalHarmonicCoefficients {
-    let mut coefficients = SphericalHarmonicCoefficients::zeros([max_degree]);
+    let mut coefficients = SphericalHarmonicCoefficients::zeros(max_degree);
     for ((degree, order), value) in mode_pairs(max_degree).zip(raw.iter().copied()) {
         coefficients.set(
             degree,
@@ -324,20 +325,20 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
-    leto_interop::array2_from_view(&view)
+    view.to_contiguous()
 }
 fn coefficients_from_leto_view(
     plan: &ShtWgpuPlan,
     coefficients: leto::ArrayView2<'_, Complex64>,
 ) -> WgpuResult<SphericalHarmonicCoefficients> {
     let values = array2_from_leto_view(coefficients);
-    let expected = (plan.max_degree() + 1, 2 * plan.max_degree() + 1);
+    let expected = [plan.max_degree() + 1, 2 * plan.max_degree() + 1];
     if values.shape() != expected {
         let [rows, cols] = values.shape();
         return Err(WgpuError::ShapeMismatch {
             message: format!(
                 "coefficient shape mismatch: expected {}x{}, got {}x{}",
-                expected.0, expected.1, rows, cols
+                expected[0], expected[1], rows, cols
             ),
         });
     }
