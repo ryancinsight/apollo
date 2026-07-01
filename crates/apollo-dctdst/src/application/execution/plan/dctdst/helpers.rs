@@ -8,14 +8,6 @@ pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow
     leto_interop::view1_cow(view)
 }
 
-pub(crate) fn array2_from_leto_view(input: leto::ArrayView2<'_, f64>) -> Array2<f64> {
-    input.to_contiguous()
-}
-
-pub(crate) fn array3_from_leto_view(input: leto::ArrayView3<'_, f64>) -> Array3<f64> {
-    input.to_contiguous()
-}
-
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     output: &[T],
 ) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {

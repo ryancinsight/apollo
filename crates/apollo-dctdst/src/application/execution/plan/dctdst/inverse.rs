@@ -1,5 +1,5 @@
 use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_dense,
+    leto_array1_from_slice, leto_array2_from_dense,
     leto_array3_from_dense, leto_view1_cow,
 };
 use super::DctDstPlan;
@@ -9,7 +9,7 @@ use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, 
 use crate::infrastructure::kernel::fast::{
     dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
 };
-use leto::{Array2, Array3};
+use leto::{Array, Array2, Array3, Storage};
 
 impl DctDstPlan {
     /// Compute the inverse of the given forward transform.
@@ -62,8 +62,10 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView2<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let input = array2_from_leto_view(input);
-        let output = self.inverse_2d(&input)?;
+        let input = input.as_array();
+        let n = self.len();
+        let mut output = Array2::<f64>::zeros([n, n]);
+        self.inverse_2d_into(&input, &mut output)?;
         Ok(leto_array2_from_dense(&output))
     }
 
@@ -71,9 +73,9 @@ impl DctDstPlan {
     ///
     /// Returns `LengthMismatch` unless both `input` and `output` are square
     /// `N x N` arrays matching the plan length `N`.
-    pub fn inverse_2d_into(
+    pub fn inverse_2d_into<S: Storage<f64>>(
         &self,
-        input: &Array2<f64>,
+        input: &Array<f64, S, 2>,
         output: &mut Array2<f64>,
     ) -> DctDstResult<()> {
         let n = self.len();
@@ -126,8 +128,10 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView3<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let input = array3_from_leto_view(input);
-        let output = self.inverse_3d(&input)?;
+        let input = input.as_array();
+        let n = self.len();
+        let mut output = Array3::<f64>::zeros([n, n, n]);
+        self.inverse_3d_into(&input, &mut output)?;
         Ok(leto_array3_from_dense(&output))
     }
 
@@ -135,9 +139,9 @@ impl DctDstPlan {
     ///
     /// Returns `LengthMismatch` unless both `input` and `output` are cubic
     /// `N x N x N` arrays matching the plan length `N`.
-    pub fn inverse_3d_into(
+    pub fn inverse_3d_into<S: Storage<f64>>(
         &self,
-        input: &Array3<f64>,
+        input: &Array<f64, S, 3>,
         output: &mut Array3<f64>,
     ) -> DctDstResult<()> {
         let n = self.len();
