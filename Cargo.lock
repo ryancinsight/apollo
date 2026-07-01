@@ -527,7 +527,6 @@ name = "apollo-wgpu-helpers"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "coeus-core",
  "hephaestus-wgpu",
  "thiserror 1.0.69",
  "wgpu",
@@ -753,20 +752,6 @@ dependencies = [
  "serde",
  "termcolor",
  "unicode-width",
-]
-
-[[package]]
-name = "coeus-core"
-version = "0.5.5"
-dependencies = [
- "bytemuck",
- "eunomia",
- "half",
- "hermes-simd",
- "mnemosyne",
- "moirai",
- "smallvec",
- "thiserror 2.0.18",
 ]
 
 [[package]]
