@@ -2,13 +2,11 @@ use std::borrow::Cow;
 
 use crate::{RealTransformKind, RealTransformStorage};
 use apollo_fft::PrecisionProfile;
-use leto::{Array2, Array3};
 
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_dense,
-    leto_array3_from_dense, leto_view1_cow,
+    leto_array1_from_slice, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::DctMode;
@@ -41,12 +39,7 @@ impl DctDstWgpuBackend {
             RealTransformKind::DstI => (DctMode::Dst1, 1.0 / (2.0 * (plan.len() + 1) as f32)),
             RealTransformKind::DstIV => (DctMode::Dst4, 2.0 / plan.len() as f32),
         };
-        self.kernel.execute(
-            &self.device,
-            input,
-            mode,
-            scale,
-        )
+        self.kernel.execute(&self.device, input, mode, scale)
     }
 
     /// Execute the normalized inverse transform from a Leto 1D host view.
@@ -121,58 +114,53 @@ impl DctDstWgpuBackend {
     ///
     /// Applies the 1D inverse transform along each column then each row.
     /// Requires a square `n × n` input where `n == plan.len()`.
+    /// Row-major flat `n×n` host buffer in/out; flat host orchestration between
+    /// per-line GPU (Hephaestus) dispatches.
     pub fn execute_inverse_2d(
         &self,
         plan: &DctDstWgpuPlan,
-        input: &Array2<f32>,
-    ) -> WgpuResult<Array2<f32>> {
+        input: &[f32],
+    ) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        let [rows, cols] = input.shape();
-        if rows != n || cols != n {
+        if input.len() != n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
+                message: format!("2D input expected {n}x{n} = {} elements, got {}", n * n, input.len()),
             });
         }
-        // Column pass (inverse): columns are strided, so a single lane buffer
-        // is reused instead of a per-column allocation.
-        let mut lane = Vec::with_capacity(n);
-        let mut tmp = Array2::<f32>::zeros([n, n]);
+        // Column pass: gather each strided column into a reused lane.
+        let mut lane = vec![0.0_f32; n];
+        let mut tmp = vec![0.0_f32; n * n];
         for c in 0..n {
-            lane.clear();
-            lane.extend(input.column(c).iter().copied());
+            for r in 0..n {
+                lane[r] = input[r * n + c];
+            }
             let out = self.execute_inverse(plan, &lane)?;
-            for (row, &value) in out.iter().enumerate() {
-                tmp[[row, c]] = value;
+            for r in 0..n {
+                tmp[r * n + c] = out[r];
             }
         }
-        // Row pass (inverse): contiguous rows are borrowed without copying.
-        let mut result = Array2::<f32>::zeros([n, n]);
+        // Row pass: rows are contiguous `n`-element chunks.
+        let mut result = vec![0.0_f32; n * n];
         for r in 0..n {
-            let row = tmp.row(r);
-            let out = match row.as_slice() {
-                Some(slice) => self.execute_inverse(plan, slice)?,
-                None => {
-                    lane.clear();
-                    lane.extend(row.iter().copied());
-                    self.execute_inverse(plan, &lane)?
-                }
-            };
-            for (col, &value) in out.iter().enumerate() {
-                result[[r, col]] = value;
-            }
+            let out = self.execute_inverse(plan, &tmp[r * n..r * n + n])?;
+            result[r * n..r * n + n].copy_from_slice(&out);
         }
         Ok(result)
     }
 
     /// Execute the normalized 2D separable inverse transform from a Leto view.
+    /// Leto appears only at this CPU↔GPU seam.
     pub fn execute_inverse_2d_leto(
         &self,
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView2<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let input = array2_from_leto_view(input);
-        let output = self.execute_inverse_2d(plan, &input)?;
-        leto_array2_from_dense(&output)
+        let n = plan.len();
+        let flat: Vec<f32> = input.iter().copied().collect();
+        let result = self.execute_inverse_2d(plan, &flat)?;
+        leto::Array::from_mnemosyne_vec([n, n], result).map_err(|_| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto DCT/DST 2D output".to_string(),
+        })
     }
 
     /// Execute the normalized 3D separable inverse real-to-real transform.
@@ -182,51 +170,53 @@ impl DctDstWgpuBackend {
     pub fn execute_inverse_3d(
         &self,
         plan: &DctDstWgpuPlan,
-        input: &Array3<f32>,
-    ) -> WgpuResult<Array3<f32>> {
+        input: &[f32],
+    ) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        let [d0, d1, d2] = input.shape();
-        if d0 != n || d1 != n || d2 != n {
+        if input.len() != n * n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
+                message: format!(
+                    "3D input expected {n}x{n}x{n} = {} elements, got {}",
+                    n * n * n,
+                    input.len()
+                ),
             });
         }
-        // One lane buffer reused across all three axis passes; fibers are
-        // strided so each is gathered into it instead of a fresh allocation.
-        let mut lane = Vec::with_capacity(n);
-        // Axis-2 pass (inverse).
-        let mut tmp0 = Array3::<f32>::zeros([n, n, n]);
+        // Row-major flat index of (i, j, k) is (i*n + j)*n + k.
+        let idx = |i: usize, j: usize, k: usize| (i * n + j) * n + k;
+        let mut lane = vec![0.0_f32; n];
+        // Axis-2 pass (contiguous over k).
+        let mut tmp0 = vec![0.0_f32; n * n * n];
         for i in 0..n {
             for j in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|k| input[[i, j, k]]));
-                let out = self.execute_inverse(plan, &lane)?;
-                for k in 0..n {
-                    tmp0[[i, j, k]] = out[k];
-                }
+                let base = idx(i, j, 0);
+                let out = self.execute_inverse(plan, &input[base..base + n])?;
+                tmp0[base..base + n].copy_from_slice(&out);
             }
         }
-        // Axis-1 pass (inverse).
-        let mut tmp1 = Array3::<f32>::zeros([n, n, n]);
+        // Axis-1 pass (strided over j).
+        let mut tmp1 = vec![0.0_f32; n * n * n];
         for i in 0..n {
             for k in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|j| tmp0[[i, j, k]]));
+                for j in 0..n {
+                    lane[j] = tmp0[idx(i, j, k)];
+                }
                 let out = self.execute_inverse(plan, &lane)?;
                 for j in 0..n {
-                    tmp1[[i, j, k]] = out[j];
+                    tmp1[idx(i, j, k)] = out[j];
                 }
             }
         }
-        // Axis-0 pass (inverse).
-        let mut result = Array3::<f32>::zeros([n, n, n]);
+        // Axis-0 pass (strided over i).
+        let mut result = vec![0.0_f32; n * n * n];
         for j in 0..n {
             for k in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|i| tmp1[[i, j, k]]));
+                for i in 0..n {
+                    lane[i] = tmp1[idx(i, j, k)];
+                }
                 let out = self.execute_inverse(plan, &lane)?;
                 for i in 0..n {
-                    result[[i, j, k]] = out[i];
+                    result[idx(i, j, k)] = out[i];
                 }
             }
         }
@@ -234,13 +224,17 @@ impl DctDstWgpuBackend {
     }
 
     /// Execute the normalized 3D separable inverse transform from a Leto view.
+    /// Leto appears only at this CPU↔GPU seam.
     pub fn execute_inverse_3d_leto(
         &self,
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView3<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
-        let input = array3_from_leto_view(input);
-        let output = self.execute_inverse_3d(plan, &input)?;
-        leto_array3_from_dense(&output)
+        let n = plan.len();
+        let flat: Vec<f32> = input.iter().copied().collect();
+        let result = self.execute_inverse_3d(plan, &flat)?;
+        leto::Array::from_mnemosyne_vec([n, n, n], result).map_err(|_| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto DCT/DST 3D output".to_string(),
+        })
     }
 }

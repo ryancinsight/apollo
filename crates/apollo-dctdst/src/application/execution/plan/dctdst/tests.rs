@@ -3,8 +3,8 @@ use crate::domain::contracts::error::DctDstError;
 use crate::domain::metadata::kind::RealTransformKind;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_abs_diff_eq;
-use leto::{SliceArg, Storage};
 use leto::{Array2, Array3};
+use leto::{SliceArg, Storage};
 
 #[test]
 fn typed_paths_support_f64_f32_and_mixed_f16_storage() {

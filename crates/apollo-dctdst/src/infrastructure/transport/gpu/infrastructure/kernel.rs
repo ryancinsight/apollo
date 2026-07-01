@@ -180,38 +180,49 @@ impl DctGpuKernel {
             let reusable = matches!(cache_entry.as_ref(), Some(set) if set.byte_len == byte_len);
             if reusable {
                 let set = cache_entry.as_ref().unwrap();
-                hep_device.write_buffer(&set.input, input).expect("Failed to write to device buffer");
+                hep_device
+                    .write_buffer(&set.input, input)
+                    .expect("Failed to write to device buffer");
             } else {
-                let input_buffer = hep_device.upload(input).expect("Failed to allocate input buffer");
-                let output_buffer = hep_device.alloc_zeroed::<f32>(len).expect("Failed to allocate output buffer");
-                let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("apollo-dctdst-wgpu params"),
-                    contents: bytemuck::bytes_of(&DctParams {
-                        len: 0,
-                        mode: 0,
-                        scale_bits: 1.0_f32.to_bits(),
-                        _padding: 0,
-                    }),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-                let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("apollo-dctdst-wgpu bind group"),
-                    layout: &self.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: input_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: output_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: params_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
+                let input_buffer = hep_device
+                    .upload(input)
+                    .expect("Failed to allocate input buffer");
+                let output_buffer = hep_device
+                    .alloc_zeroed::<f32>(len)
+                    .expect("Failed to allocate output buffer");
+                let params_buffer =
+                    device
+                        .inner()
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("apollo-dctdst-wgpu params"),
+                            contents: bytemuck::bytes_of(&DctParams {
+                                len: 0,
+                                mode: 0,
+                                scale_bits: 1.0_f32.to_bits(),
+                                _padding: 0,
+                            }),
+                            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        });
+                let bind_group = device
+                    .inner()
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("apollo-dctdst-wgpu bind group"),
+                        layout: &self.bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: input_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: output_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: params_buffer.as_entire_binding(),
+                            },
+                        ],
+                    });
                 *cache_entry = Some(DispatchBuffers {
                     byte_len,
                     input: input_buffer,
@@ -233,9 +244,12 @@ impl DctGpuKernel {
                 }),
             );
 
-            let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-dctdst-wgpu encoder"),
-            });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-dctdst-wgpu encoder"),
+                    });
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some("apollo-dctdst-wgpu transform pass"),

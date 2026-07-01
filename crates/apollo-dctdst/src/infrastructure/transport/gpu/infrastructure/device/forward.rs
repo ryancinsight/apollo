@@ -2,13 +2,11 @@ use std::borrow::Cow;
 
 use crate::{RealTransformKind, RealTransformStorage};
 use apollo_fft::PrecisionProfile;
-use leto::{Array2, Array3};
 
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_dense,
-    leto_array3_from_dense, leto_view1_cow,
+    leto_array1_from_slice, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::DctMode;
@@ -40,12 +38,7 @@ impl DctDstWgpuBackend {
             RealTransformKind::DstI => DctMode::Dst1,
             RealTransformKind::DstIV => DctMode::Dst4,
         };
-        self.kernel.execute(
-            &self.device,
-            input,
-            mode,
-            1.0,
-        )
+        self.kernel.execute(&self.device, input, mode, 1.0)
     }
 
     /// Execute the unnormalized forward transform from a Leto 1D host view.
@@ -126,58 +119,54 @@ impl DctDstWgpuBackend {
     ///
     /// Applies the 1D forward transform along each row then each column.
     /// Requires a square `n × n` input where `n == plan.len()`.
+    /// Row-major flat `n×n` host buffer in, transformed flat buffer out. The
+    /// separable orchestration is flat host arithmetic between per-line GPU
+    /// dispatches; the GPU work itself runs on Hephaestus buffers.
     pub fn execute_forward_2d(
         &self,
         plan: &DctDstWgpuPlan,
-        input: &Array2<f32>,
-    ) -> WgpuResult<Array2<f32>> {
+        input: &[f32],
+    ) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        let [rows, cols] = input.shape();
-        if rows != n || cols != n {
+        if input.len() != n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("2D input expected {n}x{n}, got {rows}x{cols}"),
+                message: format!("2D input expected {n}x{n} = {} elements, got {}", n * n, input.len()),
             });
         }
-        // Row pass: contiguous rows are borrowed; non-contiguous layouts fall
-        // back to one reused lane buffer instead of a per-row allocation.
-        let mut lane = Vec::with_capacity(n);
-        let mut tmp = Array2::<f32>::zeros([n, n]);
+        // Row pass: rows are contiguous `n`-element chunks.
+        let mut tmp = vec![0.0_f32; n * n];
         for r in 0..n {
-            let row = input.row(r);
-            let out = match row.as_slice() {
-                Some(slice) => self.execute_forward(plan, slice)?,
-                None => {
-                    lane.clear();
-                    lane.extend(row.iter().copied());
-                    self.execute_forward(plan, &lane)?
-                }
-            };
-            for (col, &value) in out.iter().enumerate() {
-                tmp[[r, col]] = value;
-            }
+            let out = self.execute_forward(plan, &input[r * n..r * n + n])?;
+            tmp[r * n..r * n + n].copy_from_slice(&out);
         }
-        // Column pass: columns are strided, so the single lane buffer is reused.
-        let mut result = Array2::<f32>::zeros([n, n]);
+        // Column pass: gather each strided column into a reused lane.
+        let mut lane = vec![0.0_f32; n];
+        let mut result = vec![0.0_f32; n * n];
         for c in 0..n {
-            lane.clear();
-            lane.extend(tmp.column(c).iter().copied());
+            for r in 0..n {
+                lane[r] = tmp[r * n + c];
+            }
             let out = self.execute_forward(plan, &lane)?;
-            for (row, &value) in out.iter().enumerate() {
-                result[[row, c]] = value;
+            for r in 0..n {
+                result[r * n + c] = out[r];
             }
         }
         Ok(result)
     }
 
     /// Execute the unnormalized 2D separable forward transform from a Leto view.
+    /// Leto appears only at this CPU↔GPU seam.
     pub fn execute_forward_2d_leto(
         &self,
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView2<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-        let input = array2_from_leto_view(input);
-        let output = self.execute_forward_2d(plan, &input)?;
-        leto_array2_from_dense(&output)
+        let n = plan.len();
+        let flat: Vec<f32> = input.iter().copied().collect();
+        let result = self.execute_forward_2d(plan, &flat)?;
+        leto::Array::from_mnemosyne_vec([n, n], result).map_err(|_| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto DCT/DST 2D output".to_string(),
+        })
     }
 
     /// Execute the unnormalized 3D separable forward real-to-real transform.
@@ -187,65 +176,71 @@ impl DctDstWgpuBackend {
     pub fn execute_forward_3d(
         &self,
         plan: &DctDstWgpuPlan,
-        input: &Array3<f32>,
-    ) -> WgpuResult<Array3<f32>> {
+        input: &[f32],
+    ) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        let [d0, d1, d2] = input.shape();
-        if d0 != n || d1 != n || d2 != n {
+        if input.len() != n * n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("3D input expected {n}x{n}x{n}, got {d0}x{d1}x{d2}"),
+                message: format!(
+                    "3D input expected {n}x{n}x{n} = {} elements, got {}",
+                    n * n * n,
+                    input.len()
+                ),
             });
         }
-        // One lane buffer reused across all three axis passes; fibers are
-        // strided so each is gathered into it instead of a fresh allocation.
-        let mut lane = Vec::with_capacity(n);
-        // Axis-0 pass.
-        let mut tmp0 = Array3::<f32>::zeros([n, n, n]);
+        // Row-major flat index of (i, j, k) is (i*n + j)*n + k.
+        let idx = |i: usize, j: usize, k: usize| (i * n + j) * n + k;
+        let mut lane = vec![0.0_f32; n];
+        // Axis-0 pass (strided over i).
+        let mut tmp0 = vec![0.0_f32; n * n * n];
         for j in 0..n {
             for k in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|i| input[[i, j, k]]));
+                for i in 0..n {
+                    lane[i] = input[idx(i, j, k)];
+                }
                 let out = self.execute_forward(plan, &lane)?;
                 for i in 0..n {
-                    tmp0[[i, j, k]] = out[i];
+                    tmp0[idx(i, j, k)] = out[i];
                 }
             }
         }
-        // Axis-1 pass.
-        let mut tmp1 = Array3::<f32>::zeros([n, n, n]);
+        // Axis-1 pass (strided over j).
+        let mut tmp1 = vec![0.0_f32; n * n * n];
         for i in 0..n {
             for k in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|j| tmp0[[i, j, k]]));
+                for j in 0..n {
+                    lane[j] = tmp0[idx(i, j, k)];
+                }
                 let out = self.execute_forward(plan, &lane)?;
                 for j in 0..n {
-                    tmp1[[i, j, k]] = out[j];
+                    tmp1[idx(i, j, k)] = out[j];
                 }
             }
         }
-        // Axis-2 pass.
-        let mut result = Array3::<f32>::zeros([n, n, n]);
+        // Axis-2 pass (contiguous over k).
+        let mut result = vec![0.0_f32; n * n * n];
         for i in 0..n {
             for j in 0..n {
-                lane.clear();
-                lane.extend((0..n).map(|k| tmp1[[i, j, k]]));
-                let out = self.execute_forward(plan, &lane)?;
-                for k in 0..n {
-                    result[[i, j, k]] = out[k];
-                }
+                let base = idx(i, j, 0);
+                let out = self.execute_forward(plan, &tmp1[base..base + n])?;
+                result[base..base + n].copy_from_slice(&out);
             }
         }
         Ok(result)
     }
 
     /// Execute the unnormalized 3D separable forward transform from a Leto view.
+    /// Leto appears only at this CPU↔GPU seam.
     pub fn execute_forward_3d_leto(
         &self,
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView3<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
-        let input = array3_from_leto_view(input);
-        let output = self.execute_forward_3d(plan, &input)?;
-        leto_array3_from_dense(&output)
+        let n = plan.len();
+        let flat: Vec<f32> = input.iter().copied().collect();
+        let result = self.execute_forward_3d(plan, &flat)?;
+        leto::Array::from_mnemosyne_vec([n, n, n], result).map_err(|_| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto DCT/DST 3D output".to_string(),
+        })
     }
 }

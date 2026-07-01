@@ -1,38 +1,15 @@
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_fft::application::utilities::leto_interop;
-use leto::{Array2, Array3};
 use std::borrow::Cow;
 
 pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
-}
-pub(crate) fn array2_from_leto_view(view: leto::ArrayView2<'_, f32>) -> Array2<f32> {
-    view.to_contiguous()
-}
-pub(crate) fn array3_from_leto_view(view: leto::ArrayView3<'_, f32>) -> Array3<f32> {
-    view.to_contiguous()
 }
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
     leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
         message: "failed to allocate Mnemosyne-backed Leto DCT/DST 1D output".to_string(),
-    })
-}
-
-pub(crate) fn leto_array2_from_dense(
-    values: &Array2<f32>,
-) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto DCT/DST 2D output".to_string(),
-    })
-}
-
-pub(crate) fn leto_array3_from_dense(
-    values: &Array3<f32>,
-) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
-    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto DCT/DST 3D output".to_string(),
     })
 }
 
