@@ -9,17 +9,19 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     leto_array1_from_slice, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
-use crate::infrastructure::transport::gpu::infrastructure::kernel::DctMode;
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{DctMode, FiberLayout};
 
 impl DctDstWgpuBackend {
-    /// Execute the normalized inverse of the configured real-to-real transform for a real-valued `f32` signal.
+    /// The GPU kernel mode and per-axis normalization scale for the plan's
+    /// inverse transform (DCT-I = 1/(2(N-1)), DCT/DST-IV = 2/N, DST-I =
+    /// 1/(2(N+1)), else 2/N; DCT-I requires length ≥ 2 else
+    /// [`WgpuError::InvalidPlan`]).
     ///
-    /// Supported kinds: DCT-I, DCT-II, DCT-III, DCT-IV, DST-I, DST-II, DST-III, and DST-IV.
-    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidPlan`] otherwise.
-    /// Inverse scales: DCT-I = 1/(2*(N-1)), DCT-IV = 2/N, DST-I = 1/(2*(N+1)), DST-IV = 2/N.
-    pub fn execute_inverse(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
-        Self::validate_plan_input(plan, input)?;
-        let (mode, scale) = match plan.kind() {
+    /// A separable rank-`d` inverse applies this scale once per axis; since the
+    /// scale is a scalar that commutes with the linear transform, the batched
+    /// path folds it into a single `scale.powi(d)`.
+    pub(crate) fn inverse_mode_scale(plan: &DctDstWgpuPlan) -> WgpuResult<(DctMode, f32)> {
+        Ok(match plan.kind() {
             RealTransformKind::DctII => (DctMode::Dct3, 2.0 / plan.len() as f32),
             RealTransformKind::DctIII => (DctMode::Dct2, 2.0 / plan.len() as f32),
             RealTransformKind::DstII => (DctMode::Dst3, 2.0 / plan.len() as f32),
@@ -38,7 +40,14 @@ impl DctDstWgpuBackend {
             RealTransformKind::DctIV => (DctMode::Dct4, 2.0 / plan.len() as f32),
             RealTransformKind::DstI => (DctMode::Dst1, 1.0 / (2.0 * (plan.len() + 1) as f32)),
             RealTransformKind::DstIV => (DctMode::Dst4, 2.0 / plan.len() as f32),
-        };
+        })
+    }
+
+    /// Execute the normalized inverse of the configured 1-D real-to-real
+    /// transform for a real-valued `f32` signal (DCT-I/II/III/IV, DST-I/II/III/IV).
+    pub fn execute_inverse(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
+        Self::validate_plan_input(plan, input)?;
+        let (mode, scale) = Self::inverse_mode_scale(plan)?;
         self.kernel.execute(&self.device, input, mode, scale)
     }
 
@@ -112,40 +121,27 @@ impl DctDstWgpuBackend {
 
     /// Execute the normalized 2D separable inverse real-to-real transform.
     ///
-    /// Applies the 1D inverse transform along each column then each row.
-    /// Requires a square `n × n` input where `n == plan.len()`.
-    /// Row-major flat `n×n` host buffer in/out; flat host orchestration between
-    /// per-line GPU (Hephaestus) dispatches.
-    pub fn execute_inverse_2d(
-        &self,
-        plan: &DctDstWgpuPlan,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
+    /// Row-major flat `n×n` host buffer in/out. Both inverse axis passes run
+    /// on-device (one batched dispatch each); the per-axis normalization folds
+    /// into a single `scale²` applied once before download.
+    pub fn execute_inverse_2d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
         if input.len() != n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("2D input expected {n}x{n} = {} elements, got {}", n * n, input.len()),
+                message: format!(
+                    "2D input expected {n}x{n} = {} elements, got {}",
+                    n * n,
+                    input.len()
+                ),
             });
         }
-        // Column pass: gather each strided column into a reused lane.
-        let mut lane = vec![0.0_f32; n];
-        let mut tmp = vec![0.0_f32; n * n];
-        for c in 0..n {
-            for r in 0..n {
-                lane[r] = input[r * n + c];
-            }
-            let out = self.execute_inverse(plan, &lane)?;
-            for r in 0..n {
-                tmp[r * n + c] = out[r];
-            }
-        }
-        // Row pass: rows are contiguous `n`-element chunks.
-        let mut result = vec![0.0_f32; n * n];
-        for r in 0..n {
-            let out = self.execute_inverse(plan, &tmp[r * n..r * n + n])?;
-            result[r * n..r * n + n].copy_from_slice(&out);
-        }
-        Ok(result)
+        let (mode, scale) = Self::inverse_mode_scale(plan)?;
+        let passes = [
+            (mode, FiberLayout::axis(n, 2, 1)),
+            (mode, FiberLayout::axis(n, 2, 0)),
+        ];
+        self.kernel
+            .execute_separable(&self.device, input, &passes, scale.powi(2))
     }
 
     /// Execute the normalized 2D separable inverse transform from a Leto view.
@@ -165,13 +161,9 @@ impl DctDstWgpuBackend {
 
     /// Execute the normalized 3D separable inverse real-to-real transform.
     ///
-    /// Applies the 1D inverse transform along axes 2, 1, and 0 in sequence.
-    /// Requires a cubic `n × n × n` input where `n == plan.len()`.
-    pub fn execute_inverse_3d(
-        &self,
-        plan: &DctDstWgpuPlan,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
+    /// Row-major flat `n³` host buffer in/out; three on-device batched passes,
+    /// per-axis normalization folded into a single `scale³`.
+    pub fn execute_inverse_3d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
         if input.len() != n * n * n {
             return Err(WgpuError::ShapeMismatch {
@@ -182,45 +174,14 @@ impl DctDstWgpuBackend {
                 ),
             });
         }
-        // Row-major flat index of (i, j, k) is (i*n + j)*n + k.
-        let idx = |i: usize, j: usize, k: usize| (i * n + j) * n + k;
-        let mut lane = vec![0.0_f32; n];
-        // Axis-2 pass (contiguous over k).
-        let mut tmp0 = vec![0.0_f32; n * n * n];
-        for i in 0..n {
-            for j in 0..n {
-                let base = idx(i, j, 0);
-                let out = self.execute_inverse(plan, &input[base..base + n])?;
-                tmp0[base..base + n].copy_from_slice(&out);
-            }
-        }
-        // Axis-1 pass (strided over j).
-        let mut tmp1 = vec![0.0_f32; n * n * n];
-        for i in 0..n {
-            for k in 0..n {
-                for j in 0..n {
-                    lane[j] = tmp0[idx(i, j, k)];
-                }
-                let out = self.execute_inverse(plan, &lane)?;
-                for j in 0..n {
-                    tmp1[idx(i, j, k)] = out[j];
-                }
-            }
-        }
-        // Axis-0 pass (strided over i).
-        let mut result = vec![0.0_f32; n * n * n];
-        for j in 0..n {
-            for k in 0..n {
-                for i in 0..n {
-                    lane[i] = tmp1[idx(i, j, k)];
-                }
-                let out = self.execute_inverse(plan, &lane)?;
-                for i in 0..n {
-                    result[idx(i, j, k)] = out[i];
-                }
-            }
-        }
-        Ok(result)
+        let (mode, scale) = Self::inverse_mode_scale(plan)?;
+        let passes = [
+            (mode, FiberLayout::axis(n, 3, 2)),
+            (mode, FiberLayout::axis(n, 3, 1)),
+            (mode, FiberLayout::axis(n, 3, 0)),
+        ];
+        self.kernel
+            .execute_separable(&self.device, input, &passes, scale.powi(3))
     }
 
     /// Execute the normalized 3D separable inverse transform from a Leto view.

@@ -9,16 +9,13 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     leto_array1_from_slice, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
-use crate::infrastructure::transport::gpu::infrastructure::kernel::DctMode;
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{DctMode, FiberLayout};
 
 impl DctDstWgpuBackend {
-    /// Execute the unnormalized configured real-to-real transform for a real-valued `f32` signal.
-    ///
-    /// Supported kinds: DCT-I, DCT-II, DCT-III, DCT-IV, DST-I, DST-II, DST-III, and DST-IV.
-    /// DCT-I requires length >= 2 and returns [`WgpuError::InvalidPlan`] otherwise.
-    pub fn execute_forward(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
-        Self::validate_plan_input(plan, input)?;
-        let mode = match plan.kind() {
+    /// The GPU kernel mode for the plan's forward transform (DCT-I requires
+    /// length ≥ 2, else [`WgpuError::InvalidPlan`]).
+    pub(crate) fn forward_mode(plan: &DctDstWgpuPlan) -> WgpuResult<DctMode> {
+        Ok(match plan.kind() {
             RealTransformKind::DctII => DctMode::Dct2,
             RealTransformKind::DctIII => DctMode::Dct3,
             RealTransformKind::DstII => DctMode::Dst2,
@@ -37,7 +34,14 @@ impl DctDstWgpuBackend {
             RealTransformKind::DctIV => DctMode::Dct4,
             RealTransformKind::DstI => DctMode::Dst1,
             RealTransformKind::DstIV => DctMode::Dst4,
-        };
+        })
+    }
+
+    /// Execute the unnormalized configured 1-D real-to-real transform for a
+    /// real-valued `f32` signal (DCT-I/II/III/IV, DST-I/II/III/IV).
+    pub fn execute_forward(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
+        Self::validate_plan_input(plan, input)?;
+        let mode = Self::forward_mode(plan)?;
         self.kernel.execute(&self.device, input, mode, 1.0)
     }
 
@@ -117,41 +121,28 @@ impl DctDstWgpuBackend {
 
     /// Execute the unnormalized 2D separable forward real-to-real transform.
     ///
-    /// Applies the 1D forward transform along each row then each column.
-    /// Requires a square `n × n` input where `n == plan.len()`.
-    /// Row-major flat `n×n` host buffer in, transformed flat buffer out. The
-    /// separable orchestration is flat host arithmetic between per-line GPU
-    /// dispatches; the GPU work itself runs on Hephaestus buffers.
-    pub fn execute_forward_2d(
-        &self,
-        plan: &DctDstWgpuPlan,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
+    /// Row-major flat `n×n` host buffer in/out. Both axis passes run on-device
+    /// via one batched dispatch each (rows then columns), so the field is
+    /// uploaded once and downloaded once — no per-line host round trips.
+    /// Requires `input.len() == n²` where `n == plan.len()`.
+    pub fn execute_forward_2d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
         if input.len() != n * n {
             return Err(WgpuError::ShapeMismatch {
-                message: format!("2D input expected {n}x{n} = {} elements, got {}", n * n, input.len()),
+                message: format!(
+                    "2D input expected {n}x{n} = {} elements, got {}",
+                    n * n,
+                    input.len()
+                ),
             });
         }
-        // Row pass: rows are contiguous `n`-element chunks.
-        let mut tmp = vec![0.0_f32; n * n];
-        for r in 0..n {
-            let out = self.execute_forward(plan, &input[r * n..r * n + n])?;
-            tmp[r * n..r * n + n].copy_from_slice(&out);
-        }
-        // Column pass: gather each strided column into a reused lane.
-        let mut lane = vec![0.0_f32; n];
-        let mut result = vec![0.0_f32; n * n];
-        for c in 0..n {
-            for r in 0..n {
-                lane[r] = tmp[r * n + c];
-            }
-            let out = self.execute_forward(plan, &lane)?;
-            for r in 0..n {
-                result[r * n + c] = out[r];
-            }
-        }
-        Ok(result)
+        let mode = Self::forward_mode(plan)?;
+        let passes = [
+            (mode, FiberLayout::axis(n, 2, 1)),
+            (mode, FiberLayout::axis(n, 2, 0)),
+        ];
+        self.kernel
+            .execute_separable(&self.device, input, &passes, 1.0)
     }
 
     /// Execute the unnormalized 2D separable forward transform from a Leto view.
@@ -171,13 +162,10 @@ impl DctDstWgpuBackend {
 
     /// Execute the unnormalized 3D separable forward real-to-real transform.
     ///
-    /// Applies the 1D forward transform along axes 0, 1, and 2 in sequence.
-    /// Requires a cubic `n × n × n` input where `n == plan.len()`.
-    pub fn execute_forward_3d(
-        &self,
-        plan: &DctDstWgpuPlan,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
+    /// Row-major flat `n³` host buffer in/out. The three axis passes run
+    /// on-device as one batched dispatch each; the field is uploaded once and
+    /// downloaded once. Requires `input.len() == n³` where `n == plan.len()`.
+    pub fn execute_forward_3d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
         if input.len() != n * n * n {
             return Err(WgpuError::ShapeMismatch {
@@ -188,45 +176,14 @@ impl DctDstWgpuBackend {
                 ),
             });
         }
-        // Row-major flat index of (i, j, k) is (i*n + j)*n + k.
-        let idx = |i: usize, j: usize, k: usize| (i * n + j) * n + k;
-        let mut lane = vec![0.0_f32; n];
-        // Axis-0 pass (strided over i).
-        let mut tmp0 = vec![0.0_f32; n * n * n];
-        for j in 0..n {
-            for k in 0..n {
-                for i in 0..n {
-                    lane[i] = input[idx(i, j, k)];
-                }
-                let out = self.execute_forward(plan, &lane)?;
-                for i in 0..n {
-                    tmp0[idx(i, j, k)] = out[i];
-                }
-            }
-        }
-        // Axis-1 pass (strided over j).
-        let mut tmp1 = vec![0.0_f32; n * n * n];
-        for i in 0..n {
-            for k in 0..n {
-                for j in 0..n {
-                    lane[j] = tmp0[idx(i, j, k)];
-                }
-                let out = self.execute_forward(plan, &lane)?;
-                for j in 0..n {
-                    tmp1[idx(i, j, k)] = out[j];
-                }
-            }
-        }
-        // Axis-2 pass (contiguous over k).
-        let mut result = vec![0.0_f32; n * n * n];
-        for i in 0..n {
-            for j in 0..n {
-                let base = idx(i, j, 0);
-                let out = self.execute_forward(plan, &tmp1[base..base + n])?;
-                result[base..base + n].copy_from_slice(&out);
-            }
-        }
-        Ok(result)
+        let mode = Self::forward_mode(plan)?;
+        let passes = [
+            (mode, FiberLayout::axis(n, 3, 2)),
+            (mode, FiberLayout::axis(n, 3, 1)),
+            (mode, FiberLayout::axis(n, 3, 0)),
+        ];
+        self.kernel
+            .execute_separable(&self.device, input, &passes, 1.0)
     }
 
     /// Execute the unnormalized 3D separable forward transform from a Leto view.
