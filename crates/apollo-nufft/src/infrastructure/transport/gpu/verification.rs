@@ -169,7 +169,7 @@ mod tests {
                 .execute_type1_1d(&plan, &positions, &values)
                 .expect("GPU type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.size(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 4.0e-5);
             }
@@ -266,7 +266,7 @@ mod tests {
                 )
                 .expect("mixed type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.len(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -541,7 +541,7 @@ mod tests {
                 .execute_fast_type1_1d(&plan, &positions, &values)
                 .expect("GPU fast type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.size(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 1.5e-3);
             }
@@ -577,7 +577,7 @@ mod tests {
                 )
                 .expect("mixed fast type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.len(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -743,7 +743,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -771,7 +771,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes16 = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 [
                     f16::from_f32(0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32),
                     f16::from_f32(-0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32),
@@ -808,7 +808,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -894,7 +894,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -923,7 +923,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -960,7 +960,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes16 = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 [
                     f16::from_f32(0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32),
                     f16::from_f32(-0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32),

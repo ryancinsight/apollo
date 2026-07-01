@@ -908,7 +908,7 @@ mod tests {
             .plan_3d(Shape3D::new(2, 2, 2).expect("shape"))
             .expect("gpu plan");
         let field = leto::Array3::from_shape_vec(
-            (2, 2, 2),
+            [2, 2, 2],
             vec![1.0_f64, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5],
         )
         .expect("field");
@@ -955,12 +955,12 @@ mod tests {
             .expect("gpu plan");
         let values = [1.0_f32, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
         let field_f16 = leto::Array3::from_shape_vec(
-            (2, 2, 2),
+            [2, 2, 2],
             values.iter().copied().map(f16::from_f32).collect(),
         )
         .expect("f16 field");
         let represented = leto::Array3::from_shape_vec(
-            (2, 2, 2),
+            [2, 2, 2],
             field_f16
                 .iter()
                 .copied()
@@ -1101,7 +1101,7 @@ mod tests {
             .expect("gpu plan");
         let values = [1.0_f32, -2.0, 0.5, 3.0, -1.25, 0.75, 2.5, -0.5];
         let field_f16 = leto::Array3::from_shape_vec(
-            (2, 2, 2),
+            [2, 2, 2],
             values.iter().copied().map(f16::from_f32).collect(),
         )
         .expect("f16 field");
