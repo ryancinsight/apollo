@@ -57,10 +57,10 @@ pub(crate) fn dht2<'py>(
     let n = arr.nrows();
     let plan = DhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.forward_2d(&arr)
+        plan.forward_2d(&leto::Array2::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray2::from_owned_array(py, result))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Inverse 2D Discrete Hartley Transform. Input must be square (N×N). Scales by `1/N²`.
@@ -74,10 +74,10 @@ pub(crate) fn idht2<'py>(
     let n = arr.nrows();
     let plan = DhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.inverse_2d(&arr)
+        plan.inverse_2d(&leto::Array2::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray2::from_owned_array(py, result))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Forward 3D Discrete Hartley Transform. Input must be cubic (N×N×N).
@@ -91,10 +91,10 @@ pub(crate) fn dht3<'py>(
     let n = arr.shape()[0];
     let plan = DhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.forward_3d(&arr)
+        plan.forward_3d(&leto::Array3::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Inverse 3D Discrete Hartley Transform. Input must be cubic (N×N×N). Scales by `1/N³`.
@@ -108,8 +108,8 @@ pub(crate) fn idht3<'py>(
     let n = arr.shape()[0];
     let plan = DhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.inverse_3d(&arr)
+        plan.inverse_3d(&leto::Array3::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }

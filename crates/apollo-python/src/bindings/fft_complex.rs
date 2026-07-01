@@ -65,11 +65,11 @@ pub(crate) fn fft_complex1<'py>(
     input: PyReadonlyArray1<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
     require_contiguous_1d(&input, "fft_complex1 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array1::from(input.as_array().to_owned());
     py.allow_threads(|| {
         fft_1d_complex_inplace(&mut output);
     });
-    Ok(PyArray1::from_owned_array(py, output))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(output).expect("leto result is C-contiguous")))
 }
 
 /// Complex-to-complex inverse 1D FFT. Accepts complex128, returns complex128.
@@ -79,11 +79,11 @@ pub(crate) fn ifft_complex1<'py>(
     input: PyReadonlyArray1<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
     require_contiguous_1d(&input, "ifft_complex1 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array1::from(input.as_array().to_owned());
     py.allow_threads(|| {
         ifft_1d_complex_inplace(&mut output);
     });
-    Ok(PyArray1::from_owned_array(py, output))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(output).expect("leto result is C-contiguous")))
 }
 
 /// Complex-to-complex forward 2D FFT.
@@ -93,11 +93,11 @@ pub(crate) fn fft_complex2<'py>(
     input: PyReadonlyArray2<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
     require_contiguous_2d(&input, "fft_complex2 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array2::from(input.as_array().to_owned());
     py.allow_threads(|| {
         fft_2d_complex_inplace(&mut output);
     });
-    Ok(PyArray2::from_owned_array(py, output))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(output).expect("leto result is C-contiguous")))
 }
 
 /// Complex-to-complex inverse 2D FFT.
@@ -107,11 +107,11 @@ pub(crate) fn ifft_complex2<'py>(
     input: PyReadonlyArray2<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
     require_contiguous_2d(&input, "ifft_complex2 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array2::from(input.as_array().to_owned());
     py.allow_threads(|| {
         ifft_2d_complex_inplace(&mut output);
     });
-    Ok(PyArray2::from_owned_array(py, output))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(output).expect("leto result is C-contiguous")))
 }
 
 /// Complex-to-complex forward 3D FFT.
@@ -121,11 +121,11 @@ pub(crate) fn fft_complex3<'py>(
     input: PyReadonlyArray3<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray3<Complex64>>> {
     require_contiguous_3d(&input, "fft_complex3 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array3::from(input.as_array().to_owned());
     py.allow_threads(|| {
         fft_3d_complex_inplace(&mut output);
     });
-    Ok(PyArray3::from_owned_array(py, output))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(output).expect("leto result is C-contiguous")))
 }
 
 /// Complex-to-complex inverse 3D FFT.
@@ -135,9 +135,9 @@ pub(crate) fn ifft_complex3<'py>(
     input: PyReadonlyArray3<'_, Complex64>,
 ) -> PyResult<Bound<'py, PyArray3<Complex64>>> {
     require_contiguous_3d(&input, "ifft_complex3 input")?;
-    let mut output = input.as_array().to_owned();
+    let mut output = leto::Array3::from(input.as_array().to_owned());
     py.allow_threads(|| {
         ifft_3d_complex_inplace(&mut output);
     });
-    Ok(PyArray3::from_owned_array(py, output))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(output).expect("leto result is C-contiguous")))
 }

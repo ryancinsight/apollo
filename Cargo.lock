@@ -329,9 +329,9 @@ dependencies = [
  "apollo-fft",
  "apollo-fwht",
  "apollo-nufft",
+ "eunomia",
  "leto",
  "ndarray",
- "num-complex",
  "numpy",
  "pyo3",
 ]
@@ -901,6 +901,8 @@ dependencies = [
  "bytemuck",
  "half",
  "libm",
+ "numpy",
+ "pyo3",
  "rkyv",
  "serde",
 ]

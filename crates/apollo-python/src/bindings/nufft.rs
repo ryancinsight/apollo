@@ -37,7 +37,7 @@ pub(crate) fn nufft_type1_1d_py<'py>(
             domain,
         )
     });
-    Ok(PyArray1::from_owned_array(py, result))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Exact direct 1D type-2 NUFFT.
@@ -56,7 +56,7 @@ pub(crate) fn nufft_type2_1d_py<'py>(
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let result = py.allow_threads(|| {
         nufft_type2_1d(
-            &coeffs,
+            &leto::Array1::from(coeffs),
             positions
                 .as_slice()
                 .expect("owned positions are contiguous"),
@@ -109,7 +109,7 @@ pub(crate) fn nufft_type1_3d_py<'py>(
             grid,
         )
     });
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Fast 1D type-1 NUFFT using Kaiser-Bessel spreading.
@@ -139,7 +139,7 @@ pub(crate) fn nufft_type1_1d_fast_py<'py>(
             kernel_width,
         )
     });
-    Ok(PyArray1::from_owned_array(py, result))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Fast 1D type-2 NUFFT using Kaiser-Bessel spreading.
@@ -160,7 +160,7 @@ pub(crate) fn nufft_type2_1d_fast_py<'py>(
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let result = py.allow_threads(|| {
         nufft_type2_1d_fast(
-            &coeffs,
+            &leto::Array1::from(coeffs),
             positions
                 .as_slice()
                 .expect("owned positions are contiguous"),
@@ -217,5 +217,5 @@ pub(crate) fn nufft_type1_3d_fast_py<'py>(
             kernel_width,
         )
     });
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }

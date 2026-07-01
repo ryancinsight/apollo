@@ -18,10 +18,10 @@ pub(crate) fn fwht1<'py>(
     let n = arr.len();
     let plan = FwhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.forward(&arr)
+        plan.forward(&leto::Array1::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray1::from_owned_array(py, result))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Inverse 1D Fast Walsh-Hadamard Transform. Scales by `1/n`.
@@ -35,10 +35,10 @@ pub(crate) fn ifwht1<'py>(
     let n = arr.len();
     let plan = FwhtPlan::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.inverse(&arr)
+        plan.inverse(&leto::Array1::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray1::from_owned_array(py, result))
+    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Forward 2D Fast Walsh-Hadamard Transform. Input must be square (N×N), N a power of two.
@@ -52,10 +52,10 @@ pub(crate) fn fwht2<'py>(
     let n = arr.nrows();
     let plan = FwhtPlan2D::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.forward(&arr)
+        plan.forward(&leto::Array2::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray2::from_owned_array(py, result))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Inverse 2D Fast Walsh-Hadamard Transform. Scales by `1/N²`.
@@ -69,10 +69,10 @@ pub(crate) fn ifwht2<'py>(
     let n = arr.nrows();
     let plan = FwhtPlan2D::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.inverse(&arr)
+        plan.inverse(&leto::Array2::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray2::from_owned_array(py, result))
+    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Forward 3D Fast Walsh-Hadamard Transform. Input must be cubic (N×N×N), N a power of two.
@@ -86,10 +86,10 @@ pub(crate) fn fwht3<'py>(
     let n = arr.shape()[0];
     let plan = FwhtPlan3D::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.forward(&arr)
+        plan.forward(&leto::Array3::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }
 
 /// Inverse 3D Fast Walsh-Hadamard Transform. Scales by `1/N³`.
@@ -103,8 +103,8 @@ pub(crate) fn ifwht3<'py>(
     let n = arr.shape()[0];
     let plan = FwhtPlan3D::new(n).map_err(|err| PyValueError::new_err(err.to_string()))?;
     let result = py.allow_threads(|| {
-        plan.inverse(&arr)
+        plan.inverse(&leto::Array3::from(arr))
             .map_err(|err| PyValueError::new_err(err.to_string()))
     })?;
-    Ok(PyArray3::from_owned_array(py, result))
+    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
 }

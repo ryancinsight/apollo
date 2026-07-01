@@ -37,8 +37,8 @@ pub(crate) fn fft1<'py>(
                 let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                 require_contiguous_1d(&input32, "fft1 input")?;
                 let owned = input32.as_array().mapv(f16::from_f32);
-                let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&owned));
-                Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
+                let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&leto::Array1::from(owned)));
+                Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
@@ -84,9 +84,9 @@ pub(crate) fn ifft1<'py>(
             StoragePrecision::F16 => {
                 let owned = input32.as_array().to_owned();
                 let result = py.allow_threads(|| {
-                    apollo_fft::ifft_1d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                    apollo_fft::ifft_1d_array_typed::<f16>(&leto::Array1::from(owned)).mapv(|value: f16| value.to_f32())
                 });
-                Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
+                Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft1")?;
@@ -129,8 +129,8 @@ pub(crate) fn fft2<'py>(
                 let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
                 require_contiguous_2d(&input32, "fft2 input")?;
                 let owned = input32.as_array().mapv(f16::from_f32);
-                let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
-                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&leto::Array2::from(owned)));
+                Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
@@ -176,9 +176,9 @@ pub(crate) fn ifft2<'py>(
             StoragePrecision::F16 => {
                 let owned = input32.as_array().to_owned();
                 let result = py.allow_threads(|| {
-                    apollo_fft::ifft_2d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                    apollo_fft::ifft_2d_array_typed::<f16>(&leto::Array2::from(owned)).mapv(|value: f16| value.to_f32())
                 });
-                Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft2")?;
@@ -221,8 +221,8 @@ pub(crate) fn fft3<'py>(
                 let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
                 require_contiguous_3d(&input32, "fft3 input")?;
                 let owned = input32.as_array().mapv(f16::from_f32);
-                let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&owned));
-                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
+                let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&leto::Array3::from(owned)));
+                Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
@@ -268,9 +268,9 @@ pub(crate) fn ifft3<'py>(
         match profile.storage {
             StoragePrecision::F16 => {
                 let result = py.allow_threads(|| {
-                    apollo_fft::ifft_3d_array_typed::<f16>(&owned).mapv(|value: f16| value.to_f32())
+                    apollo_fft::ifft_3d_array_typed::<f16>(&leto::Array3::from(owned)).mapv(|value: f16| value.to_f32())
                 });
-                Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
+                Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
             }
             _ => {
                 require_profile_matches_f32(profile, "ifft3")?;
@@ -310,7 +310,7 @@ pub(crate) fn irfft3<'py>(
     nz: usize,
 ) -> PyResult<Bound<'py, PyArray3<f64>>> {
     require_contiguous_3d(&input, "irfft3 input")?;
-    let (_nx, _ny, nz_c) = input.as_array().dim();
+    let nz_c = input.as_array().shape()[2];
     if nz_c != nz {
         return Err(PyValueError::new_err(
             "irfft3 input shape and nz are inconsistent",

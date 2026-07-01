@@ -54,8 +54,8 @@ impl PyFftPlan1D {
                     let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                     require_contiguous_1d(&input32, "fft input")?;
                     let owned = input32.as_array().mapv(f16::from_f32);
-                    let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&owned));
-                    Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
+                    let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&leto::Array1::from(owned)));
+                    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
@@ -94,10 +94,10 @@ impl PyFftPlan1D {
                 StoragePrecision::F16 => {
                     let owned = input32.as_array().to_owned();
                     let result = py.allow_threads(|| {
-                        apollo_fft::ifft_1d_array_typed::<f16>(&owned)
+                        apollo_fft::ifft_1d_array_typed::<f16>(&leto::Array1::from(owned))
                             .mapv(|value: f16| value.to_f32())
                     });
-                    Ok(PyArray1::from_owned_array(py, result).into_any().unbind())
+                    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
@@ -122,11 +122,11 @@ impl PyFftPlan1D {
         input: PyReadonlyArray1<'_, Complex64>,
     ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
         require_contiguous_1d(&input, "fft_complex input")?;
-        let mut output = input.as_array().to_owned();
+        let mut output = leto::Array1::from(input.as_array().to_owned());
         py.allow_threads(|| {
             fft_1d_complex_inplace(&mut output);
         });
-        Ok(PyArray1::from_owned_array(py, output))
+        Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(output).expect("leto result is C-contiguous")))
     }
 
     /// Complex-to-complex inverse FFT using the plan's cached twiddle factors.
@@ -136,11 +136,11 @@ impl PyFftPlan1D {
         input: PyReadonlyArray1<'_, Complex64>,
     ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
         require_contiguous_1d(&input, "ifft_complex input")?;
-        let mut output = input.as_array().to_owned();
+        let mut output = leto::Array1::from(input.as_array().to_owned());
         py.allow_threads(|| {
             ifft_1d_complex_inplace(&mut output);
         });
-        Ok(PyArray1::from_owned_array(py, output))
+        Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(output).expect("leto result is C-contiguous")))
     }
 }
 
@@ -181,8 +181,8 @@ impl PyFftPlan2D {
                     let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
                     require_contiguous_2d(&input32, "fft input")?;
                     let owned = input32.as_array().mapv(f16::from_f32);
-                    let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
-                    Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                    let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&leto::Array2::from(owned)));
+                    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
@@ -221,10 +221,10 @@ impl PyFftPlan2D {
                 StoragePrecision::F16 => {
                     let owned = input32.as_array().to_owned();
                     let result = py.allow_threads(|| {
-                        apollo_fft::ifft_2d_array_typed::<f16>(&owned)
+                        apollo_fft::ifft_2d_array_typed::<f16>(&leto::Array2::from(owned))
                             .mapv(|value: f16| value.to_f32())
                     });
-                    Ok(PyArray2::from_owned_array(py, result).into_any().unbind())
+                    Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
@@ -249,11 +249,11 @@ impl PyFftPlan2D {
         input: PyReadonlyArray2<'_, Complex64>,
     ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
         require_contiguous_2d(&input, "fft_complex input")?;
-        let mut output = input.as_array().to_owned();
+        let mut output = leto::Array2::from(input.as_array().to_owned());
         py.allow_threads(|| {
             fft_2d_complex_inplace(&mut output);
         });
-        Ok(PyArray2::from_owned_array(py, output))
+        Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(output).expect("leto result is C-contiguous")))
     }
 
     /// Complex-to-complex inverse 2D FFT.
@@ -263,11 +263,11 @@ impl PyFftPlan2D {
         input: PyReadonlyArray2<'_, Complex64>,
     ) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
         require_contiguous_2d(&input, "ifft_complex input")?;
-        let mut output = input.as_array().to_owned();
+        let mut output = leto::Array2::from(input.as_array().to_owned());
         py.allow_threads(|| {
             ifft_2d_complex_inplace(&mut output);
         });
-        Ok(PyArray2::from_owned_array(py, output))
+        Ok(PyArray2::from_owned_array(py, ndarray::Array2::try_from(output).expect("leto result is C-contiguous")))
     }
 }
 
@@ -307,8 +307,8 @@ impl PyFftPlan3D {
                     let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
                     require_contiguous_3d(&input32, "fft input")?;
                     let owned = input32.as_array().mapv(f16::from_f32);
-                    let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&owned));
-                    Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
+                    let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&leto::Array3::from(owned)));
+                    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
@@ -347,10 +347,10 @@ impl PyFftPlan3D {
                 StoragePrecision::F16 => {
                     let owned = input32.as_array().to_owned();
                     let result = py.allow_threads(|| {
-                        apollo_fft::ifft_3d_array_typed::<f16>(&owned)
+                        apollo_fft::ifft_3d_array_typed::<f16>(&leto::Array3::from(owned))
                             .mapv(|value: f16| value.to_f32())
                     });
-                    Ok(PyArray3::from_owned_array(py, result).into_any().unbind())
+                    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")).into_any().unbind())
                 }
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
