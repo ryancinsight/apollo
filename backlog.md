@@ -5,6 +5,14 @@
 Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),
 hermes (SIMD), moirai (parallel), mnemosyne (scratch). nalgebra is fully removed.
 Remaining replacement work:
+- [x] [minor] Repaired the `--features wgpu` builds of `apollo-dctdst`, `apollo-sht`, and
+  `apollo-radon` — their GPU device paths were uncovered by the leto migration (per-crate
+  wgpu builds had never been verified; default build + 901 tests were green). Fixed D7
+  `leto_interop::array{2,3}_from_view` → `to_contiguous`, tuple shape compares/constructors
+  → `[usize;N]`, domain `zeros`, and ndarray `row_mut`/`column_mut` writes → `IndexMut`
+  loops. SSOT enabler: added leto `Array<T,S,2>::row/column(i) -> ArrayView1` zero-copy
+  indexed accessors (strided-correct). Every transform crate now builds with `--features
+  wgpu`; runtime GPU verification still needs hardware.
 - [x] [arch] Stage A3 (complete): the whole workspace runs on `leto` + `eunomia`.
   `num_complex`→`eunomia::Complex` and `ndarray::Array`→`leto::Array` across all 17
   transform crates, `apollo-validation`, and `apollo-python`. `ndarray` survives only at
