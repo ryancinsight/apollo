@@ -145,7 +145,7 @@ impl NufftWgpuBackend {
             output
                 .into_iter()
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect(),
+                .collect::<Vec<_>>(),
             diagnostics,
         ))
     }
@@ -158,7 +158,7 @@ impl NufftWgpuBackend {
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex64>> {
         let grid = plan.grid();
-        if modes.shape() != (grid.nx, grid.ny, grid.nz) {
+        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "mode shape must match 3D plan grid dimensions",
             });
@@ -173,8 +173,8 @@ impl NufftWgpuBackend {
         let output = self.kernel.execute_fast_type2_3d(
             self.device.device(),
             self.device.queue(),
-            [grid.nx, grid.ny, grid.nz],
-            [fast.mx, fast.my, fast.mz],
+            (grid.nx, grid.ny, grid.nz),
+            (fast.mx, fast.my, fast.mz),
             plan.kernel_width(),
             (lx as f32, ly as f32, lz as f32),
             fast.beta as f32,
@@ -251,7 +251,7 @@ impl NufftWgpuBackend {
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<(Vec<Complex64>, crate::infrastructure::transport::gpu::NufftType2GridDiagnostics)> {
         let grid = plan.grid();
-        if modes.shape() != (grid.nx, grid.ny, grid.nz) {
+        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "mode shape must match 3D plan grid dimensions",
             });
@@ -265,8 +265,8 @@ impl NufftWgpuBackend {
         let flat_modes: Vec<Complex32> = modes.iter().copied().collect();
         let buffers = crate::infrastructure::transport::gpu::NufftGpuBuffers3D::new(
             self.device.inner(),
-            [grid.nx, grid.ny, grid.nz],
-            [fast.mx, fast.my, fast.mz],
+            (grid.nx, grid.ny, grid.nz),
+            (fast.mx, fast.my, fast.mz),
             positions.len(),
         );
         let (output, diagnostics) = self.kernel.execute_fast_type2_3d_with_diagnostics(
@@ -285,7 +285,7 @@ impl NufftWgpuBackend {
             output
                 .into_iter()
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect(),
+                .collect::<Vec<_>>(),
             diagnostics,
         ))
     }
@@ -334,7 +334,7 @@ impl NufftWgpuBackend {
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex64>> {
         let grid = plan.grid();
-        if modes.shape() != (grid.nx, grid.ny, grid.nz) {
+        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "mode shape must match 3D plan grid dimensions",
             });

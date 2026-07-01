@@ -105,7 +105,7 @@ impl ShtWgpuBackend {
     /// The returned dense coefficient matrix has shape
     /// `(max_degree + 1, 2 * max_degree + 1)` and uses Mnemosyne-backed Leto
     /// storage. Strided sample views are materialized once into logical order
-    /// before the existing WGPU ndarray execution path.
+    /// before the existing WGPU execution path.
     pub fn execute_forward_leto(
         &self,
         plan: &ShtWgpuPlan,
@@ -113,7 +113,7 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let samples = array2_from_leto_view(samples);
         let coefficients = self.execute_forward(plan, &samples)?;
-        leto_array2_from_ndarray(coefficients.values(), "SHT coefficients")
+        leto_array2_from_dense(coefficients.values(), "SHT coefficients")
     }
 
     /// Execute inverse complex SHT by direct synthesis matrix summation.
@@ -160,7 +160,7 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let coefficients = coefficients_from_leto_view(plan, coefficients)?;
         let samples = self.execute_inverse(plan, &coefficients)?;
-        leto_array2_from_ndarray(&samples, "SHT inverse samples")
+        leto_array2_from_dense(&samples, "SHT inverse samples")
     }
 
     /// Execute forward complex SHT from a flat typed sample slice.
@@ -212,7 +212,7 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let flat_samples = leto_view1_cow(flat_samples);
         let coefficients = self.execute_forward_flat_typed(plan, precision, &flat_samples)?;
-        leto_array2_from_ndarray(coefficients.values(), "SHT typed coefficients")
+        leto_array2_from_dense(coefficients.values(), "SHT typed coefficients")
     }
 
     /// Execute inverse complex SHT and write the flat output to a typed slice.
@@ -356,7 +356,7 @@ fn leto_array1_from_slice<T: Copy>(
     })
 }
 
-fn leto_array2_from_ndarray<T: Copy>(
+fn leto_array2_from_dense<T: Copy>(
     values: &Array2<T>,
     label: &str,
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {

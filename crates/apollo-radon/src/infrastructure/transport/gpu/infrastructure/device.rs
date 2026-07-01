@@ -94,7 +94,7 @@ impl RadonWgpuBackend {
     /// Execute the forward Radon projection from Leto image and angle views.
     ///
     /// Contiguous angle views are borrowed. Strided image or angle views are
-    /// materialized once into logical order before the existing WGPU ndarray
+    /// materialized once into logical order before the existing WGPU
     /// execution path.
     pub fn execute_forward_leto(
         &self,
@@ -105,7 +105,7 @@ impl RadonWgpuBackend {
         let image = array2_from_leto_view(image);
         let angles = leto_view1_cow(angles);
         let output = self.execute_forward(plan, &image, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon forward sinogram")
+        leto_array2_from_dense(&output, "Radon forward sinogram")
     }
 
     /// Execute the GPU adjoint backprojection (Radon adjoint operator).
@@ -138,7 +138,7 @@ impl RadonWgpuBackend {
         let sinogram = array2_from_leto_view(sinogram);
         let angles = leto_view1_cow(angles);
         let output = self.execute_inverse(plan, &sinogram, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon backprojection image")
+        leto_array2_from_dense(&output, "Radon backprojection image")
     }
 
     /// Execute GPU adjoint backprojection from a flat typed sinogram slice.
@@ -193,7 +193,7 @@ impl RadonWgpuBackend {
         let flat = sinogram.iter().copied().collect::<Vec<_>>();
         let angles = leto_view1_cow(angles);
         let output = self.execute_inverse_flat_typed(plan, precision, &flat, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon typed backprojection image")
+        leto_array2_from_dense(&output, "Radon typed backprojection image")
     }
 
     /// Execute GPU ramp-filtered backprojection (FBP).
@@ -230,7 +230,7 @@ impl RadonWgpuBackend {
         let sinogram = array2_from_leto_view(sinogram);
         let angles = leto_view1_cow(angles);
         let output = self.execute_filtered_backproject(plan, &sinogram, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon filtered backprojection image")
+        leto_array2_from_dense(&output, "Radon filtered backprojection image")
     }
 
     /// Execute the forward Radon projection from a flat typed image slice.
@@ -285,7 +285,7 @@ impl RadonWgpuBackend {
         let flat = image.iter().copied().collect::<Vec<_>>();
         let angles = leto_view1_cow(angles);
         let output = self.execute_forward_flat_typed(plan, precision, &flat, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon typed forward sinogram")
+        leto_array2_from_dense(&output, "Radon typed forward sinogram")
     }
 
     fn validate_sinogram_inputs(
@@ -375,7 +375,7 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     leto_interop::array2_from_view(&view)
 }
-fn leto_array2_from_ndarray(
+fn leto_array2_from_dense(
     values: &Array2<f32>,
     label: &str,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {

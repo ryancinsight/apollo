@@ -20,7 +20,7 @@ use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weig
 use apollo_fft::PrecisionProfile;
 use helpers::{
     array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes,
-    leto_array2_from_ndarray, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
+    leto_array2_from_dense, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
     sht_inverse_sample, sht_inverse_sample_hermes, SHT_COEFF_LANE_SCRATCH,
     SHT_HERMES_DOT_LEN_THRESHOLD,
 };
@@ -83,7 +83,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_real(&samples)?;
-        leto_array2_from_ndarray(coefficients.values())
+        leto_array2_from_dense(coefficients.values())
     }
 
     /// Forward SHT for complex-valued samples on the plan grid.
@@ -154,7 +154,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_complex(&samples)?;
-        leto_array2_from_ndarray(coefficients.values())
+        leto_array2_from_dense(coefficients.values())
     }
 
     /// Inverse SHT evaluating real-valued samples on the plan grid.
@@ -172,7 +172,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let coefficients = coefficients_from_leto_view(self, coefficients)?;
         let samples = self.inverse_real(&coefficients)?;
-        leto_array2_from_ndarray(&samples)
+        leto_array2_from_dense(&samples)
     }
 
     /// Inverse SHT evaluating complex-valued samples on the plan grid.
@@ -249,7 +249,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let coefficients = coefficients_from_leto_view(self, coefficients)?;
         let samples = self.inverse_complex(&coefficients)?;
-        leto_array2_from_ndarray(&samples)
+        leto_array2_from_dense(&samples)
     }
 
     /// Forward real-sample SHT for `f64`, `f32`, or mixed `f16` sample storage.
@@ -276,7 +276,7 @@ impl ShtPlan {
             O::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.forward_real_typed_into(&samples, &mut output, sample_profile, coefficient_profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Forward complex-sample SHT for `Complex64`, `Complex32`, or mixed `[f16; 2]`.
@@ -308,7 +308,7 @@ impl ShtPlan {
             sample_profile,
             coefficient_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Inverse SHT into complex sample storage.
@@ -346,7 +346,7 @@ impl ShtPlan {
             coefficient_profile,
             sample_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Inverse SHT into real sample storage by taking the synthesized real part.
@@ -384,7 +384,7 @@ impl ShtPlan {
             coefficient_profile,
             sample_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     pub(super) fn check_sample_shape(&self, shape: [usize; 2]) -> ShtResult<()> {

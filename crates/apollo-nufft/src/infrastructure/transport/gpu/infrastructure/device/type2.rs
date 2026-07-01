@@ -117,7 +117,7 @@ impl NufftWgpuBackend {
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex64>> {
         let grid = plan.grid();
-        if modes.shape() != (grid.nx, grid.ny, grid.nz) {
+        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "mode shape must match 3D plan grid dimensions",
             });
@@ -131,7 +131,7 @@ impl NufftWgpuBackend {
         let output = self.kernel.execute_type2_3d(
             self.device.inner(),
             self.device.queue().as_ref(),
-            [grid.nx, grid.ny, grid.nz],
+            (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             &coefficients,
             positions,

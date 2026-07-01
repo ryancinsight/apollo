@@ -58,7 +58,7 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute forward transform into caller-owned ndarray storage.
+    /// Execute forward transform into caller-owned Leto storage.
     fn forward_into(
         plan: &FrftPlan,
         input: &Array1<Self>,
@@ -94,7 +94,7 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned ndarray storage.
+    /// Execute inverse transform into caller-owned Leto storage.
     fn inverse_into(
         plan: &FrftPlan,
         input: &Array1<Self>,

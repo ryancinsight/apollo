@@ -59,14 +59,14 @@ impl RadonPlan {
     /// Execute the forward Radon transform from a Leto 2D image view.
     ///
     /// The Leto view is copied once into logical row-major order before
-    /// reusing the canonical ndarray/Moirai projection kernel.
+    /// reusing the canonical Moirai projection kernel.
     pub fn forward_leto(
         &self,
         image: leto::ArrayView2<'_, f64>,
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let image = array2_from_leto_view(image);
         let sinogram = self.forward(&image)?;
-        leto_array2_from_ndarray(sinogram.values())
+        leto_array2_from_dense(sinogram.values())
     }
 
     /// Execute the forward Radon transform into caller-owned storage.
@@ -102,7 +102,7 @@ impl RadonPlan {
             T::from_f64(0.0),
         );
         self.forward_typed_into(&image, &mut output, profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Execute adjoint backprojection.
@@ -120,7 +120,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.backproject(&Sinogram::new(sinogram))?;
-        leto_array2_from_ndarray(&image)
+        leto_array2_from_dense(&image)
     }
 
     /// Execute adjoint backprojection into caller-owned image storage.
@@ -160,7 +160,7 @@ impl RadonPlan {
             T::from_f64(0.0),
         );
         self.backproject_typed_into(&sinogram, &mut output, profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Execute ramp-filtered backprojection.
@@ -217,7 +217,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.filtered_backprojection(&Sinogram::new(sinogram))?;
-        leto_array2_from_ndarray(&image)
+        leto_array2_from_dense(&image)
     }
 }
 
@@ -379,7 +379,7 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Rad
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()
 }
-fn leto_array2_from_ndarray<T: Copy>(
+fn leto_array2_from_dense<T: Copy>(
     array: &Array2<T>,
 ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     if array.as_slice().is_some() {

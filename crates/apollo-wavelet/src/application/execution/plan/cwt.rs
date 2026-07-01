@@ -89,7 +89,7 @@ impl CwtPlan {
     ) -> WaveletResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let signal = leto_view1_cow(signal)?;
         let coefficients = self.transform(signal.as_ref())?;
-        leto_array2_from_ndarray(coefficients.values())
+        leto_array2_from_dense(coefficients.values())
     }
 
     /// Execute the CWT for `f64`, `f32`, or mixed `f16` storage into a
@@ -112,7 +112,7 @@ impl CwtPlan {
         let signal = leto_view1_cow(signal)?;
         let mut output = Array2::<T>::from_elem([self.scales.len(), self.len], T::from_f64(0.0));
         self.transform_typed_into(signal.as_ref(), &mut output, profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 }
 
@@ -125,7 +125,7 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'
     ))
 }
 
-fn leto_array2_from_ndarray<T: Copy>(
+fn leto_array2_from_dense<T: Copy>(
     array: &Array2<T>,
 ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)

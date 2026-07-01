@@ -268,7 +268,7 @@ pub(crate) fn leto_array1_from_slice<T: Copy>(
     })
 }
 
-pub(crate) fn leto_array3_from_ndarray<T: Copy>(
+pub(crate) fn leto_array3_from_dense<T: Copy>(
     values: &Array3<T>,
 ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
     leto_interop::try_dense_from_contiguous(values).ok_or_else(|| NufftWgpuError::BufferMapFailed {

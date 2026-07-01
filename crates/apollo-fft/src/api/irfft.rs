@@ -158,7 +158,7 @@ pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
 
 /// Inverse 1D FFT of a complex spectrum slice, returning an owned `Vec` signal.
 ///
-/// Slice/`Vec`-based wrapper for callers that do not depend on `ndarray`.
+/// Slice/`Vec`-based wrapper for callers that prefer raw slices over Leto `Array` types.
 #[must_use]
 pub fn ifft_1d_slice_typed<T>(spectrum: &[Complex<T::PlanScalar>]) -> Vec<T>
 where
@@ -503,8 +503,8 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = field_hat.to_contiguous();
-    let output = ifft_2d_array_typed::<T>(&nd_array);
+    let dense_array = field_hat.to_contiguous();
+    let output = ifft_2d_array_typed::<T>(&dense_array);
     try_dense_from_contiguous(&output).expect("IFFT signal shape must match Leto output shape")
 }
 
@@ -526,7 +526,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = field_hat.to_contiguous();
-    let output = ifft_3d_array_typed::<T>(&nd_array);
+    let dense_array = field_hat.to_contiguous();
+    let output = ifft_3d_array_typed::<T>(&dense_array);
     try_dense_from_contiguous(&output).expect("IFFT signal shape must match Leto output shape")
 }

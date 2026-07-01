@@ -111,7 +111,7 @@ impl StftPlan {
     /// Forward STFT from a Leto 1D signal view.
     ///
     /// Contiguous Leto views are borrowed directly; strided views are copied once
-    /// into logical order before reusing the canonical ndarray-validated kernel.
+    /// into logical order before reusing the canonical Leto kernel.
     pub fn forward_leto(
         &self,
         signal: leto::ArrayView1<'_, f64>,
@@ -280,7 +280,7 @@ impl StftPlan {
     /// Inverse STFT from a Leto 1D spectrum view.
     ///
     /// Contiguous Leto views are borrowed directly; strided views are copied once
-    /// into logical order before reusing the canonical ndarray-validated kernel.
+    /// into logical order before reusing the canonical Leto kernel.
     pub fn inverse_leto(
         &self,
         spectrum: leto::ArrayView1<'_, Complex64>,

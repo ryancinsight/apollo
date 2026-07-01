@@ -20,7 +20,7 @@ pub(crate) fn leto_array1_from_slice<T: Copy>(
     })
 }
 
-pub(crate) fn leto_array2_from_ndarray(
+pub(crate) fn leto_array2_from_dense(
     values: &Array2<f32>,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
     leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
@@ -28,7 +28,7 @@ pub(crate) fn leto_array2_from_ndarray(
     })
 }
 
-pub(crate) fn leto_array3_from_ndarray(
+pub(crate) fn leto_array3_from_dense(
     values: &Array3<f32>,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
     leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {

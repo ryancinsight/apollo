@@ -7,8 +7,8 @@ use leto::{Array2, Array3};
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_ndarray,
-    leto_array3_from_ndarray, leto_view1_cow,
+    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_dense,
+    leto_array3_from_dense, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::DctMode;
@@ -180,7 +180,7 @@ impl DctDstWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
         let input = array2_from_leto_view(input);
         let output = self.execute_forward_2d(plan, &input)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Execute the unnormalized 3D separable forward real-to-real transform.
@@ -249,6 +249,6 @@ impl DctDstWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 3>> {
         let input = array3_from_leto_view(input);
         let output = self.execute_forward_3d(plan, &input)?;
-        leto_array3_from_ndarray(&output)
+        leto_array3_from_dense(&output)
     }
 }

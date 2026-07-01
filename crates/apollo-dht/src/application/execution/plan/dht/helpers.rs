@@ -40,18 +40,18 @@ pub(crate) fn array3_from_leto_view(input: leto::ArrayView3<'_, f64>) -> Array3<
 
 #[must_use]
 #[inline]
-pub(crate) fn leto_array2_from_ndarray(
+pub(crate) fn leto_array2_from_dense(
     output: &Array2<f64>,
 ) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 2> {
     apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(output)
-        .expect("DHT-owned 2D ndarray output must be contiguous with matching Leto shape")
+        .expect("DHT-owned 2D dense output must be contiguous with matching Leto shape")
 }
 
 #[must_use]
 #[inline]
-pub(crate) fn leto_array3_from_ndarray(
+pub(crate) fn leto_array3_from_dense(
     output: &Array3<f64>,
 ) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 3> {
     apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(output)
-        .expect("DHT-owned 3D ndarray output must be contiguous with matching Leto shape")
+        .expect("DHT-owned 3D dense output must be contiguous with matching Leto shape")
 }

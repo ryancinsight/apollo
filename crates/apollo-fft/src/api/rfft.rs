@@ -97,7 +97,7 @@ pub fn fft_1d_array_static_typed_into<T, const N: usize>(
 
 /// Forward 1D FFT of a real signal slice, returning an owned `Vec` spectrum.
 ///
-/// Slice/`Vec`-based wrapper for callers that do not depend on `ndarray`.
+/// Slice/`Vec`-based wrapper for callers that prefer raw slices over Leto `Array` types.
 #[must_use]
 pub fn fft_1d_slice_typed<T>(signal: &[T]) -> Vec<Complex<T::PlanScalar>>
 where
@@ -339,8 +339,8 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = field.to_contiguous();
-    let output = fft_2d_array_typed::<T>(&nd_array);
+    let dense_array = field.to_contiguous();
+    let output = fft_2d_array_typed::<T>(&dense_array);
     try_dense_from_contiguous(&output).expect("FFT spectrum shape must match Leto output shape")
 }
 
@@ -362,7 +362,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let nd_array = field.to_contiguous();
-    let output = fft_3d_array_typed::<T>(&nd_array);
+    let dense_array = field.to_contiguous();
+    let output = fft_3d_array_typed::<T>(&dense_array);
     try_dense_from_contiguous(&output).expect("FFT spectrum shape must match Leto output shape")
 }

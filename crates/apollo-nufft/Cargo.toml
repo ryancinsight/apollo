@@ -10,6 +10,7 @@ description = "Non-uniform FFT plans and utilities for Apollo"
 
 [features]
 wgpu = [
+    "apollo-fft/wgpu",
     "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
     "dep:wgpu",

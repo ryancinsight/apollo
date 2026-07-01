@@ -1,8 +1,8 @@
 //! Reusable Discrete Hartley Transform plan.
 
 use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array2_from_ndarray,
-    leto_array3_from_ndarray, FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
+    array2_from_leto_view, array3_from_leto_view, leto_array2_from_dense,
+    leto_array3_from_dense, FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
 };
 use super::typed::HartleyStorage;
 use crate::domain::contracts::error::{DhtError, DhtResult};
@@ -230,7 +230,7 @@ impl DhtPlan {
         let input = array2_from_leto_view(input);
         let mut output = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
-        Ok(leto_array2_from_ndarray(&output))
+        Ok(leto_array2_from_dense(&output))
     }
 
     /// Execute the unnormalized separable 2D forward DHT into a caller-owned buffer.
@@ -259,7 +259,7 @@ impl DhtPlan {
         self.forward_2d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n) as f64;
         output.mapv_inplace(|v| v * scale);
-        Ok(leto_array2_from_ndarray(&output))
+        Ok(leto_array2_from_dense(&output))
     }
 
     /// Execute the normalized separable 2D inverse DHT into a caller-owned buffer.
@@ -287,7 +287,7 @@ impl DhtPlan {
         let input = array3_from_leto_view(input);
         let mut output = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
-        Ok(leto_array3_from_ndarray(&output))
+        Ok(leto_array3_from_dense(&output))
     }
 
     /// Execute the unnormalized separable 3D forward DHT into a caller-owned buffer.
@@ -316,7 +316,7 @@ impl DhtPlan {
         self.forward_3d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n * n) as f64;
         output.mapv_inplace(|v| v * scale);
-        Ok(leto_array3_from_ndarray(&output))
+        Ok(leto_array3_from_dense(&output))
     }
 
     /// Execute the normalized separable 3D inverse DHT into a caller-owned buffer.

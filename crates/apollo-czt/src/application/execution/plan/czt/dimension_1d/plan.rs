@@ -292,7 +292,7 @@ impl CztPlan {
     /// Inverse CZT over a Leto complex spectrum view.
     ///
     /// Inversion is available only for square plans (`M == N`), matching the
-    /// existing ndarray inverse contract.
+    /// existing Leto inverse contract.
     pub fn inverse_leto(
         &self,
         spectrum: leto::ArrayView1<'_, Complex64>,

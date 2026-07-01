@@ -6,7 +6,7 @@ use eunomia::{Complex32, Complex64};
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    leto_array1_from_slice, leto_array3_from_ndarray, leto_view1_cow, positions3_from_leto_view,
+    leto_array1_from_slice, leto_array3_from_dense, leto_view1_cow, positions3_from_leto_view,
     typed_to_complex32, validate_pair_lengths, validate_typed_profile, validate_usize_to_u32,
     write_typed_output,
 };
@@ -35,7 +35,7 @@ impl NufftWgpuBackend {
             output
                 .into_iter()
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect(),
+                .collect::<Vec<_>>(),
         ))
     }
 
@@ -118,7 +118,7 @@ impl NufftWgpuBackend {
         let output = self.kernel.execute_type1_3d(
             self.device.inner(),
             self.device.queue().as_ref(),
-            [grid.nx, grid.ny, grid.nz],
+            (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             positions,
             values,
@@ -145,14 +145,14 @@ impl NufftWgpuBackend {
     ) -> NufftWgpuResult<()> {
         validate_typed_profile::<T>(precision)?;
         let grid = plan.grid();
-        if output.shape() != (grid.nx, grid.ny, grid.nz) {
+        if output.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "typed output shape must match 3D plan grid dimensions",
             });
         }
         let values32 = typed_to_complex32(values);
         let computed = self.execute_type1_3d(plan, positions, &values32)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+        for (slot, value) in output.as_slice_mut().expect("contiguous").iter_mut().zip(computed.iter().copied()) {
             *slot = T::from_complex64(value);
         }
         Ok(())
@@ -168,7 +168,7 @@ impl NufftWgpuBackend {
         let positions = positions3_from_leto_view(positions)?;
         let values = leto_view1_cow(values);
         let output = self.execute_type1_3d(plan, &positions, values.as_ref())?;
-        leto_array3_from_ndarray(&output)
+        leto_array3_from_dense(&output)
     }
 
     /// Execute exact direct Type-1 3D NUFFT from typed Leto views.
@@ -193,6 +193,6 @@ impl NufftWgpuBackend {
             values.as_ref(),
             &mut output,
         )?;
-        leto_array3_from_ndarray(&output)
+        leto_array3_from_dense(&output)
     }
 }

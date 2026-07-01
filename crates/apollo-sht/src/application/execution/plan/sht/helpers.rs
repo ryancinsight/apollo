@@ -179,7 +179,7 @@ pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> A
     view.to_contiguous()
 }
 
-pub(super) fn leto_array2_from_ndarray<T: Copy>(
+pub(super) fn leto_array2_from_dense<T: Copy>(
     array: &Array2<T>,
 ) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     if array.as_slice().is_some() {
