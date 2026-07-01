@@ -28,18 +28,6 @@ pub(crate) fn validate_profile(
 
 #[must_use]
 #[inline]
-pub(crate) fn array2_from_leto_view(input: leto::ArrayView2<'_, f64>) -> Array2<f64> {
-    input.to_contiguous()
-}
-
-#[must_use]
-#[inline]
-pub(crate) fn array3_from_leto_view(input: leto::ArrayView3<'_, f64>) -> Array3<f64> {
-    input.to_contiguous()
-}
-
-#[must_use]
-#[inline]
 pub(crate) fn leto_array2_from_dense(
     output: &Array2<f64>,
 ) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 2> {

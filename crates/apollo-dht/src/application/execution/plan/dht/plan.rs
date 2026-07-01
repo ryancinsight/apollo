@@ -1,8 +1,7 @@
 //! Reusable Discrete Hartley Transform plan.
 
 use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array2_from_dense,
-    leto_array3_from_dense, FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
+    leto_array2_from_dense, leto_array3_from_dense, FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
 };
 use super::typed::HartleyStorage;
 use crate::domain::contracts::error::{DhtError, DhtResult};
@@ -11,7 +10,7 @@ use crate::domain::spectrum::coefficients::HartleySpectrum;
 use crate::infrastructure::kernel::direct::transform_real;
 use crate::infrastructure::kernel::fast::dht_fast_with_scratch;
 use apollo_fft::PrecisionProfile;
-use leto::{Array2, Array3};
+use leto::{Array, Array2, Array3, Storage};
 
 const FAST_KERNEL_THRESHOLD: usize = 512;
 
@@ -22,7 +21,7 @@ pub struct DhtPlan {
 }
 
 impl DhtPlan {
-    fn forward_2d_impl(&self, input: &Array2<f64>, output: &mut Array2<f64>) -> DhtResult<()> {
+    fn forward_2d_impl<S: Storage<f64>>(&self, input: &Array<f64, S, 2>, output: &mut Array2<f64>) -> DhtResult<()> {
         let n = self.len();
         let [rows, cols] = input.shape();
         let [out_rows, out_cols] = output.shape();
@@ -72,7 +71,7 @@ impl DhtPlan {
         })
     }
 
-    fn forward_3d_impl(&self, input: &Array3<f64>, output: &mut Array3<f64>) -> DhtResult<()> {
+    fn forward_3d_impl<S: Storage<f64>>(&self, input: &Array<f64, S, 3>, output: &mut Array3<f64>) -> DhtResult<()> {
         let n = self.len();
         let [d0, d1, d2] = input.shape();
         let [o0, o1, o2] = output.shape();
@@ -227,7 +226,7 @@ impl DhtPlan {
         input: leto::ArrayView2<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
-        let input = array2_from_leto_view(input);
+        let input = input.as_array();
         let mut output = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         Ok(leto_array2_from_dense(&output))
@@ -254,7 +253,7 @@ impl DhtPlan {
         input: leto::ArrayView2<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
-        let input = array2_from_leto_view(input);
+        let input = input.as_array();
         let mut output = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n) as f64;
@@ -284,7 +283,7 @@ impl DhtPlan {
         input: leto::ArrayView3<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
-        let input = array3_from_leto_view(input);
+        let input = input.as_array();
         let mut output = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         Ok(leto_array3_from_dense(&output))
@@ -311,7 +310,7 @@ impl DhtPlan {
         input: leto::ArrayView3<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
-        let input = array3_from_leto_view(input);
+        let input = input.as_array();
         let mut output = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n * n) as f64;
