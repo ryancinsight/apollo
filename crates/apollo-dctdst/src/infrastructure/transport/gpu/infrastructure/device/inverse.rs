@@ -141,10 +141,9 @@ impl DctDstWgpuBackend {
             lane.clear();
             lane.extend(input.column(c).iter().copied());
             let out = self.execute_inverse(plan, &lane)?;
-            tmp.column_mut(c)
-                .iter_mut()
-                .zip(&out)
-                .for_each(|(s, v)| *s = *v);
+            for (row, &value) in out.iter().enumerate() {
+                tmp[[row, c]] = value;
+            }
         }
         // Row pass (inverse): contiguous rows are borrowed without copying.
         let mut result = Array2::<f32>::zeros([n, n]);
@@ -158,11 +157,9 @@ impl DctDstWgpuBackend {
                     self.execute_inverse(plan, &lane)?
                 }
             };
-            result
-                .row_mut(r)
-                .iter_mut()
-                .zip(&out)
-                .for_each(|(s, v)| *s = *v);
+            for (col, &value) in out.iter().enumerate() {
+                result[[r, col]] = value;
+            }
         }
         Ok(result)
     }

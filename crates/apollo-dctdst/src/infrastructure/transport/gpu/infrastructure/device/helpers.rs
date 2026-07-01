@@ -7,10 +7,10 @@ pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, 
     leto_interop::view1_cow(&view)
 }
 pub(crate) fn array2_from_leto_view(view: leto::ArrayView2<'_, f32>) -> Array2<f32> {
-    leto_interop::array2_from_view(&view)
+    view.to_contiguous()
 }
 pub(crate) fn array3_from_leto_view(view: leto::ArrayView3<'_, f32>) -> Array3<f32> {
-    leto_interop::array3_from_view(&view)
+    view.to_contiguous()
 }
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     values: &[T],

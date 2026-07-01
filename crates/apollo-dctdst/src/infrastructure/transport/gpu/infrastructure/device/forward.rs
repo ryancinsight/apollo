@@ -152,10 +152,9 @@ impl DctDstWgpuBackend {
                     self.execute_forward(plan, &lane)?
                 }
             };
-            tmp.row_mut(r)
-                .iter_mut()
-                .zip(&out)
-                .for_each(|(s, v)| *s = *v);
+            for (col, &value) in out.iter().enumerate() {
+                tmp[[r, col]] = value;
+            }
         }
         // Column pass: columns are strided, so the single lane buffer is reused.
         let mut result = Array2::<f32>::zeros([n, n]);
@@ -163,11 +162,9 @@ impl DctDstWgpuBackend {
             lane.clear();
             lane.extend(tmp.column(c).iter().copied());
             let out = self.execute_forward(plan, &lane)?;
-            result
-                .column_mut(c)
-                .iter_mut()
-                .zip(&out)
-                .for_each(|(s, v)| *s = *v);
+            for (row, &value) in out.iter().enumerate() {
+                result[[row, c]] = value;
+            }
         }
         Ok(result)
     }
