@@ -258,7 +258,7 @@ impl RadonGpuKernel {
         hep_device.download(&sinogram_buffer, &mut values).map_err(|e| WgpuError::BufferMapFailed {
             message: e.to_string(),
         })?;
-        Array2::from_shape_vec((plan.angle_count(), plan.detector_count()), values).map_err(|_| {
+        Array2::from_shape_vec([plan.angle_count(), plan.detector_count()], values).map_err(|_| {
             WgpuError::BufferMapFailed {
                 message: "failed to reshape sinogram readback".to_string(),
             }

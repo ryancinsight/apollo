@@ -173,7 +173,7 @@ impl RadonWgpuBackend {
             flat_sinogram.iter().map(|v| v.to_f64() as f32).collect()
         };
         let sinogram_2d =
-            Array2::from_shape_vec((plan.angle_count(), plan.detector_count()), promoted).map_err(
+            Array2::from_shape_vec([plan.angle_count(), plan.detector_count()], promoted).map_err(
                 |_| WgpuError::InvalidPlan {
                         message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat sinogram reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                     },
@@ -265,7 +265,7 @@ impl RadonWgpuBackend {
             flat_image.iter().map(|v| v.to_f64() as f32).collect()
         };
         let image_2d =
-            Array2::from_shape_vec((plan.rows(), plan.cols()), promoted).map_err(|_| {
+            Array2::from_shape_vec([plan.rows(), plan.cols()], promoted).map_err(|_| {
                 WgpuError::InvalidPlan {
                         message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat image reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                     }
@@ -373,7 +373,7 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
-    leto_interop::array2_from_view(&view)
+    view.to_contiguous()
 }
 fn leto_array2_from_dense(
     values: &Array2<f32>,
