@@ -8,11 +8,14 @@ Remaining replacement work:
 - [x] [minor] Repaired the `--features wgpu` builds of `apollo-dctdst`, `apollo-sht`, and
   `apollo-radon` — their GPU device paths were uncovered by the leto migration (per-crate
   wgpu builds had never been verified; default build + 901 tests were green). Fixed D7
-  `leto_interop::array{2,3}_from_view` → `to_contiguous`, tuple shape compares/constructors
-  → `[usize;N]`, domain `zeros`, and ndarray `row_mut`/`column_mut` writes → `IndexMut`
-  loops. SSOT enabler: added leto `Array<T,S,2>::row/column(i) -> ArrayView1` zero-copy
-  indexed accessors (strided-correct). Every transform crate now builds with `--features
-  wgpu`; runtime GPU verification still needs hardware.
+  `leto_interop::array{2,3}_from_view` → `to_contiguous` and tuple shape compares/constructors
+  → `[usize;N]`. **Architectural correction (leto is CPU, hephaestus is GPU):** the dctdst GPU
+  device path had staged its 2D/3D separable orchestration with leto's array API
+  (`Array2`/`row`/`column`/`[[i,j]]`); rewrote it to flat row-major `Vec<f32>` + index
+  arithmetic between per-line Hephaestus dispatches, with leto only at the `*_leto` CPU↔GPU
+  seam (`view.iter()` in, `from_mnemosyne_vec` out). sht/radon already used leto only at the
+  seam (`from_shape_vec` to build the returned output). Every transform crate builds with
+  `--features wgpu`; runtime GPU verification needs hardware.
 - [x] [arch] Stage A3 (complete): the whole workspace runs on `leto` + `eunomia`.
   `num_complex`→`eunomia::Complex` and `ndarray::Array`→`leto::Array` across all 17
   transform crates, `apollo-validation`, and `apollo-python`. `ndarray` survives only at
