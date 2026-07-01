@@ -26,6 +26,16 @@ Remaining replacement work:
   Start with FFT; differential vs CPU and wgpu.
 
 ## Delivered
+- [x] [patch] Zero-copy input on the 2D/3D leto transform entry points (via new
+  `leto::ArrayView::as_array` → `Array<T, SliceStorage, N>`, layout-preserving, no
+  alloc). `forward/inverse_{2,3}d_into` made storage-generic in `apollo-dht` and
+  `apollo-dctdst`; `*_leto` now borrows the input instead of `to_contiguous`,
+  removing an O(N²)/O(N³) input copy per call. 1D paths were already zero-copy
+  (`leto_view1_cow` Cow-borrow). **Deliberately NOT applied** to `apollo-sht`
+  (downstream reads a contiguous flat slice — `to_contiguous` is load-bearing for
+  strided inputs), `apollo-radon` (Sinogram domain wrapper), `apollo-nufft` (scratch
+  views), or GPU device paths (data is copied on upload regardless). Verification:
+  `cargo nextest run --workspace` 901/901; clippy 0 warnings.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `a46dea9` (`0.4.0`). This imports broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` that write through caller-owned output layouts, covering provider-side `[N,1]`/`[1,C]` elementwise tensor paths without materialized broadcast inputs. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `642d87a3` (`0.3.0`). This imports the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR without changing Apollo public APIs. Verification: focused FFT/FRFT/GFT check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
