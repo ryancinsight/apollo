@@ -11,17 +11,19 @@ name: Legacy Migration Audit
 # clean exit otherwise. The allowlist-style mutation workflow is owned by
 # Apollo's existing xtask architecture and is not duplicated here.
 
-on:
-  push:
-    branches: [main, "refactor/**", "codex/**"]
-  pull_request:branches: [main, "refactor/**", "codex/**"]
-
 # Apollo's `provider-audit` subcommand hard-fails on forbidden ndarray references
 # anywhere in the workspace manifest + source tree. The active
 # `refactor/apollo-fft-eunomia` branch carries ~234 dirty files mid-migration,
-# so the gate fires only on `main` + `codex/**` for now to keep the day-1
-# green-banner promise; once that migration lands, expand to `refactor/**`.
-branches: [main, "codex/**"] permissions:
+# so the gate intentionally fires only on `main` + `codex/**` for now to keep
+# the day-1 green-banner promise; once that migration lands, expand to
+# `refactor/**`.
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main, "codex/**"]
+
+permissions:
   contents: read
 
 concurrency:
@@ -56,12 +58,3 @@ jobs:
 
       - name: Run xtask provider-audit (Apollo's legacy-migration gate)
         run: cargo run -p xtask -- provider-audit
-
-      - name: Upload audit log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: apollo-legacy-migration-audit-log
-          path: |
-            target/xtask-*.log
-          if-no-files-found: ignore
