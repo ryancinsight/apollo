@@ -58,6 +58,17 @@ pub(crate) fn run(args: impl Iterator<Item = String>) -> Result<()> {
     Ok(())
 }
 
+/// Render a path with forward-slash separators regardless of platform, so
+/// the audit report and violation messages are byte-identical whether
+/// generated on Windows or Linux (`Path::display` uses the platform-native
+/// separator, which made the rendered output non-portable).
+fn portable_display(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 fn parse_args(args: impl Iterator<Item = String>) -> Result<PathBuf> {
     let mut root = PathBuf::from(".");
     let mut args = args.peekable();
@@ -180,7 +191,7 @@ impl ProviderAudit {
                 &mut output,
                 "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
                 crate_audit.name,
-                crate_audit.manifest.display(),
+                portable_display(&crate_audit.manifest),
                 mark(
                     crate_audit.manifest_usage.moirai
                         || count(&crate_audit.source_usage, "moirai") > 0
@@ -250,7 +261,7 @@ fn reject_forbidden_array_crate(root: &Path) -> Result<()> {
         writeln!(
             &mut details,
             "{}:{}",
-            reference.path.display(),
+            portable_display(&reference.path),
             reference.line
         )
         .expect("writing to String cannot fail");
@@ -536,7 +547,7 @@ leto = { workspace = true }
         assert!(rendered.contains("Hermes workspace dependency: yes"));
         assert!(rendered.contains("Leto workspace dependency: yes"));
         assert!(rendered.contains(
-            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes | yes | no |"
+            "| apollo-demo | crates/apollo-demo/Cargo.toml | yes | no | yes | yes | yes | no |"
         ));
         assert!(rendered.contains(
             "Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies"
@@ -585,8 +596,8 @@ edition = "2021"
         let message = error.to_string();
 
         assert!(message.contains(forbidden_array_crate_name()));
-        assert!(message.contains("crates\\apollo-demo\\Cargo.toml:"));
-        assert!(message.contains("crates\\apollo-demo\\src\\lib.rs:1"));
+        assert!(message.contains("crates/apollo-demo/Cargo.toml:"));
+        assert!(message.contains("crates/apollo-demo/src/lib.rs:1"));
 
         fs::remove_dir_all(root)?;
         Ok(())
@@ -639,7 +650,7 @@ moirai = {{ workspace = true }}
 
         assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no |"));
         assert!(rendered.contains(
-            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no |"
+            "| apollo-demo | crates/apollo-demo/Cargo.toml | yes | no | no | no | no | no |"
         ));
 
         fs::remove_dir_all(root)?;
