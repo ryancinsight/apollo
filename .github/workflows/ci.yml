@@ -80,8 +80,14 @@ jobs:
           cargo fmt $pkgs -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # apollo-python builds pyo3 with the "extension-module" feature, which
+      # deliberately omits linking against libpython (Python dynamically
+      # loads the .so and supplies those symbols at runtime). A `cargo test`
+      # binary is a normal executable that needs those symbols itself, so it
+      # cannot link — apollo-python is exercised by the separate "python
+      # bindings" job instead (maturin develop + pytest).
       - name: Tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --exclude apollo-python
 
   python:
     name: python bindings
@@ -135,6 +141,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # maturin develop requires an active virtualenv (or conda env) to
+      # install into — there is none by default on the hosted runner.
+      - name: Create virtualenv
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Install Python test tools
         run: python -m pip install --upgrade pip maturin pytest numpy
       - name: Build Python extension
