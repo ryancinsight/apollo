@@ -208,7 +208,11 @@ impl RadonPlan {
         );
         let mut image = adjoint_backproject(&filtered, &self.geometry);
         let scale = std::f64::consts::PI / self.geometry.angle_count() as f64;
-        image.iter_mut().for_each(|value| *value *= scale);
+        image
+            .as_slice_mut()
+            .expect("adjoint_backproject output must be contiguous")
+            .iter_mut()
+            .for_each(|value| *value *= scale);
         Ok(image)
     }
 
