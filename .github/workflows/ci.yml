@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/hermes
-          ref: df67249ef05de8e1addc5a26d6831c70d63c3d18
+          ref: 9d0a358d2196390ce626ca653c180b04eae1ed4a
           path: hermes
       - uses: actions/checkout@v4
         with:
@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/hermes
-          ref: df67249ef05de8e1addc5a26d6831c70d63c3d18
+          ref: 9d0a358d2196390ce626ca653c180b04eae1ed4a
           path: hermes
       - uses: actions/checkout@v4
         with:
