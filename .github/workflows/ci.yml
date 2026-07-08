@@ -68,8 +68,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apollo
+      # `cargo fmt --all` treats every path-sourced package reachable in the
+      # resolved graph as "local" and formats it — including the fleet
+      # siblings pulled in only via the [patch] table above. Scope to
+      # apollo's own workspace members (cargo metadata --no-deps correctly
+      # excludes patched externals) so CI never lints/formats another repo's
+      # source.
       - name: Format
-        run: cargo fmt --all -- --check
+        run: |
+          pkgs=$(cargo metadata --no-deps --format-version=1 | python3 -c "import json,sys; print('\n'.join('-p ' + p['name'] for p in json.load(sys.stdin)['packages']))" | tr -d '\r')
+          cargo fmt $pkgs -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
