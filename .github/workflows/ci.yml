@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/Mnemosyne
-          ref: 938d0c2bc094d3bbe7745d68d60e05a531e0cfc2
+          ref: a6cbccf207c271af640c126ff27435f995c7cb6c
           path: mnemosyne
       - uses: actions/checkout@v4
         with:
@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/Mnemosyne
-          ref: 938d0c2bc094d3bbe7745d68d60e05a531e0cfc2
+          ref: a6cbccf207c271af640c126ff27435f995c7cb6c
           path: mnemosyne
       - uses: actions/checkout@v4
         with:
