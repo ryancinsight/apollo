@@ -44,10 +44,10 @@ use std::num::NonZeroU64;
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::hephaestus_wgpu::WgpuBuffer;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -250,23 +250,34 @@ impl NttGpuKernel {
 
         // ----- Allocate GPU buffers -----------------------------------------
 
-        let data_buffer = hep_device.alloc_zeroed::<u32>(n).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let data_buffer =
+            hep_device
+                .alloc_zeroed::<u32>(n)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
-        let fwd_twiddle_buffer = hep_device.upload(&fwd_twiddles).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let fwd_twiddle_buffer =
+            hep_device
+                .upload(&fwd_twiddles)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
-        let inv_twiddle_buffer = hep_device.upload(&inv_twiddles).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let inv_twiddle_buffer =
+            hep_device
+                .upload(&inv_twiddles)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-ntt-wgpu params"),
-            contents: &params_raw,
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-ntt-wgpu params"),
+                contents: &params_raw,
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
         // ----- Bind groups ---------------------------------------------------
         // Two bind groups sharing `data_buffer` and `params_buffer` but
@@ -274,51 +285,55 @@ impl NttGpuKernel {
         let params_size =
             NonZeroU64::new(NTT_PARAMS_BYTE_SIZE as u64).expect("nonzero params size");
 
-        let fwd_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-ntt-wgpu fwd bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: data_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: fwd_twiddle_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &params_buffer,
-                        offset: 0,
-                        size: Some(params_size),
-                    }),
-                },
-            ],
-        });
+        let fwd_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-ntt-wgpu fwd bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: data_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: fwd_twiddle_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &params_buffer,
+                            offset: 0,
+                            size: Some(params_size),
+                        }),
+                    },
+                ],
+            });
 
-        let inv_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-ntt-wgpu inv bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: data_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: inv_twiddle_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &params_buffer,
-                        offset: 0,
-                        size: Some(params_size),
-                    }),
-                },
-            ],
-        });
+        let inv_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-ntt-wgpu inv bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: data_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: inv_twiddle_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &params_buffer,
+                            offset: 0,
+                            size: Some(params_size),
+                        }),
+                    },
+                ],
+            });
 
         Ok(NttGpuBuffers {
             len: n,
@@ -434,9 +449,11 @@ impl NttGpuKernel {
         let hep_device = device.hephaestus();
 
         // Upload bit-reversed input residues to the in-place data buffer.
-        hep_device.write_buffer(&bufs.data_buffer, &bufs.data_residues).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .write_buffer(&bufs.data_buffer, &bufs.data_residues)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         // Select the bind group (forward twiddles or inverse twiddles).
         let bind_group = match mode {
@@ -449,9 +466,11 @@ impl NttGpuKernel {
         // command buffer execute in submission order and that storage writes
         // from earlier passes are visible to later passes without explicit
         // barriers.
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-ntt-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-ntt-wgpu encoder"),
+            });
 
         // Butterfly passes: one per stage, dispatching N/2 threads total.
         let half_n = ((bufs.len / 2).max(1)) as u32;
@@ -485,9 +504,11 @@ impl NttGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output_u32 = vec![0u32; bufs.len];
-        hep_device.download(&bufs.data_buffer, &mut output_u32).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&bufs.data_buffer, &mut output_u32)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         for (slot, &v) in bufs.output_residues.iter_mut().zip(&output_u32) {
             *slot = u64::from(v);
@@ -647,4 +668,3 @@ fn uniform_dynamic_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
 fn dispatch_count(items: u32) -> u32 {
     items.div_ceil(WORKGROUP_SIZE)
 }
-

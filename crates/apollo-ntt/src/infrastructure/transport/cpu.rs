@@ -1,10 +1,10 @@
 use crate::application::execution::plan::ntt::dimension_1d::NttPlan;
 use crate::domain::contracts::error::NttError;
-use ndarray::Array1;
+use leto::Array1;
 
 /// Forward NTT convenience wrapper; constructs a default-modulus plan and executes forward.
 pub fn ntt(input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-    NttPlan::new(input.len())?.forward(input)
+    NttPlan::new(input.size())?.forward(input)
 }
 
 /// Forward NTT convenience wrapper for a Leto view.
@@ -16,7 +16,7 @@ pub fn ntt_leto(
 
 /// Inverse NTT convenience wrapper; constructs a default-modulus plan and executes inverse.
 pub fn intt(input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-    NttPlan::new(input.len())?.inverse(input)
+    NttPlan::new(input.size())?.inverse(input)
 }
 
 /// Inverse NTT convenience wrapper for a Leto view.

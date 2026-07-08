@@ -6,9 +6,9 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 };
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
 use crate::domain::metadata::shape::Shape3D;
+use eunomia::Complex;
+use leto::Array3;
 use leto::ArrayViewMut3;
-use ndarray::Array3;
-use num_complex::Complex;
 use std::sync::Arc;
 
 /// Reusable separable 3D FFT plan generic over `MixedRadixScalar`.
@@ -86,8 +86,8 @@ where
     /// Forward transform of a complex field in-place.
     pub fn forward_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny, self.nz),
+            data.shape(),
+            [self.nx, self.ny, self.nz],
             "complex forward shape mismatch"
         );
         let view = ArrayViewMut3::from(data.view_mut());
@@ -97,8 +97,8 @@ where
     /// Inverse transform of a complex field in-place with FFTW-compatible normalization.
     pub fn inverse_complex_inplace(&self, data: &mut Array3<F::Complex>) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny, self.nz),
+            data.shape(),
+            [self.nx, self.ny, self.nz],
             "complex inverse shape mismatch"
         );
         let view = ArrayViewMut3::from(data.view_mut());
@@ -119,8 +119,8 @@ where
     /// - Shape mismatch with the plan, or `axis >= 3`.
     pub fn forward_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny, self.nz),
+            data.shape(),
+            [self.nx, self.ny, self.nz],
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");
@@ -135,8 +135,8 @@ where
     /// - Shape mismatch with the plan, or `axis >= 3`.
     pub fn inverse_axis_complex_inplace(&self, data: &mut Array3<F::Complex>, axis: usize) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny, self.nz),
+            data.shape(),
+            [self.nx, self.ny, self.nz],
             "axis FFT shape mismatch"
         );
         assert!(axis < 3, "axis must be 0, 1, or 2");

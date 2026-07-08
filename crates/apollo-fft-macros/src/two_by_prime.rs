@@ -77,7 +77,7 @@ pub fn generate_two_by_prime_natural_dispatch(input: CompilerTokenStream) -> Com
         #[inline]
         fn fuse_two_prime_natural<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-                Complex = num_complex::Complex<F>,
+                Complex = eunomia::Complex<F>,
             >,
             const INVERSE: bool,
         >(
@@ -143,7 +143,7 @@ fn two_by_prime_kernel(p: usize, h: usize) -> proc_macro2::TokenStream {
             F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar,
             const INVERSE: bool,
         >(
-            data: &mut [num_complex::Complex<F>],
+            data: &mut [eunomia::Complex<F>],
             cos: &[[F; #h]; #h],
             sin: &[[F; #h]; #h],
         ) {
@@ -151,8 +151,8 @@ fn two_by_prime_kernel(p: usize, h: usize) -> proc_macro2::TokenStream {
             const SCATTER_SUM: [usize; #p] = [#(#scatter_sum_tokens),*];
             const SCATTER_DIFF: [usize; #p] = [#(#scatter_diff_tokens),*];
 
-            let zero = F::zero();
-            let mut rows = [[num_complex::Complex::new(zero, zero); #p]; 2];
+            let zero = <F as eunomia::NumericElement>::ZERO;
+            let mut rows = [[eunomia::Complex::new(zero, zero); #p]; 2];
 
             // Gather: even row from even indices, odd row via const CRT map
             for i1 in 0..#p {
@@ -169,8 +169,8 @@ fn two_by_prime_kernel(p: usize, h: usize) -> proc_macro2::TokenStream {
             for k1 in 0..#p {
                 let a = rows[0][k1];
                 let b = rows[1][k1];
-                data[SCATTER_SUM[k1]] = num_complex::Complex::new(a.re + b.re, a.im + b.im);
-                data[SCATTER_DIFF[k1]] = num_complex::Complex::new(a.re - b.re, a.im - b.im);
+                data[SCATTER_SUM[k1]] = eunomia::Complex::new(a.re + b.re, a.im + b.im);
+                data[SCATTER_DIFF[k1]] = eunomia::Complex::new(a.re - b.re, a.im - b.im);
             }
         }
     }

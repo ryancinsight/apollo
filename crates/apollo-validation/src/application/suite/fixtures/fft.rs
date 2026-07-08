@@ -25,19 +25,19 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use eunomia::Complex64;
 use leto::Storage;
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn fft_four_point_difference_fixture() -> PublishedFixtureReport {
-    let signal_nd = Array1::from_vec(vec![1.0, 0.0, -1.0, 0.0]);
+    let signal_nd = Array1::from(vec![1.0, 0.0, -1.0, 0.0]);
     let signal = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
-        [signal_nd.len()],
+        [signal_nd.size()],
         signal_nd.as_slice().unwrap(),
     )
     .unwrap();
     let actual_leto = apollo_fft::fft_1d_leto(signal.view());
-    let actual = ndarray::Array1::from_vec(actual_leto.storage().as_slice().to_vec());
+    let actual = leto::Array1::from(actual_leto.storage().as_slice().to_vec());
     let expected = [
         Complex64::new(0.0, 0.0),
         Complex64::new(2.0, 0.0),
@@ -62,19 +62,19 @@ pub(crate) fn fft_four_point_difference_fixture() -> PublishedFixtureReport {
 /// because Σ_k exp(2πikn/N) = N·δ_{n,0} by the geometric series identity for
 /// primitive roots of unity. Reference: DFT Inversion Theorem, Cooley and Tukey (1965).
 pub(crate) fn fft_inverse_four_point_fixture() -> PublishedFixtureReport {
-    let spectrum_nd = Array1::from_vec(vec![
+    let spectrum_nd = Array1::from(vec![
         Complex64::new(1.0, 0.0),
         Complex64::new(1.0, 0.0),
         Complex64::new(1.0, 0.0),
         Complex64::new(1.0, 0.0),
     ]);
     let spectrum = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
-        [spectrum_nd.len()],
+        [spectrum_nd.size()],
         spectrum_nd.as_slice().unwrap(),
     )
     .unwrap();
     let actual_leto = apollo_fft::ifft_1d_leto(spectrum.view());
-    let actual = ndarray::Array1::from_vec(actual_leto.storage().as_slice().to_vec());
+    let actual = leto::Array1::from(actual_leto.storage().as_slice().to_vec());
     let expected = [1.0_f64, 0.0, 0.0, 0.0];
     published_real_fixture(
         "FFT",

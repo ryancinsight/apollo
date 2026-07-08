@@ -1,9 +1,9 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
 use core::marker::PhantomData;
+use eunomia::Complex;
+use leto::Array1;
 use leto::ArrayViewMut1;
-use ndarray::Array1;
-use num_complex::Complex;
 use std::borrow::Cow;
 use std::sync::Arc;
 

@@ -4,7 +4,7 @@ use crate::application::execution::kernel::direct::wht_inplace;
 use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array1;
+use leto::Array1;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
@@ -58,7 +58,7 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute forward transform into caller-owned ndarray storage.
+    /// Execute forward transform into caller-owned Leto storage.
     fn forward_into(
         plan: &FwhtPlan,
         input: &Array1<Self>,
@@ -94,7 +94,7 @@ pub trait FwhtStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned ndarray storage.
+    /// Execute inverse transform into caller-owned Leto storage.
     fn inverse_into(
         plan: &FwhtPlan,
         input: &Array1<Self>,

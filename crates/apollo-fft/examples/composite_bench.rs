@@ -1,6 +1,6 @@
 //! Composite FFT bench
 #![allow(missing_docs)]
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::time::{Duration, Instant};
 
 // Inline the forward_inplace from the mixed_radix dispatch path.

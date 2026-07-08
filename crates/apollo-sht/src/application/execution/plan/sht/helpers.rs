@@ -5,9 +5,9 @@ use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::PrecisionProfile;
+use eunomia::Complex64;
+use leto::Array2;
 use mnemosyne::scratch::ScratchPool;
-use ndarray::Array2;
-use num_complex::Complex64;
 
 /// Below this reduction length, scalar accumulation avoids Hermes dispatch and scratch setup.
 pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
@@ -29,14 +29,14 @@ pub(super) fn validate_profile(
 }
 
 pub(super) fn validate_sample_array_shape<T>(plan: &ShtPlan, samples: &Array2<T>) -> ShtResult<()> {
-    plan.check_sample_shape(samples.dim())
+    plan.check_sample_shape(samples.shape())
 }
 
 pub(super) fn validate_coefficient_array_shape<T>(
     plan: &ShtPlan,
     coefficients: &Array2<T>,
 ) -> ShtResult<()> {
-    if coefficients.dim() == plan.coefficient_shape() {
+    if coefficients.shape() == plan.coefficient_shape() {
         Ok(())
     } else {
         Err(ShtError::CoefficientShapeMismatch)
@@ -47,7 +47,12 @@ pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(
     source: &Array2<Complex64>,
     target: &mut Array2<T>,
 ) {
-    for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
+    for (slot, value) in target
+        .as_slice_mut()
+        .expect("contiguous target")
+        .iter_mut()
+        .zip(source.iter().copied())
+    {
         *slot = T::from_complex64(value);
     }
 }
@@ -173,33 +178,20 @@ pub(super) fn phi_for_longitude(longitude_index: usize, n_lon: usize) -> f64 {
     std::f64::consts::TAU * longitude_index as f64 / n_lon as f64
 }
 
-pub(super) fn array2_from_leto_view<T: Clone>(
-    view: leto::ArrayView2<'_, T>,
-    shape_error: ShtError,
-) -> ShtResult<Array2<T>> {
-    if let Ok(nd_view) =
-        ndarray::ArrayView2::try_from(leto::ArrayView2::new(view.layout(), view.data()))
-    {
-        return Ok(nd_view.to_owned());
-    }
-    let [rows, cols] = view.shape();
-    let mut values = Vec::with_capacity(view.size());
-    for row in 0..rows {
-        for col in 0..cols {
-            values.push((*view.get([row, col]).map_err(|_| shape_error)?).clone());
-        }
-    }
-    Array2::from_shape_vec((rows, cols), values).map_err(|_| shape_error)
+pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
+    // Contiguous views borrow without copy; strided views materialize once into
+    // logical row-major order. One canonical Leto entry point covers both.
+    view.to_contiguous()
 }
 
-pub(super) fn leto_array2_from_ndarray<T: Copy>(
+pub(super) fn leto_array2_from_dense<T: Copy>(
     array: &Array2<T>,
 ) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     if array.as_slice().is_some() {
-        apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+        apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
             .ok_or(ShtError::CoefficientShapeMismatch)
     } else {
-        let (rows, cols) = array.dim();
+        let [rows, cols] = array.shape();
         let values = array.iter().copied().collect::<Vec<_>>();
         leto::Array::from_mnemosyne_vec([rows, cols], values)
             .map_err(|_| ShtError::CoefficientShapeMismatch)
@@ -210,8 +202,8 @@ pub(super) fn coefficients_from_leto_view(
     plan: &ShtPlan,
     coefficients: leto::ArrayView2<'_, Complex64>,
 ) -> ShtResult<SphericalHarmonicCoefficients> {
-    let values = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
-    if values.dim() != plan.coefficient_shape() {
+    let values = array2_from_leto_view(coefficients);
+    if values.shape() != plan.coefficient_shape() {
         return Err(ShtError::CoefficientShapeMismatch);
     }
     Ok(SphericalHarmonicCoefficients::from_values(

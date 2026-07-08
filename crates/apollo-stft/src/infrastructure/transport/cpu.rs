@@ -1,7 +1,7 @@
 use crate::application::execution::plan::stft::dimension_1d::StftPlan;
 use crate::domain::contracts::error::StftResult;
-use ndarray::Array1;
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::Array1;
 
 /// Forward STFT convenience wrapper.
 ///

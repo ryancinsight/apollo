@@ -3,7 +3,7 @@ use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::CwtPlan;
 use apollo_fft::PrecisionProfile;
-use ndarray::Array2;
+use leto::Array2;
 use std::borrow::Cow;
 
 pub(crate) fn leto_view1_cow<T: Copy>(
@@ -112,7 +112,7 @@ pub(crate) fn validate_cwt_output_shape<T>(
     plan: &CwtPlan,
     output: &Array2<T>,
 ) -> WaveletResult<()> {
-    if output.nrows() == plan.scales().len() && output.ncols() == plan.len() {
+    if output.shape()[0] == plan.scales().len() && output.shape()[1] == plan.len() {
         Ok(())
     } else {
         Err(WaveletError::CoefficientShapeMismatch)

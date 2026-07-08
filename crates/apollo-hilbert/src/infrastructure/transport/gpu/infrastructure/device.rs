@@ -3,10 +3,10 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use num_complex::Complex32;
+use eunomia::Complex32;
 
-use apollo_fft::PrecisionProfile;
 use crate::HilbertStorage;
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::HilbertWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -70,8 +70,7 @@ impl HilbertWgpuBackend {
         input: &[f32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel
-            .execute(&self.device, input)
+        self.kernel.execute(&self.device, input)
     }
 
     /// Execute the analytic signal from a Leto real-valued host view.
@@ -176,10 +175,7 @@ impl HilbertWgpuBackend {
         quadrature: &[f32],
     ) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, quadrature)?;
-        self.kernel.execute_inverse(
-            &self.device,
-            quadrature,
-        )
+        self.kernel.execute_inverse(&self.device, quadrature)
     }
 
     /// Execute the inverse Hilbert transform from a Leto quadrature view.

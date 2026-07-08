@@ -1,6 +1,6 @@
 use super::super::generic::triple::stage_triple_radix1_avx_fma;
 use super::triple_2::stage_triple_quarter_groups_one_reduced_avx_fma;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]

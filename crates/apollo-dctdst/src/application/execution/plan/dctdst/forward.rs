@@ -1,7 +1,4 @@
-use super::helpers::{
-    array2_from_leto_view, array3_from_leto_view, leto_array1_from_slice, leto_array2_from_ndarray,
-    leto_array3_from_ndarray, leto_view1_cow,
-};
+use super::helpers::{leto_array1_from_slice, leto_view1_cow};
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
@@ -9,7 +6,7 @@ use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, 
 use crate::infrastructure::kernel::fast::{
     dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
 };
-use ndarray::{Array2, Array3};
+use leto::{Array, Array2, Array3, MnemosyneStorage, Storage, StorageMut};
 
 impl DctDstPlan {
     /// Execute the forward transform and return allocated coefficients.
@@ -46,13 +43,13 @@ impl DctDstPlan {
     /// The plan length `N` is applied to both axes; each row is transformed
     /// first, then each column.
     ///
-    /// Returns `LengthMismatch` unless `input.dim() == (N, N)`.
+    /// Returns `LengthMismatch` unless `input.shape() == (N, N)`.
     pub fn forward_2d(&self, input: &Array2<f64>) -> DctDstResult<Array2<f64>> {
-        let (rows, cols) = input.dim();
+        let [rows, cols] = input.shape();
         if rows != self.len() || cols != self.len() {
             return Err(DctDstError::LengthMismatch);
         }
-        let mut output = Array2::<f64>::zeros((rows, cols));
+        let mut output = Array2::<f64>::zeros([rows, cols]);
         self.forward_2d_into(input, &mut output)?;
         Ok(output)
     }
@@ -62,46 +59,48 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView2<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let input = array2_from_leto_view(input);
-        let output = self.forward_2d(&input)?;
-        Ok(leto_array2_from_ndarray(&output))
+        let input = input.to_contiguous();
+        let n = self.len();
+        let mut output = Array::<f64, MnemosyneStorage<f64>, 2>::zeros_mnemosyne([n, n]);
+        self.forward_2d_into(&input, &mut output)?;
+        Ok(output)
     }
 
     /// Execute a separable 2D forward transform into caller-owned output.
     ///
     /// Returns `LengthMismatch` unless both `input` and `output` are square
     /// `N x N` arrays matching the plan length `N`.
-    pub fn forward_2d_into(
+    pub fn forward_2d_into<S: Storage<f64>, SO: StorageMut<f64>>(
         &self,
-        input: &Array2<f64>,
-        output: &mut Array2<f64>,
+        input: &Array<f64, S, 2>,
+        output: &mut Array<f64, SO, 2>,
     ) -> DctDstResult<()> {
         let n = self.len();
-        if input.dim() != (n, n) || output.dim() != (n, n) {
+        if input.shape() != [n, n] || output.shape() != [n, n] {
             return Err(DctDstError::LengthMismatch);
         }
 
-        let mut stage = Array2::<f64>::zeros((n, n));
+        let mut stage = Array2::<f64>::zeros([n, n]);
         let mut line_in = vec![0.0_f64; n];
         let mut line_out = vec![0.0_f64; n];
 
         for i in 0..n {
             for j in 0..n {
-                line_in[j] = input[(i, j)];
+                line_in[j] = input[[i, j]];
             }
             self.forward_into(&line_in, &mut line_out)?;
             for j in 0..n {
-                stage[(i, j)] = line_out[j];
+                stage[[i, j]] = line_out[j];
             }
         }
 
         for j in 0..n {
             for i in 0..n {
-                line_in[i] = stage[(i, j)];
+                line_in[i] = stage[[i, j]];
             }
             self.forward_into(&line_in, &mut line_out)?;
             for i in 0..n {
-                output[(i, j)] = line_out[i];
+                output[[i, j]] = line_out[i];
             }
         }
 
@@ -113,10 +112,10 @@ impl DctDstPlan {
     /// The plan length `N` is applied to all three axes in z, then y, then x
     /// order.
     ///
-    /// Returns `LengthMismatch` unless `input.dim() == (N, N, N)`.
+    /// Returns `LengthMismatch` unless `input.shape() == (N, N, N)`.
     pub fn forward_3d(&self, input: &Array3<f64>) -> DctDstResult<Array3<f64>> {
-        let dims = input.dim();
-        if dims.0 != self.len() || dims.1 != self.len() || dims.2 != self.len() {
+        let dims = input.shape();
+        if dims[0] != self.len() || dims[1] != self.len() || dims[2] != self.len() {
             return Err(DctDstError::LengthMismatch);
         }
         let mut output = Array3::<f64>::zeros(dims);
@@ -129,38 +128,40 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView3<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let input = array3_from_leto_view(input);
-        let output = self.forward_3d(&input)?;
-        Ok(leto_array3_from_ndarray(&output))
+        let input = input.to_contiguous();
+        let n = self.len();
+        let mut output = Array::<f64, MnemosyneStorage<f64>, 3>::zeros_mnemosyne([n, n, n]);
+        self.forward_3d_into(&input, &mut output)?;
+        Ok(output)
     }
 
     /// Execute a separable 3D forward transform into caller-owned output.
     ///
     /// Returns `LengthMismatch` unless both `input` and `output` are cubic
     /// `N x N x N` arrays matching the plan length `N`.
-    pub fn forward_3d_into(
+    pub fn forward_3d_into<S: Storage<f64>, SO: StorageMut<f64>>(
         &self,
-        input: &Array3<f64>,
-        output: &mut Array3<f64>,
+        input: &Array<f64, S, 3>,
+        output: &mut Array<f64, SO, 3>,
     ) -> DctDstResult<()> {
         let n = self.len();
-        if input.dim() != (n, n, n) || output.dim() != (n, n, n) {
+        if input.shape() != [n, n, n] || output.shape() != [n, n, n] {
             return Err(DctDstError::LengthMismatch);
         }
 
-        let mut stage1 = Array3::<f64>::zeros((n, n, n));
-        let mut stage2 = Array3::<f64>::zeros((n, n, n));
+        let mut stage1 = Array3::<f64>::zeros([n, n, n]);
+        let mut stage2 = Array3::<f64>::zeros([n, n, n]);
         let mut line_in = vec![0.0_f64; n];
         let mut line_out = vec![0.0_f64; n];
 
         for i in 0..n {
             for j in 0..n {
                 for k in 0..n {
-                    line_in[k] = input[(i, j, k)];
+                    line_in[k] = input[[i, j, k]];
                 }
                 self.forward_into(&line_in, &mut line_out)?;
                 for k in 0..n {
-                    stage1[(i, j, k)] = line_out[k];
+                    stage1[[i, j, k]] = line_out[k];
                 }
             }
         }
@@ -168,11 +169,11 @@ impl DctDstPlan {
         for i in 0..n {
             for k in 0..n {
                 for j in 0..n {
-                    line_in[j] = stage1[(i, j, k)];
+                    line_in[j] = stage1[[i, j, k]];
                 }
                 self.forward_into(&line_in, &mut line_out)?;
                 for j in 0..n {
-                    stage2[(i, j, k)] = line_out[j];
+                    stage2[[i, j, k]] = line_out[j];
                 }
             }
         }
@@ -180,11 +181,11 @@ impl DctDstPlan {
         for j in 0..n {
             for k in 0..n {
                 for i in 0..n {
-                    line_in[i] = stage2[(i, j, k)];
+                    line_in[i] = stage2[[i, j, k]];
                 }
                 self.forward_into(&line_in, &mut line_out)?;
                 for i in 0..n {
-                    output[(i, j, k)] = line_out[i];
+                    output[[i, j, k]] = line_out[i];
                 }
             }
         }

@@ -1,7 +1,7 @@
-use apollo_fft::PrecisionProfile;
 use crate::NufftComplexStorage;
-use ndarray::Array3;
-use num_complex::{Complex32, Complex64};
+use apollo_fft::PrecisionProfile;
+use eunomia::{Complex32, Complex64};
+use leto::Array3;
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -117,7 +117,7 @@ impl NufftWgpuBackend {
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex64>> {
         let grid = plan.grid();
-        if modes.dim() != (grid.nx, grid.ny, grid.nz) {
+        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {
                 message: "mode shape must match 3D plan grid dimensions",
             });

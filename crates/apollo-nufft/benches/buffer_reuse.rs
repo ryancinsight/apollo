@@ -23,8 +23,8 @@ use apollo_nufft::{
     UniformDomain1D, UniformGrid3D,
 };
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use ndarray::Array3;
-use num_complex::Complex32;
+use eunomia::Complex32;
+use leto::Array3;
 
 // ---------------------------------------------------------------------------
 // 1D helpers (unchanged from original)
@@ -96,7 +96,7 @@ fn positions_3d(count: usize) -> Vec<(f32, f32, f32)> {
 /// Values are derived from a linear phase: `exp(i·2π·(0.1·kx + 0.07·ky − 0.13·kz))`,
 /// which provides non-trivial coverage across all mode indices.
 fn modes_3d(n: usize) -> Array3<Complex32> {
-    Array3::from_shape_fn((n, n, n), |(ix, iy, iz)| {
+    Array3::from_shape_fn([n, n, n], |[ix, iy, iz]| {
         let phase = (ix as f32 * 0.1 + iy as f32 * 0.07 - iz as f32 * 0.13) * std::f32::consts::TAU;
         Complex32::new(phase.cos(), phase.sin())
     })

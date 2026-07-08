@@ -1,5 +1,5 @@
 use super::super::backend::StockhamAvxBackend;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use std::arch::x86_64::__m256d;
 
 impl StockhamAvxBackend for f64 {

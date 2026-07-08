@@ -26,9 +26,8 @@ wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
-ndarray = { workspace = true }
 leto = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true, features = ["serde"] }
 moirai = { workspace = true }
 hermes-simd = { workspace = true }
 mnemosyne = { workspace = true }

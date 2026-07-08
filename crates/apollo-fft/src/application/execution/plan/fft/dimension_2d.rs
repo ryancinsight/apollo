@@ -35,9 +35,9 @@ use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, Mixed
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
+use eunomia::Complex;
+use leto::Array2;
 use leto::ArrayViewMut2;
-use ndarray::Array2;
-use num_complex::Complex;
 use std::sync::Arc;
 
 /// Use Moirai parallel iteration when total elements exceed this threshold.
@@ -96,7 +96,7 @@ where
     /// Forward transform of a complex array in-place.
     #[inline]
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
-        assert_eq!(data.dim(), (NX, NY), "static 2D forward shape mismatch");
+        assert_eq!(data.shape(), [NX, NY], "static 2D forward shape mismatch");
         let view = ArrayViewMut2::from(data.view_mut());
         self.forward_complex_leto_inplace(view);
     }
@@ -104,7 +104,7 @@ where
     /// Inverse transform of a complex array in-place with normalization.
     #[inline]
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
-        assert_eq!(data.dim(), (NX, NY), "static 2D inverse shape mismatch");
+        assert_eq!(data.shape(), [NX, NY], "static 2D inverse shape mismatch");
         let view = ArrayViewMut2::from(data.view_mut());
         self.inverse_complex_leto_inplace(view);
     }
@@ -230,8 +230,8 @@ where
     /// Forward transform of a complex array in-place.
     pub fn forward_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny),
+            data.shape(),
+            [self.nx, self.ny],
             "complex forward shape mismatch"
         );
         let view = ArrayViewMut2::from(data.view_mut());
@@ -241,8 +241,8 @@ where
     /// Inverse transform of a complex array in-place with normalization.
     pub fn inverse_complex_inplace(&self, data: &mut Array2<F::Complex>) {
         assert_eq!(
-            data.dim(),
-            (self.nx, self.ny),
+            data.shape(),
+            [self.nx, self.ny],
             "complex inverse shape mismatch"
         );
         let view = ArrayViewMut2::from(data.view_mut());
@@ -393,11 +393,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
     use std::f64::consts::PI;
 
     fn signal<const NX: usize, const NY: usize>() -> Array2<Complex64> {
-        Array2::from_shape_fn((NX, NY), |(i, j)| {
+        Array2::from_shape_fn([NX, NY], |[i, j]| {
             let x = (i * NY + j) as f64;
             Complex64::new(
                 (0.17 * x).sin() + 0.11 * (0.07 * x).cos(),
@@ -409,7 +409,7 @@ mod tests {
     fn direct_forward<const NX: usize, const NY: usize>(
         input: &Array2<Complex64>,
     ) -> Array2<Complex64> {
-        let mut out = Array2::from_elem((NX, NY), Complex64::new(0.0, 0.0));
+        let mut out = Array2::from_elem([NX, NY], Complex64::new(0.0, 0.0));
         for kx in 0..NX {
             for ky in 0..NY {
                 let mut acc = Complex64::new(0.0, 0.0);
@@ -417,10 +417,10 @@ mod tests {
                     for y in 0..NY {
                         let phase =
                             -2.0 * PI * ((kx * x) as f64 / NX as f64 + (ky * y) as f64 / NY as f64);
-                        acc += input[(x, y)] * Complex64::from_polar(1.0, phase);
+                        acc += input[[x, y]] * Complex64::from_polar(1.0, phase);
                     }
                 }
-                out[(kx, ky)] = acc;
+                out[[kx, ky]] = acc;
             }
         }
         out

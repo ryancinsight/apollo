@@ -3,10 +3,12 @@
 #[cfg(test)]
 mod tests {
     use apollo_fft::{f16, PrecisionProfile};
+    use eunomia::{Complex32, Complex64};
     use leto::{SliceArg, Storage};
-    use num_complex::{Complex32, Complex64};
 
-    use crate::infrastructure::transport::gpu::{FrftWgpuBackend, FrftWgpuPlan, UnitaryFrftWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        FrftWgpuBackend, FrftWgpuPlan, UnitaryFrftWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_reflect_implemented_kernel_surface() {
@@ -91,11 +93,11 @@ mod tests {
             let input_f32: Vec<Complex32> = (0..n)
                 .map(|i| Complex32::new((i as f32 * 0.31_f32).sin(), 0.0_f32))
                 .collect();
-            let input_f64 = ndarray::Array1::from_vec(
+            let input_f64 = leto::Array1::from(
                 input_f32
                     .iter()
                     .map(|v| Complex64::new(v.re as f64, v.im as f64))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             );
             let plan = FrftWgpuPlan::new(n, 1.0_f32);
             let gpu = backend
@@ -128,11 +130,11 @@ mod tests {
             let input_f32: Vec<Complex32> = (0..n)
                 .map(|i| Complex32::new((i as f32 * 0.4_f32).cos(), (i as f32 * 0.3_f32).sin()))
                 .collect();
-            let input_f64 = ndarray::Array1::from_vec(
+            let input_f64 = leto::Array1::from(
                 input_f32
                     .iter()
                     .map(|v| Complex64::new(v.re as f64, v.im as f64))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             );
             let plan = FrftWgpuPlan::new(n, order_f32);
             let gpu = backend
@@ -546,14 +548,13 @@ mod tests {
             assert_eq!(gpu_out.len(), n);
 
             // CPU reference: crate::UnitaryFrftPlan with f64 precision.
-            let cpu_input = ndarray::Array1::from_vec(
+            let cpu_input = leto::Array1::from(
                 input
                     .iter()
                     .map(|c| Complex64::new(c.re as f64, c.im as f64))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             );
-            let cpu_plan =
-                crate::UnitaryFrftPlan::new(n, order as f64).expect("cpu unitary plan");
+            let cpu_plan = crate::UnitaryFrftPlan::new(n, order as f64).expect("cpu unitary plan");
             let cpu_out = cpu_plan.forward(&cpu_input).expect("cpu unitary forward");
 
             for (k, (g, c)) in gpu_out.iter().zip(cpu_out.iter()).enumerate() {

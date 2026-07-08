@@ -1,6 +1,6 @@
 use crate::application::execution::kernel::components::winograd::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
     a.iter()
@@ -50,7 +50,7 @@ fn dft15_roundtrip_recovers_input() {
     let mut buf: [Complex64; 15] = input.as_slice().try_into().unwrap();
     dft15_impl::<_, false>(&mut buf);
     dft15_impl::<_, true>(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 15.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 15.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-12, "DFT-15 roundtrip max_err={err:.2e}");
 }
@@ -136,7 +136,7 @@ fn dft25_roundtrip_recovers_input() {
     unsafe {
         dft25_impl::<f64, true>(&mut buf);
     }
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / 25.0).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / 25.0).collect();
     let err = max_err(&recovered, &input);
     assert!(err < 1e-9, "DFT-25 roundtrip max_err={err:.2e}");
 }
@@ -228,7 +228,7 @@ fn run_composite_case<const N: usize>(
     let mut roundtrip: [Complex64; N] = input.as_slice().try_into().unwrap();
     kernel64(&mut roundtrip, false);
     kernel64(&mut roundtrip, true);
-    let recovered: Vec<Complex64> = roundtrip.iter().map(|x| x / N as f64).collect();
+    let recovered: Vec<Complex64> = roundtrip.iter().map(|x| *x / N as f64).collect();
     let err = max_err(&recovered, &input);
     let bound = roundoff_bound(&input, ops * 2);
     assert!(

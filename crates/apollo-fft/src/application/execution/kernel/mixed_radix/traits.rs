@@ -51,7 +51,7 @@ macro_rules! short_winograd_match {
         match $data.len() {
             $(
                 $n => {
-                    let ptr = $data.as_mut_ptr() as *mut [num_complex::Complex<$F>; $n];
+                    let ptr = $data.as_mut_ptr() as *mut [eunomia::Complex<$F>; $n];
                     let arr = unsafe { &mut *ptr };
                     <$F as ShortDft<$n>>::dft::<$INVERSE>(arr);
                     true
@@ -64,11 +64,11 @@ macro_rules! short_winograd_match {
 
 #[inline]
 pub(crate) fn short_winograd<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>> + ShortWinogradScalar,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
     const NORMALIZE: bool,
 >(
-    data: &mut [num_complex::Complex<F>],
+    data: &mut [eunomia::Complex<F>],
 ) -> bool {
     // Fast-reject: O(log N) binary search on the sorted const array.
     if !is_short_winograd_size(data.len()) {
@@ -82,11 +82,11 @@ pub(crate) fn short_winograd<
         return false;
     }
     let handled = short_winograd_match!(
-        data, F, INVERSE,
-        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+        data, F, INVERSE, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
         22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 96, 99, 108, 112,
-        120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484
+        45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 96, 99, 108,
+        112, 120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363,
+        400, 484
     );
 
     if handled && INVERSE && NORMALIZE {
@@ -97,14 +97,14 @@ pub(crate) fn short_winograd<
 }
 
 pub trait ShortDft<const N: usize>: ShortWinogradScalar {
-    fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; N]);
+    fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; N]);
 }
 
 macro_rules! impl_short_dft {
     ($n:expr, radix_dft2) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
-            fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 Self::dft2(data);
             }
         }
@@ -112,7 +112,7 @@ macro_rules! impl_short_dft {
     ($n:expr, $method:ident) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
-            fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 Self::$method::<INVERSE>(data);
             }
         }
@@ -120,7 +120,7 @@ macro_rules! impl_short_dft {
     ($n:expr, slice_method, $method:ident) => {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
-            fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 Self::$method::<INVERSE>(data.as_mut_slice());
             }
         }
@@ -129,7 +129,7 @@ macro_rules! impl_short_dft {
         impl<F: ShortWinogradScalar> ShortDft<$n> for F {
             #[inline]
             #[allow(unused_unsafe)]
-            fn dft<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn dft<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 unsafe {
                     crate::application::execution::kernel::components::butterflies::dft::$func::<
                         Self,
@@ -230,7 +230,7 @@ impl_short_dft!(296, winograd_impl, dft296_impl);
 #[cfg(test)]
 mod tests {
     use super::{short_winograd, SHORT_WINOGRAD_SIZES};
-    use num_complex::Complex64;
+    use eunomia::Complex64;
 
     fn make_data(n: usize) -> Vec<Complex64> {
         (0..n)

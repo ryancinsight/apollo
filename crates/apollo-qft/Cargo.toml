@@ -29,9 +29,8 @@ apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }
-ndarray = { workspace = true }
 leto = { workspace = true }
-num-complex = { version = "0.4", features = ["serde"] }
+eunomia = { workspace = true, features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
@@ -41,3 +40,4 @@ proptest = "1.6"
 
 [lints]
 workspace = true
+

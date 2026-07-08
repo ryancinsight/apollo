@@ -13,8 +13,8 @@ use criterion::measurement::WallTime;
 use criterion::{
     black_box, criterion_group, criterion_main, BenchmarkGroup, BenchmarkId, Criterion, Throughput,
 };
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 use rustfft::FftPlanner;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -482,7 +482,9 @@ fn bench_six_step_f32(c: &mut Criterion) {
 
     for len in sizes {
         group.throughput(Throughput::Elements(len as u64));
-        let input = Array1::from_vec(signal_f32(len).into_iter().map(|z| z.re).collect());
+        let input =
+            Array1::from_shape_vec([len], signal_f32(len).into_iter().map(|z| z.re).collect())
+                .expect("bench input length matches shape");
         let plan = f32::get_1d_plan(Shape1D::new(len).expect("bench length must be non-zero"));
 
         group.bench_with_input(
@@ -498,7 +500,7 @@ fn bench_six_step_f32(c: &mut Criterion) {
             },
         );
 
-        let mut apollo_output = Array1::<Complex32>::zeros(len);
+        let mut apollo_output = Array1::<Complex32>::zeros([len]);
         group.bench_with_input(
             BenchmarkId::new("apollo_caller_owned_six_step", len),
             &input,

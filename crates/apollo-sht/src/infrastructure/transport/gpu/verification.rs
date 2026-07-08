@@ -2,13 +2,15 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::{ShtPlan, SphericalHarmonicCoefficients};
+    use apollo_fft::{f16, PrecisionProfile};
+    use eunomia::{Complex32, Complex64};
+    use leto::Array2;
     use leto::{SliceArg, Storage};
-    use ndarray::Array2;
-    use num_complex::{Complex32, Complex64};
 
-    use crate::infrastructure::transport::gpu::{ShtWgpuBackend, ShtWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        ShtWgpuBackend, ShtWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_advertise_direct_complex_execution() {
@@ -55,7 +57,7 @@ mod tests {
 
         // 1. invalid_plan_rejects_under_sampled_bandlimit
         {
-            let samples = Array2::from_elem((2, 3), Complex32::new(1.0, 0.0));
+            let samples = Array2::from_elem([2, 3], Complex32::new(1.0, 0.0));
             let error = backend
                 .execute_forward(&ShtWgpuPlan::new(2, 3, 2), &samples)
                 .expect_err("undersampled bandlimit must fail");
@@ -64,7 +66,7 @@ mod tests {
 
         // 2. sample_shape_mismatch_reports_dimensions
         {
-            let samples = Array2::from_elem((3, 4), Complex32::new(1.0, 0.0));
+            let samples = Array2::from_elem([3, 4], Complex32::new(1.0, 0.0));
             let error = backend
                 .execute_forward(&ShtWgpuPlan::new(4, 5, 1), &samples)
                 .expect_err("shape mismatch must fail");
@@ -77,7 +79,7 @@ mod tests {
             let cpu_plan = ShtPlan::new(plan.latitudes(), plan.longitudes(), plan.max_degree())
                 .expect("valid CPU SHT plan");
             let samples =
-                Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+                Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
                     Complex64::new(
                         0.25 + lat as f64 * 0.5 - lon as f64 * 0.125,
                         0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
@@ -108,7 +110,7 @@ mod tests {
             let cpu_plan = ShtPlan::new(plan.latitudes(), plan.longitudes(), plan.max_degree())
                 .expect("valid CPU SHT plan");
             let samples =
-                Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+                Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
                     Complex64::new(
                         0.25 + lat as f64 * 0.5 - lon as f64 * 0.125,
                         0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
@@ -123,17 +125,17 @@ mod tests {
                 .execute_inverse(&plan, &coefficients)
                 .expect("GPU inverse");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 2.0e-5);
             }
         }
 
-        // 5. leto_forward_and_inverse_match_ndarray
+        // 5. leto_forward_and_inverse_match_leto
         {
             let plan = ShtWgpuPlan::new(4, 5, 1);
             let samples =
-                Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+                Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
                     Complex32::new(
                         0.25 + lat as f32 * 0.5 - lon as f32 * 0.125,
                         0.1 * (lat as f32 + 1.0) * (lon as f32 + 1.0),
@@ -141,7 +143,7 @@ mod tests {
                 });
             let expected_forward = backend
                 .execute_forward(&plan, &samples)
-                .expect("ndarray forward");
+                .expect("leto forward");
             let samples_leto = leto::Array::from_mnemosyne_slice(
                 [plan.latitudes(), plan.longitudes()],
                 &samples.iter().copied().collect::<Vec<_>>(),
@@ -160,7 +162,7 @@ mod tests {
 
             let expected_inverse = backend
                 .execute_inverse(&plan, &expected_forward)
-                .expect("ndarray inverse");
+                .expect("leto inverse");
             let actual_inverse = backend
                 .execute_inverse_leto(&plan, actual_forward.view())
                 .expect("leto inverse");
@@ -170,11 +172,11 @@ mod tests {
             );
         }
 
-        // 6. leto_strided_forward_matches_logical_ndarray
+        // 6. leto_strided_forward_matches_logical_leto
         {
             let plan = ShtWgpuPlan::new(4, 5, 1);
             let samples =
-                Array2::from_shape_fn((plan.latitudes(), plan.longitudes()), |(lat, lon)| {
+                Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
                     Complex32::new(lat as f32 + lon as f32 * 0.25, 0.5 + lon as f32 * 0.1)
                 });
             let mut interleaved = Vec::with_capacity(plan.latitudes() * plan.longitudes() * 2);
@@ -195,7 +197,7 @@ mod tests {
                 .expect("strided samples");
             let expected = backend
                 .execute_forward(&plan, &samples)
-                .expect("ndarray forward");
+                .expect("leto forward");
             let actual = backend
                 .execute_forward_leto(&plan, strided)
                 .expect("strided leto forward");
@@ -222,7 +224,7 @@ mod tests {
                 .map(|v| Complex32::new(v[0].to_f32(), v[1].to_f32()))
                 .collect();
             let samples_2d =
-                Array2::from_shape_vec((plan.latitudes(), plan.longitudes()), represented_f32)
+                Array2::from_shape_vec([plan.latitudes(), plan.longitudes()], represented_f32)
                     .expect("reshape");
 
             let expected = backend

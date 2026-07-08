@@ -1,7 +1,7 @@
 use super::super::super::radix_shape::{
     coprime_factors, factorize_composite as factorize_prime23, is_prime,
 };
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;

@@ -8,7 +8,7 @@ use crate::infrastructure::kernel::direct::{
 };
 use crate::infrastructure::kernel::filter::ramp_filter_projection_into;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array2;
+use leto::Array2;
 
 /// Reusable 2D parallel-beam Radon plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +50,7 @@ impl RadonPlan {
 
     /// Execute the forward Radon transform.
     pub fn forward(&self, image: &Array2<f64>) -> RadonResult<Sinogram> {
-        if image.dim() != (self.geometry.rows(), self.geometry.cols()) {
+        if image.shape() != [self.geometry.rows(), self.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
         Ok(Sinogram::new(forward_project(image, &self.geometry)))
@@ -59,22 +59,22 @@ impl RadonPlan {
     /// Execute the forward Radon transform from a Leto 2D image view.
     ///
     /// The Leto view is copied once into logical row-major order before
-    /// reusing the canonical ndarray/Moirai projection kernel.
+    /// reusing the canonical Moirai projection kernel.
     pub fn forward_leto(
         &self,
         image: leto::ArrayView2<'_, f64>,
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let image = array2_from_leto_view(image);
         let sinogram = self.forward(&image)?;
-        leto_array2_from_ndarray(sinogram.values())
+        leto_array2_from_dense(sinogram.values())
     }
 
     /// Execute the forward Radon transform into caller-owned storage.
     pub fn forward_into(&self, image: &Array2<f64>, output: &mut Array2<f64>) -> RadonResult<()> {
-        if image.dim() != (self.geometry.rows(), self.geometry.cols()) {
+        if image.shape() != [self.geometry.rows(), self.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
-        if output.dim() != (self.geometry.angle_count(), self.geometry.detector_count()) {
+        if output.shape() != [self.geometry.angle_count(), self.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
         forward_project_into(image, &self.geometry, output);
@@ -99,11 +99,11 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
         let image = array2_from_leto_view(image);
         let mut output = Array2::<T>::from_elem(
-            (self.geometry.angle_count(), self.geometry.detector_count()),
+            [self.geometry.angle_count(), self.geometry.detector_count()],
             T::from_f64(0.0),
         );
         self.forward_typed_into(&image, &mut output, profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Execute adjoint backprojection.
@@ -121,7 +121,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.backproject(&Sinogram::new(sinogram))?;
-        leto_array2_from_ndarray(&image)
+        leto_array2_from_dense(&image)
     }
 
     /// Execute adjoint backprojection into caller-owned image storage.
@@ -133,7 +133,7 @@ impl RadonPlan {
         if sinogram.shape() != (self.geometry.angle_count(), self.geometry.detector_count()) {
             return Err(RadonError::SinogramShapeMismatch);
         }
-        if output.dim() != (self.geometry.rows(), self.geometry.cols()) {
+        if output.shape() != [self.geometry.rows(), self.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
         adjoint_backproject_into(sinogram.values(), &self.geometry, output);
@@ -158,11 +158,11 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let mut output = Array2::<T>::from_elem(
-            (self.geometry.rows(), self.geometry.cols()),
+            [self.geometry.rows(), self.geometry.cols()],
             T::from_f64(0.0),
         );
         self.backproject_typed_into(&sinogram, &mut output, profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Execute ramp-filtered backprojection.
@@ -181,12 +181,17 @@ impl RadonPlan {
             return Err(RadonError::SinogramShapeMismatch);
         }
         let sinogram_values = sinogram.values();
-        let mut filtered = Array2::zeros(sinogram_values.dim());
+        let mut filtered = Array2::zeros(sinogram_values.shape());
         let det_spacing = self.geometry.detector_spacing();
         let det_count = self.geometry.detector_count();
         // Parallel ramp filter per angle: each row is an independent, contiguous
-        // chunk of the row-major `filtered` buffer.
-        let ncols = filtered.ncols();
+        // chunk of the row-major `filtered` buffer; the source sinogram is read
+        // row-by-row from its own contiguous backing slice.
+        let ncols = filtered.shape()[1];
+        let src_cols = sinogram_values.shape()[1];
+        let src_flat = sinogram_values
+            .as_slice()
+            .expect("sinogram values must be contiguous (standard layout)");
         let flat = filtered
             .as_slice_mut()
             .expect("filtered must be contiguous (standard layout)");
@@ -194,8 +199,8 @@ impl RadonPlan {
             flat,
             ncols,
             |angle_idx, dest_row| {
-                let source_row = sinogram_values.row(angle_idx);
-                let projection: Vec<f64> = source_row.iter().copied().collect();
+                let start = angle_idx * src_cols;
+                let projection: Vec<f64> = src_flat[start..start + src_cols].to_vec();
                 let mut filtered_buf = vec![0.0_f64; det_count];
                 ramp_filter_projection_into(&projection, det_spacing, &mut filtered_buf);
                 dest_row.copy_from_slice(&filtered_buf);
@@ -203,7 +208,11 @@ impl RadonPlan {
         );
         let mut image = adjoint_backproject(&filtered, &self.geometry);
         let scale = std::f64::consts::PI / self.geometry.angle_count() as f64;
-        image.iter_mut().for_each(|value| *value *= scale);
+        image
+            .as_slice_mut()
+            .expect("adjoint_backproject output must be contiguous")
+            .iter_mut()
+            .for_each(|value| *value *= scale);
         Ok(image)
     }
 
@@ -214,7 +223,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.filtered_backprojection(&Sinogram::new(sinogram))?;
-        leto_array2_from_ndarray(&image)
+        leto_array2_from_dense(&image)
     }
 }
 
@@ -251,17 +260,22 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if image.dim() != (plan.geometry.rows(), plan.geometry.cols()) {
+        if image.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
-        if output.dim() != (plan.geometry.angle_count(), plan.geometry.detector_count()) {
+        if output.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
         let input64 = image.mapv(Self::to_f64);
         let mut output64 =
-            Array2::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_into(&input64, &mut output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(output64.iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())
@@ -275,17 +289,22 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if sinogram.dim() != (plan.geometry.angle_count(), plan.geometry.detector_count()) {
+        if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
-        if output.dim() != (plan.geometry.rows(), plan.geometry.cols()) {
+        if output.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
         let sinogram64 = sinogram.mapv(Self::to_f64);
-        let mut output64 = Array2::zeros((plan.geometry.rows(), plan.geometry.cols()));
+        let mut output64 = Array2::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         let owner_sinogram = Sinogram::new(sinogram64);
         plan.backproject_into(&owner_sinogram, &mut output64)?;
-        for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(output64.iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())
@@ -320,10 +339,10 @@ impl RadonStorage for f64 {
         profile: PrecisionProfile,
     ) -> RadonResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if sinogram.dim() != (plan.geometry.angle_count(), plan.geometry.detector_count()) {
+        if sinogram.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
-        if output.dim() != (plan.geometry.rows(), plan.geometry.cols()) {
+        if output.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
         adjoint_backproject_into(sinogram, &plan.geometry, output);
@@ -374,16 +393,16 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Rad
 }
 
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
-    apollo_fft::application::utilities::leto_interop::array2_from_view(&view)
+    view.to_contiguous()
 }
-fn leto_array2_from_ndarray<T: Copy>(
+fn leto_array2_from_dense<T: Copy>(
     array: &Array2<T>,
 ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
     if array.as_slice().is_some() {
-        apollo_fft::application::utilities::leto_interop::try_array2_from_ndarray(array)
+        apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
             .ok_or(RadonError::ImageShapeMismatch)
     } else {
-        let (rows, cols) = array.dim();
+        let [rows, cols] = array.shape();
         let values: Vec<T> = array.iter().copied().collect();
         leto::Array::from_mnemosyne_vec([rows, cols], values)
             .map_err(|_| RadonError::ImageShapeMismatch)
@@ -394,14 +413,14 @@ fn leto_array2_from_ndarray<T: Copy>(
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::array;
 
     fn plan() -> RadonPlan {
         RadonPlan::new(3, 3, vec![0.0, std::f64::consts::FRAC_PI_2], 3, 1.0).expect("valid plan")
     }
 
     fn image64() -> Array2<f64> {
-        array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]
+        leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+            .unwrap()
     }
 
     #[test]
@@ -410,7 +429,7 @@ mod tests {
         let image = image64();
         let sinogram = plan.forward(&image).expect("forward");
         let mut forward_output =
-            Array2::<f64>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::<f64>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_into(&image, &mut forward_output)
             .expect("caller-owned forward");
         for (actual, expected) in forward_output.iter().zip(sinogram.values().iter()) {
@@ -419,7 +438,7 @@ mod tests {
 
         let expected_backproject = plan.backproject(&sinogram).expect("backproject");
         let mut backproject_output =
-            Array2::<f64>::zeros((plan.geometry.rows(), plan.geometry.cols()));
+            Array2::<f64>::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         plan.backproject_into(&sinogram, &mut backproject_output)
             .expect("caller-owned backproject");
         for (actual, expected) in backproject_output.iter().zip(expected_backproject.iter()) {
@@ -434,7 +453,7 @@ mod tests {
         let expected = plan.forward(&image).expect("forward");
 
         let mut out64 =
-            Array2::<f64>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::<f64>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_typed_into(&image, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
             .expect("typed f64 forward");
         for (actual, expected) in out64.iter().zip(expected.values().iter()) {
@@ -447,14 +466,14 @@ mod tests {
             .forward(&represented32)
             .expect("represented f32 forward");
         let mut out32 =
-            Array2::<f32>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::<f32>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_typed_into(&image32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
             .expect("typed f32 forward");
         for (actual, expected) in out32.iter().zip(expected32.values().iter()) {
             assert!((f64::from(*actual) - *expected).abs() < 1.0e-5);
         }
 
-        let mut recovered32 = Array2::<f32>::zeros((plan.geometry.rows(), plan.geometry.cols()));
+        let mut recovered32 = Array2::<f32>::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         plan.backproject_typed_into(
             &out32,
             &mut recovered32,
@@ -474,7 +493,7 @@ mod tests {
             .forward(&represented16)
             .expect("represented f16 forward");
         let mut out16 = Array2::from_elem(
-            (plan.geometry.angle_count(), plan.geometry.detector_count()),
+            [plan.geometry.angle_count(), plan.geometry.detector_count()],
             f16::from_f32(0.0),
         );
         plan.forward_typed_into(
@@ -492,9 +511,9 @@ mod tests {
     #[test]
     fn typed_path_rejects_profile_storage_mismatch() {
         let plan = plan();
-        let image = Array2::from_elem((3, 3), 1.0_f32);
+        let image = Array2::from_elem([3, 3], 1.0_f32);
         let mut output =
-            Array2::<f32>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::<f32>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         assert!(matches!(
             plan.forward_typed_into(&image, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(RadonError::PrecisionMismatch)
@@ -502,12 +521,12 @@ mod tests {
     }
 
     #[test]
-    fn leto_forward_matches_ndarray_reference() {
+    fn leto_forward_matches_leto_reference() {
         let plan = plan();
         let image = image64();
         let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
             .expect("leto image");
-        let expected = plan.forward(&image).expect("ndarray forward");
+        let expected = plan.forward(&image).expect("leto forward");
 
         let actual = plan.forward_leto(input.view()).expect("leto forward");
         let actual = actual.view();
@@ -519,7 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_strided_forward_matches_ndarray_reference() {
+    fn leto_strided_forward_matches_leto_reference() {
         let plan = plan();
         let image = image64();
         let mut backing = Vec::with_capacity(18);
@@ -532,7 +551,7 @@ mod tests {
             .view()
             .slice(&[(0, 3, 1), (0, 6, 2)])
             .expect("strided view");
-        let expected = plan.forward(&image).expect("ndarray forward");
+        let expected = plan.forward(&image).expect("leto forward");
 
         let actual = plan.forward_leto(strided).expect("leto forward");
         let actual = actual.view();
@@ -544,19 +563,19 @@ mod tests {
     }
 
     #[test]
-    fn typed_leto_forward_and_backproject_match_ndarray_reference() {
+    fn typed_leto_forward_and_backproject_match_leto_reference() {
         let plan = plan();
         let image = image64().mapv(|value| value as f32);
         let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
             .expect("leto image");
         let mut expected_forward =
-            Array2::<f32>::zeros((plan.geometry.angle_count(), plan.geometry.detector_count()));
+            Array2::<f32>::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_typed_into(
             &image,
             &mut expected_forward,
             PrecisionProfile::LOW_PRECISION_F32,
         )
-        .expect("typed ndarray forward");
+        .expect("typed leto forward");
 
         let actual_forward = plan
             .forward_leto_typed::<f32>(input.view(), PrecisionProfile::LOW_PRECISION_F32)
@@ -570,13 +589,13 @@ mod tests {
         }
 
         let mut expected_backproject =
-            Array2::<f32>::zeros((plan.geometry.rows(), plan.geometry.cols()));
+            Array2::<f32>::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         plan.backproject_typed_into(
             &expected_forward,
             &mut expected_backproject,
             PrecisionProfile::LOW_PRECISION_F32,
         )
-        .expect("typed ndarray backproject");
+        .expect("typed leto backproject");
         let values = leto::Array2::from_shape_vec(
             [plan.geometry.angle_count(), plan.geometry.detector_count()],
             expected_forward.iter().copied().collect(),
@@ -599,7 +618,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_backproject_and_filtered_backprojection_match_ndarray_reference() {
+    fn leto_backproject_and_filtered_backprojection_match_leto_reference() {
         let plan = plan();
         let image = image64();
         let sinogram = plan.forward(&image).expect("forward");

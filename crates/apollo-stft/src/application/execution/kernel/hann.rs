@@ -1,4 +1,4 @@
-use ndarray::Array1;
+use leto::Array1;
 
 /// Symmetric Hann analysis window of length `n`.
 ///
@@ -9,9 +9,9 @@ use ndarray::Array1;
 #[must_use]
 pub fn hann_window(n: usize) -> Array1<f64> {
     if n == 1 {
-        return Array1::from_vec(vec![1.0]);
+        return Array1::from(vec![1.0]);
     }
-    Array1::from_shape_fn(n, |i| {
+    Array1::from_shape_fn([n], |[i]| {
         0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n - 1) as f64).cos()
     })
 }

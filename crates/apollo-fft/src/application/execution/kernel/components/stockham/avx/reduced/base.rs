@@ -1,5 +1,5 @@
 use super::fixed::cmul_pair_reduced;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 /// AVX/FMA Stockham reduced stage over two independent complex instances per vector
 /// for `groups == 1`.

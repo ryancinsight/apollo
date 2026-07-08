@@ -1,4 +1,4 @@
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
@@ -38,26 +38,41 @@ impl StftGpuKernel {
         let hep_device = device.hephaestus();
 
         // ── Step 1: Build flat interleaved spectrum for GPU upload ────────────
-        let spectrum_pods: Vec<ComplexPod> = spectrum.iter().map(|c| ComplexPod { re: c.re, im: c.im }).collect();
+        let spectrum_pods: Vec<ComplexPod> = spectrum
+            .iter()
+            .map(|c| ComplexPod { re: c.re, im: c.im })
+            .collect();
 
         // ── Step 2: Allocate GPU buffers ──────────────────────────────────────
-        let spectrum_buf = hep_device.upload(&spectrum_pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let spectrum_buf =
+            hep_device
+                .upload(&spectrum_pods)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
-        let re_scratch_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let im_scratch_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let frame_data_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let re_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let im_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let frame_data_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let signal_buf = hep_device.alloc_zeroed::<f32>(signal_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let signal_buf =
+            hep_device
+                .alloc_zeroed::<f32>(signal_len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         // ── Step 3: Write OLA uniform params (StftParams) ─────────────────────
         let params_buffer = device
@@ -80,13 +95,14 @@ impl StftGpuKernel {
             stage: 0,
             _pad: 0,
         };
-        let base_params_buf = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu base params"),
-                contents: bytemuck::bytes_of(&base_params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu base params"),
+                    contents: bytemuck::bytes_of(&base_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
 
         // ── Step 5: Write butterfly uniform params (one buffer per stage) ─────
         let mut butterfly_bufs = Vec::with_capacity(log2_n as usize);
@@ -246,9 +262,11 @@ impl StftGpuKernel {
         device.queue().submit(std::iter::once(enc.finish()));
 
         let mut output = vec![0.0f32; signal_len];
-        hep_device.download(&signal_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&signal_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 
@@ -280,10 +298,15 @@ impl StftGpuKernel {
         let log2_n = buffers.log2_n;
         let hep_device = device.hephaestus();
 
-        let spectrum_pods: Vec<ComplexPod> = spectrum.iter().map(|c| ComplexPod { re: c.re, im: c.im }).collect();
-        hep_device.write_buffer(&buffers.spectrum_buf, &spectrum_pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let spectrum_pods: Vec<ComplexPod> = spectrum
+            .iter()
+            .map(|c| ComplexPod { re: c.re, im: c.im })
+            .collect();
+        hep_device
+            .write_buffer(&buffers.spectrum_buf, &spectrum_pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         device.queue().write_buffer(
             &buffers.inv_ola_params_buf,
@@ -296,9 +319,11 @@ impl StftGpuKernel {
             }),
         );
 
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu inv reuse encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu inv reuse encoder"),
+            });
 
         {
             let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -360,9 +385,11 @@ impl StftGpuKernel {
 
         device.queue().submit(std::iter::once(enc.finish()));
 
-        hep_device.download(&buffers.inv_signal_buf, &mut buffers.inv_output_host).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&buffers.inv_signal_buf, &mut buffers.inv_output_host)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(())
     }

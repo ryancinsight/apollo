@@ -13,7 +13,7 @@
 //! Normalization (when const NORMALIZE=true) fuses the 1/N scale into the
 //! final stores for inverse paths, avoiding a separate pass.
 
-use num_complex::Complex;
+use eunomia::Complex;
 
 use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
 
@@ -291,7 +291,7 @@ pub(crate) fn dft7_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE:
 /// Moved to shared for dupe reduction (used by winograd composite and GT paths).
 #[inline]
 pub(crate) fn dft15_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 15],
+    data: &mut [eunomia::Complex<F>; 15],
 ) {
     // Read CRT-mapped inputs into locals before any writes.
     // Row mapping: grid[i1*5+i2] = data[(5*i1 + 3*i2) mod 15]
@@ -374,7 +374,7 @@ pub(crate) use super::super::winograd::composite::{
 // Medium composites (N ≥ 72):
 pub(crate) use super::super::winograd::composite::{
     dft108_impl, dft112_impl, dft120_impl, dft121_impl, dft126_impl, dft144_impl, dft154_impl,
-    dft168_impl, dft180_impl, dft189_impl, dft242_impl, dft275_impl, dft280_impl, dft363_impl,
-    dft400_impl, dft484_impl, dft72_impl, dft96_impl, dft99_impl,
-    dft222_impl, dft246_impl, dft259_impl, dft296_impl,
+    dft168_impl, dft180_impl, dft189_impl, dft222_impl, dft242_impl, dft246_impl, dft259_impl,
+    dft275_impl, dft280_impl, dft296_impl, dft363_impl, dft400_impl, dft484_impl, dft72_impl,
+    dft96_impl, dft99_impl,
 };

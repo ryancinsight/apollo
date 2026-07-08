@@ -7,10 +7,10 @@
 //! Because `H_n^2 = n I`, the inverse applies the same butterfly network
 //! followed by multiplication by `1 / n`.
 
-use std::num::NonZeroU64;
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
 use bytemuck::{Pod, Zeroable};
+use std::num::NonZeroU64;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
@@ -102,39 +102,49 @@ impl FwhtGpuKernel {
     ) -> WgpuResult<Vec<f32>> {
         let hep_device = device.hephaestus();
         let len = input.len();
-        let storage = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let storage = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         let mut stride = 1usize;
         while stride < len {
-            let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-fwht-wgpu params stage"),
-                contents: bytemuck::bytes_of(&FwhtParams {
-                    len: len as u32,
-                    stride: stride as u32,
-                    _padding: [0; 2],
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-fwht-wgpu bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: storage.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+            let params_buffer =
+                device
+                    .inner()
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("apollo-fwht-wgpu params stage"),
+                        contents: bytemuck::bytes_of(&FwhtParams {
+                            len: len as u32,
+                            stride: stride as u32,
+                            _padding: [0; 2],
+                        }),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-fwht-wgpu bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: storage.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
 
-            let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-fwht-wgpu butterfly encoder"),
-            });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-fwht-wgpu butterfly encoder"),
+                    });
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some("apollo-fwht-wgpu butterfly pass"),
@@ -149,33 +159,41 @@ impl FwhtGpuKernel {
         }
 
         if inverse {
-            let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-fwht-wgpu params scale"),
-                contents: bytemuck::bytes_of(&FwhtParams {
-                    len: len as u32,
-                    stride: 0,
-                    _padding: [0; 2],
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-fwht-wgpu scale bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: storage.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+            let params_buffer =
+                device
+                    .inner()
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("apollo-fwht-wgpu params scale"),
+                        contents: bytemuck::bytes_of(&FwhtParams {
+                            len: len as u32,
+                            stride: 0,
+                            _padding: [0; 2],
+                        }),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-fwht-wgpu scale bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: storage.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
 
-            let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-fwht-wgpu scale encoder"),
-            });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-fwht-wgpu scale encoder"),
+                    });
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some("apollo-fwht-wgpu scale pass"),
@@ -189,9 +207,11 @@ impl FwhtGpuKernel {
         }
 
         let mut output = vec![0.0_f32; len];
-        hep_device.download(&storage, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&storage, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

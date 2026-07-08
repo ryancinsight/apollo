@@ -5,7 +5,7 @@
 
 /// Frequency bin utilities: `fftfreq` and `rfftfreq`.
 pub mod freq;
-/// Canonical Leto ↔ slice/ndarray interop helpers shared workspace-wide.
+/// Canonical Leto ↔ slice interop helpers shared workspace-wide.
 pub mod leto_interop;
 /// Spectrum shift utilities: `fftshift` and `ifftshift`.
 pub mod shift;

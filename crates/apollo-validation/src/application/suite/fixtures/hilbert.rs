@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn hilbert_cosine_to_sine_fixture() -> SuiteResult<PublishedFixtureReport> {
     // H{cos(2πn/N)} = sin(2πn/N) for bin-frequency f₀=1, N=4.

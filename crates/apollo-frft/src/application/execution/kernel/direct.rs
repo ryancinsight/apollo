@@ -1,6 +1,6 @@
+use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
 use std::f64::consts::PI;
 
 /// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.

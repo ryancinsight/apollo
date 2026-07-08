@@ -15,7 +15,7 @@ use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePai
 use super::components::winograd::WinogradScalar;
 use super::mixed_radix::traits::ShortWinogradScalar;
 use super::mixed_radix::MixedRadixScalar;
-use num_complex::Complex;
+use eunomia::Complex;
 
 /// In-place Rader FFT with automatic convolution strategy and const direction.
 pub fn rader_prime_with_direction<F, const INVERSE: bool>(data: &mut [Complex<F>])

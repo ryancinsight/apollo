@@ -2,12 +2,14 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::{SparseFftPlan, SparseSpectrum};
+    use apollo_fft::{f16, PrecisionProfile};
+    use eunomia::{Complex32, Complex64};
     use leto::{SliceArg, Storage};
-    use num_complex::{Complex32, Complex64};
 
-    use crate::infrastructure::transport::gpu::{SftWgpuBackend, SftWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        SftWgpuBackend, SftWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_advertise_direct_dense_sparse_execution() {

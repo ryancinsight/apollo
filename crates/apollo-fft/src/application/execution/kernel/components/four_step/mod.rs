@@ -55,7 +55,7 @@ const PARALLEL_ROW_THRESHOLD: usize = 65_536;
 
 /// In-place four-step FFT for large power-of-two lengths.
 pub(crate) fn four_step_fft<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     data: &mut [F::Complex],

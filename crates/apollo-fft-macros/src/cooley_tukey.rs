@@ -56,7 +56,7 @@ pub(crate) fn cooley_tukey_function(
 
         row_blocks.push(quote! {
             {
-                let row = unsafe { &mut *(scratch.as_mut_ptr().add(#start) as *mut [num_complex::Complex<F>; #n2]) };
+                let row = unsafe { &mut *(scratch.as_mut_ptr().add(#start) as *mut [eunomia::Complex<F>; #n2]) };
                 <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
                 #(#row_stores)*
             }
@@ -72,15 +72,15 @@ pub(crate) fn cooley_tukey_function(
                 + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>,
             const INVERSE: bool,
         >(
-            data: &mut [num_complex::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
         ) {
             // SAFETY: Every element of `scratch` is written by a col_block before
             // any row_block reads it. The nested loop structure guarantees all N
             // positions are covered (col_block for j in 0..n2 writes scratch[k1*n2+j]
             // for all k1 in 0..n1 and all j in 0..n2 = all N indices).
             let mut scratch =
-                std::mem::MaybeUninit::<[num_complex::Complex<F>; #n]>::uninit();
-            let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+                std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
             #(#col_blocks)*
             let scratch = unsafe { scratch.assume_init_mut() };
             #(#row_blocks)*
@@ -127,25 +127,25 @@ fn twiddle_expr(
         return assign(quote! { col[#k1] });
     }
     if (w_re + 1.0).abs() < 1e-6 && w_im.abs() < 1e-6 {
-        return assign(quote! { num_complex::Complex::new(-col[#k1].re, -col[#k1].im) });
+        return assign(quote! { eunomia::Complex::new(-col[#k1].re, -col[#k1].im) });
     }
 
     // Special-case: ±i
     if w_re.abs() < 1e-6 && (w_im - 1.0).abs() < 1e-6 {
         return assign(quote! {
             if INVERSE {
-                num_complex::Complex::new(col[#k1].im, -col[#k1].re)
+                eunomia::Complex::new(col[#k1].im, -col[#k1].re)
             } else {
-                num_complex::Complex::new(-col[#k1].im, col[#k1].re)
+                eunomia::Complex::new(-col[#k1].im, col[#k1].re)
             }
         });
     }
     if w_re.abs() < 1e-6 && (w_im + 1.0).abs() < 1e-6 {
         return assign(quote! {
             if INVERSE {
-                num_complex::Complex::new(-col[#k1].im, col[#k1].re)
+                eunomia::Complex::new(-col[#k1].im, col[#k1].re)
             } else {
-                num_complex::Complex::new(col[#k1].im, -col[#k1].re)
+                eunomia::Complex::new(col[#k1].im, -col[#k1].re)
             }
         });
     }
@@ -162,7 +162,7 @@ fn twiddle_expr(
                 let sq2o2 = F::sq2o2();
                 let a = col[#k1];
                 if INVERSE {
-                    num_complex::Complex::new(
+                    eunomia::Complex::new(
                         sq2o2 * (
                             if #s_re_pos { a.re } else { -a.re }
                             + if #s_im_pos { a.im } else { -a.im }
@@ -173,7 +173,7 @@ fn twiddle_expr(
                         )
                     )
                 } else {
-                    num_complex::Complex::new(
+                    eunomia::Complex::new(
                         sq2o2 * (
                             if #s_re_pos { a.re } else { -a.re }
                             - if #s_im_pos { a.im } else { -a.im }
@@ -191,7 +191,7 @@ fn twiddle_expr(
     // General case: complex multiplication
     assign(quote! {
         {
-            let tw = num_complex::Complex::new(
+            let tw = eunomia::Complex::new(
                 F::from_precise(#w_re),
                 if INVERSE { F::from_precise(-(#w_im)) } else { F::from_precise(#w_im) }
             );

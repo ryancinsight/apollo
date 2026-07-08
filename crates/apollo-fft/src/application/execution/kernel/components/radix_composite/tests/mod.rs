@@ -10,7 +10,7 @@
 use super::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::radix_shape::factorize_composite;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 mod composite;
 mod correctness;
@@ -61,7 +61,7 @@ pub(super) fn check_roundtrip(n: usize, tol: f64) {
     let mut buf = input.clone();
     forward_inplace_64(&mut buf);
     inverse_inplace_unnorm_64(&mut buf);
-    let recovered: Vec<Complex64> = buf.iter().map(|x| x / n as f64).collect();
+    let recovered: Vec<Complex64> = buf.iter().map(|x| *x / n as f64).collect();
     let err = max_err(&recovered, &input);
     assert!(
         err < tol,

@@ -1,7 +1,9 @@
 //! WGPU compute dispatch logic for the FFT execution.
 
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::GpuFft3d;
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, ChirpData, RadixStages};
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
+    Axis, ChirpData, RadixStages,
+};
 
 impl GpuFft3d {
     pub(crate) fn dispatch_pack(

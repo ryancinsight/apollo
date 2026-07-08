@@ -10,6 +10,7 @@ description = "Non-uniform FFT plans and utilities for Apollo"
 
 [features]
 wgpu = [
+    "apollo-fft/wgpu",
     "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
     "dep:wgpu",
@@ -30,8 +31,7 @@ bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
-ndarray = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true, features = ["serde"] }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

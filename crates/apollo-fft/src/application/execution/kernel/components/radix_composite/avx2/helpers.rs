@@ -2,7 +2,7 @@
 //!
 //! These are used by all radix modules (r2-r7) for both f64 and f32.
 
-use num_complex::Complex;
+use eunomia::Complex;
 use std::arch::x86_64::{
     __m128, __m256, __m256d, _mm256_fmaddsub_pd, _mm256_fmaddsub_ps, _mm256_loadu_pd,
     _mm256_loadu_ps, _mm256_movehdup_ps, _mm256_moveldup_ps, _mm256_mul_pd, _mm256_mul_ps,

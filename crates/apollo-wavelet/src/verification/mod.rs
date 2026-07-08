@@ -74,7 +74,9 @@ mod tests {
         let signal = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
         let plan = CwtPlan::new(7, vec![1.0], ContinuousWavelet::Ricker).expect("plan");
         let coefficients = plan.transform(&signal).expect("cwt");
-        let row = coefficients.values().row(0);
+        let values = coefficients.values();
+        let cols = values.shape()[1];
+        let row = &values.as_slice().expect("contiguous coefficients")[0..cols];
         let (max_index, _) = row
             .iter()
             .enumerate()
@@ -144,11 +146,14 @@ mod tests {
         let scales = vec![s_resonant, 16.0_f64];
         let plan = CwtPlan::new(n, scales, ContinuousWavelet::Morlet { omega0 }).expect("plan");
         let coeffs = plan.transform(&signal).expect("transform");
+        let values = coeffs.values();
+        let cols = values.shape()[1];
+        let flat = values.as_slice().expect("contiguous coefficients");
         // Max coefficient magnitude at resonant scale (row 0)
-        let resonant_row = coeffs.values().row(0);
+        let resonant_row = &flat[0..cols];
         let max_resonant = resonant_row.iter().map(|c| c.abs()).fold(0.0_f64, f64::max);
         // Max coefficient magnitude at far scale (row 1)
-        let far_row = coeffs.values().row(1);
+        let far_row = &flat[cols..2 * cols];
         let max_far = far_row.iter().map(|c| c.abs()).fold(0.0_f64, f64::max);
         // At the resonant scale, the Morlet CWT coefficient is O(π^(1/4)) ≈ 1.33.
         // At scale 16 (mismatched frequency), the broad Gaussian and incoherent oscillation give ~0.

@@ -1,7 +1,7 @@
 use crate::application::execution::plan::czt::dimension_1d::CztPlan;
 use crate::domain::contracts::error::CztError;
-use ndarray::Array1;
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::Array1;
 
 /// Computes the forward CZT using the synchronous standard CPU pipeline.
 pub fn czt(
@@ -10,7 +10,7 @@ pub fn czt(
     a: Complex64,
     w: Complex64,
 ) -> Result<Array1<Complex64>, CztError> {
-    CztPlan::new(input.len(), output_len, a, w)?.forward(input)
+    CztPlan::new(input.size(), output_len, a, w)?.forward(input)
 }
 
 /// Computes the forward CZT from a Leto view using the synchronous CPU pipeline.
@@ -40,7 +40,7 @@ pub fn czt_direct(
     a: Complex64,
     w: Complex64,
 ) -> Result<Array1<Complex64>, CztError> {
-    CztPlan::new(input.len(), output_len, a, w)?.forward_direct(input)
+    CztPlan::new(input.size(), output_len, a, w)?.forward_direct(input)
 }
 
 #[cfg(test)]
@@ -50,7 +50,7 @@ mod tests {
     use leto::Storage;
 
     #[test]
-    fn czt_leto_matches_ndarray_transport() {
+    fn czt_leto_matches_contiguous_transport() {
         let input = vec![
             Complex64::new(0.25, 0.5),
             Complex64::new(-0.75, 1.0),
@@ -59,8 +59,9 @@ mod tests {
         ];
         let a = Complex64::from_polar(1.0, 0.125);
         let w = Complex64::from_polar(1.0, -std::f64::consts::TAU / 11.0);
-        let ndarray_input = Array1::from_vec(input.clone());
-        let expected = czt(&ndarray_input, 6, a, w).expect("ndarray transport");
+        let contiguous_input =
+            Array1::from_shape_vec([input.len()], input.clone()).expect("contiguous input");
+        let expected = czt(&contiguous_input, 6, a, w).expect("contiguous transport");
         let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
 
         let actual = czt_leto(leto_input.view(), 6, a, w).expect("leto transport");

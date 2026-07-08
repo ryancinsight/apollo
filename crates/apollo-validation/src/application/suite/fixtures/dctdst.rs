@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn dct2_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
     let plan = DctDstPlan::new(2, RealTransformKind::DctII)?;

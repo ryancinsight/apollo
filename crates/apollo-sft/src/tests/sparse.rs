@@ -2,7 +2,7 @@
 
 use crate::{SparseFftPlan, SparseSpectrum};
 use apollo_fft::ApolloError;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 fn approx_eq(a: Complex64, b: Complex64, eps: f64) -> bool {
     (a.re - b.re).abs() <= eps && (a.im - b.im).abs() <= eps

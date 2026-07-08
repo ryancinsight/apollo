@@ -5,11 +5,39 @@
 Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),
 hermes (SIMD), moirai (parallel), mnemosyne (scratch). nalgebra is fully removed.
 Remaining replacement work:
-- [ ] [minor] Stage A3: replace residual internal ndarray in validation builders and
-  the Python/numpy boundary with leto where not a public contract; keep ndarray a
-  dev-only differential oracle.
-- [ ] [major] Stage A3: deprecate the public `Array1/2/3` ndarray surface behind an
-  `ndarray-compat` feature once consumers move to the `*_leto` APIs; ADR + migration guide.
+- [x] [minor] Repaired the `--features wgpu` builds of `apollo-dctdst`, `apollo-sht`, and
+  `apollo-radon` — their GPU device paths were uncovered by the leto migration (per-crate
+  wgpu builds had never been verified; default build + 901 tests were green). Fixed D7
+  `leto_interop::array{2,3}_from_view` → `to_contiguous` and tuple shape compares/constructors
+  → `[usize;N]`. **Architectural correction (leto is CPU, hephaestus is GPU):** the dctdst GPU
+  device path had staged its 2D/3D separable orchestration with leto's array API
+  (`Array2`/`row`/`column`/`[[i,j]]`); rewrote it to flat row-major `Vec<f32>` + index
+  arithmetic between per-line Hephaestus dispatches, with leto only at the `*_leto` CPU↔GPU
+  seam (`view.iter()` in, `from_mnemosyne_vec` out). sht/radon already used leto only at the
+  seam (`from_shape_vec` to build the returned output). Every transform crate builds with
+  `--features wgpu`; runtime GPU verification needs hardware.
+- [x] [arch] Stage A3 (complete): the whole workspace runs on `leto` + `eunomia`.
+  `num_complex`→`eunomia::Complex` and `ndarray::Array`→`leto::Array` across all 17
+  transform crates, `apollo-validation`, and `apollo-python`. Apollo has no
+  `ndarray` package in its resolved Cargo graph. The Python boundary keeps
+  runtime NumPy arrays as the external ABI object format, but `apollo-python`
+  now validates dtype/shape/contiguity through PyO3-owned helpers, converts
+  bytes through `bytemuck::Pod` into Leto views/arrays, and constructs runtime
+  NumPy outputs without the Rust `numpy` crate or Eunomia's `numpy` feature.
+  Current verification: first-party source/manifest/lock scan has no `ndarray`,
+  Rust `numpy`, or `as_array()` dependency residue; `cargo tree -i ndarray`
+  reports no matching package; `cargo check -p apollo-python` passes; `cargo
+  nextest run -p apollo-python` passes the value-semantic boundary roundtrip test.
+  `xtask provider-audit` no longer models an ndarray-specific audit column or
+  fixture dependency and now rejects any first-party Rust/TOML/lockfile
+  reintroduction of the Rust crate; `cargo nextest run -p xtask provider_audit`
+  passes. 2026-07-03 audit refresh: stale `gap_audit.md` residual-risk entries
+  that still described Rust `ndarray` usage as current were corrected; the
+  current dependency/source scan and `cargo tree -i ndarray` remain clean.
+- [x] [arch] Coeus decoupling: removed `apollo-fft/src/coeus.rs`, the `coeus` feature, the
+  `ComputeBackend`/`FftDeviceOps`-for-`WgpuBackend` bridge, and `apollo-wgpu-helpers`'
+  `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
+  `coeus-autograd` consuming Apollo one-way (cycle broken).
 - [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
   through moirai.
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0001):
@@ -76,6 +104,16 @@ Remaining replacement work:
   feature-gated GPU code, verify under the wgpu feature, differential vs CPU.
 
 ## Delivered
+- [x] [patch] Zero-copy input was previously added on the 2D/3D Leto transform
+  entry points via `leto::ArrayView::as_array`, but that provider API is no
+  longer current in the local Leto checkout. The current `apollo-dht` and
+  `apollo-dctdst` Leto 2D/3D entry points use `to_contiguous()` while their
+  storage-generic `forward/inverse_{2,3}d_into` implementations remain intact.
+  1D paths remain zero-copy (`leto_view1_cow` Cow-borrow). **Deliberately NOT applied** to `apollo-sht`
+  (downstream reads a contiguous flat slice — `to_contiguous` is load-bearing for
+  strided inputs), `apollo-radon` (Sinogram domain wrapper), `apollo-nufft` (scratch
+  views), or GPU device paths (data is copied on upload regardless). Verification:
+  `cargo nextest run --workspace` 901/901; clippy 0 warnings.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `a46dea9` (`0.4.0`). This imports broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` that write through caller-owned output layouts, covering provider-side `[N,1]`/`[1,C]` elementwise tensor paths without materialized broadcast inputs. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `642d87a3` (`0.3.0`). This imports the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR without changing Apollo public APIs. Verification: focused FFT/FRFT/GFT check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.

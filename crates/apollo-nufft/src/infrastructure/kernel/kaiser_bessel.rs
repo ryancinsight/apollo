@@ -22,7 +22,7 @@
 //! Transforms Using Min-Max Interpolation." *IEEE Trans. Signal Process.* **51**(2),
 //! 560–574. <https://doi.org/10.1109/TSP.2002.807005>
 
-use ndarray::Array1;
+use leto::Array1;
 use std::f64::consts::PI;
 
 /// Evaluate the modified Bessel function of order zero.
@@ -141,7 +141,7 @@ pub fn axis_deconv(
     beta: f64,
     i0_beta: f64,
 ) -> Array1<f64> {
-    Array1::from_shape_fn(n, |k| {
+    Array1::from_shape_fn([n], |[k]| {
         let xi = fft_signed_index(k, n) as f64 / m as f64;
         1.0 / kb_kernel_ft(xi, kernel_width, beta, i0_beta)
     })

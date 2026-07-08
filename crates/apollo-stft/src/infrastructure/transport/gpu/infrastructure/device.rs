@@ -39,12 +39,19 @@ impl StftWgpuBackend {
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        static INSTANCE: std::sync::OnceLock<Result<StftWgpuBackend, crate::infrastructure::transport::gpu::domain::error::WgpuError>> = std::sync::OnceLock::new();
-        INSTANCE.get_or_init(|| {
-            WgpuDevice::try_default("apollo-stft-wgpu")
-                .map_err(crate::infrastructure::transport::gpu::domain::error::WgpuError::from)
-                .and_then(Self::new)
-        }).clone()
+        static INSTANCE: std::sync::OnceLock<
+            Result<
+                StftWgpuBackend,
+                crate::infrastructure::transport::gpu::domain::error::WgpuError,
+            >,
+        > = std::sync::OnceLock::new();
+        INSTANCE
+            .get_or_init(|| {
+                WgpuDevice::try_default("apollo-stft-wgpu")
+                    .map_err(crate::infrastructure::transport::gpu::domain::error::WgpuError::from)
+                    .and_then(Self::new)
+            })
+            .clone()
     }
 
     /// Return truthful forward-and-inverse capability descriptor.

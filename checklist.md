@@ -1,5 +1,102 @@
 # Apollo Checklist
 
+## Hephaestus WGPU local provider edge [patch]
+- [x] Routed the workspace `hephaestus-wgpu` dependency to the local Atlas
+  Hephaestus checkout so `apollo-wgpu-helpers` compiles against the current
+  `WgpuDevice` acquisition and staging-buffer API used by downstream
+  `kwavers-math --features gpu`.
+- Evidence tier: downstream compile/type validation plus focused GPU FFT
+  tests from the consumer integration. Verification from
+  `D:\atlas\repos\kwavers`: `rustup run nightly cargo check -p kwavers-math
+  --features gpu --all-targets` passed, `rustup run nightly cargo nextest run
+  -p kwavers-math --features gpu -E "test(gpu_fft) or test(apollo_wgpu)"
+  --status-level fail --no-fail-fast` passed 2/2, and
+  `cargo tree -p kwavers-math --features gpu -i hephaestus-wgpu` resolves
+  `hephaestus-wgpu v0.11.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
+- Residual: Apollo has an `FftBackend` trait seam, but no real CUDA FFT
+  provider yet. CUDA FFT requires upstream Apollo/Hephaestus kernels plus
+  WGPU/CUDA differential tests.
+
+## Apollo direct ndarray removal [patch]
+- [x] Removed the remaining Python-boundary `as_array()` conversions. NumPy
+  inputs are now validated as C-contiguous through `numpy`'s slice/shape API and
+  are converted to Leto views or Leto-owned arrays without handing Apollo
+  ndarray views.
+- [x] Replaced stale `ArrayView::as_array()` calls in `apollo-dctdst` and
+  `apollo-dht` Leto 2D/3D entry points with native Leto `to_contiguous()`
+  materialization, and replaced DHT inverse scaling through obsolete
+  `mapv_inplace` with Leto mutable-slice scaling.
+- [x] Migrated remaining non-Python benchmark arrays to Leto constructors in
+  `apollo-fft`, `apollo-nufft`, and `apollo-radon`.
+- [x] Removed stale `ndarray` dev-dependencies from `apollo-fft`, `apollo-dht`,
+  `apollo-frft`, `apollo-gft`, `apollo-qft`, and `apollo-sft`.
+- [x] Removed the obsolete validation-suite Leto/ndarray roundtrip and renamed stale
+  non-Python test/oracle labels to Leto.
+- [x] Replaced `apollo-python` return conversion through
+  `ndarray::Array{1,2,3}` with shared Leto-to-NumPy helpers that consume Leto
+  arrays into owned vectors and reshape them at the PyO3 boundary.
+- [x] Removed Apollo's root workspace `ndarray` dependency and the
+  `apollo-python` direct dependency.
+- [x] Removed `xtask provider-audit`'s stale `ndarray` audit column and test
+  dependency fixtures.
+- [x] Removed `apollo-python`'s Rust `numpy` crate dependency and Eunomia
+  `numpy` feature; Python runtime NumPy remains only as the external ABI object
+  format.
+- [x] Added PyO3-only NumPy boundary helpers that validate dtype, rank, and
+  contiguity, cast byte buffers through `bytemuck::Pod`, build Leto views/arrays,
+  and construct owned runtime NumPy outputs without Rust `numpy`/`ndarray`.
+- [x] Added `numpy_boundary_preserves_shape_and_values` to assert input
+  shape/value extraction, Leto conversion, and output NumPy shape/value
+  reconstruction.
+- [x] Cleared the Leto API blockers in `apollo-fwht` and `apollo-nufft` by
+  replacing stale `mapv_inplace`, `Array1::from(Vec<_>)`, scalar rank-1
+  indexing, mutable rank-3 view indexing, mutable-view `fill`, and
+  mutable-view `as_view` calls with current Leto slice, shape, `get`,
+  `get_mut`, and `ArrayView3::new` APIs.
+- [x] Removed stale `apollo-fft` README wording that still described active
+  ndarray-backed stride and caller-owned output paths; it now documents Leto
+  views and caller-owned slice output paths.
+- [x] Removed stale current-provider documentation that still described
+  `ndarray` as Apollo's validation oracle or transitional public substrate.
+  `docs/provider_contract.md` now states that Apollo code and manifests must
+  not depend on the Rust `ndarray` crate, and `docs/VALIDATION.md` now
+  describes Leto-owned FFT/SFT validation surfaces.
+- [x] Added a provider-audit regression guard that rejects first-party
+  manifest, lockfile, or Rust-source `ndarray` references while ignoring
+  comment-only mentions.
+- [x] Refreshed stale residual-risk entries in `gap_audit.md` that still
+  described Rust `ndarray` usage as current after the Leto migration had already
+  removed the dependency and source edges.
+- Evidence: `rg -n "as_array\(|ndarray::|use ndarray|^ndarray\s*=|\bndarray\b" Cargo.toml crates -g "*.rs" -g "Cargo.toml"` returned no matches before the Python-boundary cleanup; the final source/manifest/lock scan for Rust `numpy`/`ndarray` residue returns no dependency hits outside local helper names and the runtime Python import string.
+- Final xtask evidence: `rg -n "ndarray" Cargo.toml Cargo.lock crates xtask
+  -g "*.toml" -g "*.rs" -g "Cargo.lock"` returns no matches.
+- README evidence: `rg -n "ndarray" README.md crates -g "README.md"` returns
+  no matches.
+- Dependency evidence: `cargo tree -i ndarray` reports no matching `ndarray`
+  package in Apollo's resolved Cargo graph.
+- Current artifact refresh evidence: stale `gap_audit.md` residual-risk entries
+  that described Rust `ndarray` as current were rewritten to the present Leto
+  state. Historical migration entries still mention prior `ndarray` roles.
+- Verified for the README correction: `cargo check -p apollo-fft`; `cargo
+  nextest run -p apollo-fft` (394/394 passed).
+- Verified for this slice: `cargo fmt -p apollo-python -- --check`; `cargo check -p apollo-python`; `cargo nextest run -p apollo-python`; `git diff --check`.
+- Verified for the provider-audit cleanup: `cargo fmt -p xtask --check`;
+  `cargo nextest run -p xtask provider_audit`; `cargo run -p xtask --
+  provider-audit`.
+- Residual: runtime NumPy arrays remain the Python ABI object format, but Apollo
+  no longer carries the Rust `numpy` crate, Eunomia's `numpy` feature, or
+  `ndarray` in the Cargo graph.
+
+## CZT native Leto constructor/indexing cleanup [patch]
+- [x] Removed `apollo-czt`'s stale `ndarray` dev-dependency.
+- [x] Replaced CZT `Array1::from(Vec<_>)` construction with
+  `Array1::from_shape_vec([len], values)` in the plan kernel and tests.
+- [x] Replaced remaining scalar 1D array indexing in CZT tests/proptests with Leto
+  rank-aware coordinate indexing.
+- Evidence: `rg` found no targeted ndarray/compat constructor residue in
+  `crates/apollo-czt/src` or its manifest; `cargo fmt --package apollo-czt --check`;
+  `cargo nextest run -p apollo-czt` -> 40/40 passed.
+
 ## Coeus GradBuffer autograd compatibility [patch]
 - [x] Migrated `apollo-fft` Coeus FFT autograd nodes from raw `Arc<Mutex<Tensor<_>>>`
   gradient buffers to `coeus_autograd::GradBuffer`, matching the current local Coeus
@@ -61,7 +158,10 @@
 - [x] WGPU and Python boundary crates forward `parallel`/`mnemosyne-memory` defaults to their CPU transform dependencies instead of introducing duplicate runtime dependencies.
 - [x] Updated workspace `leto` and `leto-ops` Git revisions to pushed Leto commit `d8d34c617da453360931e50358e645743918962f` (`0.13.1` row-walk traversal provider).
 - [x] Verification: manifest audit confirmed every package default includes `parallel` and `mnemosyne-memory`; `cargo metadata --no-deps --locked`; `cargo fmt --all --check`; `cargo check --workspace --locked`; `cargo test --locked --workspace --examples`; `cargo test --locked --workspace`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps --locked`.
-- Residual: full `cargo doc --workspace --no-deps --locked` ICEs while documenting `apollo-python` through `numpy 0.23.0` intra-doc link collection on rustc `1.95.0`; non-PyO3 workspace docs are clean.
+- Historical residual superseded by the Apollo direct ndarray removal slice:
+  `apollo-python` no longer depends on the Rust `numpy` crate. Non-PyO3
+  workspace docs were clean for this provider-feature policy increment; rerun
+  full workspace docs as a separate doc-gate closure item.
 - Evidence: Cargo resolver metadata, value-semantic workspace tests, example build/test target, clippy diagnostics, and non-PyO3 rustdoc generation.
 
 ## Structural hierarchy + nufft zero-copy sweep [patch]
@@ -719,7 +819,8 @@
 - [x] Removed Apollo's root `ndarray` `matrixmultiply-threading` feature so ndarray remains a validation oracle without Rayon-backed execution.
 - [x] Verification: `cargo check -p apollo-fft`; `cargo test -p apollo-fft --test slice_api -- --nocapture`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo run -p xtask -- provider-audit`; touched rustfmt check; `cargo tree -p apollo-fft --edges normal` dependency inspection.
 - Evidence: differential value-semantic tests against the ndarray array API for contiguous and strided Leto 1D views, static provider audit, and single-source Mnemosyne dependency resolution. No runtime benchmark claim is made.
-- Residual: broad Apollo ndarray replacement remains per-crate work; current increment covers the public 1D FFT boundary.
+- Historical residual superseded by the Apollo direct ndarray removal slice:
+  Apollo's current Cargo graph no longer resolves an `ndarray` package.
 
 ## Mnemosyne scratch-bank provider consumption [patch]
 - [x] Added and pushed Mnemosyne `ScratchBank<T, const N>` in commit `9411c444`, with independent role slots over provider-owned `ScratchPool<T>` instances.

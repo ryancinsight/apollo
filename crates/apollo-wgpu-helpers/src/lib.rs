@@ -32,11 +32,9 @@
 use std::sync::Arc;
 
 pub use error::{WgpuDeviceError, WgpuDeviceResult, WgpuError, WgpuResult};
-pub use storage::{WgpuStorage, get_global_device};
 pub use hephaestus_wgpu;
 
 mod error;
-mod storage;
 
 // ── WgpuDevice ──────────────────────────────────────────────────────────────
 

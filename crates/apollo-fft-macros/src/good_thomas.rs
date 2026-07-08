@@ -114,12 +114,12 @@ pub(crate) fn good_thomas_function(
         #inline_attr
         #[allow(unused_variables, unused_mut)]
         pub(crate) unsafe fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>, const INVERSE: bool>(
-            data: &mut [num_complex::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
         ) {
             // Use MaybeUninit to avoid zero-initialization overhead
             // SAFETY: All scratch positions are written via .write() before any .read()
-            let mut scratch = std::mem::MaybeUninit::<[num_complex::Complex<F>; #n]>::uninit();
-            let scratch_ptr = scratch.as_mut_ptr() as *mut num_complex::Complex<F>;
+            let mut scratch = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n]>::uninit();
+            let scratch_ptr = scratch.as_mut_ptr() as *mut eunomia::Complex<F>;
 
             // Gather input using incremental index calculation (no runtime modulo)
             for i1 in 0..#n1 {
@@ -138,7 +138,7 @@ pub(crate) fn good_thomas_function(
             // Transform rows using zero-cost pointer cast
             for i1 in 0..#n1 {
                 let row_start = i1 * #n2;
-                let row = unsafe { &mut *(scratch_ptr.add(row_start) as *mut [num_complex::Complex<F>; #n2]) };
+                let row = unsafe { &mut *(scratch_ptr.add(row_start) as *mut [eunomia::Complex<F>; #n2]) };
                 unsafe {
                     <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
                 }
@@ -151,8 +151,8 @@ pub(crate) fn good_thomas_function(
             for i2 in 0..#n2 {
                 // SAFETY: All N1 slots of `col` are written by the gather loop before
                 // `dft` reads any of them. The loop covers i1=0..N1 unconditionally.
-                let mut col = std::mem::MaybeUninit::<[num_complex::Complex<F>; #n1]>::uninit();
-                let col_ptr = col.as_mut_ptr() as *mut num_complex::Complex<F>;
+                let mut col = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n1]>::uninit();
+                let col_ptr = col.as_mut_ptr() as *mut eunomia::Complex<F>;
                 for i1 in 0..#n1 {
                     unsafe { col_ptr.add(i1).write(scratch_ptr.add(i1 * #n2 + i2).read()); }
                 }
@@ -218,7 +218,7 @@ pub fn generate_good_thomas_dispatch(input: CompilerTokenStream) -> CompilerToke
 
         pub(super) fn try_fft<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-                Complex = num_complex::Complex<F>,
+                Complex = eunomia::Complex<F>,
             > #(#trait_bounds)*,
             const INVERSE: bool,
         >(

@@ -6,7 +6,7 @@ use proptest::prelude::*;
 #[test]
 fn two_point_transform_matches_reference() {
     let plan = FwhtPlan::new(2).expect("valid plan");
-    let input = Array1::from_vec(vec![1.0, 3.0]);
+    let input = Array1::from(vec![1.0, 3.0]);
     let output = plan.forward(&input).expect("forward");
     assert_relative_eq!(output[0], 4.0, epsilon = 1.0e-12);
     assert_relative_eq!(output[1], -2.0, epsilon = 1.0e-12);
@@ -15,7 +15,7 @@ fn two_point_transform_matches_reference() {
 #[test]
 fn roundtrip_recovers_input() {
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let input = Array1::from_vec(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
+    let input = Array1::from(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
     let fwd = plan.forward(&input).expect("forward");
     let recovered = plan.inverse(&fwd).expect("inverse");
     for (actual, expected) in recovered.iter().zip(input.iter()) {
@@ -26,15 +26,15 @@ fn roundtrip_recovers_input() {
 #[test]
 fn caller_owned_real_paths_match_allocating_paths() {
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let input = Array1::from_vec(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
+    let input = Array1::from(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
     let expected_forward = plan.forward(&input).expect("forward");
-    let mut forward = Array1::zeros(8);
+    let mut forward = Array1::zeros([8]);
     plan.forward_into(&input, &mut forward)
         .expect("forward_into");
     assert_eq!(forward, expected_forward);
 
     let expected_inverse = plan.inverse(&expected_forward).expect("inverse");
-    let mut inverse = Array1::zeros(8);
+    let mut inverse = Array1::zeros([8]);
     plan.inverse_into(&forward, &mut inverse)
         .expect("inverse_into");
     for (actual, expected) in inverse.iter().zip(expected_inverse.iter()) {
@@ -43,21 +43,21 @@ fn caller_owned_real_paths_match_allocating_paths() {
 }
 
 #[test]
-fn leto_real_forward_and_inverse_match_ndarray_path() {
+fn leto_real_forward_and_inverse_match_leto_path() {
     use leto::Storage;
 
     let plan = FwhtPlan::new(8).expect("valid plan");
     let signal = vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0];
-    let ndarray_input = Array1::from_vec(signal.clone());
+    let owned_input = Array1::from(signal.clone());
     let leto_input = leto::Array1::from_shape_vec([8], signal).expect("leto input");
 
     let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
-    let ndarray_forward = plan.forward(&ndarray_input).expect("ndarray forward");
+    let owned_forward = plan.forward(&owned_input).expect("owned forward");
     for (actual, expected) in leto_forward
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_forward.iter())
+        .zip(owned_forward.iter())
     {
         assert_relative_eq!(actual, expected, epsilon = 1.0e-12);
     }
@@ -65,12 +65,12 @@ fn leto_real_forward_and_inverse_match_ndarray_path() {
     let leto_inverse = plan
         .inverse_leto(leto_forward.view())
         .expect("leto inverse");
-    let ndarray_inverse = plan.inverse(&ndarray_forward).expect("ndarray inverse");
+    let owned_inverse = plan.inverse(&owned_forward).expect("owned inverse");
     for (actual, expected) in leto_inverse
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_inverse.iter())
+        .zip(owned_inverse.iter())
     {
         assert_relative_eq!(actual, expected, epsilon = 1.0e-12);
     }
@@ -129,9 +129,7 @@ fn leto_real_forward_accepts_strided_logical_view() {
         .unwrap();
 
     let actual = plan.forward_leto(strided).expect("leto forward");
-    let expected = plan
-        .forward(&Array1::from_vec(logical))
-        .expect("ndarray forward");
+    let expected = plan.forward(&Array1::from(logical)).expect("leto forward");
     for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
         assert_relative_eq!(actual, expected, epsilon = 1.0e-12);
     }
@@ -152,9 +150,7 @@ fn leto_real_forward_scatters_into_strided_output() {
 
     plan.forward_leto_into(leto_input.view(), strided_output)
         .expect("leto strided output forward");
-    let expected = plan
-        .forward(&Array1::from_vec(signal))
-        .expect("ndarray forward");
+    let expected = plan.forward(&Array1::from(signal)).expect("leto forward");
     for index in 0..8 {
         assert_relative_eq!(
             output.storage().as_slice()[index * 2],
@@ -170,15 +166,15 @@ fn leto_real_forward_scatters_into_strided_output() {
 }
 
 #[test]
-fn leto_typed_f32_matches_ndarray_typed_path() {
+fn leto_typed_f32_matches_leto_typed_path() {
     use leto::Storage;
 
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let signal = Array1::from_vec(vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
+    let signal = Array1::from(vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
     let leto_input = leto::Array1::from_shape_vec([8], signal.iter().copied().collect()).unwrap();
-    let mut expected = Array1::<f32>::zeros(8);
+    let mut expected = Array1::<f32>::zeros([8]);
     plan.forward_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("ndarray typed forward");
+        .expect("leto typed forward");
 
     let actual = plan
         .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
@@ -189,15 +185,15 @@ fn leto_typed_f32_matches_ndarray_typed_path() {
 }
 
 #[test]
-fn leto_typed_f32_caller_owned_output_matches_ndarray_typed_path() {
+fn leto_typed_f32_caller_owned_output_matches_leto_typed_path() {
     use leto::Storage;
 
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let signal = Array1::from_vec(vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
+    let signal = Array1::from(vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
     let leto_input = leto::Array1::from_shape_vec([8], signal.iter().copied().collect()).unwrap();
-    let mut expected = Array1::<f32>::zeros(8);
+    let mut expected = Array1::<f32>::zeros([8]);
     plan.forward_typed_into(&signal, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("ndarray typed forward");
+        .expect("leto typed forward");
 
     let mut actual = leto::Array1::from_shape_vec([8], vec![0.0_f32; 8]).unwrap();
     plan.forward_leto_typed_into(
@@ -212,11 +208,11 @@ fn leto_typed_f32_caller_owned_output_matches_ndarray_typed_path() {
 }
 
 #[test]
-fn leto_typed_strided_f16_matches_ndarray_typed_path() {
+fn leto_typed_strided_f16_matches_leto_typed_path() {
     use leto::{SliceArg, Storage};
 
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let signal = Array1::from_vec(vec![
+    let signal = Array1::from(vec![
         f16::from_f32(1.0),
         f16::from_f32(-2.0),
         f16::from_f32(0.5),
@@ -235,13 +231,13 @@ fn leto_typed_strided_f16_matches_ndarray_typed_path() {
     let strided = leto_input
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .unwrap();
-    let mut expected = Array1::from_elem(8, f16::from_f32(0.0));
+    let mut expected = Array1::from_elem([8], f16::from_f32(0.0));
     plan.forward_typed_into(
         &signal,
         &mut expected,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("ndarray typed forward");
+    .expect("leto typed forward");
 
     let actual = plan
         .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
@@ -254,10 +250,10 @@ fn leto_typed_strided_f16_matches_ndarray_typed_path() {
 #[test]
 fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let signal64 = Array1::from_vec(vec![1.0_f64, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
+    let signal64 = Array1::from(vec![1.0_f64, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75]);
     let expected = plan.forward(&signal64).expect("forward");
 
-    let mut out64 = Array1::zeros(8);
+    let mut out64 = Array1::zeros([8]);
     plan.forward_typed_into(&signal64, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
         .expect("typed f64 forward");
     for (actual, expected) in out64.iter().zip(expected.iter()) {
@@ -265,7 +261,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     }
 
     let signal32 = signal64.mapv(|value| value as f32);
-    let mut out32 = Array1::zeros(8);
+    let mut out32 = Array1::zeros([8]);
     plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
         .expect("typed f32 forward");
     for (actual, expected) in out32.iter().zip(expected.iter()) {
@@ -273,7 +269,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     }
 
     let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
-    let mut out16 = Array1::from_elem(8, f16::from_f32(0.0));
+    let mut out16 = Array1::from_elem([8], f16::from_f32(0.0));
     plan.forward_typed_into(
         &signal16,
         &mut out16,
@@ -285,7 +281,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
     }
 
-    let mut recovered32 = Array1::zeros(8);
+    let mut recovered32 = Array1::zeros([8]);
     plan.inverse_typed_into(
         &out32,
         &mut recovered32,
@@ -296,7 +292,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(*actual) - f64::from(*expected)).abs() < 1.0e-5);
     }
 
-    let mut recovered16 = Array1::from_elem(8, f16::from_f32(0.0));
+    let mut recovered16 = Array1::from_elem([8], f16::from_f32(0.0));
     plan.inverse_typed_into(
         &out16,
         &mut recovered16,
@@ -312,7 +308,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 #[test]
 fn mixed_f16_typed_paths_reuse_f32_workspace() {
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let signal = Array1::from_vec(vec![
+    let signal = Array1::from(vec![
         f16::from_f32(1.0),
         f16::from_f32(-2.0),
         f16::from_f32(0.5),
@@ -322,8 +318,8 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
         f16::from_f32(0.0),
         f16::from_f32(-0.75),
     ]);
-    let mut first = Array1::from_elem(8, f16::from_f32(0.0));
-    let mut second = Array1::from_elem(8, f16::from_f32(0.0));
+    let mut first = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut second = Array1::from_elem([8], f16::from_f32(0.0));
 
     plan.forward_typed_into(
         &signal,
@@ -349,8 +345,8 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
         assert_relative_eq!(actual.to_f32(), expected.to_f32(), epsilon = 0.0);
     }
 
-    let mut recovered_first = Array1::from_elem(8, f16::from_f32(0.0));
-    let mut recovered_second = Array1::from_elem(8, f16::from_f32(0.0));
+    let mut recovered_first = Array1::from_elem([8], f16::from_f32(0.0));
+    let mut recovered_second = Array1::from_elem([8], f16::from_f32(0.0));
     plan.inverse_typed_into(
         &first,
         &mut recovered_first,
@@ -379,8 +375,8 @@ fn mixed_f16_typed_paths_reuse_f32_workspace() {
 #[test]
 fn typed_path_rejects_profile_storage_mismatch() {
     let plan = FwhtPlan::new(4).expect("valid plan");
-    let signal = Array1::from_vec(vec![1.0_f32, 2.0, 3.0, 4.0]);
-    let mut output = Array1::zeros(4);
+    let signal = Array1::from(vec![1.0_f32, 2.0, 3.0, 4.0]);
+    let mut output = Array1::zeros([4]);
     assert!(matches!(
         plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
         Err(FwhtError::PrecisionMismatch)
@@ -390,7 +386,7 @@ fn typed_path_rejects_profile_storage_mismatch() {
 #[test]
 fn complex_roundtrip_recovers_input() {
     let plan = FwhtPlan::new(4).expect("valid plan");
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, -1.0),
         Complex64::new(2.0, 0.5),
         Complex64::new(-0.75, 0.25),
@@ -407,14 +403,14 @@ fn complex_roundtrip_recovers_input() {
 #[test]
 fn caller_owned_complex_paths_match_allocating_paths() {
     let plan = FwhtPlan::new(4).expect("valid plan");
-    let input = Array1::from_vec(vec![
+    let input = Array1::from(vec![
         Complex64::new(1.0, -1.0),
         Complex64::new(2.0, 0.5),
         Complex64::new(-0.75, 0.25),
         Complex64::new(0.125, -0.625),
     ]);
     let expected_forward = plan.forward_complex(&input).expect("forward_complex");
-    let mut forward = Array1::from_elem(4, Complex64::new(0.0, 0.0));
+    let mut forward = Array1::from_elem([4], Complex64::new(0.0, 0.0));
     plan.forward_complex_into(&input, &mut forward)
         .expect("forward_complex_into");
     assert_eq!(forward, expected_forward);
@@ -422,7 +418,7 @@ fn caller_owned_complex_paths_match_allocating_paths() {
     let expected_inverse = plan
         .inverse_complex(&expected_forward)
         .expect("inverse_complex");
-    let mut inverse = Array1::from_elem(4, Complex64::new(0.0, 0.0));
+    let mut inverse = Array1::from_elem([4], Complex64::new(0.0, 0.0));
     plan.inverse_complex_into(&forward, &mut inverse)
         .expect("inverse_complex_into");
     for (actual, expected) in inverse.iter().zip(expected_inverse.iter()) {
@@ -440,7 +436,7 @@ fn rejects_invalid_lengths() {
 #[test]
 fn length_mismatch_returns_error() {
     let plan = FwhtPlan::new(4).expect("valid plan");
-    let wrong = Array1::from_vec(vec![1.0, 2.0, 3.0]);
+    let wrong = Array1::from(vec![1.0, 2.0, 3.0]);
     assert!(matches!(
         plan.forward(&wrong),
         Err(FwhtError::LengthMismatch)
@@ -449,7 +445,7 @@ fn length_mismatch_returns_error() {
         plan.inverse(&wrong),
         Err(FwhtError::LengthMismatch)
     ));
-    let wrong_c = Array1::from_vec(vec![Complex64::new(1.0, 0.0); 3]);
+    let wrong_c = Array1::from(vec![Complex64::new(1.0, 0.0); 3]);
     assert!(matches!(
         plan.forward_complex(&wrong_c),
         Err(FwhtError::LengthMismatch)
@@ -458,7 +454,7 @@ fn length_mismatch_returns_error() {
         plan.inverse_complex(&wrong_c),
         Err(FwhtError::LengthMismatch)
     ));
-    let mut output_c = Array1::from_vec(vec![Complex64::new(0.0, 0.0); 4]);
+    let mut output_c = Array1::from(vec![Complex64::new(0.0, 0.0); 4]);
     assert!(matches!(
         plan.forward_complex_into(&wrong_c, &mut output_c),
         Err(FwhtError::LengthMismatch)
@@ -484,7 +480,7 @@ fn length_mismatch_returns_error() {
 #[test]
 fn single_element_is_identity() {
     let plan = FwhtPlan::new(1).expect("valid plan");
-    let input = Array1::from_vec(vec![42.0f64]);
+    let input = Array1::from(vec![42.0f64]);
     let fwd = plan.forward(&input).expect("forward");
     assert_relative_eq!(fwd[0], 42.0, epsilon = 1.0e-12);
     let inv = plan.inverse(&fwd).expect("inverse");
@@ -494,7 +490,7 @@ fn single_element_is_identity() {
 #[test]
 fn involution_property() {
     let plan = FwhtPlan::new(8).expect("valid plan");
-    let input = Array1::from_vec(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
+    let input = Array1::from(vec![1.0, -2.0, 3.5, 0.25, -1.5, 2.0, 0.0, 4.0]);
     let fwd1 = plan.forward(&input).expect("fwd1");
     let fwd2 = plan.forward(&fwd1).expect("fwd2");
     for (actual, expected) in fwd2.iter().zip(input.iter()) {
@@ -509,7 +505,7 @@ proptest::proptest! {
         samples in prop::collection::vec(-10.0f64..10.0f64, 1usize..4096)
     ) {
         let n = 1usize << power;
-        let input = Array1::from_vec(
+        let input = Array1::from(
             samples.into_iter().cycle().take(n).collect::<Vec<_>>()
         );
         let plan = FwhtPlan::new(n).expect("valid plan");

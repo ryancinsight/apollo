@@ -29,7 +29,7 @@ impl GpuPrecision for ReducedPrecision {
 
     fn create_chirp_buffers(
         device: &wgpu::Device,
-        h: &[num_complex::Complex<f64>],
+        h: &[eunomia::Complex<f64>],
     ) -> (wgpu::Buffer, wgpu::Buffer) {
         use wgpu::util::DeviceExt;
         let h_re_bits: Vec<u16> = h
@@ -145,11 +145,11 @@ mod tests {
         };
 
         // Analytical test field: deterministic, non-trivial, ‖f‖_∞ ≤ 1.
-        let field_f64 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f64 = leto::Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f64;
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });
-        let field_f32 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f32 = leto::Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f64;
             ((0.3 * x).sin() + 0.5 * (0.7 * x).cos()) as f32
         });
@@ -182,13 +182,13 @@ mod tests {
         };
 
         // Deterministic 3×3×3 field with values in [−1, 1].
-        let field = ndarray::Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
+        let field = leto::Array3::from_shape_fn([3, 3, 3], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f32;
             ((0.3 * x).sin() + 0.5 * (0.7 * x).cos()) as f32
         });
 
         let forward = plan.forward(&field);
-        let mut roundtrip = ndarray::Array3::<f32>::zeros((3, 3, 3));
+        let mut roundtrip = leto::Array3::<f32>::zeros([3, 3, 3]);
         plan.inverse(&forward, &mut roundtrip);
 
         assert_eq!(

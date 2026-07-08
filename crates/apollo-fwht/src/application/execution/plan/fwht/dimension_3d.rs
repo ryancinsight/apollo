@@ -14,9 +14,18 @@
 
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
-use ndarray::Array3;
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::Array3;
 use serde::{Deserialize, Serialize};
+
+fn scale_array(data: &mut Array3<f64>, scale: f64) {
+    for value in data
+        .as_slice_mut()
+        .expect("invariant: FWHT arrays are contiguous")
+    {
+        *value *= scale;
+    }
+}
 
 /// Reusable 3D FWHT plan.
 ///
@@ -59,10 +68,10 @@ impl FwhtPlan3D {
     /// Applies the 1D WHT along axis 0, then axis 1, then axis 2.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n, n)`.
     pub fn forward(&self, input: &Array3<f64>) -> Result<Array3<f64>, FwhtError> {
         let n = self.n;
-        let (d0, d1, d2) = input.dim();
+        let [d0, d1, d2] = input.shape();
         if d0 != n || d1 != n || d2 != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -112,7 +121,7 @@ impl FwhtPlan3D {
         output: &mut Array3<f64>,
     ) -> Result<(), FwhtError> {
         let result = self.forward(input)?;
-        output.assign(&result);
+        output.assign(&result.view());
         Ok(())
     }
 
@@ -121,12 +130,12 @@ impl FwhtPlan3D {
     /// Correctness: `WHT_3D(WHT_3D(X)) = N³·X`, so scaling by `1/N³` recovers X.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n, n)`.
     pub fn inverse(&self, input: &Array3<f64>) -> Result<Array3<f64>, FwhtError> {
         let n = self.n;
         let mut result = self.forward(input)?;
         let scale = 1.0 / (n * n * n) as f64;
-        result.mapv_inplace(|v| v * scale);
+        scale_array(&mut result, scale);
         Ok(result)
     }
 
@@ -140,7 +149,7 @@ impl FwhtPlan3D {
         output: &mut Array3<f64>,
     ) -> Result<(), FwhtError> {
         let result = self.inverse(input)?;
-        output.assign(&result);
+        output.assign(&result.view());
         Ok(())
     }
 
@@ -149,13 +158,13 @@ impl FwhtPlan3D {
     /// Applies the real WHT butterfly independently to real and imaginary parts.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n, n)`.
     pub fn forward_complex(
         &self,
         input: &Array3<Complex64>,
     ) -> Result<Array3<Complex64>, FwhtError> {
         let n = self.n;
-        let (d0, d1, d2) = input.dim();
+        let [d0, d1, d2] = input.shape();
         if d0 != n || d1 != n || d2 != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -163,21 +172,19 @@ impl FwhtPlan3D {
         let im_in: Array3<f64> = input.mapv(|v| v.im);
         let re_out = self.forward(&re_in)?;
         let im_out = self.forward(&im_in)?;
-        Ok(ndarray::Zip::from(&re_out)
-            .and(&im_out)
-            .map_collect(|&re, &im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, Complex64::new))
     }
 
     /// Inverse 3D WHT of a complex-valued `n×n×n` spectrum.
     ///
     /// # Errors
-    /// Returns [`FwhtError::LengthMismatch`] when `input.dim() != (n, n, n)`.
+    /// Returns [`FwhtError::LengthMismatch`] when `input.shape() != (n, n, n)`.
     pub fn inverse_complex(
         &self,
         input: &Array3<Complex64>,
     ) -> Result<Array3<Complex64>, FwhtError> {
         let n = self.n;
-        let (d0, d1, d2) = input.dim();
+        let [d0, d1, d2] = input.shape();
         if d0 != n || d1 != n || d2 != n {
             return Err(FwhtError::LengthMismatch);
         }
@@ -185,9 +192,7 @@ impl FwhtPlan3D {
         let im_in: Array3<f64> = input.mapv(|v| v.im);
         let re_out = self.inverse(&re_in)?;
         let im_out = self.inverse(&im_in)?;
-        Ok(ndarray::Zip::from(&re_out)
-            .and(&im_out)
-            .map_collect(|&re, &im| Complex64::new(re, im)))
+        Ok(re_out.zip_map(&im_out, Complex64::new))
     }
 }
 
@@ -195,7 +200,7 @@ impl FwhtPlan3D {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::Array3;
+    use leto::Array3;
 
     #[test]
     fn plan_new_rejects_zero_and_non_power_of_two() {
@@ -210,7 +215,7 @@ mod tests {
         let n = 2_usize;
         let plan = FwhtPlan3D::new(n).expect("plan");
         let flat = [1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5];
-        let mut input = Array3::<f64>::zeros((n, n, n));
+        let mut input = Array3::<f64>::zeros([n, n, n]);
         let mut idx = 0;
         for i in 0..n {
             for j in 0..n {
@@ -242,7 +247,7 @@ mod tests {
         let n = 2_usize;
         let plan = FwhtPlan3D::new(n).expect("plan");
         let flat = [1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5];
-        let mut input = Array3::<f64>::zeros((n, n, n));
+        let mut input = Array3::<f64>::zeros([n, n, n]);
         let mut idx = 0;
         for i in 0..n {
             for j in 0..n {
@@ -268,14 +273,14 @@ mod tests {
     #[test]
     fn forward_3d_matches_separable_outer_product() {
         use super::super::dimension_1d::FwhtPlan;
-        use ndarray::Array1;
+        use leto::Array1;
         let n = 2_usize;
         let plan_3d = FwhtPlan3D::new(n).expect("3D plan");
         let plan_1d = FwhtPlan::new(n).expect("1D plan");
         let a = Array1::from(vec![1.0_f64, -2.0]);
         let b = Array1::from(vec![3.0_f64, -1.5]);
         let c = Array1::from(vec![0.5_f64, 0.25]);
-        let mut input = Array3::<f64>::zeros((n, n, n));
+        let mut input = Array3::<f64>::zeros([n, n, n]);
         for i in 0..n {
             for j in 0..n {
                 for k in 0..n {
@@ -300,7 +305,7 @@ mod tests {
     #[test]
     fn forward_3d_rejects_non_cubic_input() {
         let plan = FwhtPlan3D::new(2).expect("plan");
-        let wrong = Array3::<f64>::zeros((2, 2, 4));
+        let wrong = Array3::<f64>::zeros([2, 2, 4]);
         assert_eq!(plan.forward(&wrong).unwrap_err(), FwhtError::LengthMismatch);
     }
 
@@ -308,7 +313,7 @@ mod tests {
     fn forward_complex_3d_roundtrip_recovers_signal() {
         let n = 2_usize;
         let plan = FwhtPlan3D::new(n).expect("plan");
-        let mut input = Array3::<Complex64>::zeros((n, n, n));
+        let mut input = Array3::<Complex64>::zeros([n, n, n]);
         input[[0, 0, 0]] = Complex64::new(1.0, 0.5);
         input[[0, 0, 1]] = Complex64::new(-1.0, 2.0);
         input[[0, 1, 0]] = Complex64::new(0.25, -0.75);

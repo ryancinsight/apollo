@@ -5,7 +5,7 @@ use super::fixed::{fixed_len512_precise_avx_fma, fixed_len512_reduced_avx_fma};
 #[cfg(all(test, target_arch = "x86_64"))]
 use crate::application::execution::kernel::components::stockham::avx::generic::triple::stage_triple_radix1_avx_fma;
 #[cfg(all(test, target_arch = "x86_64"))]
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[cfg(all(test, target_arch = "x86_64"))]
 type PackedReducedComplex = [Complex32; 4];
@@ -122,13 +122,13 @@ pub(crate) unsafe fn hybrid_radix8x512_reduced_avx_fma<const INVERSE: bool>(
 #[inline]
 #[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) fn stockham_mixed_twiddle_reduced<const ROWS: usize, const COLS: usize>(
-    twiddles: &[num_complex::Complex32],
+    twiddles: &[eunomia::Complex32],
     row: usize,
     col: usize,
-) -> num_complex::Complex32 {
+) -> eunomia::Complex32 {
     let exponent = row * col;
     if exponent == 0 {
-        return num_complex::Complex32::new(1.0, 0.0);
+        return eunomia::Complex32::new(1.0, 0.0);
     }
     let half_n = (ROWS * COLS) >> 1;
     let stage_base = half_n - 1;
@@ -142,13 +142,13 @@ pub(crate) fn stockham_mixed_twiddle_reduced<const ROWS: usize, const COLS: usiz
 #[inline]
 #[cfg(all(test, target_arch = "x86_64"))]
 pub(crate) fn stockham_mixed_twiddle_precise<const ROWS: usize, const COLS: usize>(
-    twiddles: &[num_complex::Complex64],
+    twiddles: &[eunomia::Complex64],
     row: usize,
     col: usize,
-) -> num_complex::Complex64 {
+) -> eunomia::Complex64 {
     let exponent = row * col;
     if exponent == 0 {
-        return num_complex::Complex64::new(1.0, 0.0);
+        return eunomia::Complex64::new(1.0, 0.0);
     }
     let half_n = (ROWS * COLS) >> 1;
     let stage_base = half_n - 1;

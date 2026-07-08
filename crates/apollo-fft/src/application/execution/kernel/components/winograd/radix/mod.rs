@@ -8,12 +8,9 @@ pub(crate) use crate::application::execution::kernel::components::butterflies::d
 
 #[inline]
 #[cfg(test)]
-pub(crate) fn dft4_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
-) {
+pub(crate) fn dft4_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
     debug_assert!(data.len() >= 4);
-    let data: &mut [num_complex::Complex<F>; 4] =
-        (&mut data[..4]).try_into().expect("length checked");
+    let data: &mut [eunomia::Complex<F>; 4] = (&mut data[..4]).try_into().expect("length checked");
     crate::application::execution::kernel::components::butterflies::dft::dft4_array_impl::<
         F,
         INVERSE,
@@ -25,12 +22,9 @@ pub(crate) use crate::application::execution::kernel::components::butterflies::d
 
 #[inline]
 #[cfg(test)]
-pub(crate) fn dft8_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
-) {
+pub(crate) fn dft8_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
     debug_assert!(data.len() >= 8);
-    let data: &mut [num_complex::Complex<F>; 8] =
-        (&mut data[..8]).try_into().expect("length checked");
+    let data: &mut [eunomia::Complex<F>; 8] = (&mut data[..8]).try_into().expect("length checked");
     crate::application::execution::kernel::components::butterflies::dft::dft8_array_impl::<
         F,
         INVERSE,
@@ -53,7 +47,7 @@ pub(crate) use dft3::dft3_impl;
 #[inline]
 #[cfg(test)]
 pub(crate) fn dft15_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 15],
+    data: &mut [eunomia::Complex<F>; 15],
 ) {
     crate::application::execution::kernel::components::butterflies::dft::dft15_impl::<F, INVERSE>(
         data,
@@ -68,12 +62,9 @@ pub(crate) use crate::application::execution::kernel::components::butterflies::d
 /// to `&mut [Complex; 5]` for test call sites.
 #[inline]
 #[cfg(test)]
-pub(crate) fn dft5_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>],
-) {
+pub(crate) fn dft5_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
     debug_assert!(data.len() >= 5);
-    let data: &mut [num_complex::Complex<F>; 5] =
-        (&mut data[..5]).try_into().expect("length checked");
+    let data: &mut [eunomia::Complex<F>; 5] = (&mut data[..5]).try_into().expect("length checked");
     crate::application::execution::kernel::components::butterflies::dft::dft5_array_impl::<
         F,
         INVERSE,

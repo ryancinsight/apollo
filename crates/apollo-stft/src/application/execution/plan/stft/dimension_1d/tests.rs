@@ -7,8 +7,8 @@ use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_relative_eq;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 use proptest::prelude::*;
 
 #[test]
@@ -22,11 +22,11 @@ fn hann_window_is_symmetric() {
 #[test]
 fn forward_and_inverse_roundtrip_for_cola_case() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec(vec![
+    let signal = Array1::from(vec![
         1.0, -1.0, 0.5, 2.0, -0.75, 0.25, 1.5, -0.5, 0.125, 0.875, -1.25, 0.75,
     ]);
     let spectrum = plan.forward(&signal).expect("forward");
-    let recovered = plan.inverse(&spectrum, signal.len()).expect("inverse");
+    let recovered = plan.inverse(&spectrum, signal.size()).expect("inverse");
     for (actual, expected) in recovered.iter().zip(signal.iter()) {
         assert_relative_eq!(actual, expected, epsilon = 1.0e-8);
     }
@@ -35,9 +35,9 @@ fn forward_and_inverse_roundtrip_for_cola_case() {
 #[test]
 fn forward_into_matches_allocating_path() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
+    let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let expected = plan.forward(&signal).expect("forward");
-    let mut actual = Array1::<Complex64>::zeros(expected.len());
+    let mut actual = Array1::<Complex64>::zeros([expected.size()]);
     plan.forward_into(&signal, &mut actual)
         .expect("forward_into");
     for (lhs, rhs) in actual.iter().zip(expected.iter()) {
@@ -47,13 +47,13 @@ fn forward_into_matches_allocating_path() {
 }
 
 #[test]
-fn leto_forward_matches_ndarray_reference() {
+fn leto_forward_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
+    let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let leto_signal =
-        leto::Array1::from_shape_vec([signal.len()], signal.iter().copied().collect())
+        leto::Array1::from_shape_vec([signal.size()], signal.iter().copied().collect::<Vec<_>>())
             .expect("leto signal");
-    let expected = plan.forward(&signal).expect("ndarray forward");
+    let expected = plan.forward(&signal).expect("leto forward");
 
     let actual = plan.forward_leto(leto_signal.view()).expect("leto forward");
     let actual_view = actual.view();
@@ -66,10 +66,10 @@ fn leto_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_strided_forward_matches_ndarray_reference() {
+fn leto_strided_forward_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
-    let mut interleaved = Vec::with_capacity(signal.len() * 2);
+    let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
+    let mut interleaved = Vec::with_capacity(signal.size() * 2);
     for value in signal.iter().copied() {
         interleaved.push(value);
         interleaved.push(99.0);
@@ -78,9 +78,9 @@ fn leto_strided_forward_matches_ndarray_reference() {
         leto::Array1::from_shape_vec([interleaved.len()], interleaved).expect("leto signal");
     let strided = leto_signal
         .view()
-        .slice(&[(0, signal.len() * 2, 2)])
+        .slice(&[(0, signal.size() * 2, 2)])
         .expect("strided signal");
-    let expected = plan.forward(&signal).expect("ndarray forward");
+    let expected = plan.forward(&signal).expect("leto forward");
 
     let actual = plan.forward_leto(strided).expect("leto forward");
     let actual_view = actual.view();
@@ -93,19 +93,21 @@ fn leto_strided_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_inverse_matches_ndarray_reference() {
+fn leto_inverse_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
-    let spectrum = plan.forward(&signal).expect("ndarray forward");
-    let leto_spectrum =
-        leto::Array1::from_shape_vec([spectrum.len()], spectrum.iter().copied().collect())
-            .expect("leto spectrum");
+    let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
+    let spectrum = plan.forward(&signal).expect("leto forward");
+    let leto_spectrum = leto::Array1::from_shape_vec(
+        [spectrum.size()],
+        spectrum.iter().copied().collect::<Vec<_>>(),
+    )
+    .expect("leto spectrum");
     let expected = plan
-        .inverse(&spectrum, signal.len())
-        .expect("ndarray inverse");
+        .inverse(&spectrum, signal.size())
+        .expect("leto inverse");
 
     let actual = plan
-        .inverse_leto(leto_spectrum.view(), signal.len())
+        .inverse_leto(leto_spectrum.view(), signal.size())
         .expect("leto inverse");
     let actual_view = actual.view();
     let actual = actual_view.as_slice().expect("contiguous leto output");
@@ -118,21 +120,21 @@ fn leto_inverse_matches_ndarray_reference() {
 #[test]
 fn inverse_into_reuses_wola_workspace_capacity() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
+    let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let spectrum = plan.forward(&signal).expect("forward");
-    let frame_work_len = plan.frame_count(signal.len()) * plan.frame_len();
-    let mut first = Array1::<f64>::zeros(signal.len());
-    let mut second = Array1::<f64>::zeros(signal.len());
+    let frame_work_len = plan.frame_count(signal.size()) * plan.frame_len();
+    let mut first = Array1::<f64>::zeros([signal.size()]);
+    let mut second = Array1::<f64>::zeros([signal.size()]);
 
-    plan.inverse_into(&spectrum, signal.len(), &mut first)
+    plan.inverse_into(&spectrum, signal.size(), &mut first)
         .expect("first inverse");
     let after_first = inverse_wola_workspace_capacities();
     assert!(after_first.0 >= frame_work_len);
     assert!(after_first.1 >= frame_work_len);
-    assert!(after_first.2 >= signal.len());
-    assert!(after_first.3 >= signal.len());
+    assert!(after_first.2 >= signal.size());
+    assert!(after_first.3 >= signal.size());
 
-    plan.inverse_into(&spectrum, signal.len(), &mut second)
+    plan.inverse_into(&spectrum, signal.size(), &mut second)
         .expect("second inverse");
     assert_eq!(inverse_wola_workspace_capacities(), after_first);
     for ((lhs, rhs), expected) in first.iter().zip(second.iter()).zip(signal.iter()) {
@@ -195,10 +197,10 @@ fn hermes_inverse_windowing_matches_scalar_formula_at_threshold() {
 #[test]
 fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal64 = Array1::from_vec((0..16).map(|i| (i as f64 * 0.2).sin()).collect());
+    let signal64 = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let expected = plan.forward(&signal64).expect("forward");
 
-    let mut out64 = Array1::<Complex64>::zeros(expected.len());
+    let mut out64 = Array1::<Complex64>::zeros([expected.size()]);
     plan.forward_typed_into(&signal64, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
         .expect("typed f64 forward");
     for (actual, expected) in out64.iter().zip(expected.iter()) {
@@ -211,7 +213,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     let expected32 = plan
         .forward(&represented32)
         .expect("represented f32 forward");
-    let mut out32 = Array1::<Complex32>::zeros(expected32.len());
+    let mut out32 = Array1::<Complex32>::zeros([expected32.size()]);
     plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
         .expect("typed f32 forward");
     for (actual, expected) in out32.iter().zip(expected32.iter()) {
@@ -219,10 +221,10 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-5);
     }
 
-    let mut recovered32 = Array1::<f32>::zeros(signal32.len());
+    let mut recovered32 = Array1::<f32>::zeros([signal32.size()]);
     plan.inverse_typed_into(
         &out32,
-        signal32.len(),
+        signal32.size(),
         &mut recovered32,
         PrecisionProfile::LOW_PRECISION_F32,
     )
@@ -236,7 +238,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
     let expected16 = plan
         .forward(&represented16)
         .expect("represented f16 forward");
-    let mut out16 = Array1::from_elem(expected16.len(), [f16::from_f32(0.0); 2]);
+    let mut out16 = Array1::from_elem([expected16.size()], [f16::from_f32(0.0); 2]);
     plan.forward_typed_into(
         &signal16,
         &mut out16,
@@ -252,20 +254,20 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 }
 
 #[test]
-fn typed_leto_forward_and_inverse_match_ndarray_reference() {
+fn typed_leto_forward_and_inverse_match_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f32 * 0.2).sin()).collect());
+    let signal = Array1::from((0..16).map(|i| (i as f32 * 0.2).sin()).collect::<Vec<_>>());
     let leto_signal =
-        leto::Array1::from_shape_vec([signal.len()], signal.iter().copied().collect())
+        leto::Array1::from_shape_vec([signal.size()], signal.iter().copied().collect::<Vec<_>>())
             .expect("leto signal");
-    let spectrum_len = plan.frame_count(signal.len()) * plan.spectrum_len();
-    let mut expected_spectrum = Array1::<Complex32>::zeros(spectrum_len);
+    let spectrum_len = plan.frame_count(signal.size()) * plan.spectrum_len();
+    let mut expected_spectrum = Array1::<Complex32>::zeros([spectrum_len]);
     plan.forward_typed_into(
         &signal,
         &mut expected_spectrum,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray forward");
+    .expect("typed leto forward");
 
     let actual_spectrum = plan
         .forward_leto_typed::<f32, Complex32>(
@@ -282,22 +284,27 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         assert_eq!(actual.im.to_bits(), expected.im.to_bits());
     }
 
-    let leto_spectrum =
-        leto::Array1::from_shape_vec([expected_spectrum.len()], expected_spectrum.to_vec())
-            .expect("leto spectrum");
-    let mut expected_signal = Array1::<f32>::zeros(signal.len());
+    let leto_spectrum = leto::Array1::from_shape_vec(
+        [expected_spectrum.size()],
+        expected_spectrum
+            .as_slice()
+            .expect("contiguous leto output")
+            .to_vec(),
+    )
+    .expect("leto spectrum");
+    let mut expected_signal = Array1::<f32>::zeros([signal.size()]);
     plan.inverse_typed_into(
         &expected_spectrum,
-        signal.len(),
+        signal.size(),
         &mut expected_signal,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray inverse");
+    .expect("typed leto inverse");
 
     let actual_signal = plan
         .inverse_leto_typed::<Complex32, f32>(
             leto_spectrum.view(),
-            signal.len(),
+            signal.size(),
             PrecisionProfile::LOW_PRECISION_F32,
         )
         .expect("typed leto inverse");
@@ -313,10 +320,10 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
 #[test]
 fn typed_paths_reuse_bridge_workspace_capacity() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..16).map(|i| (i as f32 * 0.2).sin()).collect());
-    let spectrum_len = plan.frame_count(signal.len()) * plan.spectrum_len();
-    let mut first_spectrum = Array1::<Complex32>::zeros(spectrum_len);
-    let mut second_spectrum = Array1::<Complex32>::zeros(spectrum_len);
+    let signal = Array1::from((0..16).map(|i| (i as f32 * 0.2).sin()).collect::<Vec<_>>());
+    let spectrum_len = plan.frame_count(signal.size()) * plan.spectrum_len();
+    let mut first_spectrum = Array1::<Complex32>::zeros([spectrum_len]);
+    let mut second_spectrum = Array1::<Complex32>::zeros([spectrum_len]);
 
     plan.forward_typed_into(
         &signal,
@@ -325,7 +332,7 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
     )
     .expect("first typed forward");
     let after_first_forward = typed_workspace_capacities();
-    assert!(after_first_forward.0 >= signal.len());
+    assert!(after_first_forward.0 >= signal.size());
     assert!(after_first_forward.2 >= spectrum_len);
 
     plan.forward_typed_into(
@@ -340,22 +347,22 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
         assert_eq!(first.im.to_bits(), second.im.to_bits());
     }
 
-    let mut first_recovered = Array1::<f32>::zeros(signal.len());
-    let mut second_recovered = Array1::<f32>::zeros(signal.len());
+    let mut first_recovered = Array1::<f32>::zeros([signal.size()]);
+    let mut second_recovered = Array1::<f32>::zeros([signal.size()]);
     plan.inverse_typed_into(
         &first_spectrum,
-        signal.len(),
+        signal.size(),
         &mut first_recovered,
         PrecisionProfile::LOW_PRECISION_F32,
     )
     .expect("first typed inverse");
     let after_first_inverse = typed_workspace_capacities();
     assert!(after_first_inverse.1 >= spectrum_len);
-    assert!(after_first_inverse.3 >= signal.len());
+    assert!(after_first_inverse.3 >= signal.size());
 
     plan.inverse_typed_into(
         &first_spectrum,
-        signal.len(),
+        signal.size(),
         &mut second_recovered,
         PrecisionProfile::LOW_PRECISION_F32,
     )
@@ -374,9 +381,9 @@ fn typed_paths_reuse_bridge_workspace_capacity() {
 #[test]
 fn typed_path_rejects_profile_storage_mismatch() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec(vec![1.0_f32; 16]);
+    let signal = Array1::from(vec![1.0_f32; 16]);
     let mut output =
-        Array1::<Complex32>::zeros(plan.frame_count(signal.len()) * plan.spectrum_len());
+        Array1::<Complex32>::zeros([plan.frame_count(signal.size()) * plan.spectrum_len()]);
     assert!(matches!(
         plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
         Err(StftError::PrecisionMismatch)
@@ -399,7 +406,7 @@ fn rejects_invalid_parameters() {
 #[test]
 fn input_too_short_is_rejected() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec(vec![0.0; 4]);
+    let signal = Array1::from(vec![0.0; 4]);
     assert!(matches!(
         plan.forward(&signal),
         Err(StftError::InputTooShort)
@@ -409,7 +416,7 @@ fn input_too_short_is_rejected() {
 #[test]
 fn forward_with_window_rejects_wrong_length() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec(vec![1.0f64; 12]);
+    let signal = Array1::from(vec![1.0f64; 12]);
     let bad_window = vec![1.0f64; 6];
     assert!(matches!(
         plan.forward_with_window(&signal, &bad_window),
@@ -420,9 +427,9 @@ fn forward_with_window_rejects_wrong_length() {
 #[test]
 fn forward_with_custom_window_matches_internal_hann() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
-    let signal = Array1::from_vec((0..12).map(|i| (i as f64 * 0.3).sin()).collect());
+    let signal = Array1::from((0..12).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
     let expected = plan.forward(&signal).expect("forward");
-    let window: Vec<f64> = hann_window(8).to_vec();
+    let window: Vec<f64> = hann_window(8).into_vec();
     let actual = plan
         .forward_with_window(&signal, &window)
         .expect("forward_with_window");
@@ -443,8 +450,8 @@ proptest::proptest! {
         prop_assume!(hop_len <= frame_len);
         prop_assume!(hop_len + 2 <= frame_len);
         let plan = StftPlan::new(frame_len, hop_len).expect("valid plan");
-        let signal = Array1::from_vec(
-            (0..signal_len).map(|i| (i as f64 * 0.37).sin()).collect(),
+        let signal = Array1::from(
+            (0..signal_len).map(|i| (i as f64 * 0.37).sin()).collect::<Vec<_>>(),
         );
         let spectrum = plan.forward(&signal).expect("forward");
         let recovered = plan.inverse(&spectrum, signal_len).expect("inverse");

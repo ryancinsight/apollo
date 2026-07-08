@@ -3,9 +3,9 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::MellinStorage;
-use num_complex::Complex32;
+use apollo_fft::PrecisionProfile;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::MellinWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -71,13 +71,8 @@ impl MellinWgpuBackend {
         signal_max: f64,
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_inputs(plan, signal, signal_min, signal_max)?;
-        self.kernel.execute(
-            &self.device,
-            plan,
-            signal,
-            signal_min,
-            signal_max,
-        )
+        self.kernel
+            .execute(&self.device, plan, signal, signal_min, signal_max)
     }
 
     /// Execute the forward Mellin spectrum from a Leto real-valued host view.
@@ -127,14 +122,8 @@ impl MellinWgpuBackend {
                     message: format!("invalid signal domain min={out_min}, max={out_max}: out_min must be less than out_max"),
                 });
         }
-        self.kernel.execute_inverse(
-            &self.device,
-            plan,
-            spectrum,
-            out_min,
-            out_max,
-            out_len,
-        )
+        self.kernel
+            .execute_inverse(&self.device, plan, spectrum, out_min, out_max, out_len)
     }
 
     /// Execute the inverse Mellin path from a Leto spectrum host view.

@@ -5,12 +5,12 @@
 //! Both maps are unitary on the implemented `f32` complex surface.
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -97,43 +97,55 @@ impl QftGpuKernel {
                 im: value.im,
             })
             .collect();
-        let input_buffer = hep_device.upload(&input_data).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-qft-wgpu params"),
-            contents: bytemuck::bytes_of(&QftParams {
-                len: len as u32,
-                mode: mode as u32,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-qft-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let input_buffer =
+            hep_device
+                .upload(&input_data)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-qft-wgpu params"),
+                contents: bytemuck::bytes_of(&QftParams {
+                    len: len as u32,
+                    mode: mode as u32,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-qft-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-qft-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-qft-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-qft-wgpu transform pass"),
@@ -146,10 +158,13 @@ impl QftGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device.download(&output_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output = pods.iter()
+        hep_device
+            .download(&output_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output = pods
+            .iter()
             .map(|value| Complex32::new(value.re, value.im))
             .collect();
         Ok(output)

@@ -47,8 +47,8 @@ mod tests {
     use crate::domain::contracts::backend::FftBackend;
     use crate::domain::metadata::precision::BackendKind;
     use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-    use ndarray::{Array1, Array2, Array3};
-    use num_complex::Complex64;
+    use eunomia::Complex64;
+    use leto::{Array2, Array3};
 
     #[test]
     fn default_produces_cpu_backend() {
@@ -72,7 +72,8 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape1D::new(8).expect("valid shape");
         let plan = backend.plan_1d(shape).expect("plan_1d succeeded");
-        let input = Array1::from_iter((0..8usize).map(|i| (i as f64 * 0.7).sin()));
+        let input_vec: Vec<f64> = (0..8usize).map(|i| (i as f64 * 0.7).sin()).collect();
+        let input = leto::Array1::from_shape_vec([input_vec.len()], input_vec).unwrap();
         let complex = input.mapv(|value| Complex64::new(value, 0.0));
         let spectrum = plan.forward_complex(&complex);
         let recovered = plan.inverse_complex(&spectrum).mapv(|value| value.re);
@@ -87,7 +88,7 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape2D::new(4, 4).expect("valid shape");
         let plan = backend.plan_2d(shape).expect("plan_2d succeeded");
-        let input = Array2::from_shape_fn((4, 4), |(i, j)| (i as f64 * 0.3 + j as f64 * 0.5).sin());
+        let input = Array2::from_shape_fn([4, 4], |[i, j]| (i as f64 * 0.3 + j as f64 * 0.5).sin());
         let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));
         plan.forward_complex_inplace(&mut spectrum);
         plan.inverse_complex_inplace(&mut spectrum);
@@ -103,7 +104,7 @@ mod tests {
         let backend = CpuBackend;
         let shape = Shape3D::new(4, 4, 4).expect("valid shape");
         let plan = backend.plan_3d(shape).expect("plan_3d succeeded");
-        let input = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let input = Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             (i as f64 * 0.3 + j as f64 * 0.2 + k as f64 * 0.5).sin()
         });
         let mut spectrum = input.mapv(|value| Complex64::new(value, 0.0));

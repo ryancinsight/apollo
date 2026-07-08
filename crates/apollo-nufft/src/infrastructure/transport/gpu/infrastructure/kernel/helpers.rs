@@ -1,7 +1,7 @@
 use super::{FastNufftParams3D, NufftGpuKernel, NufftParams, Position3Pod, WORKGROUP_SIZE};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use bytemuck::Pod;
-use num_complex::Complex32;
+use eunomia::Complex32;
 use std::sync::mpsc;
 use wgpu::util::DeviceExt;
 

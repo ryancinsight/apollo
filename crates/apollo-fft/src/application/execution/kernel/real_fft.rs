@@ -39,24 +39,24 @@ pub(crate) trait RealFft:
 
 impl RealFft for f64 {
     #[inline]
-    fn build_forward_twiddle_table(n: usize) -> Vec<num_complex::Complex64> {
+    fn build_forward_twiddle_table(n: usize) -> Vec<eunomia::Complex64> {
         super::twiddle_table::build_twiddle_table(n, -1.0)
     }
 
     #[inline]
-    fn build_inverse_twiddle_table(n: usize) -> Vec<num_complex::Complex64> {
+    fn build_inverse_twiddle_table(n: usize) -> Vec<eunomia::Complex64> {
         super::twiddle_table::build_twiddle_table(n, 1.0)
     }
 }
 
 impl RealFft for f32 {
     #[inline]
-    fn build_forward_twiddle_table(n: usize) -> Vec<num_complex::Complex32> {
+    fn build_forward_twiddle_table(n: usize) -> Vec<eunomia::Complex32> {
         super::twiddle_table::build_twiddle_table(n, -1.0)
     }
 
     #[inline]
-    fn build_inverse_twiddle_table(n: usize) -> Vec<num_complex::Complex32> {
+    fn build_inverse_twiddle_table(n: usize) -> Vec<eunomia::Complex32> {
         super::twiddle_table::build_twiddle_table(n, 1.0)
     }
 }

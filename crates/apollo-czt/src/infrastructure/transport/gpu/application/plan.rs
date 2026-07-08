@@ -1,6 +1,6 @@
 //! WGPU plan descriptors.
 
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 /// Metadata-preserving WGPU plan descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

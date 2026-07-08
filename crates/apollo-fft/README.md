@@ -31,11 +31,12 @@ DFT kernel remains a crate-local reference for verification.
 2D and 3D plans execute separable axis passes. Contiguous row/depth-axis passes
 operate directly on backing-slice chunks through Moirai, avoiding full-field
 lane-copy vectors and scatter copies. Non-contiguous axes still gather one lane
-buffer per lane before scattering because ndarray strides are not contiguous.
+buffer per lane before scattering because strided Leto views are not contiguous
+in memory.
 
-The 1D real-forward plan surface supports both ndarray and slice caller-owned
-output paths. Slice execution lets downstream crates reuse existing real input
-slices while still sharing the same real FFT owner kernel. The typed plan
+The 1D real-forward plan surface supports Leto-owned allocation and caller-owned
+slice output paths. Slice execution lets downstream crates reuse existing real
+input slices while still sharing the same real FFT owner kernel. The typed plan
 surface supports `f64` storage with `Complex64` compute, `f32` storage with
 `Complex32` compute, and mixed `f16` storage with `f32` compute. The 3D typed
 `*_into` paths accept caller-owned output and scratch buffers for all three

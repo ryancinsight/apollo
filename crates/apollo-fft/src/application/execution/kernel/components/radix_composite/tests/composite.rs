@@ -3,7 +3,7 @@
 
 use super::{check_forward, check_inverse, check_roundtrip, forward_inplace_32, max_err};
 use crate::application::execution::kernel::direct::dft_forward;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[test]
 fn forward_n108() {

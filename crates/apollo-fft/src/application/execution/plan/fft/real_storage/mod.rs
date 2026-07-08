@@ -12,8 +12,8 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
-use ndarray::{Array1, Array2, Array3};
-use num_complex::Complex;
+use eunomia::Complex;
+use leto::{Array1, Array2, Array3};
 
 mod compact;
 pub(super) mod fill;
@@ -82,7 +82,7 @@ where
         output: &mut Array1<Self>,
         scratch: &mut Array1<Complex<Self::PlanScalar>>,
     ) {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         plan.inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }
@@ -132,7 +132,7 @@ where
         output: &mut Array1<Self>,
         scratch: &mut Array1<Complex<Self::PlanScalar>>,
     ) {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         StaticFftPlan1D::<Self::PlanScalar, N>::new().inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }
@@ -183,7 +183,7 @@ where
     ) where
         Complex<Self::PlanScalar>: PlanScratch,
     {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         plan.inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }
@@ -219,7 +219,7 @@ where
     ) where
         Complex<Self::PlanScalar>: PlanScratch,
     {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         StaticFftPlan2D::<Self::PlanScalar, NX, NY>::new().inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }
@@ -270,7 +270,7 @@ where
     ) where
         Complex<Self::PlanScalar>: PlanScratch,
     {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         plan.inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }
@@ -306,7 +306,7 @@ where
     ) where
         Complex<Self::PlanScalar>: PlanScratch,
     {
-        scratch.assign(input);
+        scratch.assign(&input.view());
         StaticFftPlan3D::<Self::PlanScalar, NX, NY, NZ>::new().inverse_complex_inplace(scratch);
         fill_real(scratch, output);
     }

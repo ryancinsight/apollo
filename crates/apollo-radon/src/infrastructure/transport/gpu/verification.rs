@@ -2,12 +2,14 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::RadonPlan;
+    use apollo_fft::{f16, PrecisionProfile};
+    use leto::Array2;
     use leto::{SliceArg, Storage};
-    use ndarray::{array, Array2};
 
-    use crate::infrastructure::transport::gpu::{RadonWgpuBackend, RadonWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        RadonWgpuBackend, RadonWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_reflect_forward_only_kernel_surface() {
@@ -97,7 +99,11 @@ mod tests {
 
         // 2. forward_projection_matches_cpu_reference
         {
-            let image = array![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0],];
+            let image = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            )
+            .unwrap();
             let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
             let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
             let gpu = backend
@@ -116,7 +122,7 @@ mod tests {
                 .forward(&image.mapv(f64::from))
                 .expect("cpu forward");
 
-            assert_eq!(gpu.dim(), cpu.values().dim());
+            assert_eq!(gpu.shape(), cpu.values().shape());
             for (index, (actual, expected)) in gpu.iter().zip(cpu.values().iter()).enumerate() {
                 let error = (f64::from(*actual) - *expected).abs();
                 assert!(
@@ -130,7 +136,11 @@ mod tests {
 
         // 3. backproject_matches_cpu_reference
         {
-            let image_f64 = array![[1.0_f64, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let image_f64 = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            )
+            .unwrap();
             let angles_f64: Vec<f64> = vec![
                 0.0,
                 std::f64::consts::FRAC_PI_4,
@@ -149,9 +159,9 @@ mod tests {
             let gpu_bp = backend
                 .execute_inverse(&gpu_plan, &sinogram_f32, &angles_f32)
                 .expect("gpu backproject");
-            assert_eq!(gpu_bp.dim(), (3, 3));
-            for ((r, c), gpu_val) in gpu_bp.indexed_iter() {
-                let cpu_val = cpu_bp[(r, c)] as f32;
+            assert_eq!(gpu_bp.shape(), [3, 3]);
+            for ([r, c], gpu_val) in gpu_bp.indexed_iter() {
+                let cpu_val = cpu_bp[[r, c]] as f32;
                 let err = (gpu_val - cpu_val).abs();
                 assert!(
                     err < 5e-3,
@@ -160,9 +170,13 @@ mod tests {
             }
         }
 
-        // 4. leto_forward_inverse_and_fbp_match_ndarray
+        // 4. leto_forward_inverse_and_fbp_match_leto
         {
-            let image = array![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let image = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            )
+            .unwrap();
             let angles = vec![
                 0.0_f32,
                 std::f32::consts::FRAC_PI_4,
@@ -179,7 +193,7 @@ mod tests {
 
             let expected_forward = backend
                 .execute_forward(&plan, &image, &angles)
-                .expect("ndarray forward");
+                .expect("leto forward");
             let actual_forward = backend
                 .execute_forward_leto(&plan, image_leto.view(), angles_leto.view())
                 .expect("leto forward");
@@ -190,7 +204,7 @@ mod tests {
 
             let expected_inverse = backend
                 .execute_inverse(&plan, &expected_forward, &angles)
-                .expect("ndarray inverse");
+                .expect("leto inverse");
             let actual_inverse = backend
                 .execute_inverse_leto(&plan, actual_forward.view(), angles_leto.view())
                 .expect("leto inverse");
@@ -201,7 +215,7 @@ mod tests {
 
             let expected_fbp = backend
                 .execute_filtered_backproject(&plan, &expected_forward, &angles)
-                .expect("ndarray fbp");
+                .expect("leto fbp");
             let actual_fbp = backend
                 .execute_filtered_backproject_leto(&plan, actual_forward.view(), angles_leto.view())
                 .expect("leto fbp");
@@ -211,11 +225,15 @@ mod tests {
             );
         }
 
-        // 5. leto_strided_forward_matches_logical_ndarray
+        // 5. leto_strided_forward_matches_logical_leto
         {
-            let image = array![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let image = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            )
+            .unwrap();
             let mut interleaved = Vec::with_capacity(3 * 6);
-            for row in image.rows() {
+            for row in image.rows().expect("row axis view") {
                 for value in row.iter().copied() {
                     interleaved.push(value);
                     interleaved.push(99.0);
@@ -235,7 +253,7 @@ mod tests {
             let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
             let expected = backend
                 .execute_forward(&plan, &image, &angles)
-                .expect("ndarray forward");
+                .expect("leto forward");
             let actual = backend
                 .execute_forward_leto(&plan, strided, angles_leto.view())
                 .expect("strided leto forward");
@@ -248,7 +266,7 @@ mod tests {
         // 6. execute_inverse_rejects_sinogram_shape_mismatch
         {
             let plan = backend.plan(3, 3, 2, 5, 1.0);
-            let wrong_sinogram = Array2::<f32>::zeros((3, 5));
+            let wrong_sinogram = Array2::<f32>::zeros([3, 5]);
             let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
             let err = backend
                 .execute_inverse(&plan, &wrong_sinogram, &angles)
@@ -266,7 +284,7 @@ mod tests {
             let flat_f16: Vec<f16> = flat_f32.iter().copied().map(f16::from_f32).collect();
             let represented_f32: Vec<f32> = flat_f16.iter().map(|v| v.to_f32()).collect();
             let image_represented =
-                Array2::from_shape_vec((3, 3), represented_f32).expect("reshape");
+                Array2::from_shape_vec([3, 3], represented_f32).expect("reshape");
 
             let expected = backend
                 .execute_forward(&plan, &image_represented, &angles)
@@ -280,7 +298,7 @@ mod tests {
                 )
                 .expect("typed flat mixed forward");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (index, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
                 assert!(
                     (f64::from(*a) - f64::from(*e)).abs() < 0.1,
@@ -377,7 +395,7 @@ mod tests {
             let empty_plan_err = backend
                 .execute_forward(
                     &RadonWgpuPlan::new(0, 3, 1, 3, 1.0_f64.to_bits()),
-                    &array![[1.0_f32]],
+                    &leto::Array2::from_shape_vec([1, 1], vec![1.0_f32]).unwrap(),
                     &[0.0_f32],
                 )
                 .expect_err("empty plan must fail");
@@ -386,7 +404,7 @@ mod tests {
             let shape_err = backend
                 .execute_forward(
                     &RadonWgpuPlan::new(3, 3, 1, 3, 1.0_f64.to_bits()),
-                    &array![[1.0_f32, 2.0]],
+                    &leto::Array2::from_shape_vec([1, 2], vec![1.0_f32, 2.0]).unwrap(),
                     &[0.0_f32],
                 )
                 .expect_err("image shape mismatch must fail");
@@ -395,7 +413,11 @@ mod tests {
             let angle_err = backend
                 .execute_forward(
                     &RadonWgpuPlan::new(3, 3, 2, 3, 1.0_f64.to_bits()),
-                    &array![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+                    &leto::Array2::from_shape_vec(
+                        [3, 3],
+                        vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+                    )
+                    .unwrap(),
                     &[0.0_f32],
                 )
                 .expect_err("angle mismatch must fail");
@@ -410,7 +432,11 @@ mod tests {
 
         // 11. backproject_satisfies_adjoint_identity
         {
-            let f_f64 = array![[1.0_f64, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let f_f64 = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            )
+            .unwrap();
             let angles_f64 = vec![
                 0.0_f64,
                 std::f64::consts::FRAC_PI_4,
@@ -421,11 +447,14 @@ mod tests {
             let cpu_plan = RadonPlan::new(3, 3, angles_f64, 5, 1.0).expect("cpu plan");
             let af = cpu_plan.forward(&f_f64).expect("cpu forward");
 
-            let g = array![
-                [1.0_f32, 0.5, -0.5, -1.0, 0.5],
-                [0.0, 1.0, 0.0, -1.0, 0.0],
-                [0.5, -0.5, 0.5, -0.5, 0.5]
-            ];
+            let g = leto::Array2::from_shape_vec(
+                [3, 5],
+                vec![
+                    1.0_f32, 0.5, -0.5, -1.0, 0.5, 0.0, 1.0, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, -0.5,
+                    0.5,
+                ],
+            )
+            .unwrap();
 
             let lhs: f64 = af
                 .values()
@@ -459,7 +488,11 @@ mod tests {
 
         // 12. filtered_backproject_matches_cpu_reference
         {
-            let image_f64 = array![[0.0_f64, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]];
+            let image_f64 = leto::Array2::from_shape_vec(
+                [3, 3],
+                vec![0.0_f64, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            )
+            .unwrap();
             let angles_f64: Vec<f64> = (0..4)
                 .map(|i| i as f64 * std::f64::consts::FRAC_PI_4)
                 .collect();
@@ -477,10 +510,10 @@ mod tests {
                 .execute_filtered_backproject(&gpu_plan, &sinogram_f32, &angles_f32)
                 .expect("gpu fbp");
 
-            assert_eq!(gpu_fbp.dim(), (3, 3));
+            assert_eq!(gpu_fbp.shape(), [3, 3]);
             const TOL: f32 = 5e-2;
-            for ((r, c), gpu_val) in gpu_fbp.indexed_iter() {
-                let cpu_val = cpu_fbp[(r, c)] as f32;
+            for ([r, c], gpu_val) in gpu_fbp.indexed_iter() {
+                let cpu_val = cpu_fbp[[r, c]] as f32;
                 let err = (gpu_val - cpu_val).abs();
                 assert!(
                     err < TOL,
@@ -492,7 +525,7 @@ mod tests {
         // 13. filtered_backproject_rejects_sinogram_shape_mismatch
         {
             let plan = backend.plan(3, 3, 2, 5, 1.0);
-            let wrong_sinogram = Array2::<f32>::zeros((3, 5));
+            let wrong_sinogram = Array2::<f32>::zeros([3, 5]);
             let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
             let err = backend
                 .execute_filtered_backproject(&plan, &wrong_sinogram, &angles)

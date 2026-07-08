@@ -10,13 +10,13 @@
 
 use super::radix::odd_prime_pair::{dft_pair_impl, dft_pair_impl_reduced, PrimePairTable};
 use super::WinogradScalar;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 macro_rules! impl_short_winograd_prime_pair {
     ($ty:ty, $(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
         $(
             #[inline]
-            fn $method<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn $method<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 dft_pair_impl::<$ty, $n, $h, INVERSE>(
                     data,
                     <$ty as PrimePairTable<$n, $h>>::cos_table(),
@@ -31,7 +31,7 @@ macro_rules! impl_short_winograd_prime_pair_reduced {
     ($(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
         $(
             #[inline]
-            fn $method<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; $n]) {
+            fn $method<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; $n]) {
                 dft_pair_impl_reduced::<f32, $n, $h, INVERSE>(
                     data,
                     <f32 as PrimePairTable<$n, $h>>::cos_table(),
@@ -43,25 +43,25 @@ macro_rules! impl_short_winograd_prime_pair_reduced {
 }
 
 pub trait ShortWinogradScalar: WinogradScalar {
-    fn dft2(data: &mut [num_complex::Complex<Self>; 2]);
-    fn dft3<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 3]);
-    fn dft4<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 4]);
-    fn dft5<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 5]);
-    fn dft7<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 7]);
-    fn dft8<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 8]);
-    fn dft16<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 16]);
-    fn dft11<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 11]);
-    fn dft13<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 13]);
-    fn dft17<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 17]);
-    fn dft19<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 19]);
-    fn dft23<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 23]);
-    fn dft29<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 29]);
-    fn dft31<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 31]);
-    fn dft37<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 37]);
-    fn dft41<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 41]);
-    fn dft43<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 43]);
-    fn dft47<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 47]);
-    fn dft53<const INVERSE: bool>(data: &mut [num_complex::Complex<Self>; 53]);
+    fn dft2(data: &mut [eunomia::Complex<Self>; 2]);
+    fn dft3<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 3]);
+    fn dft4<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 4]);
+    fn dft5<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 5]);
+    fn dft7<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 7]);
+    fn dft8<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 8]);
+    fn dft16<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 16]);
+    fn dft11<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 11]);
+    fn dft13<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 13]);
+    fn dft17<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 17]);
+    fn dft19<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 19]);
+    fn dft23<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 23]);
+    fn dft29<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 29]);
+    fn dft31<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 31]);
+    fn dft37<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 37]);
+    fn dft41<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 41]);
+    fn dft43<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 43]);
+    fn dft47<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 47]);
+    fn dft53<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 53]);
 }
 
 impl ShortWinogradScalar for f64 {

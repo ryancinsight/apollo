@@ -1,8 +1,7 @@
 use super::cache::CompositeCache;
 use crate::application::execution::kernel::components::winograd::apply_twiddle_impl;
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
-use num_complex::Complex;
-use num_traits::Zero;
+use eunomia::Complex;
 
 pub(super) trait FusedStage {
     fn compute_group<F: CompositeCache + ShortWinogradScalar, const INVERSE: bool>(
@@ -189,7 +188,7 @@ impl<const R: usize> FusedStage for Radix<R> {
         let stride = groups_out * prev_len;
         let src_base = b_out * prev_len;
         let stage_twiddles = twiddles[tw_idx];
-        let zero = Complex::<F>::zero();
+        let zero = Complex::<F>::ZERO;
         let mut j = 0;
 
         // SUBTILE-4: 4 independent column chains per iteration expose ILP.

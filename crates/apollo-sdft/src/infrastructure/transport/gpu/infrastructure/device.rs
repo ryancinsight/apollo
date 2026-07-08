@@ -4,10 +4,10 @@ use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
-use apollo_fft::PrecisionProfile;
 use crate::{SdftBinStorage, SdftRealStorage};
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::SdftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -73,12 +73,8 @@ impl SdftWgpuBackend {
         window: &[f32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_plan_window(plan, window)?;
-        self.kernel.execute(
-            &self.device,
-            window,
-            plan.window_len(),
-            plan.bin_count(),
-        )
+        self.kernel
+            .execute(&self.device, window, plan.window_len(), plan.bin_count())
     }
 
     /// Execute direct SDFT bins from a Leto 1D real-valued window view.
@@ -173,12 +169,8 @@ impl SdftWgpuBackend {
     /// Mathematical contract: `x[n] = (1/K) Σ_{b=0}^{K-1} X[b]·exp(+2πi·b·n/K)`.
     pub fn execute_inverse(&self, plan: &SdftWgpuPlan, bins: &[Complex32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_bins(plan, bins)?;
-        self.kernel.execute_inverse(
-            &self.device,
-            bins,
-            plan.bin_count(),
-            plan.window_len(),
-        )
+        self.kernel
+            .execute_inverse(&self.device, bins, plan.bin_count(), plan.window_len())
     }
 
     /// Execute inverse SDFT from a Leto 1D complex-bin view.

@@ -33,7 +33,7 @@ use butterfly::{
     forward32_avx_with_scratch, forward32_avx_with_scratch_sized, forward64_avx_with_scratch,
     forward64_avx_with_scratch_sized,
 };
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use transform::transform_sized;
 #[cfg(not(target_arch = "x86_64"))]
 use transform::transform_with_strategy;

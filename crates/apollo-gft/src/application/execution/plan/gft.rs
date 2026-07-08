@@ -8,10 +8,10 @@ use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
 use apollo_fft::{f16, PrecisionProfile};
+use leto::Array1;
 use leto::ArrayView2;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
 use serde::{Deserialize, Serialize};
 
 /// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.
@@ -77,7 +77,7 @@ impl GftPlan {
 
     /// Forward graph Fourier transform `U^T x`.
     pub fn forward(&self, signal: &Array1<f64>) -> GftResult<Array1<f64>> {
-        let mut output = Array1::zeros(self.n);
+        let mut output = Array1::zeros([self.n]);
         self.forward_into(signal, &mut output)?;
         Ok(output)
     }
@@ -140,7 +140,7 @@ impl GftPlan {
 
     /// Inverse graph Fourier transform `U X`.
     pub fn inverse(&self, spectrum: &Array1<f64>) -> GftResult<Array1<f64>> {
-        let mut output = Array1::zeros(self.n);
+        let mut output = Array1::zeros([self.n]);
         self.inverse_into(spectrum, &mut output)?;
         Ok(output)
     }
@@ -253,7 +253,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
         profile: PrecisionProfile,
     ) -> GftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if signal.len() != plan.n || output.len() != plan.n {
+        if signal.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
         with_f64_workspaces(plan.n, |input64, output64| {
@@ -261,7 +261,12 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 *slot = Self::to_f64(value);
             }
             plan.forward_f64_slice_into(input64, output64)?;
-            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = Self::from_f64(value);
             }
             Ok(())
@@ -276,7 +281,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
         profile: PrecisionProfile,
     ) -> GftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
-        if spectrum.len() != plan.n || output.len() != plan.n {
+        if spectrum.size() != plan.n || output.size() != plan.n {
             return Err(GftError::LengthMismatch);
         }
         with_f64_workspaces(plan.n, |input64, output64| {
@@ -284,7 +289,12 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 *slot = Self::to_f64(value);
             }
             plan.inverse_f64_slice_into(input64, output64)?;
-            for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = Self::from_f64(value);
             }
             Ok(())
@@ -397,9 +407,9 @@ mod tests {
     #[test]
     fn caller_owned_forward_and_inverse_match_allocating_paths() {
         let plan = path_three_plan();
-        let signal = Array1::from_vec(vec![1.25, -0.5, 2.0]);
+        let signal = Array1::from(vec![1.25, -0.5, 2.0]);
         let spectrum = plan.forward(&signal).expect("forward");
-        let mut forward_output = Array1::<f64>::zeros(plan.len());
+        let mut forward_output = Array1::<f64>::zeros([plan.len()]);
         plan.forward_into(&signal, &mut forward_output)
             .expect("caller-owned forward");
         for (actual, expected) in forward_output.iter().zip(spectrum.iter()) {
@@ -407,7 +417,7 @@ mod tests {
         }
 
         let recovered = plan.inverse(&spectrum).expect("inverse");
-        let mut inverse_output = Array1::<f64>::zeros(plan.len());
+        let mut inverse_output = Array1::<f64>::zeros([plan.len()]);
         plan.inverse_into(&spectrum, &mut inverse_output)
             .expect("caller-owned inverse");
         for ((actual, expected), original) in inverse_output
@@ -423,10 +433,10 @@ mod tests {
     #[test]
     fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
         let plan = path_three_plan();
-        let signal64 = Array1::from_vec(vec![1.25, -0.5, 2.0]);
+        let signal64 = Array1::from(vec![1.25, -0.5, 2.0]);
         let expected = plan.forward(&signal64).expect("forward");
 
-        let mut out64 = Array1::<f64>::zeros(plan.len());
+        let mut out64 = Array1::<f64>::zeros([plan.len()]);
         plan.forward_typed_into(&signal64, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
             .expect("typed f64 forward");
         for (actual, expected) in out64.iter().zip(expected.iter()) {
@@ -434,7 +444,7 @@ mod tests {
         }
 
         let signal32 = signal64.mapv(|value| value as f32);
-        let mut out32 = Array1::<f32>::zeros(plan.len());
+        let mut out32 = Array1::<f32>::zeros([plan.len()]);
         plan.forward_typed_into(&signal32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
             .expect("typed f32 forward");
         for (actual, expected) in out32.iter().zip(expected.iter()) {
@@ -442,12 +452,16 @@ mod tests {
         }
 
         let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
-        let expected16_input =
-            Array1::from_iter(signal16.iter().map(|value| f64::from(value.to_f32())));
+        let expected16_input = Array1::from(
+            signal16
+                .iter()
+                .map(|value| f64::from(value.to_f32()))
+                .collect::<Vec<_>>(),
+        );
         let expected16 = plan
             .forward(&expected16_input)
             .expect("f16 represented forward");
-        let mut out16 = Array1::from_elem(plan.len(), f16::from_f32(0.0));
+        let mut out16 = Array1::from_elem([plan.len()], f16::from_f32(0.0));
         plan.forward_typed_into(
             &signal16,
             &mut out16,
@@ -459,7 +473,7 @@ mod tests {
             assert!((f64::from(actual.to_f32()) - *expected).abs() <= quantization_bound);
         }
 
-        let mut recovered32 = Array1::<f32>::zeros(plan.len());
+        let mut recovered32 = Array1::<f32>::zeros([plan.len()]);
         plan.inverse_typed_into(
             &out32,
             &mut recovered32,
@@ -474,11 +488,11 @@ mod tests {
     #[test]
     fn typed_f32_paths_reuse_f64_workspaces() {
         let plan = path_three_plan();
-        let signal = Array1::from_vec(vec![1.25_f32, -0.5, 2.0]);
-        let mut first_spectrum = Array1::<f32>::zeros(plan.len());
-        let mut second_spectrum = Array1::<f32>::zeros(plan.len());
-        let mut first_recovered = Array1::<f32>::zeros(plan.len());
-        let mut second_recovered = Array1::<f32>::zeros(plan.len());
+        let signal = Array1::from(vec![1.25_f32, -0.5, 2.0]);
+        let mut first_spectrum = Array1::<f32>::zeros([plan.len()]);
+        let mut second_spectrum = Array1::<f32>::zeros([plan.len()]);
+        let mut first_recovered = Array1::<f32>::zeros([plan.len()]);
+        let mut second_recovered = Array1::<f32>::zeros([plan.len()]);
 
         plan.forward_typed_into(
             &signal,
@@ -531,8 +545,8 @@ mod tests {
     #[test]
     fn typed_path_rejects_profile_storage_mismatch() {
         let plan = path_three_plan();
-        let signal = Array1::from_vec(vec![1.0_f32, -2.0, 0.5]);
-        let mut output = Array1::<f32>::zeros(plan.len());
+        let signal = Array1::from(vec![1.0_f32, -2.0, 0.5]);
+        let mut output = Array1::<f32>::zeros([plan.len()]);
         assert!(matches!(
             plan.forward_typed_into(&signal, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
             Err(GftError::PrecisionMismatch)

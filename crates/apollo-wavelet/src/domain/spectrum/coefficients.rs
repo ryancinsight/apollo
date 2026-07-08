@@ -1,6 +1,6 @@
 //! Wavelet coefficient containers.
 
-use ndarray::Array2;
+use leto::Array2;
 
 /// Multilevel DWT coefficient storage.
 #[derive(Debug, Clone, PartialEq)]

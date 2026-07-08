@@ -2,11 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{FwhtWgpuBackend, FwhtWgpuPlan, WgpuCapabilities, WgpuError};
-    use apollo_fft::{f16, PrecisionProfile};
+    use crate::infrastructure::transport::gpu::{
+        FwhtWgpuBackend, FwhtWgpuPlan, WgpuCapabilities, WgpuError,
+    };
     use crate::FwhtPlan;
+    use apollo_fft::{f16, PrecisionProfile};
+    use leto::Array1;
     use leto::{SliceArg, Storage};
-    use ndarray::Array1;
 
     #[test]
     fn capabilities_reflect_implemented_kernel_surface() {
@@ -87,10 +89,11 @@ mod tests {
                 .expect("wgpu forward execution");
 
             let cpu_plan = FwhtPlan::new(input.len()).expect("cpu plan");
-            let cpu_input = Array1::from_vec(input.iter().map(|&value| value as f64).collect());
+            let cpu_input =
+                Array1::from(input.iter().map(|&value| value as f64).collect::<Vec<_>>());
             let cpu = cpu_plan.forward(&cpu_input).expect("cpu forward");
 
-            assert_eq!(gpu.len(), cpu.len());
+            assert_eq!(gpu.len(), cpu.size());
             for (actual, expected) in gpu.iter().zip(cpu.iter()) {
                 assert!((f64::from(*actual) - *expected).abs() < 1.0e-4);
             }

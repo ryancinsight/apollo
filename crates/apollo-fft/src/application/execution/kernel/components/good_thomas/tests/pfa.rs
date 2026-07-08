@@ -1,7 +1,7 @@
 use super::super::{ordered_rader_n1_config, pfa_fft_natural_inplace, ORDERED_RADER_SKIP_PRIMES};
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::test_utils::max_abs_err_64;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use proptest::prelude::*;
 use proptest::proptest;
 

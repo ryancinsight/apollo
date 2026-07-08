@@ -3,9 +3,9 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::RadonStorage;
-use ndarray::Array2;
+use apollo_fft::PrecisionProfile;
+use leto::Array2;
 
 use crate::infrastructure::transport::gpu::application::plan::RadonWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -83,18 +83,13 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_inputs(plan, image, angles)?;
-        self.kernel.execute(
-            &self.device,
-            plan,
-            image,
-            angles,
-        )
+        self.kernel.execute(&self.device, plan, image, angles)
     }
 
     /// Execute the forward Radon projection from Leto image and angle views.
     ///
     /// Contiguous angle views are borrowed. Strided image or angle views are
-    /// materialized once into logical order before the existing WGPU ndarray
+    /// materialized once into logical order before the existing WGPU
     /// execution path.
     pub fn execute_forward_leto(
         &self,
@@ -105,7 +100,7 @@ impl RadonWgpuBackend {
         let image = array2_from_leto_view(image);
         let angles = leto_view1_cow(angles);
         let output = self.execute_forward(plan, &image, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon forward sinogram")
+        leto_array2_from_dense(&output, "Radon forward sinogram")
     }
 
     /// Execute the GPU adjoint backprojection (Radon adjoint operator).
@@ -120,12 +115,8 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel.execute_backproject(
-            &self.device,
-            plan,
-            sinogram,
-            angles,
-        )
+        self.kernel
+            .execute_backproject(&self.device, plan, sinogram, angles)
     }
 
     /// Execute GPU adjoint backprojection from Leto sinogram and angle views.
@@ -138,7 +129,7 @@ impl RadonWgpuBackend {
         let sinogram = array2_from_leto_view(sinogram);
         let angles = leto_view1_cow(angles);
         let output = self.execute_inverse(plan, &sinogram, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon backprojection image")
+        leto_array2_from_dense(&output, "Radon backprojection image")
     }
 
     /// Execute GPU adjoint backprojection from a flat typed sinogram slice.
@@ -173,7 +164,7 @@ impl RadonWgpuBackend {
             flat_sinogram.iter().map(|v| v.to_f64() as f32).collect()
         };
         let sinogram_2d =
-            Array2::from_shape_vec((plan.angle_count(), plan.detector_count()), promoted).map_err(
+            Array2::from_shape_vec([plan.angle_count(), plan.detector_count()], promoted).map_err(
                 |_| WgpuError::InvalidPlan {
                         message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat sinogram reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                     },
@@ -193,7 +184,7 @@ impl RadonWgpuBackend {
         let flat = sinogram.iter().copied().collect::<Vec<_>>();
         let angles = leto_view1_cow(angles);
         let output = self.execute_inverse_flat_typed(plan, precision, &flat, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon typed backprojection image")
+        leto_array2_from_dense(&output, "Radon typed backprojection image")
     }
 
     /// Execute GPU ramp-filtered backprojection (FBP).
@@ -212,12 +203,8 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel.execute_filtered_backproject(
-            &self.device,
-            plan,
-            sinogram,
-            angles,
-        )
+        self.kernel
+            .execute_filtered_backproject(&self.device, plan, sinogram, angles)
     }
 
     /// Execute GPU ramp-filtered backprojection from Leto sinogram and angle views.
@@ -230,7 +217,7 @@ impl RadonWgpuBackend {
         let sinogram = array2_from_leto_view(sinogram);
         let angles = leto_view1_cow(angles);
         let output = self.execute_filtered_backproject(plan, &sinogram, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon filtered backprojection image")
+        leto_array2_from_dense(&output, "Radon filtered backprojection image")
     }
 
     /// Execute the forward Radon projection from a flat typed image slice.
@@ -265,7 +252,7 @@ impl RadonWgpuBackend {
             flat_image.iter().map(|v| v.to_f64() as f32).collect()
         };
         let image_2d =
-            Array2::from_shape_vec((plan.rows(), plan.cols()), promoted).map_err(|_| {
+            Array2::from_shape_vec([plan.rows(), plan.cols()], promoted).map_err(|_| {
                 WgpuError::InvalidPlan {
                         message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: flat image reshape failed", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                     }
@@ -285,7 +272,7 @@ impl RadonWgpuBackend {
         let flat = image.iter().copied().collect::<Vec<_>>();
         let angles = leto_view1_cow(angles);
         let output = self.execute_forward_flat_typed(plan, precision, &flat, &angles)?;
-        leto_array2_from_ndarray(&output, "Radon typed forward sinogram")
+        leto_array2_from_dense(&output, "Radon typed forward sinogram")
     }
 
     fn validate_sinogram_inputs(
@@ -307,7 +294,7 @@ impl RadonWgpuBackend {
                     message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                 });
         }
-        let (actual_angles, actual_detectors) = sinogram.dim();
+        let [actual_angles, actual_detectors] = sinogram.shape();
         if (actual_angles, actual_detectors) != (plan.angle_count(), plan.detector_count()) {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
@@ -347,7 +334,7 @@ impl RadonWgpuBackend {
                     message: format!("invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive", plan.rows(), plan.cols(), plan.angle_count(), plan.detector_count(), plan.detector_spacing()),
                 });
         }
-        let (actual_rows, actual_cols) = image.dim();
+        let [actual_rows, actual_cols] = image.shape();
         if (actual_rows, actual_cols) != (plan.rows(), plan.cols()) {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
@@ -373,13 +360,13 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
-    leto_interop::array2_from_view(&view)
+    view.to_contiguous()
 }
-fn leto_array2_from_ndarray(
+fn leto_array2_from_dense(
     values: &Array2<f32>,
     label: &str,
 ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 2>> {
-    leto_interop::try_array2_from_ndarray(values).ok_or_else(|| WgpuError::InvalidPlan {
+    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
         message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
     })
 }

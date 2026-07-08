@@ -2,7 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{HilbertWgpuBackend, HilbertWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        HilbertWgpuBackend, HilbertWgpuPlan, WgpuCapabilities, WgpuError,
+    };
     use crate::HilbertPlan;
     use leto::{SliceArg, Storage};
 
@@ -342,7 +344,7 @@ mod tests {
             let positive_end = (n + 1) / 2;
             let tau = std::f64::consts::TAU;
             // DFT of quadrature
-            let mut q_dft = vec![num_complex::Complex64::new(0.0, 0.0); n];
+            let mut q_dft = vec![eunomia::Complex64::new(0.0, 0.0); n];
             for k in 0..n {
                 let mut re = 0.0_f64;
                 let mut im = 0.0_f64;
@@ -351,19 +353,19 @@ mod tests {
                     re += cpu_quadrature[j] * angle.cos();
                     im += cpu_quadrature[j] * angle.sin();
                 }
-                q_dft[k] = num_complex::Complex64::new(re, im);
+                q_dft[k] = eunomia::Complex64::new(re, im);
             }
             // Inverse mask: X[k] = j * Q[k] for positive, -j * Q[k] for negative
-            let mut x_dft = vec![num_complex::Complex64::new(0.0, 0.0); n];
+            let mut x_dft = vec![eunomia::Complex64::new(0.0, 0.0); n];
             for k in 0..n {
                 if k == 0 || (n % 2 == 0 && k == n / 2) {
-                    x_dft[k] = num_complex::Complex64::new(0.0, 0.0); // DC/Nyquist lost
+                    x_dft[k] = eunomia::Complex64::new(0.0, 0.0); // DC/Nyquist lost
                 } else if k < positive_end {
                     // Q[k] = -j * X[k], so X[k] = j * Q[k] = (-Q.im, Q.re)
-                    x_dft[k] = num_complex::Complex64::new(-q_dft[k].im, q_dft[k].re);
+                    x_dft[k] = eunomia::Complex64::new(-q_dft[k].im, q_dft[k].re);
                 } else {
                     // Q[k] = j * X[k], so X[k] = -j * Q[k] = (Q.im, -Q.re)
-                    x_dft[k] = num_complex::Complex64::new(q_dft[k].im, -q_dft[k].re);
+                    x_dft[k] = eunomia::Complex64::new(q_dft[k].im, -q_dft[k].re);
                 }
             }
             // IDFT of recovered X

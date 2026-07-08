@@ -65,7 +65,6 @@ macro_rules! with_winograd_pair_primes {
     }};
 }
 
-
 /// In-place circular convolution via forward FFT -> pointwise multiply -> inverse FFT.
 ///
 /// `padded` holds the input sequence on entry and the convolution result on exit.
@@ -88,7 +87,7 @@ macro_rules! with_winograd_pair_primes {
 /// may recursively re-enter Rader for prime sub-lengths, and preventing inlining
 /// keeps each Rader level's stack frame independent.
 #[inline(never)]
-pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     padded: &mut [F::Complex],
     kernel_spectrum: &[F::Complex],
 ) {
@@ -146,7 +145,7 @@ pub(super) fn rader_convolve_inplace<F: MixedRadixScalar<Complex = num_complex::
 /// preventing inlining keeps each Rader level's stack frame independent.
 #[inline(never)]
 pub(super) fn rader_negacyclic_convolve_inplace<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
 >(
     padded: &mut [F::Complex],
     kernel_cyc_spectrum: &[F::Complex],
@@ -278,7 +277,7 @@ pub(super) fn rader_negacyclic_convolve_inplace<
 /// full dispatch chain which may call back into Rader. `inline(never)` prevents
 /// debug builds from accumulating a large monomorphized stack frame.
 #[inline(never)]
-fn rader_subconv_forward_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn rader_subconv_forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
     crate::application::execution::kernel::mixed_radix::forward_inplace::<F>(data);
@@ -286,7 +285,7 @@ fn rader_subconv_forward_inplace<F: MixedRadixScalar<Complex = num_complex::Comp
 
 /// Trampoline: keep recursive sub-convolution dispatch out of this frame.
 #[inline(never)]
-fn rader_subconv_inverse_inplace<F: MixedRadixScalar<Complex = num_complex::Complex<F>>>(
+fn rader_subconv_inverse_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
     crate::application::execution::kernel::mixed_radix::inverse_inplace::<F>(data);

@@ -22,7 +22,7 @@ use super::super::stage::stockham_reduced_stage_is_l1_resident;
 use super::traits::ReducedStockham;
 use super::traits::{private, StockhamPrecision};
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 #[cfg(any(
     test,

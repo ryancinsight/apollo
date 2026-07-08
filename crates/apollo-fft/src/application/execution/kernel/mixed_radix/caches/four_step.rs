@@ -1,5 +1,5 @@
 use super::super::super::twiddle_table::TwiddleOutput;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::collections::HashMap;

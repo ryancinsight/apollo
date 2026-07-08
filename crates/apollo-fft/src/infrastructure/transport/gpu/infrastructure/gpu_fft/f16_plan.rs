@@ -29,9 +29,11 @@
 //! This module is compiled only when the `native-f16` feature is enabled.
 
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::AxisPackStage;
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy, ChirpData, RadixStages};
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
+    Axis, AxisStrategy, ChirpData, RadixStages,
+};
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
-use ndarray::{Array1, Array3};
+use leto::{Array1, Array3};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
@@ -609,8 +611,8 @@ impl GpuFft3dF16Native {
     #[must_use]
     pub fn forward_native_f16(&self, field: &Array3<f32>) -> Vec<f32> {
         assert_eq!(
-            field.dim(),
-            (self.nx, self.ny, self.nz),
+            field.shape(),
+            [self.nx, self.ny, self.nz],
             "field dimensions must match plan"
         );
         let n = self.nx * self.ny * self.nz;
@@ -796,7 +798,7 @@ impl GpuFft3dF16Native {
         // Compute h[j] = exp(-πi j²/N) in f32, then narrow to f16.
         // The symmetric extension h[m-j] = h[j] for j=1..N-1 ensures the
         // circular convolution of length M produces the correct linear sum.
-        let mut h = Array1::<Complex64>::zeros(m);
+        let mut h = Array1::<Complex64>::zeros([m]);
         for idx in 0..n {
             let arg = std::f32::consts::PI * (idx * idx) as f32 / n as f32;
             let value = Complex64::new(arg.cos() as f64, arg.sin() as f64);
@@ -1215,22 +1217,24 @@ mod tests {
             return;
         };
 
-        let Ok(plan_f32) = crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
-            Arc::new(device),
-            Arc::new(queue),
-            4,
-            4,
-            4,
-        ) else {
+        let Ok(plan_f32) =
+            crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
+                Arc::new(device),
+                Arc::new(queue),
+                4,
+                4,
+                4,
+            )
+        else {
             return;
         };
 
         // Analytical test field: deterministic, non-trivial, ‖f‖_∞ ≤ 1.
-        let field_f64 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f64 = leto::Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f64;
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });
-        let field_f32 = ndarray::Array3::from_shape_fn((4, 4, 4), |(i, j, k)| {
+        let field_f32 = leto::Array3::from_shape_fn([4, 4, 4], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f64;
             ((0.3 * x).sin() + 0.5 * (0.7 * x).cos()) as f32
         });
@@ -1278,7 +1282,7 @@ mod tests {
         };
 
         // Deterministic 3×3×3 field with values in [−1, 1].
-        let field = ndarray::Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
+        let field = leto::Array3::from_shape_fn([3, 3, 3], |[i, j, k]| {
             let x = (i + j * 3 + k * 7) as f32;
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });

@@ -1,4 +1,4 @@
-﻿#![warn(missing_docs)]
+#![warn(missing_docs)]
 //! Chirp z-transform utilities for Apollo.
 //!
 //! This crate implements the chirp z-transform as a reusable plan plus direct
@@ -25,4 +25,4 @@ pub mod wgpu_backend {
     pub use crate::infrastructure::transport::gpu::*;
 }
 #[cfg(feature = "wgpu")]
-pub use infrastructure::transport::gpu::{*};
+pub use infrastructure::transport::gpu::*;

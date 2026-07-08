@@ -1,10 +1,12 @@
-use apollo_fft::PrecisionProfile;
 use crate::{StftRealStorage, StftSpectrumStorage};
-use num_complex::Complex32;
+use apollo_fft::PrecisionProfile;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::StftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{leto_array1_from_slice, leto_view1_cow};
+use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
+    leto_array1_from_slice, leto_view1_cow,
+};
 use crate::infrastructure::transport::gpu::infrastructure::device::StftWgpuBackend;
 
 impl StftWgpuBackend {
@@ -106,7 +108,7 @@ impl StftWgpuBackend {
             });
         }
         for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = O::from_complex64(num_complex::Complex64::new(
+            *slot = O::from_complex64(eunomia::Complex64::new(
                 f64::from(value.re),
                 f64::from(value.im),
             ));
@@ -124,7 +126,7 @@ impl StftWgpuBackend {
     ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
         let signal = leto_view1_cow(signal);
         let output_len = forward_output_len(plan, signal.len())?;
-        let mut output = vec![O::from_complex64(num_complex::Complex64::new(0.0, 0.0)); output_len];
+        let mut output = vec![O::from_complex64(eunomia::Complex64::new(0.0, 0.0)); output_len];
         self.execute_forward_typed_into(
             plan,
             input_precision,

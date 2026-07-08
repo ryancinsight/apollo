@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn mellin_constant_function_first_moment_fixture() -> SuiteResult<PublishedFixtureReport>
 {

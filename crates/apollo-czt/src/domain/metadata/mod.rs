@@ -5,7 +5,7 @@
 //! where `A` is the starting point and `W` is the frequency step ratio.
 
 use crate::domain::contracts::error::CztError;
-use num_complex::Complex64;
+use eunomia::Complex64;
 use serde::{Deserialize, Serialize};
 
 /// Validated CZT parameters: input length, output length, and spiral parameters.

@@ -2,7 +2,7 @@
 
 use super::super::metrics::max_complex_abs_delta;
 use crate::domain::report::PublishedFixtureReport;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 pub(crate) const PUBLISHED_FIXTURE_LIMIT: f64 = 1.0e-12;
 

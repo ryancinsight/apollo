@@ -3,17 +3,17 @@
 use super::plan::{frft, frft_leto, FrftPlan};
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 
 #[test]
 fn integer_order_zero_is_identity() {
-    let input = Array1::from_vec(vec![Complex64::new(1.0, 2.0), Complex64::new(-3.0, 4.0)]);
+    let input = Array1::from(vec![Complex64::new(1.0, 2.0), Complex64::new(-3.0, 4.0)]);
     assert_eq!(frft(&input, 0.0).expect("frft"), input);
 }
 
 #[test]
-fn leto_forward_and_inverse_match_ndarray_path() {
+fn leto_forward_and_inverse_match_leto_path() {
     use leto::Storage;
 
     let n = 8;
@@ -21,17 +21,17 @@ fn leto_forward_and_inverse_match_ndarray_path() {
     let signal = (0..n)
         .map(|i| Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin()))
         .collect::<Vec<_>>();
-    let ndarray_input = Array1::from_vec(signal.clone());
+    let owned_input = Array1::from(signal.clone());
     let leto_input = leto::Array1::from_shape_vec([n], signal).expect("leto input");
 
     let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
-    let ndarray_forward = plan.forward(&ndarray_input).expect("ndarray forward");
-    assert_eq!(leto_forward.shape(), [ndarray_forward.len()]);
+    let owned_forward = plan.forward(&owned_input).expect("owned forward");
+    assert_eq!(leto_forward.shape(), [owned_forward.size()]);
     for (actual, expected) in leto_forward
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_forward.iter())
+        .zip(owned_forward.iter())
     {
         assert!((actual - expected).norm() < 1.0e-12);
     }
@@ -39,12 +39,12 @@ fn leto_forward_and_inverse_match_ndarray_path() {
     let leto_inverse = plan
         .inverse_leto(leto_forward.view())
         .expect("leto inverse");
-    let ndarray_inverse = plan.inverse(&ndarray_forward).expect("ndarray inverse");
+    let owned_inverse = plan.inverse(&owned_forward).expect("owned inverse");
     for (actual, expected) in leto_inverse
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_inverse.iter())
+        .zip(owned_inverse.iter())
     {
         assert!((actual - expected).norm() < 1.0e-12);
     }
@@ -70,27 +70,27 @@ fn leto_forward_accepts_strided_logical_view() {
         .expect("strided view");
 
     let via_leto = frft_leto(strided, 0.5).expect("leto frft");
-    let via_ndarray = frft(&Array1::from_vec(logical), 0.5).expect("ndarray frft");
-    for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_ndarray.iter()) {
+    let via_owned = frft(&Array1::from(logical), 0.5).expect("owned frft");
+    for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_owned.iter()) {
         assert!((actual - expected).norm() < 1.0e-12);
     }
 }
 
 #[test]
-fn leto_typed_complex32_matches_ndarray_typed_path() {
+fn leto_typed_complex32_matches_leto_typed_path() {
     use leto::Storage;
 
     let n = 8;
     let plan = FrftPlan::new(n, 0.75).expect("valid plan");
-    let input = Array1::from_shape_fn(n, |i| {
+    let input = Array1::from_shape_fn([n], |[i]| {
         Complex32::new((i as f32 * 0.17).cos(), (i as f32 * 0.23).sin())
     });
     let leto_input =
         leto::Array1::from_shape_vec([n], input.iter().copied().collect()).expect("leto input");
 
-    let mut expected = Array1::<Complex32>::zeros(n);
+    let mut expected = Array1::<Complex32>::zeros([n]);
     plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("ndarray typed forward");
+        .expect("leto typed forward");
     let actual = plan
         .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
         .expect("leto typed forward");
@@ -102,12 +102,12 @@ fn leto_typed_complex32_matches_ndarray_typed_path() {
 }
 
 #[test]
-fn leto_typed_strided_f16_matches_ndarray_typed_path() {
+fn leto_typed_strided_f16_matches_leto_typed_path() {
     use leto::{SliceArg, Storage};
 
     let n = 8;
     let plan = FrftPlan::new(n, 0.5).expect("valid plan");
-    let logical = Array1::from_shape_fn(n, |i| {
+    let logical = Array1::from_shape_fn([n], |[i]| {
         [
             f16::from_f32((i as f32 * 0.13).sin()),
             f16::from_f32((i as f32 * 0.31).cos()),
@@ -125,13 +125,13 @@ fn leto_typed_strided_f16_matches_ndarray_typed_path() {
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .expect("strided view");
 
-    let mut expected = Array1::from_elem(n, [f16::from_f32(0.0); 2]);
+    let mut expected = Array1::from_elem([n], [f16::from_f32(0.0); 2]);
     plan.forward_typed_into(
         &logical,
         &mut expected,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("ndarray typed forward");
+    .expect("leto typed forward");
     let actual = plan
         .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
         .expect("leto typed forward");
@@ -145,7 +145,7 @@ fn leto_typed_strided_f16_matches_ndarray_typed_path() {
 #[test]
 fn exact_centered_continuity_at_boundary() {
     let n: usize = 16;
-    let input = Array1::from_shape_fn(n, |i| Complex64::new((i as f64 * 0.1).sin(), 0.0));
+    let input = Array1::from_shape_fn([n], |[i]| Complex64::new((i as f64 * 0.1).sin(), 0.0));
     let boundary = frft(&input, 1.0).unwrap();
     let near_limit = frft(&input, 0.9999999999).unwrap();
 
@@ -159,7 +159,7 @@ fn exact_centered_continuity_at_boundary() {
 fn integer_order_one_inverse_recovers_input() {
     let n: usize = 8;
     let plan = FrftPlan::new(n, 1.0).expect("valid plan");
-    let input = Array1::from_shape_fn(n, |i| {
+    let input = Array1::from_shape_fn([n], |[i]| {
         Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin())
     });
     let recovered = plan
@@ -176,9 +176,9 @@ fn integer_order_one_inverse_recovers_input() {
 fn inverse_into_matches_allocating_inverse() {
     let n: usize = 8;
     let plan = FrftPlan::new(n, 3.0).expect("valid plan");
-    let input = Array1::from_shape_fn(n, |i| Complex64::new(i as f64 - 2.0, i as f64 * 0.5));
+    let input = Array1::from_shape_fn([n], |[i]| Complex64::new(i as f64 - 2.0, i as f64 * 0.5));
     let expected = plan.inverse(&input).expect("inverse");
-    let mut actual = Array1::<Complex64>::zeros(n);
+    let mut actual = Array1::<Complex64>::zeros([n]);
     plan.inverse_into(&input, &mut actual)
         .expect("inverse_into");
 
@@ -192,12 +192,12 @@ fn inverse_into_matches_allocating_inverse() {
 fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
     let n: usize = 8;
     let plan = FrftPlan::new(n, 0.75).expect("valid plan");
-    let input64 = Array1::from_shape_fn(n, |i| {
+    let input64 = Array1::from_shape_fn([n], |[i]| {
         Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin())
     });
     let expected = plan.forward(&input64).expect("forward");
 
-    let mut out64 = Array1::<Complex64>::zeros(n);
+    let mut out64 = Array1::<Complex64>::zeros([n]);
     plan.forward_typed_into(&input64, &mut out64, PrecisionProfile::HIGH_ACCURACY_F64)
         .expect("complex64 forward");
     for (actual, expected) in out64.iter().zip(expected.iter()) {
@@ -205,7 +205,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
     }
 
     let input32 = input64.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-    let mut out32 = Array1::<Complex32>::zeros(n);
+    let mut out32 = Array1::<Complex32>::zeros([n]);
     plan.forward_typed_into(&input32, &mut out32, PrecisionProfile::LOW_PRECISION_F32)
         .expect("complex32 forward");
     for (actual, expected) in out32.iter().zip(expected.iter()) {
@@ -219,7 +219,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
             f16::from_f32(value.im as f32),
         ]
     });
-    let mut out16 = Array1::from_elem(n, [f16::from_f32(0.0); 2]);
+    let mut out16 = Array1::from_elem([n], [f16::from_f32(0.0); 2]);
     let input16_reference = input16
         .mapv(|value| Complex64::new(f64::from(value[0].to_f32()), f64::from(value[1].to_f32())));
     let expected16 = plan.forward(&input16_reference).expect("mixed reference");
@@ -236,7 +236,7 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
         assert!((f64::from(actual[1].to_f32()) - expected.im).abs() <= im_bound);
     }
 
-    let mut recovered32 = Array1::<Complex32>::zeros(n);
+    let mut recovered32 = Array1::<Complex32>::zeros([n]);
     plan.inverse_typed_into(
         &out32,
         &mut recovered32,
@@ -256,11 +256,11 @@ fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
 fn typed_complex32_path_reuses_complex64_workspaces() {
     let n: usize = 8;
     let plan = FrftPlan::new(n, 0.5).expect("valid plan");
-    let input = Array1::from_shape_fn(n, |i| {
+    let input = Array1::from_shape_fn([n], |[i]| {
         Complex32::new((i as f32 * 0.17).cos(), (i as f32 * 0.23).sin())
     });
-    let mut first = Array1::<Complex32>::zeros(n);
-    let mut second = Array1::<Complex32>::zeros(n);
+    let mut first = Array1::<Complex32>::zeros([n]);
+    let mut second = Array1::<Complex32>::zeros([n]);
 
     plan.forward_typed_into(&input, &mut first, PrecisionProfile::LOW_PRECISION_F32)
         .expect("first typed forward");
@@ -283,8 +283,8 @@ fn typed_complex32_path_reuses_complex64_workspaces() {
 fn typed_path_rejects_profile_storage_mismatch() {
     let n: usize = 4;
     let plan = FrftPlan::new(n, 1.0).expect("valid plan");
-    let input = Array1::from_elem(n, Complex32::new(1.0, 0.0));
-    let mut output = Array1::<Complex32>::zeros(n);
+    let input = Array1::from_elem([n], Complex32::new(1.0, 0.0));
+    let mut output = Array1::<Complex32>::zeros([n]);
     assert!(matches!(
         plan.forward_typed_into(&input, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
         Err(FrftError::PrecisionMismatch)
@@ -304,7 +304,7 @@ fn frft_order_1_matches_dft() {
     let input: Vec<Complex64> = (0..n)
         .map(|i| Complex64::new((i as f64 * 0.31).sin(), 0.0))
         .collect();
-    let input_arr = Array1::from_vec(input.clone());
+    let input_arr = Array1::from(input.clone());
     let result = frft(&input_arr, 1.0).unwrap();
     let center = (n as f64 - 1.0) * 0.5;
     let scale = 1.0 / (n as f64).sqrt();
@@ -331,7 +331,7 @@ fn frft_order_1_matches_dft() {
 #[test]
 fn frft_order_4_is_identity() {
     let n = 8usize;
-    let input: Array1<Complex64> = Array1::from_shape_fn(n, |i| {
+    let input: Array1<Complex64> = Array1::from_shape_fn([n], |[i]| {
         Complex64::new((i as f64 * 0.5).cos(), (i as f64 * 0.3).sin())
     });
     let plan = FrftPlan::new(n, 4.0).unwrap();
@@ -349,7 +349,7 @@ fn frft_order_4_is_identity() {
 fn frft_order_2_is_reversal() {
     let n = 8usize;
     let input: Array1<Complex64> =
-        Array1::from_shape_fn(n, |i| Complex64::new(i as f64 + 1.0, 0.0));
+        Array1::from_shape_fn([n], |[i]| Complex64::new(i as f64 + 1.0, 0.0));
     let plan = FrftPlan::new(n, 2.0).unwrap();
     let result = plan.forward(&input).unwrap();
     for k in 0..n {

@@ -22,7 +22,7 @@
 //! | log₂(N) uniform buffer allocs     | 0 uniform allocs           |
 //! | 1 `Vec<Complex32>` output alloc   | 0 host Vec allocations     |
 
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use super::chirp::chirp_padded_len;
@@ -130,172 +130,213 @@ impl StftGpuBuffers {
         let log2_n = frame_len.trailing_zeros();
 
         // ── Data buffers ──────────────────────────────────────────────────────
-        let signal_buf = hep_device.alloc_zeroed::<f32>(signal_len).expect("Failed to allocate signal buffer");
-        let spectrum_buf = hep_device.alloc_zeroed::<ComplexPod>(frame_count * frame_len).expect("Failed to allocate spectrum buffer");
-        let re_scratch_buf = hep_device.alloc_zeroed::<f32>(scratch_elem_count).expect("Failed to allocate re scratch buffer");
-        let im_scratch_buf = hep_device.alloc_zeroed::<f32>(scratch_elem_count).expect("Failed to allocate im scratch buffer");
-        let fwd_output_buf = hep_device.alloc_zeroed::<ComplexPod>(frame_count * frame_len).expect("Failed to allocate forward output buffer");
-        let frame_data_buf = hep_device.alloc_zeroed::<f32>(scratch_elem_count).expect("Failed to allocate frame data buffer");
-        let inv_signal_buf = hep_device.alloc_zeroed::<f32>(signal_len).expect("Failed to allocate inverse signal buffer");
-        let inv_ola_params_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu reusable ola params"),
-            contents: bytemuck::bytes_of(&StftParams {
-                signal_len: 0,
-                frame_len: 0,
-                hop_len: 0,
-                frame_count: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let signal_buf = hep_device
+            .alloc_zeroed::<f32>(signal_len)
+            .expect("Failed to allocate signal buffer");
+        let spectrum_buf = hep_device
+            .alloc_zeroed::<ComplexPod>(frame_count * frame_len)
+            .expect("Failed to allocate spectrum buffer");
+        let re_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(scratch_elem_count)
+            .expect("Failed to allocate re scratch buffer");
+        let im_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(scratch_elem_count)
+            .expect("Failed to allocate im scratch buffer");
+        let fwd_output_buf = hep_device
+            .alloc_zeroed::<ComplexPod>(frame_count * frame_len)
+            .expect("Failed to allocate forward output buffer");
+        let frame_data_buf = hep_device
+            .alloc_zeroed::<f32>(scratch_elem_count)
+            .expect("Failed to allocate frame data buffer");
+        let inv_signal_buf = hep_device
+            .alloc_zeroed::<f32>(signal_len)
+            .expect("Failed to allocate inverse signal buffer");
+        let inv_ola_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu reusable ola params"),
+                    contents: bytemuck::bytes_of(&StftParams {
+                        signal_len: 0,
+                        frame_len: 0,
+                        hop_len: 0,
+                        frame_count: 0,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
 
         // ── Bind groups ───────────────────────────────────────────────────────
-        let fwd_data_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu reusable fwd data BG"),
-            layout: &kernel.fft_data_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: re_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: im_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: fwd_output_buf.as_entire_binding(),
-                },
-            ],
-        });
-        let inv_data_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu reusable inv data BG"),
-            layout: &kernel.fft_data_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: re_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: im_scratch_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-            ],
-        });
-        let ola_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu reusable OLA BG"),
-            layout: &kernel.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: frame_data_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: inv_signal_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: inv_ola_params_buf.as_entire_binding(),
-                },
-            ],
-        });
+        let fwd_data_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu reusable fwd data BG"),
+                layout: &kernel.fft_data_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: re_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: im_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: fwd_output_buf.as_entire_binding(),
+                    },
+                ],
+            });
+        let inv_data_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu reusable inv data BG"),
+                layout: &kernel.fft_data_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: re_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: im_scratch_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                ],
+            });
+        let ola_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu reusable OLA BG"),
+                layout: &kernel.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: frame_data_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: inv_signal_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: inv_ola_params_buf.as_entire_binding(),
+                    },
+                ],
+            });
 
         // ── Forward FFT stage params ──────────────────────────────────────────
-        let fwd_base_params_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu reusable fwd base params"),
-            contents: bytemuck::bytes_of(&FwdFftStageParams {
-                frame_count: frame_count as u32,
-                frame_len: frame_len as u32,
-                hop_len: hop_len as u32,
-                stage: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let fwd_base_params_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu reusable fwd base params BG"),
-            layout: &kernel.fft_params_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: fwd_base_params_buf.as_entire_binding(),
-            }],
-        });
-        let mut fwd_butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
-        let mut fwd_butterfly_bgs: Vec<wgpu::BindGroup> = Vec::with_capacity(log2_n as usize);
-        for s in 0..log2_n {
-            let buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu reusable fwd butterfly params"),
-                contents: bytemuck::bytes_of(&FwdFftStageParams {
-                    frame_count: frame_count as u32,
-                    frame_len: frame_len as u32,
-                    hop_len: hop_len as u32,
-                    stage: s,
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-stft-wgpu reusable fwd butterfly params BG"),
+        let fwd_base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu reusable fwd base params"),
+                    contents: bytemuck::bytes_of(&FwdFftStageParams {
+                        frame_count: frame_count as u32,
+                        frame_len: frame_len as u32,
+                        hop_len: hop_len as u32,
+                        stage: 0,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let fwd_base_params_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu reusable fwd base params BG"),
                 layout: &kernel.fft_params_bgl,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buf.as_entire_binding(),
+                    resource: fwd_base_params_buf.as_entire_binding(),
                 }],
             });
+        let mut fwd_butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
+        let mut fwd_butterfly_bgs: Vec<wgpu::BindGroup> = Vec::with_capacity(log2_n as usize);
+        for s in 0..log2_n {
+            let buf = device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu reusable fwd butterfly params"),
+                    contents: bytemuck::bytes_of(&FwdFftStageParams {
+                        frame_count: frame_count as u32,
+                        frame_len: frame_len as u32,
+                        hop_len: hop_len as u32,
+                        stage: s,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            let bg = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-stft-wgpu reusable fwd butterfly params BG"),
+                    layout: &kernel.fft_params_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buf.as_entire_binding(),
+                    }],
+                });
             fwd_butterfly_bufs.push(buf);
             fwd_butterfly_bgs.push(bg);
         }
 
         // ── Inverse FFT stage params ──────────────────────────────────────────
-        let inv_base_params_buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-stft-wgpu reusable inv base params"),
-            contents: bytemuck::bytes_of(&FftStageParams {
-                frame_count: frame_count as u32,
-                frame_len: frame_len as u32,
-                stage: 0,
-                _pad: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let inv_base_params_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-stft-wgpu reusable inv base params BG"),
-            layout: &kernel.fft_params_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: inv_base_params_buf.as_entire_binding(),
-            }],
-        });
-        let mut inv_butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
-        let mut inv_butterfly_bgs: Vec<wgpu::BindGroup> = Vec::with_capacity(log2_n as usize);
-        for s in 0..log2_n {
-            let buf = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu reusable inv butterfly params"),
-                contents: bytemuck::bytes_of(&FftStageParams {
-                    frame_count: frame_count as u32,
-                    frame_len: frame_len as u32,
-                    stage: s,
-                    _pad: 0,
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-            let bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-stft-wgpu reusable inv butterfly params BG"),
+        let inv_base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu reusable inv base params"),
+                    contents: bytemuck::bytes_of(&FftStageParams {
+                        frame_count: frame_count as u32,
+                        frame_len: frame_len as u32,
+                        stage: 0,
+                        _pad: 0,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let inv_base_params_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-stft-wgpu reusable inv base params BG"),
                 layout: &kernel.fft_params_bgl,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buf.as_entire_binding(),
+                    resource: inv_base_params_buf.as_entire_binding(),
                 }],
             });
+        let mut inv_butterfly_bufs: Vec<wgpu::Buffer> = Vec::with_capacity(log2_n as usize);
+        let mut inv_butterfly_bgs: Vec<wgpu::BindGroup> = Vec::with_capacity(log2_n as usize);
+        for s in 0..log2_n {
+            let buf = device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu reusable inv butterfly params"),
+                    contents: bytemuck::bytes_of(&FftStageParams {
+                        frame_count: frame_count as u32,
+                        frame_len: frame_len as u32,
+                        stage: s,
+                        _pad: 0,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            let bg = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-stft-wgpu reusable inv butterfly params BG"),
+                    layout: &kernel.fft_params_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: buf.as_entire_binding(),
+                    }],
+                });
             inv_butterfly_bufs.push(buf);
             inv_butterfly_bgs.push(bg);
         }

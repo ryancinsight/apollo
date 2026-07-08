@@ -137,7 +137,7 @@ pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
         #[inline]
         pub(crate) fn #fn_name<
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-                    Complex = num_complex::Complex<F>,
+                    Complex = eunomia::Complex<F>,
                 >
                 + crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar,
             const INVERSE: bool,
@@ -145,12 +145,12 @@ pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
         where
             F: crate::application::execution::kernel::mixed_radix::traits::ShortDft<#p_const>,
         {
-            use num_complex::Complex;
+            use eunomia::Complex;
             use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 
             // Step 1 — Gather + accumulate DC (data[0] = Σ inputs).
             let mut rader_in: [F::Complex; #p_const] =
-                [Complex::new(F::zero(), F::zero()); #p_const];
+                [Complex::new(<F as eunomia::NumericElement>::ZERO, <F as eunomia::NumericElement>::ZERO); #p_const];
             let v0 = data[0];
             let mut dc = v0;
             for i in 0..#p_const {

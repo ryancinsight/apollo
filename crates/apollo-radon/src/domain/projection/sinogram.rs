@@ -1,6 +1,6 @@
 //! Dense sinogram storage.
 
-use ndarray::Array2;
+use leto::Array2;
 
 /// Dense sinogram indexed by `(angle_index, detector_index)`.
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +30,7 @@ impl Sinogram {
     /// Return `(angle_count, detector_count)`.
     #[must_use]
     pub fn shape(&self) -> (usize, usize) {
-        self.values.dim()
+        let [angles, detectors] = self.values.shape();
+        (angles, detectors)
     }
 }

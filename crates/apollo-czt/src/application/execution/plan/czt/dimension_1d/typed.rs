@@ -4,8 +4,8 @@ use super::helpers::{validate_profile, with_complex64_workspaces};
 use super::plan::CztPlan;
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 
 /// Complex storage accepted by typed CZT paths.
 pub trait CztStorage: Copy + Send + Sync + 'static {
@@ -159,7 +159,7 @@ impl CztStorage for Complex64 {
         profile: PrecisionProfile,
     ) -> Result<(), CztError> {
         validate_profile(profile, Self::PROFILE)?;
-        if spectrum.len() != plan.output_len() || output.len() != plan.input_len() {
+        if spectrum.size() != plan.output_len() || output.size() != plan.input_len() {
             return Err(CztError::LengthMismatch);
         }
         plan.inverse_complex64_slice_into(

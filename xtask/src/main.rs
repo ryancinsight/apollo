@@ -293,7 +293,7 @@ struct SinglePrecision;
 #[cfg(feature = "bench-runner")]
 impl PrecisionBenchmark for DoublePrecision {
     type Scalar = f64;
-    type Complex = num_complex::Complex64;
+    type Complex = eunomia::Complex64;
     type Plan = std::sync::Arc<apollo_fft::FftPlan1D<f64>>;
 
     #[inline]
@@ -301,7 +301,7 @@ impl PrecisionBenchmark for DoublePrecision {
         (0..len)
             .map(|i| {
                 let x = i as f64;
-                num_complex::Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                eunomia::Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
             })
             .collect()
     }
@@ -334,7 +334,7 @@ impl PrecisionBenchmark for DoublePrecision {
 #[cfg(feature = "bench-runner")]
 impl PrecisionBenchmark for SinglePrecision {
     type Scalar = f32;
-    type Complex = num_complex::Complex32;
+    type Complex = eunomia::Complex32;
     type Plan = std::sync::Arc<apollo_fft::FftPlan1D<f32>>;
 
     #[inline]
@@ -342,7 +342,7 @@ impl PrecisionBenchmark for SinglePrecision {
         (0..len)
             .map(|i| {
                 let x = i as f32;
-                num_complex::Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                eunomia::Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
             })
             .collect()
     }

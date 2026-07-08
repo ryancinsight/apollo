@@ -1,8 +1,8 @@
 use apollo_fft::FftPlan1D;
+use eunomia::Complex64;
+use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
-use num_complex::Complex64;
 
 /// Below this contiguous element count, serial loops avoid scheduling overhead.
 const BLUESTEIN_PAR_LEN_THRESHOLD: usize = 16_384;
@@ -40,7 +40,7 @@ pub fn czt_bluestein_forward(
     fft_kernel: &Array1<Complex64>,
     fft_plan: &FftPlan1D<f64>,
 ) -> Array1<Complex64> {
-    let mut output = Array1::<Complex64>::zeros(output_len);
+    let mut output = Array1::<Complex64>::zeros([output_len]);
     czt_bluestein_forward_into(
         input,
         &mut output,

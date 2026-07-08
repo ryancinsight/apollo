@@ -2,15 +2,15 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::{
         nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d, nufft_type1_3d_fast, nufft_type2_1d,
         nufft_type2_1d_fast, nufft_type2_3d, nufft_type2_3d_fast, UniformDomain1D, UniformGrid3D,
         DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING,
     };
+    use apollo_fft::{f16, PrecisionProfile};
+    use eunomia::{Complex32, Complex64};
+    use leto::{Array1, Array3};
     use leto::{SliceArg, Storage};
-    use ndarray::{Array1, Array3};
-    use num_complex::{Complex32, Complex64};
 
     use crate::infrastructure::transport::gpu::{
         NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuBackend, NufftWgpuCapabilities,
@@ -169,7 +169,7 @@ mod tests {
                 .execute_type1_1d(&plan, &positions, &values)
                 .expect("GPU type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.size(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 4.0e-5);
             }
@@ -266,7 +266,7 @@ mod tests {
                 )
                 .expect("mixed type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.len(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -341,7 +341,7 @@ mod tests {
                 .execute_type1_3d(&plan, &positions, &values)
                 .expect("GPU type1 3D");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 8.0e-5);
             }
@@ -399,7 +399,7 @@ mod tests {
                 .execute_type1_3d(&plan, &positions, &represented)
                 .expect("represented type1 3D");
             let mut actual = Array3::from_elem(
-                (grid.nx, grid.ny, grid.nz),
+                [grid.nx, grid.ny, grid.nz],
                 [f16::from_f32(0.0), f16::from_f32(0.0)],
             );
 
@@ -413,7 +413,7 @@ mod tests {
                 )
                 .expect("mixed type1 3D");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -460,7 +460,7 @@ mod tests {
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
                 .collect();
             let expected = nufft_type2_1d(
-                &Array1::from_vec(expected_coefficients),
+                &Array1::from(expected_coefficients),
                 &expected_positions,
                 domain,
             );
@@ -541,7 +541,7 @@ mod tests {
                 .execute_fast_type1_1d(&plan, &positions, &values)
                 .expect("GPU fast type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.size(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 1.5e-3);
             }
@@ -577,7 +577,7 @@ mod tests {
                 )
                 .expect("mixed fast type1 1D");
 
-            assert_eq!(actual.len(), expected.len());
+            assert_eq!(actual.len(), expected.size());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -608,7 +608,7 @@ mod tests {
                 .map(|value| Complex64::new(value.re as f64, value.im as f64))
                 .collect();
             let expected = nufft_type2_1d_fast(
-                &Array1::from_vec(expected_coefficients),
+                &Array1::from(expected_coefficients),
                 &expected_positions,
                 domain,
                 6,
@@ -691,7 +691,7 @@ mod tests {
                 .execute_fast_type1_3d(&plan, &positions, &values)
                 .expect("GPU fast type1 3D");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 assert_complex64_close(*actual, *expected, 2.0e-3);
             }
@@ -715,7 +715,7 @@ mod tests {
                 .execute_fast_type1_3d(&plan, &positions, &represented)
                 .expect("represented fast type1 3D");
             let mut actual = Array3::from_elem(
-                (grid.nx, grid.ny, grid.nz),
+                [grid.nx, grid.ny, grid.nz],
                 [f16::from_f32(0.0), f16::from_f32(0.0)],
             );
 
@@ -729,7 +729,7 @@ mod tests {
                 )
                 .expect("mixed fast type1 3D");
 
-            assert_eq!(actual.dim(), expected.dim());
+            assert_eq!(actual.shape(), expected.shape());
             for (actual, expected) in actual.iter().zip(expected.iter()) {
                 let expected_re = f16::from_f32(expected.re as f32);
                 let expected_im = f16::from_f32(expected.im as f32);
@@ -743,7 +743,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -771,7 +771,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes16 = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 [
                     f16::from_f32(0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32),
                     f16::from_f32(-0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32),
@@ -808,7 +808,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -877,7 +877,7 @@ mod tests {
         {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let modes = Array3::from_elem((2, 2, 2), Complex32::new(1.0, 0.0));
+            let modes = Array3::from_elem([2, 2, 2], Complex32::new(1.0, 0.0));
             let error = backend
                 .execute_type2_3d(&plan, &modes, &[(0.0, 0.0, 0.0)])
                 .expect_err("mode shape mismatch must fail");
@@ -894,7 +894,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -923,7 +923,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 Complex32::new(
                     0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
                     -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
@@ -960,7 +960,7 @@ mod tests {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes16 = Array3::from_shape_fn((grid.nx, grid.ny, grid.nz), |(kx, ky, kz)| {
+            let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
                 [
                     f16::from_f32(0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32),
                     f16::from_f32(-0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32),
@@ -1014,7 +1014,7 @@ mod tests {
             let expected_positions: Vec<f64> = positions.iter().map(|&x| x as f64).collect();
 
             let expected = nufft_type2_1d_fast(
-                &Array1::from_vec(expected_coefficients),
+                &Array1::from(expected_coefficients),
                 &expected_positions,
                 domain,
                 DEFAULT_NUFFT_KERNEL_WIDTH,

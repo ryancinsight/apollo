@@ -8,8 +8,8 @@ use super::ShtPlan;
 use crate::domain::contracts::error::ShtResult;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array2;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
+use leto::Array2;
 
 /// Real sample storage accepted by typed SHT paths.
 pub trait ShtRealStorage: Copy + Send + Sync + 'static {
@@ -196,7 +196,12 @@ pub trait ShtComplexStorage: Copy + Send + Sync + 'static {
         let owner_coefficients =
             SphericalHarmonicCoefficients::from_values(plan.grid().max_degree(), coefficients64);
         let samples = plan.inverse_real(&owner_coefficients)?;
-        for (slot, value) in output.iter_mut().zip(samples.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(samples.iter().copied())
+        {
             *slot = O::from_f64(value);
         }
         Ok(())
@@ -266,7 +271,12 @@ impl ShtComplexStorage for Complex64 {
             coefficients.clone(),
         );
         let samples = plan.inverse_real(&owner_coefficients)?;
-        for (slot, value) in output.iter_mut().zip(samples.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(samples.iter().copied())
+        {
             *slot = O::from_f64(value);
         }
         Ok(())

@@ -32,8 +32,7 @@ mnemosyne = { workspace = true }
 thiserror = "1.0"
 apollo-fft = { path = "../apollo-fft" }
 leto = { workspace = true }
-ndarray = { workspace = true }
-num-complex = { workspace = true }
+eunomia = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
@@ -42,3 +41,4 @@ proptest = "1.6"
 
 [lints]
 workspace = true
+

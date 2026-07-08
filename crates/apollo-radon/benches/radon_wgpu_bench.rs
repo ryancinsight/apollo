@@ -53,7 +53,7 @@
 
 use apollo_radon::{RadonWgpuBackend, RadonWgpuPlan};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use ndarray::Array2;
+use leto::Array2;
 
 /// Parameter sets: `(image_size, angle_count, detector_count)`.
 ///
@@ -71,7 +71,7 @@ const PARAMS: &[(usize, usize, usize)] = &[(64, 90, 91), (128, 180, 182), (256, 
 /// benchmark workload with known spectral content.
 fn gaussian_phantom(rows: usize, cols: usize) -> Array2<f32> {
     const SIGMA_SQ: f32 = 0.25 * 0.25;
-    Array2::from_shape_fn((rows, cols), |(i, j)| {
+    Array2::from_shape_fn([rows, cols], |[i, j]| {
         let x = 2.0 * i as f32 / (rows - 1) as f32 - 1.0;
         let y = 2.0 * j as f32 / (cols - 1) as f32 - 1.0;
         (-(x * x + y * y) / (2.0 * SIGMA_SQ)).exp()

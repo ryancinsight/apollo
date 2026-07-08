@@ -132,41 +132,50 @@ impl WaveletGpuKernel {
     ) -> WgpuResult<Vec<f32>> {
         let hep_device = device.hephaestus();
 
-        let main_buf = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let temp_buf = hep_device.alloc_zeroed::<f32>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let main_buf = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let temp_buf =
+            hep_device
+                .alloc_zeroed::<f32>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-wavelet-wgpu params"),
-            contents: bytemuck::bytes_of(&WaveletParams {
-                len: 0,
-                _p0: 0,
-                _p1: 0,
-                _p2: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-wavelet-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: main_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: temp_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-wavelet-wgpu params"),
+                contents: bytemuck::bytes_of(&WaveletParams {
+                    len: 0,
+                    _p0: 0,
+                    _p1: 0,
+                    _p2: 0,
+                }),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-wavelet-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: main_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: temp_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
         let level_lens: Vec<usize> = if inverse {
             (0..levels).rev().map(|l| len >> l).collect()
         } else {
@@ -190,9 +199,12 @@ impl WaveletGpuKernel {
             } else {
                 &self.analysis_pipeline
             };
-            let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-wavelet-wgpu pass encoder"),
-            });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-wavelet-wgpu pass encoder"),
+                    });
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some("apollo-wavelet-wgpu pass"),
@@ -207,9 +219,11 @@ impl WaveletGpuKernel {
         }
 
         let mut output = vec![0.0f32; len];
-        hep_device.download(&main_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&main_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

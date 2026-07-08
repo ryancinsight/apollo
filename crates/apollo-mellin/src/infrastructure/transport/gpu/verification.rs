@@ -2,11 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::MellinPlan;
+    use apollo_fft::{f16, PrecisionProfile};
     use leto::{SliceArg, Storage};
 
-    use crate::infrastructure::transport::gpu::{MellinWgpuBackend, MellinWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        MellinWgpuBackend, MellinWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_reflect_forward_inverse_kernel_surface() {
@@ -302,7 +304,7 @@ mod tests {
         {
             let n = 8usize;
             let plan = backend.plan(n, 1.0, 8.0);
-            let spectrum = vec![num_complex::Complex32::new(0.0, 0.0); n];
+            let spectrum = vec![eunomia::Complex32::new(0.0, 0.0); n];
             assert!(matches!(
                 backend.execute_inverse(&plan, &spectrum, 0.0, 8.0, n),
                 Err(WgpuError::InvalidSignalDomain { .. })

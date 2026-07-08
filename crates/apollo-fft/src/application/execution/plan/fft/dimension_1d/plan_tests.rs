@@ -2,7 +2,7 @@ use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::plan::fft::dimension_1d::helpers::PlanStrategy;
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::domain::metadata::shape::Shape1D;
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 fn signal64(n: usize) -> Vec<Complex64> {
     (0..n)
@@ -908,7 +908,8 @@ fn planned_n512_f32_pot_zst_forward_matches_direct() {
 #[test]
 fn planned_new_winograd_composite_sizes_match_direct() {
     let sizes = [
-        72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484
+        72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154, 168, 180, 189, 222, 242, 246, 259,
+        275, 280, 296, 363, 400, 484,
     ];
     for &n in &sizes {
         // test f64
@@ -923,7 +924,11 @@ fn planned_new_winograd_composite_sizes_match_direct() {
         let expected64 = dft_forward(&input64);
         let mut actual64 = input64;
         plan64.forward_complex_slice_inplace(&mut actual64);
-        let err64 = actual64.iter().zip(expected64.iter()).map(|(a, b)| (*a - *b).norm()).fold(0.0f64, f64::max);
+        let err64 = actual64
+            .iter()
+            .zip(expected64.iter())
+            .map(|(a, b)| (*a - *b).norm())
+            .fold(0.0f64, f64::max);
         assert!(err64 <= 1.0e-9, "f64 size {n} mismatch err={err64:.2e}");
 
         // test f32
@@ -938,8 +943,11 @@ fn planned_new_winograd_composite_sizes_match_direct() {
         let expected32 = dft_forward(&input32);
         let mut actual32 = input32;
         plan32.forward_complex_slice_inplace(&mut actual32);
-        let err32 = actual32.iter().zip(expected32.iter()).map(|(a, b)| f64::from((*a - *b).norm())).fold(0.0f64, f64::max);
+        let err32 = actual32
+            .iter()
+            .zip(expected32.iter())
+            .map(|(a, b)| f64::from((*a - *b).norm()))
+            .fold(0.0f64, f64::max);
         assert!(err32 <= 1.0e-3, "f32 size {n} mismatch err={err32:.2e}");
     }
 }
-

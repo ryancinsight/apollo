@@ -4,8 +4,8 @@
 mod tests {
     use crate::{iqft, is_valid_length, qft, QftError, QftPlan, QuantumStateDimension};
     use approx::assert_relative_eq;
-    use ndarray::Array1;
-    use num_complex::Complex64;
+    use eunomia::Complex64;
+    use leto::Array1;
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -16,7 +16,7 @@ mod tests {
     #[test]
     fn two_point_qft_matches_reference() {
         let plan = QftPlan::new(QuantumStateDimension::new(2).expect("valid dim"));
-        let input = Array1::from_vec(vec![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
+        let input = Array1::from(vec![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
         let output = plan.forward(&input).expect("forward");
         let scale = 1.0 / 2.0_f64.sqrt();
         assert_relative_eq!(output[0].re, scale, epsilon = 1.0e-12);
@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn roundtrip_and_norm_preservation_hold() {
         let plan = QftPlan::new(QuantumStateDimension::new(4).expect("valid dim"));
-        let input = Array1::from_vec(vec![
+        let input = Array1::from(vec![
             Complex64::new(1.0, -1.0),
             Complex64::new(0.5, 0.25),
             Complex64::new(-0.75, 0.125),
@@ -46,10 +46,10 @@ mod tests {
     #[test]
     fn inplace_and_convenience_paths_match_allocating_paths() {
         let plan = QftPlan::new(QuantumStateDimension::new(8).expect("valid dim"));
-        let input = Array1::from_vec(
+        let input = Array1::from(
             (0..8)
                 .map(|i| Complex64::new(i as f64, -(i as f64) * 0.25))
-                .collect(),
+                .collect::<Vec<_>>(),
         );
         let mut inplace = input.clone();
         plan.forward_inplace(&mut inplace).expect("forward inplace");
@@ -79,7 +79,7 @@ mod tests {
             Err(QftError::EmptyLength)
         ));
         let plan = QftPlan::new(QuantumStateDimension::new(4).expect("valid dim"));
-        let bad = Array1::from_vec(vec![Complex64::new(0.0, 0.0); 3]);
+        let bad = Array1::from(vec![Complex64::new(0.0, 0.0); 3]);
         assert!(matches!(plan.forward(&bad), Err(QftError::LengthMismatch)));
         assert!(matches!(plan.inverse(&bad), Err(QftError::LengthMismatch)));
     }
@@ -95,7 +95,7 @@ mod tests {
             for (re, im) in data.into_iter().cycle().take(len) {
                 values.push(Complex64::new(re, im));
             }
-            let input = Array1::from_vec(values);
+            let input = Array1::from(values);
             let spectrum = plan.forward(&input).expect("forward");
             prop_assert!((norm_sqr(&spectrum) - norm_sqr(&input)).abs() < 1.0e-9);
             let recovered = plan.inverse(&spectrum).expect("inverse");
@@ -111,15 +111,15 @@ mod tests {
         // columns of U are orthonormal under the inner product <u_i, u_j> = delta_ij.
         let n = 4usize;
         let plan = QftPlan::new(QuantumStateDimension::new(n).expect("valid dim"));
-        let mut u_cols: Vec<Array1<num_complex::Complex64>> = Vec::new();
+        let mut u_cols: Vec<Array1<eunomia::Complex64>> = Vec::new();
         for j in 0..n {
-            let mut basis = Array1::zeros(n);
-            basis[j] = num_complex::Complex64::new(1.0, 0.0);
+            let mut basis = Array1::zeros([n]);
+            basis[j] = eunomia::Complex64::new(1.0, 0.0);
             u_cols.push(plan.forward(&basis).expect("forward"));
         }
         for i in 0..n {
             for j in 0..n {
-                let dot: num_complex::Complex64 = u_cols[i]
+                let dot: eunomia::Complex64 = u_cols[i]
                     .iter()
                     .zip(u_cols[j].iter())
                     .map(|(a, b)| a.conj() * b)
@@ -137,7 +137,7 @@ mod tests {
     fn qft_n1_is_identity() {
         // n=1: scale = 1/sqrt(1)=1, twiddle[0]=exp(0)=1. Output = input.
         let plan = QftPlan::new(QuantumStateDimension::new(1).expect("valid dim"));
-        let input = Array1::from_vec(vec![num_complex::Complex64::new(3.7, -1.2)]);
+        let input = Array1::from(vec![eunomia::Complex64::new(3.7, -1.2)]);
         let result = plan.forward(&input).expect("forward");
         assert!((result[0] - input[0]).norm() < 1e-14);
     }
@@ -153,7 +153,7 @@ mod tests {
             let dim = QuantumStateDimension::new(n).expect("valid dim");
             let plan = QftPlan::new(dim);
             // x[j] = cos(2πj/n) + i·sin(4πj/n): analytically constructed, no round numbers.
-            let input: Array1<Complex64> = Array1::from_shape_fn(n, |j| {
+            let input: Array1<Complex64> = Array1::from_shape_fn([n], |[j]| {
                 Complex64::new(
                     (TAU * j as f64 / n as f64).cos(),
                     (TAU * 2.0 * j as f64 / n as f64).sin(),
@@ -177,8 +177,8 @@ mod tests {
             // ||QFT_n(x)||² = ||x||² for all n ≥ 1 and x ∈ ℂⁿ.
             let dim = QuantumStateDimension::new(n).expect("valid dim");
             let plan = QftPlan::new(dim);
-            let input: Array1<Complex64> = Array1::from_vec(
-                data.into_iter().cycle().take(n).map(|(re, im)| Complex64::new(re, im)).collect(),
+            let input: Array1<Complex64> = Array1::from(
+                data.into_iter().cycle().take(n).map(|(re, im)| Complex64::new(re, im)).collect::<Vec<_>>(),
             );
             let energy_in: f64 = input.iter().map(|c| c.norm_sqr()).sum();
             let spectrum = plan.forward(&input).expect("forward");
@@ -195,10 +195,10 @@ mod tests {
     fn qft_n3_roundtrip() {
         // n=3 is not a power of two; the dense QFT handles arbitrary positive lengths.
         let plan = QftPlan::new(QuantumStateDimension::new(3).expect("valid dim"));
-        let input = Array1::from_vec(vec![
-            num_complex::Complex64::new(1.0, 0.5),
-            num_complex::Complex64::new(-0.5, 1.0),
-            num_complex::Complex64::new(0.25, -0.75),
+        let input = Array1::from(vec![
+            eunomia::Complex64::new(1.0, 0.5),
+            eunomia::Complex64::new(-0.5, 1.0),
+            eunomia::Complex64::new(0.25, -0.75),
         ]);
         let spectrum = plan.forward(&input).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");

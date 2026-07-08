@@ -246,7 +246,7 @@ mod inverse_tests {
     #[test]
     fn inverse_spectrum_rejects_wrong_spectrum_length() {
         let plan = MellinPlan::new(8, 1.0, 4.0).expect("plan");
-        let bad_spectrum = crate::MellinSpectrum::new(vec![num_complex::Complex64::ZERO; 5]);
+        let bad_spectrum = crate::MellinSpectrum::new(vec![eunomia::Complex64::ZERO; 5]);
         let mut out = vec![0.0_f64; 8];
         assert_eq!(
             plan.inverse_spectrum(&bad_spectrum, 1.0, 4.0, &mut out)
@@ -260,7 +260,7 @@ mod inverse_tests {
     fn inverse_spectrum_rejects_invalid_output_bounds() {
         let n = 8usize;
         let plan = MellinPlan::new(n, 1.0, 4.0).expect("plan");
-        let spectrum = crate::MellinSpectrum::new(vec![num_complex::Complex64::ZERO; n]);
+        let spectrum = crate::MellinSpectrum::new(vec![eunomia::Complex64::ZERO; n]);
         let mut out = vec![0.0_f64; n];
         assert_eq!(
             plan.inverse_spectrum(&spectrum, 0.0, 4.0, &mut out)

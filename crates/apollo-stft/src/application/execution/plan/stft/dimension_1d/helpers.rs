@@ -1,8 +1,8 @@
 //! Thread-local scratch pools and helpers for 1D Short-Time Fourier Transform.
 
 use crate::domain::contracts::error::{StftError, StftResult};
+use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
-use num_complex::Complex64;
 use std::borrow::Cow;
 
 thread_local! {

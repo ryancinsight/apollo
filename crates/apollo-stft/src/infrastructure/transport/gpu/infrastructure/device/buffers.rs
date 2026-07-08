@@ -1,4 +1,4 @@
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::StftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
@@ -70,15 +70,15 @@ impl StftWgpuBackend {
         if !plan.frame_len().is_power_of_two() {
             let result = self.execute_forward(plan, signal)?;
             for (dest, src) in buffers.fwd_output_host.iter_mut().zip(result.iter()) {
-                *dest = ComplexPod { re: src.re, im: src.im };
+                *dest = ComplexPod {
+                    re: src.re,
+                    im: src.im,
+                };
             }
             return Ok(());
         }
-        self.kernel.execute_forward_fft_with_buffers(
-            &self.device,
-            signal,
-            buffers,
-        )
+        self.kernel
+            .execute_forward_fft_with_buffers(&self.device, signal, buffers)
     }
 
     /// Execute the inverse STFT using pre-allocated GPU buffers.
@@ -112,11 +112,7 @@ impl StftWgpuBackend {
             buffers.inv_output_host.copy_from_slice(&result);
             return Ok(());
         }
-        self.kernel.execute_inverse_with_buffers(
-            &self.device,
-            spectrum,
-            signal_len,
-            buffers,
-        )
+        self.kernel
+            .execute_inverse_with_buffers(&self.device, spectrum, signal_len, buffers)
     }
 }

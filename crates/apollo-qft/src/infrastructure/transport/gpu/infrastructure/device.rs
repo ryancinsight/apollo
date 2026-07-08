@@ -4,9 +4,9 @@ use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use apollo_fft::PrecisionProfile;
 use crate::QftStorage;
-use num_complex::{Complex32, Complex64};
+use apollo_fft::PrecisionProfile;
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::QftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -70,12 +70,8 @@ impl QftWgpuBackend {
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_inputs(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            plan.len(),
-            QftMode::Forward,
-        )
+        self.kernel
+            .execute(&self.device, input, plan.len(), QftMode::Forward)
     }
 
     /// Execute the forward unitary QFT from a Leto complex `f32` view.
@@ -99,12 +95,8 @@ impl QftWgpuBackend {
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_inputs(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            plan.len(),
-            QftMode::Inverse,
-        )
+        self.kernel
+            .execute(&self.device, input, plan.len(), QftMode::Inverse)
     }
 
     /// Execute the inverse unitary QFT from a Leto complex `f32` view.
@@ -263,7 +255,7 @@ fn leto_array1_from_slice<T: Copy>(
 
 #[cfg(test)]
 mod tests {
-    use num_complex::Complex32;
+    use eunomia::Complex32;
 
     use super::leto_view1_cow;
 

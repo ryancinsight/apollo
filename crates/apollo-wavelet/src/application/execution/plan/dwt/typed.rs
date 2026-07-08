@@ -7,7 +7,7 @@ use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
 use crate::CwtPlan;
 use apollo_fft::{f16, PrecisionProfile};
-use ndarray::Array2;
+use leto::Array2;
 
 impl DwtPlan {
     /// Execute a multilevel forward DWT for `f64`, `f32`, or mixed `f16` storage.
@@ -159,7 +159,12 @@ pub trait WaveletStorage: Copy + Send + Sync + 'static {
         }
         let signal64: Vec<f64> = signal.iter().copied().map(Self::to_f64).collect();
         let coefficients = plan.transform(&signal64)?;
-        for (slot, value) in output.iter_mut().zip(coefficients.values().iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(coefficients.values().iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())
@@ -232,7 +237,7 @@ impl WaveletStorage for f64 {
             return Err(WaveletError::LengthMismatch);
         }
         let coefficients = plan.transform(signal)?;
-        output.assign(coefficients.values());
+        output.assign(&coefficients.values().view());
         Ok(())
     }
 }

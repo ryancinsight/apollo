@@ -6,7 +6,7 @@
 //!
 //! [`MixedRadixScalar`]: super::MixedRadixScalar
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 const SCRATCH_2D_SLOT: usize = 0;
 const SCRATCH_3D_Y_SLOT: usize = 1;
@@ -16,8 +16,8 @@ const PLAN_SCRATCH_ROLE_COUNT: usize = 3;
 mod sealed {
     pub trait Sealed {}
 
-    impl Sealed for num_complex::Complex32 {}
-    impl Sealed for num_complex::Complex64 {}
+    impl Sealed for eunomia::Complex32 {}
+    impl Sealed for eunomia::Complex64 {}
 }
 
 thread_local! {

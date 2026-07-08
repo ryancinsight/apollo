@@ -6,9 +6,9 @@
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
 use crate::domain::contracts::error::{SdftError, SdftResult};
+use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
 
 /// Below this O(bin_count * window_len) count, serial loops avoid scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;

@@ -4,9 +4,9 @@
 //! Inverse entry `M[k,j] = exp(-2*pi*i*j*k/n) / sqrt(n)`.
 //! Both maps are unitary (norm-preserving) in exact arithmetic.
 
+use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use num_complex::Complex64;
 
 /// Below this operation count, serial loops avoid parallel scheduling overhead.
 const QFT_PAR_OP_THRESHOLD: usize = 16_384;

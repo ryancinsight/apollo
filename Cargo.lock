@@ -72,13 +72,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -94,13 +93,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -116,13 +114,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -138,20 +135,14 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
- "coeus-autograd",
- "coeus-core",
- "coeus-ops",
- "coeus-tensor",
  "criterion",
+ "eunomia",
  "half",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
- "num-traits",
  "once_cell",
  "parking_lot",
  "pollster",
@@ -181,14 +172,13 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "leto-ops",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -204,13 +194,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -232,8 +221,6 @@ dependencies = [
  "leto-ops",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -249,12 +236,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -270,12 +257,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -289,12 +276,11 @@ version = "0.2.0"
 dependencies = [
  "apollo-wgpu-helpers",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -311,13 +297,12 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -334,10 +319,9 @@ dependencies = [
  "apollo-fft",
  "apollo-fwht",
  "apollo-nufft",
+ "bytemuck",
+ "eunomia",
  "leto",
- "ndarray",
- "num-complex",
- "numpy",
  "pyo3",
 ]
 
@@ -349,13 +333,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -372,13 +355,12 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -394,12 +376,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -415,13 +397,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -437,13 +418,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -460,13 +440,12 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -496,11 +475,10 @@ dependencies = [
  "apollo-sht",
  "apollo-stft",
  "apollo-wavelet",
+ "eunomia",
  "leto",
- "melinoe",
+ "melinoe 0.8.0",
  "moirai",
- "ndarray",
- "num-complex",
  "rustfft",
  "serde",
  "serde_json",
@@ -514,13 +492,12 @@ dependencies = [
  "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "eunomia",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "ndarray",
- "num-complex",
  "pollster",
  "proptest",
  "serde",
@@ -533,7 +510,6 @@ name = "apollo-wgpu-helpers"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "coeus-core",
  "hephaestus-wgpu",
  "thiserror 1.0.69",
  "wgpu",
@@ -762,81 +738,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "coeus-autograd"
-version = "0.2.3"
-dependencies = [
- "coeus-core",
- "coeus-ops",
- "coeus-sparse",
- "coeus-tensor",
- "leto-ops",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-core"
-version = "0.2.3"
-dependencies = [
- "bytemuck",
- "half",
- "hermes-simd",
- "libm",
- "mnemosyne",
- "moirai",
- "num-traits",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-leto"
-version = "0.2.3"
-dependencies = [
- "coeus-core",
- "leto",
- "leto-ops",
-]
-
-[[package]]
-name = "coeus-ops"
-version = "0.2.3"
-dependencies = [
- "bytemuck",
- "coeus-core",
- "coeus-leto",
- "coeus-sparse",
- "coeus-tensor",
- "half",
- "leto-ops",
- "melinoe",
- "num-traits",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-sparse"
-version = "0.2.3"
-dependencies = [
- "coeus-core",
- "coeus-tensor",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "coeus-tensor"
-version = "0.2.3"
-dependencies = [
- "bytemuck",
- "coeus-core",
- "coeus-leto",
- "smallvec",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -959,6 +860,17 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "eunomia"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "half",
+ "libm",
+ "rkyv",
+ "serde",
 ]
 
 [[package]]
@@ -1269,16 +1181,17 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bytemuck",
+ "leto",
  "themis 0.6.0",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bytemuck",
  "hephaestus-core",
@@ -1296,27 +1209,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "hermes-numeric"
-version = "0.3.0"
-dependencies = [
- "bytemuck",
- "half",
- "libm",
- "rkyv",
-]
-
-[[package]]
 name = "hermes-simd"
 version = "0.3.0"
 dependencies = [
- "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "rkyv",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1324,8 +1226,8 @@ name = "hermes-simd-core"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "mnemosyne",
  "rkyv",
  "themis 0.9.17",
@@ -1335,11 +1237,9 @@ dependencies = [
 name = "hermes-simd-intrinsics"
 version = "0.3.0"
 dependencies = [
- "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
- "rkyv",
 ]
 
 [[package]]
@@ -1475,28 +1375,26 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "leto"
-version = "0.35.1"
+version = "0.36.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
  "mnemosyne",
- "ndarray",
- "num-complex",
- "num-traits",
+ "serde",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "leto-ops"
-version = "0.35.1"
+version = "0.36.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
  "hermes-simd",
  "leto",
  "moirai",
- "num-complex",
- "num-traits",
  "themis 0.9.17",
  "thiserror 2.0.18",
 ]
@@ -1560,18 +1458,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "matrixmultiply"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08"
-dependencies = [
- "autocfg",
- "rawpointer",
-]
+name = "melinoe"
+version = "0.7.0"
+source = "git+https://github.com/ryancinsight/melinoe.git#f0139dd77e2c175aeea51687669ef5d5fdafd078"
 
 [[package]]
 name = "melinoe"
-version = "0.7.0"
+version = "0.8.0"
 
 [[package]]
 name = "memchr"
@@ -1616,6 +1509,7 @@ dependencies = [
 name = "mnemosyne"
 version = "0.2.0"
 dependencies = [
+ "eunomia",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
@@ -1624,16 +1518,15 @@ dependencies = [
  "mnemosyne-heap",
  "mnemosyne-local",
  "mnemosyne-prof",
- "num-complex",
 ]
 
 [[package]]
 name = "mnemosyne-arena"
 version = "0.2.0"
 dependencies = [
+ "eunomia",
  "mnemosyne-backend",
  "mnemosyne-core",
- "num-complex",
  "themis 0.9.17",
 ]
 
@@ -1643,6 +1536,10 @@ version = "0.1.0"
 dependencies = [
  "mnemosyne-core",
 ]
+
+[[package]]
+name = "mnemosyne-build-util"
+version = "0.1.0"
 
 [[package]]
 name = "mnemosyne-core"
@@ -1668,21 +1565,23 @@ dependencies = [
 name = "mnemosyne-heap"
 version = "0.1.0"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
+ "themis 0.9.17",
 ]
 
 [[package]]
 name = "mnemosyne-local"
 version = "0.1.0"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
  "mnemosyne-arena",
  "mnemosyne-backend",
+ "mnemosyne-build-util",
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
@@ -1694,6 +1593,7 @@ name = "mnemosyne-prof"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "mnemosyne-build-util",
  "mnemosyne-core",
 ]
 
@@ -1701,7 +1601,7 @@ dependencies = [
 name = "moirai"
 version = "0.2.0"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
  "mnemosyne",
  "moirai-async",
  "moirai-core",
@@ -1742,7 +1642,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.2.0"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
  "mnemosyne",
  "moirai-core",
  "moirai-pal",
@@ -1781,7 +1681,7 @@ version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
- "melinoe",
+ "melinoe 0.8.0",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1793,7 +1693,7 @@ dependencies = [
 name = "moirai-parallel"
 version = "0.2.0"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
  "moirai-executor",
 ]
 
@@ -1858,21 +1758,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ndarray"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
-dependencies = [
- "matrixmultiply",
- "num-complex",
- "num-integer",
- "num-traits",
- "portable-atomic",
- "portable-atomic-util",
- "rawpointer",
-]
-
-[[package]]
 name = "ndk-sys"
 version = "0.6.0+11769913"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1889,7 +1774,6 @@ checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "bytemuck",
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -1919,21 +1803,6 @@ checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
  "hermit-abi",
  "libc",
-]
-
-[[package]]
-name = "numpy"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b94caae805f998a07d33af06e6a3891e38556051b8045c615470a71590e13e78"
-dependencies = [
- "libc",
- "ndarray",
- "num-complex",
- "num-integer",
- "num-traits",
- "pyo3",
- "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -2320,12 +2189,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
-name = "rawpointer"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
-
-[[package]]
 name = "rayon"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2673,15 +2536,15 @@ name = "themis"
 version = "0.6.0"
 source = "git+https://github.com/ryancinsight/themis?rev=bdcddfe294f941ef2f84fd4ce38537906b0fec23#bdcddfe294f941ef2f84fd4ce38537906b0fec23"
 dependencies = [
- "melinoe",
+ "melinoe 0.8.0",
 ]
 
 [[package]]
 name = "themis"
 version = "0.9.17"
-source = "git+https://github.com/ryancinsight/themis#b3f72299362bf116f4266798c56ece3cd22de1fc"
+source = "git+https://github.com/ryancinsight/themis#e87618a241c69502302da296767a9e3c0acc4906"
 dependencies = [
- "melinoe",
+ "melinoe 0.7.0",
 ]
 
 [[package]]
@@ -3235,7 +3098,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apollo-fft",
- "num-complex",
+ "eunomia",
  "rustfft",
  "serde_json",
 ]

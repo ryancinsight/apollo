@@ -48,7 +48,74 @@ struct DctParams {
     len: u32,
     mode: u32,
     scale_bits: u32,
-    _padding: u32,
+    elem_stride: u32,
+    num_fibers: u32,
+    fiber_stride_a: u32,
+    fiber_stride_b: u32,
+    fiber_dim_b: u32,
+}
+
+/// Addressing of the 1-D fibers a single batched dispatch transforms.
+///
+/// Element `n` of fiber `f` lives at `base(f) + n*elem_stride`, where
+/// `base(f) = (f / fiber_dim_b)*fiber_stride_a + (f % fiber_dim_b)*fiber_stride_b`.
+/// One [`FiberLayout`] describes an entire axis pass of a separable transform;
+/// [`FiberLayout::axis`] builds the layout for axis `a` of an `n`-cube of rank
+/// `rank`, and covers every axis of 1-D/2-D/3-D fields.
+#[derive(Clone, Copy, Debug)]
+pub struct FiberLayout {
+    len: u32,
+    elem_stride: u32,
+    num_fibers: u32,
+    fiber_stride_a: u32,
+    fiber_stride_b: u32,
+    fiber_dim_b: u32,
+}
+
+impl FiberLayout {
+    /// Layout for the length-`n` fibers running along axis `a` of a row-major
+    /// `n^rank` cube (`rank` in `1..=3`, `a < rank`).
+    ///
+    /// The `rank - 1` non-axis indices are folded into the two-level fiber
+    /// decode `(fiber_dim_b, fiber_stride_a, fiber_stride_b)`. A `rank <= 2`
+    /// pass leaves `fiber_dim_b = 1` (single level).
+    #[must_use]
+    pub fn axis(n: usize, rank: usize, a: usize) -> Self {
+        let n_u = n as u32;
+        // Row-major stride of each axis in an n^rank cube: n^(rank-1-axis).
+        let stride = |axis: usize| n.pow((rank - 1 - axis) as u32) as u32;
+        let elem_stride = stride(a);
+        let num_fibers = (n.pow(rank as u32) / n) as u32;
+        // The non-axis axes, outer-to-inner, provide the two decode levels.
+        let others: Vec<usize> = (0..rank).filter(|&x| x != a).collect();
+        match others.as_slice() {
+            [] => Self {
+                len: n_u,
+                elem_stride,
+                num_fibers: 1,
+                fiber_stride_a: 0,
+                fiber_stride_b: 0,
+                fiber_dim_b: 1,
+            },
+            [outer] => Self {
+                len: n_u,
+                elem_stride,
+                num_fibers,
+                fiber_stride_a: stride(*outer),
+                fiber_stride_b: 0,
+                fiber_dim_b: 1,
+            },
+            [outer, inner] => Self {
+                len: n_u,
+                elem_stride,
+                num_fibers,
+                fiber_stride_a: stride(*outer),
+                fiber_stride_b: stride(*inner),
+                fiber_dim_b: n_u,
+            },
+            _ => unreachable!("rank is 1..=3, so at most two non-axis indices"),
+        }
+    }
 }
 
 /// GPU buffer set reused across same-length dispatches.
@@ -180,38 +247,53 @@ impl DctGpuKernel {
             let reusable = matches!(cache_entry.as_ref(), Some(set) if set.byte_len == byte_len);
             if reusable {
                 let set = cache_entry.as_ref().unwrap();
-                hep_device.write_buffer(&set.input, input).expect("Failed to write to device buffer");
+                hep_device
+                    .write_buffer(&set.input, input)
+                    .expect("Failed to write to device buffer");
             } else {
-                let input_buffer = hep_device.upload(input).expect("Failed to allocate input buffer");
-                let output_buffer = hep_device.alloc_zeroed::<f32>(len).expect("Failed to allocate output buffer");
-                let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("apollo-dctdst-wgpu params"),
-                    contents: bytemuck::bytes_of(&DctParams {
-                        len: 0,
-                        mode: 0,
-                        scale_bits: 1.0_f32.to_bits(),
-                        _padding: 0,
-                    }),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-                let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("apollo-dctdst-wgpu bind group"),
-                    layout: &self.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: input_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: output_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: params_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
+                let input_buffer = hep_device
+                    .upload(input)
+                    .expect("Failed to allocate input buffer");
+                let output_buffer = hep_device
+                    .alloc_zeroed::<f32>(len)
+                    .expect("Failed to allocate output buffer");
+                let params_buffer =
+                    device
+                        .inner()
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("apollo-dctdst-wgpu params"),
+                            contents: bytemuck::bytes_of(&DctParams {
+                                len: 0,
+                                mode: 0,
+                                scale_bits: 1.0_f32.to_bits(),
+                                elem_stride: 1,
+                                num_fibers: 1,
+                                fiber_stride_a: 0,
+                                fiber_stride_b: 0,
+                                fiber_dim_b: 1,
+                            }),
+                            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        });
+                let bind_group = device
+                    .inner()
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("apollo-dctdst-wgpu bind group"),
+                        layout: &self.bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: input_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: output_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: params_buffer.as_entire_binding(),
+                            },
+                        ],
+                    });
                 *cache_entry = Some(DispatchBuffers {
                     byte_len,
                     input: input_buffer,
@@ -229,13 +311,20 @@ impl DctGpuKernel {
                     len: len as u32,
                     mode: mode as u32,
                     scale_bits: scale.to_bits(),
-                    _padding: 0,
+                    elem_stride: 1,
+                    num_fibers: 1,
+                    fiber_stride_a: 0,
+                    fiber_stride_b: 0,
+                    fiber_dim_b: 1,
                 }),
             );
 
-            let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-dctdst-wgpu encoder"),
-            });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-dctdst-wgpu encoder"),
+                    });
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some("apollo-dctdst-wgpu transform pass"),
@@ -271,6 +360,158 @@ impl DctGpuKernel {
             return Err(WgpuError::BufferMapFailed { message });
         }
 
+        Ok(output)
+    }
+
+    /// On-device separable transform: upload once, run each axis `pass`
+    /// (`mode` + [`FiberLayout`]) as one batched dispatch that ping-pongs
+    /// between two device buffers, apply `final_scale`, download once.
+    ///
+    /// Every 1-D fiber of a pass runs concurrently and intermediate results
+    /// never leave the GPU — the separable 2-D/3-D transform costs one upload,
+    /// `passes.len()` (+1 scale) dispatches, and one download, versus the host
+    /// path's `2n`/`3n²` per-line round trips.
+    pub fn execute_separable(
+        &self,
+        device: &WgpuDevice,
+        input: &[f32],
+        passes: &[(DctMode, FiberLayout)],
+        final_scale: f32,
+    ) -> WgpuResult<Vec<f32>> {
+        let hep = device.hephaestus();
+        let total = input.len();
+        // Ping-pong buffers: read `src`, write `dst`, swap after each pass.
+        // Both carry STORAGE usage, so either may bind read-only or read_write.
+        let mut src = hep.upload(input).map_err(|e| WgpuError::BufferMapFailed {
+            message: e.to_string(),
+        })?;
+        let mut dst = hep
+            .alloc_zeroed::<f32>(total)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let params_buffer = device.inner().create_buffer(&wgpu::BufferDescriptor {
+            label: Some("apollo-dctdst-wgpu separable params"),
+            size: std::mem::size_of::<DctParams>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        for (mode, layout) in passes {
+            device.queue().write_buffer(
+                &params_buffer,
+                0,
+                bytemuck::bytes_of(&DctParams {
+                    len: layout.len,
+                    mode: *mode as u32,
+                    scale_bits: 1.0_f32.to_bits(),
+                    elem_stride: layout.elem_stride,
+                    num_fibers: layout.num_fibers,
+                    fiber_stride_a: layout.fiber_stride_a,
+                    fiber_stride_b: layout.fiber_stride_b,
+                    fiber_dim_b: layout.fiber_dim_b,
+                }),
+            );
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: src.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: dst.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-dctdst-wgpu separable encoder"),
+                    });
+            {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable transform"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&self.transform_pipeline);
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.dispatch_workgroups(dispatch_count(layout.len), layout.num_fibers, 1);
+            }
+            device.queue().submit(std::iter::once(encoder.finish()));
+            std::mem::swap(&mut src, &mut dst);
+        }
+
+        // The transformed result is in `src`. Apply the single output scale over
+        // the dense buffer (every position was written exactly once per pass).
+        if final_scale != 1.0 {
+            device.queue().write_buffer(
+                &params_buffer,
+                0,
+                bytemuck::bytes_of(&DctParams {
+                    len: total as u32,
+                    mode: 0,
+                    scale_bits: final_scale.to_bits(),
+                    elem_stride: 1,
+                    num_fibers: 1,
+                    fiber_stride_a: 0,
+                    fiber_stride_b: 0,
+                    fiber_dim_b: 1,
+                }),
+            );
+            // `dct_scale` reads+writes binding 1; bind the result buffer there.
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable scale bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: dst.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: src.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+            let mut encoder =
+                device
+                    .inner()
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("apollo-dctdst-wgpu separable scale encoder"),
+                    });
+            {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable scale"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&self.scale_pipeline);
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.dispatch_workgroups(dispatch_count(total as u32), 1, 1);
+            }
+            device.queue().submit(std::iter::once(encoder.finish()));
+        }
+
+        let mut output = vec![0.0_f32; total];
+        hep.download(&src, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

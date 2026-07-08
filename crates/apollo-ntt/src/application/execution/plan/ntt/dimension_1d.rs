@@ -4,7 +4,7 @@ use crate::application::execution::kernel::direct::ntt_kernel;
 use crate::domain::contracts::config::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 use crate::domain::contracts::error::NttError;
 use crate::domain::contracts::math::{mod_inv, mod_mul, mod_pow};
-use ndarray::Array1;
+use leto::Array1;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -100,7 +100,7 @@ impl NttPlan {
 
     /// Allocate and execute the forward transform.
     pub fn forward(&self, input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-        let mut output = Array1::zeros(self.n);
+        let mut output = Array1::zeros([self.n]);
         self.forward_into(input, &mut output)?;
         Ok(output)
     }
@@ -132,7 +132,7 @@ impl NttPlan {
 
     /// Allocate and execute the inverse transform.
     pub fn inverse(&self, input: &Array1<u64>) -> Result<Array1<u64>, NttError> {
-        let mut output = Array1::zeros(self.n);
+        let mut output = Array1::zeros([self.n]);
         self.inverse_into(input, &mut output)?;
         Ok(output)
     }
@@ -320,7 +320,6 @@ fn leto_view1_cow<'a>(view: &leto::ArrayView1<'a, u64>) -> Cow<'a, [u64]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::array;
     use proptest::prelude::*;
 
     #[test]
@@ -328,17 +327,17 @@ mod tests {
         assert_eq!(NttPlan::new(0), Err(NttError::EmptyLength));
 
         let plan = NttPlan::new(1).unwrap();
-        let input = array![DEFAULT_MODULUS + 7];
+        let input = leto::Array1::from(vec![DEFAULT_MODULUS + 7]);
         let spectrum = plan.forward(&input).unwrap();
-        assert_eq!(spectrum, array![7]);
+        assert_eq!(spectrum, leto::Array1::from(vec![7]));
         let recovered = plan.inverse(&spectrum).unwrap();
-        assert_eq!(recovered, array![7]);
+        assert_eq!(recovered, leto::Array1::from(vec![7]));
     }
 
     #[test]
     fn forward_inverse_roundtrip_for_small_vector() {
         let plan = NttPlan::new(8).unwrap();
-        let input = array![1, 1, 2, 3, 5, 8, 13, 21];
+        let input = leto::Array1::from(vec![1, 1, 2, 3, 5, 8, 13, 21]);
         let spectrum = plan.forward(&input).unwrap();
         assert_ne!(spectrum, input);
         let recovered = plan.inverse(&spectrum).unwrap();
@@ -348,9 +347,9 @@ mod tests {
     #[test]
     fn caller_owned_paths_match_allocating_paths() {
         let plan = NttPlan::new(4).unwrap();
-        let input = array![2, 4, 8, 16];
+        let input = leto::Array1::from(vec![2, 4, 8, 16]);
         let expected = plan.forward(&input).unwrap();
-        let mut actual = Array1::zeros(4);
+        let mut actual = Array1::zeros([4]);
         plan.forward_into(&input, &mut actual).unwrap();
         assert_eq!(actual, expected);
 
@@ -360,26 +359,26 @@ mod tests {
     }
 
     #[test]
-    fn leto_forward_and_inverse_match_ndarray_path() {
+    fn leto_forward_and_inverse_match_leto_path() {
         use leto::Storage;
 
         let plan = NttPlan::new(8).unwrap();
         let signal = vec![1, 1, 2, 3, 5, 8, 13, 21];
-        let ndarray_input = Array1::from_vec(signal.clone());
+        let owned_input = Array1::from(signal.clone());
         let leto_input = leto::Array1::from_shape_vec([8], signal).unwrap();
 
         let leto_spectrum = plan.forward_leto(leto_input.view()).unwrap();
-        let ndarray_spectrum = plan.forward(&ndarray_input).unwrap();
+        let owned_spectrum = plan.forward(&owned_input).unwrap();
         assert_eq!(
             leto_spectrum.storage().as_slice(),
-            ndarray_spectrum.as_slice().unwrap()
+            owned_spectrum.as_slice().unwrap()
         );
 
         let leto_recovered = plan.inverse_leto(leto_spectrum.view()).unwrap();
-        let ndarray_recovered = plan.inverse(&ndarray_spectrum).unwrap();
+        let owned_recovered = plan.inverse(&owned_spectrum).unwrap();
         assert_eq!(
             leto_recovered.storage().as_slice(),
-            ndarray_recovered.as_slice().unwrap()
+            owned_recovered.as_slice().unwrap()
         );
     }
 
@@ -400,7 +399,7 @@ mod tests {
             .unwrap();
 
         let actual = plan.forward_leto(strided).unwrap();
-        let expected = plan.forward(&Array1::from_vec(logical)).unwrap();
+        let expected = plan.forward(&Array1::from(logical)).unwrap();
         assert_eq!(actual.storage().as_slice(), expected.as_slice().unwrap());
     }
 
@@ -411,7 +410,7 @@ mod tests {
         let plan = NttPlan::new(8).unwrap();
         let mut input = leto::Array1::from_shape_vec([8], vec![3, 1, 4, 1, 5, 9, 2, 6]).unwrap();
         let expected_forward = plan
-            .forward(&Array1::from_vec(input.storage().as_slice().to_vec()))
+            .forward(&Array1::from(input.storage().as_slice().to_vec()))
             .unwrap();
         let mut output = leto::Array1::zeros([8]);
 
@@ -450,7 +449,7 @@ mod tests {
         let plan = NttPlan::new(8).unwrap();
         let logical = vec![1, 2, 3, 4, 5, 6, 7, 8];
         let input = leto::Array1::from_shape_vec([8], logical.clone()).unwrap();
-        let expected = plan.forward(&Array1::from_vec(logical)).unwrap();
+        let expected = plan.forward(&Array1::from(logical)).unwrap();
         let mut backing =
             leto::Array1::from_shape_vec([16], vec![DEFAULT_MODULUS - 1; 16]).unwrap();
         {
@@ -482,8 +481,8 @@ mod tests {
     #[test]
     fn inputs_are_normalized_to_residue_class() {
         let plan = NttPlan::new(4).unwrap();
-        let input = array![DEFAULT_MODULUS + 1, DEFAULT_MODULUS + 2, 3, 4];
-        let normalized = array![1, 2, 3, 4];
+        let input = leto::Array1::from(vec![DEFAULT_MODULUS + 1, DEFAULT_MODULUS + 2, 3, 4]);
+        let normalized = leto::Array1::from(vec![1, 2, 3, 4]);
         assert_eq!(
             plan.forward(&input).unwrap(),
             plan.forward(&normalized).unwrap()
@@ -494,7 +493,10 @@ mod tests {
     fn rejects_invalid_lengths() {
         assert_eq!(NttPlan::new(3), Err(NttError::NonPowerOfTwo));
         let plan = NttPlan::new(4).unwrap();
-        assert_eq!(plan.forward(&array![1, 2]), Err(NttError::LengthMismatch));
+        assert_eq!(
+            plan.forward(&leto::Array1::from(vec![1, 2])),
+            Err(NttError::LengthMismatch)
+        );
     }
 
     proptest! {
@@ -552,11 +554,11 @@ mod tests {
         // NTT convolution: forward both, multiply pointwise, inverse.
         let p = DEFAULT_MODULUS;
         let plan = NttPlan::new(4).unwrap();
-        let a = Array1::from_vec(vec![1u64, 2, 0, 0]);
-        let b = Array1::from_vec(vec![3u64, 4, 0, 0]);
+        let a = Array1::from(vec![1u64, 2, 0, 0]);
+        let b = Array1::from(vec![3u64, 4, 0, 0]);
         let fa = plan.forward(&a).unwrap();
         let fb = plan.forward(&b).unwrap();
-        let fc = Array1::from_shape_fn(4, |i| mod_mul(fa[i], fb[i], p));
+        let fc = Array1::from_shape_fn([4], |[i]| mod_mul(fa[i], fb[i], p));
         let c = plan.inverse(&fc).unwrap();
         assert_eq!(c[0], 3, "constant term");
         assert_eq!(c[1], 10, "linear term");

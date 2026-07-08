@@ -1,7 +1,7 @@
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::mixed_radix::{forward_inplace, inverse_inplace_unnorm};
 use crate::application::execution::kernel::test_utils::{max_abs_err_32, max_abs_err_64};
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 #[test]
 fn mixed_small_coprime_composites_use_short_codelets_and_match_direct() {

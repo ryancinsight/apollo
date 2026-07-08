@@ -1,10 +1,12 @@
-use apollo_fft::PrecisionProfile;
 use crate::{StftRealOutputStorage, StftSpectrumInput};
-use num_complex::Complex32;
+use apollo_fft::PrecisionProfile;
+use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::StftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{leto_array1_from_slice, leto_view1_cow};
+use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
+    leto_array1_from_slice, leto_view1_cow,
+};
 use crate::infrastructure::transport::gpu::infrastructure::device::StftWgpuBackend;
 
 impl StftWgpuBackend {

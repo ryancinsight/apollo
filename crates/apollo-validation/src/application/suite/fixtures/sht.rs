@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn sht_monopole_y00_coefficient_fixture() -> SuiteResult<PublishedFixtureReport> {
     // f(θ,φ) = Y_0^0(θ,φ) = 1/√(4π) is the spherical harmonic of degree 0.
@@ -40,7 +40,7 @@ pub(crate) fn sht_monopole_y00_coefficient_fixture() -> SuiteResult<PublishedFix
     let plan = ShtPlan::new(12, 25, 1)?;
     let constant = 1.0_f64 / (4.0 * std::f64::consts::PI).sqrt();
     let samples = Array2::from_elem(
-        (plan.grid().latitudes(), plan.grid().longitudes()),
+        [plan.grid().latitudes(), plan.grid().longitudes()],
         constant,
     );
     let coefficients = plan.forward_real(&samples)?;
@@ -73,7 +73,7 @@ pub(crate) fn sht_inverse_roundtrip_y10_fixture() -> SuiteResult<PublishedFixtur
     let n_lat = plan.grid().latitudes();
     let n_lon = plan.grid().longitudes();
     let mut samples_flat = Vec::with_capacity(n_lat * n_lon);
-    let mut sample_arr = ndarray::Array2::<f64>::zeros((n_lat, n_lon));
+    let mut sample_arr = leto::Array2::<f64>::zeros([n_lat, n_lon]);
     for lat in 0..n_lat {
         let theta = plan.theta(lat);
         let val = (3.0_f64 / (4.0 * std::f64::consts::PI)).sqrt() * theta.cos();

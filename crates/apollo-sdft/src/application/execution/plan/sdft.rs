@@ -10,8 +10,8 @@ use crate::infrastructure::kernel::sliding::{
     direct_bins, direct_bins_into, update_bins, update_twiddles,
 };
 use apollo_fft::{f16, PrecisionProfile};
+use eunomia::{Complex32, Complex64};
 use mnemosyne::scratch::ScratchPool;
-use num_complex::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::collections::VecDeque;
 

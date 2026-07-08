@@ -1,8 +1,10 @@
 //! Core WGPU 3D FFT planning structures and dispatch operations.
 
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy, ChirpData, RadixStages};
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
+    Axis, AxisStrategy, ChirpData, RadixStages,
+};
 use crate::{fft_1d_complex_inplace, Complex64};
-use ndarray::Array1;
+use leto::Array1;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
@@ -599,13 +601,13 @@ impl GpuFft3d {
         m: usize,
         batch_count: u32,
     ) -> ChirpData {
-        let mut h = Array1::<Complex64>::zeros(m);
+        let mut h = Array1::<Complex64>::zeros([m]);
         for idx in 0..n {
             let arg = std::f32::consts::PI * (idx * idx) as f32 / n as f32;
             let value = Complex64::new(arg.cos() as f64, arg.sin() as f64);
-            h[idx] = value;
+            h[[idx]] = value;
             if idx > 0 {
-                h[m - idx] = value;
+                h[[m - idx]] = value;
             }
         }
         fft_1d_complex_inplace(&mut h);

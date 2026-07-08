@@ -211,7 +211,7 @@ by unit and property tests against analytical identities and direct references.
 
 ## Current Memory-Efficiency Checks
 
-- FFT 2D/3D axis passes gather non-contiguous ndarray lanes once, transform the
+- FFT 2D/3D axis passes gather non-contiguous Leto lanes once, transform the
   gathered lane buffers in place, and scatter them back without constructing a
   second transformed-lane collection.
 - FFT 2D row passes and 3D innermost-axis passes now transform contiguous
@@ -250,8 +250,8 @@ by unit and property tests against analytical identities and direct references.
   residue classes before butterflies, and uses overflow-safe modular addition.
 - STFT documents centered-frame overlap-add reconstruction, removes filler
   module comments, and verifies caller-owned inverse parity.
-- SFT uses non-deprecated ndarray vector extraction and reuses the crate-local
-  direct DFT reference in verification.
+- SFT uses Leto-owned vector extraction and reuses the crate-local direct DFT
+  reference in verification.
 - NUFFT 1D type-2 interpolation borrows the inverse oversampled grid as a
   contiguous slice instead of copying it before interpolation. The fast path
   restores Apollo FFT's inverse `1/M` normalization before interpolation so the

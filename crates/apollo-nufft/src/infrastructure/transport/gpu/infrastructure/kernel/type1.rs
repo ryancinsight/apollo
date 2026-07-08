@@ -1,6 +1,6 @@
 use super::{NufftGpuKernel, NufftParams, Position3Pod};
 use crate::infrastructure::transport::gpu::domain::error::NufftWgpuResult;
-use num_complex::Complex32;
+use eunomia::Complex32;
 
 impl NufftGpuKernel {
     /// Execute exact direct Type-1 1D NUFFT.

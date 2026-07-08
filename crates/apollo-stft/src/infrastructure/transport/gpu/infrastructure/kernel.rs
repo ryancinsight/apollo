@@ -89,7 +89,6 @@ pub struct StftGpuKernel {
     pub(crate) pointmul_fwd_pipeline: wgpu::ComputePipeline,
 }
 
-
 impl StftGpuKernel {
     /// Create a new kernel by compiling all WGSL shaders and building all pipelines.
     #[must_use]
@@ -340,37 +339,41 @@ impl StftGpuKernel {
             entries: &[bgl_storage_entry(0, true), bgl_storage_entry(1, false)],
         });
 
-        let chirp_radix2_params_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp radix2 params BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
+        let chirp_radix2_params_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("apollo-stft-wgpu chirp radix2 params BGL"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
 
-        let chirp_io_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp IO pipeline layout"),
-            bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl, &chirp_io_bgl],
-            push_constant_ranges: &[],
-        });
+        let chirp_io_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("apollo-stft-wgpu chirp IO pipeline layout"),
+                bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl, &chirp_io_bgl],
+                push_constant_ranges: &[],
+            });
 
-        let chirp_radix2_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp radix2 pipeline layout"),
-            bind_group_layouts: &[&chirp_data_bgl, &chirp_radix2_params_bgl],
-            push_constant_ranges: &[],
-        });
+        let chirp_radix2_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("apollo-stft-wgpu chirp radix2 pipeline layout"),
+                bind_group_layouts: &[&chirp_data_bgl, &chirp_radix2_params_bgl],
+                push_constant_ranges: &[],
+            });
 
-        let chirp_pm_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp pointmul pipeline layout"),
-            bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl],
-            push_constant_ranges: &[],
-        });
+        let chirp_pm_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("apollo-stft-wgpu chirp pointmul pipeline layout"),
+                bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl],
+                push_constant_ranges: &[],
+            });
 
         let chirp_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("apollo-stft-wgpu chirp shader"),
@@ -382,27 +385,68 @@ impl StftGpuKernel {
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_chirp_fft.wgsl").into()),
         });
 
-        let build_chirp_pipeline = |layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &str| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry),
-                layout: Some(layout),
-                module,
-                entry_point: Some(entry),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            })
-        };
+        let build_chirp_pipeline =
+            |layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &str| {
+                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some(entry),
+                    layout: Some(layout),
+                    module,
+                    entry_point: Some(entry),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    cache: None,
+                })
+            };
 
-        let premul_fwd_pipeline = build_chirp_pipeline(&chirp_io_pipeline_layout, &chirp_shader, "stft_chirp_premul_fwd");
-        let premul_inv_pipeline = build_chirp_pipeline(&chirp_io_pipeline_layout, &chirp_shader, "stft_chirp_premul_inv");
-        let pointmul_pipeline = build_chirp_pipeline(&chirp_pm_pipeline_layout, &chirp_shader, "stft_chirp_pointmul");
-        let postmul_fwd_pipeline = build_chirp_pipeline(&chirp_io_pipeline_layout, &chirp_shader, "stft_chirp_postmul_fwd");
-        let postmul_inv_pipeline = build_chirp_pipeline(&chirp_io_pipeline_layout, &chirp_shader, "stft_chirp_postmul_inv");
-        let chirp_bitrev_pipeline = build_chirp_pipeline(&chirp_radix2_pipeline_layout, &chirp_fft_shader, "chirp_fft_bitrev");
-        let chirp_fwd_butterfly_pipeline = build_chirp_pipeline(&chirp_radix2_pipeline_layout, &chirp_fft_shader, "chirp_fft_butterfly_fwd");
-        let chirp_inv_butterfly_pipeline = build_chirp_pipeline(&chirp_radix2_pipeline_layout, &chirp_fft_shader, "chirp_fft_butterfly_inv");
-        let chirp_scale_pipeline = build_chirp_pipeline(&chirp_radix2_pipeline_layout, &chirp_fft_shader, "chirp_fft_scale");
-        let pointmul_fwd_pipeline = build_chirp_pipeline(&chirp_pm_pipeline_layout, &chirp_shader, "stft_chirp_pointmul_fwd");
+        let premul_fwd_pipeline = build_chirp_pipeline(
+            &chirp_io_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_premul_fwd",
+        );
+        let premul_inv_pipeline = build_chirp_pipeline(
+            &chirp_io_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_premul_inv",
+        );
+        let pointmul_pipeline = build_chirp_pipeline(
+            &chirp_pm_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_pointmul",
+        );
+        let postmul_fwd_pipeline = build_chirp_pipeline(
+            &chirp_io_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_postmul_fwd",
+        );
+        let postmul_inv_pipeline = build_chirp_pipeline(
+            &chirp_io_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_postmul_inv",
+        );
+        let chirp_bitrev_pipeline = build_chirp_pipeline(
+            &chirp_radix2_pipeline_layout,
+            &chirp_fft_shader,
+            "chirp_fft_bitrev",
+        );
+        let chirp_fwd_butterfly_pipeline = build_chirp_pipeline(
+            &chirp_radix2_pipeline_layout,
+            &chirp_fft_shader,
+            "chirp_fft_butterfly_fwd",
+        );
+        let chirp_inv_butterfly_pipeline = build_chirp_pipeline(
+            &chirp_radix2_pipeline_layout,
+            &chirp_fft_shader,
+            "chirp_fft_butterfly_inv",
+        );
+        let chirp_scale_pipeline = build_chirp_pipeline(
+            &chirp_radix2_pipeline_layout,
+            &chirp_fft_shader,
+            "chirp_fft_scale",
+        );
+        let pointmul_fwd_pipeline = build_chirp_pipeline(
+            &chirp_pm_pipeline_layout,
+            &chirp_shader,
+            "stft_chirp_pointmul_fwd",
+        );
 
         Self {
             bind_group_layout,
@@ -432,7 +476,6 @@ impl StftGpuKernel {
             chirp_scale_pipeline,
             pointmul_fwd_pipeline,
         }
-
     }
 }
 

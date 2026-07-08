@@ -3,9 +3,9 @@
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
-use ndarray::Array1;
-use num_complex::{Complex32, Complex64};
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -58,7 +58,7 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute forward transform into caller-owned ndarray storage.
+    /// Execute forward transform into caller-owned Leto storage.
     fn forward_into(
         plan: &FrftPlan,
         input: &Array1<Self>,
@@ -94,7 +94,7 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         })
     }
 
-    /// Execute inverse transform into caller-owned ndarray storage.
+    /// Execute inverse transform into caller-owned Leto storage.
     fn inverse_into(
         plan: &FrftPlan,
         input: &Array1<Self>,

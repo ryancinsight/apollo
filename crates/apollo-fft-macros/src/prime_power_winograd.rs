@@ -126,7 +126,7 @@ pub fn prime_power_winograd_function(
     let z_init: Vec<_> = (0..p)
         .map(|m| {
             if m == 0 {
-                quote! { num_complex::Complex::new(F::zero(), F::zero()) }
+                quote! { eunomia::Complex::new(<F as eunomia::NumericElement>::ZERO, <F as eunomia::NumericElement>::ZERO) }
             } else {
                 let idx = m * p;
                 quote! { data[#idx] }
@@ -148,7 +148,7 @@ pub fn prime_power_winograd_function(
         .map(|c| {
             let re = c.re;
             let im = c.im;
-            quote! { num_complex::Complex::new(F::from_precise(#re), F::from_precise(#im)) }
+            quote! { eunomia::Complex::new(F::from_precise(#re), F::from_precise(#im)) }
         })
         .collect();
     let hi_lits: Vec<_> = hi_hat
@@ -156,7 +156,7 @@ pub fn prime_power_winograd_function(
         .map(|c| {
             let re = c.re;
             let im = c.im;
-            quote! { num_complex::Complex::new(F::from_precise(#re), F::from_precise(#im)) }
+            quote! { eunomia::Complex::new(F::from_precise(#re), F::from_precise(#im)) }
         })
         .collect();
 
@@ -175,7 +175,7 @@ pub fn prime_power_winograd_function(
         let bp = b % (p - 1);
         let kp = mod_pow(gp, (p - 1 - bp) as u64, p as u64);
         unit_scatter.push(quote! {
-            data[#dest_idx] = num_complex::Complex::new(
+            data[#dest_idx] = eunomia::Complex::new(
                 x0.re + a[#b].re + z[#kp].re,
                 x0.im + a[#b].im + z[#kp].im,
             );
@@ -191,24 +191,24 @@ pub fn prime_power_winograd_function(
                 + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#phi>,
             const INVERSE: bool,
         >(
-            data: &mut [num_complex::Complex<F>; #n],
+            data: &mut [eunomia::Complex<F>; #n],
         ) {
             // Save x[0] for output assembly
             let x0 = data[0];
 
             // 1. Prepare and compute DFT of y
-            let mut y: [num_complex::Complex<F>; #p] = [ #(#y_init),* ];
+            let mut y: [eunomia::Complex<F>; #p] = [ #(#y_init),* ];
             <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#p>>::dft::<INVERSE>(&mut y);
 
             // 2. Prepare and compute DFT of z
-            let mut z: [num_complex::Complex<F>; #p] = [ #(#z_init),* ];
+            let mut z: [eunomia::Complex<F>; #p] = [ #(#z_init),* ];
             <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#p>>::dft::<INVERSE>(&mut z);
 
             // 3. Prepare and compute cyclic convolution of length φ
-            let mut a: [num_complex::Complex<F>; #phi] = [ #(#gather),* ];
+            let mut a: [eunomia::Complex<F>; #phi] = [ #(#gather),* ];
             <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#phi>>::dft::<false>(&mut a);
 
-            let h_hat: [num_complex::Complex<F>; #phi] = if INVERSE {
+            let h_hat: [eunomia::Complex<F>; #phi] = if INVERSE {
                 [ #(#hi_lits),* ]
             } else {
                 [ #(#hf_lits),* ]
@@ -216,7 +216,7 @@ pub fn prime_power_winograd_function(
             for k in 0..#phi {
                 let ak = a[k];
                 let hk = h_hat[k];
-                a[k] = num_complex::Complex::new(
+                a[k] = eunomia::Complex::new(
                     ak.re * hk.re - ak.im * hk.im,
                     ak.re * hk.im + ak.im * hk.re,
                 );
@@ -225,7 +225,7 @@ pub fn prime_power_winograd_function(
             <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#phi>>::dft::<true>(&mut a);
             let inv_phi = F::from_precise(#inv_phi);
             for k in 0..#phi {
-                a[k] = num_complex::Complex::new(a[k].re * inv_phi, a[k].im * inv_phi);
+                a[k] = eunomia::Complex::new(a[k].re * inv_phi, a[k].im * inv_phi);
             }
 
             // 4. Assemble outputs

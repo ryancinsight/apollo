@@ -3,14 +3,13 @@
 //! Evaluates the direct O(N^2) FrFT on centred coordinates.
 //! Five dispatch modes cover integer-order degenerate cases and general chirp.
 
-
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -130,12 +129,17 @@ impl FrftGpuKernel {
         scale_im: f32,
     ) -> WgpuResult<Vec<Complex32>> {
         let hep_device = device.hephaestus();
-        let input_buf = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buf = hep_device.alloc_zeroed::<Complex32>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let input_buf = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output_buf =
+            hep_device
+                .alloc_zeroed::<Complex32>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
         device.queue().write_buffer(
             &self.params_buffer,
             0,
@@ -149,27 +153,31 @@ impl FrftGpuKernel {
                 _padding: [0; 2],
             }),
         );
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-frft-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-frft-wgpu encoder"),
-        });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-frft-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-frft-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-frft-wgpu pass"),
@@ -182,9 +190,11 @@ impl FrftGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![Complex32::new(0.0, 0.0); len];
-        hep_device.download(&output_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

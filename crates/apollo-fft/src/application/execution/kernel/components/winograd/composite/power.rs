@@ -1,6 +1,6 @@
 use super::super::radix::dft8_array_impl;
 use super::super::traits::{apply_twiddle_impl, WinogradScalar};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// `W_16^k = W_32^(2k)` for `k = 0..7`: every other entry of `TWIDDLE32_FWD`.
 /// Forward convention: `(cos(2πk/16), -sin(2πk/16))`.
@@ -22,7 +22,7 @@ const TWIDDLE16_FWD: [Complex64; 8] = [
 ];
 
 #[inline]
-fn twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_complex::Complex<F> {
+fn twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> eunomia::Complex<F> {
     let w = TWIDDLE16_FWD[K];
     let w = if INVERSE {
         Complex64::new(w.re, -w.im)
@@ -33,14 +33,14 @@ fn twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_co
 }
 
 #[inline]
-fn cast_twiddle<F: WinogradScalar>(w: Complex64) -> num_complex::Complex<F> {
-    num_complex::Complex::new(F::from_precise(w.re), F::from_precise(w.im))
+fn cast_twiddle<F: WinogradScalar>(w: Complex64) -> eunomia::Complex<F> {
+    eunomia::Complex::new(F::from_precise(w.re), F::from_precise(w.im))
 }
 
 #[inline]
 fn apply_twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>(
-    o: num_complex::Complex<F>,
-) -> num_complex::Complex<F> {
+    o: eunomia::Complex<F>,
+) -> eunomia::Complex<F> {
     let sign = if INVERSE {
         F::from_precise(1.0)
     } else {
@@ -50,18 +50,18 @@ fn apply_twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>(
         0 => o,
         4 => {
             if INVERSE {
-                num_complex::Complex::new(-o.im, o.re)
+                eunomia::Complex::new(-o.im, o.re)
             } else {
-                num_complex::Complex::new(o.im, -o.re)
+                eunomia::Complex::new(o.im, -o.re)
             }
         }
         2 => {
             let sq2o2 = F::sq2o2();
-            num_complex::Complex::new(sq2o2 * (o.re - sign * o.im), sq2o2 * (sign * o.re + o.im))
+            eunomia::Complex::new(sq2o2 * (o.re - sign * o.im), sq2o2 * (sign * o.re + o.im))
         }
         6 => {
             let sq2o2 = F::sq2o2();
-            num_complex::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
+            eunomia::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
         }
         _ => o * twiddle16::<F, INVERSE, K>(),
     }
@@ -73,7 +73,7 @@ fn apply_twiddle16<F: WinogradScalar, const INVERSE: bool, const K: usize>(
 /// final write-back, eliminating the separate scale loop in the inverse path.
 #[inline]
 pub(crate) fn dft16_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [num_complex::Complex<F>; 16],
+    data: &mut [eunomia::Complex<F>; 16],
 ) {
     let x0 = data[0];
     let x1 = data[1];
@@ -107,22 +107,22 @@ pub(crate) fn dft16_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
 
     if NORMALIZE {
         let q = F::from_precise(1.0 / 16.0);
-        data[0] = num_complex::Complex::new((e_arr[0].re + t0.re) * q, (e_arr[0].im + t0.im) * q);
-        data[1] = num_complex::Complex::new((e_arr[1].re + t1.re) * q, (e_arr[1].im + t1.im) * q);
-        data[2] = num_complex::Complex::new((e_arr[2].re + t2.re) * q, (e_arr[2].im + t2.im) * q);
-        data[3] = num_complex::Complex::new((e_arr[3].re + t3.re) * q, (e_arr[3].im + t3.im) * q);
-        data[4] = num_complex::Complex::new((e_arr[4].re + t4.re) * q, (e_arr[4].im + t4.im) * q);
-        data[5] = num_complex::Complex::new((e_arr[5].re + t5.re) * q, (e_arr[5].im + t5.im) * q);
-        data[6] = num_complex::Complex::new((e_arr[6].re + t6.re) * q, (e_arr[6].im + t6.im) * q);
-        data[7] = num_complex::Complex::new((e_arr[7].re + t7.re) * q, (e_arr[7].im + t7.im) * q);
-        data[8] = num_complex::Complex::new((e_arr[0].re - t0.re) * q, (e_arr[0].im - t0.im) * q);
-        data[9] = num_complex::Complex::new((e_arr[1].re - t1.re) * q, (e_arr[1].im - t1.im) * q);
-        data[10] = num_complex::Complex::new((e_arr[2].re - t2.re) * q, (e_arr[2].im - t2.im) * q);
-        data[11] = num_complex::Complex::new((e_arr[3].re - t3.re) * q, (e_arr[3].im - t3.im) * q);
-        data[12] = num_complex::Complex::new((e_arr[4].re - t4.re) * q, (e_arr[4].im - t4.im) * q);
-        data[13] = num_complex::Complex::new((e_arr[5].re - t5.re) * q, (e_arr[5].im - t5.im) * q);
-        data[14] = num_complex::Complex::new((e_arr[6].re - t6.re) * q, (e_arr[6].im - t6.im) * q);
-        data[15] = num_complex::Complex::new((e_arr[7].re - t7.re) * q, (e_arr[7].im - t7.im) * q);
+        data[0] = eunomia::Complex::new((e_arr[0].re + t0.re) * q, (e_arr[0].im + t0.im) * q);
+        data[1] = eunomia::Complex::new((e_arr[1].re + t1.re) * q, (e_arr[1].im + t1.im) * q);
+        data[2] = eunomia::Complex::new((e_arr[2].re + t2.re) * q, (e_arr[2].im + t2.im) * q);
+        data[3] = eunomia::Complex::new((e_arr[3].re + t3.re) * q, (e_arr[3].im + t3.im) * q);
+        data[4] = eunomia::Complex::new((e_arr[4].re + t4.re) * q, (e_arr[4].im + t4.im) * q);
+        data[5] = eunomia::Complex::new((e_arr[5].re + t5.re) * q, (e_arr[5].im + t5.im) * q);
+        data[6] = eunomia::Complex::new((e_arr[6].re + t6.re) * q, (e_arr[6].im + t6.im) * q);
+        data[7] = eunomia::Complex::new((e_arr[7].re + t7.re) * q, (e_arr[7].im + t7.im) * q);
+        data[8] = eunomia::Complex::new((e_arr[0].re - t0.re) * q, (e_arr[0].im - t0.im) * q);
+        data[9] = eunomia::Complex::new((e_arr[1].re - t1.re) * q, (e_arr[1].im - t1.im) * q);
+        data[10] = eunomia::Complex::new((e_arr[2].re - t2.re) * q, (e_arr[2].im - t2.im) * q);
+        data[11] = eunomia::Complex::new((e_arr[3].re - t3.re) * q, (e_arr[3].im - t3.im) * q);
+        data[12] = eunomia::Complex::new((e_arr[4].re - t4.re) * q, (e_arr[4].im - t4.im) * q);
+        data[13] = eunomia::Complex::new((e_arr[5].re - t5.re) * q, (e_arr[5].im - t5.im) * q);
+        data[14] = eunomia::Complex::new((e_arr[6].re - t6.re) * q, (e_arr[6].im - t6.im) * q);
+        data[15] = eunomia::Complex::new((e_arr[7].re - t7.re) * q, (e_arr[7].im - t7.im) * q);
     } else {
         data[0] = e_arr[0] + t0;
         data[1] = e_arr[1] + t1;
@@ -146,7 +146,7 @@ pub(crate) fn dft16_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
 /// In-place Winograd DFT-16 (public API).
 #[inline]
 pub(crate) fn dft16_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 16],
+    data: &mut [eunomia::Complex<F>; 16],
 ) {
     dft16_array_impl::<F, INVERSE, false>(data);
 }
@@ -177,7 +177,7 @@ const TWIDDLE32_FWD: [Complex64; 16] = [
 ];
 
 #[inline]
-fn twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_complex::Complex<F> {
+fn twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> eunomia::Complex<F> {
     let w = TWIDDLE32_FWD[K];
     let w = if INVERSE {
         Complex64::new(w.re, -w.im)
@@ -189,8 +189,8 @@ fn twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>() -> num_co
 
 #[inline]
 fn apply_twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>(
-    o: num_complex::Complex<F>,
-) -> num_complex::Complex<F> {
+    o: eunomia::Complex<F>,
+) -> eunomia::Complex<F> {
     let sign = if INVERSE {
         F::from_precise(1.0)
     } else {
@@ -200,18 +200,18 @@ fn apply_twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>(
         0 => o,
         8 => {
             if INVERSE {
-                num_complex::Complex::new(-o.im, o.re)
+                eunomia::Complex::new(-o.im, o.re)
             } else {
-                num_complex::Complex::new(o.im, -o.re)
+                eunomia::Complex::new(o.im, -o.re)
             }
         }
         4 => {
             let sq2o2 = F::sq2o2();
-            num_complex::Complex::new(sq2o2 * (o.re - sign * o.im), sq2o2 * (sign * o.re + o.im))
+            eunomia::Complex::new(sq2o2 * (o.re - sign * o.im), sq2o2 * (sign * o.re + o.im))
         }
         12 => {
             let sq2o2 = F::sq2o2();
-            num_complex::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
+            eunomia::Complex::new(sq2o2 * (-o.re - sign * o.im), sq2o2 * (sign * o.re - o.im))
         }
         _ => o * twiddle32::<F, INVERSE, K>(),
     }
@@ -223,7 +223,7 @@ fn apply_twiddle32<F: WinogradScalar, const INVERSE: bool, const K: usize>(
 /// final write-back, eliminating the separate scale loop in the inverse path.
 #[inline]
 pub(crate) fn dft32_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [num_complex::Complex<F>; 32],
+    data: &mut [eunomia::Complex<F>; 32],
 ) {
     let mut e_arr = [
         data[0], data[2], data[4], data[6], data[8], data[10], data[12], data[14], data[16],
@@ -254,50 +254,38 @@ pub(crate) fn dft32_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
 
     if NORMALIZE {
         let q = F::from_precise(1.0 / 32.0);
-        data[0] = num_complex::Complex::new((e_arr[0].re + t0.re) * q, (e_arr[0].im + t0.im) * q);
-        data[16] = num_complex::Complex::new((e_arr[0].re - t0.re) * q, (e_arr[0].im - t0.im) * q);
-        data[1] = num_complex::Complex::new((e_arr[1].re + t1.re) * q, (e_arr[1].im + t1.im) * q);
-        data[17] = num_complex::Complex::new((e_arr[1].re - t1.re) * q, (e_arr[1].im - t1.im) * q);
-        data[2] = num_complex::Complex::new((e_arr[2].re + t2.re) * q, (e_arr[2].im + t2.im) * q);
-        data[18] = num_complex::Complex::new((e_arr[2].re - t2.re) * q, (e_arr[2].im - t2.im) * q);
-        data[3] = num_complex::Complex::new((e_arr[3].re + t3.re) * q, (e_arr[3].im + t3.im) * q);
-        data[19] = num_complex::Complex::new((e_arr[3].re - t3.re) * q, (e_arr[3].im - t3.im) * q);
-        data[4] = num_complex::Complex::new((e_arr[4].re + t4.re) * q, (e_arr[4].im + t4.im) * q);
-        data[20] = num_complex::Complex::new((e_arr[4].re - t4.re) * q, (e_arr[4].im - t4.im) * q);
-        data[5] = num_complex::Complex::new((e_arr[5].re + t5.re) * q, (e_arr[5].im + t5.im) * q);
-        data[21] = num_complex::Complex::new((e_arr[5].re - t5.re) * q, (e_arr[5].im - t5.im) * q);
-        data[6] = num_complex::Complex::new((e_arr[6].re + t6.re) * q, (e_arr[6].im + t6.im) * q);
-        data[22] = num_complex::Complex::new((e_arr[6].re - t6.re) * q, (e_arr[6].im - t6.im) * q);
-        data[7] = num_complex::Complex::new((e_arr[7].re + t7.re) * q, (e_arr[7].im + t7.im) * q);
-        data[23] = num_complex::Complex::new((e_arr[7].re - t7.re) * q, (e_arr[7].im - t7.im) * q);
-        data[8] = num_complex::Complex::new((e_arr[8].re + t8.re) * q, (e_arr[8].im + t8.im) * q);
-        data[24] = num_complex::Complex::new((e_arr[8].re - t8.re) * q, (e_arr[8].im - t8.im) * q);
-        data[9] = num_complex::Complex::new((e_arr[9].re + t9.re) * q, (e_arr[9].im + t9.im) * q);
-        data[25] = num_complex::Complex::new((e_arr[9].re - t9.re) * q, (e_arr[9].im - t9.im) * q);
-        data[10] =
-            num_complex::Complex::new((e_arr[10].re + t10.re) * q, (e_arr[10].im + t10.im) * q);
-        data[26] =
-            num_complex::Complex::new((e_arr[10].re - t10.re) * q, (e_arr[10].im - t10.im) * q);
-        data[11] =
-            num_complex::Complex::new((e_arr[11].re + t11.re) * q, (e_arr[11].im + t11.im) * q);
-        data[27] =
-            num_complex::Complex::new((e_arr[11].re - t11.re) * q, (e_arr[11].im - t11.im) * q);
-        data[12] =
-            num_complex::Complex::new((e_arr[12].re + t12.re) * q, (e_arr[12].im + t12.im) * q);
-        data[28] =
-            num_complex::Complex::new((e_arr[12].re - t12.re) * q, (e_arr[12].im - t12.im) * q);
-        data[13] =
-            num_complex::Complex::new((e_arr[13].re + t13.re) * q, (e_arr[13].im + t13.im) * q);
-        data[29] =
-            num_complex::Complex::new((e_arr[13].re - t13.re) * q, (e_arr[13].im - t13.im) * q);
-        data[14] =
-            num_complex::Complex::new((e_arr[14].re + t14.re) * q, (e_arr[14].im + t14.im) * q);
-        data[30] =
-            num_complex::Complex::new((e_arr[14].re - t14.re) * q, (e_arr[14].im - t14.im) * q);
-        data[15] =
-            num_complex::Complex::new((e_arr[15].re + t15.re) * q, (e_arr[15].im + t15.im) * q);
-        data[31] =
-            num_complex::Complex::new((e_arr[15].re - t15.re) * q, (e_arr[15].im - t15.im) * q);
+        data[0] = eunomia::Complex::new((e_arr[0].re + t0.re) * q, (e_arr[0].im + t0.im) * q);
+        data[16] = eunomia::Complex::new((e_arr[0].re - t0.re) * q, (e_arr[0].im - t0.im) * q);
+        data[1] = eunomia::Complex::new((e_arr[1].re + t1.re) * q, (e_arr[1].im + t1.im) * q);
+        data[17] = eunomia::Complex::new((e_arr[1].re - t1.re) * q, (e_arr[1].im - t1.im) * q);
+        data[2] = eunomia::Complex::new((e_arr[2].re + t2.re) * q, (e_arr[2].im + t2.im) * q);
+        data[18] = eunomia::Complex::new((e_arr[2].re - t2.re) * q, (e_arr[2].im - t2.im) * q);
+        data[3] = eunomia::Complex::new((e_arr[3].re + t3.re) * q, (e_arr[3].im + t3.im) * q);
+        data[19] = eunomia::Complex::new((e_arr[3].re - t3.re) * q, (e_arr[3].im - t3.im) * q);
+        data[4] = eunomia::Complex::new((e_arr[4].re + t4.re) * q, (e_arr[4].im + t4.im) * q);
+        data[20] = eunomia::Complex::new((e_arr[4].re - t4.re) * q, (e_arr[4].im - t4.im) * q);
+        data[5] = eunomia::Complex::new((e_arr[5].re + t5.re) * q, (e_arr[5].im + t5.im) * q);
+        data[21] = eunomia::Complex::new((e_arr[5].re - t5.re) * q, (e_arr[5].im - t5.im) * q);
+        data[6] = eunomia::Complex::new((e_arr[6].re + t6.re) * q, (e_arr[6].im + t6.im) * q);
+        data[22] = eunomia::Complex::new((e_arr[6].re - t6.re) * q, (e_arr[6].im - t6.im) * q);
+        data[7] = eunomia::Complex::new((e_arr[7].re + t7.re) * q, (e_arr[7].im + t7.im) * q);
+        data[23] = eunomia::Complex::new((e_arr[7].re - t7.re) * q, (e_arr[7].im - t7.im) * q);
+        data[8] = eunomia::Complex::new((e_arr[8].re + t8.re) * q, (e_arr[8].im + t8.im) * q);
+        data[24] = eunomia::Complex::new((e_arr[8].re - t8.re) * q, (e_arr[8].im - t8.im) * q);
+        data[9] = eunomia::Complex::new((e_arr[9].re + t9.re) * q, (e_arr[9].im + t9.im) * q);
+        data[25] = eunomia::Complex::new((e_arr[9].re - t9.re) * q, (e_arr[9].im - t9.im) * q);
+        data[10] = eunomia::Complex::new((e_arr[10].re + t10.re) * q, (e_arr[10].im + t10.im) * q);
+        data[26] = eunomia::Complex::new((e_arr[10].re - t10.re) * q, (e_arr[10].im - t10.im) * q);
+        data[11] = eunomia::Complex::new((e_arr[11].re + t11.re) * q, (e_arr[11].im + t11.im) * q);
+        data[27] = eunomia::Complex::new((e_arr[11].re - t11.re) * q, (e_arr[11].im - t11.im) * q);
+        data[12] = eunomia::Complex::new((e_arr[12].re + t12.re) * q, (e_arr[12].im + t12.im) * q);
+        data[28] = eunomia::Complex::new((e_arr[12].re - t12.re) * q, (e_arr[12].im - t12.im) * q);
+        data[13] = eunomia::Complex::new((e_arr[13].re + t13.re) * q, (e_arr[13].im + t13.im) * q);
+        data[29] = eunomia::Complex::new((e_arr[13].re - t13.re) * q, (e_arr[13].im - t13.im) * q);
+        data[14] = eunomia::Complex::new((e_arr[14].re + t14.re) * q, (e_arr[14].im + t14.im) * q);
+        data[30] = eunomia::Complex::new((e_arr[14].re - t14.re) * q, (e_arr[14].im - t14.im) * q);
+        data[15] = eunomia::Complex::new((e_arr[15].re + t15.re) * q, (e_arr[15].im + t15.im) * q);
+        data[31] = eunomia::Complex::new((e_arr[15].re - t15.re) * q, (e_arr[15].im - t15.im) * q);
     } else {
         data[0] = e_arr[0] + t0;
         data[16] = e_arr[0] - t0;
@@ -337,13 +325,13 @@ pub(crate) fn dft32_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
 /// In-place Winograd DFT-32 (public API).
 #[inline]
 pub(crate) fn dft32_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 32],
+    data: &mut [eunomia::Complex<F>; 32],
 ) {
     dft32_array_impl::<F, INVERSE, false>(data);
 }
 
 #[inline]
-fn twiddle32_runtime<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
+fn twiddle32_runtime<F: WinogradScalar, const INVERSE: bool>(k: usize) -> eunomia::Complex<F> {
     let w = TWIDDLE32_FWD[k];
     let w = if INVERSE {
         Complex64::new(w.re, -w.im)
@@ -358,7 +346,7 @@ fn twiddle32_runtime<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_co
 /// For odd k (k=2*m+1), returns W_64^(2m+1) = W_32^m * W_64^1.
 /// LLVM optimizes `k >> 1` and `if (k & 1) == 0` at -O3 for runtime k.
 #[inline]
-fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
+fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> eunomia::Complex<F> {
     let base = twiddle32_runtime::<F, INVERSE>(k >> 1);
     if (k & 1) == 0 {
         base
@@ -378,7 +366,7 @@ fn twiddle64<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::C
 /// final write-back, eliminating the separate scale loop in the inverse path.
 #[inline]
 pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [num_complex::Complex<F>; 64],
+    data: &mut [eunomia::Complex<F>; 64],
 ) {
     F::with_winograd_scratch(64, |scratch| {
         let ptr = scratch.as_mut_ptr();
@@ -395,10 +383,9 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
             let q = F::from_precise(1.0 / 64.0);
             for k in 0..32 {
                 let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
-                data[k] =
-                    num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] = eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 32] =
-                    num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+                    eunomia::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }
         } else {
             for k in 0..32 {
@@ -413,7 +400,7 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
 /// In-place Winograd DFT-64 (public API).
 #[inline]
 pub(crate) fn dft64_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 64],
+    data: &mut [eunomia::Complex<F>; 64],
 ) {
     dft64_array_impl::<F, INVERSE, false>(data);
 }
@@ -423,7 +410,7 @@ pub(crate) fn dft64_impl<F: WinogradScalar, const INVERSE: bool>(
 /// For odd k (k=2*m+1), returns W_128^(2m+1) = W_64^m * W_128^1.
 /// LLVM optimizes `k >> 1` and `if (k & 1) == 0` at -O3 for runtime k.
 #[inline]
-fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::Complex<F> {
+fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> eunomia::Complex<F> {
     let base = twiddle64::<F, INVERSE>(k >> 1);
     if (k & 1) == 0 {
         base
@@ -443,7 +430,7 @@ fn twiddle128<F: WinogradScalar, const INVERSE: bool>(k: usize) -> num_complex::
 /// final write-back, eliminating the separate scale loop in the inverse path.
 #[inline]
 pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NORMALIZE: bool>(
-    data: &mut [num_complex::Complex<F>; 128],
+    data: &mut [eunomia::Complex<F>; 128],
 ) {
     F::with_winograd_scratch(128, |scratch| {
         let ptr = scratch.as_mut_ptr();
@@ -460,10 +447,9 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
             let q = F::from_precise(1.0 / 128.0);
             for k in 0..64 {
                 let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
-                data[k] =
-                    num_complex::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] = eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 64] =
-                    num_complex::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
+                    eunomia::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }
         } else {
             for k in 0..64 {
@@ -478,7 +464,7 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
 /// In-place Winograd DFT-128 (public API).
 #[inline]
 pub(crate) fn dft128_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [num_complex::Complex<F>; 128],
+    data: &mut [eunomia::Complex<F>; 128],
 ) {
     dft128_array_impl::<F, INVERSE, false>(data);
 }

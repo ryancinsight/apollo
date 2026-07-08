@@ -1,5 +1,5 @@
 use super::fixed::cmul_vec_precise;
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 /// AVX/FMA final Stockham f64 stage for `groups == 1`.
 ///

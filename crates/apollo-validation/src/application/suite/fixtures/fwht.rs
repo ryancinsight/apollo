@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use ndarray::{Array1, Array2};
-use num_complex::Complex64;
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 /// FWHT two-point known-value fixture.
 ///
@@ -38,7 +38,7 @@ use num_complex::Complex64;
 /// Reference: Hadamard (1893), two-point Walsh-Hadamard matrix definition.
 pub(crate) fn fwht_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
     let plan = FwhtPlan::new(2)?;
-    let input = Array1::from_vec(vec![1.0_f64, 1.0]);
+    let input = Array1::from(vec![1.0_f64, 1.0]);
     let actual = plan.forward(&input)?;
     let expected = [2.0_f64, 0.0];
     Ok(published_real_fixture(
@@ -63,7 +63,7 @@ pub(crate) fn fwht_two_point_fixture() -> SuiteResult<PublishedFixtureReport> {
 pub(crate) fn fwht_inverse_roundtrip_fixture() -> SuiteResult<PublishedFixtureReport> {
     let input = [1.0_f64, 2.0, 3.0, 4.0];
     let plan = FwhtPlan::new(4)?;
-    let signal = Array1::from_vec(input.to_vec());
+    let signal = Array1::from(input.to_vec());
     let spectrum = plan.forward(&signal)?;
     let recovered = plan.inverse(&spectrum)?;
     Ok(published_real_fixture_with_threshold(

@@ -4,9 +4,9 @@ use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use apollo_fft::PrecisionProfile;
 use crate::{SparseComplexStorage, SparseSpectrum};
-use num_complex::{Complex32, Complex64};
+use apollo_fft::PrecisionProfile;
+use eunomia::{Complex32, Complex64};
 
 use crate::infrastructure::transport::gpu::application::plan::SftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -80,12 +80,9 @@ impl SftWgpuBackend {
                 actual: input.len(),
             });
         }
-        let dense = self.kernel.execute(
-            &self.device,
-            input,
-            plan.len(),
-            SftMode::Forward,
-        )?;
+        let dense = self
+            .kernel
+            .execute(&self.device, input, plan.len(), SftMode::Forward)?;
         select_top_k(plan.len(), plan.sparsity(), &dense)
     }
 
@@ -120,12 +117,8 @@ impl SftWgpuBackend {
             .iter()
             .map(|value| Complex32::new(value.re as f32, value.im as f32))
             .collect();
-        self.kernel.execute(
-            &self.device,
-            &dense,
-            plan.len(),
-            SftMode::Inverse,
-        )
+        self.kernel
+            .execute(&self.device, &dense, plan.len(), SftMode::Inverse)
     }
 
     /// Execute inverse reconstruction from a sparse spectrum into a Leto dense signal.
@@ -296,7 +289,7 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
 
 #[cfg(test)]
 mod tests {
-    use num_complex::Complex32;
+    use eunomia::Complex32;
 
     use super::leto_view1_cow;
 

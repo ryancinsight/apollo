@@ -18,14 +18,13 @@ use crate::domain::metadata::grid::SphericalGridSpec;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
 use apollo_fft::PrecisionProfile;
+use eunomia::Complex64;
 use helpers::{
-    array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes,
-    leto_array2_from_ndarray, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
-    sht_inverse_sample, sht_inverse_sample_hermes, SHT_COEFF_LANE_SCRATCH,
-    SHT_HERMES_DOT_LEN_THRESHOLD,
+    array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes, leto_array2_from_dense,
+    sht_forward_mode_sum, sht_forward_mode_sum_hermes, sht_inverse_sample,
+    sht_inverse_sample_hermes, SHT_COEFF_LANE_SCRATCH, SHT_HERMES_DOT_LEN_THRESHOLD,
 };
-use ndarray::Array2;
-use num_complex::Complex64;
+use leto::Array2;
 
 /// Reusable spherical harmonic transform (SHT) plan.
 ///
@@ -71,7 +70,7 @@ impl ShtPlan {
 
     /// Forward SHT for real-valued samples on the plan grid.
     pub fn forward_real(&self, samples: &Array2<f64>) -> ShtResult<SphericalHarmonicCoefficients> {
-        self.check_sample_shape(samples.dim())?;
+        self.check_sample_shape(samples.shape())?;
         let complex_samples = samples.mapv(|value| Complex64::new(value, 0.0));
         self.forward_complex(&complex_samples)
     }
@@ -81,9 +80,9 @@ impl ShtPlan {
         &self,
         samples: leto::ArrayView2<'_, f64>,
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_real(&samples)?;
-        leto_array2_from_ndarray(coefficients.values())
+        leto_array2_from_dense(coefficients.values())
     }
 
     /// Forward SHT for complex-valued samples on the plan grid.
@@ -91,7 +90,7 @@ impl ShtPlan {
         &self,
         samples: &Array2<Complex64>,
     ) -> ShtResult<SphericalHarmonicCoefficients> {
-        self.check_sample_shape(samples.dim())?;
+        self.check_sample_shape(samples.shape())?;
         let max_degree = self.grid.max_degree();
         let mut coefficients = SphericalHarmonicCoefficients::zeros(max_degree);
         let longitude_weight = std::f64::consts::TAU / self.grid.longitudes() as f64;
@@ -107,21 +106,18 @@ impl ShtPlan {
         let num_modes = all_modes.len();
         let mut flat_contributions = vec![Complex64::new(0.0, 0.0); n_lat * num_modes];
 
+        // `samples` is C-contiguous after view materialization, so each latitude
+        // row is a contiguous `n_lon`-length window of the backing slice.
+        let samples_flat = samples
+            .as_slice()
+            .expect("samples are contiguous after materialization");
         moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
             &mut flat_contributions,
             num_modes,
             |lat, row_contrib| {
                 let theta = self.theta(lat);
                 let weight = self.theta_weights[lat];
-                let row = samples.row(lat);
-                let row_values;
-                let row = match row.as_slice() {
-                    Some(row) => row,
-                    None => {
-                        row_values = row.iter().copied().collect::<Vec<_>>();
-                        &row_values
-                    }
-                };
+                let row = &samples_flat[lat * n_lon..lat * n_lon + n_lon];
                 let sample_lanes =
                     (n_lon >= SHT_HERMES_DOT_LEN_THRESHOLD).then(|| interleaved_lanes(row));
                 for (mode_idx, &(degree, order)) in all_modes.iter().enumerate() {
@@ -155,9 +151,9 @@ impl ShtPlan {
         &self,
         samples: leto::ArrayView2<'_, Complex64>,
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let coefficients = self.forward_complex(&samples)?;
-        leto_array2_from_ndarray(coefficients.values())
+        leto_array2_from_dense(coefficients.values())
     }
 
     /// Inverse SHT evaluating real-valued samples on the plan grid.
@@ -175,7 +171,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let coefficients = coefficients_from_leto_view(self, coefficients)?;
         let samples = self.inverse_real(&coefficients)?;
-        leto_array2_from_ndarray(&samples)
+        leto_array2_from_dense(&samples)
     }
 
     /// Inverse SHT evaluating complex-valued samples on the plan grid.
@@ -193,7 +189,7 @@ impl ShtPlan {
             .flat_map(|l| (-(l as isize)..=(l as isize)).map(move |m| (l, m)))
             .collect();
 
-        let mut samples = Array2::<Complex64>::zeros((n_lat, n_lon));
+        let mut samples = Array2::<Complex64>::zeros([n_lat, n_lon]);
 
         let mut run_inverse = |coefficient_lanes: Option<&[f64]>| {
             if let Some(flat_samples) = samples.as_slice_mut() {
@@ -252,7 +248,7 @@ impl ShtPlan {
     ) -> ShtResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let coefficients = coefficients_from_leto_view(self, coefficients)?;
         let samples = self.inverse_complex(&coefficients)?;
-        leto_array2_from_ndarray(&samples)
+        leto_array2_from_dense(&samples)
     }
 
     /// Forward real-sample SHT for `f64`, `f32`, or mixed `f16` sample storage.
@@ -273,13 +269,13 @@ impl ShtPlan {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
             O::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.forward_real_typed_into(&samples, &mut output, sample_profile, coefficient_profile)?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Forward complex-sample SHT for `Complex64`, `Complex32`, or mixed `[f16; 2]`.
@@ -300,7 +296,7 @@ impl ShtPlan {
         sample_profile: PrecisionProfile,
         coefficient_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let samples = array2_from_leto_view(samples, ShtError::SampleShapeMismatch)?;
+        let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
             O::from_complex64(Complex64::new(0.0, 0.0)),
@@ -311,7 +307,7 @@ impl ShtPlan {
             sample_profile,
             coefficient_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Inverse SHT into complex sample storage.
@@ -338,9 +334,9 @@ impl ShtPlan {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
-            (self.grid.latitudes(), self.grid.longitudes()),
+            [self.grid.latitudes(), self.grid.longitudes()],
             O::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.inverse_complex_typed_into(
@@ -349,7 +345,7 @@ impl ShtPlan {
             coefficient_profile,
             sample_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
     /// Inverse SHT into real sample storage by taking the synthesized real part.
@@ -376,9 +372,9 @@ impl ShtPlan {
         coefficient_profile: PrecisionProfile,
         sample_profile: PrecisionProfile,
     ) -> ShtResult<leto::Array<O, leto::MnemosyneStorage<O>, 2>> {
-        let coefficients = array2_from_leto_view(coefficients, ShtError::CoefficientShapeMismatch)?;
+        let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
-            (self.grid.latitudes(), self.grid.longitudes()),
+            [self.grid.latitudes(), self.grid.longitudes()],
             O::from_f64(0.0),
         );
         self.inverse_real_typed_into(
@@ -387,11 +383,11 @@ impl ShtPlan {
             coefficient_profile,
             sample_profile,
         )?;
-        leto_array2_from_ndarray(&output)
+        leto_array2_from_dense(&output)
     }
 
-    pub(super) fn check_sample_shape(&self, shape: (usize, usize)) -> ShtResult<()> {
-        if shape != (self.grid.latitudes(), self.grid.longitudes()) {
+    pub(super) fn check_sample_shape(&self, shape: [usize; 2]) -> ShtResult<()> {
+        if shape != [self.grid.latitudes(), self.grid.longitudes()] {
             return Err(ShtError::SampleShapeMismatch);
         }
         Ok(())
@@ -401,16 +397,16 @@ impl ShtPlan {
         &self,
         coefficients: &SphericalHarmonicCoefficients,
     ) -> ShtResult<()> {
-        let expected = (self.grid.max_degree() + 1, 2 * self.grid.max_degree() + 1);
+        let expected = [self.grid.max_degree() + 1, 2 * self.grid.max_degree() + 1];
         if coefficients.max_degree() != self.grid.max_degree()
-            || coefficients.values().dim() != expected
+            || coefficients.values().shape() != expected
         {
             return Err(ShtError::CoefficientShapeMismatch);
         }
         Ok(())
     }
 
-    pub(super) fn coefficient_shape(&self) -> (usize, usize) {
-        (self.grid.max_degree() + 1, 2 * self.grid.max_degree() + 1)
+    pub(super) fn coefficient_shape(&self) -> [usize; 2] {
+        [self.grid.max_degree() + 1, 2 * self.grid.max_degree() + 1]
     }
 }

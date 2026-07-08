@@ -11,12 +11,12 @@
 //!   3. hilbert_inverse_dft: IDFT of recovered spectrum -> original real signal in output
 
 use bytemuck::{Pod, Zeroable};
-use num_complex::Complex32;
+use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -138,11 +138,7 @@ impl HilbertGpuKernel {
     }
 
     /// Execute the analytic signal path: `x[n] + i H{x}[n]`.
-    pub fn execute(
-        &self,
-        device: &WgpuDevice,
-        input: &[f32],
-    ) -> WgpuResult<Vec<Complex32>> {
+    pub fn execute(&self, device: &WgpuDevice, input: &[f32]) -> WgpuResult<Vec<Complex32>> {
         let len = input.len();
         let hep_device = device.hephaestus();
         let input_data: Vec<ComplexPod> = input
@@ -152,62 +148,79 @@ impl HilbertGpuKernel {
                 im: 0.0,
             })
             .collect();
-        let real_buffer = hep_device.upload(&input_data).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let spectrum_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-hilbert-wgpu params"),
-            contents: bytemuck::bytes_of(&HilbertParams {
-                len: len as u32,
-                _padding: [0; 3],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let forward_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-hilbert-wgpu forward bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: real_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let spectrum_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-hilbert-wgpu spectrum bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-hilbert-wgpu encoder"),
-        });
+        let real_buffer =
+            hep_device
+                .upload(&input_data)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let spectrum_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-hilbert-wgpu params"),
+                contents: bytemuck::bytes_of(&HilbertParams {
+                    len: len as u32,
+                    _padding: [0; 3],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let forward_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-hilbert-wgpu forward bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: real_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let spectrum_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-hilbert-wgpu spectrum bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-hilbert-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-hilbert-wgpu forward pass"),
@@ -238,10 +251,13 @@ impl HilbertGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device.download(&output_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let mut output: Vec<Complex32> = pods.iter()
+        hep_device
+            .download(&output_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let mut output: Vec<Complex32> = pods
+            .iter()
             .map(|value| Complex32::new(value.re, value.im))
             .collect();
 
@@ -266,11 +282,7 @@ impl HilbertGpuKernel {
     /// `X[N-k] = conj(X[k])`. The forward mask M doubles positive frequencies and zeros
     /// negative frequencies. Since `Q[k] = M[k]*X[k]`, we recover `X[k] = Q[k]/M[k]`
     /// for positive frequencies and `X[k] = conj(X[N-k])` for negative frequencies.
-    pub fn execute_inverse(
-        &self,
-        device: &WgpuDevice,
-        quadrature: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
+    pub fn execute_inverse(&self, device: &WgpuDevice, quadrature: &[f32]) -> WgpuResult<Vec<f32>> {
         let len = quadrature.len();
         let hep_device = device.hephaestus();
         let input_data: Vec<ComplexPod> = quadrature
@@ -280,90 +292,112 @@ impl HilbertGpuKernel {
                 im: 0.0,
             })
             .collect();
-        let input_buffer = hep_device.upload(&input_data).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let spectrum_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let input_buffer =
+            hep_device
+                .upload(&input_data)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let spectrum_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
         // Separate buffer for mask-undo output to avoid in-place data races:
         // the undo-mask reads positive-frequency bins (from spectrum) and writes
         // reconstructed negative-frequency bins (to recovered). Using separate
         // buffers ensures no cross-thread data race.
-        let recovered_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-hilbert-wgpu params"),
-            contents: bytemuck::bytes_of(&HilbertParams {
-                len: len as u32,
-                _padding: [0; 3],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let recovered_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-hilbert-wgpu params"),
+                contents: bytemuck::bytes_of(&HilbertParams {
+                    len: len as u32,
+                    _padding: [0; 3],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
         // Pass 1: DFT of quadrature. inout_a = input, inout_b = spectrum.
-        let dft_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-hilbert-wgpu inverse dft bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let dft_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-hilbert-wgpu inverse dft bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
         // Pass 2: Undo mask. Read spectrum (binding 0), write recovered (binding 1).
-        let undo_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-hilbert-wgpu undo mask bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: recovered_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let undo_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-hilbert-wgpu undo mask bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: recovered_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
         // Pass 3: IDFT. Read recovered (binding 0), write output (binding 1).
-        let idft_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-hilbert-wgpu inverse idft bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: recovered_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-hilbert-wgpu inverse encoder"),
-        });
+        let idft_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-hilbert-wgpu inverse idft bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: recovered_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-hilbert-wgpu inverse encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-hilbert-wgpu inverse dft pass"),
@@ -394,9 +428,11 @@ impl HilbertGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device.download(&output_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         let output: Vec<f32> = pods.iter().map(|v| v.re).collect();
         Ok(output)
     }

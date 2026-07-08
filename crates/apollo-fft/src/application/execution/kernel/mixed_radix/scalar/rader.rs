@@ -1,7 +1,7 @@
 use super::trait_def::MixedRadixScalar;
 
 pub(super) fn build_rader_spectrum_vec<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     n: usize,
@@ -37,7 +37,7 @@ pub(super) fn build_rader_spectrum_vec<
 /// It does not materialize the full length-M kernel, reducing peak build memory
 /// from `4m` complex values to `2m` complex values.
 pub(super) fn build_rader_negacyclic_spectra<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
 >(
     n: usize,
@@ -79,7 +79,7 @@ pub(super) fn build_rader_negacyclic_spectra<
 /// Returns a vector of length m containing the twist factors used for weighting
 /// before the forward FFT and unweighting after the inverse FFT.
 pub(super) fn build_rader_negacyclic_twiddles<
-    F: MixedRadixScalar<Complex = num_complex::Complex<F>>,
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
 >(
     m: usize,
 ) -> Vec<F::Complex> {

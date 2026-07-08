@@ -24,7 +24,7 @@ pub use domain::contracts::error::{DhtError, DhtResult};
 pub use domain::metadata::length::HartleyLength;
 pub use domain::spectrum::coefficients::HartleySpectrum;
 pub use infrastructure::kernel::direct::{hartley_cas, transform_real};
-pub use ndarray::{Array2, Array3};
+pub use leto::{Array2, Array3};
 
 /// GPU-accelerated backend using WGPU.
 #[cfg(feature = "wgpu")]
@@ -32,4 +32,4 @@ pub mod wgpu_backend {
     pub use crate::infrastructure::transport::gpu::*;
 }
 #[cfg(feature = "wgpu")]
-pub use infrastructure::transport::gpu::{*};
+pub use infrastructure::transport::gpu::*;

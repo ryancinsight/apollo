@@ -38,11 +38,11 @@
 //!   *J. Math. Anal. Appl.*, 88(1), 355–363.
 
 use crate::domain::contracts::error::FrftError;
+use eunomia::Complex64;
+use leto::Array1;
 use leto::Array2;
 use leto_ops::symmetric_eigen_jacobi;
 use moirai::ParallelSliceMut;
-use ndarray::Array1;
-use num_complex::Complex64;
 use std::f64::consts::PI;
 use std::sync::Arc;
 
@@ -214,7 +214,7 @@ impl UnitaryFrftPlan {
         input: &Array1<Complex64>,
         output: &mut Array1<Complex64>,
     ) -> Result<(), FrftError> {
-        validate_io(input.len(), output.len(), self.n)?;
+        validate_io(input.size(), output.size(), self.n)?;
         apply_unitary_frft(
             self.basis.eigenvectors(),
             self.n,
@@ -227,7 +227,7 @@ impl UnitaryFrftPlan {
 
     /// Execute the forward unitary DFrFT, returning an allocated output.
     pub fn forward(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, FrftError> {
-        let mut output = Array1::<Complex64>::zeros(self.n);
+        let mut output = Array1::<Complex64>::zeros([self.n]);
         self.forward_into(input, &mut output)?;
         Ok(output)
     }
@@ -240,7 +240,7 @@ impl UnitaryFrftPlan {
         input: &Array1<Complex64>,
         output: &mut Array1<Complex64>,
     ) -> Result<(), FrftError> {
-        validate_io(input.len(), output.len(), self.n)?;
+        validate_io(input.size(), output.size(), self.n)?;
         apply_unitary_frft(
             self.basis.eigenvectors(),
             self.n,
@@ -253,7 +253,7 @@ impl UnitaryFrftPlan {
 
     /// Execute the inverse unitary DFrFT, returning an allocated output.
     pub fn inverse(&self, input: &Array1<Complex64>) -> Result<Array1<Complex64>, FrftError> {
-        let mut output = Array1::<Complex64>::zeros(self.n);
+        let mut output = Array1::<Complex64>::zeros([self.n]);
         self.inverse_into(input, &mut output)?;
         Ok(output)
     }
@@ -362,7 +362,7 @@ mod tests {
     fn unitary_order_zero_is_identity() {
         let n = 8;
         let plan = UnitaryFrftPlan::new(n, 0.0).expect("valid plan");
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new((i as f64 * 0.3).sin(), (i as f64 * 0.17).cos())
         });
         let result = plan.forward(&input).expect("forward");
@@ -380,7 +380,7 @@ mod tests {
         // 4 full cycles = identity
         let n = 8;
         let plan = UnitaryFrftPlan::new(n, 4.0).expect("valid plan");
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new(i as f64 * 0.25 - 1.0, 0.5 - i as f64 * 0.1)
         });
         let result = plan.forward(&input).expect("forward");
@@ -400,7 +400,7 @@ mod tests {
         // on any specific DFT centering convention.
         let n = 8;
         let plan = UnitaryFrftPlan::new(n, 1.0).expect("valid plan");
-        let input = Array1::from_shape_fn(n, |i| Complex64::new((i as f64 * 0.31).sin(), 0.0));
+        let input = Array1::from_shape_fn([n], |[i]| Complex64::new((i as f64 * 0.31).sin(), 0.0));
         let after_twice = plan
             .forward(&plan.forward(&input).expect("first forward"))
             .expect("second forward");
@@ -419,7 +419,7 @@ mod tests {
     fn unitary_order_2_is_reversal() {
         let n = 8;
         let plan = UnitaryFrftPlan::new(n, 2.0).expect("valid plan");
-        let input = Array1::from_shape_fn(n, |i| Complex64::new(i as f64 + 1.0, 0.0));
+        let input = Array1::from_shape_fn([n], |[i]| Complex64::new(i as f64 + 1.0, 0.0));
         let result = plan.forward(&input).expect("forward");
         for k in 0..n {
             let expected = input[n - 1 - k];
@@ -438,7 +438,7 @@ mod tests {
         let n = 16;
         for order in [0.3_f64, 0.5, 0.7, 1.0, 1.3, 1.7, 2.5] {
             let plan = UnitaryFrftPlan::new(n, order).expect("valid plan");
-            let input = Array1::from_shape_fn(n, |i| {
+            let input = Array1::from_shape_fn([n], |[i]| {
                 Complex64::new((i as f64 * 0.23).sin(), (i as f64 * 0.31).cos())
             });
             let spectrum = plan.forward(&input).expect("forward");
@@ -458,11 +458,11 @@ mod tests {
     fn unitary_transform_reuses_thread_local_coeff_workspace() {
         let n = 16;
         let plan = UnitaryFrftPlan::new(n, 0.5).expect("valid plan");
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new((i as f64 * 0.19).sin(), (i as f64 * 0.23).cos())
         });
-        let mut first = Array1::<Complex64>::zeros(n);
-        let mut second = Array1::<Complex64>::zeros(n);
+        let mut first = Array1::<Complex64>::zeros([n]);
+        let mut second = Array1::<Complex64>::zeros([n]);
 
         plan.forward_into(&input, &mut first)
             .expect("first forward");
@@ -483,7 +483,7 @@ mod tests {
         let n = 128;
         let order = 0.5;
         let basis = GrunbaumBasis::new(n);
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new((i as f64 * 0.11).sin(), (i as f64 * 0.19).cos())
         });
         let plan = UnitaryFrftPlan {
@@ -511,7 +511,7 @@ mod tests {
     fn unitary_frft_preserves_l2_norm_for_non_integer_orders() {
         // Core unitarity test: ||DFrFT_a(x)||_2 = ||x||_2 for non-integer a.
         let n = 16;
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new((i as f64 * 0.37).cos(), (i as f64 * 0.41).sin())
         });
         let input_norm_sq: f64 = input.iter().map(|x| x.norm_sqr()).sum();
@@ -542,7 +542,7 @@ mod tests {
         let plan_b = UnitaryFrftPlan::new(n, b).expect("plan b");
         let plan_ab = UnitaryFrftPlan::new(n, a + b).expect("plan a+b");
 
-        let input = Array1::from_shape_fn(n, |i| {
+        let input = Array1::from_shape_fn([n], |[i]| {
             Complex64::new((i as f64 * 0.25).sin(), (i as f64 * 0.17).cos())
         });
         let composed = plan_a
@@ -578,8 +578,8 @@ mod tests {
     #[test]
     fn length_mismatch_is_rejected() {
         let plan = UnitaryFrftPlan::new(4, 0.5).expect("valid plan");
-        let input = Array1::from_elem(3, Complex64::new(1.0, 0.0));
-        let mut output = Array1::<Complex64>::zeros(4);
+        let input = Array1::from_elem([3], Complex64::new(1.0, 0.0));
+        let mut output = Array1::<Complex64>::zeros([4]);
         assert!(matches!(
             plan.forward_into(&input, &mut output),
             Err(FrftError::LengthMismatch { .. })
@@ -604,8 +604,8 @@ mod tests {
         ) {
             let (n, re_parts) = n_and_re;
             let order = order_step as f64 * 0.1 + 0.05;
-            let input = ndarray::Array1::from_vec(
-                re_parts.iter().map(|&r| num_complex::Complex64::new(r, 0.0)).collect()
+            let input = leto::Array1::from(
+                re_parts.iter().map(|&r| eunomia::Complex64::new(r, 0.0)).collect::<Vec<_>>()
             );
             let plan = UnitaryFrftPlan::new(n, order).expect("plan");
             let forward = plan.forward(&input).expect("forward");
@@ -637,8 +637,8 @@ mod tests {
             let (n, re_parts) = n_and_re;
             let a = a_step as f64 * 0.1 + 0.05;
             let b = b_step as f64 * 0.1 + 0.05;
-            let input = ndarray::Array1::from_vec(
-                re_parts.iter().map(|&r| num_complex::Complex64::new(r, 0.0)).collect()
+            let input = leto::Array1::from(
+                re_parts.iter().map(|&r| eunomia::Complex64::new(r, 0.0)).collect::<Vec<_>>()
             );
             let plan_ab = UnitaryFrftPlan::new(n, a + b).expect("plan_ab");
             let plan_b = UnitaryFrftPlan::new(n, b).expect("plan_b");
@@ -669,15 +669,15 @@ mod tests {
         ) {
             let (n, re_parts) = n_and_re;
             let order = order_step as f64 * 0.1 + 0.05;
-            let input = ndarray::Array1::from_vec(
-                re_parts.iter().map(|&r| num_complex::Complex64::new(r, 0.0)).collect()
+            let input = leto::Array1::from(
+                re_parts.iter().map(|&r| eunomia::Complex64::new(r, 0.0)).collect::<Vec<_>>()
             );
-            let scaled = ndarray::Array1::from_vec(
-                re_parts.iter().map(|&r| num_complex::Complex64::new(r * scalar, 0.0)).collect()
+            let scaled = leto::Array1::from(
+                re_parts.iter().map(|&r| eunomia::Complex64::new(r * scalar, 0.0)).collect::<Vec<_>>()
             );
             let plan = UnitaryFrftPlan::new(n, order).expect("plan");
             let frft_scaled = plan.forward(&scaled).expect("frft_scaled");
-            let frft_then_scale: Vec<num_complex::Complex64> = plan
+            let frft_then_scale: Vec<eunomia::Complex64> = plan
                 .forward(&input)
                 .expect("frft_x")
                 .iter()

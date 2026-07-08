@@ -17,9 +17,7 @@ apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { version = "2.4", features = ["serde", "use-intrinsics"] }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
-ndarray = { workspace = true }
-num-complex = { workspace = true }
-num-traits = "0.2.19"
+eunomia = { workspace = true }
 once_cell = "1.19"
 parking_lot = "0.12"
 rand = { workspace = true }
@@ -28,10 +26,6 @@ mnemosyne = { workspace = true }
 rustc-hash = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-coeus-core = { path = "../../../coeus/coeus-core" }
-coeus-tensor = { path = "../../../coeus/coeus-tensor" }
-coeus-autograd = { path = "../../../coeus/coeus-autograd" }
-coeus-ops = { path = "../../../coeus/coeus-ops" }
 
 [dev-dependencies]
 approx = "0.5"

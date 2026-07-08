@@ -4,7 +4,7 @@
 //! radix and Rader kernel tests to reduce DRY violations and
 //! maintain consistent error tolerances.
 
-use num_complex::{Complex32, Complex64};
+use eunomia::{Complex32, Complex64};
 
 /// Compute the maximum absolute error between two f64 FFT outputs.
 ///
