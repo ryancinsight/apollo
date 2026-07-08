@@ -60,10 +60,10 @@ approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "a6cbccf207c271af640c126ff27435f995c7cb6c", features = ["eunomia"] }
-melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
+melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "ba9194613169827a6db55e7458b8e0320cd515e1", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "df67249ef05de8e1addc5a26d6831c70d63c3d18" }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "a673325f61e933f6d3d6ecb9569d8f07c78152a8" }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "a673325f61e933f6d3d6ecb9569d8f07c78152a8" }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "d9e8ac95949b8a684b26d739eb175874764f3e0e" }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "d9e8ac95949b8a684b26d739eb175874764f3e0e" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
@@ -78,7 +78,7 @@ quote = "1.0"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 rand = "0.8"
 # moirai: data-parallel runtime replacing direct scheduler usage.
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "d60317ef76f1556901e137ed687c82d7ec4d2bec", features = ["melinoe", "no-global-alloc"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "37ff12d584e1fb472f41b4e40c702d708aba1dac", features = ["melinoe", "no-global-alloc"] }
 rustfft = "6.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

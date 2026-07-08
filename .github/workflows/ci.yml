@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/leto
-          ref: a673325f61e933f6d3d6ecb9569d8f07c78152a8
+          ref: d9e8ac95949b8a684b26d739eb175874764f3e0e
           path: leto
       - uses: actions/checkout@v4
         with:
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/Moirai
-          ref: d60317ef76f1556901e137ed687c82d7ec4d2bec
+          ref: 37ff12d584e1fb472f41b4e40c702d708aba1dac
           path: moirai
       - uses: actions/checkout@v4
         with:
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/melinoe
-          ref: cb4e371c38dac53a33bb72c726c98178a6430842
+          ref: ba9194613169827a6db55e7458b8e0320cd515e1
           path: melinoe
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/leto
-          ref: a673325f61e933f6d3d6ecb9569d8f07c78152a8
+          ref: d9e8ac95949b8a684b26d739eb175874764f3e0e
           path: leto
       - uses: actions/checkout@v4
         with:
@@ -108,7 +108,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/Moirai
-          ref: d60317ef76f1556901e137ed687c82d7ec4d2bec
+          ref: 37ff12d584e1fb472f41b4e40c702d708aba1dac
           path: moirai
       - uses: actions/checkout@v4
         with:
@@ -118,7 +118,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ryancinsight/melinoe
-          ref: cb4e371c38dac53a33bb72c726c98178a6430842
+          ref: ba9194613169827a6db55e7458b8e0320cd515e1
           path: melinoe
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
