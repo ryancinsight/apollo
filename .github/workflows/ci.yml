@@ -16,6 +16,44 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # apollo's [patch] table (Cargo.toml) resolves the Atlas fleet's git
+      # dependencies to local-path siblings for cross-repo dev; CI must
+      # recreate that same sibling layout (one level above the apollo
+      # checkout) so those patches resolve identically to a local dev tree.
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/hephaestus
+          ref: ks5-cholesky-panel
+          path: ../hephaestus
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/leto
+          ref: a673325f61e933f6d3d6ecb9569d8f07c78152a8
+          path: ../leto
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/eunomia
+          path: ../eunomia
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/Mnemosyne
+          ref: 938d0c2bc094d3bbe7745d68d60e05a531e0cfc2
+          path: ../mnemosyne
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/Moirai
+          ref: d60317ef76f1556901e137ed687c82d7ec4d2bec
+          path: ../moirai
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/hermes
+          ref: df67249ef05de8e1addc5a26d6831c70d63c3d18
+          path: ../hermes
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/melinoe
+          ref: cb4e371c38dac53a33bb72c726c98178a6430842
+          path: ../melinoe
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -33,6 +71,40 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/hephaestus
+          ref: ks5-cholesky-panel
+          path: ../hephaestus
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/leto
+          ref: a673325f61e933f6d3d6ecb9569d8f07c78152a8
+          path: ../leto
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/eunomia
+          path: ../eunomia
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/Mnemosyne
+          ref: 938d0c2bc094d3bbe7745d68d60e05a531e0cfc2
+          path: ../mnemosyne
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/Moirai
+          ref: d60317ef76f1556901e137ed687c82d7ec4d2bec
+          path: ../moirai
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/hermes
+          ref: df67249ef05de8e1addc5a26d6831c70d63c3d18
+          path: ../hermes
+      - uses: actions/checkout@v4
+        with:
+          repository: ryancinsight/melinoe
+          ref: cb4e371c38dac53a33bb72c726c98178a6430842
+          path: ../melinoe
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
