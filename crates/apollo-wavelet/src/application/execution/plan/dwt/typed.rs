@@ -159,7 +159,12 @@ pub trait WaveletStorage: Copy + Send + Sync + 'static {
         }
         let signal64: Vec<f64> = signal.iter().copied().map(Self::to_f64).collect();
         let coefficients = plan.transform(&signal64)?;
-        for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(coefficients.values().iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(coefficients.values().iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())

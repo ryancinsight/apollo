@@ -97,43 +97,55 @@ impl SftGpuKernel {
                 im: value.im,
             })
             .collect();
-        let input_buffer = hep_device.upload(&input_data).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<ComplexPod>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-sft-wgpu params"),
-            contents: bytemuck::bytes_of(&SftParams {
-                len: len as u32,
-                mode: mode as u32,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-sft-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let input_buffer =
+            hep_device
+                .upload(&input_data)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<ComplexPod>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-sft-wgpu params"),
+                contents: bytemuck::bytes_of(&SftParams {
+                    len: len as u32,
+                    mode: mode as u32,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-sft-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-sft-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-sft-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-sft-wgpu direct DFT pass"),
@@ -146,9 +158,11 @@ impl SftGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device.download(&output_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(pods
             .iter()

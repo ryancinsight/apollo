@@ -1,8 +1,8 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
 
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
-use mnemosyne::scratch::ScratchPool;
 use leto::Array2;
+use mnemosyne::scratch::ScratchPool;
 
 /// Below this angle count, scalar accumulation avoids Hermes dispatch and scratch setup.
 const RADON_HERMES_BACKPROJECT_ANGLE_THRESHOLD: usize = 256;

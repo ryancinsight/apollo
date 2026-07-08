@@ -4,8 +4,8 @@
 //! f32 at the storage boundary so the plan stays monomorphized on `f32`.
 
 use super::RealFftData;
-use half::f16;
 use eunomia::Complex32;
+use half::f16;
 
 impl RealFftData for f16 {
     type PlanScalar = f32;

@@ -1,9 +1,9 @@
 //! Tests for forward real FFT API.
 
 use crate::*;
+use eunomia::Complex64;
 use half::f16;
 use leto::{Array1, Array2, Array3};
-use eunomia::Complex64;
 
 #[test]
 fn fft_3d_array_into_matches_allocating_path() {
@@ -24,7 +24,9 @@ fn fft_3d_array_into_matches_allocating_path() {
     for (lhs, rhs) in expected_recovered.iter().zip(actual_recovered.iter()) {
         assert!((lhs - rhs).abs() < 1e-12);
     }
-    assert_eq!(expected, preserved_spectrum);
+    for (expected, preserved) in expected.iter().zip(preserved_spectrum.iter()) {
+        assert_eq!(expected, preserved);
+    }
 }
 
 #[test]

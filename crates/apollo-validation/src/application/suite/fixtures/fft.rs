@@ -25,9 +25,9 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use eunomia::Complex64;
 use leto::Storage;
 use leto::{Array1, Array2};
-use eunomia::Complex64;
 
 pub(crate) fn fft_four_point_difference_fixture() -> PublishedFixtureReport {
     let signal_nd = Array1::from(vec![1.0, 0.0, -1.0, 0.0]);

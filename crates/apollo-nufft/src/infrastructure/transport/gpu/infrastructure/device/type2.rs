@@ -1,7 +1,7 @@
-use apollo_fft::PrecisionProfile;
 use crate::NufftComplexStorage;
-use leto::Array3;
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
+use leto::Array3;
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};

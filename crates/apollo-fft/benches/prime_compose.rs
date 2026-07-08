@@ -10,7 +10,7 @@
 
 use apollo_fft::application::execution::kernel::FftPrecision;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use num_complex::Complex64;
+use eunomia::Complex64;
 
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)

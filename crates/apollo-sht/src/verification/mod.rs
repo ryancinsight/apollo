@@ -8,8 +8,8 @@ mod tests {
     };
     use crate::{ShtError, ShtPlan};
     use approx::assert_abs_diff_eq;
-    use leto::Array2;
     use eunomia::Complex64;
+    use leto::Array2;
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -61,8 +61,8 @@ mod tests {
         }
 
         let recovered = plan.inverse_real(&coefficients).expect("inverse");
-        for value in recovered.iter().copied() {
-            assert_abs_diff_eq!(value, constant, epsilon = 1.0e-12);
+        for value in recovered.iter() {
+            assert_abs_diff_eq!(*value, constant, epsilon = 1.0e-12);
         }
     }
 

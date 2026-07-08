@@ -23,31 +23,33 @@ impl StftGpuKernel {
     ) -> WgpuResult<Vec<Complex32>> {
         // Non-power-of-two frame_len: delegate to Bluestein/Chirp-Z path.
         if !frame_len.is_power_of_two() {
-            return self.execute_forward_fft_chirp(
-                device,
-                signal,
-                frame_len,
-                hop_len,
-                frame_count,
-            );
+            return self.execute_forward_fft_chirp(device, signal, frame_len, hop_len, frame_count);
         }
         let log2_n = frame_len.trailing_zeros();
         let hep_device = device.hephaestus();
 
-        let signal_buf = hep_device.upload(signal).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let signal_buf = hep_device
+            .upload(signal)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let re_scratch_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let im_scratch_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let re_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let im_scratch_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let output_buf = hep_device.alloc_zeroed::<ComplexPod>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let output_buf = hep_device
+            .alloc_zeroed::<ComplexPod>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         // Bind group 0: reuse fft_data_bgl (binding types are identical: ro, rw, rw, rw).
         let fft_fwd_data_bg = device
@@ -83,13 +85,14 @@ impl StftGpuKernel {
             hop_len: hop_len as u32,
             stage: 0,
         };
-        let base_params_buf = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-stft-wgpu fwd base params"),
-                contents: bytemuck::bytes_of(&base_params),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let base_params_buf =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-stft-wgpu fwd base params"),
+                    contents: bytemuck::bytes_of(&base_params),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
         let base_params_bg = device
             .inner()
             .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -189,9 +192,11 @@ impl StftGpuKernel {
         device.queue().submit(std::iter::once(enc.finish()));
 
         let mut pods = vec![ComplexPod { re: 0.0, im: 0.0 }; frame_count * frame_len];
-        hep_device.download(&output_buf, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buf, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(pods.iter().map(|p| Complex32::new(p.re, p.im)).collect())
     }
@@ -215,13 +220,17 @@ impl StftGpuKernel {
         let log2_n = buffers.log2_n;
         let hep_device = device.hephaestus();
 
-        hep_device.write_buffer(&buffers.signal_buf, signal).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .write_buffer(&buffers.signal_buf, signal)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let mut enc = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-stft-wgpu fwd reuse encoder"),
-        });
+        let mut enc = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-stft-wgpu fwd reuse encoder"),
+            });
 
         {
             let mut p = enc.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -273,9 +282,11 @@ impl StftGpuKernel {
 
         device.queue().submit(std::iter::once(enc.finish()));
 
-        hep_device.download(&buffers.fwd_output_buf, &mut buffers.fwd_output_host).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&buffers.fwd_output_buf, &mut buffers.fwd_output_host)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(())
     }

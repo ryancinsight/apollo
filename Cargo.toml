@@ -58,25 +58,17 @@ repository = "https://github.com/ryancinsight/kwavers"
 anyhow = "1.0"
 approx = "0.5"
 bytemuck = { version = "1.19", features = ["derive"] }
-ndarray = { version = "0.16", default-features = false }
-num-complex = { version = "0.4", features = ["bytemuck"] }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "938d0c2bc094d3bbe7745d68d60e05a531e0cfc2", features = ["eunomia"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "cb4e371c38dac53a33bb72c726c98178a6430842", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "df67249ef05de8e1addc5a26d6831c70d63c3d18" }
-# leto/ndarray-compat is deliberately NOT requested here: apollo lib code never
-# uses leto<->ndarray conversion (test-only), and the workspace-level request
-# leaked the feature into every downstream graph containing apollo-fft
-# (feature-unification hazard; broke leto-ops consumers). Tests that need the
-# conversion enable it via their crate's [dev-dependencies].
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "a673325f61e933f6d3d6ecb9569d8f07c78152a8" }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "a673325f61e933f6d3d6ecb9569d8f07c78152a8" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "8d4045f763006777edd2f243e6cf34e2ded235bb" }
+hephaestus-wgpu = { path = "../hephaestus/crates/hephaestus-wgpu" }
 proc-macro2 = "1.0"
-numpy = "0.23"
 once_cell = "1.19"
 parking_lot = "0.12"
 pollster = "0.4"

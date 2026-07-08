@@ -65,7 +65,6 @@ macro_rules! with_winograd_pair_primes {
     }};
 }
 
-
 /// In-place circular convolution via forward FFT -> pointwise multiply -> inverse FFT.
 ///
 /// `padded` holds the input sequence on entry and the convolution result on exit.

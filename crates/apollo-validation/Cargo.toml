@@ -70,7 +70,6 @@ apollo-radon = { path = "../apollo-radon" }
 apollo-sft = { path = "../apollo-sft" }
 apollo-sht = { path = "../apollo-sht" }
 apollo-stft = { path = "../apollo-stft" }
-num-complex = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 melinoe = { workspace = true }

@@ -4,8 +4,8 @@
 mod tests {
     use crate::{GftError, GftPlan, GraphAdjacency};
     use approx::assert_abs_diff_eq;
-    use leto::Array2;
     use leto::Array1;
+    use leto::Array2;
     use proptest::prelude::*;
 
     #[test]

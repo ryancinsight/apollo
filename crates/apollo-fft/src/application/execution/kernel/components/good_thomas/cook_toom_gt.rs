@@ -32,9 +32,7 @@ use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradSca
 ///
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
-pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [eunomia::Complex<F>],
-) {
+pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
     debug_assert!(data.len() >= 84);
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 84];
@@ -147,9 +145,7 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(
 ///
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
-pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(
-    data: &mut [eunomia::Complex<F>],
-) {
+pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
     debug_assert!(data.len() >= 60);
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 60];

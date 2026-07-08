@@ -30,7 +30,6 @@ thiserror = "1.0"
 [dev-dependencies]
 approx = "0.5"
 criterion = { workspace = true }
-ndarray = { workspace = true }
 proptest = "1.6"
 rustfft = { workspace = true }
 

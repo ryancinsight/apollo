@@ -3,8 +3,8 @@
 use super::plan::{frft, frft_leto, FrftPlan};
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
 
 #[test]
 fn integer_order_zero_is_identity() {
@@ -13,7 +13,7 @@ fn integer_order_zero_is_identity() {
 }
 
 #[test]
-fn leto_forward_and_inverse_match_ndarray_path() {
+fn leto_forward_and_inverse_match_leto_path() {
     use leto::Storage;
 
     let n = 8;
@@ -21,17 +21,17 @@ fn leto_forward_and_inverse_match_ndarray_path() {
     let signal = (0..n)
         .map(|i| Complex64::new((i as f64 * 0.17).cos(), (i as f64 * 0.23).sin()))
         .collect::<Vec<_>>();
-    let ndarray_input = Array1::from(signal.clone());
+    let owned_input = Array1::from(signal.clone());
     let leto_input = leto::Array1::from_shape_vec([n], signal).expect("leto input");
 
     let leto_forward = plan.forward_leto(leto_input.view()).expect("leto forward");
-    let ndarray_forward = plan.forward(&ndarray_input).expect("ndarray forward");
-    assert_eq!(leto_forward.shape(), [ndarray_forward.size()]);
+    let owned_forward = plan.forward(&owned_input).expect("owned forward");
+    assert_eq!(leto_forward.shape(), [owned_forward.size()]);
     for (actual, expected) in leto_forward
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_forward.iter())
+        .zip(owned_forward.iter())
     {
         assert!((actual - expected).norm() < 1.0e-12);
     }
@@ -39,12 +39,12 @@ fn leto_forward_and_inverse_match_ndarray_path() {
     let leto_inverse = plan
         .inverse_leto(leto_forward.view())
         .expect("leto inverse");
-    let ndarray_inverse = plan.inverse(&ndarray_forward).expect("ndarray inverse");
+    let owned_inverse = plan.inverse(&owned_forward).expect("owned inverse");
     for (actual, expected) in leto_inverse
         .storage()
         .as_slice()
         .iter()
-        .zip(ndarray_inverse.iter())
+        .zip(owned_inverse.iter())
     {
         assert!((actual - expected).norm() < 1.0e-12);
     }
@@ -70,14 +70,14 @@ fn leto_forward_accepts_strided_logical_view() {
         .expect("strided view");
 
     let via_leto = frft_leto(strided, 0.5).expect("leto frft");
-    let via_ndarray = frft(&Array1::from(logical), 0.5).expect("ndarray frft");
-    for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_ndarray.iter()) {
+    let via_owned = frft(&Array1::from(logical), 0.5).expect("owned frft");
+    for (actual, expected) in via_leto.storage().as_slice().iter().zip(via_owned.iter()) {
         assert!((actual - expected).norm() < 1.0e-12);
     }
 }
 
 #[test]
-fn leto_typed_complex32_matches_ndarray_typed_path() {
+fn leto_typed_complex32_matches_leto_typed_path() {
     use leto::Storage;
 
     let n = 8;
@@ -90,7 +90,7 @@ fn leto_typed_complex32_matches_ndarray_typed_path() {
 
     let mut expected = Array1::<Complex32>::zeros([n]);
     plan.forward_typed_into(&input, &mut expected, PrecisionProfile::LOW_PRECISION_F32)
-        .expect("ndarray typed forward");
+        .expect("leto typed forward");
     let actual = plan
         .forward_leto_typed(leto_input.view(), PrecisionProfile::LOW_PRECISION_F32)
         .expect("leto typed forward");
@@ -102,7 +102,7 @@ fn leto_typed_complex32_matches_ndarray_typed_path() {
 }
 
 #[test]
-fn leto_typed_strided_f16_matches_ndarray_typed_path() {
+fn leto_typed_strided_f16_matches_leto_typed_path() {
     use leto::{SliceArg, Storage};
 
     let n = 8;
@@ -131,7 +131,7 @@ fn leto_typed_strided_f16_matches_ndarray_typed_path() {
         &mut expected,
         PrecisionProfile::MIXED_PRECISION_F16_F32,
     )
-    .expect("ndarray typed forward");
+    .expect("leto typed forward");
     let actual = plan
         .forward_leto_typed(strided, PrecisionProfile::MIXED_PRECISION_F16_F32)
         .expect("leto typed forward");

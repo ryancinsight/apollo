@@ -5,8 +5,12 @@ use super::plan::CztPlan;
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::{assert_abs_diff_eq, assert_relative_eq};
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
+
+fn contiguous_array<T>(values: Vec<T>) -> Array1<T> {
+    Array1::from_shape_vec([values.len()], values).expect("contiguous test input")
+}
 
 mod spiral_collapse_tests {
     use super::*;
@@ -101,7 +105,7 @@ mod general_czt_tests {
 
     #[test]
     fn direct_matches_reference_for_small_sequence() {
-        let input = Array1::from(vec![
+        let input = contiguous_array(vec![
             Complex64::new(1.0, 0.0),
             Complex64::new(2.0, -1.0),
             Complex64::new(0.5, 0.25),
@@ -139,10 +143,10 @@ mod general_czt_tests {
             Complex64::from_polar(1.0, -std::f64::consts::TAU / 8.0),
         )
         .expect("valid plan");
-        let bad = Array1::from(vec![Complex64::new(0.0, 0.0); 3]);
+        let bad = contiguous_array(vec![Complex64::new(0.0, 0.0); 3]);
         assert!(matches!(plan.forward(&bad), Err(CztError::LengthMismatch)));
-        let good = Array1::from(vec![Complex64::new(0.0, 0.0); 4]);
-        let mut bad_output = Array1::from(vec![Complex64::new(0.0, 0.0); 3]);
+        let good = contiguous_array(vec![Complex64::new(0.0, 0.0); 4]);
+        let mut bad_output = contiguous_array(vec![Complex64::new(0.0, 0.0); 3]);
         assert!(matches!(
             plan.forward_into(&good, &mut bad_output),
             Err(CztError::LengthMismatch)
@@ -151,7 +155,7 @@ mod general_czt_tests {
 
     #[test]
     fn forward_into_matches_allocating_fast_path() {
-        let input = Array1::from(vec![
+        let input = contiguous_array(vec![
             Complex64::new(0.25, 0.5),
             Complex64::new(-0.75, 1.0),
             Complex64::new(1.25, -0.25),
@@ -179,7 +183,7 @@ mod general_czt_tests {
 
     #[test]
     fn forward_into_reuses_plan_convolution_workspace() {
-        let input = Array1::from(vec![
+        let input = contiguous_array(vec![
             Complex64::new(0.25, -0.5),
             Complex64::new(-0.75, 1.0),
             Complex64::new(1.25, 0.25),
@@ -212,7 +216,7 @@ mod general_czt_tests {
 
     #[test]
     fn typed_paths_support_complex64_complex32_and_mixed_f16_storage() {
-        let input64 = Array1::from(vec![
+        let input64 = contiguous_array(vec![
             Complex64::new(0.25, 0.5),
             Complex64::new(-0.75, 1.0),
             Complex64::new(1.25, -0.25),
@@ -275,7 +279,7 @@ mod general_czt_tests {
             Complex64::from_polar(1.0, -std::f64::consts::TAU / 8.0),
         )
         .expect("valid plan");
-        let input = Array1::from(vec![Complex32::new(1.0, 0.0); 4]);
+        let input = contiguous_array(vec![Complex32::new(1.0, 0.0); 4]);
         let mut output = Array1::<Complex32>::zeros([4]);
         assert!(matches!(
             plan.forward_typed_into(&input, &mut output, PrecisionProfile::HIGH_ACCURACY_F64),
@@ -365,7 +369,7 @@ mod inverse_tests {
             let spectrum = plan.forward(&input).expect("forward");
             let recovered = plan.inverse(&spectrum).expect("inverse");
             for i in 0..n {
-                let err = (recovered[i] - input[i]).norm();
+                let err = (recovered[[i]] - input[[i]]).norm();
                 assert!(err < 1e-10, "n={n} i={i} err={err:.3e}");
             }
         }
@@ -386,8 +390,8 @@ mod inverse_tests {
         let spectrum = plan.forward(&input).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");
         for i in 0..n {
-            assert_abs_diff_eq!(recovered[i].re, input[i].re, epsilon = 1e-9);
-            assert_abs_diff_eq!(recovered[i].im, input[i].im, epsilon = 1e-9);
+            assert_abs_diff_eq!(recovered[[i]].re, input[[i]].re, epsilon = 1e-9);
+            assert_abs_diff_eq!(recovered[[i]].im, input[[i]].im, epsilon = 1e-9);
         }
     }
 
@@ -406,8 +410,8 @@ mod inverse_tests {
         let spectrum = plan.forward(&input).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");
         for i in 0..n {
-            assert_abs_diff_eq!(recovered[i].re, input[i].re, epsilon = 1e-8);
-            assert_abs_diff_eq!(recovered[i].im, input[i].im, epsilon = 1e-8);
+            assert_abs_diff_eq!(recovered[[i]].re, input[[i]].re, epsilon = 1e-8);
+            assert_abs_diff_eq!(recovered[[i]].im, input[[i]].im, epsilon = 1e-8);
         }
     }
 

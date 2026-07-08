@@ -1,6 +1,6 @@
 use crate::application::execution::plan::fft::dimension_3d::StaticFftPlan3D;
-use leto::Array3;
 use eunomia::Complex64;
+use leto::Array3;
 use std::f64::consts::PI;
 
 fn signal<const NX: usize, const NY: usize, const NZ: usize>() -> Array3<Complex64> {
@@ -100,7 +100,10 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
         .zip(full.iter())
         .map(|(a, b)| (a - b).norm())
         .fold(0.0_f64, f64::max);
-    assert!(err <= 1.0e-10, "axis compose != full forward, err={err:.2e}");
+    assert!(
+        err <= 1.0e-10,
+        "axis compose != full forward, err={err:.2e}"
+    );
 
     // forward_axis then inverse_axis along the same axis is the identity.
     for axis in 0..3 {
@@ -112,6 +115,9 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
             .zip(original.iter())
             .map(|(a, b)| (a - b).norm())
             .fold(0.0_f64, f64::max);
-        assert!(err <= 1.0e-10, "axis {axis} roundtrip not identity, err={err:.2e}");
+        assert!(
+            err <= 1.0e-10,
+            "axis {axis} roundtrip not identity, err={err:.2e}"
+        );
     }
 }

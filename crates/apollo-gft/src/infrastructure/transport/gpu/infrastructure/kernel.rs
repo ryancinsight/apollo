@@ -8,9 +8,9 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -117,49 +117,62 @@ impl GftGpuKernel {
         mode: u32,
     ) -> WgpuResult<Vec<f32>> {
         let hep_device = device.hephaestus();
-        let input_buf = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buf = hep_device.alloc_zeroed::<f32>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let basis_buf = hep_device.upload(basis).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-gft-wgpu params"),
-            contents: bytemuck::bytes_of(&GftParams {
-                len: len as u32,
-                mode,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-gft-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: basis_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-gft-wgpu encoder"),
-        });
+        let input_buf = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output_buf =
+            hep_device
+                .alloc_zeroed::<f32>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let basis_buf = hep_device
+            .upload(basis)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-gft-wgpu params"),
+                contents: bytemuck::bytes_of(&GftParams {
+                    len: len as u32,
+                    mode,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-gft-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: basis_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-gft-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-gft-wgpu pass"),
@@ -172,9 +185,11 @@ impl GftGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![0.0; len];
-        hep_device.download(&output_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

@@ -58,9 +58,9 @@
 use crate::domain::plan::config::SparseFftConfig;
 use crate::domain::spectrum::sparse::SparseSpectrum;
 use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
-use moirai::ParallelSliceMut;
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
+use moirai::ParallelSliceMut;
 use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -213,7 +213,7 @@ impl SparseFftPlan {
         let dense: Vec<Complex64> = {
             let mut arr = Array1::from(signal.to_vec());
             apollo_fft::fft_1d_complex_inplace(&mut arr);
-            arr.to_vec()
+            arr.into_vec()
         };
 
         // O(N log K) top-K selection via min-heap of size K.
@@ -273,7 +273,7 @@ impl SparseFftPlan {
 
         let mut arr = Array1::from(spectrum.to_dense());
         apollo_fft::ifft_1d_complex_inplace(&mut arr);
-        Ok(arr.to_vec())
+        Ok(arr.into_vec())
     }
 
     /// Inverse sparse transform into a Mnemosyne-backed Leto 1D complex array.

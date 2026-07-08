@@ -6,9 +6,9 @@
 //! for verification cross-checks.
 
 #[cfg(test)]
-use mnemosyne::scratch::ScratchPool;
-#[cfg(test)]
 use eunomia::Complex64;
+#[cfg(test)]
+use mnemosyne::scratch::ScratchPool;
 
 /// Below this reference-row length, scalar accumulation avoids Hermes dispatch and scratch setup.
 #[cfg(test)]

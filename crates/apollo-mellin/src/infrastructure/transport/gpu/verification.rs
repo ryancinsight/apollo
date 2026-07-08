@@ -2,11 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::MellinPlan;
+    use apollo_fft::{f16, PrecisionProfile};
     use leto::{SliceArg, Storage};
 
-    use crate::infrastructure::transport::gpu::{MellinWgpuBackend, MellinWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        MellinWgpuBackend, MellinWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_reflect_forward_inverse_kernel_surface() {

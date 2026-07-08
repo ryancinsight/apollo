@@ -31,12 +31,10 @@ leto = { workspace = true }
 eunomia = { workspace = true }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }
-num-complex = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
 [dev-dependencies]
-ndarray = { workspace = true }
 approx = "0.5"
 proptest = "1.6"
 

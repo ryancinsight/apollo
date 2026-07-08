@@ -1,9 +1,9 @@
 use super::*;
 use apollo_fft::PrecisionProfile;
 use approx::{assert_abs_diff_eq, assert_relative_eq};
-use leto::{SliceArg, Storage};
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
+use leto::{SliceArg, Storage};
 
 fn reference_plan(n: usize, m: usize) -> CztPlan {
     CztPlan::new(
@@ -21,12 +21,16 @@ fn reference_input(n: usize) -> Vec<Complex64> {
         .collect()
 }
 
+fn contiguous_array<T>(values: Vec<T>) -> Array1<T> {
+    Array1::from_shape_vec([values.len()], values).expect("contiguous test input")
+}
+
 #[test]
-fn leto_forward_matches_ndarray_reference() {
+fn leto_forward_matches_contiguous_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from(input.clone());
+    let contiguous_input = contiguous_array(input.clone());
     let plan = reference_plan(input.len(), 7);
-    let expected = plan.forward(&ndarray_input).expect("ndarray forward");
+    let expected = plan.forward(&contiguous_input).expect("contiguous forward");
 
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
     let actual = plan.forward_leto(leto_input.view()).expect("leto forward");
@@ -39,13 +43,13 @@ fn leto_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_direct_forward_matches_ndarray_reference() {
+fn leto_direct_forward_matches_contiguous_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from(input.clone());
+    let contiguous_input = contiguous_array(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan
-        .forward_direct(&ndarray_input)
-        .expect("ndarray direct forward");
+        .forward_direct(&contiguous_input)
+        .expect("contiguous direct forward");
 
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("leto input");
     let actual = plan
@@ -60,11 +64,11 @@ fn leto_direct_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_strided_forward_matches_ndarray_reference() {
+fn leto_strided_forward_matches_contiguous_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from(input.clone());
+    let contiguous_input = contiguous_array(input.clone());
     let plan = reference_plan(input.len(), 7);
-    let expected = plan.forward(&ndarray_input).expect("ndarray forward");
+    let expected = plan.forward(&contiguous_input).expect("contiguous forward");
 
     let mut interleaved = Vec::with_capacity(input.len() * 2);
     for value in input {
@@ -90,13 +94,13 @@ fn leto_strided_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_strided_direct_forward_matches_ndarray_reference() {
+fn leto_strided_direct_forward_matches_contiguous_reference() {
     let input = reference_input(5);
-    let ndarray_input = Array1::from(input.clone());
+    let contiguous_input = contiguous_array(input.clone());
     let plan = reference_plan(input.len(), 7);
     let expected = plan
-        .forward_direct(&ndarray_input)
-        .expect("ndarray direct forward");
+        .forward_direct(&contiguous_input)
+        .expect("contiguous direct forward");
 
     let mut interleaved = Vec::with_capacity(input.len() * 2);
     for value in input {
@@ -124,21 +128,21 @@ fn leto_strided_direct_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_typed_complex32_forward_matches_ndarray_reference() {
+fn leto_typed_complex32_forward_matches_contiguous_reference() {
     let input64 = reference_input(5);
     let input32: Vec<Complex32> = input64
         .iter()
         .map(|value| Complex32::new(value.re as f32, value.im as f32))
         .collect();
-    let ndarray_input = Array1::from(input32.clone());
+    let contiguous_input = contiguous_array(input32.clone());
     let plan = reference_plan(input32.len(), 7);
     let mut expected = Array1::<Complex32>::zeros([plan.output_len()]);
     plan.forward_typed_into(
-        &ndarray_input,
+        &contiguous_input,
         &mut expected,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("ndarray typed forward");
+    .expect("contiguous typed forward");
 
     let leto_input =
         leto::Array1::from_shape_vec([input32.len()], input32).expect("leto typed input");
@@ -153,10 +157,10 @@ fn leto_typed_complex32_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_inverse_matches_ndarray_reference() {
+fn leto_inverse_matches_contiguous_reference() {
     let n = 5usize;
     let input = reference_input(n);
-    let ndarray_input = Array1::from(input.clone());
+    let contiguous_input = contiguous_array(input.clone());
     let plan = CztPlan::new(
         n,
         n,
@@ -164,8 +168,8 @@ fn leto_inverse_matches_ndarray_reference() {
         Complex64::from_polar(1.0, -std::f64::consts::TAU / n as f64),
     )
     .expect("DFT-equivalent plan");
-    let spectrum = plan.forward(&ndarray_input).expect("ndarray forward");
-    let expected = plan.inverse(&spectrum).expect("ndarray inverse");
+    let spectrum = plan.forward(&contiguous_input).expect("contiguous forward");
+    let expected = plan.inverse(&spectrum).expect("contiguous inverse");
 
     let leto_spectrum = leto::Array1::from_shape_vec([n], spectrum.iter().copied().collect())
         .expect("leto spectrum");

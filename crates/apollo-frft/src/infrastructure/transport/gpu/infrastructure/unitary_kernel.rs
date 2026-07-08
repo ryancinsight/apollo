@@ -10,16 +10,15 @@
 //! and two `device.poll` calls replace the previous three-submission pattern,
 //! reducing CPU–GPU round-trips from 4 submits + 5 polls to 1 submit + 2 polls.
 
-
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use crate::GrunbaumBasis;
 
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -166,96 +165,120 @@ impl UnitaryFrftGpuKernel {
         let v_flat = basis.eigenvectors_column_major_f32();
 
         let hep_device = device.hephaestus();
-        let input_buf = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let v_mat_buf = hep_device.upload(&v_flat).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let intermediate_buf = hep_device.alloc_zeroed::<Complex32>(n).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buf = hep_device.alloc_zeroed::<Complex32>(n).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let input_buf = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let v_mat_buf = hep_device
+            .upload(&v_flat)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let intermediate_buf =
+            hep_device
+                .alloc_zeroed::<Complex32>(n)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buf =
+            hep_device
+                .alloc_zeroed::<Complex32>(n)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         // Pre-create one params buffer per pass (step discriminant differs per pass).
         // All three are created before the command encoder so no resource creation
         // occurs inside an active encoding scope.
-        let params_buf0 = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-frft-wgpu unitary params step0"),
-            contents: bytemuck::bytes_of(&UnitaryParams {
-                len: n as u32,
-                step: 0,
-                order,
-                _pad: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let params_buf1 = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-frft-wgpu unitary params step1"),
-            contents: bytemuck::bytes_of(&UnitaryParams {
-                len: n as u32,
-                step: 1,
-                order,
-                _pad: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let params_buf2 = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-frft-wgpu unitary params step2"),
-            contents: bytemuck::bytes_of(&UnitaryParams {
-                len: n as u32,
-                step: 2,
-                order,
-                _pad: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let params_buf0 = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-frft-wgpu unitary params step0"),
+                contents: bytemuck::bytes_of(&UnitaryParams {
+                    len: n as u32,
+                    step: 0,
+                    order,
+                    _pad: 0,
+                }),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let params_buf1 = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-frft-wgpu unitary params step1"),
+                contents: bytemuck::bytes_of(&UnitaryParams {
+                    len: n as u32,
+                    step: 1,
+                    order,
+                    _pad: 0,
+                }),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let params_buf2 = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-frft-wgpu unitary params step2"),
+                contents: bytemuck::bytes_of(&UnitaryParams {
+                    len: n as u32,
+                    step: 2,
+                    order,
+                    _pad: 0,
+                }),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
         // Pre-create one bind group per pass. Each bind group is identical except
         // for binding 4 (params_buf), which carries the per-pass step discriminant.
-        let bg0 = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-frft-wgpu unitary bg0"),
-            layout: &self.bind_group_layout,
-            entries: &make_entries(
-                &input_buf,
-                &v_mat_buf,
-                &intermediate_buf,
-                &output_buf,
-                &params_buf0,
-            ),
-        });
-        let bg1 = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-frft-wgpu unitary bg1"),
-            layout: &self.bind_group_layout,
-            entries: &make_entries(
-                &input_buf,
-                &v_mat_buf,
-                &intermediate_buf,
-                &output_buf,
-                &params_buf1,
-            ),
-        });
-        let bg2 = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-frft-wgpu unitary bg2"),
-            layout: &self.bind_group_layout,
-            entries: &make_entries(
-                &input_buf,
-                &v_mat_buf,
-                &intermediate_buf,
-                &output_buf,
-                &params_buf2,
-            ),
-        });
+        let bg0 = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-frft-wgpu unitary bg0"),
+                layout: &self.bind_group_layout,
+                entries: &make_entries(
+                    &input_buf,
+                    &v_mat_buf,
+                    &intermediate_buf,
+                    &output_buf,
+                    &params_buf0,
+                ),
+            });
+        let bg1 = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-frft-wgpu unitary bg1"),
+                layout: &self.bind_group_layout,
+                entries: &make_entries(
+                    &input_buf,
+                    &v_mat_buf,
+                    &intermediate_buf,
+                    &output_buf,
+                    &params_buf1,
+                ),
+            });
+        let bg2 = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-frft-wgpu unitary bg2"),
+                layout: &self.bind_group_layout,
+                entries: &make_entries(
+                    &input_buf,
+                    &v_mat_buf,
+                    &intermediate_buf,
+                    &output_buf,
+                    &params_buf2,
+                ),
+            });
 
         // Single command encoder: three sequential compute passes followed by a copy.
         // WebGPU spec §3.4: compute passes within a command buffer execute in order;
         // each pass boundary enforces an implicit memory barrier so writes from pass k
         // are globally visible when pass k+1 reads `intermediate_buf`.
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-frft-wgpu unitary encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-frft-wgpu unitary encoder"),
+            });
 
         // Pass 0: c[k] = Σ_j V[j,k] · x[j]  (V^T · x, writes intermediate_buf)
         {
@@ -294,9 +317,11 @@ impl UnitaryFrftGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![Complex32::new(0.0, 0.0); n];
-        hep_device.download(&output_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

@@ -382,12 +382,14 @@ impl DctGpuKernel {
         let total = input.len();
         // Ping-pong buffers: read `src`, write `dst`, swap after each pass.
         // Both carry STORAGE usage, so either may bind read-only or read_write.
-        let mut src = hep
-            .upload(input)
-            .map_err(|e| WgpuError::BufferMapFailed { message: e.to_string() })?;
+        let mut src = hep.upload(input).map_err(|e| WgpuError::BufferMapFailed {
+            message: e.to_string(),
+        })?;
         let mut dst = hep
             .alloc_zeroed::<f32>(total)
-            .map_err(|e| WgpuError::BufferMapFailed { message: e.to_string() })?;
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         let params_buffer = device.inner().create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-dctdst-wgpu separable params"),
             size: std::mem::size_of::<DctParams>() as u64,
@@ -410,24 +412,26 @@ impl DctGpuKernel {
                     fiber_dim_b: layout.fiber_dim_b,
                 }),
             );
-            let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-dctdst-wgpu separable bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: src.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: dst.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: src.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: dst.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
             let mut encoder =
                 device
                     .inner()
@@ -465,24 +469,26 @@ impl DctGpuKernel {
                 }),
             );
             // `dct_scale` reads+writes binding 1; bind the result buffer there.
-            let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-dctdst-wgpu separable scale bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: dst.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: src.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
+            let bind_group = device
+                .inner()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("apollo-dctdst-wgpu separable scale bind group"),
+                    layout: &self.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: dst.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: src.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: params_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
             let mut encoder =
                 device
                     .inner()
@@ -502,7 +508,10 @@ impl DctGpuKernel {
         }
 
         let mut output = vec![0.0_f32; total];
-        hep.download(&src, &mut output).map_err(|e| WgpuError::BufferMapFailed { message: e.to_string() })?;
+        hep.download(&src, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

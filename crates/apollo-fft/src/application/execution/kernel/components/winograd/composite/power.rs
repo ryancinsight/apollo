@@ -274,30 +274,18 @@ pub(crate) fn dft32_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
         data[24] = eunomia::Complex::new((e_arr[8].re - t8.re) * q, (e_arr[8].im - t8.im) * q);
         data[9] = eunomia::Complex::new((e_arr[9].re + t9.re) * q, (e_arr[9].im + t9.im) * q);
         data[25] = eunomia::Complex::new((e_arr[9].re - t9.re) * q, (e_arr[9].im - t9.im) * q);
-        data[10] =
-            eunomia::Complex::new((e_arr[10].re + t10.re) * q, (e_arr[10].im + t10.im) * q);
-        data[26] =
-            eunomia::Complex::new((e_arr[10].re - t10.re) * q, (e_arr[10].im - t10.im) * q);
-        data[11] =
-            eunomia::Complex::new((e_arr[11].re + t11.re) * q, (e_arr[11].im + t11.im) * q);
-        data[27] =
-            eunomia::Complex::new((e_arr[11].re - t11.re) * q, (e_arr[11].im - t11.im) * q);
-        data[12] =
-            eunomia::Complex::new((e_arr[12].re + t12.re) * q, (e_arr[12].im + t12.im) * q);
-        data[28] =
-            eunomia::Complex::new((e_arr[12].re - t12.re) * q, (e_arr[12].im - t12.im) * q);
-        data[13] =
-            eunomia::Complex::new((e_arr[13].re + t13.re) * q, (e_arr[13].im + t13.im) * q);
-        data[29] =
-            eunomia::Complex::new((e_arr[13].re - t13.re) * q, (e_arr[13].im - t13.im) * q);
-        data[14] =
-            eunomia::Complex::new((e_arr[14].re + t14.re) * q, (e_arr[14].im + t14.im) * q);
-        data[30] =
-            eunomia::Complex::new((e_arr[14].re - t14.re) * q, (e_arr[14].im - t14.im) * q);
-        data[15] =
-            eunomia::Complex::new((e_arr[15].re + t15.re) * q, (e_arr[15].im + t15.im) * q);
-        data[31] =
-            eunomia::Complex::new((e_arr[15].re - t15.re) * q, (e_arr[15].im - t15.im) * q);
+        data[10] = eunomia::Complex::new((e_arr[10].re + t10.re) * q, (e_arr[10].im + t10.im) * q);
+        data[26] = eunomia::Complex::new((e_arr[10].re - t10.re) * q, (e_arr[10].im - t10.im) * q);
+        data[11] = eunomia::Complex::new((e_arr[11].re + t11.re) * q, (e_arr[11].im + t11.im) * q);
+        data[27] = eunomia::Complex::new((e_arr[11].re - t11.re) * q, (e_arr[11].im - t11.im) * q);
+        data[12] = eunomia::Complex::new((e_arr[12].re + t12.re) * q, (e_arr[12].im + t12.im) * q);
+        data[28] = eunomia::Complex::new((e_arr[12].re - t12.re) * q, (e_arr[12].im - t12.im) * q);
+        data[13] = eunomia::Complex::new((e_arr[13].re + t13.re) * q, (e_arr[13].im + t13.im) * q);
+        data[29] = eunomia::Complex::new((e_arr[13].re - t13.re) * q, (e_arr[13].im - t13.im) * q);
+        data[14] = eunomia::Complex::new((e_arr[14].re + t14.re) * q, (e_arr[14].im + t14.im) * q);
+        data[30] = eunomia::Complex::new((e_arr[14].re - t14.re) * q, (e_arr[14].im - t14.im) * q);
+        data[15] = eunomia::Complex::new((e_arr[15].re + t15.re) * q, (e_arr[15].im + t15.im) * q);
+        data[31] = eunomia::Complex::new((e_arr[15].re - t15.re) * q, (e_arr[15].im - t15.im) * q);
     } else {
         data[0] = e_arr[0] + t0;
         data[16] = e_arr[0] - t0;
@@ -395,8 +383,7 @@ pub(crate) fn dft64_array_impl<F: WinogradScalar, const INVERSE: bool, const NOR
             let q = F::from_precise(1.0 / 64.0);
             for k in 0..32 {
                 let o = apply_twiddle_impl(odd[k], twiddle64::<F, INVERSE>(k));
-                data[k] =
-                    eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] = eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 32] =
                     eunomia::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }
@@ -460,8 +447,7 @@ pub(crate) fn dft128_array_impl<F: WinogradScalar, const INVERSE: bool, const NO
             let q = F::from_precise(1.0 / 128.0);
             for k in 0..64 {
                 let o = apply_twiddle_impl(odd[k], twiddle128::<F, INVERSE>(k));
-                data[k] =
-                    eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
+                data[k] = eunomia::Complex::new((even[k].re + o.re) * q, (even[k].im + o.im) * q);
                 data[k + 64] =
                     eunomia::Complex::new((even[k].re - o.re) * q, (even[k].im - o.im) * q);
             }

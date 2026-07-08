@@ -1,5 +1,5 @@
-use mnemosyne::scratch::{ScratchBank, ScratchElement};
 use eunomia::{Complex32, Complex64};
+use mnemosyne::scratch::{ScratchBank, ScratchElement};
 
 const STOCKHAM_SLOT: usize = 0;
 const PFA_SLOT: usize = 1;

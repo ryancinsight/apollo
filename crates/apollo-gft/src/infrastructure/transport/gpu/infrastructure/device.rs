@@ -3,8 +3,8 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::GftStorage;
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::GftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -71,13 +71,8 @@ impl GftWgpuBackend {
         basis: &[f32],
     ) -> WgpuResult<Vec<f32>> {
         Self::validate(plan, signal, basis)?;
-        self.kernel.execute(
-            &self.device,
-            signal,
-            basis,
-            plan.len(),
-            0,
-        )
+        self.kernel
+            .execute(&self.device, signal, basis, plan.len(), 0)
     }
 
     /// Execute the forward GFT from Leto host views.
@@ -106,13 +101,8 @@ impl GftWgpuBackend {
         basis: &[f32],
     ) -> WgpuResult<Vec<f32>> {
         Self::validate(plan, spectrum, basis)?;
-        self.kernel.execute(
-            &self.device,
-            spectrum,
-            basis,
-            plan.len(),
-            1,
-        )
+        self.kernel
+            .execute(&self.device, spectrum, basis, plan.len(), 1)
     }
 
     /// Execute the inverse GFT from Leto host views.

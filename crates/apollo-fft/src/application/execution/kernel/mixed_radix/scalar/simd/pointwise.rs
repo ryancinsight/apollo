@@ -1,5 +1,5 @@
-use hermes_simd::{interleaved_complex_mul_assign, PreferredArch};
 use eunomia::{Complex32, Complex64};
+use hermes_simd::{interleaved_complex_mul_assign, PreferredArch};
 
 #[inline]
 fn pointwise_mul_precise_hermes<const CONJ_B: bool>(a: &mut [Complex64], b: &[Complex64]) {

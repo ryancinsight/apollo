@@ -76,7 +76,11 @@ pub(crate) fn dft_pair_impl<
     let mut sums = [eunomia::Complex::new(zero, zero); H];
     let mut idiffs = [eunomia::Complex::new(zero, zero); H];
 
-    let sign = if INVERSE { <F as eunomia::NumericElement>::ONE } else { -<F as eunomia::NumericElement>::ONE };
+    let sign = if INVERSE {
+        <F as eunomia::NumericElement>::ONE
+    } else {
+        -<F as eunomia::NumericElement>::ONE
+    };
 
     for m in 0..H {
         let a = unsafe { *data.get_unchecked(m + 1) };
@@ -85,8 +89,7 @@ pub(crate) fn dft_pair_impl<
             *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
             let diff_re = a.re - b.re;
             let diff_im = a.im - b.im;
-            *idiffs.get_unchecked_mut(m) =
-                eunomia::Complex::new(-diff_im * sign, diff_re * sign);
+            *idiffs.get_unchecked_mut(m) = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
         }
     }
 
@@ -151,7 +154,11 @@ pub(crate) fn dft_pair_impl_reduced<
     let mut idiffs_re = [zero; H];
     let mut idiffs_im = [zero; H];
 
-    let sign = if INVERSE { <F as eunomia::NumericElement>::ONE } else { -<F as eunomia::NumericElement>::ONE };
+    let sign = if INVERSE {
+        <F as eunomia::NumericElement>::ONE
+    } else {
+        -<F as eunomia::NumericElement>::ONE
+    };
     let mut y0_re = x0.re;
     let mut y0_im = x0.im;
 
@@ -242,8 +249,7 @@ pub(crate) fn dft_pair_forward_with_pointwise<F: WinogradScalar, const N: usize,
             *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
             let diff_re = a.re - b.re;
             let diff_im = a.im - b.im;
-            *idiffs.get_unchecked_mut(m) =
-                eunomia::Complex::new(-diff_im * sign, diff_re * sign);
+            *idiffs.get_unchecked_mut(m) = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
         }
     }
 

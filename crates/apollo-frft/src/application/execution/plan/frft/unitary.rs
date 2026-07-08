@@ -38,11 +38,11 @@
 //!   *J. Math. Anal. Appl.*, 88(1), 355–363.
 
 use crate::domain::contracts::error::FrftError;
+use eunomia::Complex64;
+use leto::Array1;
 use leto::Array2;
 use leto_ops::symmetric_eigen_jacobi;
 use moirai::ParallelSliceMut;
-use leto::Array1;
-use eunomia::Complex64;
 use std::f64::consts::PI;
 use std::sync::Arc;
 

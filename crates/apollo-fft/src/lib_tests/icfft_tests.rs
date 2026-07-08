@@ -1,8 +1,8 @@
 //! Tests for forward/inverse complex FFT API (part 2).
 
 use crate::*;
-use leto::{Array1, Array2, Array3};
 use eunomia::{Complex32, Complex64};
+use leto::{Array1, Array2, Array3};
 
 #[test]
 fn owned_static_complex_wrappers_reuse_input_allocation() {
@@ -20,7 +20,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     let recovered1 = ifft_1d_complex(&expected1);
     let ptr_recovered1 = expected1.as_slice().unwrap().as_ptr();
     let actual_recovered1 = ifft_1d_complex_static::<16>(expected1);
-    assert_eq!(ptr_recovered1, actual_recovered1.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered1,
+        actual_recovered1.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -39,7 +42,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     let recovered2 = ifft_2d_complex(&expected2);
     let ptr_recovered2 = expected2.as_slice().unwrap().as_ptr();
     let actual_recovered2 = ifft_2d_complex_static::<4, 5>(expected2);
-    assert_eq!(ptr_recovered2, actual_recovered2.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered2,
+        actual_recovered2.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered2.iter().zip(actual_recovered2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -58,7 +64,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     let recovered3 = ifft_3d_complex(&expected3);
     let ptr_recovered3 = expected3.as_slice().unwrap().as_ptr();
     let actual_recovered3 = ifft_3d_complex_static::<3, 4, 5>(expected3);
-    assert_eq!(ptr_recovered3, actual_recovered3.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered3,
+        actual_recovered3.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered3.iter().zip(actual_recovered3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -80,7 +89,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     plan32.inverse_complex_inplace(&mut recovered32);
     let ptr_recovered32 = expected32.as_slice().unwrap().as_ptr();
     let actual_recovered32 = ifft_1d_complex_static_typed::<f32, 16>(expected32);
-    assert_eq!(ptr_recovered32, actual_recovered32.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered32,
+        actual_recovered32.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered32.iter().zip(actual_recovered32.iter()) {
         assert!((expected - actual).norm() < 2e-5);
     }
@@ -102,7 +114,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     plan32_2d.inverse_complex_inplace(&mut recovered32_2d);
     let ptr_recovered32_2d = expected32_2d.as_slice().unwrap().as_ptr();
     let actual_recovered32_2d = ifft_2d_complex_static_typed::<f32, 4, 5>(expected32_2d);
-    assert_eq!(ptr_recovered32_2d, actual_recovered32_2d.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered32_2d,
+        actual_recovered32_2d.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered32_2d.iter().zip(actual_recovered32_2d.iter()) {
         assert!((expected - actual).norm() < 3e-5);
     }
@@ -124,7 +139,10 @@ fn owned_static_complex_wrappers_reuse_input_allocation() {
     plan32_3d.inverse_complex_inplace(&mut recovered32_3d);
     let ptr_recovered32_3d = expected32_3d.as_slice().unwrap().as_ptr();
     let actual_recovered32_3d = ifft_3d_complex_static_typed::<f32, 3, 4, 5>(expected32_3d);
-    assert_eq!(ptr_recovered32_3d, actual_recovered32_3d.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered32_3d,
+        actual_recovered32_3d.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered32_3d.iter().zip(actual_recovered32_3d.iter()) {
         assert!((expected - actual).norm() < 4e-5);
     }

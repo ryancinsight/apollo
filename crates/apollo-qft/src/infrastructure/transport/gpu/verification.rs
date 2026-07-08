@@ -2,13 +2,15 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::{QftPlan, QuantumStateDimension};
-    use leto::{SliceArg, Storage};
-    use leto::Array1;
+    use apollo_fft::{f16, PrecisionProfile};
     use eunomia::{Complex32, Complex64};
+    use leto::Array1;
+    use leto::{SliceArg, Storage};
 
-    use crate::infrastructure::transport::gpu::{QftWgpuBackend, QftWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        QftWgpuBackend, QftWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     #[test]
     fn capabilities_reflect_direct_unitary_kernel_surface() {
@@ -75,11 +77,11 @@ mod tests {
                 input
                     .iter()
                     .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             );
             let cpu = cpu_plan.forward(&cpu_input).expect("cpu forward");
 
-            assert_eq!(gpu.len(), cpu.len());
+            assert_eq!(gpu.len(), cpu.size());
             for (index, (actual, expected)) in gpu.iter().zip(cpu.iter()).enumerate() {
                 let real_error = (f64::from(actual.re) - expected.re).abs();
                 let imag_error = (f64::from(actual.im) - expected.im).abs();
@@ -115,11 +117,11 @@ mod tests {
                 input
                     .iter()
                     .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
-                    .collect(),
+                    .collect::<Vec<_>>(),
             );
             let cpu = cpu_plan.inverse(&cpu_input).expect("cpu inverse");
 
-            assert_eq!(gpu.len(), cpu.len());
+            assert_eq!(gpu.len(), cpu.size());
             for (index, (actual, expected)) in gpu.iter().zip(cpu.iter()).enumerate() {
                 let real_error = (f64::from(actual.re) - expected.re).abs();
                 let imag_error = (f64::from(actual.im) - expected.im).abs();

@@ -6,11 +6,14 @@ use apollo_nufft::{
     nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d, nufft_type1_3d_fast, nufft_type2_1d,
     nufft_type2_1d_fast, UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
 };
-use numpy::{IntoPyArray, PyArray1, PyArray3, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use super::support::{require_contiguous_1d, require_contiguous_2d};
+use super::support::{
+    leto_array1_into_pyarray, leto_array3_into_pyarray, py_array1_slice, py_array1_to_leto,
+    py_array2_slice, require_contiguous_1d, require_contiguous_2d, vec1_into_pyarray,
+    PyReadonlyArray1, PyReadonlyArray2,
+};
 
 /// Exact direct 1D type-1 NUFFT.
 #[pyfunction(name = "nufft_type1_1d")]
@@ -21,23 +24,15 @@ pub(crate) fn nufft_type1_1d_py<'py>(
     values: PyReadonlyArray1<Complex64>,
     dx: f64,
     n_out: Option<usize>,
-) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_1d(&positions, "nufft_type1_1d positions")?;
     require_contiguous_1d(&values, "nufft_type1_1d values")?;
-    let positions = positions.as_array().to_owned();
-    let values = values.as_array().to_owned();
+    let positions = py_array1_slice(&positions, "nufft_type1_1d positions")?;
+    let values = py_array1_slice(&values, "nufft_type1_1d values")?;
     let domain = UniformDomain1D::new(n_out.unwrap_or(values.len()), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type1_1d(
-            positions
-                .as_slice()
-                .expect("owned positions are contiguous"),
-            values.as_slice().expect("owned values are contiguous"),
-            domain,
-        )
-    });
-    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
+    let result = py.allow_threads(|| nufft_type1_1d(positions, values, domain));
+    leto_array1_into_pyarray(py, result)
 }
 
 /// Exact direct 1D type-2 NUFFT.
@@ -47,23 +42,15 @@ pub(crate) fn nufft_type2_1d_py<'py>(
     fourier_coeffs: PyReadonlyArray1<Complex64>,
     positions: PyReadonlyArray1<f64>,
     dx: f64,
-) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_1d(&fourier_coeffs, "nufft_type2_1d fourier_coeffs")?;
     require_contiguous_1d(&positions, "nufft_type2_1d positions")?;
-    let coeffs = fourier_coeffs.as_array().to_owned();
-    let positions = positions.as_array().to_owned();
-    let domain = UniformDomain1D::new(coeffs.len(), dx)
+    let coeffs = py_array1_to_leto(&fourier_coeffs, "nufft_type2_1d fourier_coeffs")?;
+    let positions = py_array1_slice(&positions, "nufft_type2_1d positions")?;
+    let domain = UniformDomain1D::new(coeffs.size(), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type2_1d(
-            &leto::Array1::from(coeffs),
-            positions
-                .as_slice()
-                .expect("owned positions are contiguous"),
-            domain,
-        )
-    });
-    Ok(result.into_pyarray(py))
+    let result = py.allow_threads(|| nufft_type2_1d(&coeffs, positions, domain));
+    vec1_into_pyarray(py, result)
 }
 
 /// Exact direct 3D type-1 NUFFT.
@@ -78,38 +65,30 @@ pub(crate) fn nufft_type1_3d_py<'py>(
     dx: f64,
     dy: f64,
     dz: f64,
-) -> PyResult<Bound<'py, PyArray3<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_2d(&positions, "nufft_type1_3d positions")?;
     require_contiguous_1d(&values, "nufft_type1_3d values")?;
-    let positions = positions.as_array();
-    if positions.ncols() != 3 {
+    let shape = positions.shape();
+    if shape[1] != 3 {
         return Err(PyValueError::new_err(
             "nufft_type1_3d positions must have shape (n_samples, 3)",
         ));
     }
-    if positions.nrows() != values.as_array().len() {
+    let positions_slice = py_array2_slice(&positions, "nufft_type1_3d positions")?;
+    let values_slice = py_array1_slice(&values, "nufft_type1_3d values")?;
+    if shape[0] != values_slice.len() {
         return Err(PyValueError::new_err(
             "nufft_type1_3d positions/value length mismatch",
         ));
     }
-    let tuples: Vec<(f64, f64, f64)> = positions
-        .rows()
-        .into_iter()
+    let tuples: Vec<(f64, f64, f64)> = positions_slice
+        .chunks_exact(3)
         .map(|row| (row[0], row[1], row[2]))
         .collect();
-    let owned_values = values.as_array().to_owned();
     let grid = UniformGrid3D::new(nx, ny, nz, dx, dy, dz)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type1_3d(
-            &tuples,
-            owned_values
-                .as_slice()
-                .expect("owned values are contiguous"),
-            grid,
-        )
-    });
-    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
+    let result = py.allow_threads(|| nufft_type1_3d(&tuples, values_slice, grid));
+    leto_array3_into_pyarray(py, result)
 }
 
 /// Fast 1D type-1 NUFFT using Kaiser-Bessel spreading.
@@ -122,24 +101,15 @@ pub(crate) fn nufft_type1_1d_fast_py<'py>(
     dx: f64,
     n_out: Option<usize>,
     kernel_width: usize,
-) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_1d(&positions, "nufft_type1_1d_fast positions")?;
     require_contiguous_1d(&values, "nufft_type1_1d_fast values")?;
-    let positions = positions.as_array().to_owned();
-    let values = values.as_array().to_owned();
+    let positions = py_array1_slice(&positions, "nufft_type1_1d_fast positions")?;
+    let values = py_array1_slice(&values, "nufft_type1_1d_fast values")?;
     let domain = UniformDomain1D::new(n_out.unwrap_or(values.len()), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type1_1d_fast(
-            positions
-                .as_slice()
-                .expect("owned positions are contiguous"),
-            values.as_slice().expect("owned values are contiguous"),
-            domain,
-            kernel_width,
-        )
-    });
-    Ok(PyArray1::from_owned_array(py, ndarray::Array1::try_from(result).expect("leto result is C-contiguous")))
+    let result = py.allow_threads(|| nufft_type1_1d_fast(positions, values, domain, kernel_width));
+    leto_array1_into_pyarray(py, result)
 }
 
 /// Fast 1D type-2 NUFFT using Kaiser-Bessel spreading.
@@ -151,24 +121,15 @@ pub(crate) fn nufft_type2_1d_fast_py<'py>(
     positions: PyReadonlyArray1<f64>,
     dx: f64,
     kernel_width: usize,
-) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_1d(&fourier_coeffs, "nufft_type2_1d_fast fourier_coeffs")?;
     require_contiguous_1d(&positions, "nufft_type2_1d_fast positions")?;
-    let coeffs = fourier_coeffs.as_array().to_owned();
-    let positions = positions.as_array().to_owned();
-    let domain = UniformDomain1D::new(coeffs.len(), dx)
+    let coeffs = py_array1_to_leto(&fourier_coeffs, "nufft_type2_1d_fast fourier_coeffs")?;
+    let positions = py_array1_slice(&positions, "nufft_type2_1d_fast positions")?;
+    let domain = UniformDomain1D::new(coeffs.size(), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type2_1d_fast(
-            &leto::Array1::from(coeffs),
-            positions
-                .as_slice()
-                .expect("owned positions are contiguous"),
-            domain,
-            kernel_width,
-        )
-    });
-    Ok(result.into_pyarray(py))
+    let result = py.allow_threads(|| nufft_type2_1d_fast(&coeffs, positions, domain, kernel_width));
+    vec1_into_pyarray(py, result)
 }
 
 /// Fast 3D type-1 NUFFT using Kaiser-Bessel spreading.
@@ -185,37 +146,29 @@ pub(crate) fn nufft_type1_3d_fast_py<'py>(
     dy: f64,
     dz: f64,
     kernel_width: usize,
-) -> PyResult<Bound<'py, PyArray3<Complex64>>> {
+) -> PyResult<PyObject> {
     require_contiguous_2d(&positions, "nufft_type1_3d_fast positions")?;
     require_contiguous_1d(&values, "nufft_type1_3d_fast values")?;
-    let positions = positions.as_array();
-    if positions.ncols() != 3 {
+    let shape = positions.shape();
+    if shape[1] != 3 {
         return Err(PyValueError::new_err(
             "nufft_type1_3d_fast positions must have shape (n_samples, 3)",
         ));
     }
-    if positions.nrows() != values.as_array().len() {
+    let positions_slice = py_array2_slice(&positions, "nufft_type1_3d_fast positions")?;
+    let values_slice = py_array1_slice(&values, "nufft_type1_3d_fast values")?;
+    if shape[0] != values_slice.len() {
         return Err(PyValueError::new_err(
             "nufft_type1_3d_fast positions/value length mismatch",
         ));
     }
-    let tuples: Vec<(f64, f64, f64)> = positions
-        .rows()
-        .into_iter()
+    let tuples: Vec<(f64, f64, f64)> = positions_slice
+        .chunks_exact(3)
         .map(|row| (row[0], row[1], row[2]))
         .collect();
-    let owned_values = values.as_array().to_owned();
     let grid = UniformGrid3D::new(nx, ny, nz, dx, dy, dz)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| {
-        nufft_type1_3d_fast(
-            &tuples,
-            owned_values
-                .as_slice()
-                .expect("owned values are contiguous"),
-            grid,
-            kernel_width,
-        )
-    });
-    Ok(PyArray3::from_owned_array(py, ndarray::Array3::try_from(result).expect("leto result is C-contiguous")))
+    let result =
+        py.allow_threads(|| nufft_type1_3d_fast(&tuples, values_slice, grid, kernel_width));
+    leto_array3_into_pyarray(py, result)
 }

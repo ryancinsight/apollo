@@ -1,8 +1,8 @@
 use crate::domain::contracts::error::CztError;
+use eunomia::Complex64;
+use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use leto::Array1;
-use eunomia::Complex64;
 
 /// Below this O(NM) operation count, serial loops avoid scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;

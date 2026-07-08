@@ -22,7 +22,11 @@ pub(super) fn fill_spectrum<T, S1, S2, const N: usize>(
     S1: Storage<T>,
     S2: StorageMut<Complex<T::PlanScalar>>,
 {
-    debug_assert_eq!(input.shape(), output.shape(), "real-to-complex shape mismatch");
+    debug_assert_eq!(
+        input.shape(),
+        output.shape(),
+        "real-to-complex shape mismatch"
+    );
     let dst = output
         .as_slice_mut()
         .expect("invariant: spectrum output is C-contiguous");
@@ -42,7 +46,11 @@ pub(super) fn fill_real<T, S1, S2, const N: usize>(
     S1: Storage<Complex<T::PlanScalar>>,
     S2: StorageMut<T>,
 {
-    debug_assert_eq!(input.shape(), output.shape(), "complex-to-real shape mismatch");
+    debug_assert_eq!(
+        input.shape(),
+        output.shape(),
+        "complex-to-real shape mismatch"
+    );
     let dst = output
         .as_slice_mut()
         .expect("invariant: real output is C-contiguous");

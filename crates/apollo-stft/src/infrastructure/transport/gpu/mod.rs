@@ -16,10 +16,10 @@ pub mod verification;
 pub use application::plan::StftWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
+pub use eunomia::Complex32;
 pub use infrastructure::buffers::StftGpuBuffers;
 pub use infrastructure::device::{wgpu_available, StftWgpuBackend};
 pub use infrastructure::kernel::StftGpuKernel;
-pub use eunomia::Complex32;
 
 /// CPU transform marker proving dependency direction into the owning transform crate.
 pub type CpuTransformMarker = crate::StftPlan;

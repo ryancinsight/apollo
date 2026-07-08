@@ -23,10 +23,9 @@ apollo-nufft = { path = "../apollo-nufft" }
 apollo-dht = { path = "../apollo-dht" }
 apollo-fwht = { path = "../apollo-fwht" }
 apollo-dctdst = { path = "../apollo-dctdst" }
-ndarray = { workspace = true }
 leto = { workspace = true }
-eunomia = { workspace = true, features = ["serde", "numpy"] }
-numpy = "0.23"
+eunomia = { workspace = true }
+bytemuck = { workspace = true }
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
 
 [lints]

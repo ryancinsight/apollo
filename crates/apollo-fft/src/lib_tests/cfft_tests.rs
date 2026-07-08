@@ -1,8 +1,8 @@
 //! Tests for forward/inverse complex FFT API (part 1).
 
 use crate::*;
-use leto::{Array1, Array2, Array3};
 use eunomia::{Complex32, Complex64};
+use leto::{Array1, Array2, Array3};
 
 #[test]
 fn complex_into_wrappers_match_allocating_paths() {
@@ -78,7 +78,10 @@ fn owned_complex_wrappers_reuse_input_allocation() {
     let recovered1 = ifft_1d_complex(&expected1);
     let ptr_recovered1 = expected1.as_slice().unwrap().as_ptr();
     let actual_recovered1 = ifft_1d_complex_owned(expected1);
-    assert_eq!(ptr_recovered1, actual_recovered1.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered1,
+        actual_recovered1.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -98,7 +101,10 @@ fn owned_complex_wrappers_reuse_input_allocation() {
     let recovered2 = ifft_2d_complex(&expected2);
     let ptr_recovered2 = expected2.as_slice().unwrap().as_ptr();
     let actual_recovered2 = ifft_2d_complex_owned(expected2);
-    assert_eq!(ptr_recovered2, actual_recovered2.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered2,
+        actual_recovered2.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered2.iter().zip(actual_recovered2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -118,7 +124,10 @@ fn owned_complex_wrappers_reuse_input_allocation() {
     let recovered3 = ifft_3d_complex(&expected3);
     let ptr_recovered3 = expected3.as_slice().unwrap().as_ptr();
     let actual_recovered3 = ifft_3d_complex_owned(expected3);
-    assert_eq!(ptr_recovered3, actual_recovered3.as_slice().unwrap().as_ptr());
+    assert_eq!(
+        ptr_recovered3,
+        actual_recovered3.as_slice().unwrap().as_ptr()
+    );
     for (expected, actual) in recovered3.iter().zip(actual_recovered3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -281,13 +290,14 @@ fn test_f64_pot_dfts_correctness() {
             expected_fwd[k] = sum;
         }
         for k in 0..n {
-            let err = (got_fwd[k] - expected_fwd[k]).norm();
+            let actual = got_fwd[[k]];
+            let err = (actual - expected_fwd[k]).norm();
             assert!(
                 err < 1e-12,
                 "forward: n = {}, k = {}, got_fwd = {:?}, expected = {:?}, err = {}",
                 n,
                 k,
-                got_fwd[k],
+                actual,
                 expected_fwd[k],
                 err
             );
@@ -307,13 +317,14 @@ fn test_f64_pot_dfts_correctness() {
             expected_inv[k] = sum / n as f64;
         }
         for k in 0..n {
-            let err = (got_inv[k] - expected_inv[k]).norm();
+            let actual = got_inv[[k]];
+            let err = (actual - expected_inv[k]).norm();
             assert!(
                 err < 1e-12,
                 "inverse: n = {}, k = {}, got_inv = {:?}, expected = {:?}, err = {}",
                 n,
                 k,
-                got_inv[k],
+                actual,
                 expected_inv[k],
                 err
             );

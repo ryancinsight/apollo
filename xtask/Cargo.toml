@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 anyhow = { workspace = true }
 apollo-fft = { path = "../crates/apollo-fft", optional = true }
-num-complex = { workspace = true, optional = true }
+eunomia = { workspace = true, optional = true }
 rustfft = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
@@ -15,7 +15,7 @@ serde_json = { workspace = true }
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
-bench-runner = ["dep:apollo-fft", "dep:num-complex", "dep:rustfft"]
+bench-runner = ["dep:apollo-fft", "dep:eunomia", "dep:rustfft"]
 
 [lints]
 workspace = true

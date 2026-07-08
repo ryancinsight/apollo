@@ -2,8 +2,8 @@
 
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use apollo_fft::PrecisionProfile;
-use mnemosyne::scratch::ScratchPool;
 use eunomia::Complex64;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     pub(crate) static FAST_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -24,4 +24,3 @@ pub(crate) fn validate_profile(
         Err(DhtError::PrecisionMismatch)
     }
 }
-

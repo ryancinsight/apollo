@@ -8,10 +8,10 @@ use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
 use crate::infrastructure::transport::gpu::application::plan::MellinWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
+use apollo_wgpu_helpers::WgpuDevice;
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -148,72 +148,86 @@ impl MellinGpuKernel {
         signal: &[f32],
         signal_min: f64,
         signal_max: f64,
-     ) -> WgpuResult<Vec<Complex32>> {
+    ) -> WgpuResult<Vec<Complex32>> {
         let hep_device = device.hephaestus();
-        let signal_buffer = hep_device.upload(signal).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let resample_buffer = hep_device.alloc_zeroed::<f32>(plan.samples()).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let spectrum_buffer = hep_device.alloc_zeroed::<ComplexPod>(plan.samples()).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let signal_buffer = hep_device
+            .upload(signal)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let resample_buffer = hep_device
+            .alloc_zeroed::<f32>(plan.samples())
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let spectrum_buffer = hep_device
+            .alloc_zeroed::<ComplexPod>(plan.samples())
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-mellin-wgpu params"),
-            contents: bytemuck::bytes_of(&MellinParams {
-                signal_len: signal.len() as u32,
-                samples: plan.samples() as u32,
-                signal_min: signal_min as f32,
-                signal_max: signal_max as f32,
-                log_min: plan.min_scale().ln() as f32,
-                log_max: plan.max_scale().ln() as f32,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-mellin-wgpu params"),
+                contents: bytemuck::bytes_of(&MellinParams {
+                    signal_len: signal.len() as u32,
+                    samples: plan.samples() as u32,
+                    signal_min: signal_min as f32,
+                    signal_max: signal_max as f32,
+                    log_min: plan.min_scale().ln() as f32,
+                    log_max: plan.max_scale().ln() as f32,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
-        let resample_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-mellin-wgpu resample bind group"),
-            layout: &self.resample_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: signal_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: resample_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let spectrum_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-mellin-wgpu spectrum bind group"),
-            layout: &self.spectrum_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: resample_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let resample_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-mellin-wgpu resample bind group"),
+                layout: &self.resample_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: signal_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: resample_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let spectrum_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-mellin-wgpu spectrum bind group"),
+                layout: &self.spectrum_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: resample_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-mellin-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-mellin-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-mellin-wgpu resample pass"),
@@ -235,11 +249,14 @@ impl MellinGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); plan.samples()];
-        hep_device.download(&spectrum_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&spectrum_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
-        let output = pods.iter()
+        let output = pods
+            .iter()
             .map(|value| Complex32::new(value.re, value.im))
             .collect();
         Ok(output)
@@ -266,75 +283,93 @@ impl MellinGpuKernel {
             .map(|v| ComplexPod { re: v.re, im: v.im })
             .collect();
 
-        let spectrum_buffer = hep_device.upload(&spectrum_pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let log_samples_buffer = hep_device.alloc_zeroed::<f32>(n).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<f32>(out_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let spectrum_buffer =
+            hep_device
+                .upload(&spectrum_pods)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let log_samples_buffer =
+            hep_device
+                .alloc_zeroed::<f32>(n)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<f32>(out_len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         let log_min = plan.min_scale().ln() as f32;
         let log_max = plan.max_scale().ln() as f32;
-        let inv_params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-mellin-wgpu inverse params"),
-            contents: bytemuck::bytes_of(&InverseMellinParamsPod {
-                samples: n as u32,
-                out_len: out_len as u32,
-                log_min,
-                log_max,
-                out_min: out_min as f32,
-                out_max: out_max as f32,
-                _pad0: 0,
-                _pad1: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let inv_params_buffer =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-mellin-wgpu inverse params"),
+                    contents: bytemuck::bytes_of(&InverseMellinParamsPod {
+                        samples: n as u32,
+                        out_len: out_len as u32,
+                        log_min,
+                        log_max,
+                        out_min: out_min as f32,
+                        out_max: out_max as f32,
+                        _pad0: 0,
+                        _pad1: 0,
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
 
         // Pass 1: mellin_inverse_spectrum — spectrum -> log_samples
-        let inv_spectrum_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-mellin-wgpu inv-spectrum bind group"),
-            layout: &self.resample_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: log_samples_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: inv_params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let inv_spectrum_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-mellin-wgpu inv-spectrum bind group"),
+                layout: &self.resample_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: log_samples_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: inv_params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
         // Pass 2: mellin_exp_resample — log_samples -> output
-        let exp_resample_bg = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-mellin-wgpu exp-resample bind group"),
-            layout: &self.resample_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: log_samples_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: inv_params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let exp_resample_bg = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-mellin-wgpu exp-resample bind group"),
+                layout: &self.resample_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: log_samples_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: inv_params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-mellin-wgpu inverse encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-mellin-wgpu inverse encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-mellin-wgpu inverse-spectrum pass"),
@@ -356,9 +391,11 @@ impl MellinGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![0.0; out_len];
-        hep_device.download(&output_buffer, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

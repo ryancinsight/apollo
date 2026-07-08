@@ -14,9 +14,18 @@
 
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
-use leto::Array2;
 use eunomia::Complex64;
+use leto::Array2;
 use serde::{Deserialize, Serialize};
+
+fn scale_array(data: &mut Array2<f64>, scale: f64) {
+    for value in data
+        .as_slice_mut()
+        .expect("invariant: FWHT arrays are contiguous")
+    {
+        *value *= scale;
+    }
+}
 
 /// Reusable 2D FWHT plan.
 ///
@@ -139,7 +148,7 @@ impl FwhtPlan2D {
         let n = self.n;
         let mut result = self.forward(input)?;
         let scale = 1.0 / (n * n) as f64;
-        result.mapv_inplace(|v| v * scale);
+        scale_array(&mut result, scale);
         Ok(result)
     }
 
@@ -165,7 +174,7 @@ impl FwhtPlan2D {
         let n = self.n;
         self.forward_inplace(data)?;
         let scale = 1.0 / (n * n) as f64;
-        data.mapv_inplace(|v| v * scale);
+        scale_array(data, scale);
         Ok(())
     }
 
@@ -231,7 +240,14 @@ mod tests {
         let n = 4_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
         // Analytically constructed: use a non-trivial non-zero signal.
-        let input = leto::Array2::from_shape_vec([4, 4], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [4, 4],
+            vec![
+                1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1,
+                -1.1, 0.7,
+            ],
+        )
+        .unwrap();
         let first = plan.forward(&input).expect("first forward");
         let second = plan.forward(&first).expect("second forward");
         let n2 = (n * n) as f64;
@@ -247,7 +263,14 @@ mod tests {
     fn inverse_2d_roundtrip_recovers_signal() {
         let n = 4_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
-        let input = leto::Array2::from_shape_vec([4, 4], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [4, 4],
+            vec![
+                1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1,
+                -1.1, 0.7,
+            ],
+        )
+        .unwrap();
         let spectrum = plan.forward(&input).expect("forward");
         let recovered = plan.inverse(&spectrum).expect("inverse");
         for r in 0..n {
@@ -298,7 +321,16 @@ mod tests {
     fn forward_complex_2d_roundtrip_recovers_signal() {
         let n = 2_usize;
         let plan = FwhtPlan2D::new(n).expect("plan");
-        let input = leto::Array2::from_shape_vec([2, 2], vec![Complex64::new(1.0, 0.5), Complex64::new(-1.0, 2.0), Complex64::new(0.25, -0.75), Complex64::new(3.0, -1.5)]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [2, 2],
+            vec![
+                Complex64::new(1.0, 0.5),
+                Complex64::new(-1.0, 2.0),
+                Complex64::new(0.25, -0.75),
+                Complex64::new(3.0, -1.5),
+            ],
+        )
+        .unwrap();
         let spectrum = plan.forward_complex(&input).expect("complex forward");
         let recovered = plan.inverse_complex(&spectrum).expect("complex inverse");
         for r in 0..n {

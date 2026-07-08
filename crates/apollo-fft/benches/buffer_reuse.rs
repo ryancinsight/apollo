@@ -15,14 +15,14 @@
 
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use ndarray::Array3;
+use leto::Array3;
 
 /// Build a deterministic real test field of shape `(nx, ny, nz)`.
 ///
 /// Values are drawn from the analytic signal `sin(0.057·x) + 0.3·cos(0.11·x)`
 /// where `x = i + j + k`, ensuring non-trivial frequency content on all axes.
 fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
-    Array3::from_shape_fn((nx, ny, nz), |(i, j, k)| {
+    Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
         let x = (i + j + k) as f64;
         (0.057 * x).sin() + 0.3 * (0.11 * x).cos()
     })
@@ -98,7 +98,7 @@ fn bench_inverse_3d(c: &mut Criterion) {
 
         // Allocating path: `inverse` allocates scratch vecs internally per call.
         group.bench_function(BenchmarkId::new("allocating", nx), |b| {
-            let mut out = Array3::<f64>::zeros((nx, ny, nz));
+            let mut out = Array3::<f64>::zeros([nx, ny, nz]);
             b.iter(|| {
                 plan.inverse(black_box(&spectrum), &mut out);
                 black_box(&out);
@@ -108,7 +108,7 @@ fn bench_inverse_3d(c: &mut Criterion) {
         // Reuse path: caller retains GPU buffers across repeated calls.
         let mut buffers = GpuFft3dBuffers::new(&plan);
         group.bench_function(BenchmarkId::new("with_buffers", nx), |b| {
-            let mut out = Array3::<f64>::zeros((nx, ny, nz));
+            let mut out = Array3::<f64>::zeros([nx, ny, nz]);
             b.iter(|| {
                 plan.inverse_with_buffers(black_box(&spectrum), &mut out, black_box(&mut buffers));
                 black_box(&out);

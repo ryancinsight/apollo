@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use leto::{Array1, Array2};
 use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 pub(crate) fn sht_monopole_y00_coefficient_fixture() -> SuiteResult<PublishedFixtureReport> {
     // f(θ,φ) = Y_0^0(θ,φ) = 1/√(4π) is the spherical harmonic of degree 0.

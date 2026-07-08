@@ -403,17 +403,17 @@ fn test_small_sizes_correctness() {
         let n = input.len();
         let mut output = vec![eunomia::Complex::<T>::ZERO; n];
         let sign = if inverse {
-            T::from_f64((1.0) as f64)
+            T::from_f64(1.0_f64)
         } else {
-            T::from_f64((-1.0) as f64)
+            T::from_f64(-1.0_f64)
         };
-        let two_pi = T::from_f64((2.0 * std::f64::consts::PI) as f64);
+        let two_pi = T::from_f64(2.0 * std::f64::consts::PI);
         for k in 0..n {
             let mut sum = eunomia::Complex::<T>::ZERO;
             for j in 0..n {
                 let theta = two_pi * T::from_f64((k * j) as f64) / T::from_f64((n) as f64);
                 let w = eunomia::Complex::new(theta.cos(), sign * theta.sin());
-                sum = sum + input[j] * w;
+                sum += input[j] * w;
             }
             output[k] = sum;
         }

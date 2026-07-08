@@ -9,7 +9,10 @@ pub trait WinogradScalar:
     private::Sealed
     + super::radix::odd_prime_pair::PrimePairTables
     + eunomia::RealField
-    + core::ops::AddAssign + core::ops::SubAssign + core::ops::MulAssign + core::ops::DivAssign
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
     + Send
     + Sync
     + 'static
@@ -19,10 +22,7 @@ pub trait WinogradScalar:
     /// Return sqrt(2)/2 in this scalar precision.
     fn sq2o2() -> Self;
     /// Runs a closure with a thread-local complex scratch buffer.
-    fn with_winograd_scratch<R>(
-        n: usize,
-        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
-    ) -> R;
+    fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R;
 }
 
 thread_local! {
@@ -40,10 +40,7 @@ impl WinogradScalar for f64 {
         std::f64::consts::SQRT_2 / 2.0
     }
     #[inline]
-    fn with_winograd_scratch<R>(
-        n: usize,
-        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
-    ) -> R {
+    fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R {
         TL_WINOGRAD_SCRATCH_64.with(|pool| pool.with_scratch(n, f))
     }
 }
@@ -57,10 +54,7 @@ impl WinogradScalar for f32 {
         (std::f64::consts::SQRT_2 / 2.0) as f32
     }
     #[inline]
-    fn with_winograd_scratch<R>(
-        n: usize,
-        f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R,
-    ) -> R {
+    fn with_winograd_scratch<R>(n: usize, f: impl FnOnce(&mut [eunomia::Complex<Self>]) -> R) -> R {
         TL_WINOGRAD_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
     }
 }

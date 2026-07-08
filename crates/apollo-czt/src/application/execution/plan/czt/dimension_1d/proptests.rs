@@ -1,8 +1,8 @@
 //! Proptest suite for 1D Chirp Z-Transform.
 
 use super::plan::CztPlan;
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 use proptest::prelude::*;
 
 proptest! {
@@ -30,8 +30,8 @@ proptest! {
         let direct = plan.forward_direct(&input).expect("direct");
         prop_assert_eq!(fast.size(), direct.size());
         for k in 0..m {
-            let diff = (fast[k] - direct[k]).norm();
-            let scale = direct[k].norm().max(1.0_f64);
+            let diff = (fast[[k]] - direct[[k]]).norm();
+            let scale = direct[[k]].norm().max(1.0_f64);
             prop_assert!(
                 diff < 1e-9 * scale,
                 "k={k}: |fast - direct| / |direct| = {} >= 1e-9 (a={a}, w={w}, diff={diff}, scale={scale})",
@@ -59,7 +59,7 @@ proptest! {
         let fft_out = apollo_fft::fft_1d_complex(&input);
         prop_assert_eq!(czt_out.size(), fft_out.size());
         for k in 0..n {
-            let diff = (czt_out[k] - fft_out[k]).norm();
+            let diff = (czt_out[[k]] - fft_out[[k]]).norm();
             prop_assert!(
                 diff < 1e-9,
                 "k={k}: |czt - fft| = {diff} >= 1e-9 (n={n})"
@@ -93,8 +93,8 @@ proptest! {
         let czt_base = plan.forward(&input).expect("czt base");
         prop_assert_eq!(czt_scaled.size(), czt_base.size());
         for k in 0..m {
-            let expected = scalar * czt_base[k];
-            let diff = (czt_scaled[k] - expected).norm();
+            let expected = scalar * czt_base[[k]];
+            let diff = (czt_scaled[[k]] - expected).norm();
             prop_assert!(
                 diff < 1e-9,
                 "k={k}: |CZT(c·x) - c·CZT(x)| = {diff} >= 1e-9 (scalar={scalar})"

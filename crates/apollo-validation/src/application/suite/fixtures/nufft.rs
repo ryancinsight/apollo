@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use leto::{Array1, Array2};
 use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 /// NUFFT Type-1 1D with a single source at x=0 and value 1+0i, N=4, dx=π/2 (L=2π).
 ///

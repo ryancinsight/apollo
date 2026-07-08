@@ -12,8 +12,8 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
-use leto::{Array1, Array2, Array3};
 use eunomia::Complex;
+use leto::{Array1, Array2, Array3};
 
 mod compact;
 pub(super) mod fill;

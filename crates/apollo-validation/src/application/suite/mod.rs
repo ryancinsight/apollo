@@ -67,9 +67,9 @@ use apollo_nufft::{
     nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d, nufft_type1_3d_fast, nufft_type2_1d,
     nufft_type2_1d_fast, UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
 };
-use leto::{self, Storage};
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
+use leto::{self, Storage};
 use std::error::Error;
 use std::path::Path;
 
@@ -395,8 +395,7 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
                 )
                 .unwrap();
             let prime_apollo_leto = apollo_fft::fft_1d_leto(prime_signal_leto.view());
-            let prime_apollo =
-                leto::Array1::from(prime_apollo_leto.storage().as_slice().to_vec());
+            let prime_apollo = leto::Array1::from(prime_apollo_leto.storage().as_slice().to_vec());
             let prime_rustfft = fft1_real(&prime_signal_leto.view());
             let rustfft_prime_error =
                 max_complex_abs_delta(prime_apollo.iter(), prime_rustfft.iter());
@@ -993,7 +992,7 @@ mod tests {
                 input_signal.iter().copied().map(MelinoeCell::new).collect();
 
             // Run Moirai's parallel partitioning over the Melinoe cell region
-            par_partition_for_each(&mut cells, 4, |start, mut shard| {
+            par_partition_for_each(cells.as_mut_slice(), 4, |start, mut shard| {
                 for (j, slot) in shard.iter_mut().enumerate() {
                     *slot = (start + j) as f64;
                 }
@@ -1007,26 +1006,17 @@ mod tests {
     }
 
     #[test]
-    fn test_leto_ndarray_validation_boundary() {
-        use leto::{Array2 as LetoArray2, Storage};
-        use leto::Array2;
+    fn test_leto_validation_boundary() {
+        use leto::{Array2, Storage};
 
-        let ndarray = Array2::from_shape_vec([2, 3], vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0])
-            .expect("ndarray construction");
-        let leto = LetoArray2::from(ndarray.clone());
+        let leto = Array2::from_shape_vec([2, 3], vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .expect("leto construction");
 
         assert_eq!(leto.shape(), [2, 3]);
         assert_eq!(leto.strides(), [3, 1]);
         assert_eq!(
             leto.storage().as_slice(),
-            ndarray.as_slice().expect("contiguous ndarray")
-        );
-
-        let ndarray_back = leto::Array::try_from(leto).expect("leto to ndarray");
-        assert_eq!(ndarray_back.shape(), [2, 3]);
-        assert_eq!(
-            ndarray_back.as_slice().expect("contiguous ndarray"),
-            ndarray.as_slice().expect("contiguous ndarray")
+            &[1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0]
         );
     }
 }

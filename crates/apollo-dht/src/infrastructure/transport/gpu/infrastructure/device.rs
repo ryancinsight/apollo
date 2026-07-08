@@ -65,11 +65,7 @@ impl DhtWgpuBackend {
     /// Execute the unnormalized forward 1D DHT for a real-valued `f32` signal.
     pub fn execute_forward(&self, plan: &DhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            false,
-        )
+        self.kernel.execute(&self.device, input, false)
     }
 
     /// Execute the unnormalized forward 1D DHT from a Leto `f32` view.
@@ -123,11 +119,7 @@ impl DhtWgpuBackend {
     /// Execute the normalized inverse 1D DHT for a real-valued `f32` spectrum.
     pub fn execute_inverse(&self, plan: &DhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            true,
-        )
+        self.kernel.execute(&self.device, input, true)
     }
 
     /// Execute the normalized inverse 1D DHT from a Leto `f32` view.

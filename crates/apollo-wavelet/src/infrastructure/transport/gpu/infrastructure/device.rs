@@ -3,8 +3,8 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::WaveletStorage;
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::WaveletWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -78,12 +78,8 @@ impl WaveletWgpuBackend {
                 actual: signal.len(),
             });
         }
-        self.kernel.execute_forward(
-            &self.device,
-            signal,
-            plan.len(),
-            plan.levels(),
-        )
+        self.kernel
+            .execute_forward(&self.device, signal, plan.len(), plan.levels())
     }
 
     /// Execute the forward Haar DWT from a Leto 1D signal view.
@@ -118,12 +114,8 @@ impl WaveletWgpuBackend {
                 actual: coefficients.len(),
             });
         }
-        self.kernel.execute_inverse(
-            &self.device,
-            coefficients,
-            plan.len(),
-            plan.levels(),
-        )
+        self.kernel
+            .execute_inverse(&self.device, coefficients, plan.len(), plan.levels())
     }
 
     /// Execute the inverse Haar DWT from a Leto 1D coefficient view.

@@ -59,7 +59,7 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView2<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let n = self.len();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 2>::zeros_mnemosyne([n, n]);
         self.inverse_2d_into(&input, &mut output)?;
@@ -125,7 +125,7 @@ impl DctDstPlan {
         &self,
         input: leto::ArrayView3<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let n = self.len();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 3>::zeros_mnemosyne([n, n, n]);
         self.inverse_3d_into(&input, &mut output)?;

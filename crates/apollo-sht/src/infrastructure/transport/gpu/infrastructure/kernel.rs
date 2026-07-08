@@ -192,82 +192,102 @@ impl ShtGpuKernel {
                 im: value.im,
             })
             .collect();
-        let input_buffer = hep_device.upload(&input_data).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let basis_buffer = hep_device.alloc_zeroed::<ComplexPod>(mode_count * sample_count).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let grid_buffer = hep_device.upload(grid).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<ComplexPod>(output_count).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-sht-wgpu params"),
-            contents: bytemuck::bytes_of(&ShtParams {
-                output_count: output_count as u32,
-                reduction_count: reduction_count as u32,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let basis_params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-sht-wgpu basis params"),
-            contents: bytemuck::bytes_of(&BasisParams {
-                mode_count: mode_count as u32,
-                sample_count: sample_count as u32,
-                max_degree: (integer_sqrt(mode_count) - 1) as u32,
-                weighted: u32::from(weighted),
-                conjugate: u32::from(conjugate),
-                _padding: [0; 3],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let basis_bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-sht-wgpu basis bind group"),
-            layout: &self.basis_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: grid_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: basis_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: basis_params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-sht-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: basis_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-sht-wgpu encoder"),
-        });
+        let input_buffer =
+            hep_device
+                .upload(&input_data)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let basis_buffer = hep_device
+            .alloc_zeroed::<ComplexPod>(mode_count * sample_count)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let grid_buffer = hep_device
+            .upload(grid)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output_buffer = hep_device
+            .alloc_zeroed::<ComplexPod>(output_count)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-sht-wgpu params"),
+                contents: bytemuck::bytes_of(&ShtParams {
+                    output_count: output_count as u32,
+                    reduction_count: reduction_count as u32,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let basis_params_buffer =
+            device
+                .inner()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("apollo-sht-wgpu basis params"),
+                    contents: bytemuck::bytes_of(&BasisParams {
+                        mode_count: mode_count as u32,
+                        sample_count: sample_count as u32,
+                        max_degree: (integer_sqrt(mode_count) - 1) as u32,
+                        weighted: u32::from(weighted),
+                        conjugate: u32::from(conjugate),
+                        _padding: [0; 3],
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+        let basis_bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-sht-wgpu basis bind group"),
+                layout: &self.basis_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: grid_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: basis_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: basis_params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-sht-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: basis_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-sht-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-sht-wgpu basis generation pass"),
@@ -289,9 +309,11 @@ impl ShtGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut pods = vec![ComplexPod::zeroed(); output_count];
-        hep_device.download(&output_buffer, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(pods
             .iter()

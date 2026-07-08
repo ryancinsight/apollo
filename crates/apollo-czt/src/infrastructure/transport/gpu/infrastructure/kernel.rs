@@ -119,49 +119,59 @@ impl CztGpuKernel {
     ) -> WgpuResult<Vec<Complex32>> {
         let hep_device = device.hephaestus();
         let output_len = plan.output_len();
-        let input_buffer = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<Complex32>(output_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let input_buffer = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output_buffer = hep_device
+            .alloc_zeroed::<Complex32>(output_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         let a = plan.a();
         let w = plan.w();
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-czt-wgpu params"),
-            contents: bytemuck::bytes_of(&CztParams {
-                input_len: plan.input_len() as u32,
-                output_len: output_len as u32,
-                a_re: a.re,
-                a_im: a.im,
-                w_re: w.re,
-                w_im: w.im,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-czt-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-czt-wgpu params"),
+                contents: bytemuck::bytes_of(&CztParams {
+                    input_len: plan.input_len() as u32,
+                    output_len: output_len as u32,
+                    a_re: a.re,
+                    a_im: a.im,
+                    w_re: w.re,
+                    w_im: w.im,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-czt-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-czt-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-czt-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-czt-wgpu forward pass"),
@@ -175,9 +185,11 @@ impl CztGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![Complex32::new(0.0, 0.0); output_len];
-        hep_device.download(&output_buffer, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 
@@ -195,53 +207,65 @@ impl CztGpuKernel {
         let n = plan.input_len();
         let m = plan.output_len();
 
-        let spectrum_buffer = hep_device.upload(spectrum).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let signal_buffer = hep_device.alloc_zeroed::<Complex32>(n).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let spectrum_buffer =
+            hep_device
+                .upload(spectrum)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let signal_buffer =
+            hep_device
+                .alloc_zeroed::<Complex32>(n)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         let a = plan.a();
         let w = plan.w();
         // For the inverse kernel: input_len = N (output size), output_len = M (spectrum size).
         // Since M = N for the square inverse, both params fields hold N.
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-czt-wgpu params"),
-            contents: bytemuck::bytes_of(&CztParams {
-                input_len: n as u32,
-                output_len: m as u32,
-                a_re: a.re,
-                a_im: a.im,
-                w_re: w.re,
-                w_im: w.im,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-czt-wgpu params"),
+                contents: bytemuck::bytes_of(&CztParams {
+                    input_len: n as u32,
+                    output_len: m as u32,
+                    a_re: a.re,
+                    a_im: a.im,
+                    w_re: w.re,
+                    w_im: w.im,
+                    _padding: [0; 2],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-czt-wgpu inverse bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: spectrum_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: signal_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-czt-wgpu inverse bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: spectrum_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: signal_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-czt-wgpu inverse encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-czt-wgpu inverse encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-czt-wgpu inverse pass"),
@@ -254,9 +278,11 @@ impl CztGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![Complex32::new(0.0, 0.0); n];
-        hep_device.download(&signal_buffer, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&signal_buffer, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

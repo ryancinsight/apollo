@@ -1,8 +1,6 @@
 //! Reusable Discrete Hartley Transform plan.
 
-use super::helpers::{
-    FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH,
-};
+use super::helpers::{FAST_SCRATCH, LANE_IN_SCRATCH, LANE_OUT_SCRATCH};
 use super::typed::HartleyStorage;
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use crate::domain::metadata::length::HartleyLength;
@@ -14,6 +12,15 @@ use leto::{Array, Array2, Array3, MnemosyneStorage, Storage, StorageMut};
 
 const FAST_KERNEL_THRESHOLD: usize = 512;
 
+fn scale_array<S: StorageMut<f64>, const N: usize>(array: &mut Array<f64, S, N>, scale: f64) {
+    for value in array
+        .as_slice_mut()
+        .expect("invariant: owned Leto arrays expose contiguous mutable storage")
+    {
+        *value *= scale;
+    }
+}
+
 /// Reusable 1D real-to-real DHT plan.
 #[derive(Debug)]
 pub struct DhtPlan {
@@ -21,7 +28,11 @@ pub struct DhtPlan {
 }
 
 impl DhtPlan {
-    fn forward_2d_impl<S: Storage<f64>, SO: StorageMut<f64>>(&self, input: &Array<f64, S, 2>, output: &mut Array<f64, SO, 2>) -> DhtResult<()> {
+    fn forward_2d_impl<S: Storage<f64>, SO: StorageMut<f64>>(
+        &self,
+        input: &Array<f64, S, 2>,
+        output: &mut Array<f64, SO, 2>,
+    ) -> DhtResult<()> {
         let n = self.len();
         let [rows, cols] = input.shape();
         let [out_rows, out_cols] = output.shape();
@@ -71,7 +82,11 @@ impl DhtPlan {
         })
     }
 
-    fn forward_3d_impl<S: Storage<f64>, SO: StorageMut<f64>>(&self, input: &Array<f64, S, 3>, output: &mut Array<f64, SO, 3>) -> DhtResult<()> {
+    fn forward_3d_impl<S: Storage<f64>, SO: StorageMut<f64>>(
+        &self,
+        input: &Array<f64, S, 3>,
+        output: &mut Array<f64, SO, 3>,
+    ) -> DhtResult<()> {
         let n = self.len();
         let [d0, d1, d2] = input.shape();
         let [o0, o1, o2] = output.shape();
@@ -226,7 +241,7 @@ impl DhtPlan {
         input: leto::ArrayView2<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 2>::zeros_mnemosyne([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         Ok(output)
@@ -243,7 +258,7 @@ impl DhtPlan {
         let mut result = Array2::<f64>::zeros([n, n]);
         self.forward_2d_impl(input, &mut result)?;
         let scale = 1.0 / (n * n) as f64;
-        result.mapv_inplace(|v| v * scale);
+        scale_array(&mut result, scale);
         Ok(result)
     }
 
@@ -253,11 +268,11 @@ impl DhtPlan {
         input: leto::ArrayView2<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let n = self.len();
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 2>::zeros_mnemosyne([n, n]);
         self.forward_2d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n) as f64;
-        output.mapv_inplace(|v| v * scale);
+        scale_array(&mut output, scale);
         Ok(output)
     }
 
@@ -265,7 +280,7 @@ impl DhtPlan {
     pub fn inverse_2d_into(&self, input: &Array2<f64>, output: &mut Array2<f64>) -> DhtResult<()> {
         self.forward_2d_impl(input, output)?;
         let scale = 1.0 / (self.len() * self.len()) as f64;
-        output.mapv_inplace(|v| v * scale);
+        scale_array(output, scale);
         Ok(())
     }
 
@@ -283,7 +298,7 @@ impl DhtPlan {
         input: leto::ArrayView3<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 3>::zeros_mnemosyne([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         Ok(output)
@@ -300,7 +315,7 @@ impl DhtPlan {
         let mut result = Array3::<f64>::zeros([n, n, n]);
         self.forward_3d_impl(input, &mut result)?;
         let scale = 1.0 / (n * n * n) as f64;
-        result.mapv_inplace(|v| v * scale);
+        scale_array(&mut result, scale);
         Ok(result)
     }
 
@@ -310,11 +325,11 @@ impl DhtPlan {
         input: leto::ArrayView3<'_, f64>,
     ) -> DhtResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
         let n = self.len();
-        let input = input.as_array();
+        let input = input.to_contiguous();
         let mut output = Array::<f64, MnemosyneStorage<f64>, 3>::zeros_mnemosyne([n, n, n]);
         self.forward_3d_impl(&input, &mut output)?;
         let scale = 1.0 / (n * n * n) as f64;
-        output.mapv_inplace(|v| v * scale);
+        scale_array(&mut output, scale);
         Ok(output)
     }
 
@@ -323,7 +338,7 @@ impl DhtPlan {
         self.forward_3d_impl(input, output)?;
         let n = self.len();
         let scale = 1.0 / (n * n * n) as f64;
-        output.mapv_inplace(|v| v * scale);
+        scale_array(output, scale);
         Ok(())
     }
 

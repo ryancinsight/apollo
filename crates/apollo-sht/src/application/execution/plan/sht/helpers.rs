@@ -5,9 +5,9 @@ use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::PrecisionProfile;
-use mnemosyne::scratch::ScratchPool;
-use leto::Array2;
 use eunomia::Complex64;
+use leto::Array2;
+use mnemosyne::scratch::ScratchPool;
 
 /// Below this reduction length, scalar accumulation avoids Hermes dispatch and scratch setup.
 pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
@@ -47,7 +47,12 @@ pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(
     source: &Array2<Complex64>,
     target: &mut Array2<T>,
 ) {
-    for (slot, value) in target.as_slice_mut().expect("contiguous target").iter_mut().zip(source.iter().copied()) {
+    for (slot, value) in target
+        .as_slice_mut()
+        .expect("contiguous target")
+        .iter_mut()
+        .zip(source.iter().copied())
+    {
         *slot = T::from_complex64(value);
     }
 }

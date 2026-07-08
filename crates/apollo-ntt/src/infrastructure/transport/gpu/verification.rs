@@ -26,10 +26,12 @@
 #[cfg(test)]
 mod tests {
     use crate::{NttPlan, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
-    use leto::{SliceArg, Storage};
     use leto::Array1;
+    use leto::{SliceArg, Storage};
 
-    use crate::infrastructure::transport::gpu::{NttWgpuBackend, NttWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        NttWgpuBackend, NttWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     // -----------------------------------------------------------------------
     // Pure-struct tests (no GPU device required)
@@ -111,7 +113,7 @@ mod tests {
             let cpu = cpu_plan
                 .forward(&Array1::from(input.clone()))
                 .expect("cpu forward");
-            assert_eq!(gpu, cpu.to_vec(), "gpu must match cpu reference exactly");
+            assert_eq!(gpu, cpu.into_vec(), "gpu must match cpu reference exactly");
         }
 
         // 3. forward_fibonacci_matches_cpu_reference
@@ -129,7 +131,7 @@ mod tests {
 
             assert_eq!(
                 gpu,
-                cpu.to_vec(),
+                cpu.into_vec(),
                 "gpu forward NTT must match cpu reference exactly for Fibonacci input"
             );
         }
@@ -540,7 +542,7 @@ mod tests {
                             % DEFAULT_MODULUS;
                     }
                 }
-                prop_assert_eq!(c.to_vec(), expected,
+                prop_assert_eq!(c.into_vec(), expected,
                     "INTT(NTT(a)*NTT(b)) must equal cyclic convolution");
             }
         }

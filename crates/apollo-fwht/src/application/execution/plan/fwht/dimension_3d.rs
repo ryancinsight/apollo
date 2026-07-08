@@ -14,9 +14,18 @@
 
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
-use leto::Array3;
 use eunomia::Complex64;
+use leto::Array3;
 use serde::{Deserialize, Serialize};
+
+fn scale_array(data: &mut Array3<f64>, scale: f64) {
+    for value in data
+        .as_slice_mut()
+        .expect("invariant: FWHT arrays are contiguous")
+    {
+        *value *= scale;
+    }
+}
 
 /// Reusable 3D FWHT plan.
 ///
@@ -126,7 +135,7 @@ impl FwhtPlan3D {
         let n = self.n;
         let mut result = self.forward(input)?;
         let scale = 1.0 / (n * n * n) as f64;
-        result.mapv_inplace(|v| v * scale);
+        scale_array(&mut result, scale);
         Ok(result)
     }
 

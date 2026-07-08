@@ -1,8 +1,12 @@
 use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::chirp::{chirp_padded_len, StftChirpData};
-use crate::infrastructure::transport::gpu::infrastructure::kernel::{fft_dispatch_count, ComplexPod, StftGpuKernel};
+use crate::infrastructure::transport::gpu::infrastructure::chirp::{
+    chirp_padded_len, StftChirpData,
+};
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{
+    fft_dispatch_count, ComplexPod, StftGpuKernel,
+};
 use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
 use apollo_wgpu_helpers::WgpuDevice;
 
@@ -33,14 +37,18 @@ impl StftGpuKernel {
         );
 
         // Upload signal to GPU.
-        let signal_buf = hep_device.upload(signal).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let signal_buf = hep_device
+            .upload(signal)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         // Output buffer: frame_count × frame_len × ComplexPod.
-        let output_buf = hep_device.alloc_zeroed::<ComplexPod>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let output_buf = hep_device
+            .alloc_zeroed::<ComplexPod>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         // IO bind group for premul_fwd (binding 0 = signal, binding 1 = output_data).
         let io_bg_fwd = device
@@ -113,9 +121,11 @@ impl StftGpuKernel {
         device.queue().submit(std::iter::once(enc.finish()));
 
         let mut pods = vec![ComplexPod { re: 0.0, im: 0.0 }; frame_count * frame_len];
-        hep_device.download(&output_buf, &mut pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buf, &mut pods)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(pods.iter().map(|p| Complex32::new(p.re, p.im)).collect())
     }

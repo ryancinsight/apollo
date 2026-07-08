@@ -4,8 +4,8 @@ use super::helpers::{validate_profile, with_complex64_workspaces};
 use super::plan::CztPlan;
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, PrecisionProfile};
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
 
 /// Complex storage accepted by typed CZT paths.
 pub trait CztStorage: Copy + Send + Sync + 'static {

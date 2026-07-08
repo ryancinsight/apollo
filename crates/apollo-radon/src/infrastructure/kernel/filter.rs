@@ -1,8 +1,8 @@
 //! Projection-domain filters for filtered backprojection.
 
 use apollo_fft::{fft_1d_array, ifft_1d_array};
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 
 /// Apply the unwindowed ramp filter `|omega|` to one projection.
 #[must_use]
@@ -40,7 +40,7 @@ pub fn ramp_filter_projection_into(projection: &[f64], detector_spacing: f64, ou
     }
 
     let arr = Array1::from(projection.to_vec());
-    let mut spectrum: Vec<Complex64> = fft_1d_array(&arr).to_vec();
+    let mut spectrum: Vec<Complex64> = fft_1d_array(&arr).into_vec();
 
     for (k, coefficient) in spectrum.iter_mut().enumerate() {
         *coefficient *= ramp_frequency(k, projection.len(), detector_spacing);

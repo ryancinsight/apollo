@@ -8,10 +8,10 @@ use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
 use apollo_fft::{f16, PrecisionProfile};
+use leto::Array1;
 use leto::ArrayView2;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use leto::Array1;
 use serde::{Deserialize, Serialize};
 
 /// Below this O(N²) operation count, serial loops avoid parallel scheduling overhead.
@@ -261,7 +261,12 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 *slot = Self::to_f64(value);
             }
             plan.forward_f64_slice_into(input64, output64)?;
-            for (slot, value) in output.as_slice_mut().expect("contiguous").iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = Self::from_f64(value);
             }
             Ok(())
@@ -284,7 +289,12 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 *slot = Self::to_f64(value);
             }
             plan.inverse_f64_slice_into(input64, output64)?;
-            for (slot, value) in output.as_slice_mut().expect("contiguous").iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = Self::from_f64(value);
             }
             Ok(())
@@ -442,8 +452,12 @@ mod tests {
         }
 
         let signal16 = signal64.mapv(|value| f16::from_f32(value as f32));
-        let expected16_input =
-            Array1::from(signal16.iter().map(|value| f64::from(value.to_f32())).collect::<Vec<_>>());
+        let expected16_input = Array1::from(
+            signal16
+                .iter()
+                .map(|value| f64::from(value.to_f32()))
+                .collect::<Vec<_>>(),
+        );
         let expected16 = plan
             .forward(&expected16_input)
             .expect("f16 represented forward");

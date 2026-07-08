@@ -98,7 +98,8 @@ impl RadonPlan {
         profile: PrecisionProfile,
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
         let image = array2_from_leto_view(image);
-        let mut output = Array2::<T>::from_elem([self.geometry.angle_count(), self.geometry.detector_count()],
+        let mut output = Array2::<T>::from_elem(
+            [self.geometry.angle_count(), self.geometry.detector_count()],
             T::from_f64(0.0),
         );
         self.forward_typed_into(&image, &mut output, profile)?;
@@ -156,7 +157,8 @@ impl RadonPlan {
         profile: PrecisionProfile,
     ) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
-        let mut output = Array2::<T>::from_elem([self.geometry.rows(), self.geometry.cols()],
+        let mut output = Array2::<T>::from_elem(
+            [self.geometry.rows(), self.geometry.cols()],
             T::from_f64(0.0),
         );
         self.backproject_typed_into(&sinogram, &mut output, profile)?;
@@ -206,7 +208,7 @@ impl RadonPlan {
         );
         let mut image = adjoint_backproject(&filtered, &self.geometry);
         let scale = std::f64::consts::PI / self.geometry.angle_count() as f64;
-        image.mapv_inplace(|value| value * scale);
+        image.iter_mut().for_each(|value| *value *= scale);
         Ok(image)
     }
 
@@ -264,7 +266,12 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         let mut output64 =
             Array2::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_into(&input64, &mut output64)?;
-        for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(output64.iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())
@@ -288,7 +295,12 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         let mut output64 = Array2::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         let owner_sinogram = Sinogram::new(sinogram64);
         plan.backproject_into(&owner_sinogram, &mut output64)?;
-        for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(output64.iter().copied())
+        {
             *slot = Self::from_f64(value);
         }
         Ok(())
@@ -403,7 +415,8 @@ mod tests {
     }
 
     fn image64() -> Array2<f64> {
-        leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap()
+        leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+            .unwrap()
     }
 
     #[test]
@@ -475,7 +488,8 @@ mod tests {
         let expected16 = plan
             .forward(&represented16)
             .expect("represented f16 forward");
-        let mut out16 = Array2::from_elem([plan.geometry.angle_count(), plan.geometry.detector_count()],
+        let mut out16 = Array2::from_elem(
+            [plan.geometry.angle_count(), plan.geometry.detector_count()],
             f16::from_f32(0.0),
         );
         plan.forward_typed_into(
@@ -503,12 +517,12 @@ mod tests {
     }
 
     #[test]
-    fn leto_forward_matches_ndarray_reference() {
+    fn leto_forward_matches_leto_reference() {
         let plan = plan();
         let image = image64();
         let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
             .expect("leto image");
-        let expected = plan.forward(&image).expect("ndarray forward");
+        let expected = plan.forward(&image).expect("leto forward");
 
         let actual = plan.forward_leto(input.view()).expect("leto forward");
         let actual = actual.view();
@@ -520,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_strided_forward_matches_ndarray_reference() {
+    fn leto_strided_forward_matches_leto_reference() {
         let plan = plan();
         let image = image64();
         let mut backing = Vec::with_capacity(18);
@@ -533,7 +547,7 @@ mod tests {
             .view()
             .slice(&[(0, 3, 1), (0, 6, 2)])
             .expect("strided view");
-        let expected = plan.forward(&image).expect("ndarray forward");
+        let expected = plan.forward(&image).expect("leto forward");
 
         let actual = plan.forward_leto(strided).expect("leto forward");
         let actual = actual.view();
@@ -545,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_leto_forward_and_backproject_match_ndarray_reference() {
+    fn typed_leto_forward_and_backproject_match_leto_reference() {
         let plan = plan();
         let image = image64().mapv(|value| value as f32);
         let input = leto::Array2::from_shape_vec([3, 3], image.iter().copied().collect())
@@ -557,7 +571,7 @@ mod tests {
             &mut expected_forward,
             PrecisionProfile::LOW_PRECISION_F32,
         )
-        .expect("typed ndarray forward");
+        .expect("typed leto forward");
 
         let actual_forward = plan
             .forward_leto_typed::<f32>(input.view(), PrecisionProfile::LOW_PRECISION_F32)
@@ -577,7 +591,7 @@ mod tests {
             &mut expected_backproject,
             PrecisionProfile::LOW_PRECISION_F32,
         )
-        .expect("typed ndarray backproject");
+        .expect("typed leto backproject");
         let values = leto::Array2::from_shape_vec(
             [plan.geometry.angle_count(), plan.geometry.detector_count()],
             expected_forward.iter().copied().collect(),
@@ -600,7 +614,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_backproject_and_filtered_backprojection_match_ndarray_reference() {
+    fn leto_backproject_and_filtered_backprojection_match_leto_reference() {
         let plan = plan();
         let image = image64();
         let sinogram = plan.forward(&image).expect("forward");

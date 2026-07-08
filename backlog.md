@@ -18,13 +18,22 @@ Remaining replacement work:
   `--features wgpu`; runtime GPU verification needs hardware.
 - [x] [arch] Stage A3 (complete): the whole workspace runs on `leto` + `eunomia`.
   `num_complex`→`eunomia::Complex` and `ndarray::Array`→`leto::Array` across all 17
-  transform crates, `apollo-validation`, and `apollo-python`. `ndarray` survives only at
-  the `rust-numpy` element surface (`apollo-python`) and the `rustfft` differential oracle
-  (`apollo-validation`), converted to `leto` at the seam. `eunomia` gained an opt-in
-  `numpy` feature (`unsafe impl numpy::Element for Complex`) so the SSOT complex type is a
-  first-class numpy element with no `num_complex` in the binding layer. Verification:
-  workspace build (default + wgpu); `cargo nextest run --workspace` 901/901; clippy 0
-  warnings; `apollo-python` pytest 34/34.
+  transform crates, `apollo-validation`, and `apollo-python`. Apollo has no
+  `ndarray` package in its resolved Cargo graph. The Python boundary keeps
+  runtime NumPy arrays as the external ABI object format, but `apollo-python`
+  now validates dtype/shape/contiguity through PyO3-owned helpers, converts
+  bytes through `bytemuck::Pod` into Leto views/arrays, and constructs runtime
+  NumPy outputs without the Rust `numpy` crate or Eunomia's `numpy` feature.
+  Current verification: first-party source/manifest/lock scan has no `ndarray`,
+  Rust `numpy`, or `as_array()` dependency residue; `cargo tree -i ndarray`
+  reports no matching package; `cargo check -p apollo-python` passes; `cargo
+  nextest run -p apollo-python` passes the value-semantic boundary roundtrip test.
+  `xtask provider-audit` no longer models an ndarray-specific audit column or
+  fixture dependency and now rejects any first-party Rust/TOML/lockfile
+  reintroduction of the Rust crate; `cargo nextest run -p xtask provider_audit`
+  passes. 2026-07-03 audit refresh: stale `gap_audit.md` residual-risk entries
+  that still described Rust `ndarray` usage as current were corrected; the
+  current dependency/source scan and `cargo tree -i ndarray` remain clean.
 - [x] [arch] Coeus decoupling: removed `apollo-fft/src/coeus.rs`, the `coeus` feature, the
   `ComputeBackend`/`FftDeviceOps`-for-`WgpuBackend` bridge, and `apollo-wgpu-helpers`'
   `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
@@ -95,12 +104,12 @@ Remaining replacement work:
   feature-gated GPU code, verify under the wgpu feature, differential vs CPU.
 
 ## Delivered
-- [x] [patch] Zero-copy input on the 2D/3D leto transform entry points (via new
-  `leto::ArrayView::as_array` → `Array<T, SliceStorage, N>`, layout-preserving, no
-  alloc). `forward/inverse_{2,3}d_into` made storage-generic in `apollo-dht` and
-  `apollo-dctdst`; `*_leto` now borrows the input instead of `to_contiguous`,
-  removing an O(N²)/O(N³) input copy per call. 1D paths were already zero-copy
-  (`leto_view1_cow` Cow-borrow). **Deliberately NOT applied** to `apollo-sht`
+- [x] [patch] Zero-copy input was previously added on the 2D/3D Leto transform
+  entry points via `leto::ArrayView::as_array`, but that provider API is no
+  longer current in the local Leto checkout. The current `apollo-dht` and
+  `apollo-dctdst` Leto 2D/3D entry points use `to_contiguous()` while their
+  storage-generic `forward/inverse_{2,3}d_into` implementations remain intact.
+  1D paths remain zero-copy (`leto_view1_cow` Cow-borrow). **Deliberately NOT applied** to `apollo-sht`
   (downstream reads a contiguous flat slice — `to_contiguous` is load-bearing for
   strided inputs), `apollo-radon` (Sinogram domain wrapper), `apollo-nufft` (scratch
   views), or GPU device paths (data is copied on upload regardless). Verification:

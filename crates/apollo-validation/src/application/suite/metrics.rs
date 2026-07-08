@@ -4,8 +4,8 @@
 //! external state — extracted for SRP isolation so the orchestrating suite
 //! module remains focused on report assembly.
 
-use leto::{Array1, Array3};
 use eunomia::Complex64;
+use leto::{Array1, Array3};
 use std::time::Instant;
 
 /// Synthesised deterministic 1D real signal used by orchestrator paths that

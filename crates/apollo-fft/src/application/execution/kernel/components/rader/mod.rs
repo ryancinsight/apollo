@@ -12,7 +12,6 @@ use convolution::rader_convolve_inplace;
 use convolution::rader_negacyclic_convolve_inplace;
 use std::sync::Arc;
 
-
 pub(crate) trait RaderConvolutionBackend {
     fn convolve<F, const INVERSE: bool>(
         data: &mut [F::Complex],

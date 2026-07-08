@@ -5,8 +5,8 @@
 //! `m + max_degree`. Entries where `|m| > l` are invalid and left
 //! at zero by transform construction.
 
-use leto::Array2;
 use eunomia::Complex64;
+use leto::Array2;
 
 /// Dense spherical harmonic coefficient matrix.
 #[derive(Debug, Clone, PartialEq)]

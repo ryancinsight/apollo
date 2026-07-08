@@ -2,11 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError};
-    use apollo_fft::{f16, PrecisionProfile};
+    use crate::infrastructure::transport::gpu::{
+        SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError,
+    };
     use crate::SdftPlan;
-    use leto::{SliceArg, Storage};
+    use apollo_fft::{f16, PrecisionProfile};
     use eunomia::Complex32;
+    use leto::{SliceArg, Storage};
 
     #[test]
     fn capabilities_reflect_forward_only_surface() {

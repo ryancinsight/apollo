@@ -1,8 +1,8 @@
 use apollo_fft::FftPlan1D;
+use eunomia::Complex64;
+use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use leto::Array1;
-use eunomia::Complex64;
 
 /// Below this contiguous element count, serial loops avoid scheduling overhead.
 const BLUESTEIN_PAR_LEN_THRESHOLD: usize = 16_384;

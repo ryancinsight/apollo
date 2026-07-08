@@ -23,13 +23,15 @@ const PROVIDER_REQUIREMENTS: &[(&str, &str)] = &[
     ),
     (
         "leto",
-        "ndarray-validated strided array construction, views, slicing, broadcasting, axis iteration, and zero-copy ndarray compatibility for migration away from direct ndarray ownership",
+        "Atlas-owned strided array construction, views, slicing, broadcasting, axis iteration, and zero-copy transform boundaries",
     ),
     (
         "wgpu",
         "GPU kernels keep device buffers behind infrastructure crates while CPU planning, host staging, and verification stay provider-agnostic",
     ),
 ];
+
+const FORBIDDEN_ARRAY_CRATE: &str = concat!("nd", "array");
 
 const SOURCE_PATTERNS: &[(&str, &str)] = &[
     ("moirai", "moirai"),
@@ -90,7 +92,6 @@ struct WorkspaceAudit {
     melinoe_workspace_dep: bool,
     hermes_workspace_dep: bool,
     leto_workspace_dep: bool,
-    ndarray_rayon_feature: bool,
 }
 
 #[derive(Debug)]
@@ -109,7 +110,6 @@ struct ManifestUsage {
     hermes: bool,
     leto: bool,
     rayon: bool,
-    ndarray_rayon_feature: bool,
 }
 
 impl ProviderAudit {
@@ -117,6 +117,7 @@ impl ProviderAudit {
         let root = root
             .canonicalize()
             .with_context(|| format!("failed to canonicalize {}", root.display()))?;
+        reject_forbidden_array_crate(&root)?;
         let manifests = collect_manifests(&root)?;
         let workspace = collect_workspace_usage(&root)?;
         let crates = manifests
@@ -161,19 +162,14 @@ impl ProviderAudit {
             "Leto workspace dependency",
             self.workspace.leto_workspace_dep,
         );
-        push_bool_line(
-            &mut output,
-            "ndarray rayon/matrixmultiply-threading feature",
-            self.workspace.ndarray_rayon_feature,
-        );
         output.push('\n');
 
         output.push_str("## Crate Usage\n");
         output.push_str(
-            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Rayon | ndarray rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
+            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
         );
         output.push_str(
-            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
         );
         for crate_audit in &self.crates {
             let dyn_count = count(&crate_audit.source_usage, "box_dyn")
@@ -182,7 +178,7 @@ impl ProviderAudit {
                 + count(&crate_audit.source_usage, "collect_vec");
             writeln!(
                 &mut output,
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
                 crate_audit.name,
                 crate_audit.manifest.display(),
                 mark(
@@ -209,7 +205,6 @@ impl ProviderAudit {
                     crate_audit.manifest_usage.rayon
                         || count(&crate_audit.source_usage, "rayon") > 0
                 ),
-                mark(crate_audit.manifest_usage.ndarray_rayon_feature),
                 count(&crate_audit.source_usage, "arc"),
                 count(&crate_audit.source_usage, "mutex"),
                 dyn_count,
@@ -237,6 +232,92 @@ impl ProviderAudit {
     }
 }
 
+#[derive(Debug)]
+struct ForbiddenReference {
+    path: PathBuf,
+    line: usize,
+}
+
+fn reject_forbidden_array_crate(root: &Path) -> Result<()> {
+    let mut references = Vec::new();
+    collect_forbidden_references(root, root, &mut references)?;
+    if references.is_empty() {
+        return Ok(());
+    }
+
+    let mut details = String::new();
+    for reference in references.iter().take(8) {
+        writeln!(
+            &mut details,
+            "{}:{}",
+            reference.path.display(),
+            reference.line
+        )
+        .expect("writing to String cannot fail");
+    }
+    if references.len() > 8 {
+        writeln!(&mut details, "... and {} more", references.len() - 8)
+            .expect("writing to String cannot fail");
+    }
+
+    bail!(
+        "Apollo must not depend on or import `{}`; found references:\n{}",
+        FORBIDDEN_ARRAY_CRATE,
+        details.trim_end()
+    )
+}
+
+fn collect_forbidden_references(
+    root: &Path,
+    path: &Path,
+    references: &mut Vec<ForbiddenReference>,
+) -> Result<()> {
+    if should_skip_path(path) {
+        return Ok(());
+    }
+    let metadata =
+        fs::metadata(path).with_context(|| format!("failed to inspect {}", path.display()))?;
+    if metadata.is_dir() {
+        for entry in
+            fs::read_dir(path).with_context(|| format!("failed to read {}", path.display()))?
+        {
+            let entry = entry?;
+            collect_forbidden_references(root, &entry.path(), references)?;
+        }
+        return Ok(());
+    }
+
+    if !is_forbidden_scan_file(path) {
+        return Ok(());
+    }
+    let text =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let scan_text = match path.extension().and_then(|extension| extension.to_str()) {
+        Some("toml") => strip_toml_comments(&text),
+        Some("rs") => strip_rust_line_comments(&text),
+        _ => text,
+    };
+    for (line_index, line) in scan_text.lines().enumerate() {
+        if line.contains(FORBIDDEN_ARRAY_CRATE) {
+            references.push(ForbiddenReference {
+                path: path.strip_prefix(root).unwrap_or(path).to_path_buf(),
+                line: line_index + 1,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn is_forbidden_scan_file(path: &Path) -> bool {
+    if path.file_name().is_some_and(|name| name == "Cargo.lock") {
+        return true;
+    }
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("toml" | "rs")
+    )
+}
+
 fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
     let manifest = root.join("Cargo.toml");
     let text = fs::read_to_string(&manifest)
@@ -249,9 +330,6 @@ fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
         hermes_workspace_dep: uncommented.contains("hermes-simd")
             && uncommented.contains("github.com"),
         leto_workspace_dep: uncommented.contains("leto") && uncommented.contains("github.com"),
-        ndarray_rayon_feature: uncommented.contains("features = [\"rayon\"")
-            || uncommented.contains("features = [\"rayon\",")
-            || uncommented.contains("features = [\"rayon\","),
     })
 }
 
@@ -332,7 +410,6 @@ fn manifest_usage(text: &str) -> ManifestUsage {
         hermes: uncommented.contains("hermes-simd") || uncommented.contains("hermes_simd"),
         leto: uncommented.contains("leto"),
         rayon: uncommented.contains("rayon"),
-        ndarray_rayon_feature: uncommented.contains("ndarray") && uncommented.contains("rayon"),
     }
 }
 
@@ -428,8 +505,7 @@ members = ["crates/apollo-demo"]
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", default-features = false, features = ["std"] }
-leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "ndarray-compat"] }
-ndarray = { version = "0.16", features = ["rayon","matrixmultiply-threading"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std"] }
 "#,
         )?;
         fs::write(
@@ -460,7 +536,7 @@ leto = { workspace = true }
         assert!(rendered.contains("Hermes workspace dependency: yes"));
         assert!(rendered.contains("Leto workspace dependency: yes"));
         assert!(rendered.contains(
-            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes | yes |"
+            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | yes | yes | yes | no |"
         ));
         assert!(rendered.contains(
             "Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies"
@@ -477,48 +553,101 @@ leto = { workspace = true }
     }
 
     #[test]
-    fn provider_audit_ignores_comment_only_provider_mentions() -> Result<()> {
-        let root = temp_workspace("provider-audit-comments")?;
+    fn provider_audit_rejects_forbidden_array_crate_references() -> Result<()> {
+        let root = temp_workspace("provider-audit-forbidden-array")?;
         fs::create_dir_all(root.join("crates/apollo-demo/src"))?;
         fs::write(
             root.join("Cargo.toml"),
             r#"[workspace]
 members = ["crates/apollo-demo"]
-
-[workspace.dependencies]
-# rayon = "1.11"
-# ndarray = { version = "0.16", features = ["rayon"] }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
 "#,
         )?;
         fs::write(
             root.join("crates/apollo-demo/Cargo.toml"),
-            r#"[package]
+            format!(
+                r#"[package]
 name = "apollo-demo"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-moirai = { workspace = true }
-# rayon = "1.11"
+{} = "0.16"
 "#,
+                forbidden_array_crate_name()
+            ),
         )?;
         fs::write(
             root.join("crates/apollo-demo/src/lib.rs"),
-            "// rayon::join is deliberately mentioned only in a comment\npub fn value() -> usize { 1 }\n",
+            format!("use {}::Array1;\n", forbidden_array_crate_name()),
+        )?;
+
+        let error = ProviderAudit::collect(&root).expect_err("forbidden array crate rejected");
+        let message = error.to_string();
+
+        assert!(message.contains(forbidden_array_crate_name()));
+        assert!(message.contains("crates\\apollo-demo\\Cargo.toml:"));
+        assert!(message.contains("crates\\apollo-demo\\src\\lib.rs:1"));
+
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn provider_audit_ignores_comment_only_provider_mentions() -> Result<()> {
+        let root = temp_workspace("provider-audit-comments")?;
+        fs::create_dir_all(root.join("crates/apollo-demo/src"))?;
+        fs::write(
+            root.join("Cargo.toml"),
+            format!(
+                r#"[workspace]
+members = ["crates/apollo-demo"]
+
+[workspace.dependencies]
+# rayon = "1.11"
+# {} = "0.16"
+moirai = {{ git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }}
+"#,
+                forbidden_array_crate_name()
+            ),
+        )?;
+        fs::write(
+            root.join("crates/apollo-demo/Cargo.toml"),
+            format!(
+                r#"[package]
+name = "apollo-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+moirai = {{ workspace = true }}
+# rayon = "1.11"
+# {} = "0.16"
+"#,
+                forbidden_array_crate_name()
+            ),
+        )?;
+        fs::write(
+            root.join("crates/apollo-demo/src/lib.rs"),
+            format!(
+                "// rayon::join and {}::Array1 are deliberately mentioned only in a comment\npub fn value() -> usize {{ 1 }}\n",
+                forbidden_array_crate_name()
+            ),
         )?;
 
         let audit = ProviderAudit::collect(&root)?;
         let rendered = audit.render();
 
-        assert!(rendered.contains("ndarray rayon/matrixmultiply-threading feature: no"));
-        assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no | no |"));
+        assert!(rendered.contains("| workspace | Cargo.toml | yes | no | no | no | no | no |"));
         assert!(rendered.contains(
-            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no | no |"
+            "| apollo-demo | crates\\apollo-demo\\Cargo.toml | yes | no | no | no | no | no |"
         ));
 
         fs::remove_dir_all(root)?;
         Ok(())
+    }
+
+    fn forbidden_array_crate_name() -> &'static str {
+        FORBIDDEN_ARRAY_CRATE
     }
 
     fn temp_workspace(label: &str) -> Result<PathBuf> {

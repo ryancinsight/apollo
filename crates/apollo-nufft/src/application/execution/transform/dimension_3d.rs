@@ -31,9 +31,9 @@
 //! - kernel width must satisfy `kernel_width >= 2`
 
 use apollo_fft::{ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
-use mnemosyne::scratch::ScratchPool;
-use leto::{Array3, ArrayView3, ArrayViewMut3};
 use eunomia::Complex64;
+use leto::{Array3, ArrayView3, ArrayViewMut3};
+use mnemosyne::scratch::ScratchPool;
 use std::cmp::Ordering;
 use std::f64::consts::PI;
 
@@ -171,6 +171,52 @@ fn sort_positions_3d(
     indexed
 }
 
+fn array1_value(array: &leto::Array1<f64>, index: usize) -> f64 {
+    *array
+        .get([index])
+        .expect("invariant: validated rank-1 Leto index")
+}
+
+fn view3_value(view: &ArrayView3<'_, Complex64>, index: [usize; 3]) -> Complex64 {
+    *view
+        .get(index)
+        .expect("invariant: validated rank-3 Leto view index")
+}
+
+fn view3_mut_value(view: &mut ArrayViewMut3<'_, Complex64>, index: [usize; 3]) -> Complex64 {
+    *view
+        .get(index)
+        .expect("invariant: validated rank-3 Leto mutable view index")
+}
+
+fn view3_write(view: &mut ArrayViewMut3<'_, Complex64>, index: [usize; 3], value: Complex64) {
+    *view
+        .get_mut(index)
+        .expect("invariant: validated rank-3 Leto mutable view index") = value;
+}
+
+fn view3_add_assign(view: &mut ArrayViewMut3<'_, Complex64>, index: [usize; 3], value: Complex64) {
+    *view
+        .get_mut(index)
+        .expect("invariant: validated rank-3 Leto mutable view index") += value;
+}
+
+fn view3_fill(view: &mut ArrayViewMut3<'_, Complex64>, value: Complex64) {
+    if let Some(slice) = view.as_mut_slice() {
+        slice.fill(value);
+        return;
+    }
+
+    let [nx, ny, nz] = view.shape();
+    for ix in 0..nx {
+        for iy in 0..ny {
+            for iz in 0..nz {
+                view3_write(view, [ix, iy, iz], value);
+            }
+        }
+    }
+}
+
 /// Reusable 3D type-1 NUFFT plan using separable Kaiser-Bessel spreading.
 pub struct NufftPlan3D {
     grid: UniformGrid3D,
@@ -306,7 +352,7 @@ impl NufftPlan3D {
         assert_eq!(scratch_wy.len(), 2 * self.w + 1);
         assert_eq!(scratch_wz.len(), 2 * self.w + 1);
 
-        scratch_grid.fill(Complex64::new(0.0, 0.0));
+        view3_fill(scratch_grid, Complex64::new(0.0, 0.0));
         let (lx, ly, lz) = self.grid.lengths();
         let w = self.w as i64;
         let w_f = self.w as f64;
@@ -352,7 +398,7 @@ impl NufftPlan3D {
                             continue;
                         }
                         let iz = (m0z + pz as i64 - w).rem_euclid(self.mz as i64) as usize;
-                        scratch_grid[[ix, iy, iz]] += point.value * (wxy * wzv);
+                        view3_add_assign(scratch_grid, [ix, iy, iz], point.value * (wxy * wzv));
                     }
                 }
             }
@@ -430,7 +476,18 @@ impl NufftPlan3D {
                             &mut output64,
                         );
 
-                        for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.as_slice().expect("contiguous output64").iter().copied()) {
+                        for (slot, value) in output
+                            .as_slice_mut()
+                            .expect("contiguous output")
+                            .iter_mut()
+                            .zip(
+                                output64
+                                    .as_slice()
+                                    .expect("contiguous output64")
+                                    .iter()
+                                    .copied(),
+                            )
+                        {
                             *slot = T::from_complex64(value);
                         }
                     });
@@ -458,8 +515,14 @@ impl NufftPlan3D {
                         fft_signed_index(ky, self.grid.ny).rem_euclid(self.my as i64) as usize;
                     let kz_idx =
                         fft_signed_index(kz, self.grid.nz).rem_euclid(self.mz as i64) as usize;
-                    output[[kx, ky, kz]] = grid[[kx_idx, ky_idx, kz_idx]]
-                        * (self.deconv_x[kx] * self.deconv_y[ky] * self.deconv_z[kz]);
+                    view3_write(
+                        output,
+                        [kx, ky, kz],
+                        view3_mut_value(grid, [kx_idx, ky_idx, kz_idx])
+                            * (array1_value(&self.deconv_x, kx)
+                                * array1_value(&self.deconv_y, ky)
+                                * array1_value(&self.deconv_z, kz)),
+                    );
                 }
             }
         }
@@ -471,11 +534,11 @@ impl NufftPlan3D {
                 for ix in 0..self.mx {
                     for iy in 0..self.my {
                         for iz in 0..self.mz {
-                            lane[iz] = grid[[ix, iy, iz]];
+                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_z.inverse_complex_slice_inplace(lane);
                         for iz in 0..self.mz {
-                            grid[[ix, iy, iz]] = lane[iz];
+                            view3_write(grid, [ix, iy, iz], lane[iz]);
                         }
                     }
                 }
@@ -489,11 +552,11 @@ impl NufftPlan3D {
                 for ix in 0..self.mx {
                     for iz in 0..self.mz {
                         for iy in 0..self.my {
-                            lane[iy] = grid[[ix, iy, iz]];
+                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_y.inverse_complex_slice_inplace(lane);
                         for iy in 0..self.my {
-                            grid[[ix, iy, iz]] = lane[iy];
+                            view3_write(grid, [ix, iy, iz], lane[iy]);
                         }
                     }
                 }
@@ -507,11 +570,11 @@ impl NufftPlan3D {
                 for iy in 0..self.my {
                     for iz in 0..self.mz {
                         for ix in 0..self.mx {
-                            lane[ix] = grid[[ix, iy, iz]];
+                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_x.inverse_complex_slice_inplace(lane);
                         for ix in 0..self.mx {
-                            grid[[ix, iy, iz]] = lane[ix];
+                            view3_write(grid, [ix, iy, iz], lane[ix]);
                         }
                     }
                 }
@@ -613,7 +676,7 @@ impl NufftPlan3D {
         assert_eq!(output.len(), positions.len(), "output length mismatch");
 
         // 1. Place deconvolved modes on oversampled grid (zero-padded)
-        scratch_grid.fill(Complex64::new(0.0, 0.0));
+        view3_fill(scratch_grid, Complex64::new(0.0, 0.0));
         for kx in 0..self.grid.nx {
             let kx_idx = fft_signed_index(kx, self.grid.nx).rem_euclid(self.mx as i64) as usize;
             for ky in 0..self.grid.ny {
@@ -621,8 +684,14 @@ impl NufftPlan3D {
                 for kz in 0..self.grid.nz {
                     let kz_idx =
                         fft_signed_index(kz, self.grid.nz).rem_euclid(self.mz as i64) as usize;
-                    scratch_grid[[kx_idx, ky_idx, kz_idx]] = modes[[kx, ky, kz]]
-                        * (self.deconv_x[kx] * self.deconv_y[ky] * self.deconv_z[kz]);
+                    view3_write(
+                        scratch_grid,
+                        [kx_idx, ky_idx, kz_idx],
+                        view3_value(&modes, [kx, ky, kz])
+                            * (array1_value(&self.deconv_x, kx)
+                                * array1_value(&self.deconv_y, ky)
+                                * array1_value(&self.deconv_z, kz)),
+                    );
                 }
             }
         }
@@ -675,7 +744,7 @@ impl NufftPlan3D {
                             continue;
                         }
                         let iz = (m0z + pz as i64 - w).rem_euclid(self.mz as i64) as usize;
-                        value += scratch_grid[[ix, iy, iz]] * (wxy * wzv);
+                        value += view3_mut_value(scratch_grid, [ix, iy, iz]) * (wxy * wzv);
                     }
                 }
             }
@@ -724,7 +793,12 @@ impl NufftPlan3D {
                                 .expect("3D NUFFT modes scratch shape is validated"),
                             modes_vec,
                         );
-                        for (slot, &val) in modes64.as_mut_slice().expect("contiguous modes64").iter_mut().zip(modes.iter()) {
+                        for (slot, &val) in modes64
+                            .as_mut_slice()
+                            .expect("contiguous modes64")
+                            .iter_mut()
+                            .zip(modes.iter())
+                        {
                             *slot = T::to_complex64(val);
                         }
 
@@ -738,7 +812,10 @@ impl NufftPlan3D {
                                                     wz_pool.with_scratch(size_w, |wz| {
                                                         self.type2_view_into(
                                                             positions,
-                                                            modes64.as_view(),
+                                                            ArrayView3::new(
+                                                                modes64.layout(),
+                                                                modes64.data(),
+                                                            ),
                                                             &mut scratch_grid,
                                                             wx,
                                                             wy,
@@ -768,11 +845,11 @@ impl NufftPlan3D {
                 for ix in 0..self.mx {
                     for iy in 0..self.my {
                         for iz in 0..self.mz {
-                            lane[iz] = grid[[ix, iy, iz]];
+                            lane[iz] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_z.forward_complex_slice_inplace(lane);
                         for iz in 0..self.mz {
-                            grid[[ix, iy, iz]] = lane[iz];
+                            view3_write(grid, [ix, iy, iz], lane[iz]);
                         }
                     }
                 }
@@ -786,11 +863,11 @@ impl NufftPlan3D {
                 for ix in 0..self.mx {
                     for iz in 0..self.mz {
                         for iy in 0..self.my {
-                            lane[iy] = grid[[ix, iy, iz]];
+                            lane[iy] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_y.forward_complex_slice_inplace(lane);
                         for iy in 0..self.my {
-                            grid[[ix, iy, iz]] = lane[iy];
+                            view3_write(grid, [ix, iy, iz], lane[iy]);
                         }
                     }
                 }
@@ -804,11 +881,11 @@ impl NufftPlan3D {
                 for iy in 0..self.my {
                     for iz in 0..self.mz {
                         for ix in 0..self.mx {
-                            lane[ix] = grid[[ix, iy, iz]];
+                            lane[ix] = view3_mut_value(grid, [ix, iy, iz]);
                         }
                         self.fft_x.forward_complex_slice_inplace(lane);
                         for ix in 0..self.mx {
-                            grid[[ix, iy, iz]] = lane[ix];
+                            view3_write(grid, [ix, iy, iz], lane[ix]);
                         }
                     }
                 }

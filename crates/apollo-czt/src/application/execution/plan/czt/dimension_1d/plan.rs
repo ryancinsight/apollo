@@ -10,8 +10,8 @@ use crate::application::execution::kernel::direct::{
 };
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 
 /// Reusable chirp z-transform plan.
 ///
@@ -87,7 +87,8 @@ impl CztPlan {
             kernel[convolution_len - k_idx] = w.powf(-0.5 * (k_idx as f64) * (k_idx as f64));
         }
 
-        let mut fft_kernel = Array1::from(kernel);
+        let mut fft_kernel = Array1::from_shape_vec([convolution_len], kernel)
+            .expect("CZT convolution kernel length must match convolution shape");
         fft_plan.forward_complex_inplace(&mut fft_kernel);
         let inverse_nodes = if n == m {
             Some(czt_inverse_nodes(n, w))

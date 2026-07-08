@@ -6,9 +6,9 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use core::marker::PhantomData;
-use leto::ArrayViewMut3;
-use leto::Array3;
 use eunomia::Complex;
+use leto::Array3;
+use leto::ArrayViewMut3;
 
 /// Zero-sized 3D FFT plan for compile-time-known shapes.
 ///
@@ -56,7 +56,11 @@ where
     /// Forward transform of a complex field in-place.
     #[inline]
     pub fn forward_complex_inplace(&self, data: &mut Array3<F::Complex>) {
-        assert_eq!(data.shape(), [NX, NY, NZ], "static 3D forward shape mismatch");
+        assert_eq!(
+            data.shape(),
+            [NX, NY, NZ],
+            "static 3D forward shape mismatch"
+        );
         let view = ArrayViewMut3::from(data.view_mut());
         self.forward_complex_leto_inplace(view);
     }
@@ -64,7 +68,11 @@ where
     /// Inverse transform of a complex field in-place with normalization.
     #[inline]
     pub fn inverse_complex_inplace(&self, data: &mut Array3<F::Complex>) {
-        assert_eq!(data.shape(), [NX, NY, NZ], "static 3D inverse shape mismatch");
+        assert_eq!(
+            data.shape(),
+            [NX, NY, NZ],
+            "static 3D inverse shape mismatch"
+        );
         let view = ArrayViewMut3::from(data.view_mut());
         self.inverse_complex_leto_inplace(view);
     }

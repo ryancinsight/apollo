@@ -22,8 +22,8 @@ mod tests {
         DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING,
     };
     use apollo_fft::{f16, ApolloError, Complex32, PrecisionProfile};
-    use leto::{Array1, Array3};
     use eunomia::Complex64;
+    use leto::{Array1, Array3};
 
     /// Theorem: Type-1 DC mode identity.
     ///
@@ -57,11 +57,11 @@ mod tests {
         let dc_exact = Complex64::new(1.35, 0.6);
 
         let f_exact = nufft_type1_1d(&positions, &values, domain);
-        let err_exact = (f_exact[0] - dc_exact).norm();
+        let err_exact = (f_exact[[0]] - dc_exact).norm();
         assert!(
             err_exact < 1e-10,
             "exact DC mode error {err_exact}: got {:?}, expected {:?}",
-            f_exact[0],
+            f_exact[[0]],
             dc_exact
         );
         // Verify the full output is finite.
@@ -74,11 +74,11 @@ mod tests {
 
         // Fast path: kernel_width=6, oversampling=DEFAULT(2).
         let f_fast = nufft_type1_1d_fast(&positions, &values, domain, 6);
-        let err_fast = (f_fast[0] - dc_exact).norm();
+        let err_fast = (f_fast[[0]] - dc_exact).norm();
         assert!(
             err_fast < 1e-4,
             "fast DC mode error {err_fast}: got {:?}, expected {:?}",
-            f_fast[0],
+            f_fast[[0]],
             dc_exact
         );
         for (k, v) in f_fast.iter().enumerate() {
@@ -136,7 +136,10 @@ mod tests {
             Complex64::new(0.5, 0.3),
             Complex64::new(-0.25, 0.1),
         ];
-        let freq_domain_array = Array1::from((freq_domain_data.iter().copied()).collect::<Vec<_>>());
+        let freq_domain_values = freq_domain_data.to_vec();
+        let freq_domain_array =
+            Array1::from_shape_vec([freq_domain_values.len()], freq_domain_values)
+                .expect("invariant: frequency-domain fixture length matches Array1 shape");
 
         // G = A*·f, length = positions.len() = 3
         let g = nufft_type2_1d(&freq_domain_array, &positions, domain);
@@ -414,7 +417,8 @@ mod tests {
         // NUFFT type-1 at uniform positions (exact direct O(N²) path)
         let nufft_output = nufft_type1_1d(&positions, &values, domain);
         // Independent DFT via apollo_fft (separate Cooley-Tukey radix-2 kernel for N=8)
-        let values_complex = Array1::from(values);
+        let values_complex = Array1::from_shape_vec([values.len()], values)
+            .expect("invariant: uniform-grid fixture length matches Array1 shape");
         let fft_complex = fft_1d_complex(&values_complex);
         for (k, (nv, fv)) in nufft_output.iter().zip(fft_complex.iter()).enumerate() {
             let err = (nv - fv).norm();
@@ -617,7 +621,9 @@ mod tests {
             .copied()
             .map(Complex32::to_complex64)
             .collect();
-        let expected32 = plan.type2(&Array1::from(represented32), &positions);
+        let represented32_array = Array1::from_shape_vec([represented32.len()], represented32)
+            .expect("invariant: represented f32 coefficient length matches Array1 shape");
+        let expected32 = plan.type2(&represented32_array, &positions);
         let mut output32 = vec![Complex32::new(0.0, 0.0); positions.len()];
         plan.type2_typed_into(
             &coeffs32,
@@ -650,7 +656,9 @@ mod tests {
             .copied()
             .map(<[f16; 2]>::to_complex64)
             .collect();
-        let expected16 = plan.type2(&Array1::from(represented16), &positions);
+        let represented16_array = Array1::from_shape_vec([represented16.len()], represented16)
+            .expect("invariant: represented f16 coefficient length matches Array1 shape");
+        let expected16 = plan.type2(&represented16_array, &positions);
         let mut output16 = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
         plan.type2_typed_into(
             &coeffs16,

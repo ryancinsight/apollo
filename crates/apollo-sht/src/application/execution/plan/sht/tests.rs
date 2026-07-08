@@ -9,8 +9,8 @@ use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_abs_diff_eq;
-use leto::Array2;
 use eunomia::{Complex32, Complex64};
+use leto::Array2;
 
 fn coefficient_shape(plan: &ShtPlan) -> [usize; 2] {
     [
@@ -139,7 +139,7 @@ fn typed_real_forward_supports_f64_f32_and_mixed_f16_storage() {
 }
 
 #[test]
-fn leto_real_forward_matches_ndarray_reference() {
+fn leto_real_forward_matches_leto_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let constant = 1.0 / (4.0 * std::f64::consts::PI).sqrt();
     let samples = Array2::from_elem(
@@ -151,7 +151,7 @@ fn leto_real_forward_matches_ndarray_reference() {
         samples.iter().copied().collect(),
     )
     .expect("leto samples");
-    let expected = plan.forward_real(&samples).expect("ndarray forward");
+    let expected = plan.forward_real(&samples).expect("leto forward");
 
     let actual = plan
         .forward_real_leto(input.view())
@@ -165,7 +165,7 @@ fn leto_real_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_strided_real_forward_matches_ndarray_reference() {
+fn leto_strided_real_forward_matches_leto_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
         [plan.grid().latitudes(), plan.grid().longitudes()],
@@ -188,7 +188,7 @@ fn leto_strided_real_forward_matches_ndarray_reference() {
             (0, plan.grid().longitudes() * 2, 2),
         ])
         .expect("strided samples");
-    let expected = plan.forward_real(&samples).expect("ndarray forward");
+    let expected = plan.forward_real(&samples).expect("leto forward");
 
     let actual = plan.forward_real_leto(strided).expect("leto real forward");
     let actual_view = actual.view();
@@ -200,7 +200,7 @@ fn leto_strided_real_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_complex_forward_and_inverse_match_ndarray_reference() {
+fn leto_complex_forward_and_inverse_match_leto_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
         [plan.grid().latitudes(), plan.grid().longitudes()],
@@ -211,7 +211,7 @@ fn leto_complex_forward_and_inverse_match_ndarray_reference() {
         samples.iter().copied().collect(),
     )
     .expect("leto samples");
-    let expected_coefficients = plan.forward_complex(&samples).expect("ndarray forward");
+    let expected_coefficients = plan.forward_complex(&samples).expect("leto forward");
 
     let actual_coefficients = plan
         .forward_complex_leto(input.view())
@@ -238,7 +238,7 @@ fn leto_complex_forward_and_inverse_match_ndarray_reference() {
     .expect("leto coefficients");
     let expected_inverse = plan
         .inverse_complex(&expected_coefficients)
-        .expect("ndarray inverse");
+        .expect("leto inverse");
     let actual_inverse = plan
         .inverse_complex_leto(coefficients.view())
         .expect("leto inverse");
@@ -253,7 +253,7 @@ fn leto_complex_forward_and_inverse_match_ndarray_reference() {
 }
 
 #[test]
-fn typed_leto_forward_and_inverse_match_ndarray_reference() {
+fn typed_leto_forward_and_inverse_match_leto_reference() {
     let plan = ShtPlan::new(6, 13, 2).expect("plan");
     let samples = Array2::from_shape_fn(
         [plan.grid().latitudes(), plan.grid().longitudes()],
@@ -272,7 +272,7 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         PrecisionProfile::LOW_PRECISION_F32,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray forward");
+    .expect("typed leto forward");
 
     let actual_coefficients = plan
         .forward_real_leto_typed::<f32, Complex32>(
@@ -306,7 +306,7 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         PrecisionProfile::LOW_PRECISION_F32,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray inverse");
+    .expect("typed leto inverse");
     let actual_samples = plan
         .inverse_real_leto_typed::<Complex32, f32>(
             coefficients.view(),

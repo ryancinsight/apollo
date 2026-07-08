@@ -7,8 +7,8 @@ use crate::application::execution::plan::fft::{
 };
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use leto::{Array1, Array2, Array3};
 use eunomia::{Complex, Complex64};
+use leto::{Array1, Array2, Array3};
 
 /// Inverse complex 1D FFT in-place with FFTW-compatible normalization.
 pub fn ifft_1d_complex_inplace(data: &mut Array1<Complex64>) {

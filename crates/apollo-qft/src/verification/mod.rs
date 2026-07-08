@@ -4,8 +4,8 @@
 mod tests {
     use crate::{iqft, is_valid_length, qft, QftError, QftPlan, QuantumStateDimension};
     use approx::assert_relative_eq;
-    use leto::Array1;
     use eunomia::Complex64;
+    use leto::Array1;
     use proptest::prelude::*;
     use proptest::proptest;
 

@@ -122,14 +122,14 @@ fn leto_typed_forward_matches_typed_slice_reference() {
 }
 
 #[test]
-fn leto_2d_forward_matches_ndarray_reference() {
+fn leto_2d_forward_matches_leto_reference() {
     let plan = DctDstPlan::new(3, RealTransformKind::DctII).expect("valid plan");
     let input = Array2::from_shape_vec(
         [3, 3],
         vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
     )
-    .expect("ndarray input");
-    let expected = plan.forward_2d(&input).expect("ndarray forward");
+    .expect("leto input");
+    let expected = plan.forward_2d(&input).expect("leto forward");
     let leto_input =
         leto::Array2::from_shape_vec([3, 3], input.iter().copied().collect()).expect("leto input");
 
@@ -144,15 +144,15 @@ fn leto_2d_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_2d_strided_inverse_matches_ndarray_reference() {
+fn leto_2d_strided_inverse_matches_leto_reference() {
     let plan = DctDstPlan::new(3, RealTransformKind::DstII).expect("valid plan");
     let input = Array2::from_shape_vec(
         [3, 3],
         vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0, -0.75],
     )
-    .expect("ndarray input");
-    let spectrum = plan.forward_2d(&input).expect("ndarray forward");
-    let expected = plan.inverse_2d(&spectrum).expect("ndarray inverse");
+    .expect("leto input");
+    let spectrum = plan.forward_2d(&input).expect("leto forward");
+    let expected = plan.inverse_2d(&spectrum).expect("leto inverse");
     let mut interleaved = Vec::with_capacity(18);
     for value in spectrum.iter() {
         interleaved.push(*value);
@@ -176,12 +176,12 @@ fn leto_2d_strided_inverse_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_3d_forward_and_inverse_match_ndarray_reference() {
+fn leto_3d_forward_and_inverse_match_leto_reference() {
     let plan = DctDstPlan::new(2, RealTransformKind::DctIV).expect("valid plan");
     let input = Array3::from_shape_vec([2, 2, 2], vec![1.0, -2.0, 0.5, 4.0, 0.25, -1.5, 2.0, 3.0])
-        .expect("ndarray input");
-    let expected_forward = plan.forward_3d(&input).expect("ndarray forward");
-    let expected_inverse = plan.inverse_3d(&expected_forward).expect("ndarray inverse");
+        .expect("leto input");
+    let expected_forward = plan.forward_3d(&input).expect("leto forward");
+    let expected_inverse = plan.inverse_3d(&expected_forward).expect("leto inverse");
     let leto_input = leto::Array3::from_shape_vec([2, 2, 2], input.iter().copied().collect())
         .expect("leto input");
 

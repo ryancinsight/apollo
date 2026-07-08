@@ -30,14 +30,12 @@ hermes-simd = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true }
 mnemosyne = { workspace = true }
-num-complex = { workspace = true }
 moirai = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
 [dev-dependencies]
 approx = "0.5"
-num-complex = { workspace = true }
 proptest = "1.6"
 
 [lints]

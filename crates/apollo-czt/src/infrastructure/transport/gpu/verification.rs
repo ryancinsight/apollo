@@ -4,9 +4,9 @@
 mod tests {
     use crate::CztPlan;
     use apollo_fft::{f16, PrecisionProfile};
-    use leto::{SliceArg, Storage};
-    use leto::Array1;
     use eunomia::{Complex32, Complex64};
+    use leto::Array1;
+    use leto::{SliceArg, Storage};
 
     use crate::infrastructure::transport::gpu::{
         Complex32 as GpuComplex32, CztWgpuBackend, CztWgpuPlan, WgpuCapabilities, WgpuError,
@@ -88,15 +88,15 @@ mod tests {
                 Complex64::new(f64::from(w32.re), f64::from(w32.im)),
             )
             .expect("cpu plan");
-            let cpu_input = Array1::from(
-                input
-                    .iter()
-                    .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
-                    .collect(),
-            );
+            let cpu_values = input
+                .iter()
+                .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
+                .collect::<Vec<_>>();
+            let cpu_input =
+                Array1::from_shape_vec([cpu_values.len()], cpu_values).expect("cpu input");
             let cpu = cpu_plan.forward_direct(&cpu_input).expect("cpu direct");
 
-            assert_eq!(gpu.len(), cpu.len());
+            assert_eq!(gpu.len(), cpu.size());
             for (actual, expected) in gpu.iter().zip(cpu.iter()) {
                 assert!((f64::from(actual.re) - expected.re).abs() < 5.0e-4);
                 assert!((f64::from(actual.im) - expected.im).abs() < 5.0e-4);

@@ -252,7 +252,6 @@ impl StftChirpData {
         let chirp_inv_butterfly_pipeline = kernel.chirp_inv_butterfly_pipeline.clone();
         let chirp_scale_pipeline = kernel.chirp_scale_pipeline.clone();
 
-
         // ── Precompute Radix-2 stage bind groups ──────────────────────────────
         // Forward sub-FFT: bitrev + log₂M butterfly stages.
         // Inverse sub-FFT: bitrev + log₂M butterfly stages + scale stage.

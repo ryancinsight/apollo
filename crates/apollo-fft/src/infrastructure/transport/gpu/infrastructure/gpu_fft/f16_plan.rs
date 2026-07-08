@@ -29,7 +29,9 @@
 //! This module is compiled only when the `native-f16` feature is enabled.
 
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::AxisPackStage;
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy, ChirpData, RadixStages};
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
+    Axis, AxisStrategy, ChirpData, RadixStages,
+};
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
 use leto::{Array1, Array3};
 use std::sync::Arc;
@@ -610,7 +612,7 @@ impl GpuFft3dF16Native {
     pub fn forward_native_f16(&self, field: &Array3<f32>) -> Vec<f32> {
         assert_eq!(
             field.shape(),
-            (self.nx, self.ny, self.nz),
+            [self.nx, self.ny, self.nz],
             "field dimensions must match plan"
         );
         let n = self.nx * self.ny * self.nz;
@@ -1215,13 +1217,15 @@ mod tests {
             return;
         };
 
-        let Ok(plan_f32) = crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
-            Arc::new(device),
-            Arc::new(queue),
-            4,
-            4,
-            4,
-        ) else {
+        let Ok(plan_f32) =
+            crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
+                Arc::new(device),
+                Arc::new(queue),
+                4,
+                4,
+                4,
+            )
+        else {
             return;
         };
 

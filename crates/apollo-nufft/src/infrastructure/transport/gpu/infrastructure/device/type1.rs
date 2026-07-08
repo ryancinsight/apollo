@@ -1,7 +1,7 @@
-use apollo_fft::PrecisionProfile;
 use crate::NufftComplexStorage;
-use leto::{Array1, Array3};
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
+use leto::{Array1, Array3};
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -152,7 +152,12 @@ impl NufftWgpuBackend {
         }
         let values32 = typed_to_complex32(values);
         let computed = self.execute_type1_3d(plan, positions, &values32)?;
-        for (slot, value) in output.as_slice_mut().expect("contiguous").iter_mut().zip(computed.iter().copied()) {
+        for (slot, value) in output
+            .as_slice_mut()
+            .expect("contiguous")
+            .iter_mut()
+            .zip(computed.iter().copied())
+        {
             *slot = T::from_complex64(value);
         }
         Ok(())

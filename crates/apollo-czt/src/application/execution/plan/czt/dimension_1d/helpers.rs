@@ -2,8 +2,8 @@
 
 use crate::domain::contracts::error::CztError;
 use apollo_fft::PrecisionProfile;
-use mnemosyne::scratch::ScratchPool;
 use eunomia::Complex64;
+use mnemosyne::scratch::ScratchPool;
 use std::borrow::Cow;
 
 thread_local! {

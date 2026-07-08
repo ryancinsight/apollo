@@ -12,8 +12,8 @@ use super::helpers::{
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
 use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 
 /// Reusable short-time Fourier transform plan.
 ///
@@ -190,7 +190,12 @@ impl StftPlan {
                 *slot = T::to_f64(value);
             }
             self.forward_f64_slice_into(signal64, output64)?;
-            for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous output")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = O::from_complex64(value);
             }
             Ok(())
@@ -396,7 +401,12 @@ impl StftPlan {
                 *slot = T::to_complex64(value);
             }
             self.inverse_complex64_slice_into(spectrum64, signal_len, output64)?;
-            for (slot, value) in output.as_slice_mut().expect("contiguous output").iter_mut().zip(output64.iter().copied()) {
+            for (slot, value) in output
+                .as_slice_mut()
+                .expect("contiguous output")
+                .iter_mut()
+                .zip(output64.iter().copied())
+            {
                 *slot = O::from_f64(value);
             }
             Ok(())

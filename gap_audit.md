@@ -1,5 +1,83 @@
 # Apollo Gap Audit
 
+## Hephaestus WGPU local provider edge [patch]
+- Performed: changed Apollo's workspace `hephaestus-wgpu` dependency from the
+  obsolete pinned Git revision to the local Atlas Hephaestus checkout so
+  `apollo-wgpu-helpers` consumes the current `WgpuDevice` acquisition and
+  staging-buffer API.
+- Architecture effect: downstream Atlas repos share one Hephaestus GPU
+  substrate and one target tree; Apollo remains the GPU FFT owner through its
+  `FftBackend` contract, while Kwavers consumes that contract instead of a
+  WGPU-specific helper crate name.
+- Verification: downstream integration from `D:\atlas\repos\kwavers`:
+  `rustup run nightly cargo check -p kwavers-math --features gpu --all-targets`
+  passes, focused `kwavers-math --features gpu` GPU FFT nextest passes 2/2,
+  and `cargo tree -p kwavers-math --features gpu -i hephaestus-wgpu` resolves
+  `hephaestus-wgpu v0.11.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
+- Evidence tier: compile-time dependency/type validation plus downstream
+  value-semantic GPU FFT tests.
+- Residual: Apollo has no real CUDA FFT provider yet. CUDA FFT requires
+  upstream Apollo/Hephaestus kernels and WGPU/CUDA differential tests; no
+  Kwavers placeholder should claim it.
+
+## Apollo direct ndarray removal [patch]
+- Performed: changed the remaining `ndarray` benchmark imports and tuple-shaped
+  constructors in `apollo-fft`, `apollo-nufft`, and `apollo-radon` to Leto
+  `Array{1,2,3}` constructors; removed stale `ndarray` dev-dependencies from
+  transform crates that no longer import it; replaced `apollo-python` return
+  conversion through `ndarray::Array{1,2,3}` with shared Leto-to-NumPy helpers;
+  removed the remaining Python input `as_array()` conversions by constructing
+  Leto views/arrays from validated NumPy slices and shape metadata; replaced
+  stale Leto `ArrayView::as_array()` use in `apollo-dctdst`/`apollo-dht` with
+  native `to_contiguous()` materialization; removed the Rust `numpy` crate,
+  Apollo's root `ndarray` workspace dependency, and Eunomia's `numpy` feature
+  from `apollo-python`; removed `xtask provider-audit`'s stale
+  ndarray-specific audit column and test dependency fixtures.
+- Architecture effect: Apollo's Rust transform, validation, and benchmark surfaces
+  no longer use ndarray as an owned-array substrate. Apollo has no `ndarray`
+  package in its resolved Cargo graph. Python inputs cross the PyO3 boundary as
+  runtime NumPy array objects and immediately become Leto views or Leto-owned
+  row-major buffers through PyO3-owned dtype/shape/byte helpers; Python return
+  arrays are built from Leto-owned row-major buffers by importing runtime NumPy
+  from Python, not by depending on the Rust `numpy` crate.
+- Verification: non-Python source/manifest scan returned no `ndarray` hits;
+  `cargo tree -p apollo-fft -i ndarray` and
+  `cargo tree -p apollo-validation -i ndarray` report no matching package;
+  `rg -n "ndarray" Cargo.toml crates -g "*.toml" -g "*.rs"` returns no matches;
+  `cargo tree -i ndarray` reports no matching package; `cargo tree -p
+  apollo-python -i eunomia` shows Eunomia only through the transform crates
+  consumed by the binding crate; `cargo fmt -p apollo-python -p apollo-dctdst -p apollo-dht --check`;
+  `cargo check -p apollo-dctdst -p apollo-dht`; first-party source/manifest
+  `rg -n "as_array\(|ndarray::|use ndarray|^ndarray\s*=|\bndarray\b" Cargo.toml crates -g "*.rs" -g "Cargo.toml"` returns no matches;
+  final first-party source/manifest/lock/xtask `rg -n "ndarray" Cargo.toml
+  Cargo.lock crates xtask -g "*.toml" -g "*.rs" -g "Cargo.lock"` returns no
+  matches; `cargo fmt -p xtask --check`; `cargo nextest run -p xtask
+  provider_audit`; `cargo run -p xtask -- provider-audit` now fails on
+  first-party manifest, lockfile, or Rust-source reintroduction of the Rust
+  crate and ignores comment-only mentions;
+  `cargo check -p apollo-python` passes; `cargo nextest run -p apollo-python`
+  passes the value-semantic boundary roundtrip test; `cargo fmt -p apollo-python -p
+  apollo-fwht -p apollo-nufft --check` passes; `git diff --check` passes.
+- Residual: runtime NumPy arrays remain the Python ABI object format. No Cargo
+  `ndarray` package or Rust `numpy` crate remains in Apollo.
+- Evidence tier: compile-time dependency/source-scan evidence plus a
+  value-semantic PyO3 boundary roundtrip test. No runtime benchmark claim is made.
+
+## CZT native Leto constructor/indexing cleanup [patch]
+- Performed: removed `apollo-czt`'s stale `ndarray` dev-dependency and replaced
+  residual compatibility-backed `Array1::from(Vec<_>)` construction plus scalar
+  1D indexing in CZT tests/proptests with native Leto shape construction and
+  rank-aware indexing.
+- Architecture effect: the CZT slice now builds against Leto array APIs directly
+  instead of relying on ndarray compatibility to materialize test and kernel arrays.
+- Verification: `rg -n "ndarray|ndarray_input|matches_ndarray|Array1::from\(|leto::Array1::from\(" crates/apollo-czt/src crates/apollo-czt/Cargo.toml`
+  returned no matches; `cargo fmt --package apollo-czt --check`;
+  `cargo nextest run -p apollo-czt` -> 40/40 passed.
+- Evidence tier: compile-time dependency removal plus value-semantic CZT unit and
+  property tests. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage. Runtime NumPy remains
+  only as the Python ABI object format.
+
 ## Coeus GradBuffer autograd compatibility [patch]
 - Performed: updated `apollo-fft` Coeus FFT autograd nodes to use
   `coeus_autograd::GradBuffer` for output and input gradient accumulation instead of raw
@@ -17,26 +95,26 @@
 ## Leto 0.5.0 shape/materialization provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `a46dea9` (`0.4.0`) to pushed Leto `6c7899d` (`0.5.0`).
 - Architecture effect: Apollo now consumes provider-side dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization through the canonical Git dependency path.
-- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes a prerequisite for replacing ndarray shape/materialization usage in low-frequency validation and staging paths.
+- Migration effect: no Apollo public API or compute path changed in this increment; this historical provider pin removed a prerequisite for the later Leto-owned shape/materialization migration.
 - Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence tier: Cargo dependency resolution plus focused compile checks for provider-consuming crates. Leto owns value-semantic reshape/materialization coverage through core tests and ndarray contract validation.
-- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+- Residuals: superseded by the Apollo direct ndarray removal entry; current Apollo source, manifests, and lockfile have no Rust `ndarray` dependency edge.
 
 ## Leto 0.4.0 broadcast binary provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `642d87a3` (`0.3.0`) to pushed Leto `a46dea9` (`0.4.0`).
 - Architecture effect: Apollo now consumes provider-side broadcast-aware binary maps for caller-owned output layouts through the canonical Git dependency path.
-- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes a prerequisite for later internal ndarray replacement in validation, scaling, and tensor-style elementwise paths.
+- Migration effect: no Apollo public API or compute path changed in this increment; this historical provider pin removed a prerequisite for the later Leto-owned validation, scaling, and tensor-style elementwise migration.
 - Verification: `cargo check -p apollo-validation -p apollo-fft -p apollo-gft -p apollo-frft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence tier: Cargo dependency resolution plus focused compile checks for provider-consuming crates. Leto owns value-semantic broadcast coverage through dense/strided tests and ndarray differential validation.
-- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+- Residuals: superseded by the Apollo direct ndarray removal entry; current Apollo source, manifests, and lockfile have no Rust `ndarray` dependency edge.
 
 ## Leto 0.3.0 provider pin [minor]
 - Performed: updated Apollo's workspace `leto` and `leto-ops` Git dependencies from Leto `fd1d87b` (`0.2.0`) to pushed Leto `642d87a3` (`0.3.0`).
 - Architecture effect: Apollo now consumes the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and the Coeus rank-boundary ADR through its canonical Git dependency path.
-- Migration effect: no Apollo public API or compute path changed in this increment; the new provider surface removes prerequisites for later internal ndarray replacement work.
+- Migration effect: no Apollo public API or compute path changed in this increment; this historical provider pin removed prerequisites for the later Leto migration.
 - Verification: `cargo check -p apollo-frft -p apollo-gft -p apollo-fft`; `cargo run -p xtask -- provider-audit`; `cargo fmt --check`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence tier: Cargo dependency resolution plus focused compile checks for the FFT, FRFT, and GFT Leto consumers. No runtime benchmark claim is made.
-- Residuals: Apollo still uses ndarray internally in CPU transform kernels; replacing those paths with Leto requires separate value-semantic migration increments.
+- Residuals: superseded by the Apollo direct ndarray removal entry; current Apollo source, manifests, and lockfile have no Rust `ndarray` dependency edge.
 
 ## NUFFT 3D FFT lane scratch migration [patch]
 - Performed: replaced all 3D NUFFT separable FFT forward/inverse x/y/z temporary lane `Array1` allocations with a Mnemosyne `ScratchPool<Complex64>` and Apollo FFT slice execution.
@@ -228,7 +306,7 @@
 - Implementation effect: three shared helpers own typed storage movement for all generic `SparseComplexStorage` implementations, preventing conversion-loop duplication across slice and Leto wrappers.
 - Verification: `cargo fmt --check`; `cargo check -p apollo-sft`; `cargo test -p apollo-sft`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence tier: value-semantic SFT unit/property tests plus direct threshold-path storage conversion tests. No runtime benchmark claim is made.
-- Residuals: dense FFT ownership still uses ndarray as the validation/transport buffer; Hermes is still absent from `apollo-sft`; the top-K heap remains sequential due to its deterministic bounded-heap dependency.
+- Residuals: Hermes and top-K providerization remain separate work; dense FFT transport no longer requires a Rust `ndarray` dependency edge in current Apollo.
 
 ## CZT direct/Bluestein Moirai routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-czt`; routed direct CZT output rows through `ParallelSliceMut` above a bounded O(NM) threshold; routed Bluestein workspace preparation, FFT-kernel multiplication, and output sampling through `ParallelSliceMut` above bounded contiguous-buffer thresholds.
@@ -286,7 +364,7 @@
 
 ## NUFFT exact 1D Moirai reference routing [patch]
 - Performed: added the workspace Moirai provider dependency to `apollo-nufft` and routed `nufft_type1_1d` / `nufft_type2_1d` direct reference output construction through `ParallelSliceMut` above a bounded operation threshold.
-- Architecture effect: NUFFT exact 1D reference execution now uses Apollo's Moirai provider surface for CPU data parallelism instead of local sequential-only loops, while the public Leto/Mnemosyne boundaries and ndarray validation role remain unchanged.
+- Architecture effect: NUFFT exact 1D reference execution now uses Apollo's Moirai provider surface for CPU data parallelism instead of local sequential-only loops, while the public Leto/Mnemosyne boundaries remain unchanged.
 - Memory effect: output buffers are allocated once, then filled by disjoint mutable slice writes; small workloads use the serial path to avoid scheduler overhead.
 - Implementation effect: the mathematical formulas are factored into shared helper functions used by both serial and Moirai paths, preserving SSOT and avoiding duplicated algorithm bodies.
 - Verification: `cargo fmt --check`; `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
@@ -295,20 +373,20 @@
 
 ## NUFFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-nufft-wgpu` to `0.2.0`; added the workspace Leto dependency; added direct and fast 1D/3D Type-1/Type-2 Leto host boundaries, including typed storage variants.
-- Architecture effect: NUFFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains available as the validation oracle for 3D mode storage.
+- Architecture effect: NUFFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate; current validation storage is Leto/provider-owned.
 - Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing WGPU slice and ndarray execution paths instead of adding separate GPU algorithm bodies.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice and provider execution paths instead of adding separate GPU algorithm bodies.
 - Verification: `cargo check -p apollo-nufft-wgpu`; `cargo test -p apollo-nufft-wgpu leto -- --nocapture`; `cargo test -p apollo-nufft-wgpu -- --nocapture`; `cargo clippy -p apollo-nufft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-nufft-wgpu --no-deps`; `cargo semver-checks -p apollo-nufft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing NUFFT-WGPU slice/ndarray APIs for 1D Type-1, strided 1D Type-2, typed fast 1D Type-1, 3D Type-1, and 3D Type-2 paths. No runtime benchmark claim is made.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing NUFFT-WGPU slice/provider APIs for 1D Type-1, strided 1D Type-2, typed fast 1D Type-1, 3D Type-1, and 3D Type-2 paths. No runtime benchmark claim is made.
 - Residuals: provider audit no longer reports an Apollo WGPU transform crate without Leto/Mnemosyne host-boundary usage; NUFFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
 
 ## FFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-fft-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 3D forward, 3D inverse, mixed `f16` 3D forward, and mixed `f16` 3D inverse execution.
-- Architecture effect: FFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains available as the validation oracle.
+- Architecture effect: FFT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate.
 - Memory effect: contiguous Leto 1D/3D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
 - Implementation effect: Leto boundaries reuse the existing WGPU split-buffer 3D FFT execution path instead of adding a separate GPU algorithm body.
 - Verification: `cargo check -p apollo-fft-wgpu`; `cargo test -p apollo-fft-wgpu leto -- --nocapture`; `cargo test -p apollo-fft-wgpu -- --nocapture`; `cargo clippy -p apollo-fft-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-fft-wgpu --no-deps`; `cargo semver-checks -p apollo-fft-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing FFT-WGPU ndarray APIs for forward, inverse, strided forward, and mixed `f16` paths. No runtime benchmark claim is made.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing FFT-WGPU provider APIs for forward, inverse, strided forward, and mixed `f16` paths. No runtime benchmark claim is made.
 - Residuals: FFT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
 
 ## STFT-WGPU Leto host boundary [minor]
@@ -331,21 +409,21 @@
 
 ## Radon-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-radon-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for forward projection, adjoint backprojection, filtered backprojection, typed forward projection, and typed adjoint backprojection.
-- Architecture effect: Radon-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
+- Architecture effect: Radon-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate; internal host staging is provider-owned in current Apollo.
 - Memory effect: contiguous Leto 1D angle views borrow storage through `Cow`; strided Leto 1D/2D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing WGPU ndarray and typed flat slice execution methods instead of adding a separate GPU algorithm body.
+- Implementation effect: Leto boundaries reuse the existing WGPU provider and typed flat slice execution methods instead of adding a separate GPU algorithm body.
 - Verification: `cargo check -p apollo-radon-wgpu`; `cargo test -p apollo-radon-wgpu leto -- --nocapture`; `cargo test -p apollo-radon-wgpu -- --nocapture`; `cargo clippy -p apollo-radon-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-radon-wgpu --no-deps`; `cargo semver-checks -p apollo-radon-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Radon-WGPU ndarray/slice APIs for forward, adjoint backprojection, filtered backprojection, strided forward, and typed forward/inverse paths. No runtime benchmark claim is made.
-- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; Radon-WGPU still performs WGPU arithmetic at `f32` precision by contract; ndarray remains an internal staging and validation surface for this WGPU crate.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing Radon-WGPU provider/slice APIs for forward, adjoint backprojection, filtered backprojection, strided forward, and typed forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still need Hephaestus capability expansion; Radon-WGPU still performs WGPU arithmetic at `f32` precision by contract.
 
 ## SHT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-sht-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 2D forward samples, 2D inverse coefficients, flat typed forward samples, and flat typed inverse coefficients.
-- Architecture effect: SHT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains the internal validation/execution staging surface.
+- Architecture effect: SHT-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate; internal host staging is provider-owned in current Apollo.
 - Memory effect: contiguous flat typed Leto 1D views borrow storage through `Cow`; strided Leto 1D/2D views copy once into logical order; generated host outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing WGPU ndarray and typed slice execution methods instead of adding a separate GPU algorithm body.
+- Implementation effect: Leto boundaries reuse the existing WGPU provider and typed slice execution methods instead of adding a separate GPU algorithm body.
 - Verification: `cargo check -p apollo-sht-wgpu`; `cargo test -p apollo-sht-wgpu leto -- --nocapture`; `cargo test -p apollo-sht-wgpu -- --nocapture`; `cargo clippy -p apollo-sht-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-sht-wgpu --no-deps`; `cargo semver-checks -p apollo-sht-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SHT-WGPU ndarray/slice APIs for 2D forward, 2D inverse, strided 2D forward, and typed flat forward/inverse paths. No runtime benchmark claim is made.
-- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; SHT-WGPU still performs WGPU arithmetic at `f32` precision by contract; ndarray remains an internal staging and validation surface for this WGPU crate.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SHT-WGPU provider/slice APIs for 2D forward, 2D inverse, strided 2D forward, and typed flat forward/inverse paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still need Hephaestus capability expansion; SHT-WGPU still performs WGPU arithmetic at `f32` precision by contract.
 
 ## GFT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-gft-wgpu` to `0.2.0`; promoted Leto from dev-only to public dependency; added Leto host boundaries for forward, inverse, typed forward, and typed inverse execution.
@@ -394,12 +472,12 @@
 
 ## DCT/DST-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-dctdst-wgpu` to `0.2.0`; added the workspace Leto dependency; added Leto host boundaries for 1D forward/inverse, typed 1D forward/inverse, 2D forward/inverse, and 3D forward/inverse DCT/DST execution.
-- Architecture effect: DCT/DST-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate and ndarray remains a validation/internal separable execution buffer.
-- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; 2D/3D Leto views materialize once into existing ndarray buffers; generated host outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing WGPU slice, typed slice, and separable ndarray execution methods instead of adding a separate GPU algorithm body.
+- Architecture effect: DCT/DST-WGPU callers can now use Leto as the public host array/layout boundary while WGPU device buffers remain isolated in the infrastructure crate. Current Apollo source and manifests no longer retain a Rust `ndarray` crate edge.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto 1D views copy once into logical order; current 2D/3D host staging uses Leto/row-major provider buffers before generated host outputs return Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing WGPU slice, typed slice, and separable execution methods instead of adding a separate GPU algorithm body.
 - Verification: `cargo check -p apollo-dctdst-wgpu`; `cargo test -p apollo-dctdst-wgpu leto -- --nocapture`; `cargo test -p apollo-dctdst-wgpu -- --nocapture`; `cargo clippy -p apollo-dctdst-wgpu --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst-wgpu --no-deps`; `cargo semver-checks -p apollo-dctdst-wgpu --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing DCT/DST-WGPU slice and ndarray APIs for 1D, typed 1D, 2D, and 3D paths. No runtime benchmark claim is made.
-- Residuals: several Apollo WGPU transform crates still lack Leto/Mnemosyne host boundaries; DCT/DST-WGPU still performs WGPU arithmetic at `f32` precision by contract; multidimensional WGPU helpers still use ndarray as internal validation/separable host staging.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing DCT/DST-WGPU slice/Leto APIs for 1D, typed 1D, 2D, and 3D paths. No runtime benchmark claim is made.
+- Residuals: several Apollo WGPU transform crates still lack complete Hephaestus capability expansion; DCT/DST-WGPU still performs WGPU arithmetic at `f32` precision by contract.
 
 ## CZT-WGPU Leto host boundary [minor]
 - Performed: bumped `apollo-czt-wgpu` to `0.3.0`; added the workspace Leto dependency; added Leto host boundaries for forward, typed forward, and adjoint inverse CZT execution.
@@ -457,21 +535,21 @@
 
 ## NUFFT Leto 1D type-1/type-2 boundary [minor]
 - Performed: bumped `apollo-nufft` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for 1D type-1, type-2, typed type-1, and typed type-2 NUFFT.
-- Architecture effect: NUFFT 1D callers can now use Leto as the public position/value/coefficient boundary while existing slice and ndarray APIs remain the validation and compatibility surface.
+- Architecture effect: NUFFT 1D callers can now use Leto as the public position/value/coefficient boundary while existing slice APIs remain the validation and compatibility surface.
 - Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided Leto views copy once into logical order; generated Fourier bins and interpolated values use Mnemosyne-backed Leto storage.
 - Implementation effect: Leto boundaries reuse the existing slice NUFFT kernels and Mnemosyne scratch pools rather than adding a separate NUFFT implementation.
 - Verification: `cargo check -p apollo-nufft`; `cargo test -p apollo-nufft leto -- --nocapture`; `cargo test -p apollo-nufft -- --nocapture`; `cargo clippy -p apollo-nufft --all-targets -- -D warnings`; `cargo doc -p apollo-nufft --no-deps`; `cargo semver-checks -p apollo-nufft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-nufft --examples`.
 - Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing NUFFT slice APIs for type-1, strided type-1, type-2, and typed `Complex32` type-1/type-2. No runtime benchmark claim is made.
-- Residuals: NUFFT 3D and NUFFT WGPU still have no Leto boundary; direct exact helper functions still expose ndarray where they are validation surfaces.
+- Residuals: NUFFT still has broader GPU/provider expansion work, but current Apollo source and manifests no longer expose a Rust `ndarray` dependency edge.
 
 ## SHT Leto 2D sample/coefficient boundary [minor]
 - Performed: bumped `apollo-sht` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for real forward, complex forward, real inverse, complex inverse, and typed real/complex forward/inverse storage.
-- Architecture effect: SHT callers can now use Leto as the public 2D sample/coefficient boundary while existing ndarray APIs remain the validation and compatibility surface.
-- Memory effect: Leto 2D views copy once into logical row-major ndarray validation buffers; generated coefficient and sample outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai SHT quadrature and synthesis kernels rather than adding a separate SHT implementation.
+- Architecture effect: SHT callers can now use Leto as the public 2D sample/coefficient boundary while Leto-native paths own the validation and compatibility surface.
+- Memory effect: Leto 2D views copy once into logical row-major provider buffers; generated coefficient and sample outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing Leto/Moirai SHT quadrature and synthesis kernels rather than adding a separate SHT implementation.
 - Verification: `cargo check -p apollo-sht`; `cargo test -p apollo-sht leto -- --nocapture`; `cargo test -p apollo-sht -- --nocapture`; `cargo clippy -p apollo-sht --all-targets -- -D warnings`; `cargo doc -p apollo-sht --no-deps`; `cargo semver-checks -p apollo-sht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sht --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing SHT ndarray APIs for real forward, strided real forward, complex forward/inverse, and typed `f32` real forward/inverse. No runtime benchmark claim is made.
-- Residuals: SHT WGPU still has no Leto boundary; SHT CPU internals still use ndarray as the validation/execution buffer until Leto owns all row/chunk mutation contracts required by dense spherical grids.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic tests for real forward, strided real forward, complex forward/inverse, and typed `f32` real forward/inverse. No runtime benchmark claim is made.
+- Residuals: SHT still has broader WGPU/Hephaestus provider expansion work; no current Apollo-owned Rust `ndarray` dependency remains.
 
 ## Wavelet Leto DWT/CWT boundary [minor]
 - Performed: bumped `apollo-wavelet` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for DWT forward/inverse, typed DWT forward/inverse, CWT transform, and typed CWT transform.
@@ -484,21 +562,21 @@
 
 ## STFT Leto 1D analysis/synthesis boundary [minor]
 - Performed: bumped `apollo-stft` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for forward analysis, inverse synthesis, typed forward analysis, typed inverse synthesis, and transport convenience wrappers.
-- Architecture effect: STFT callers can now use Leto as the public 1D signal/spectrum boundary while existing ndarray APIs remain the validation and compatibility surface.
+- Architecture effect: STFT callers can now use Leto as the public 1D signal/spectrum boundary while existing slice/Leto APIs remain the validation and compatibility surface.
 - Memory effect: contiguous `f64` Leto views borrow storage through `Cow`; strided Leto views copy once into logical order; generated spectrum and signal outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai STFT execution contract rather than adding a separate STFT implementation.
+- Implementation effect: Leto boundaries reuse the existing Leto/Moirai STFT execution contract rather than adding a separate STFT implementation.
 - Verification: `cargo check -p apollo-stft`; `cargo test -p apollo-stft leto -- --nocapture`; `cargo test -p apollo-stft -- --nocapture`; `cargo clippy -p apollo-stft --all-targets -- -D warnings`; `cargo doc -p apollo-stft --no-deps`; `cargo semver-checks -p apollo-stft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-stft --examples`.
-- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing STFT ndarray APIs for contiguous forward analysis, strided forward analysis, inverse synthesis, and typed `f32` forward/inverse. No runtime benchmark claim is made.
-- Residuals: STFT WGPU still has no Leto boundary; typed Leto paths still bridge through ndarray typed validation storage until Leto owns the full typed mutation surface required by the existing STFT implementation.
+- Evidence tier: type-level public Leto boundary plus focused value-semantic differential tests against existing STFT provider APIs for contiguous forward analysis, strided forward analysis, inverse synthesis, and typed `f32` forward/inverse. No runtime benchmark claim is made.
+- Residuals: STFT still has broader WGPU/Hephaestus provider expansion work; no current Apollo-owned Rust `ndarray` dependency remains.
 
 ## Radon Leto 2D projection boundary [minor]
 - Performed: bumped `apollo-radon` to `0.2.0`; added the workspace Leto dependency; added Leto boundaries for forward projection, typed forward projection, adjoint backprojection, typed adjoint backprojection, and filtered backprojection.
-- Architecture effect: Radon callers can now use Leto as the public 2D image/sinogram boundary while existing ndarray APIs remain the validation and compatibility surface.
-- Memory effect: Leto 2D views copy once into logical row-major ndarray validation buffers; generated image and sinogram outputs use Mnemosyne-backed Leto storage.
-- Implementation effect: Leto boundaries reuse the existing ndarray/Moirai projection, adjoint, and filtered-backprojection kernels rather than adding a separate Radon implementation.
+- Architecture effect: Radon callers can now use Leto as the public 2D image/sinogram boundary while existing Leto/slice APIs remain the validation and compatibility surface.
+- Memory effect: Leto 2D views copy once into logical row-major provider buffers; generated image and sinogram outputs use Mnemosyne-backed Leto storage.
+- Implementation effect: Leto boundaries reuse the existing Leto/Moirai projection, adjoint, and filtered-backprojection kernels rather than adding a separate Radon implementation.
 - Verification: `cargo check -p apollo-radon`; `cargo test -p apollo-radon leto -- --nocapture`; `cargo test -p apollo-radon -- --nocapture`; `cargo clippy -p apollo-radon --all-targets -- -D warnings`; `cargo doc -p apollo-radon --no-deps`; `cargo semver-checks -p apollo-radon --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-radon --examples`.
-- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Radon ndarray APIs for contiguous forward projection, strided forward projection, typed `f32` forward/backprojection, adjoint backprojection, and filtered backprojection. Existing adjoint identity and ramp-filter tests remained green. No runtime benchmark claim is made.
-- Residuals: Radon WGPU still has no Leto boundary; CPU internals still use ndarray as the validation/execution buffer until Leto grows all required row/chunk mutation contracts.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Radon provider APIs for contiguous forward projection, strided forward projection, typed `f32` forward/backprojection, adjoint backprojection, and filtered backprojection. Existing adjoint identity and ramp-filter tests remained green. No runtime benchmark claim is made.
+- Residuals: Radon still has broader WGPU/Hephaestus provider expansion work; no current Apollo-owned Rust `ndarray` dependency remains.
 
 ## Mellin Leto resample and spectrum boundary [minor]
 - Performed: bumped `apollo-mellin` to `0.3.0`; added the workspace Leto dependency; added Leto boundaries for resampling, typed resampling, moments, typed moments, forward spectra, typed forward spectra, inverse spectra, and inverse from Leto spectrum views.
@@ -525,7 +603,7 @@
 - Implementation effect: Leto boundaries reuse the existing dense FFT plus deterministic top-K sparse-selection contract rather than adding a separate sparse-transform implementation.
 - Verification: `cargo check -p apollo-sft`; `cargo test -p apollo-sft leto -- --nocapture`; `cargo test -p apollo-sft -- --nocapture`; `cargo clippy -p apollo-sft --all-targets -- -D warnings`; `cargo doc -p apollo-sft --no-deps`; `cargo semver-checks -p apollo-sft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-sft --examples`.
 - Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing SFT slice APIs for contiguous forward, strided forward, inverse reconstruction, and typed `Complex32` forward/inverse. Existing property tests for exact sparse recovery, top-K retained energy, and retained DFT values remained green. No runtime benchmark claim is made.
-- Residuals: SFT still uses ndarray internally as the FFT bridge; replacing that path requires an Apollo FFT slice/Leto execution bridge or further direct slice APIs.
+- Residuals: SFT still has broader sparse/GPU providerization work, but current FFT bridge execution no longer requires a Rust `ndarray` crate edge.
 
 ## Hilbert Leto analytic and quadrature boundary [minor]
 - Performed: bumped `apollo-hilbert` to `0.4.0`; added the workspace Leto dependency; added `HilbertPlan::analytic_signal_leto`, `HilbertPlan::transform_leto`, and `HilbertPlan::transform_leto_typed`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
@@ -534,78 +612,78 @@
 - Implementation effect: Leto boundaries reuse the existing slice and typed Hilbert execution contracts rather than adding a separate transform implementation.
 - Verification: `cargo check -p apollo-hilbert`; `cargo test -p apollo-hilbert leto -- --nocapture`; `cargo test -p apollo-hilbert -- --nocapture`; `cargo clippy -p apollo-hilbert --all-targets -- -D warnings`; `cargo doc -p apollo-hilbert --no-deps`; `cargo semver-checks -p apollo-hilbert --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-hilbert --examples`.
 - Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing Hilbert slice APIs for contiguous quadrature, strided quadrature, analytic signal, and typed `f32` quadrature. No runtime benchmark claim is made.
-- Residuals: Hilbert WGPU still has no Leto boundary; broader Apollo ndarray/Leto provider migration remains per-crate work.
+- Residuals: Hilbert still has broader WGPU/Hephaestus provider expansion work; Apollo's Rust `ndarray` migration is complete in the current source and dependency graph.
 
 ## DCT/DST Leto multidimensional boundary and benchmark refresh [minor]
 - Performed: bumped `apollo-dctdst` to `0.2.0`; added the workspace Leto dependency; added Leto 1D/2D/3D forward and inverse boundaries plus typed 1D Leto storage boundaries, returning `leto::Array<_, leto::MnemosyneStorage<_>, _>`.
-- Architecture effect: DCT/DST callers can now use Leto as a public array/layout boundary while existing slice and ndarray APIs remain the validation and compatibility surfaces.
-- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided 1D views copy once into logical order; multidimensional Leto views copy once into ndarray row-major validation buffers before returning Mnemosyne-backed Leto arrays.
+- Architecture effect: DCT/DST callers can now use Leto as a public array/layout boundary while existing slice/Leto APIs remain the validation and compatibility surfaces.
+- Memory effect: contiguous Leto 1D views borrow storage through `Cow`; strided 1D views copy once into logical order; multidimensional Leto views copy once into row-major provider buffers before returning Mnemosyne-backed Leto arrays.
 - Implementation effect: Leto boundaries reuse the existing transform execution paths instead of adding a separate DCT/DST algorithm body.
 - Benchmark refresh: regenerated the full canonical FFT table with `cargo run -p xtask -- benchmark --all --profile quick`. Current measured table has 514 rows; f64 is faster on 68 rows, f32 is faster on 44 rows, and both are faster on 19 rows. This is empirical FFT benchmark evidence only and does not measure DCT/DST.
 - Verification: `cargo check -p apollo-dctdst`; `cargo test -p apollo-dctdst leto -- --nocapture`; `cargo test -p apollo-dctdst -- --nocapture`; `cargo clippy -p apollo-dctdst --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst --no-deps`; `cargo semver-checks -p apollo-dctdst --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dctdst --examples`; `cargo run -p xtask -- benchmark --all --profile quick`.
-- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST slice and ndarray APIs. Benchmark table evidence is empirical quick-profile measurement only. No machine-checked proof is performed.
-- Residuals: DCT/DST still retains ndarray APIs for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST slice/Leto APIs. Benchmark table evidence is empirical quick-profile measurement only. No machine-checked proof is performed.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; broader GPU/provider expansion remains separate work.
 
 ## CZT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-czt` to `0.3.0`; added the workspace Leto dependency; added `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
-- Architecture effect: CZT Complex64 and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Architecture effect: CZT Complex64 and typed public 1D callers can now use Leto as the array/layout boundary while Leto/slice APIs remain as validation and compatibility surfaces.
 - Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
-- Implementation effect: `CztStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Implementation effect: `CztStorage` now owns canonical typed slice execution hooks, reducing repeated array-specific implementation logic and allowing Leto views to share the same execution contract.
 - Verification: `cargo check -p apollo-czt`; `cargo test -p apollo-czt leto -- --nocapture`; `cargo test -p apollo-czt -- --nocapture`; `cargo clippy -p apollo-czt --all-targets -- -D warnings`; `cargo doc -p apollo-czt --no-deps`; `cargo semver-checks -p apollo-czt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-czt --examples`.
-- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray CZT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, inverse `Complex64`, and transport helper output. Existing CZT property tests also remained green. No runtime benchmark claim is made.
-- Residuals: CZT WGPU and some internal kernels still expose ndarray arrays where validation and compatibility surfaces already exist; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing CZT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, inverse `Complex64`, and transport helper output. Existing CZT property tests also remained green. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; CZT WGPU/Hephaestus expansion remains separate work.
 
 ## DHT Leto multidimensional boundary [minor]
 - Performed: bumped `apollo-dht` to `0.2.0`; added the workspace Leto dependency; added `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto`, returning `leto::Array<f64, leto::MnemosyneStorage<f64>, 2/3>`.
-- Architecture effect: DHT 2D/3D callers can now use Leto as the array/layout boundary while ndarray remains the validation and compatibility oracle.
+- Architecture effect: DHT 2D/3D callers can now use Leto as the array/layout boundary while Leto/slice paths remain the validation and compatibility oracle.
 - Memory effect: output arrays use Mnemosyne-backed Leto storage; Leto strided inputs copy once into the existing row-major lane workspace required by the separable DHT scheduler.
 - Implementation effect: Leto boundaries reuse the existing separable DHT row/column/depth kernels and Mnemosyne lane scratch pools instead of adding a separate transform implementation.
 - Verification: `cargo check -p apollo-dht`; `cargo test -p apollo-dht leto -- --nocapture`; `cargo test -p apollo-dht -- --nocapture`; `cargo clippy -p apollo-dht --all-targets -- -D warnings`; `cargo doc -p apollo-dht --no-deps`; `cargo semver-checks -p apollo-dht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dht --examples`.
-- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray DHT API for contiguous 2D, strided 2D inverse, contiguous 3D, and 3D inverse. No runtime benchmark claim is made.
-- Residuals: DHT still exposes ndarray arrays for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing DHT API for contiguous 2D, strided 2D inverse, contiguous 3D, and 3D inverse. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; broader GPU/provider expansion remains separate work.
 
 ## QFT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-qft` to `0.2.0`; added the workspace Leto dependency; added `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
-- Architecture effect: QFT complex and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Architecture effect: QFT complex and typed public 1D callers can now use Leto as the array/layout boundary while Leto/slice APIs remain as validation and compatibility surfaces.
 - Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
-- Implementation effect: `QftStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Implementation effect: `QftStorage` now owns canonical typed slice execution hooks, reducing repeated array-specific implementation logic and allowing Leto views to share the same execution contract.
 - Verification: `cargo check -p apollo-qft`; `cargo test -p apollo-qft leto -- --nocapture`; `cargo test -p apollo-qft -- --nocapture`; `cargo clippy -p apollo-qft --all-targets -- -D warnings`; `cargo doc -p apollo-qft --no-deps`; `cargo semver-checks -p apollo-qft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-qft --examples`.
-- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray QFT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, and strided mixed `[f16; 2]`. No runtime benchmark claim is made.
-- Residuals: QFT WGPU and verification fixtures still use ndarray arrays where validation fixtures already exist; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing QFT API for contiguous `Complex64`, strided `Complex64`, typed `Complex32`, and strided mixed `[f16; 2]`. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; QFT WGPU/Hephaestus expansion remains separate work.
 
 ## FWHT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-fwht` to `0.2.0`; added the workspace Leto dependency; added `FwhtPlan::forward_leto`, `FwhtPlan::inverse_leto`, `FwhtPlan::forward_leto_typed`, `FwhtPlan::inverse_leto_typed`, `fwht_leto`, and `ifwht_leto`, returning `leto::Array<_, leto::MnemosyneStorage<_>, 1>`.
-- Architecture effect: FWHT real and typed public 1D callers can now use Leto as the array/layout boundary while ndarray APIs remain as validation and compatibility surfaces.
+- Architecture effect: FWHT real and typed public 1D callers can now use Leto as the array/layout boundary while Leto/slice APIs remain as validation and compatibility surfaces.
 - Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
-- Implementation effect: `FwhtStorage` now owns canonical typed slice execution hooks, reducing repeated ndarray-only implementation logic and allowing Leto views to share the same execution contract.
+- Implementation effect: `FwhtStorage` now owns canonical typed slice execution hooks, reducing repeated array-specific implementation logic and allowing Leto views to share the same execution contract.
 - Verification: `cargo check -p apollo-fwht`; `cargo test -p apollo-fwht leto -- --nocapture`; `cargo test -p apollo-fwht -- --nocapture`; `cargo clippy -p apollo-fwht --all-targets -- -D warnings`; `cargo doc -p apollo-fwht --no-deps`; `cargo semver-checks -p apollo-fwht --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-fwht --examples`.
-- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing ndarray FWHT API for contiguous `f64`, strided `f64`, typed `f32`, and strided mixed `f16`. No runtime benchmark claim is made.
-- Residuals: complex FWHT and 2D/3D FWHT APIs still expose ndarray arrays; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level provider boundary plus value-semantic differential tests against the existing FWHT API for contiguous `f64`, strided `f64`, typed `f32`, and strided mixed `f16`. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; broader FWHT/GPU provider expansion remains separate work.
 
 ## NTT Leto public 1D boundary [minor]
 - Performed: bumped `apollo-ntt` to `0.2.0`; added the workspace Leto dependency; added `NttPlan::forward_leto`, `NttPlan::inverse_leto`, `ntt_leto`, and `intt_leto`, accepting `leto::ArrayView1<'_, u64>` and returning `leto::Array<u64, leto::MnemosyneStorage<u64>, 1>`.
-- Architecture effect: NTT now has a public Leto array boundary matching FFT, FRFT, and GFT migration direction while retaining ndarray APIs for validation and compatibility.
+- Architecture effect: NTT now has a public Leto array boundary matching FFT, FRFT, and GFT migration direction.
 - Memory effect: contiguous Leto views borrow storage through `Cow`; strided views copy once into logical order; output arrays use Mnemosyne-backed Leto storage.
-- Implementation effect: ndarray allocation/caller-owned methods and Leto allocation methods now share canonical contiguous slice execution hooks, reducing repeated normalization and kernel-dispatch logic.
+- Implementation effect: Leto allocation methods now share canonical contiguous slice execution hooks, reducing repeated normalization and kernel-dispatch logic.
 - Verification: `cargo check -p apollo-ntt`; `cargo test -p apollo-ntt leto -- --nocapture`; `cargo test -p apollo-ntt -- --nocapture`; `cargo clippy -p apollo-ntt --all-targets -- -D warnings`; `cargo doc -p apollo-ntt --no-deps`; `cargo semver-checks -p apollo-ntt --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-ntt --examples`.
-- Evidence tier: type-level provider boundary plus exact value-semantic tests against the existing ndarray NTT API. No runtime benchmark claim is made.
-- Residuals: NTT WGPU verification still consumes CPU `NttPlan` through ndarray arrays where validation fixtures already exist; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level provider boundary plus exact value-semantic tests against the existing NTT API. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; NTT WGPU/Hephaestus expansion remains separate work.
 
 ## FRFT typed Leto storage boundary [minor]
 - Performed: bumped `apollo-frft` to `0.2.0`; added `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and crate-root `frft_leto_typed`, accepting `leto::ArrayView1<'_, T>` where `T: FrftStorage` and returning `leto::Array<T, leto::MnemosyneStorage<T>, 1>`.
-- Architecture effect: FRFT reduced-precision callers now have a typed Leto boundary instead of requiring ndarray ownership at the public edge. The `FrftStorage` trait owns canonical slice execution hooks, and ndarray arrays delegate into those hooks.
+- Architecture effect: FRFT reduced-precision callers now have a typed Leto boundary instead of requiring array ownership at the public edge. The `FrftStorage` trait owns canonical slice execution hooks, and Leto arrays delegate into those hooks.
 - Memory effect: contiguous typed Leto views borrow their backing slice through `Cow`; strided views copy once into logical order before typed slice execution; returned arrays use Mnemosyne-backed Leto storage.
 - Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`.
-- Evidence tier: type-level public boundary replacement plus value-semantic differential tests against the existing ndarray typed API for contiguous `Complex32` and strided mixed `[f16; 2]`. `cargo semver-checks` reported no required semver update for `apollo-frft` 0.1.2 to 0.2.0. No runtime benchmark claim is made.
-- Residuals: FRFT still retains ndarray APIs for compatibility and validation; broader Apollo ndarray replacement remains per-crate work.
+- Evidence tier: type-level public boundary replacement plus value-semantic differential tests against the existing typed API for contiguous `Complex32` and strided mixed `[f16; 2]`. `cargo semver-checks` reported no required semver update for `apollo-frft` 0.1.2 to 0.2.0. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; broader GPU/provider expansion remains separate work.
 
 ## FRFT Leto public 1D boundary [minor]
 - Performed: added `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and crate-root `frft_leto`, accepting `leto::ArrayView1<'_, Complex64>` and returning `leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>`.
-- Architecture effect: FRFT now has a public Leto array boundary matching the provider direction already used in FFT, GFT, and the unitary FRFT basis. The existing ndarray API remains for compatibility and validation while callers migrate.
+- Architecture effect: FRFT now has a public Leto array boundary matching the provider direction already used in FFT, GFT, and the unitary FRFT basis.
 - Memory effect: contiguous Leto views borrow their backing slice; strided views copy once into logical order before the canonical slice FrFT execution path. Returned arrays use Mnemosyne-backed Leto storage.
 - Verification: `cargo check -p apollo-frft`; `cargo test -p apollo-frft leto -- --nocapture`; `cargo clippy -p apollo-frft --all-targets -- -D warnings`; `cargo doc -p apollo-frft --no-deps`; `cargo semver-checks -p apollo-frft --baseline-rev HEAD`.
-- Evidence tier: type-level public Leto boundary plus value-semantic parity tests against the existing ndarray path. No runtime benchmark claim is made.
-- Residuals: FRFT's typed reduced-precision APIs still use ndarray arrays. Migrating those requires a typed Leto storage boundary and precision-profile tests.
+- Evidence tier: type-level public Leto boundary plus value-semantic parity tests against the existing FRFT path. No runtime benchmark claim is made.
+- Residuals: none for Apollo-owned Rust `ndarray` usage; typed reduced-precision Leto storage is already covered by the current provider surface.
 
 ## FRFT Leto eigensolver migration and nalgebra removal [major]
 - Performed: replaced the `apollo-frft` unitary Grünbaum matrix and eigenbasis representation with `leto::Array2<f64>` and `leto_ops::symmetric_eigen_jacobi`, removing the local `DMatrix` and `SymmetricEigen` usage.
@@ -637,10 +715,10 @@
 ## Leto-backed FFT boundary with Mnemosyne storage [minor]
 - Performed in Leto: pinned Mnemosyne to commit `9411c444` in pushed Leto commit `9f639b73`, keeping Apollo and Leto on one Mnemosyne source identity.
 - Performed in Apollo: updated Leto to commit `9f639b73` with `mnemosyne-alloc`; added `leto` to `apollo-fft`; exposed forward/inverse Leto 1D FFT APIs returning Mnemosyne-backed Leto arrays; removed Apollo's root `ndarray` `matrixmultiply-threading` feature.
-- Architecture effect: Leto becomes the array/layout boundary for the first public FFT slice while ndarray remains the differential validation oracle. Contiguous Leto views borrow input storage through `Cow::Borrowed`; strided views perform one explicit logical-order copy before reusing the existing slice execution boundary.
+- Architecture effect: Leto becomes the array/layout boundary for the first public FFT slice. Contiguous Leto views borrow input storage through `Cow::Borrowed`; strided views perform one explicit logical-order copy before reusing the existing slice execution boundary.
 - Verification: `cargo check -p apollo-fft`; `cargo test -p apollo-fft --test slice_api -- --nocapture`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo doc -p apollo-fft --no-deps`; `cargo run -p xtask -- provider-audit`; touched rustfmt check; `cargo tree -p apollo-fft --edges normal` inspection.
-- Evidence tier: differential value-semantic tests against ndarray for contiguous and strided Leto 1D views, type-level Mnemosyne-backed return storage, and static dependency/provider audit. No runtime performance claim is made.
-- Residuals: Apollo still exposes ndarray-backed 2D/3D and validation APIs. Those migrate in later per-crate increments after Leto covers each ndarray contract surface with validation tests.
+- Evidence tier: differential value-semantic tests for contiguous and strided Leto 1D views, type-level Mnemosyne-backed return storage, and static dependency/provider audit. No runtime performance claim is made.
+- Residuals: superseded by later direct ndarray removal; current Apollo source, manifests, and lockfile have no Rust `ndarray` dependency edge.
 
 ## Mnemosyne scratch-bank provider consumption [patch]
 - Performed in Mnemosyne: added `ScratchBank<T, const N>` as a const-generic fixed-role scratch-bank abstraction over independent provider-owned `ScratchPool<T>` slots, bumped exposed Mnemosyne packages to `0.2.0`, and pushed commit `9411c444`.
@@ -663,7 +741,7 @@
 - Performed in Apollo: added Leto to the workspace provider dependency surface with `std` and `ndarray-compat`, added `leto` to `apollo-validation`, added a Leto/ndarray contiguous conversion validation test, extended `xtask provider-audit` to report Leto, and updated the provider contract.
 - Verification: Leto `cargo test -p leto --features ndarray-compat --test apollo_ndarray_contract` (8 passed); Leto `cargo test -p leto --test core_tests slicing` (5 passed); Leto `cargo test -p leto --test layout_property_tests` (8 passed); Apollo `cargo test -p xtask provider_audit -- --nocapture`; Apollo `cargo test -p apollo-validation test_leto_ndarray_validation_boundary --lib`.
 - Evidence tier: differential validation against `ndarray`, value-semantic tests, and static provider-audit coverage. No runtime performance claim is made.
-- Residuals: Apollo `Cargo.lock` currently resolves pushed Leto commit `5c1fd250`, which is sufficient for the contiguous validation boundary but not the new local Apollo slice/stride contract. The local Leto changes must be committed and pushed before Apollo can update to a revision containing the full contract. Direct replacement of Apollo's broad `ndarray` API surface remains pending per-crate migration tests.
+- Residuals: superseded by later Leto revisions and the Apollo direct ndarray removal entry; current Apollo source, manifests, and lockfile have no Rust `ndarray` dependency edge.
 
 ## 1D slice-owned real-storage execution [minor]
 - Performed: `RealFftData` now exposes additive default slice-owned 1D forward and inverse methods. The concrete `f64`, `f32`, and `f16` implementations override those methods and construct exactly the owned vector required by the public slice API before executing the cached `FftPlan1D` in-place slice path.

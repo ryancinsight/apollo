@@ -3,11 +3,11 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
 use crate::{ShtComplexStorage, SphericalGridSpec, SphericalHarmonicCoefficients};
-use leto::Array2;
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
+use leto::Array2;
 
 use crate::infrastructure::transport::gpu::application::plan::ShtWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;

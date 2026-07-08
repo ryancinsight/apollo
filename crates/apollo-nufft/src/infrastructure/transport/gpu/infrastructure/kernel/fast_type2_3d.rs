@@ -3,12 +3,12 @@ use super::{
     FastNufftParams3D, NufftGpuKernel, Position3Pod,
 };
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
-use wgpu::util::DeviceExt;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::buffers::ensure_sample_capacity;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::NufftGpuBuffers3D;
 use apollo_fft::GpuFft3d;
 use eunomia::Complex32;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 
 #[cfg(any(test, feature = "diagnostics"))]
 use super::{read_split_grid_snapshot, NufftType2GridDiagnostics};

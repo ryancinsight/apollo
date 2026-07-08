@@ -25,8 +25,8 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
-use leto::{Array1, Array2};
 use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 /// NTT of the unit impulse [1,0,0,0] with N=4, modulus=998244353, primitive root=3.
 ///

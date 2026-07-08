@@ -3,13 +3,11 @@
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::application::utilities::leto_interop::{
-    try_dense_from_contiguous, view1_cow,
-};
+use crate::application::utilities::leto_interop::{try_dense_from_contiguous, view1_cow};
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use leto::{Array1, Array2, Array3};
 use eunomia::Complex;
 use eunomia::Complex64;
+use leto::{Array1, Array2, Array3};
 
 /// Inverse 1D FFT of a complex signal.
 #[must_use]

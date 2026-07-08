@@ -1,8 +1,10 @@
 //! Buffer gathering, scatter operations, and forward/inverse routing for GPU FFT.
 
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::GpuFft3d;
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{Axis, AxisStrategy};
 use crate::application::utilities::leto_interop;
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::GpuFft3d;
+use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
+    Axis, AxisStrategy,
+};
 use crate::{f16, ApolloError, ApolloResult};
 use leto::Array3;
 use std::borrow::Cow;
@@ -312,7 +314,12 @@ impl GpuFft3d {
 
         let (re_out, _) = self.read_back_full_buffers();
 
-        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(re_out.iter()) {
+        for (dst, &value) in out
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(re_out.iter())
+        {
             *dst = value as f64;
         }
     }
@@ -347,7 +354,12 @@ impl GpuFft3d {
         self.queue.submit(std::iter::once(encoder.finish()));
 
         buffers.read_split_into_host(self);
-        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(buffers.re_host.iter()) {
+        for (dst, &value) in out
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(buffers.re_host.iter())
+        {
             *dst = value as f64;
         }
     }
@@ -390,7 +402,12 @@ impl GpuFft3d {
         self.queue.submit(std::iter::once(encoder.finish()));
 
         buffers.read_split_into_host(self);
-        for (dst, &value) in out.as_slice_mut().expect("contiguous output").iter_mut().zip(buffers.re_host.iter()) {
+        for (dst, &value) in out
+            .as_slice_mut()
+            .expect("contiguous output")
+            .iter_mut()
+            .zip(buffers.re_host.iter())
+        {
             *dst = f16::from_f32(value);
         }
     }
@@ -1024,7 +1041,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_forward_and_inverse_match_ndarray_when_device_exists() {
+    fn leto_forward_and_inverse_match_leto_when_device_exists() {
         let Ok(backend) = WgpuBackend::try_default() else {
             return;
         };
@@ -1064,7 +1081,7 @@ mod tests {
     }
 
     #[test]
-    fn leto_strided_forward_matches_logical_ndarray_when_device_exists() {
+    fn leto_strided_forward_matches_logical_leto_when_device_exists() {
         let Ok(backend) = WgpuBackend::try_default() else {
             return;
         };
@@ -1092,7 +1109,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_leto_forward_and_inverse_match_ndarray_f16_when_device_exists() {
+    fn typed_leto_forward_and_inverse_match_leto_f16_when_device_exists() {
         let Ok(backend) = WgpuBackend::try_default() else {
             return;
         };

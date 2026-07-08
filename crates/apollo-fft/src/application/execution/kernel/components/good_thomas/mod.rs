@@ -34,10 +34,7 @@ pub(crate) fn has_static_coprime_codelet(n1: usize, n2: usize) -> bool {
 ///
 /// Requires gcd(n1, n2) == 1. Permutation index tables are precomputed and cached
 /// on first use via `cached_pfa_perm`, eliminating O(N) modulo per subsequent call.
-pub(crate) fn pfa_fft<
-    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
-    const INVERSE: bool,
->(
+pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,

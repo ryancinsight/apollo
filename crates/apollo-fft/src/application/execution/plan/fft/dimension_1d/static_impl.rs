@@ -1,9 +1,9 @@
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::executors::static_fft_dispatch;
 use core::marker::PhantomData;
-use leto::ArrayViewMut1;
-use leto::Array1;
 use eunomia::Complex;
+use leto::Array1;
+use leto::ArrayViewMut1;
 
 /// Zero-sized 1D FFT plan for compile-time-known lengths.
 ///

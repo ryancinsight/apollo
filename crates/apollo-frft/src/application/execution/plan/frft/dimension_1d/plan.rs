@@ -5,8 +5,8 @@ use crate::application::execution::kernel::direct::direct_frft_forward_into;
 use crate::application::execution::plan::frft::storage::FrftStorage;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::PrecisionProfile;
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::FRAC_PI_2;
 

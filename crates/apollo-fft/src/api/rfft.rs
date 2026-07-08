@@ -3,20 +3,20 @@
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::application::utilities::leto_interop::{
-    try_dense_from_contiguous, view1_cow,
-};
+use crate::application::utilities::leto_interop::{try_dense_from_contiguous, view1_cow};
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use leto::{Array1, Array2, Array3};
 use eunomia::Complex;
 use eunomia::Complex64;
+use leto::{Array1, Array2, Array3};
 
 /// Forward 1D FFT of a real signal.
 #[must_use]
 pub fn fft_1d_array(field: &Array1<f64>) -> Array1<Complex64> {
     <f64 as RealFftData>::forward_1d(
-        f64::get_1d_plan(Shape1D::new(field.size()).expect("fft_1d_array requires non-zero length"))
-            .as_ref(),
+        f64::get_1d_plan(
+            Shape1D::new(field.size()).expect("fft_1d_array requires non-zero length"),
+        )
+        .as_ref(),
         field,
     )
 }

@@ -2,15 +2,15 @@
 
 #[cfg(test)]
 mod tests {
-    use apollo_fft::{f16, PrecisionProfile};
     use crate::{
         nufft_type1_1d, nufft_type1_1d_fast, nufft_type1_3d, nufft_type1_3d_fast, nufft_type2_1d,
         nufft_type2_1d_fast, nufft_type2_3d, nufft_type2_3d_fast, UniformDomain1D, UniformGrid3D,
         DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING,
     };
-    use leto::{SliceArg, Storage};
-    use leto::{Array1, Array3};
+    use apollo_fft::{f16, PrecisionProfile};
     use eunomia::{Complex32, Complex64};
+    use leto::{Array1, Array3};
+    use leto::{SliceArg, Storage};
 
     use crate::infrastructure::transport::gpu::{
         NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuBackend, NufftWgpuCapabilities,

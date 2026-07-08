@@ -256,7 +256,11 @@ mod tests {
     /// H_{2D}(H_{2D}(X))[m,n] = N·(N·X[m,n]) = N²·X[m,n].
     #[test]
     fn forward_2d_involution_equals_n_squared_times_input() {
-        let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [3, 3],
+            vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0],
+        )
+        .unwrap();
         let plan = DhtPlan::new(3).expect("plan");
         let first = plan.forward_2d(&input).expect("first 2D forward");
         let second = plan.forward_2d(&first).expect("second 2D forward");
@@ -280,7 +284,11 @@ mod tests {
     /// inverse_2d(forward_2d(X)) = (1/N²)·N²·X = X exactly.
     #[test]
     fn inverse_2d_recovers_input() {
-        let input = leto::Array2::from_shape_vec([3, 3], vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [3, 3],
+            vec![1.0_f64, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0],
+        )
+        .unwrap();
         let plan = DhtPlan::new(3).expect("plan");
         let spectrum = plan.forward_2d(&input).expect("2D forward");
         let recovered = plan.inverse_2d(&spectrum).expect("2D inverse");
@@ -299,8 +307,11 @@ mod tests {
 
     #[test]
     fn forward_and_inverse_2d_into_match_allocating_paths() {
-
-        let input = leto::Array2::from_shape_vec([3, 3], vec![1.25_f64, -0.5, 2.0, -1.0, 0.75, 3.5, 0.125, -2.25, 1.5]).unwrap();
+        let input = leto::Array2::from_shape_vec(
+            [3, 3],
+            vec![1.25_f64, -0.5, 2.0, -1.0, 0.75, 3.5, 0.125, -2.25, 1.5],
+        )
+        .unwrap();
         let plan = DhtPlan::new(3).expect("plan");
 
         let expected_forward = plan.forward_2d(&input).expect("forward 2D");

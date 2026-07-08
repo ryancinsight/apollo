@@ -13,8 +13,8 @@
 //! transform of the log-resampled signal. calculate_log_resample performs the
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
-use moirai::ParallelSliceMut;
 use eunomia::Complex64;
+use moirai::ParallelSliceMut;
 
 const PAR_THRESHOLD: usize = 256;
 const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;

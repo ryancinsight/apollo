@@ -35,9 +35,9 @@ use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, Mixed
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
 use crate::domain::metadata::shape::Shape2D;
 use core::marker::PhantomData;
-use leto::ArrayViewMut2;
-use leto::Array2;
 use eunomia::Complex;
+use leto::Array2;
+use leto::ArrayViewMut2;
 use std::sync::Arc;
 
 /// Use Moirai parallel iteration when total elements exceed this threshold.

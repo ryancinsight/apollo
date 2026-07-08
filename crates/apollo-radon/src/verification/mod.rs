@@ -10,7 +10,9 @@ mod tests {
 
     #[test]
     fn zero_angle_projection_equals_column_sums() {
-        let image = leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap();
+        let image =
+            leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+                .unwrap();
         let plan = RadonPlan::new(3, 3, vec![0.0], 3, 1.0).expect("plan");
         let sinogram = plan.forward(&image).expect("forward");
         let row = sinogram.values().as_slice().expect("contiguous sinogram");
@@ -22,7 +24,9 @@ mod tests {
 
     #[test]
     fn right_angle_projection_equals_row_sums() {
-        let image = leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap();
+        let image =
+            leto::Array2::from_shape_vec([3, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+                .unwrap();
         let plan = RadonPlan::new(3, 3, vec![std::f64::consts::FRAC_PI_2], 3, 1.0).expect("plan");
         let sinogram = plan.forward(&image).expect("forward");
         let row = sinogram.values().as_slice().expect("contiguous sinogram");
@@ -35,7 +39,8 @@ mod tests {
     #[test]
     fn forward_and_backproject_satisfy_adjoint_identity() {
         let image = leto::Array2::from_shape_vec([2, 2], vec![1.0, -2.0, 0.5, 3.0]).unwrap();
-        let detector_values = leto::Array2::from_shape_vec([2, 3], vec![2.0, -1.0, 0.25, 1.5, 0.0, -0.75]).unwrap();
+        let detector_values =
+            leto::Array2::from_shape_vec([2, 3], vec![2.0, -1.0, 0.25, 1.5, 0.0, -0.75]).unwrap();
         let plan =
             RadonPlan::new(2, 2, vec![0.0, std::f64::consts::FRAC_PI_4], 3, 1.0).expect("plan");
         let forward = plan.forward(&image).expect("forward");

@@ -15,12 +15,13 @@ local path overrides for provider work.
   dependency table with default features disabled and `alloc` enabled.
 - `hermes-simd` is the SIMD provider in the Apollo workspace dependency table
   with default features disabled and `std` enabled.
-- `leto` is the strided-array and dense-matrix migration provider in the Apollo workspace
-  dependency table with default features disabled and `std` plus
-  `ndarray-compat` and `mnemosyne-alloc` enabled.
-- `ndarray` remains the validation oracle and transitional public API substrate.
-  The workspace dependency must not enable Rayon or matrixmultiply threading
-  while Moirai is the intended parallel runtime.
+- `leto` is the active strided-array and dense-matrix provider in the Apollo
+  workspace dependency table. Apollo code and manifests must not depend on the
+  Rust `ndarray` crate; Leto owns owned arrays, views, shape metadata, and
+  dense layout materialization.
+- Runtime NumPy arrays remain only at Python/external-reference boundaries.
+  Apollo library crates must not use the Rust `numpy` crate or `ndarray` as an
+  internal array substrate while Leto is the intended array provider.
 - WGPU crates own GPU device buffers and dispatch. CPU scheduling and host-side
   allocation policy must remain decoupled from WGPU infrastructure types.
 
@@ -88,25 +89,23 @@ local path overrides for provider work.
 
 ## Apollo Requirements for Leto
 
-- Constructors and rank aliases matching Apollo's current `ndarray`
+- Constructors and rank aliases matching Apollo's current Leto
   `Array1`/`Array2`/`Array3` usage: `zeros`, `from_elem`, `from_vec`,
-  `from_shape_vec`, `from_shape_fn`, and owned `into_vec`.
+  `from_shape_vec`, `from_shape_fn`, and owned vector extraction.
 - Zero-copy immutable and mutable views over contiguous and strided layouts,
   with signed strides preserved for reverse views and storage-span validation
   before any external layout is accepted.
-- `ndarray`-validated slicing semantics, including full axes, signed ranges,
-  negative indices, negative strides, axis-dropping index selections, inserted
-  axes, ellipsis expansion, implicit trailing axes, and retained single-element
-  range stride metadata.
-- Broadcast and axis-iteration semantics that match `ndarray` for read paths
-  and reject mutable zero-stride aliasing.
-- Transitional `ndarray-compat` conversions for validation only. Apollo uses
-  `ndarray` to validate Leto behavior before replacing a downstream call site;
-  core hot paths should move to Leto only after differential tests cover the
-  relevant shape, stride, value, and mutation contracts.
+- Leto-owned slicing semantics, including full axes, signed ranges, negative
+  indices, negative strides, axis-dropping index selections, inserted axes,
+  ellipsis expansion, implicit trailing axes, and retained single-element range
+  stride metadata.
+- Broadcast and axis-iteration semantics for read paths, plus rejection of
+  mutable zero-stride aliasing.
+- Apollo validation uses Leto-native value tests, analytical references, and
+  external runtime references where appropriate. It does not reintroduce Rust
+  `ndarray` compatibility as an oracle inside Apollo.
 - Mnemosyne-backed owned array constructors for Apollo output boundaries. The
-  first migrated surface is the `apollo-fft` 1D Leto view API, which returns
-  `MnemosyneStorage` and keeps `ndarray` only as the differential oracle.
+  migrated transform surfaces return `MnemosyneStorage`-backed Leto arrays.
 - Dense graph/matrix descriptors that can replace `nalgebra::DMatrix` in
   Apollo domain models. Current migration coverage includes `apollo-gft`
   adjacency validation and combinatorial Laplacian construction; nalgebra

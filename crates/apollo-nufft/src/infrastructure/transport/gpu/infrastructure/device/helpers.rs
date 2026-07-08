@@ -1,11 +1,11 @@
+use crate::infrastructure::kernel::kaiser_bessel::{fft_signed_index, i0, kb_kernel_ft};
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
+use crate::NufftComplexStorage;
 use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::PrecisionProfile;
-use crate::infrastructure::kernel::kaiser_bessel::{fft_signed_index, i0, kb_kernel_ft};
-use crate::NufftComplexStorage;
-use leto::Array3;
 use eunomia::{Complex32, Complex64};
+use leto::Array3;
 use std::borrow::Cow;
 
 pub(crate) struct Fast1DMetadata {

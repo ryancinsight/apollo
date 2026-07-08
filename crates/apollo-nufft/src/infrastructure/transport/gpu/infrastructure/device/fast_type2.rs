@@ -1,7 +1,7 @@
-use apollo_fft::PrecisionProfile;
 use crate::NufftComplexStorage;
-use leto::Array3;
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
+use leto::Array3;
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -11,7 +11,9 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     validate_typed_profile, validate_usize_to_u32, write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
-use crate::infrastructure::transport::gpu::infrastructure::kernel::{NufftGpuBuffers1D, NufftGpuBuffers3D};
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{
+    NufftGpuBuffers1D, NufftGpuBuffers3D,
+};
 
 impl NufftWgpuBackend {
     /// Execute fast gridded Type-2 1D NUFFT on WGPU.
@@ -113,7 +115,10 @@ impl NufftWgpuBackend {
         plan: &NufftWgpuPlan1D,
         fourier_coeffs: &[Complex32],
         positions: &[f32],
-    ) -> NufftWgpuResult<(Vec<Complex64>, crate::infrastructure::transport::gpu::NufftType2GridDiagnostics)> {
+    ) -> NufftWgpuResult<(
+        Vec<Complex64>,
+        crate::infrastructure::transport::gpu::NufftType2GridDiagnostics,
+    )> {
         if fourier_coeffs.len() != plan.domain().n {
             return Err(NufftWgpuError::InputLengthMismatch {
                 expected: plan.domain().n,
@@ -249,7 +254,10 @@ impl NufftWgpuBackend {
         plan: &NufftWgpuPlan3D,
         modes: &Array3<Complex32>,
         positions: &[(f32, f32, f32)],
-    ) -> NufftWgpuResult<(Vec<Complex64>, crate::infrastructure::transport::gpu::NufftType2GridDiagnostics)> {
+    ) -> NufftWgpuResult<(
+        Vec<Complex64>,
+        crate::infrastructure::transport::gpu::NufftType2GridDiagnostics,
+    )> {
         let grid = plan.grid();
         if modes.shape() != [grid.nx, grid.ny, grid.nz] {
             return Err(NufftWgpuError::InvalidPlan {

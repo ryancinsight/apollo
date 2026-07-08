@@ -34,10 +34,10 @@
 //! - kernel width must satisfy `kernel_width >= 2`
 
 use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
+use eunomia::{Complex32, Complex64};
+use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use leto::Array1;
-use eunomia::{Complex32, Complex64};
 use std::borrow::Cow;
 use std::f64::consts::PI;
 
@@ -109,6 +109,17 @@ fn sort_positions_1d(
     indexed
 }
 
+fn array1_from_vec<T>(values: Vec<T>) -> Array1<T> {
+    Array1::from_shape_vec([values.len()], values)
+        .expect("invariant: vector length matches 1D Leto shape")
+}
+
+fn array1_value<T: Copy>(array: &Array1<T>, index: usize) -> T {
+    *array
+        .get([index])
+        .expect("invariant: validated rank-1 Leto index")
+}
+
 /// Reusable 1D NUFFT plan using Kaiser-Bessel spreading.
 pub struct NufftPlan1D {
     n_out: usize,
@@ -170,7 +181,7 @@ impl NufftPlan1D {
         let mut grid = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![Complex64::new(0.0, 0.0); self.n_out];
         self.type1_into(positions, values, &mut grid, &mut output);
-        Array1::from(output)
+        array1_from_vec(output)
     }
 
     /// Run type-1 NUFFT from Leto position and value views.
@@ -234,7 +245,7 @@ impl NufftPlan1D {
         for k in 0..self.n_out {
             let k_signed = fft_signed_index(k, self.n_out);
             let m_idx = k_signed.rem_euclid(self.m as i64) as usize;
-            output[k] = spectrum[m_idx] * self.deconv[k];
+            output[k] = spectrum[m_idx] * array1_value(&self.deconv, k);
         }
     }
 
@@ -301,7 +312,7 @@ impl NufftPlan1D {
         for k in 0..self.n_out {
             let k_signed = fft_signed_index(k, self.n_out);
             let m_idx = k_signed.rem_euclid(self.m as i64) as usize;
-            scratch_spread[m_idx] = fourier_coeffs[k] * self.deconv[k];
+            scratch_spread[m_idx] = fourier_coeffs[k] * array1_value(&self.deconv, k);
         }
 
         self.fft_plan.inverse_complex_slice_inplace(scratch_spread);
@@ -624,7 +635,7 @@ pub fn nufft_type1_1d(
             *value = nufft_type1_coefficient(k, positions, values, domain.n, two_pi_over_l);
         });
     }
-    Array1::from(output)
+    array1_from_vec(output)
 }
 
 fn nufft_type1_coefficient(
@@ -793,11 +804,11 @@ mod tests {
         assert_eq!(output.size(), 8);
         // DC mode: sum of all values (analytical)
         let expected_dc = Complex64::new(1.25, 0.6);
-        let err = (output[0] - expected_dc).norm();
+        let err = (output[[0]] - expected_dc).norm();
         assert!(
             err < 1e-12,
             "DC mode err={err}: got {:?}, expected {:?}",
-            output[0],
+            output[[0]],
             expected_dc
         );
         // All outputs must be finite
@@ -978,7 +989,7 @@ mod tests {
             PrecisionProfile::LOW_PRECISION_F32,
         )
         .expect("typed complex32 type2");
-        let expected_type2 = plan.type2(&Array1::from(expected32.to_vec()), &positions);
+        let expected_type2 = plan.type2(&expected32, &positions);
         for (actual, expected) in recovered32.iter().zip(expected_type2.iter()) {
             assert!((f64::from(actual.re) - expected.re).abs() < 1.0e-3);
             assert!((f64::from(actual.im) - expected.im).abs() < 1.0e-3);
@@ -1104,15 +1115,16 @@ mod tests {
             DEFAULT_NUFFT_KERNEL_WIDTH,
         );
         let positions = vec![0.0, 0.09, 0.21, 0.47];
-        let coefficients = Array1::from(
-            (0..plan.n_out)
-                .map(|i| Complex64::new((i as f64 * 0.2).cos(), (i as f64 * 0.3).sin()))
-                .collect::<Vec<_>>(),
-        );
+        let coefficient_values = (0..plan.n_out)
+            .map(|i| Complex64::new((i as f64 * 0.2).cos(), (i as f64 * 0.3).sin()))
+            .collect::<Vec<_>>();
+        let coefficients = Array1::from_shape_vec([coefficient_values.len()], coefficient_values)
+            .expect("invariant: generated coefficient vector length matches plan output size");
         let leto_positions =
             leto::Array1::from_shape_vec([positions.len()], positions.clone()).unwrap();
         let leto_coefficients =
-            leto::Array1::from_shape_vec([coefficients.size()], coefficients.to_vec()).unwrap();
+            leto::Array1::from_shape_vec([coefficients.size()], coefficients.clone().into_vec())
+                .unwrap();
         let expected = plan.type2(&coefficients, &positions);
 
         let actual = plan
@@ -1268,11 +1280,11 @@ mod proptest_suite {
                 .collect();
             let output = nufft_type1_1d(&positions, &values, domain);
             let expected_dc: Complex64 = values.iter().copied().sum();
-            let err = (output[0] - expected_dc).norm();
+            let err = (output[[0]] - expected_dc).norm();
             prop_assert!(
                 err < 1e-10,
                 "DC mode err={}: got {:?}, expected {:?}",
-                err, output[0], expected_dc
+                err, output[[0]], expected_dc
             );
         }
 

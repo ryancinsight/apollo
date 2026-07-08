@@ -3,12 +3,24 @@
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::PrecisionProfile;
-use leto::Array1;
 use eunomia::Complex64;
+use leto::Array1;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use super::storage::FwhtStorage;
+
+fn scale_array<T>(data: &mut Array1<T>, scale: T)
+where
+    T: Copy + std::ops::MulAssign,
+{
+    for value in data
+        .as_slice_mut()
+        .expect("invariant: FWHT arrays are contiguous")
+    {
+        *value *= scale;
+    }
+}
 
 /// Reusable FWHT plan.
 ///
@@ -280,7 +292,7 @@ impl FwhtPlan {
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));
         let scale = 1.0 / self.n as f64;
-        data.mapv_inplace(|value| value * scale);
+        scale_array(data, scale);
         Ok(())
     }
 
@@ -366,7 +378,7 @@ impl FwhtPlan {
         }
         wht_inplace(data.as_slice_mut().expect("Array must be contiguous"));
         let scale = 1.0 / self.n as f64;
-        data.mapv_inplace(|value| value * scale);
+        scale_array(data, Complex64::new(scale, 0.0));
         Ok(())
     }
 

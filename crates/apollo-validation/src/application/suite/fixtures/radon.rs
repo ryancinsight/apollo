@@ -25,9 +25,9 @@ use apollo_sft::SparseFftPlan;
 use apollo_sht::ShtPlan;
 use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use eunomia::Complex64;
 use leto::Storage;
 use leto::{Array1, Array2};
-use eunomia::Complex64;
 
 pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<PublishedFixtureReport>
 {
@@ -42,7 +42,11 @@ pub(crate) fn radon_theta0_column_impulse_projection_fixture() -> SuiteResult<Pu
     image[[0, 0]] = 1.0;
     let plan = RadonPlan::new(3, 3, vec![0.0], 3, 1.0)?;
     let sinogram = plan.forward(&image)?;
-    let row: Vec<f64> = { let v = sinogram.values(); let c = v.shape()[1]; v.as_slice().expect("contiguous")[0..c].to_vec() };
+    let row: Vec<f64> = {
+        let v = sinogram.values();
+        let c = v.shape()[1];
+        v.as_slice().expect("contiguous")[0..c].to_vec()
+    };
     let expected = vec![1.0_f64, 0.0, 0.0];
     Ok(published_real_fixture(
         "Radon",
@@ -82,7 +86,11 @@ pub(crate) fn radon_fourier_slice_theorem_theta0_fixture() -> SuiteResult<Publis
         .expect("(2,2) shape is valid for 4 elements");
     let plan = RadonPlan::new(2, 2, vec![0.0_f64], 2, 1.0)?;
     let sinogram = plan.forward(&image)?;
-    let projection = { let v = sinogram.values(); let c = v.shape()[1]; v.as_slice().expect("contiguous")[0..c].to_vec() };
+    let projection = {
+        let v = sinogram.values();
+        let c = v.shape()[1];
+        v.as_slice().expect("contiguous")[0..c].to_vec()
+    };
     let projection_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
         [projection.len()],
         projection.as_slice(),

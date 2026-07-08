@@ -2,7 +2,9 @@ use eunomia::Complex32;
 use wgpu::util::DeviceExt;
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::chirp::{chirp_padded_len, StftChirpData};
+use crate::infrastructure::transport::gpu::infrastructure::chirp::{
+    chirp_padded_len, StftChirpData,
+};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
     dispatch_count, fft_dispatch_count, ComplexPod, StftGpuKernel, StftParams,
 };
@@ -39,19 +41,27 @@ impl StftGpuKernel {
             .iter()
             .map(|c| ComplexPod { re: c.re, im: c.im })
             .collect();
-        let spectrum_buf = hep_device.upload(&spectrum_pods).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let spectrum_buf =
+            hep_device
+                .upload(&spectrum_pods)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         // frame_data buffer: written by postmul_inv, read by OLA pass.
-        let frame_data_buf = hep_device.alloc_zeroed::<f32>(frame_count * frame_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let frame_data_buf = hep_device
+            .alloc_zeroed::<f32>(frame_count * frame_len)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         // OLA signal output.
-        let signal_buf = hep_device.alloc_zeroed::<f32>(signal_len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        let signal_buf =
+            hep_device
+                .alloc_zeroed::<f32>(signal_len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
 
         // IO bind group for premul_inv (binding 0 = interleaved spectrum, binding 1 = frame_data).
         let io_bg_inv = device
@@ -169,9 +179,11 @@ impl StftGpuKernel {
         device.queue().submit(std::iter::once(enc.finish()));
 
         let mut output = vec![0.0f32; signal_len];
-        hep_device.download(&signal_buf, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&signal_buf, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
 
         Ok(output)
     }

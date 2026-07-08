@@ -9,8 +9,8 @@ use crate::infrastructure::kernel::direct::{
     analytic_signal, analytic_signal_into, hilbert_transform, hilbert_transform_into,
 };
 use apollo_fft::{f16, PrecisionProfile};
-use mnemosyne::scratch::ScratchPool;
 use eunomia::Complex64;
+use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };

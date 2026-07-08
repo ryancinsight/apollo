@@ -7,7 +7,9 @@ use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 use crate::infrastructure::transport::gpu::application::plan::NttWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel, NttMode};
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{
+    NttGpuBuffers, NttGpuKernel, NttMode,
+};
 use apollo_wgpu_helpers::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
@@ -31,8 +33,17 @@ impl NttWgpuBackend {
     }
 
     /// Create a backend by requesting a default adapter and device.
+    ///
+    /// Adapter/device acquisition is cached process-wide behind a
+    /// [`std::sync::OnceLock`]: repeated calls (e.g. once per property-test
+    /// case) clone the cached backend instead of re-enumerating and
+    /// re-acquiring a GPU device each time.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?)
+        static INSTANCE: std::sync::OnceLock<WgpuResult<NttWgpuBackend>> =
+            std::sync::OnceLock::new();
+        INSTANCE
+            .get_or_init(|| Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?))
+            .clone()
     }
 
     /// Return truthful current capabilities.
@@ -154,12 +165,8 @@ impl NttWgpuBackend {
         buffers: &mut NttGpuBuffers,
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers(plan, input, buffers)?;
-        self.kernel.execute_with_buffers(
-            &self.device,
-            input,
-            NttMode::Forward,
-            buffers,
-        )
+        self.kernel
+            .execute_with_buffers(&self.device, input, NttMode::Forward, buffers)
     }
 
     /// Execute the direct inverse NTT over the configured residue field.
@@ -226,12 +233,8 @@ impl NttWgpuBackend {
         buffers: &mut NttGpuBuffers,
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers(plan, input, buffers)?;
-        self.kernel.execute_with_buffers(
-            &self.device,
-            input,
-            NttMode::Inverse,
-            buffers,
-        )
+        self.kernel
+            .execute_with_buffers(&self.device, input, NttMode::Inverse, buffers)
     }
 
     /// Return the last readback values written by a reusable-buffer execution.
@@ -256,12 +259,8 @@ impl NttWgpuBackend {
         }
         Self::validate_plan_and_len(plan, input.len())?;
         let mut buffers = self.create_buffers(plan)?;
-        self.kernel.execute_quantized_with_buffers(
-            &self.device,
-            input,
-            mode,
-            &mut buffers,
-        )?;
+        self.kernel
+            .execute_quantized_with_buffers(&self.device, input, mode, &mut buffers)?;
         for (slot, &value) in output.iter_mut().zip(self.buffer_output(&buffers).iter()) {
             *slot = value as u32;
         }
@@ -276,12 +275,8 @@ impl NttWgpuBackend {
         mode: NttMode,
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers_len(plan, input.len(), buffers)?;
-        self.kernel.execute_quantized_with_buffers(
-            &self.device,
-            input,
-            mode,
-            buffers,
-        )
+        self.kernel
+            .execute_quantized_with_buffers(&self.device, input, mode, buffers)
     }
 
     fn validate_plan_input_and_buffers(

@@ -3,8 +3,8 @@
 use apollo_fft::application::utilities::leto_interop;
 use std::{borrow::Cow, sync::Arc};
 
-use apollo_fft::PrecisionProfile;
 use crate::RadonStorage;
+use apollo_fft::PrecisionProfile;
 use leto::Array2;
 
 use crate::infrastructure::transport::gpu::application::plan::RadonWgpuPlan;
@@ -83,12 +83,7 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_inputs(plan, image, angles)?;
-        self.kernel.execute(
-            &self.device,
-            plan,
-            image,
-            angles,
-        )
+        self.kernel.execute(&self.device, plan, image, angles)
     }
 
     /// Execute the forward Radon projection from Leto image and angle views.
@@ -120,12 +115,8 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel.execute_backproject(
-            &self.device,
-            plan,
-            sinogram,
-            angles,
-        )
+        self.kernel
+            .execute_backproject(&self.device, plan, sinogram, angles)
     }
 
     /// Execute GPU adjoint backprojection from Leto sinogram and angle views.
@@ -212,12 +203,8 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel.execute_filtered_backproject(
-            &self.device,
-            plan,
-            sinogram,
-            angles,
-        )
+        self.kernel
+            .execute_filtered_backproject(&self.device, plan, sinogram, angles)
     }
 
     /// Execute GPU ramp-filtered backprojection from Leto sinogram and angle views.

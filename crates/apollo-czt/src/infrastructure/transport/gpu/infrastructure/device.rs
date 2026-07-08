@@ -80,11 +80,7 @@ impl CztWgpuBackend {
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            plan,
-            input,
-        )
+        self.kernel.execute(&self.device, plan, input)
     }
 
     /// Execute the direct forward CZT from a Leto host view.
@@ -199,11 +195,7 @@ impl CztWgpuBackend {
                 message: format!("CZT lengths input={n}, output={n} must be greater than zero"),
             });
         }
-        self.kernel.execute_inverse(
-            &self.device,
-            plan,
-            spectrum,
-        )
+        self.kernel.execute_inverse(&self.device, plan, spectrum)
     }
 
     /// Execute the adjoint inverse CZT from a Leto host view.

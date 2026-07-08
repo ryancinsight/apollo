@@ -112,42 +112,53 @@ impl DhtGpuKernel {
     ) -> WgpuResult<Vec<f32>> {
         let hep_device = device.hephaestus();
         let len = input.len();
-        let input_buffer = hep_device.upload(input).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let output_buffer = hep_device.alloc_zeroed::<f32>(len).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
-        let params_buffer = device.inner().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-dht-wgpu params"),
-            contents: bytemuck::bytes_of(&DhtParams {
-                len: len as u32,
-                _padding: [0; 3],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let bind_group = device.inner().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("apollo-dht-wgpu bind group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: params_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let input_buffer = hep_device
+            .upload(input)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
+        let output_buffer =
+            hep_device
+                .alloc_zeroed::<f32>(len)
+                .map_err(|e| WgpuError::BufferMapFailed {
+                    message: e.to_string(),
+                })?;
+        let params_buffer = device
+            .inner()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("apollo-dht-wgpu params"),
+                contents: bytemuck::bytes_of(&DhtParams {
+                    len: len as u32,
+                    _padding: [0; 3],
+                }),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let bind_group = device
+            .inner()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("apollo-dht-wgpu bind group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: params_buffer.as_entire_binding(),
+                    },
+                ],
+            });
 
-        let mut encoder = device.inner().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("apollo-dht-wgpu encoder"),
-        });
+        let mut encoder = device
+            .inner()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("apollo-dht-wgpu encoder"),
+            });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("apollo-dht-wgpu transform pass"),
@@ -169,9 +180,11 @@ impl DhtGpuKernel {
         device.queue().submit(std::iter::once(encoder.finish()));
 
         let mut output = vec![0.0_f32; len];
-        hep_device.download(&output_buffer, &mut output).map_err(|e| WgpuError::BufferMapFailed {
-            message: e.to_string(),
-        })?;
+        hep_device
+            .download(&output_buffer, &mut output)
+            .map_err(|e| WgpuError::BufferMapFailed {
+                message: e.to_string(),
+            })?;
         Ok(output)
     }
 }

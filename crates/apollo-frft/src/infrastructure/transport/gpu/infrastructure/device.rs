@@ -5,8 +5,8 @@ use std::{borrow::Cow, sync::Arc};
 
 use eunomia::{Complex32, Complex64};
 
-use apollo_fft::PrecisionProfile;
 use crate::FrftStorage;
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::{FrftWgpuPlan, UnitaryFrftWgpuPlan};
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -158,11 +158,8 @@ impl FrftWgpuBackend {
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
         Self::validate_unitary(plan, input)?;
-        self.unitary_kernel.execute(
-            &self.device,
-            input,
-            plan.order(),
-        )
+        self.unitary_kernel
+            .execute(&self.device, input, plan.order())
     }
 
     /// Execute the forward unitary DFrFT from a Leto complex host view.
@@ -187,11 +184,8 @@ impl FrftWgpuBackend {
     ) -> WgpuResult<Vec<Complex32>> {
         let inv_plan = UnitaryFrftWgpuPlan::new(plan.len(), -plan.order());
         Self::validate_unitary(&inv_plan, input)?;
-        self.unitary_kernel.execute(
-            &self.device,
-            input,
-            inv_plan.order(),
-        )
+        self.unitary_kernel
+            .execute(&self.device, input, inv_plan.order())
     }
 
     /// Execute the inverse unitary DFrFT from a Leto complex host view.

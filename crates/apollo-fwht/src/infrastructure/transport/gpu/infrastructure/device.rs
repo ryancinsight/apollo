@@ -4,8 +4,8 @@ use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use apollo_fft::PrecisionProfile;
 use crate::FwhtStorage;
+use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::FwhtWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
@@ -65,11 +65,7 @@ impl FwhtWgpuBackend {
     /// Execute the unnormalized forward 1D FWHT for a real-valued `f32` signal.
     pub fn execute_forward(&self, plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            false,
-        )
+        self.kernel.execute(&self.device, input, false)
     }
 
     /// Execute the unnormalized forward 1D FWHT from a Leto `f32` view.
@@ -123,11 +119,7 @@ impl FwhtWgpuBackend {
     /// Execute the normalized inverse 1D FWHT for a real-valued `f32` spectrum.
     pub fn execute_inverse(&self, plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            true,
-        )
+        self.kernel.execute(&self.device, input, true)
     }
 
     /// Execute the normalized inverse 1D FWHT from a Leto `f32` view.

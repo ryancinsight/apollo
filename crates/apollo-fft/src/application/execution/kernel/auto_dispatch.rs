@@ -5,8 +5,8 @@
 //! entry points (`fft_forward`, `fft_inverse`, `fft_inverse_unnorm`), and
 //! precision-specific scaffolding (`dispatch_dft11`).
 
-use half::f16;
 use eunomia::{Complex, Complex32, Complex64};
+use half::f16;
 
 use super::components::winograd::radix::{dft4_array_impl, dft8_array_impl};
 use super::components::winograd::{dft3_impl, dft5_array_impl, dft7_impl};

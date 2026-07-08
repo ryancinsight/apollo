@@ -5,8 +5,8 @@
 //! It provides reusable reference FFT plans for validation comparisons without
 //! imposing `rustfft` on non-validation builds.
 
-use leto::{Array1, Array3};
 use eunomia::Complex64;
+use leto::{Array1, Array3};
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
 
@@ -17,13 +17,15 @@ use std::sync::Arc;
 /// `eunomia::Complex64`. Both are `#[repr(C)] { re: f64, im: f64 }` with
 /// identical size and alignment, so the reinterpret is a no-op bit cast.
 #[inline]
-fn as_rustfft(buffer: &mut [Complex64]) -> &mut [num_complex::Complex<f64>] {
+fn as_rustfft(buffer: &mut [Complex64]) -> &mut [rustfft::num_complex::Complex<f64>] {
     // SAFETY: eunomia::Complex64 and num_complex::Complex<f64> are both
     // #[repr(C)] structs of two contiguous f64 fields (re, im) with matching
     // layout and alignment; a slice of one is a valid slice of the other.
     unsafe {
         std::slice::from_raw_parts_mut(
-            buffer.as_mut_ptr().cast::<num_complex::Complex<f64>>(),
+            buffer
+                .as_mut_ptr()
+                .cast::<rustfft::num_complex::Complex<f64>>(),
             buffer.len(),
         )
     }
@@ -68,8 +70,10 @@ impl RustFftPlan1D {
             .iter_mut()
             .zip(input.iter().copied())
             .for_each(|(dst, src)| *dst = Complex64::new(src, 0.0));
-        self.fft
-            .process_with_scratch(as_rustfft(output), as_rustfft(&mut scratch[..self.scratch_len]));
+        self.fft.process_with_scratch(
+            as_rustfft(output),
+            as_rustfft(&mut scratch[..self.scratch_len]),
+        );
     }
 }
 
@@ -121,7 +125,11 @@ impl RustFftPlan3D {
     ) {
         let shape = input.shape();
         assert_eq!(shape, self.shape, "rustfft 3D input shape mismatch");
-        assert_eq!(output.shape(), self.shape, "rustfft 3D output shape mismatch");
+        assert_eq!(
+            output.shape(),
+            self.shape,
+            "rustfft 3D output shape mismatch"
+        );
         assert!(
             lane_buffer.len() >= self.lane_len,
             "rustfft 3D lane buffer too small"
@@ -203,8 +211,10 @@ pub fn fft1_real(input: &leto::ArrayView1<'_, f64>) -> Vec<Complex64> {
         .iter_mut()
         .zip(cow.iter().copied())
         .for_each(|(dst, src)| *dst = Complex64::new(src, 0.0));
-    plan.fft
-        .process_with_scratch(as_rustfft(&mut buffer), as_rustfft(&mut scratch[..plan.scratch_len]));
+    plan.fft.process_with_scratch(
+        as_rustfft(&mut buffer),
+        as_rustfft(&mut scratch[..plan.scratch_len]),
+    );
     buffer
 }
 

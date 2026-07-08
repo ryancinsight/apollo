@@ -2,7 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::transport::gpu::{HilbertWgpuBackend, HilbertWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        HilbertWgpuBackend, HilbertWgpuPlan, WgpuCapabilities, WgpuError,
+    };
     use crate::HilbertPlan;
     use leto::{SliceArg, Storage};
 

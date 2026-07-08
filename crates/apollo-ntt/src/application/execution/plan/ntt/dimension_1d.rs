@@ -359,26 +359,26 @@ mod tests {
     }
 
     #[test]
-    fn leto_forward_and_inverse_match_ndarray_path() {
+    fn leto_forward_and_inverse_match_leto_path() {
         use leto::Storage;
 
         let plan = NttPlan::new(8).unwrap();
         let signal = vec![1, 1, 2, 3, 5, 8, 13, 21];
-        let ndarray_input = Array1::from(signal.clone());
+        let owned_input = Array1::from(signal.clone());
         let leto_input = leto::Array1::from_shape_vec([8], signal).unwrap();
 
         let leto_spectrum = plan.forward_leto(leto_input.view()).unwrap();
-        let ndarray_spectrum = plan.forward(&ndarray_input).unwrap();
+        let owned_spectrum = plan.forward(&owned_input).unwrap();
         assert_eq!(
             leto_spectrum.storage().as_slice(),
-            ndarray_spectrum.as_slice().unwrap()
+            owned_spectrum.as_slice().unwrap()
         );
 
         let leto_recovered = plan.inverse_leto(leto_spectrum.view()).unwrap();
-        let ndarray_recovered = plan.inverse(&ndarray_spectrum).unwrap();
+        let owned_recovered = plan.inverse(&owned_spectrum).unwrap();
         assert_eq!(
             leto_recovered.storage().as_slice(),
-            ndarray_recovered.as_slice().unwrap()
+            owned_recovered.as_slice().unwrap()
         );
     }
 
@@ -493,7 +493,10 @@ mod tests {
     fn rejects_invalid_lengths() {
         assert_eq!(NttPlan::new(3), Err(NttError::NonPowerOfTwo));
         let plan = NttPlan::new(4).unwrap();
-        assert_eq!(plan.forward(&leto::Array1::from(vec![1, 2])), Err(NttError::LengthMismatch));
+        assert_eq!(
+            plan.forward(&leto::Array1::from(vec![1, 2])),
+            Err(NttError::LengthMismatch)
+        );
     }
 
     proptest! {

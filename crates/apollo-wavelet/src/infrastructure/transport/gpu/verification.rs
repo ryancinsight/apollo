@@ -5,7 +5,9 @@ mod tests {
     use crate::{DiscreteWavelet, DwtPlan};
     use leto::{SliceArg, Storage};
 
-    use crate::infrastructure::transport::gpu::{WaveletWgpuBackend, WaveletWgpuPlan, WgpuCapabilities, WgpuError};
+    use crate::infrastructure::transport::gpu::{
+        WaveletWgpuBackend, WaveletWgpuPlan, WgpuCapabilities, WgpuError,
+    };
 
     // Structural / plan tests (no GPU required)
 

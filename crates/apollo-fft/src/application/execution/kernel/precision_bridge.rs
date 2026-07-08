@@ -2,9 +2,9 @@
 
 #![allow(clippy::uninit_vec)]
 
+use eunomia::{Complex, Complex32};
 use half::f16;
 use mnemosyne::scratch::ScratchPool;
-use eunomia::{Complex, Complex32};
 
 thread_local! {
     static COMPLEX32_BRIDGE_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };

@@ -7,8 +7,8 @@ use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{f16, PrecisionProfile};
 use approx::assert_relative_eq;
-use leto::Array1;
 use eunomia::{Complex32, Complex64};
+use leto::Array1;
 use proptest::prelude::*;
 
 #[test]
@@ -47,13 +47,13 @@ fn forward_into_matches_allocating_path() {
 }
 
 #[test]
-fn leto_forward_matches_ndarray_reference() {
+fn leto_forward_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
     let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let leto_signal =
         leto::Array1::from_shape_vec([signal.size()], signal.iter().copied().collect::<Vec<_>>())
             .expect("leto signal");
-    let expected = plan.forward(&signal).expect("ndarray forward");
+    let expected = plan.forward(&signal).expect("leto forward");
 
     let actual = plan.forward_leto(leto_signal.view()).expect("leto forward");
     let actual_view = actual.view();
@@ -66,7 +66,7 @@ fn leto_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_strided_forward_matches_ndarray_reference() {
+fn leto_strided_forward_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
     let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
     let mut interleaved = Vec::with_capacity(signal.size() * 2);
@@ -80,7 +80,7 @@ fn leto_strided_forward_matches_ndarray_reference() {
         .view()
         .slice(&[(0, signal.size() * 2, 2)])
         .expect("strided signal");
-    let expected = plan.forward(&signal).expect("ndarray forward");
+    let expected = plan.forward(&signal).expect("leto forward");
 
     let actual = plan.forward_leto(strided).expect("leto forward");
     let actual_view = actual.view();
@@ -93,16 +93,18 @@ fn leto_strided_forward_matches_ndarray_reference() {
 }
 
 #[test]
-fn leto_inverse_matches_ndarray_reference() {
+fn leto_inverse_matches_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
     let signal = Array1::from((0..16).map(|i| (i as f64 * 0.2).sin()).collect::<Vec<_>>());
-    let spectrum = plan.forward(&signal).expect("ndarray forward");
-    let leto_spectrum =
-        leto::Array1::from_shape_vec([spectrum.size()], spectrum.iter().copied().collect::<Vec<_>>())
-            .expect("leto spectrum");
+    let spectrum = plan.forward(&signal).expect("leto forward");
+    let leto_spectrum = leto::Array1::from_shape_vec(
+        [spectrum.size()],
+        spectrum.iter().copied().collect::<Vec<_>>(),
+    )
+    .expect("leto spectrum");
     let expected = plan
         .inverse(&spectrum, signal.size())
-        .expect("ndarray inverse");
+        .expect("leto inverse");
 
     let actual = plan
         .inverse_leto(leto_spectrum.view(), signal.size())
@@ -252,7 +254,7 @@ fn typed_paths_support_f64_f32_and_mixed_f16_storage() {
 }
 
 #[test]
-fn typed_leto_forward_and_inverse_match_ndarray_reference() {
+fn typed_leto_forward_and_inverse_match_leto_reference() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
     let signal = Array1::from((0..16).map(|i| (i as f32 * 0.2).sin()).collect::<Vec<_>>());
     let leto_signal =
@@ -265,7 +267,7 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         &mut expected_spectrum,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray forward");
+    .expect("typed leto forward");
 
     let actual_spectrum = plan
         .forward_leto_typed::<f32, Complex32>(
@@ -282,9 +284,14 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         assert_eq!(actual.im.to_bits(), expected.im.to_bits());
     }
 
-    let leto_spectrum =
-        leto::Array1::from_shape_vec([expected_spectrum.size()], expected_spectrum.to_vec())
-            .expect("leto spectrum");
+    let leto_spectrum = leto::Array1::from_shape_vec(
+        [expected_spectrum.size()],
+        expected_spectrum
+            .as_slice()
+            .expect("contiguous leto output")
+            .to_vec(),
+    )
+    .expect("leto spectrum");
     let mut expected_signal = Array1::<f32>::zeros([signal.size()]);
     plan.inverse_typed_into(
         &expected_spectrum,
@@ -292,7 +299,7 @@ fn typed_leto_forward_and_inverse_match_ndarray_reference() {
         &mut expected_signal,
         PrecisionProfile::LOW_PRECISION_F32,
     )
-    .expect("typed ndarray inverse");
+    .expect("typed leto inverse");
 
     let actual_signal = plan
         .inverse_leto_typed::<Complex32, f32>(
@@ -422,7 +429,7 @@ fn forward_with_custom_window_matches_internal_hann() {
     let plan = StftPlan::new(8, 4).expect("valid plan");
     let signal = Array1::from((0..12).map(|i| (i as f64 * 0.3).sin()).collect::<Vec<_>>());
     let expected = plan.forward(&signal).expect("forward");
-    let window: Vec<f64> = hann_window(8).to_vec();
+    let window: Vec<f64> = hann_window(8).into_vec();
     let actual = plan
         .forward_with_window(&signal, &window)
         .expect("forward_with_window");

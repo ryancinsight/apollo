@@ -8,10 +8,48 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Breaking
-- [arch] **Complete `num_complex`/`ndarray` removal — the whole Apollo workspace now runs on the Atlas-native `leto` + `eunomia` substrate.** All 17 transform crates, `apollo-validation`, and `apollo-python` are migrated: complex values are `eunomia::Complex`; owned/viewed arrays are `leto::Array`/`ArrayView`. `ndarray` is retained *only* at genuine external FFI boundaries — the `rust-numpy` element/array surface in `apollo-python` and the `rustfft` differential oracle in `apollo-validation` — converting to/from `leto` at the seam via `leto::ndarray_compat`. Migration: replace `num_complex::Complex` with `eunomia::Complex`; replace `ndarray::Array{1,2,3}` with `leto::Array{1,2,3}`; `.dim()`→`.shape()` (returns `[usize; N]`, not a tuple); `.len()`→`.size()` on arrays. Evidence: workspace builds (default + `wgpu`); `cargo nextest run --workspace` → 901/901; `cargo clippy --workspace` → 0 warnings; `apollo-python` pytest → 34/34.
+- [arch] **Complete direct `num_complex`/`ndarray` removal — Apollo transform crates and Python bindings now run on the Atlas-native `leto` + `eunomia` substrate.** All first-party Rust transform, validation, benchmark, and PyO3 binding surfaces use `leto::Array`/`ArrayView` for owned/viewed arrays. Apollo no longer resolves any `ndarray` package in its Cargo graph; `apollo-python` uses PyO3-only dtype/shape/byte helpers at the Python NumPy ABI boundary and constructs runtime NumPy outputs without the Rust `numpy` crate or Eunomia's NumPy interop feature. Migration: replace `num_complex::Complex` with `eunomia::Complex`; replace `ndarray::Array{1,2,3}` with `leto::Array{1,2,3}`; `.dim()`→`.shape()` (returns `[usize; N]`, not a tuple); `.len()`→`.size()` on arrays. Current evidence for this cleanup: first-party source/manifest/lock `rg` scan has no `ndarray`, Rust `numpy`, or `as_array()` dependency residue outside local helper names/runtime import strings; `cargo tree -i ndarray` reports no matching package; `cargo fmt -p apollo-python -- --check`; `cargo check -p apollo-python`; `cargo nextest run -p apollo-python`; `git diff --check`.
 - [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
+### Changed
+- [patch] Routed the Apollo WGPU helper dependency on `hephaestus-wgpu`
+  through the local Atlas Hephaestus checkout so downstream Atlas consumers
+  share the current GPU substrate API instead of resolving the obsolete pinned
+  Git revision.
+- [patch] Refreshed `gap_audit.md` residual-risk entries that still described
+  Rust `ndarray` usage as current. Apollo's current source/manifest/lock scan
+  and resolved Cargo graph remain free of the Rust `ndarray` crate; historical
+  changelog migration notes remain intact as prior-state records.
 ### Added
+- [patch] `xtask provider-audit` now fails when first-party Cargo manifests,
+  `Cargo.lock`, or Rust source reintroduce the Rust `ndarray` crate, with
+  regression coverage for dependency/source hits and comment-only false
+  positives. This makes Apollo's Leto-owned array-provider contract
+  enforceable by the provider audit.
+- [patch] Removed stale current-provider documentation that still described
+  `ndarray` as Apollo's validation oracle or transitional public API substrate.
+  `docs/provider_contract.md` now names Leto as the active array provider and
+  records that Apollo code/manifests must not depend on Rust `ndarray`;
+  `docs/VALIDATION.md` now describes Leto-owned FFT/SFT validation surfaces.
+- [patch] Removed stale `apollo-fft` README wording that still described active
+  ndarray-backed stride and caller-owned output paths. Current documentation now
+  names Leto views and slice output paths; `rg` found no `ndarray` tokens in
+  first-party Rust/TOML/lock/xtask files or README files, `cargo tree -i
+  ndarray` reports no resolved package, and `cargo nextest run -p apollo-fft`
+  passed 394/394.
+- [patch] Removed the stale `xtask provider-audit` `ndarray` audit column and
+  test dependency fixtures. Apollo's first-party Rust/TOML/lock/xtask scan now
+  has no `ndarray` tokens, and `cargo tree -i ndarray` still reports no
+  matching package.
+- [patch] Removed Apollo's final `ndarray` dependency graph edge by replacing
+  `apollo-python`'s Rust `numpy` crate boundary with PyO3-owned NumPy
+  dtype/shape/byte conversion helpers. The binding crate no longer enables
+  Eunomia's `numpy` feature, `Cargo.lock` no longer contains `ndarray`/`numpy`,
+  and a value-semantic PyO3 helper test covers shape/value roundtrip through
+  runtime NumPy arrays.
+- [patch] `apollo-czt` no longer carries a stale `ndarray` dev-dependency: CZT plan/test
+  construction now uses native Leto shape constructors, and rank-1 test assertions use
+  Leto coordinate indexing. Verified with `cargo nextest run -p apollo-czt` (40/40).
 - [patch] Refreshed `benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `a673325` (`0.14.2`), importing rank-deficient singular-value support without restoring any downstream nalgebra dependency.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `7d4774a` (`0.14.1`), importing wide full-row-rank thin SVD support as the next provider-side nalgebra-parity increment.
