@@ -1,5 +1,11 @@
 # Apollo Backlog
 
+## Stockham architecture gating [patch]
+- [x] Restrict AVX/FMA Stockham implementation modules and strategy types to
+  x86_64 so Apple Silicon builds select Apollo's existing scalar Stockham path.
+  The downstream RITK macOS wheel matrix is the acceptance gate because it
+  resolves the coordinated Moirai and Apollo provider revisions together.
+
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
 Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),

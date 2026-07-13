@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## Stockham architecture gating [patch]
+- [x] Gate x86_64 AVX Stockham modules, imports, precision strategies, and
+  architecture-specific tests at their module boundaries while retaining the
+  scalar Stockham implementation on AArch64.
+- [x] Verify formatting. A locked local `aarch64-apple-darwin` cross-check is
+  blocked before Apollo compilation by the pre-existing local Moirai checkout's
+  obsolete Linux-only errno accessor. The RITK macOS wheel matrix owns the
+  end-to-end check against the corrected Moirai revision.
+- Evidence tier: compile-time target gating. No numerical or performance
+  behavior changes on x86_64.
+
 ## Hephaestus WGPU local provider edge [patch]
 - [x] Routed the workspace `hephaestus-wgpu` dependency to the local Atlas
   Hephaestus checkout so `apollo-wgpu-helpers` compiles against the current

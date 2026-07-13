@@ -1,17 +1,18 @@
 //! Stockham unit and differential tests.
 #![allow(unused_imports)]
 
+#[cfg(target_arch = "x86_64")]
 use super::butterfly::{
     build_butterfly512_twiddles_precise, build_butterfly512_twiddles_reduced,
-    hybrid_radix8x512_precise_avx_fma, hybrid_radix8x512_reduced_avx_fma, stage_pair_impl,
-    stage_quad_impl, stage_triple_impl, stockham_mixed_twiddle_precise,
-    stockham_mixed_twiddle_reduced,
+    hybrid_radix8x512_precise_avx_fma, hybrid_radix8x512_reduced_avx_fma,
+    stockham_mixed_twiddle_precise, stockham_mixed_twiddle_reduced,
 };
-use super::precision::{
-    PreciseStockham, PreciseStockhamAvxFma, ReducedStockham, ReducedStockhamAvxFma,
-    StockhamPrecision,
-};
+use super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
+use super::precision::{PreciseStockham, ReducedStockham, StockhamPrecision};
+#[cfg(target_arch = "x86_64")]
+use super::precision::{PreciseStockhamAvxFma, ReducedStockhamAvxFma};
 use super::*;
+#[cfg(target_arch = "x86_64")]
 use crate::application::execution::kernel::components::stockham::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
 use eunomia::{Complex32, Complex64};
 
