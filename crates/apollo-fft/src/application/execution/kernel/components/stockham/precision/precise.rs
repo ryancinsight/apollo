@@ -1,4 +1,6 @@
+#[cfg(target_arch = "x86_64")]
 use super::super::avx::precise::triple_2::stage_triple_groups_eight_precise_avx_fma;
+#[cfg(target_arch = "x86_64")]
 use super::super::avx::{
     backend::StockhamAvxBackend,
     generic::{
@@ -15,6 +17,7 @@ use super::super::avx::{
 };
 use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
 use super::super::stage::stage_impl;
+#[cfg(target_arch = "x86_64")]
 use super::super::stage::stockham_precise_stage_is_l1_resident;
 
 #[cfg(any(

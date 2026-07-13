@@ -1,5 +1,21 @@
 # Apollo Gap Audit
 
+## Stockham architecture gating [patch]
+- Performed: moved the x86_64 condition from individual AVX function bodies to
+  the owning Stockham module, import, precision-strategy, and test boundaries.
+- Architecture effect: AArch64 no longer parses or resolves AVX-only modules;
+  it retains the existing scalar `PreciseStockham` and `ReducedStockham`
+  execution paths. No compatibility layer or alternate algorithm was added.
+- Verification: `cargo fmt -p apollo-fft -- --check` passes. A locked local
+  `aarch64-apple-darwin` cross-check stops before Apollo compilation in the
+  stale local Moirai checkout at its Linux-only `libc::__errno_location` call.
+  The coordinated RITK macOS wheel matrix is the end-to-end compile gate
+  against Moirai's corrected revision.
+- Evidence tier: compile-time architecture selection; no performance claim.
+- Residual: local package lint/test execution is blocked by incompatible rustc
+  artifacts already coexisting in the shared target tree. GitHub's clean target
+  matrix supplies the clean-build evidence without creating a second target.
+
 ## Hephaestus WGPU local provider edge [patch]
 - Performed: changed Apollo's workspace `hephaestus-wgpu` dependency from the
   obsolete pinned Git revision to the local Atlas Hephaestus checkout so

@@ -12,6 +12,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Changed
+- [patch] Apollo now compiles Stockham AVX/FMA modules and precision strategies
+  only on x86_64. Apple Silicon uses the existing scalar Stockham strategy
+  without resolving x86-only symbols; x86_64 dispatch and numerical behavior
+  remain unchanged.
 - [patch] Routed the Apollo WGPU helper dependency on `hephaestus-wgpu`
   through the local Atlas Hephaestus checkout so downstream Atlas consumers
   share the current GPU substrate API instead of resolving the obsolete pinned
