@@ -477,7 +477,7 @@ dependencies = [
  "apollo-wavelet",
  "eunomia",
  "leto",
- "melinoe 0.8.0",
+ "melinoe",
  "moirai",
  "rustfft",
  "serde",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wgpu-helpers"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "hephaestus-wgpu",
@@ -1182,7 +1182,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bytemuck",
  "leto",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bytemuck",
  "hephaestus-core",
@@ -1460,12 +1460,7 @@ dependencies = [
 
 [[package]]
 name = "melinoe"
-version = "0.7.0"
-source = "git+https://github.com/ryancinsight/melinoe.git#f0139dd77e2c175aeea51687669ef5d5fdafd078"
-
-[[package]]
-name = "melinoe"
-version = "0.8.0"
+version = "0.9.0"
 
 [[package]]
 name = "memchr"
@@ -1508,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "eunomia",
  "mnemosyne-arena",
@@ -1533,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "mnemosyne-core",
 ]
@@ -1566,7 +1561,7 @@ dependencies = [
 name = "mnemosyne-heap"
 version = "0.1.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
@@ -1579,7 +1574,7 @@ dependencies = [
 name = "mnemosyne-local"
 version = "0.1.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-build-util",
@@ -1602,7 +1597,7 @@ dependencies = [
 name = "moirai"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne",
  "moirai-async",
  "moirai-core",
@@ -1643,7 +1638,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne",
  "moirai-core",
  "moirai-pal",
@@ -1682,7 +1677,7 @@ version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
- "melinoe 0.8.0",
+ "melinoe",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1694,7 +1689,7 @@ dependencies = [
 name = "moirai-parallel"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "moirai-executor",
 ]
 
@@ -2537,15 +2532,15 @@ name = "themis"
 version = "0.6.0"
 source = "git+https://github.com/ryancinsight/themis?rev=bdcddfe294f941ef2f84fd4ce38537906b0fec23#bdcddfe294f941ef2f84fd4ce38537906b0fec23"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
 ]
 
 [[package]]
 name = "themis"
 version = "0.9.17"
-source = "git+https://github.com/ryancinsight/themis#e87618a241c69502302da296767a9e3c0acc4906"
+source = "git+https://github.com/ryancinsight/themis#6140468c79279ec8f112641ea7422cef4688c7f6"
 dependencies = [
- "melinoe 0.7.0",
+ "melinoe",
 ]
 
 [[package]]

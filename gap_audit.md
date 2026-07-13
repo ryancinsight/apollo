@@ -4190,6 +4190,31 @@ to 1e-2 for FRAME_LEN=1024 vs. CPU reference.
 
 ## Remaining Gaps
 
+### Hephaestus 0.12 fallible device construction (2026-07-13)
+
+- The local provider lock refresh exposed `E0308`: Apollo assumed
+  `hephaestus_wgpu::WgpuDevice::new` was infallible, but Hephaestus 0.12 returns
+  a typed error when Mnemosyne staging callback ownership conflicts.
+- Resolution: Apollo's public constructor now returns `WgpuDeviceResult<Self>`;
+  error translation is single-sourced and caller migration is `?` propagation.
+  See `docs/adr/0001-fallible-wgpu-device-construction.md`.
+- Evidence tier: compile-time API enforcement and value-semantic error-mapping
+  tests; the full gate is tracked in `checklist.md`. `cargo semver-checks`
+  cannot construct the historical standalone baseline because Mnemosyne's
+  pinned Melinoe `^0.8` requirement no longer resolves from the live Git source;
+  release remains blocked on reproducible baseline resolution.
+
+### Moirai feature-contract cleanup (2026-07-13)
+
+- The pinned Moirai revision defines `no-global-alloc = []`; Apollo's workspace
+  dependency requested this inert feature alongside `melinoe`.
+- Resolution: remove only the empty feature request. This preserves binary-owned
+  allocator policy without changing Moirai behavior. The resolved local graph
+  now carries one Melinoe 0.9 package and current local Mnemosyne, Hephaestus,
+  and Themis provider revisions instead of duplicate older Melinoe packages.
+- Evidence tier: locked Cargo metadata resolves the narrowed feature set;
+  focused compile/test/doc gates are tracked in `checklist.md`.
+
 Open gaps are listed at the top of this audit. Future increments should:
 - Run the Criterion buffer-reuse benches on representative GPU hardware and record measured allocation-vs-reuse speedup ratios for 1D and 3D NUFFT fast paths.
 - Verify `GpuFft3dF16Native` Bluestein path on production hardware with non-power-of-two sizes (current test passes on dev hardware; production validation is pending).

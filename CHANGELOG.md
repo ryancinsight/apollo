@@ -8,10 +8,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 ### Breaking
+- [major] `apollo-wgpu-helpers::WgpuDevice::new` now returns
+  `WgpuDeviceResult<Self>` because Hephaestus 0.12 registers Mnemosyne staging
+  callbacks during construction and can reject conflicting process ownership.
+  Migration: append `?` and propagate `WgpuDeviceError`; do not unwrap device
+  initialization failures. `apollo-wgpu-helpers` advances to 0.2.0.
 - [arch] **Complete direct `num_complex`/`ndarray` removal — Apollo transform crates and Python bindings now run on the Atlas-native `leto` + `eunomia` substrate.** All first-party Rust transform, validation, benchmark, and PyO3 binding surfaces use `leto::Array`/`ArrayView` for owned/viewed arrays. Apollo no longer resolves any `ndarray` package in its Cargo graph; `apollo-python` uses PyO3-only dtype/shape/byte helpers at the Python NumPy ABI boundary and constructs runtime NumPy outputs without the Rust `numpy` crate or Eunomia's NumPy interop feature. Migration: replace `num_complex::Complex` with `eunomia::Complex`; replace `ndarray::Array{1,2,3}` with `leto::Array{1,2,3}`; `.dim()`→`.shape()` (returns `[usize; N]`, not a tuple); `.len()`→`.size()` on arrays. Current evidence for this cleanup: first-party source/manifest/lock `rg` scan has no `ndarray`, Rust `numpy`, or `as_array()` dependency residue outside local helper names/runtime import strings; `cargo tree -i ndarray` reports no matching package; `cargo fmt -p apollo-python -- --check`; `cargo check -p apollo-python`; `cargo nextest run -p apollo-python`; `git diff --check`.
 - [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Changed
+- [patch] Removed Apollo's redundant request for Moirai's empty
+  `no-global-alloc` feature. Allocator policy remains binary-owned; Apollo now
+  requests only the behavior-bearing `melinoe` integration. Refreshed the
+  locked local Atlas graph to one Melinoe 0.9 instance plus Mnemosyne 0.3,
+  Mnemosyne Backend 0.2, Hephaestus 0.12, and Themis `6140468c`.
 - [patch] Routed the Apollo WGPU helper dependency on `hephaestus-wgpu`
   through the local Atlas Hephaestus checkout so downstream Atlas consumers
   share the current GPU substrate API instead of resolving the obsolete pinned

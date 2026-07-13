@@ -1,5 +1,41 @@
 # Apollo Checklist
 
+## Moirai feature-contract cleanup [patch]
+- [x] Removed the empty `no-global-alloc` feature from Apollo's pinned Moirai
+  dependency while retaining the behavior-bearing `melinoe` integration.
+- [x] Confirmed the locked workspace resolves with the narrowed feature set.
+- [x] Refreshed the local-provider lock graph, eliminating the resolved Melinoe
+  0.7/0.8 duplication in favor of the local 0.9 provider.
+- [x] Focused formatting and locked workspace resolution are clean; the broader
+  Hephaestus boundary gate is recorded below.
+- Evidence tier: pinned-source inspection confirms `no-global-alloc = []`;
+  Cargo feature-resolution/type-check evidence plus focused value-semantic
+  regression tests cover the narrowed request.
+
+## Fallible Hephaestus device adoption [major]
+
+- [x] Record the interface decision in ADR 0001 before implementation.
+- [x] Change `WgpuDevice::new` to propagate Hephaestus/Mnemosyne callback
+  ownership failures through `WgpuDeviceResult`.
+- [x] Consolidate Hephaestus-to-Apollo device error translation and add
+  value-semantic tests for adapter and device context preservation.
+- [x] Bump `apollo-wgpu-helpers` to 0.2.0 and document caller migration.
+- [x] `cargo fmt --package apollo-wgpu-helpers -- --check` passes.
+- [x] `cargo clippy --locked --workspace --all-targets --all-features -- -D
+  warnings` passes across every Apollo crate.
+- [x] `cargo nextest run --locked -p apollo-wgpu-helpers --all-features
+  --no-fail-fast` passes 2/2 value-semantic tests.
+- [x] `cargo test --locked --doc -p apollo-wgpu-helpers` and `cargo doc
+  --locked -p apollo-wgpu-helpers --no-deps` pass warning-clean.
+- [x] `git diff --check`, locked metadata, constructor-site, and duplicate-error
+  scans pass; the resolved graph contains exactly one Melinoe 0.9 package.
+- [ ] `cargo semver-checks` is release-blocked before API comparison: its
+  standalone baseline clone cannot resolve historical Mnemosyne's Melinoe
+  `^0.8` requirement because the live Git source exposes 0.9. This branch is
+  commit/push eligible but not release eligible until the baseline is made
+  reproducible.
+- Evidence tier: compile-time API enforcement plus value-semantic unit tests.
+
 ## Hephaestus WGPU local provider edge [patch]
 - [x] Routed the workspace `hephaestus-wgpu` dependency to the local Atlas
   Hephaestus checkout so `apollo-wgpu-helpers` compiles against the current
