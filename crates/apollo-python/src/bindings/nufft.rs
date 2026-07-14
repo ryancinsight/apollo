@@ -24,14 +24,14 @@ pub(crate) fn nufft_type1_1d_py<'py>(
     values: PyReadonlyArray1<Complex64>,
     dx: f64,
     n_out: Option<usize>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&positions, "nufft_type1_1d positions")?;
     require_contiguous_1d(&values, "nufft_type1_1d values")?;
     let positions = py_array1_slice(&positions, "nufft_type1_1d positions")?;
     let values = py_array1_slice(&values, "nufft_type1_1d values")?;
     let domain = UniformDomain1D::new(n_out.unwrap_or(values.len()), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| nufft_type1_1d(positions, values, domain));
+    let result = py.detach(|| nufft_type1_1d(positions, values, domain));
     leto_array1_into_pyarray(py, result)
 }
 
@@ -42,14 +42,14 @@ pub(crate) fn nufft_type2_1d_py<'py>(
     fourier_coeffs: PyReadonlyArray1<Complex64>,
     positions: PyReadonlyArray1<f64>,
     dx: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&fourier_coeffs, "nufft_type2_1d fourier_coeffs")?;
     require_contiguous_1d(&positions, "nufft_type2_1d positions")?;
     let coeffs = py_array1_to_leto(&fourier_coeffs, "nufft_type2_1d fourier_coeffs")?;
     let positions = py_array1_slice(&positions, "nufft_type2_1d positions")?;
     let domain = UniformDomain1D::new(coeffs.size(), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| nufft_type2_1d(&coeffs, positions, domain));
+    let result = py.detach(|| nufft_type2_1d(&coeffs, positions, domain));
     vec1_into_pyarray(py, result)
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn nufft_type1_3d_py<'py>(
     dx: f64,
     dy: f64,
     dz: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_2d(&positions, "nufft_type1_3d positions")?;
     require_contiguous_1d(&values, "nufft_type1_3d values")?;
     let shape = positions.shape();
@@ -87,7 +87,7 @@ pub(crate) fn nufft_type1_3d_py<'py>(
         .collect();
     let grid = UniformGrid3D::new(nx, ny, nz, dx, dy, dz)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| nufft_type1_3d(&tuples, values_slice, grid));
+    let result = py.detach(|| nufft_type1_3d(&tuples, values_slice, grid));
     leto_array3_into_pyarray(py, result)
 }
 
@@ -101,14 +101,14 @@ pub(crate) fn nufft_type1_1d_fast_py<'py>(
     dx: f64,
     n_out: Option<usize>,
     kernel_width: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&positions, "nufft_type1_1d_fast positions")?;
     require_contiguous_1d(&values, "nufft_type1_1d_fast values")?;
     let positions = py_array1_slice(&positions, "nufft_type1_1d_fast positions")?;
     let values = py_array1_slice(&values, "nufft_type1_1d_fast values")?;
     let domain = UniformDomain1D::new(n_out.unwrap_or(values.len()), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| nufft_type1_1d_fast(positions, values, domain, kernel_width));
+    let result = py.detach(|| nufft_type1_1d_fast(positions, values, domain, kernel_width));
     leto_array1_into_pyarray(py, result)
 }
 
@@ -121,14 +121,14 @@ pub(crate) fn nufft_type2_1d_fast_py<'py>(
     positions: PyReadonlyArray1<f64>,
     dx: f64,
     kernel_width: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&fourier_coeffs, "nufft_type2_1d_fast fourier_coeffs")?;
     require_contiguous_1d(&positions, "nufft_type2_1d_fast positions")?;
     let coeffs = py_array1_to_leto(&fourier_coeffs, "nufft_type2_1d_fast fourier_coeffs")?;
     let positions = py_array1_slice(&positions, "nufft_type2_1d_fast positions")?;
     let domain = UniformDomain1D::new(coeffs.size(), dx)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = py.allow_threads(|| nufft_type2_1d_fast(&coeffs, positions, domain, kernel_width));
+    let result = py.detach(|| nufft_type2_1d_fast(&coeffs, positions, domain, kernel_width));
     vec1_into_pyarray(py, result)
 }
 
@@ -146,7 +146,7 @@ pub(crate) fn nufft_type1_3d_fast_py<'py>(
     dy: f64,
     dz: f64,
     kernel_width: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_2d(&positions, "nufft_type1_3d_fast positions")?;
     require_contiguous_1d(&values, "nufft_type1_3d_fast values")?;
     let shape = positions.shape();
@@ -168,7 +168,6 @@ pub(crate) fn nufft_type1_3d_fast_py<'py>(
         .collect();
     let grid = UniformGrid3D::new(nx, ny, nz, dx, dy, dz)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result =
-        py.allow_threads(|| nufft_type1_3d_fast(&tuples, values_slice, grid, kernel_width));
+    let result = py.detach(|| nufft_type1_3d_fast(&tuples, values_slice, grid, kernel_width));
     leto_array3_into_pyarray(py, result)
 }

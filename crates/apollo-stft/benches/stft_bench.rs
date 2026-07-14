@@ -22,7 +22,8 @@
 #![allow(missing_docs)]
 
 use apollo_stft::{StftWgpuBackend, StftWgpuPlan};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 
 /// Parameter sets: `(frame_len, hop_len, signal_len)`.
 /// Each hop = frame_len / 2 satisfies the Hann COLA condition.

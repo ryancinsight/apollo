@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+## Release 0.14.0 eligibility [arch]
+
+- [x] Pin the toolchain, current compatible third-party versions, and exact
+  Atlas provider revisions in one reproducible lock graph.
+- [x] Replace CI's stale provider branches and bare libtest invocation with
+  revision-pinned sibling checkouts and the committed nextest timeout policy.
+- [x] Pass the Rust, Python, API, supply-chain, and Git-source distribution
+  gates; the release candidate is eligible without publishing it.
+- [ ] WGPU 30 remains provider-owned follow-up work: Hephaestus must migrate its
+  public WGPU 26 types before Apollo can advance without a split ABI.
+
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
 Apollo owns spectral transforms; it consumes leto (arrays, ndarray replacement),

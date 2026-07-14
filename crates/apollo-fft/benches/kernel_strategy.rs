@@ -5,11 +5,12 @@
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 use apollo_fft::application::execution::kernel::{direct, fft_forward};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 #[cfg(feature = "kernel-strategy-bench")]
 use eunomia::Complex32;
 use eunomia::{Complex, Complex64};
 use half::f16;
+use std::hint::black_box;
 
 /// Generate a deterministic complex sinusoidal test signal of the given length.
 fn signal(len: usize) -> Vec<Complex64> {

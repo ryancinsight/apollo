@@ -8,9 +8,10 @@
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 #[cfg(feature = "kernel-strategy-bench")]
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 #[cfg(feature = "kernel-strategy-bench")]
 use eunomia::{Complex32, Complex64};
+use std::hint::black_box;
 
 #[cfg(feature = "kernel-strategy-bench")]
 fn signal64(len: usize) -> Vec<Complex64> {

@@ -5,7 +5,7 @@
 //! views are always borrowed (`Cow::Borrowed`); only strided views are
 //! materialized, preserving zero-copy on the common path.
 //!
-//! Rank-polymorphic by design: one [`try_dense_from_contiguous`] covers every
+//! Rank-polymorphic by design: one `try_dense_from_contiguous` covers every
 //! rank `N` (monomorphized per use), and view→owned materialization defers to
 //! [`leto::ArrayView::to_contiguous`] rather than a per-rank copy helper.
 

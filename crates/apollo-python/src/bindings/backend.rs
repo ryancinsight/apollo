@@ -22,7 +22,7 @@ pub(crate) fn available_backends() -> Vec<String> {
 
 /// Return backend capability metadata for Python callers.
 #[pyfunction]
-pub(crate) fn backend_capabilities(py: Python<'_>) -> PyResult<PyObject> {
+pub(crate) fn backend_capabilities(py: Python<'_>) -> PyResult<Py<PyAny>> {
     let backends = PyDict::new(py);
 
     let cpu_caps = CpuBackend.capabilities();

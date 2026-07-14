@@ -24,7 +24,7 @@ members = [
     "crates/apollo-python",
     "xtask",
 ]
-resolver = "2"
+resolver = "3"
 
 [profile.release]
 # Single codegen unit: allows LLVM to inline num_complex::Complex64::mul and
@@ -48,43 +48,46 @@ lto = "thin"
 
 
 [workspace.package]
-version = "0.8.5"
+version = "0.14.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
-repository = "https://github.com/ryancinsight/kwavers"
+repository = "https://github.com/ryancinsight/apollo"
 
 [workspace.dependencies]
-anyhow = "1.0"
-approx = "0.5"
-bytemuck = { version = "1.19", features = ["derive"] }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "a6cbccf207c271af640c126ff27435f995c7cb6c", features = ["eunomia"] }
-melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "ba9194613169827a6db55e7458b8e0320cd515e1", default-features = false, features = ["alloc"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "9d0a358d2196390ce626ca653c180b04eae1ed4a" }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "d9e8ac95949b8a684b26d739eb175874764f3e0e" }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "d9e8ac95949b8a684b26d739eb175874764f3e0e" }
+anyhow = "1.0.103"
+approx = "0.5.1"
+bytemuck = { version = "1.25.1", features = ["derive"] }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false, features = ["std"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "eb0d94109c452cdca934c87c1e3dd53884f2ca28", features = ["eunomia"] }
+melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "bb07447f6c71978c6fed47114ba9ecfda965ddc9", default-features = false, features = ["alloc"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
+half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "1b125ce32e59fd920e946ad06804c5953a758a9e" }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "1b125ce32e59fd920e946ad06804c5953a758a9e" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
-hephaestus-wgpu = { path = "../hephaestus/crates/hephaestus-wgpu" }
-proc-macro2 = "1.0"
-once_cell = "1.19"
-parking_lot = "0.12"
-pollster = "0.4"
-proptest = "1.6"
-criterion = "0.5"
-quote = "1.0"
-pyo3 = { version = "0.23", features = ["extension-module", "abi3-py38"] }
-rand = "0.8"
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "f726742b6b0a73e519bf730ba609eac256e9c076" }
+proc-macro2 = "1.0.106"
+once_cell = "1.21.4"
+parking_lot = "0.12.5"
+pollster = "1.0.1"
+proptest = "1.11.0"
+criterion = "0.8.2"
+quote = "1.0.46"
+pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
+rand = "0.10.2"
 # moirai: data-parallel runtime replacing direct scheduler usage.
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "37ff12d584e1fb472f41b4e40c702d708aba1dac", features = ["melinoe"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "b2f373293686d54859dfc3a976e65b81c93f648d", features = ["melinoe"] }
 rustfft = "6.4.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-syn = { version = "2.0", features = ["full"] }
-thiserror = "1.0"
-wgpu = { version = "26.0", features = ["wgsl"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+syn = { version = "2.0.118", features = ["full"] }
+thiserror = "2.0.18"
+# Hephaestus 0.12 owns Apollo's GPU device contract and currently exposes wgpu
+# 26 types. The wgpu major advances only with that provider contract.
+wgpu = { version = "26.0.1", features = ["wgsl"] }
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -146,6 +149,7 @@ uninlined_format_args = "allow"
 
 [patch."https://github.com/ryancinsight/Mnemosyne.git"]
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
+mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
 mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
 mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
@@ -154,8 +158,11 @@ mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
 [patch."https://github.com/ryancinsight/Moirai.git"]
 moirai = { path = "../moirai/moirai" }
 moirai-core = { path = "../moirai/moirai-core" }
+moirai-gpu = { path = "../moirai/moirai-gpu" }
 moirai-scheduler = { path = "../moirai/moirai-scheduler" }
 moirai-parallel = { path = "../moirai/moirai-parallel" }
+moirai-sync = { path = "../moirai/moirai-sync" }
+moirai-utils = { path = "../moirai/moirai-utils" }
 
 [patch."https://github.com/ryancinsight/eunomia"]
 eunomia = { path = "../eunomia/crates/eunomia" }
@@ -172,3 +179,6 @@ hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
+
+[patch."https://github.com/ryancinsight/themis"]
+themis = { path = "../themis" }

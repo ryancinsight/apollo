@@ -11,12 +11,13 @@ use apollo_fft::application::execution::kernel::FftPrecision;
 use apollo_fft::{PlanCacheProvider, RealFftData, Shape1D};
 use criterion::measurement::WallTime;
 use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkGroup, BenchmarkId, Criterion, Throughput,
+    criterion_group, criterion_main, BenchmarkGroup, BenchmarkId, Criterion, Throughput,
 };
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use rustfft::FftPlanner;
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 

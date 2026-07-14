@@ -1,5 +1,43 @@
 # Apollo Gap Audit
 
+## Release 0.14.0 eligibility [arch]
+
+- Distribution finding: crates.io packaging is not a valid Apollo release gate
+  because required Atlas packages are unpublished there. ADR 0002 makes the
+  tested Git-source graph the SSOT instead of fabricating registry portability.
+- Dependency finding: WGPU 30 is current upstream, but Hephaestus 0.12 exposes
+  WGPU 26 types. Apollo remains on the latest compatible 26.0.1 patch until the
+  provider migrates the shared contract. WGPU 26's HAL also constrains
+  `ordered-float` to `<=5.0`, accounting for the only other package reported
+  behind the registry head by `cargo update --verbose`.
+- Reproducibility finding: CI referenced stale provider revisions, omitted the
+  Themis sibling required by Hephaestus, used a floating stable Rust channel,
+  and bypassed nextest. The release increment pins each boundary.
+- Metadata finding: member manifests retained stale dependency requirements and
+  Kwavers repository links, CI floated its test tools, and the changelog had two
+  `Unreleased` sections plus control bytes. The release increment consolidates
+  dependency versions, repository metadata, tool versions, and release history.
+- Provider-lineage finding: the required Moirai Mnemosyne 0.3 integration was
+  available only on a feature branch while `main` carried newer reactor fixes.
+  Release eligibility requires their verified union to land on Moirai `main`.
+- Local graph finding: Hephaestus reaches Moirai GPU leaf packages directly;
+  Apollo's path patch table now lists those leaves so Atlas development builds
+  use one Moirai source identity. Standalone Git builds use the same exact
+  `b2f3732` revision without path patches.
+- Workflow finding: the GPU benchmark workflow called a deleted script and
+  obsolete `*-wgpu` packages. The non-executable workflow and stale README
+  claim were removed; no benchmark result or performance claim was changed.
+- Supply-chain residual: WGPU 26 selects Metal 0.32, which depends on the
+  archived `paste` 1.0.15 (`RUSTSEC-2024-0436`). RustSec reports no safe
+  upgrade. `deny.toml` records the narrow advisory exception; it closes only
+  when Hephaestus advances the shared WGPU ABI.
+- Evidence tier: Cargo resolution and source-lineage inspection; compile-time
+  lint and rustdoc enforcement; 1027/1027 Rust value-semantic nextest cases;
+  34/34 Python boundary cases; RustSec and cargo-deny policy checks; and 196
+  applicable `apollo-fft` minor-release API checks. The historical API baseline
+  required only provider-revision alignment to resolve its dependency graph;
+  Apollo's baseline API surface was not changed.
+
 ## Hephaestus WGPU local provider edge [patch]
 - Performed: changed Apollo's workspace `hephaestus-wgpu` dependency from the
   obsolete pinned Git revision to the local Atlas Hephaestus checkout so
@@ -13,7 +51,7 @@
   `rustup run nightly cargo check -p kwavers-math --features gpu --all-targets`
   passes, focused `kwavers-math --features gpu` GPU FFT nextest passes 2/2,
   and `cargo tree -p kwavers-math --features gpu -i hephaestus-wgpu` resolves
-  `hephaestus-wgpu v0.11.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
+  `hephaestus-wgpu v0.12.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
 - Evidence tier: compile-time dependency/type validation plus downstream
   value-semantic GPU FFT tests.
 - Residual: Apollo has no real CUDA FFT provider yet. CUDA FFT requires
@@ -4199,10 +4237,9 @@ to 1e-2 for FRAME_LEN=1024 vs. CPU reference.
   error translation is single-sourced and caller migration is `?` propagation.
   See `docs/adr/0001-fallible-wgpu-device-construction.md`.
 - Evidence tier: compile-time API enforcement and value-semantic error-mapping
-  tests; the full gate is tracked in `checklist.md`. `cargo semver-checks`
-  cannot construct the historical standalone baseline because Mnemosyne's
-  pinned Melinoe `^0.8` requirement no longer resolves from the live Git source;
-  release remains blocked on reproducible baseline resolution.
+  tests; the full gate is tracked in `checklist.md`. The semver probe identified
+  path-only provider declarations in Hephaestus and Leto. Those owning repos now
+  publish exact Git requirements; Apollo pins the corrected commits.
 
 ### Moirai feature-contract cleanup (2026-07-13)
 

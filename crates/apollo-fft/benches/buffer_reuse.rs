@@ -14,8 +14,9 @@
 #![allow(missing_docs)]
 
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use leto::Array3;
+use std::hint::black_box;
 
 /// Build a deterministic real test field of shape `(nx, ny, nz)`.
 ///

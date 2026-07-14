@@ -1,0 +1,46 @@
+name: Checkout Atlas providers
+description: Reconstruct Apollo's pinned sibling-provider layout
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/hephaestus
+        ref: f726742b6b0a73e519bf730ba609eac256e9c076
+        path: hephaestus
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/themis
+        ref: 6140468c79279ec8f112641ea7422cef4688c7f6
+        path: themis
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/leto
+        ref: 1b125ce32e59fd920e946ad06804c5953a758a9e
+        path: leto
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/eunomia
+        ref: dd94f7b9d223668887302531006628818e2bd45b
+        path: eunomia
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/Mnemosyne
+        ref: eb0d94109c452cdca934c87c1e3dd53884f2ca28
+        path: mnemosyne
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/Moirai
+        ref: b2f373293686d54859dfc3a976e65b81c93f648d
+        path: moirai
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/hermes
+        ref: 51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13
+        path: hermes
+    - uses: actions/checkout@v6
+      with:
+        repository: ryancinsight/melinoe
+        ref: bb07447f6c71978c6fed47114ba9ecfda965ddc9
+        path: melinoe

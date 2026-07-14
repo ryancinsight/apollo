@@ -19,7 +19,7 @@ Rust crates:
 
 - `apollo-fft` owns CPU FFT plans, precision profiles, full-spectrum 1D/2D/3D
   execution, and real-to-complex helpers.
-- `apollo-fft-wgpu` owns WGPU backend capability discovery surfaced through
+- `apollo-fft` owns WGPU backend capability discovery surfaced through
   `available_backends()` and `backend_capabilities()`.
 - `apollo-nufft` owns exact and fast NUFFT execution.
 

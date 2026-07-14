@@ -9,8 +9,9 @@
 #![allow(missing_docs)]
 
 use apollo_fft::application::execution::kernel::FftPrecision;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use eunomia::Complex64;
+use std::hint::black_box;
 
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)

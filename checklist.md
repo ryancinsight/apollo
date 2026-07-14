@@ -1,5 +1,36 @@
 # Apollo Checklist
 
+## Release 0.14.0 eligibility [arch]
+
+- Target version: 0.14.0
+- Phase: Closure
+- [x] Record the Git-source distribution decision and WGPU provider boundary in
+  ADR 0002.
+- [x] Pin Rust 1.97.0 and resolver 3; correct nextest termination to 60 seconds.
+- [x] Update current compatible third-party requirements, exact Atlas provider
+  revisions, shared dependency declarations, and `Cargo.lock`.
+- [x] Align CI sibling checkouts with the manifest and use nextest, doctest, and
+  documentation gates.
+- [x] Consolidate member dependency declarations onto the workspace SSOT,
+  correct per-crate repository metadata, pin CI test tools, and reconcile the
+  changelog to one valid `Unreleased` section.
+- [x] Land the required Moirai provider commits with current `main` fixes and
+  replace Apollo's feature-branch revision with the resulting default-branch
+  commit.
+- [x] Cascade final Moirai `b2f3732`, Leto `1b125ce`, and Hephaestus `f726742`
+  revisions through manifests and CI checkout metadata.
+- [x] Fix source/API regressions exposed by the dependency refresh: migrate
+  PyO3 0.29 ownership/GIL APIs and Criterion 0.8 black-box imports; focused
+  `apollo-python` compile passes on Rust 1.97.0.
+- [x] Pass semver and standalone Git-source release checks. Format,
+  warning-denied clippy, all-feature nextest (1027/1027), doctest,
+  warning-denied rustdoc, Python (34/34), provider audit, RustSec, and
+  dependency policy pass. `apollo-fft` passes 196 applicable minor-release API
+  checks; the intentionally breaking `apollo-wgpu-helpers` boundary is
+  classified as a major release.
+- [ ] Commit and push the verified release candidate; synchronize Atlas's Apollo
+  gitlink without staging sibling peer work.
+
 ## Moirai feature-contract cleanup [patch]
 - [x] Removed the empty `no-global-alloc` feature from Apollo's pinned Moirai
   dependency while retaining the behavior-bearing `melinoe` integration.
@@ -29,11 +60,11 @@
   --locked -p apollo-wgpu-helpers --no-deps` pass warning-clean.
 - [x] `git diff --check`, locked metadata, constructor-site, and duplicate-error
   scans pass; the resolved graph contains exactly one Melinoe 0.9 package.
-- [ ] `cargo semver-checks` is release-blocked before API comparison: its
-  standalone baseline clone cannot resolve historical Mnemosyne's Melinoe
-  `^0.8` requirement because the live Git source exposes 0.9. This branch is
-  commit/push eligible but not release eligible until the baseline is made
-  reproducible.
+- [x] `cargo semver-checks` API comparison passes after the standalone-resolution
+  probe exposed path-only provider edges in Hephaestus and Leto and those
+  provider-first fixes were pushed. `apollo-fft` passes 196 applicable
+  minor-release checks; `apollo-wgpu-helpers` is intentionally classified as a
+  major release because its public constructor became fallible.
 - Evidence tier: compile-time API enforcement plus value-semantic unit tests.
 
 ## Hephaestus WGPU local provider edge [patch]
@@ -48,7 +79,7 @@
   -p kwavers-math --features gpu -E "test(gpu_fft) or test(apollo_wgpu)"
   --status-level fail --no-fail-fast` passed 2/2, and
   `cargo tree -p kwavers-math --features gpu -i hephaestus-wgpu` resolves
-  `hephaestus-wgpu v0.11.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
+  `hephaestus-wgpu v0.12.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
 - Residual: Apollo has an `FftBackend` trait seam, but no real CUDA FFT
   provider yet. CUDA FFT requires upstream Apollo/Hephaestus kernels plus
   WGPU/CUDA differential tests.
@@ -2829,12 +2860,12 @@ Sprint target version: apollo-fft 0.11.0
 ## Closure LXXIX - Stockham Kernel Hierarchy Stabilization [patch]
 Sprint target version: apollo-fft 0.10.0
 
-- [x] Standardized \pub(crate)\ visibility across \vx\ leaf nodes to satisfy new module boundaries.
-- [x] Audited and corrected \use\ path inconsistencies in \vx/f32/\ and \vx/f64/\ modules.
-- [x] Resolved \E0603\ (private function access) and dangling attribute errors.
-- [x] Corrected struct attributes by removing invalid \#[target_feature]\ blocks.
+- [x] Standardized `pub(crate)` visibility across AVX leaf nodes to satisfy new module boundaries.
+- [x] Audited and corrected `use` path inconsistencies in the legacy AVX scalar modules.
+- [x] Resolved `E0603` (private function access) and dangling attribute errors.
+- [x] Corrected struct attributes by removing invalid `#[target_feature]` blocks.
 - [x] Removed unused imports to eliminate compiler warnings.
-- [x] 177/177 tests pass under \--release\.
+- [x] 177/177 tests pass under `--release`.
 
 ## Closure LXXVIII - Bluestein Monomorphization + Module Decomposition [minor]
 Sprint target version: apollo-fft 0.10.0

@@ -36,12 +36,12 @@ impl PyFftPlan1D {
         Ok(Self { shape, profile })
     }
 
-    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray1<f64>>() {
             require_contiguous_1d(&input64, "fft input")?;
             require_profile_matches_f64(self.profile, "fft")?;
             let leto_view = py_array1_leto_view(&input64, "fft input")?;
-            let result = py.allow_threads(|| apollo_fft::fft_1d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::fft_1d_leto(leto_view));
             leto_array1_into_pyarray(py, result)
         } else {
             match self.profile.storage {
@@ -50,34 +50,33 @@ impl PyFftPlan1D {
                     let owned = py_array1_map_to_leto(&input32, "fft input", |value| {
                         f16::from_f32(*value)
                     })?;
-                    let result = py.allow_threads(|| apollo_fft::fft_1d_array_typed(&owned));
+                    let result = py.detach(|| apollo_fft::fft_1d_array_typed(&owned));
                     leto_array1_into_pyarray(py, result)
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray1<f32>>()?;
                     require_profile_matches_f32(self.profile, "fft")?;
                     let leto_view = py_array1_leto_view(&input32, "fft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::fft_1d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::fft_1d_leto_typed::<f32>(leto_view));
                     leto_array1_into_pyarray(py, result)
                 }
             }
         }
     }
 
-    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray1<Complex64>>() {
             require_contiguous_1d(&input64, "ifft input")?;
             require_profile_matches_f64(self.profile, "ifft")?;
             let leto_view = py_array1_leto_view(&input64, "ifft input")?;
-            let result = py.allow_threads(|| apollo_fft::ifft_1d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::ifft_1d_leto(leto_view));
             leto_array1_into_pyarray(py, result)
         } else {
             let input32 = input.extract::<PyReadonlyArray1<Complex32>>()?;
             match self.profile.storage {
                 StoragePrecision::F16 => {
                     let owned = py_array1_to_leto(&input32, "ifft input")?;
-                    let result = py.allow_threads(|| {
+                    let result = py.detach(|| {
                         apollo_fft::ifft_1d_array_typed::<f16>(&owned)
                             .mapv(|value: f16| value.to_f32())
                     });
@@ -86,8 +85,7 @@ impl PyFftPlan1D {
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
                     let leto_view = py_array1_leto_view(&input32, "ifft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::ifft_1d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::ifft_1d_leto_typed::<f32>(leto_view));
                     leto_array1_into_pyarray(py, result)
                 }
             }
@@ -99,10 +97,10 @@ impl PyFftPlan1D {
         &self,
         py: Python<'py>,
         input: PyReadonlyArray1<Complex64>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         require_contiguous_1d(&input, "fft_complex input")?;
         let mut output = py_array1_to_leto(&input, "fft_complex input")?;
-        py.allow_threads(|| {
+        py.detach(|| {
             fft_1d_complex_inplace(&mut output);
         });
         leto_array1_into_pyarray(py, output)
@@ -113,10 +111,10 @@ impl PyFftPlan1D {
         &self,
         py: Python<'py>,
         input: PyReadonlyArray1<Complex64>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         require_contiguous_1d(&input, "ifft_complex input")?;
         let mut output = py_array1_to_leto(&input, "ifft_complex input")?;
-        py.allow_threads(|| {
+        py.detach(|| {
             ifft_1d_complex_inplace(&mut output);
         });
         leto_array1_into_pyarray(py, output)
@@ -142,12 +140,12 @@ impl PyFftPlan2D {
         Ok(Self { shape, profile })
     }
 
-    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray2<f64>>() {
             require_contiguous_2d(&input64, "fft input")?;
             require_profile_matches_f64(self.profile, "fft")?;
             let leto_view = py_array2_leto_view(&input64, "fft input")?;
-            let result = py.allow_threads(|| apollo_fft::fft_2d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::fft_2d_leto(leto_view));
             leto_array2_into_pyarray(py, result)
         } else {
             match self.profile.storage {
@@ -156,34 +154,33 @@ impl PyFftPlan2D {
                     let owned = py_array2_map_to_leto(&input32, "fft input", |value| {
                         f16::from_f32(*value)
                     })?;
-                    let result = py.allow_threads(|| apollo_fft::fft_2d_array_typed(&owned));
+                    let result = py.detach(|| apollo_fft::fft_2d_array_typed(&owned));
                     leto_array2_into_pyarray(py, result)
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray2<f32>>()?;
                     require_profile_matches_f32(self.profile, "fft")?;
                     let leto_view = py_array2_leto_view(&input32, "fft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::fft_2d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::fft_2d_leto_typed::<f32>(leto_view));
                     leto_array2_into_pyarray(py, result)
                 }
             }
         }
     }
 
-    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray2<Complex64>>() {
             require_contiguous_2d(&input64, "ifft input")?;
             require_profile_matches_f64(self.profile, "ifft")?;
             let leto_view = py_array2_leto_view(&input64, "ifft input")?;
-            let result = py.allow_threads(|| apollo_fft::ifft_2d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::ifft_2d_leto(leto_view));
             leto_array2_into_pyarray(py, result)
         } else {
             let input32 = input.extract::<PyReadonlyArray2<Complex32>>()?;
             match self.profile.storage {
                 StoragePrecision::F16 => {
                     let owned = py_array2_to_leto(&input32, "ifft input")?;
-                    let result = py.allow_threads(|| {
+                    let result = py.detach(|| {
                         apollo_fft::ifft_2d_array_typed::<f16>(&owned)
                             .mapv(|value: f16| value.to_f32())
                     });
@@ -192,8 +189,7 @@ impl PyFftPlan2D {
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
                     let leto_view = py_array2_leto_view(&input32, "ifft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::ifft_2d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::ifft_2d_leto_typed::<f32>(leto_view));
                     leto_array2_into_pyarray(py, result)
                 }
             }
@@ -205,10 +201,10 @@ impl PyFftPlan2D {
         &self,
         py: Python<'py>,
         input: PyReadonlyArray2<Complex64>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         require_contiguous_2d(&input, "fft_complex input")?;
         let mut output = py_array2_to_leto(&input, "fft_complex input")?;
-        py.allow_threads(|| {
+        py.detach(|| {
             fft_2d_complex_inplace(&mut output);
         });
         leto_array2_into_pyarray(py, output)
@@ -219,10 +215,10 @@ impl PyFftPlan2D {
         &self,
         py: Python<'py>,
         input: PyReadonlyArray2<Complex64>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         require_contiguous_2d(&input, "ifft_complex input")?;
         let mut output = py_array2_to_leto(&input, "ifft_complex input")?;
-        py.allow_threads(|| {
+        py.detach(|| {
             ifft_2d_complex_inplace(&mut output);
         });
         leto_array2_into_pyarray(py, output)
@@ -247,12 +243,12 @@ impl PyFftPlan3D {
         Ok(Self { shape, profile })
     }
 
-    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn fft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray3<f64>>() {
             require_contiguous_3d(&input64, "fft input")?;
             require_profile_matches_f64(self.profile, "fft")?;
             let leto_view = py_array3_leto_view(&input64, "fft input")?;
-            let result = py.allow_threads(|| apollo_fft::fft_3d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::fft_3d_leto(leto_view));
             leto_array3_into_pyarray(py, result)
         } else {
             match self.profile.storage {
@@ -261,34 +257,33 @@ impl PyFftPlan3D {
                     let owned = py_array3_map_to_leto(&input32, "fft input", |value| {
                         f16::from_f32(*value)
                     })?;
-                    let result = py.allow_threads(|| apollo_fft::fft_3d_array_typed(&owned));
+                    let result = py.detach(|| apollo_fft::fft_3d_array_typed(&owned));
                     leto_array3_into_pyarray(py, result)
                 }
                 _ => {
                     let input32 = input.extract::<PyReadonlyArray3<f32>>()?;
                     require_profile_matches_f32(self.profile, "fft")?;
                     let leto_view = py_array3_leto_view(&input32, "fft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::fft_3d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::fft_3d_leto_typed::<f32>(leto_view));
                     leto_array3_into_pyarray(py, result)
                 }
             }
         }
     }
 
-    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<PyObject> {
+    fn ifft<'py>(&self, py: Python<'py>, input: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(input64) = input.extract::<PyReadonlyArray3<Complex64>>() {
             require_contiguous_3d(&input64, "ifft input")?;
             require_profile_matches_f64(self.profile, "ifft")?;
             let leto_view = py_array3_leto_view(&input64, "ifft input")?;
-            let result = py.allow_threads(|| apollo_fft::ifft_3d_leto(leto_view));
+            let result = py.detach(|| apollo_fft::ifft_3d_leto(leto_view));
             leto_array3_into_pyarray(py, result)
         } else {
             let input32 = input.extract::<PyReadonlyArray3<Complex32>>()?;
             match self.profile.storage {
                 StoragePrecision::F16 => {
                     let owned = py_array3_to_leto(&input32, "ifft input")?;
-                    let result = py.allow_threads(|| {
+                    let result = py.detach(|| {
                         apollo_fft::ifft_3d_array_typed::<f16>(&owned)
                             .mapv(|value: f16| value.to_f32())
                     });
@@ -297,15 +292,14 @@ impl PyFftPlan3D {
                 _ => {
                     require_profile_matches_f32(self.profile, "ifft")?;
                     let leto_view = py_array3_leto_view(&input32, "ifft input")?;
-                    let result =
-                        py.allow_threads(|| apollo_fft::ifft_3d_leto_typed::<f32>(leto_view));
+                    let result = py.detach(|| apollo_fft::ifft_3d_leto_typed::<f32>(leto_view));
                     leto_array3_into_pyarray(py, result)
                 }
             }
         }
     }
 
-    fn rfft<'py>(&self, py: Python<'py>, input: PyReadonlyArray3<f64>) -> PyResult<PyObject> {
+    fn rfft<'py>(&self, py: Python<'py>, input: PyReadonlyArray3<f64>) -> PyResult<Py<PyAny>> {
         require_contiguous_3d(&input, "rfft input")?;
         let shape = input.shape();
         if shape != [self.shape.nx, self.shape.ny, self.shape.nz] {
@@ -314,7 +308,7 @@ impl PyFftPlan3D {
             ));
         }
         let leto_view = py_array3_leto_view(&input, "rfft input")?;
-        let result = py.allow_threads(|| apollo_fft::fft_3d_leto(leto_view));
+        let result = py.detach(|| apollo_fft::fft_3d_leto(leto_view));
         leto_array3_into_pyarray(py, result)
     }
 
@@ -322,7 +316,7 @@ impl PyFftPlan3D {
         &self,
         py: Python<'py>,
         input: PyReadonlyArray3<Complex64>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         require_contiguous_3d(&input, "irfft input")?;
         let shape = input.shape();
         if shape != [self.shape.nx, self.shape.ny, self.shape.nz] {
@@ -331,7 +325,7 @@ impl PyFftPlan3D {
             ));
         }
         let leto_view = py_array3_leto_view(&input, "irfft input")?;
-        let result = py.allow_threads(|| apollo_fft::ifft_3d_leto(leto_view));
+        let result = py.detach(|| apollo_fft::ifft_3d_leto(leto_view));
         leto_array3_into_pyarray(py, result)
     }
 }

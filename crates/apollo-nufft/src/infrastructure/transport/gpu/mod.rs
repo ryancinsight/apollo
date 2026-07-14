@@ -3,7 +3,7 @@
 //! WGPU NUFFT backend boundary for Apollo.
 //!
 //! This crate owns NUFFT-specific WGPU capability and plan descriptors. Dense
-//! FFT WGPU execution lives in `apollo-fft-wgpu`; CPU NUFFT math and metadata
+//! FFT WGPU execution lives in `apollo-fft`'s `wgpu` feature; CPU NUFFT math and metadata
 //! live in `apollo-nufft`.
 //!
 //! # Features
