@@ -117,6 +117,14 @@ Remaining replacement work:
     differential, unitary identity/reversal/norm/roundtrip evidence, doctest,
     warning-denied gates, provider audit, semver classification, and a source
     scan with no direct `wgpu`, `pollster`, or helper edge.
+  - [/] D6-Hilbert: `apollo-hilbert` 0.5.0 migrates the analytic-signal and
+    inverse Hilbert paths as four typed Hephaestus kernels over an ordered
+    command stream. Leto remains the host boundary and Mnemosyne owns scratch
+    and returned arrays; a sealed `HilbertGpuStorage` contract must reject
+    silent `f64` narrowing. Acceptance: preserve `H(H(x)) = -x`, real-device
+    CPU differential and inverse evidence, negative storage/length contracts,
+    warning-denied gates, provider audit, semver classification, and no direct
+    `wgpu`, `pollster`, or helper edge.
   The first nine slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
   Wavelet, and FrFT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,

@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: Hilbert [arch]
+
+- Target version: `apollo-hilbert` 0.5.0
+- Phase: Execution
+- [ ] Replace the direct WGPU analytic-signal and inverse pipelines with four
+  typed Hephaestus ZST descriptors and one ordered command stream per path.
+- [ ] Preserve the analytic-mask and inverse Hilbert theorem; retain Leto host
+  views and Mnemosyne outputs; seal the concrete `f32` GPU storage contract.
+- [ ] Verify real-device CPU differential and inverse reconstruction, negative
+  contracts, format, warning-denied Clippy, nextest, doctest, rustdoc, provider
+  audit, and semver classification; update D6 artifacts.
+
 ## Hephaestus kernel migration: FrFT [arch]
 
 - Target version: `apollo-frft` 0.3.0
