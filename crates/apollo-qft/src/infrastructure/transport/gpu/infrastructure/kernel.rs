@@ -1,205 +1,109 @@
-//! GPU execution for the dense unitary quantum Fourier transform.
+//! Hephaestus execution kernel for the dense unitary quantum Fourier transform.
 //!
-//! Forward entry `M[k,j] = exp(2*pi*i*j*k/n) / sqrt(n)`.
-//! Inverse entry `M[k,j] = exp(-2*pi*i*j*k/n) / sqrt(n)`.
-//! Both maps are unitary on the implemented `f32` complex surface.
+//! The forward and inverse entries evaluate the conjugate pair
+//! `N^(-1/2) sum_j x[j] exp(+-2*pi*i*j*k/N)`.  Their matrices are unitary, so
+//! `QFT^-1(QFT(x)) = x`; the real-device differential and roundtrip suite is
+//! the executable evidence tier for the concrete `f32` accelerator contract.
+
+use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
-use wgpu::util::DeviceExt;
+use hephaestus_core::{
+    Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
+    Wgsl,
+};
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
 
-const WORKGROUP_SIZE: u32 = 64;
+const WORKGROUP_SIZE: usize = 64;
+const QFT_SOURCE: &str = include_str!("shaders/qft.wgsl");
 
+/// Direction selected before the accelerator boundary.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
-/// Execution mode for the direct unitary transform.
-pub enum QftMode {
+pub(crate) enum QftMode {
     /// Forward QFT.
     Forward = 0,
     /// Inverse QFT.
     Inverse = 1,
 }
 
+/// Uniform parameters matching WGSL `QftParams`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ComplexPod {
-    re: f32,
-    im: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct QftParams {
+pub struct QftParams {
     len: u32,
     mode: u32,
     _padding: [u32; 2],
 }
 
-/// Cached WGPU kernel state for repeated QFT dispatches.
-#[derive(Debug)]
-pub struct QftGpuKernel {
-    bind_group_layout: wgpu::BindGroupLayout,
-    pipeline: wgpu::ComputePipeline,
+const _: () = assert!(core::mem::size_of::<QftParams>() == 16);
+
+impl QftParams {
+    fn new(len: usize, mode: QftMode) -> WgpuResult<Self> {
+        Ok(Self {
+            len: u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
+                message: format!("transform length {len} exceeds the accelerator parameter range"),
+            })?,
+            mode: mode as u32,
+            _padding: [0; 2],
+        })
+    }
 }
+
+/// Typed Hephaestus interface for the direct unitary QFT kernel.
+pub(crate) struct QftKernel;
+
+impl KernelInterface for QftKernel {
+    type Params = QftParams;
+
+    const LABEL: &'static str = "apollo-qft-transform";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<Complex32>(),
+        BindingDecl::read_write::<Complex32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl KernelSource<Wgsl> for QftKernel {
+    const ENTRY: &'static str = "qft_transform";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(QFT_SOURCE)
+    }
+}
+
+/// Zero-sized QFT orchestration over a Hephaestus device.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct QftGpuKernel;
 
 impl QftGpuKernel {
-    /// Compile shader state and allocate the uniform parameter buffer.
-    #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-qft-wgpu shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/qft.wgsl").into()),
-        });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-qft-wgpu bind group layout"),
-            entries: &[
-                storage_layout_entry(0, true),
-                storage_layout_entry(1, false),
-                uniform_layout_entry(2),
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-qft-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-qft-wgpu pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("qft_transform"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        Self {
-            bind_group_layout,
-            pipeline,
-        }
-    }
-
-    /// Execute the direct unitary transform.
-    pub fn execute(
-        &self,
-        device: &WgpuDevice,
+    /// Execute one direct unitary transform into caller-owned host storage.
+    pub(crate) fn execute_into<D>(
+        device: &D,
         input: &[Complex32],
-        len: usize,
+        output: &mut [Complex32],
         mode: QftMode,
-    ) -> WgpuResult<Vec<Complex32>> {
-        let hep_device = device.hephaestus();
-        let input_data: Vec<ComplexPod> = input
-            .iter()
-            .map(|value| ComplexPod {
-                re: value.re,
-                im: value.im,
-            })
-            .collect();
-        let input_buffer =
-            hep_device
-                .upload(&input_data)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        let output_buffer =
-            hep_device
-                .alloc_zeroed::<ComplexPod>(len)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        let params_buffer = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-qft-wgpu params"),
-                contents: bytemuck::bytes_of(&QftParams {
-                    len: len as u32,
-                    mode: mode as u32,
-                    _padding: [0; 2],
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-qft-wgpu bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: output_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-
-        let mut encoder = device
-            .inner()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-qft-wgpu encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("apollo-qft-wgpu transform pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(dispatch_count(len as u32), 1, 1);
-        }
-        device.queue().submit(std::iter::once(encoder.finish()));
-
-        let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device
-            .download(&output_buffer, &mut pods)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        let output = pods
-            .iter()
-            .map(|value| Complex32::new(value.re, value.im))
-            .collect();
-        Ok(output)
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        QftKernel: KernelSource<D::Dialect>,
+    {
+        let input = device.upload(input)?;
+        let output_buffer = device.alloc_zeroed::<Complex32>(output.len())?;
+        let kernel = device.prepare(&QftKernel)?;
+        let bindings = [Binding::read(&input), Binding::read_write(&output_buffer)];
+        let grid = DispatchGrid::covering_domain([output.len(), 1, 1], [WORKGROUP_SIZE, 1, 1])?;
+        let mut stream = device.stream()?;
+        stream.encode(
+            &kernel,
+            &bindings,
+            &QftParams::new(output.len(), mode)?,
+            grid,
+        )?;
+        stream.submit()?;
+        device.download(&output_buffer, output)?;
+        Ok(())
     }
-}
-
-fn storage_layout_entry(binding: u32, read_only: bool) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-fn uniform_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: Some(
-                std::num::NonZeroU64::new(std::mem::size_of::<QftParams>() as u64)
-                    .expect("nonzero uniform size"),
-            ),
-        },
-        count: None,
-    }
-}
-
-fn dispatch_count(items: u32) -> u32 {
-    items.div_ceil(WORKGROUP_SIZE)
 }
