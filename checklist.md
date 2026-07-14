@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: NTT [arch]
+
+- Target version: `apollo-ntt` 0.3.0
+- Phase: Foundation
+- [ ] Audit modular forward/inverse kernel arithmetic, modulus validation, and
+  Atlas-provider boundaries against ADR 0003.
+- [ ] Encode the existing exact-residue dispatch as typed Hephaestus kernels
+  with explicit forward/inverse direction and caller-owned output.
+- [ ] Remove direct `wgpu`, `pollster`, helper, and raw-device ownership while
+  preserving Leto host boundaries and Moirai/Hermes/Mnemosyne CPU contracts.
+- [ ] Verify known modular modes, CPU differential and inverse roundtrips,
+  negative modulus/length contracts, Leto boundaries, provider audit, and API
+  classification.
+- Evidence tier: pending source audit and executable verification.
+
 ## Hephaestus kernel migration: GFT [arch]
 
 - Target version: `apollo-gft` 0.3.0

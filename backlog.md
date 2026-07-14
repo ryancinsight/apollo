@@ -62,16 +62,17 @@ Remaining replacement work:
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
-    already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`, and
-    `apollo-dctdst` are complete; 14 transform crates remain.
+      already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
+      `apollo-dctdst`, and `apollo-gft` are complete; 13 transform crates
+      remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT, and
-  DCT/DST; GFT is in flight.
+  owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
+  DCT/DST, and GFT; NTT is in flight.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
@@ -98,7 +99,10 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 14 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - [/] D6-NTT: owner Codex root; last-update 2026-07-14; claimed scope
+    `crates/apollo-ntt` only. Migrate exact modular transform GPU dispatch to
+    native Hephaestus typed kernels without changing residue arithmetic.
+  - 13 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
