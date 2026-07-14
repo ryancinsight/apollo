@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## Release 0.15.0 WGPU 30 integration [major]
+
+- Target version: 0.15.0
+- Phase: Execution
+- [x] Verify and push the Hephaestus 0.13.0 WGPU 30 provider release.
+- [ ] Pin the current Mnemosyne, Leto, Moirai, and Hephaestus provider revisions;
+  update the WGPU SSOT and Apollo helper constructor without compatibility code.
+- [ ] Run format, warning-denied Clippy, all-feature nextest, doctest, rustdoc,
+  Python boundary, provider audit, RustSec, dependency policy, and semver gates.
+- [ ] Synchronize release artifacts, commit, push, and advance the Atlas gitlink.
+
 ## Release 0.14.0 eligibility [arch]
 
 - Target version: 0.14.0

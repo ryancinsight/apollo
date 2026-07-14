@@ -8,8 +8,11 @@
   revision-pinned sibling checkouts and the committed nextest timeout policy.
 - [x] Pass the Rust, Python, API, supply-chain, and Git-source distribution
   gates; the release candidate is eligible without publishing it.
-- [ ] WGPU 30 remains provider-owned follow-up work: Hephaestus must migrate its
-  public WGPU 26 types before Apollo can advance without a split ABI.
+- [/] [major] WGPU 30 provider integration (owner Codex, 2026-07-13; scope
+  `Cargo.toml`, lockfile, `apollo-wgpu-helpers`, release/PM artifacts): consume
+  Hephaestus 0.13.0 at `090611d`, migrate the helper constructor natively to its
+  infallible contract, advance Apollo to 0.15.0, and pass the complete release
+  gate without a split WGPU ABI.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
