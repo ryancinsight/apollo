@@ -1,5 +1,22 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: GFT [arch]
+
+- Target version: `apollo-gft` 0.3.0
+- Phase: Foundation
+- [ ] Audit forward/inverse basis orientation, Atlas-provider boundaries, and
+  precision contracts against ADR 0003 and the completed provider slices.
+- [ ] Encode the basis transform as one direction-parameterized ZST authored
+  kernel over typed signal, basis, and output bindings.
+- [ ] Replace raw WGPU ownership with Hephaestus preparation, dispatch,
+  transfer, and caller-owned Mnemosyne/Leto output storage.
+- [ ] Preserve the existing Moirai, Hermes, and Mnemosyne CPU contracts; remove
+  direct `wgpu`, `pollster`, helper, fake-generic, and duplicate adapter paths.
+- [ ] Verify analytical graph modes, forward/inverse CPU differential, Leto
+  contiguous/strided/typed boundaries, negative contracts, workspace gates,
+  provider audit, and API classification.
+- Evidence tier: pending source audit and executable verification.
+
 ## Hephaestus kernel migration: DHT [arch]
 
 - Target version: `apollo-dht` 0.3.0

@@ -76,6 +76,9 @@ Remaining replacement work:
     native Hephaestus typed-kernel dispatch, retain the DCT/DST mathematical
     specification and Leto CPU boundary, and add value-semantic differential
     and analytical-oracle coverage before the slice can merge.
+  - [/] D6-GFT: owner Codex root; last-update 2026-07-14; claimed scope
+    `crates/apollo-gft` only. Migrate its graph-basis transform to Hephaestus
+    typed dispatch while the peer-owned DCT/DST scope proceeds independently.
   The first three slices are complete: FWHT, CZT, and DHT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
