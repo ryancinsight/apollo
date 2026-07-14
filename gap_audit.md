@@ -1,5 +1,27 @@
 # Apollo Gap Audit
 
+## NTT Hephaestus command-stream migration [arch]
+
+- Performed: replaced `apollo-ntt` direct WGPU pipeline, bind group, uniform
+  buffer, command encoder, queue, and transfer ownership with two ZST
+  `KernelInterface`/`KernelSource` descriptors and one ordered Hephaestus
+  command stream. Reusable NTT state retains only host residues and twiddles;
+  device buffers, parameter uploads, bindings, dispatch, and readback remain
+  provider-owned.
+- Mathematical contract: for primitive `omega` in `F_q`, the staged
+  Cooley-Tukey recurrence evaluates `X[k] = sum_j x[j] omega^(j*k)`. Each stage
+  writes disjoint butterfly pairs, and ordered command-stream passes preserve
+  the recurrence dependency. Inverse twiddles followed by multiplication by
+  `n^-1` give `INTT(NTT(x)) = x` by finite-field root-of-unity orthogonality.
+- Verification: format; all-feature check and warning-denied Clippy; 27/27
+  nextest cases, including real-device exact CPU differential and 64-case
+  GPU roundtrip property; doctest; rustdoc; and a source/manifest scan finding
+  no direct `wgpu`, `pollster`, or `apollo-wgpu-helpers` residue.
+- Evidence tier: typed binding/layout checks plus value-semantic differential
+  and property evidence. No machine-checked proof is performed.
+- Residual: D6 has 12 transform crates to migrate; D7 remains the owner of
+  cross-transform Leto interop consolidation.
+
 ## GFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced `apollo-gft`'s direct WGPU buffers, pipeline, bind group,
@@ -25,7 +47,7 @@
 - Evidence tier: type-level storage exclusion and parameter-layout assertion,
   then value-semantic CPU differential/roundtrip and real-device execution.
   No machine-checked proof is performed.
-- Residual: D6 still has 13 transform crates to migrate; GFT contains no local
+- Residual: D6 has 12 transform crates to migrate; GFT contains no local
   raw-WGPU mechanics or wrapper dependency.
 
 ## Provider-native GPU kernel migration [arch]

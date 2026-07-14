@@ -1,76 +1,60 @@
-//! WGPU device acquisition for this transform backend.
+//! Hephaestus device acquisition and NTT execution boundary.
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
+use hephaestus_wgpu::WgpuDevice;
 
 use crate::infrastructure::transport::gpu::application::plan::NttWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
-    NttGpuBuffers, NttGpuKernel, NttMode,
+    mod_pow_u64, NttGpuBuffers, NttGpuKernel, NttMode,
 };
-use apollo_wgpu_helpers::WgpuDevice;
 
-/// Return whether a default WGPU adapter/device can be acquired.
+/// Return whether a default Hephaestus WGPU device can be acquired.
 #[must_use]
 pub fn wgpu_available() -> bool {
     NttWgpuBackend::try_default().is_ok()
 }
 
-/// WGPU backend descriptor.
+/// Hephaestus WGPU backend for exact finite-field transforms.
 #[derive(Debug, Clone)]
 pub struct NttWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<NttGpuKernel>,
 }
 
 impl NttWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(NttGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
-    ///
-    /// Adapter/device acquisition is cached process-wide behind a
-    /// [`std::sync::OnceLock`]: repeated calls (e.g. once per property-test
-    /// case) clone the cached backend instead of re-enumerating and
-    /// re-acquiring a GPU device each time.
+    /// Acquire the default Hephaestus WGPU device.
     pub fn try_default() -> WgpuResult<Self> {
-        static INSTANCE: std::sync::OnceLock<WgpuResult<NttWgpuBackend>> =
-            std::sync::OnceLock::new();
-        INSTANCE
-            .get_or_init(|| Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?))
-            .clone()
+        Ok(Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?))
     }
 
-    /// Return truthful current capabilities.
+    /// Return the operations implemented by this backend.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::full(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus WGPU device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
-    }
-
-    /// Create a metadata-only plan descriptor.
+    /// Create a metadata-only plan with the canonical modulus and root.
     #[must_use]
     pub const fn plan(&self, len: usize) -> NttWgpuPlan {
         NttWgpuPlan::new(len, DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT)
     }
 
-    /// Create a plan with an explicit modulus and primitive root.
+    /// Create a metadata-only plan with an explicit modulus and primitive root.
     #[must_use]
     pub const fn plan_with_modulus(
         &self,
@@ -81,51 +65,43 @@ impl NttWgpuBackend {
         NttWgpuPlan::new(len, modulus, primitive_root)
     }
 
-    /// Allocate reusable GPU and host buffers for repeated execution of one plan length.
+    /// Construct reusable host-side state for one validated plan.
     pub fn create_buffers(&self, plan: &NttWgpuPlan) -> WgpuResult<NttGpuBuffers> {
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid buffer length {len}"),
-            });
-        }
-        let omega = Self::validate_plan_and_len(plan, len)?;
-        self.kernel
-            .create_buffers(&self.device, len, plan.modulus(), omega)
+        let omega = Self::validate_plan_and_len(plan, plan.len())?;
+        NttGpuKernel::create_buffers(plan.len(), plan.modulus(), omega)
     }
 
-    /// Execute the direct forward NTT over the configured residue field.
+    /// Execute the forward NTT over the configured residue field.
     pub fn execute_forward(&self, plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<Vec<u64>> {
-        let omega = Self::validate_plan_and_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            plan.len(),
-            plan.modulus(),
-            omega,
-            NttMode::Forward,
-        )
+        self.execute_allocating(plan, input, NttMode::Forward)
     }
 
-    /// Execute the direct forward NTT from a Leto residue view.
-    ///
-    /// Contiguous views are borrowed without copying. Strided views are
-    /// materialized once into logical order before GPU upload.
-    pub fn execute_forward_leto(
+    /// Execute the forward NTT into reusable host state.
+    pub fn execute_forward_with_buffers(
         &self,
         plan: &NttWgpuPlan,
-        input: leto::ArrayView1<'_, u64>,
-    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
-        let input = leto_view1_cow(input)?;
-        let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_slice(&output)
+        input: &[u64],
+        buffers: &mut NttGpuBuffers,
+    ) -> WgpuResult<()> {
+        self.execute_with_buffers(plan, input, buffers, NttMode::Forward)
     }
 
-    /// Execute forward NTT from exact `u32` residue storage into caller-owned `u32` output.
-    ///
-    /// This is quantized integer storage, not floating mixed precision. It is
-    /// exact when the plan modulus is bounded by `u32::MAX`, which is already
-    /// required by the current WGPU shader surface.
+    /// Execute the inverse NTT over the configured residue field.
+    pub fn execute_inverse(&self, plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<Vec<u64>> {
+        self.execute_allocating(plan, input, NttMode::Inverse)
+    }
+
+    /// Execute the inverse NTT into reusable host state.
+    pub fn execute_inverse_with_buffers(
+        &self,
+        plan: &NttWgpuPlan,
+        input: &[u64],
+        buffers: &mut NttGpuBuffers,
+    ) -> WgpuResult<()> {
+        self.execute_with_buffers(plan, input, buffers, NttMode::Inverse)
+    }
+
+    /// Execute forward from exact `u32` residues into caller-owned storage.
     pub fn execute_forward_quantized_into(
         &self,
         plan: &NttWgpuPlan,
@@ -135,65 +111,7 @@ impl NttWgpuBackend {
         self.execute_quantized_into(plan, input, output, NttMode::Forward)
     }
 
-    /// Execute forward NTT from exact `u32` Leto residue storage.
-    pub fn execute_forward_quantized_leto(
-        &self,
-        plan: &NttWgpuPlan,
-        input: leto::ArrayView1<'_, u32>,
-    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
-        let input = leto_view1_cow(input)?;
-        let mut output = vec![0_u32; plan.len()];
-        self.execute_forward_quantized_into(plan, &input, &mut output)?;
-        leto_array1_from_slice(&output)
-    }
-
-    /// Execute forward NTT from exact `u32` residues with caller-owned reusable buffers.
-    pub fn execute_forward_quantized_with_buffers(
-        &self,
-        plan: &NttWgpuPlan,
-        input: &[u32],
-        buffers: &mut NttGpuBuffers,
-    ) -> WgpuResult<()> {
-        self.execute_quantized_with_buffers(plan, input, buffers, NttMode::Forward)
-    }
-
-    /// Execute the direct forward NTT with caller-owned reusable buffers.
-    pub fn execute_forward_with_buffers(
-        &self,
-        plan: &NttWgpuPlan,
-        input: &[u64],
-        buffers: &mut NttGpuBuffers,
-    ) -> WgpuResult<()> {
-        Self::validate_plan_input_and_buffers(plan, input, buffers)?;
-        self.kernel
-            .execute_with_buffers(&self.device, input, NttMode::Forward, buffers)
-    }
-
-    /// Execute the direct inverse NTT over the configured residue field.
-    pub fn execute_inverse(&self, plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<Vec<u64>> {
-        let omega = Self::validate_plan_and_input(plan, input)?;
-        self.kernel.execute(
-            &self.device,
-            input,
-            plan.len(),
-            plan.modulus(),
-            omega,
-            NttMode::Inverse,
-        )
-    }
-
-    /// Execute the direct inverse NTT from a Leto residue view.
-    pub fn execute_inverse_leto(
-        &self,
-        plan: &NttWgpuPlan,
-        input: leto::ArrayView1<'_, u64>,
-    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
-        let input = leto_view1_cow(input)?;
-        let output = self.execute_inverse(plan, &input)?;
-        leto_array1_from_slice(&output)
-    }
-
-    /// Execute inverse NTT from exact `u32` residue storage into caller-owned `u32` output.
+    /// Execute inverse from exact `u32` residues into caller-owned storage.
     pub fn execute_inverse_quantized_into(
         &self,
         plan: &NttWgpuPlan,
@@ -203,19 +121,17 @@ impl NttWgpuBackend {
         self.execute_quantized_into(plan, input, output, NttMode::Inverse)
     }
 
-    /// Execute inverse NTT from exact `u32` Leto residue storage.
-    pub fn execute_inverse_quantized_leto(
+    /// Execute forward exact residues into reusable host state.
+    pub fn execute_forward_quantized_with_buffers(
         &self,
         plan: &NttWgpuPlan,
-        input: leto::ArrayView1<'_, u32>,
-    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
-        let input = leto_view1_cow(input)?;
-        let mut output = vec![0_u32; plan.len()];
-        self.execute_inverse_quantized_into(plan, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        input: &[u32],
+        buffers: &mut NttGpuBuffers,
+    ) -> WgpuResult<()> {
+        self.execute_quantized_with_buffers(plan, input, buffers, NttMode::Forward)
     }
 
-    /// Execute inverse NTT from exact `u32` residues with caller-owned reusable buffers.
+    /// Execute inverse exact residues into reusable host state.
     pub fn execute_inverse_quantized_with_buffers(
         &self,
         plan: &NttWgpuPlan,
@@ -225,22 +141,72 @@ impl NttWgpuBackend {
         self.execute_quantized_with_buffers(plan, input, buffers, NttMode::Inverse)
     }
 
-    /// Execute the direct inverse NTT with caller-owned reusable buffers.
-    pub fn execute_inverse_with_buffers(
+    /// Execute a forward transform from a Leto host view.
+    pub fn execute_forward_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
+        let input = leto_view1_cow(input)?;
+        self.execute_forward(plan, &input)
+            .and_then(|output| leto_array1_from_slice(&output))
+    }
+
+    /// Execute an inverse transform from a Leto host view.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u64>,
+    ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
+        let input = leto_view1_cow(input)?;
+        self.execute_inverse(plan, &input)
+            .and_then(|output| leto_array1_from_slice(&output))
+    }
+
+    /// Execute forward exact residues from a Leto host view.
+    pub fn execute_forward_quantized_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u32>,
+    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
+        self.execute_quantized_leto(plan, input, NttMode::Forward)
+    }
+
+    /// Execute inverse exact residues from a Leto host view.
+    pub fn execute_inverse_quantized_leto(
+        &self,
+        plan: &NttWgpuPlan,
+        input: leto::ArrayView1<'_, u32>,
+    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
+        self.execute_quantized_leto(plan, input, NttMode::Inverse)
+    }
+
+    /// Return the last readback in reusable host state.
+    #[must_use]
+    pub fn buffer_output<'a>(&self, buffers: &'a NttGpuBuffers) -> &'a [u64] {
+        buffers.output()
+    }
+
+    fn execute_allocating(
+        &self,
+        plan: &NttWgpuPlan,
+        input: &[u64],
+        mode: NttMode,
+    ) -> WgpuResult<Vec<u64>> {
+        let mut buffers = self.create_buffers(plan)?;
+        self.execute_with_buffers(plan, input, &mut buffers, mode)?;
+        Ok(buffers.output().to_vec())
+    }
+
+    fn execute_with_buffers(
         &self,
         plan: &NttWgpuPlan,
         input: &[u64],
         buffers: &mut NttGpuBuffers,
+        mode: NttMode,
     ) -> WgpuResult<()> {
-        Self::validate_plan_input_and_buffers(plan, input, buffers)?;
-        self.kernel
-            .execute_with_buffers(&self.device, input, NttMode::Inverse, buffers)
-    }
-
-    /// Return the last readback values written by a reusable-buffer execution.
-    #[must_use]
-    pub fn buffer_output<'a>(&self, buffers: &'a NttGpuBuffers) -> &'a [u64] {
-        self.kernel.buffer_output(buffers)
+        Self::validate_plan_input_and_buffers_len(plan, input.len(), buffers)?;
+        NttGpuKernel::execute_with_buffers(&self.device, input, mode, buffers)
     }
 
     fn execute_quantized_into(
@@ -250,19 +216,16 @@ impl NttWgpuBackend {
         output: &mut [u32],
         mode: NttMode,
     ) -> WgpuResult<()> {
-        let len = plan.len();
-        if output.len() != len {
+        if output.len() != plan.len() {
             return Err(WgpuError::LengthMismatch {
-                expected: len,
+                expected: plan.len(),
                 actual: output.len(),
             });
         }
-        Self::validate_plan_and_len(plan, input.len())?;
         let mut buffers = self.create_buffers(plan)?;
-        self.kernel
-            .execute_quantized_with_buffers(&self.device, input, mode, &mut buffers)?;
-        for (slot, &value) in output.iter_mut().zip(self.buffer_output(&buffers).iter()) {
-            *slot = value as u32;
+        self.execute_quantized_with_buffers(plan, input, &mut buffers, mode)?;
+        for (target, value) in output.iter_mut().zip(buffers.output().iter().copied()) {
+            *target = value as u32;
         }
         Ok(())
     }
@@ -275,16 +238,19 @@ impl NttWgpuBackend {
         mode: NttMode,
     ) -> WgpuResult<()> {
         Self::validate_plan_input_and_buffers_len(plan, input.len(), buffers)?;
-        self.kernel
-            .execute_quantized_with_buffers(&self.device, input, mode, buffers)
+        NttGpuKernel::execute_quantized_with_buffers(&self.device, input, mode, buffers)
     }
 
-    fn validate_plan_input_and_buffers(
+    fn execute_quantized_leto(
+        &self,
         plan: &NttWgpuPlan,
-        input: &[u64],
-        buffers: &NttGpuBuffers,
-    ) -> WgpuResult<()> {
-        Self::validate_plan_input_and_buffers_len(plan, input.len(), buffers)
+        input: leto::ArrayView1<'_, u32>,
+        mode: NttMode,
+    ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
+        let input = leto_view1_cow(input)?;
+        let mut output = vec![0; plan.len()];
+        self.execute_quantized_into(plan, &input, &mut output, mode)?;
+        leto_array1_from_slice(&output)
     }
 
     fn validate_plan_input_and_buffers_len(
@@ -302,38 +268,34 @@ impl NttWgpuBackend {
         Ok(())
     }
 
-    fn validate_plan_and_input(plan: &NttWgpuPlan, input: &[u64]) -> WgpuResult<u64> {
-        Self::validate_plan_and_len(plan, input.len())
-    }
-
     fn validate_plan_and_len(plan: &NttWgpuPlan, input_len: usize) -> WgpuResult<u64> {
         let len = plan.len();
         let modulus = plan.modulus();
         let primitive_root = plan.primitive_root();
         if len == 0 {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be greater than zero"),
-                });
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be greater than zero"),
+            });
         }
         if !len.is_power_of_two() {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be a power of two"),
-                });
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: length must be a power of two"),
+            });
         }
         if modulus < 2 {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: modulus must be at least 2"),
-                });
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: modulus must be at least 2"),
+            });
         }
-        if modulus > u32::MAX as u64 || primitive_root > u32::MAX as u64 {
+        if modulus > u64::from(u32::MAX) || primitive_root > u64::from(u32::MAX) {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: current WGPU NTT surface supports 32-bit modulus and primitive root"),
-                });
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: accelerator storage requires u32 field values"),
+            });
         }
         if (modulus - 1) % len as u64 != 0 {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: transform length is not supported by the modulus"),
-                });
+                message: format!("invalid plan len={len}, modulus={modulus}, primitive_root={primitive_root}: transform length is not supported by the modulus"),
+            });
         }
         if input_len != len {
             return Err(WgpuError::LengthMismatch {
@@ -341,34 +303,27 @@ impl NttWgpuBackend {
                 actual: input_len,
             });
         }
-        let root = mod_pow_u64(primitive_root, (modulus - 1) / len as u64, modulus);
-        Ok(root)
+        Ok(mod_pow_u64(
+            primitive_root,
+            (modulus - 1) / len as u64,
+            modulus,
+        ))
     }
-}
-
-fn mod_pow_u64(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
-    let mut result = 1_u64;
-    base %= modulus;
-    while exp > 0 {
-        if exp & 1 == 1 {
-            result = ((result as u128 * base as u128) % modulus as u128) as u64;
-        }
-        base = ((base as u128 * base as u128) % modulus as u128) as u64;
-        exp >>= 1;
-    }
-    result
 }
 
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(slice) = view.as_slice() {
-        return Ok(Cow::Borrowed(slice));
+    if let Some(values) = view.as_slice() {
+        return Ok(Cow::Borrowed(values));
     }
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(*view.get([index]).map_err(|err| WgpuError::ShapeMismatch {
-            message: format!("invalid Leto NTT 1D view: {err:?}"),
-        })?);
+    let mut values = Vec::with_capacity(view.shape()[0]);
+    for index in 0..view.shape()[0] {
+        values.push(
+            *view
+                .get([index])
+                .map_err(|error| WgpuError::ShapeMismatch {
+                    message: format!("invalid Leto NTT 1D view: {error:?}"),
+                })?,
+        );
     }
     Ok(Cow::Owned(values))
 }
@@ -376,9 +331,9 @@ fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, 
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|err| {
+    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|error| {
         WgpuError::InvalidPlan {
-            message: format!("failed to allocate Mnemosyne-backed Leto NTT output: {err:?}"),
+            message: format!("failed to allocate Mnemosyne-backed Leto NTT output: {error:?}"),
         }
     })
 }

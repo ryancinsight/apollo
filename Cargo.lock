@@ -277,20 +277,18 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
- "apollo-wgpu-helpers",
  "bytemuck",
  "eunomia",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "moirai",
- "pollster",
  "proptest",
  "serde",
  "thiserror 2.0.18",
- "wgpu",
 ]
 
 [[package]]
