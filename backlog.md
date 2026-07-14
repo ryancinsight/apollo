@@ -63,7 +63,8 @@ Remaining replacement work:
   - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
-      `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, and `apollo-qft` are complete; 11 transform crates
+      `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
+      `apollo-wavelet` are complete; 10 transform crates
       remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
@@ -72,7 +73,7 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, and QFT; 11 transform crates remain.
+  DCT/DST, GFT, NTT, QFT, and Wavelet; 10 transform crates remain.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
@@ -100,6 +101,14 @@ Remaining replacement work:
     through a typed Hephaestus kernel and command stream. The sealed GPU storage
     contract excludes `Complex64`, preventing silent narrowing; real-device
     unitary differential and roundtrip evidence pass without a raw-WGPU edge.
+  - [x] D6-Wavelet: `apollo-wavelet` 0.3.0 replaces raw WGPU pipeline,
+    binding, encoder, queue, partial-copy, and transfer mechanics with typed
+    Haar analysis/synthesis Hephaestus kernels. Leto remains the host boundary;
+    the sealed GPU storage contract admits `f32` and `f16` only. Analytical,
+    CPU differential, Parseval, and inverse-roundtrip real-device evidence
+    pass without a wrapper or direct WGPU dependency. The committed consumer
+    graph resolves Hephaestus `e527097`, Leto `7f216f1`, Mnemosyne `32b4a2a`,
+    Moirai `8cd356c`, and Themis 0.10.0 without local overrides.
   The first seven slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, and QFT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
@@ -109,7 +118,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 11 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 10 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus

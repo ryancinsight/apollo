@@ -2,6 +2,7 @@
 
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::metadata::wavelet::DiscreteWavelet;
+use apollo_fft::f16;
 
 /// Forward transform implementations.
 pub mod forward;
@@ -16,6 +17,72 @@ pub mod typed;
 mod tests;
 
 pub use typed::WaveletStorage;
+
+mod gpu_storage_sealed {
+    pub trait Sealed {}
+
+    impl Sealed for f32 {}
+    impl Sealed for apollo_fft::f16 {}
+}
+
+/// Storage admitted by the concrete `f32` Haar GPU contract.
+///
+/// The accelerator executes `f32` arithmetic. Native `f32` storage borrows
+/// directly; `f16` quantizes only at the caller-owned boundary. `f64` is not
+/// admitted, so the GPU path cannot silently narrow a high-accuracy request.
+///
+/// ```compile_fail
+/// use apollo_wavelet::WaveletGpuStorage;
+///
+/// fn require_gpu_storage<T: WaveletGpuStorage>() {}
+///
+/// require_gpu_storage::<f64>();
+/// ```
+pub trait WaveletGpuStorage: WaveletStorage + gpu_storage_sealed::Sealed {
+    /// Convert one storage value to the GPU arithmetic representation.
+    fn to_gpu(self) -> f32;
+
+    /// Convert one GPU arithmetic result to caller-owned storage.
+    fn from_gpu(value: f32) -> Self;
+
+    /// Borrow native GPU values when their storage layout is exact.
+    fn as_f32_slice(_values: &[Self]) -> Option<&[f32]> {
+        None
+    }
+
+    /// Borrow mutable native GPU values when their storage layout is exact.
+    fn as_f32_slice_mut(_values: &mut [Self]) -> Option<&mut [f32]> {
+        None
+    }
+}
+
+impl WaveletGpuStorage for f32 {
+    fn to_gpu(self) -> f32 {
+        self
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        value
+    }
+
+    fn as_f32_slice(values: &[Self]) -> Option<&[f32]> {
+        Some(values)
+    }
+
+    fn as_f32_slice_mut(values: &mut [Self]) -> Option<&mut [f32]> {
+        Some(values)
+    }
+}
+
+impl WaveletGpuStorage for f16 {
+    fn to_gpu(self) -> f32 {
+        self.to_f32()
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        f16::from_f32(value)
+    }
+}
 
 /// Reusable 1D orthogonal DWT plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -59,17 +59,17 @@ anyhow = "1.0.103"
 approx = "0.5.1"
 bytemuck = { version = "1.25.1", features = ["derive"] }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false, features = ["std"] }
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "4a9d2a32423f7c3f1413171193765d6aba34ad8e", features = ["eunomia"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d", features = ["eunomia"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "bb07447f6c71978c6fed47114ba9ecfda965ddc9", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
 half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "8651dfc18c25b9cec0ff96ad90c61c4fc2132be9" }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "8651dfc18c25b9cec0ff96ad90c61c4fc2132be9" }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
 # hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
 # delegates adapter/device acquisition here so the device layer is shared with
 # coeus without an apollo->coeus edge.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "090611d207488d30dbf95c01f0489d6215714e7e" }
-hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "090611d207488d30dbf95c01f0489d6215714e7e" }
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "e5270972ecb909659ce30e88dcdb85776729df46" }
+hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "e5270972ecb909659ce30e88dcdb85776729df46" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"
@@ -80,7 +80,7 @@ quote = "1.0.46"
 pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
 rand = "0.10.2"
 # moirai: data-parallel runtime replacing direct scheduler usage.
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "c43f86a21e0ea73d8e3bba68d75db9cedae3abb3", features = ["melinoe"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", features = ["melinoe"] }
 rustfft = "6.4.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
@@ -147,39 +147,11 @@ explicit_write = "allow"
 manual_range_contains = "allow"
 uninlined_format_args = "allow"
 
-[patch."https://github.com/ryancinsight/Mnemosyne.git"]
-mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
-mnemosyne-backend = { path = "../mnemosyne/crates/mnemosyne-backend" }
-mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
-mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
-mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
-mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
-
-[patch."https://github.com/ryancinsight/Moirai.git"]
-moirai = { path = "../moirai/moirai" }
-moirai-core = { path = "../moirai/moirai-core" }
-moirai-gpu = { path = "../moirai/moirai-gpu" }
-moirai-scheduler = { path = "../moirai/moirai-scheduler" }
-moirai-parallel = { path = "../moirai/moirai-parallel" }
-moirai-sync = { path = "../moirai/moirai-sync" }
-moirai-utils = { path = "../moirai/moirai-utils" }
-
 [patch."https://github.com/ryancinsight/eunomia"]
 eunomia = { path = "../eunomia/crates/eunomia" }
-
-[patch."https://github.com/ryancinsight/leto.git"]
-leto = { path = "../leto/crates/leto" }
-leto-ops = { path = "../leto/crates/leto-ops" }
-
-[patch."https://github.com/ryancinsight/hephaestus.git"]
-hephaestus-core = { path = "../hephaestus/crates/hephaestus-core" }
-hephaestus-wgpu = { path = "../hephaestus/crates/hephaestus-wgpu" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
-
-[patch."https://github.com/ryancinsight/themis"]
-themis = { path = "../themis" }
