@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: Wavelet [arch]
+
+- Target version: `apollo-wavelet` 0.3.0
+- Phase: Closure
+- [x] Promote multilevel prefix transfer to Hephaestus and replace Apollo-owned
+  WGPU pipeline, binding, encoder, queue, and transfer mechanics with typed
+  Haar analysis/synthesis ZST kernels and command streams.
+- [x] Preserve the Haar orthonormality/inverse theorem and Leto host boundary;
+  seal GPU storage to native `f32` and explicit `f16` conversion.
+- [x] Verify analytical values, CPU differential, Parseval, inverse roundtrip,
+  Leto boundaries, typed `f16`, negative contracts, format, warning-denied
+  Clippy, nextest, doctest, rustdoc, and the provider audit against published
+  Hephaestus/Leto/Mnemosyne/Moirai/Themis revisions; classify the intentional
+  public break as major with `cargo semver-checks`.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion; 25
+  focused value-semantic nextest cases including real-device dispatch. No
+  machine-checked proof is performed.
+
 ## Hephaestus kernel migration: QFT [arch]
 
 - Target version: `apollo-qft` 0.3.0

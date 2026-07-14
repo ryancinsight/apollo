@@ -1,5 +1,27 @@
 # Apollo Gap Audit
 
+## Wavelet Hephaestus command-stream migration [arch]
+
+- Performed: extended the owning Hephaestus command stream with typed bounded
+  prefix copy, then replaced Apollo-owned WGPU pipeline, binding, encoder,
+  queue, and transfer mechanics with Haar analysis/synthesis ZST kernels.
+  Leto remains the host-array boundary and Mnemosyne owns returned storage.
+- Mathematical contract: Haar analysis maps `(a, b)` to
+  `((a+b)/sqrt(2), (a-b)/sqrt(2))`; synthesis is its transpose. Each pass is
+  orthonormal, so Parseval holds and reverse-level synthesis gives the inverse
+  of the forward multilevel composition.
+- Verification: all-feature package check and warning-denied Clippy; 25/25
+  nextest cases including real-device analytical values, CPU differential,
+  Parseval, inverse roundtrip, Leto boundaries, and typed `f16`; compile-fail
+  `f64` storage exclusion; and a source/manifest scan with no direct WGPU,
+  pollster, or wrapper residue. The consumer resolves the published
+  Hephaestus `e527097`, Leto `7f216f1`, Mnemosyne `32b4a2a`, Moirai `8cd356c`,
+  and Themis 0.10.0 graph without local overrides. Semver classification
+  reports the intended 0.2.0-to-0.3.0 major migration.
+- Evidence tier: typed binding/layout and storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+  Residual D6 scope: 10 crates.
+
 ## QFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct WGPU pipeline, binding, encoder, queue, and
@@ -12,7 +34,7 @@
   CPU differential and inverse roundtrip; compile-fail `Complex64` exclusion;
   doctest; rustdoc; and no direct-WGPU source residue.
 - Evidence tier: type-level storage exclusion and value-semantic differential
-  evidence. No machine-checked proof is performed. Residual D6 scope: 11 crates.
+  evidence. No machine-checked proof is performed. Residual D6 scope: 10 crates.
 
 ## NTT Hephaestus command-stream migration [arch]
 
@@ -33,7 +55,7 @@
   no direct `wgpu`, `pollster`, or `apollo-wgpu-helpers` residue.
 - Evidence tier: typed binding/layout checks plus value-semantic differential
   and property evidence. No machine-checked proof is performed.
-- Residual: D6 has 11 transform crates to migrate; D7 remains the owner of
+- Residual: D6 has 10 transform crates to migrate; D7 remains the owner of
   cross-transform Leto interop consolidation.
 
 ## GFT Hephaestus command-stream migration [arch]
@@ -61,7 +83,7 @@
 - Evidence tier: type-level storage exclusion and parameter-layout assertion,
   then value-semantic CPU differential/roundtrip and real-device execution.
   No machine-checked proof is performed.
-- Residual: D6 has 11 transform crates to migrate; GFT contains no local
+- Residual: D6 has 10 transform crates to migrate; GFT contains no local
   raw-WGPU mechanics or wrapper dependency.
 
 ## Provider-native GPU kernel migration [arch]

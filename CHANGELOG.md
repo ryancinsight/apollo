@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-wavelet` 0.3.0 migrates Haar acceleration to the Hephaestus
+  authored-kernel seam. `WaveletWgpuBackend::new` accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors are removed. GPU typed APIs require sealed
+  `WaveletGpuStorage`, admitting `f32` and `f16` while rejecting silent `f64`
+  narrowing.
 - [major] `apollo-qft` 0.3.0 migrates unitary acceleration to the Hephaestus
   authored-kernel seam. `QftWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice`
   directly and returns `Self`; raw device and queue accessors are removed.
@@ -61,6 +67,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Wavelet multilevel Haar dispatch now uses typed Hephaestus analysis
+  and synthesis kernels, provider-owned prefix transfers, and Leto/Mnemosyne
+  host boundaries. Apollo no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers` in this crate.
+- [patch] The Wavelet migration resolves the published Hephaestus `e527097`,
+  Leto `7f216f1`, Mnemosyne `32b4a2a`, Moirai `8cd356c`, and Themis 0.10.0
+  provider graph without a workspace-local override.
 - [arch] QFT dispatch now uses direct Eunomia `Complex32` Hephaestus bindings
   and provider-owned transfer. The crate no longer depends directly on `wgpu`,
   `pollster`, or `apollo-wgpu-helpers`.
