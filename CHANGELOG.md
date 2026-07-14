@@ -8,6 +8,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Fixed
+
+- [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`
+  so the existing scalar path compiles for Apple Silicon consumers.
+
 ## [0.15.0] - 2026-07-13
 
 ### Breaking

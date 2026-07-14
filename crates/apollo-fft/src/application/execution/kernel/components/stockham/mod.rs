@@ -19,6 +19,7 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::empty_line_after_doc_comments)]
 
+#[cfg(target_arch = "x86_64")]
 pub(crate) mod avx;
 pub(crate) mod butterfly;
 pub(crate) mod precision;
@@ -29,6 +30,7 @@ pub(crate) mod transform;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 #[cfg(not(target_arch = "x86_64"))]
 use crate::with_pot_zst;
+#[cfg(target_arch = "x86_64")]
 use butterfly::{
     forward32_avx_with_scratch, forward32_avx_with_scratch_sized, forward64_avx_with_scratch,
     forward64_avx_with_scratch_sized,

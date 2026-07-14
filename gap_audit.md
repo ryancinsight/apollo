@@ -1,5 +1,24 @@
 # Apollo Gap Audit
 
+## Apple Silicon Stockham target boundary [patch]
+
+- Finding: RITK macOS CI uses `aarch64-apple-darwin`, but Apollo's Stockham
+  module re-exported AVX-only butterfly and precision symbols on every target.
+  The first failure exposed 43 compile errors, including missing fixed-length
+  AVX kernels and AVX backend imports.
+- Resolution: gate the AVX module, AVX butterfly modules and re-exports, AVX
+  precision imports, and AVX-only test imports on `target_arch = "x86_64"`.
+  Non-x86 targets retain the existing scalar Stockham/ZST dispatch path.
+- Verification: the pinned 1.97 toolchain `cargo check -p apollo-fft
+  --target aarch64-apple-darwin --all-features --locked` passes; host
+  warning-denied all-target Clippy passes; nextest passes 409/409; doctests
+  run 0/0; warning-clean rustdoc completes.
+- Evidence tier: cross-target compile/type validation plus host value-semantic
+  nextest and warning-denied linting. Cross-target checking still reports
+  existing unused-code warnings in scalar-only and platform-only branches;
+  those are not compile blockers and remain visible for a later warning-ratchet
+  increment.
+
 ## Release 0.15.0 eligibility [major]
 
 - Provider ABI finding: Hephaestus 0.13.0 now owns WGPU 30, so Apollo advances
