@@ -353,7 +353,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
         // 11. rejects_invalid_plan_and_length_mismatch_before_dispatch
@@ -369,13 +369,13 @@ mod tests {
                     &[Complex32::new(1.0, 0.0), Complex32::new(0.0, 1.0)],
                 )
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 4,
                     actual: 2,
                 }
-            );
+            ));
         }
     }
 }

@@ -1,5 +1,19 @@
 # Apollo Gap Audit
 
+## QFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced direct WGPU pipeline, binding, encoder, queue, and
+  transfer ownership with a ZST Hephaestus `Complex32` kernel and command
+  stream. Apollo retains the unitary formula and WGSL source; Leto remains the
+  host-array boundary.
+- Mathematical contract: the forward and inverse matrices use conjugate phases
+  and `N^(-1/2)` normalization, so orthonormality gives `QFT^-1(QFT(x)) = x`.
+- Verification: warning-denied Clippy; 27/27 nextest cases including real-device
+  CPU differential and inverse roundtrip; compile-fail `Complex64` exclusion;
+  doctest; rustdoc; and no direct-WGPU source residue.
+- Evidence tier: type-level storage exclusion and value-semantic differential
+  evidence. No machine-checked proof is performed. Residual D6 scope: 11 crates.
+
 ## NTT Hephaestus command-stream migration [arch]
 
 - Performed: replaced `apollo-ntt` direct WGPU pipeline, bind group, uniform
@@ -19,7 +33,7 @@
   no direct `wgpu`, `pollster`, or `apollo-wgpu-helpers` residue.
 - Evidence tier: typed binding/layout checks plus value-semantic differential
   and property evidence. No machine-checked proof is performed.
-- Residual: D6 has 12 transform crates to migrate; D7 remains the owner of
+- Residual: D6 has 11 transform crates to migrate; D7 remains the owner of
   cross-transform Leto interop consolidation.
 
 ## GFT Hephaestus command-stream migration [arch]
@@ -47,7 +61,7 @@
 - Evidence tier: type-level storage exclusion and parameter-layout assertion,
   then value-semantic CPU differential/roundtrip and real-device execution.
   No machine-checked proof is performed.
-- Residual: D6 has 12 transform crates to migrate; GFT contains no local
+- Residual: D6 has 11 transform crates to migrate; GFT contains no local
   raw-WGPU mechanics or wrapper dependency.
 
 ## Provider-native GPU kernel migration [arch]

@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-qft` 0.3.0 migrates unitary acceleration to the Hephaestus
+  authored-kernel seam. `QftWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice`
+  directly and returns `Self`; raw device and queue accessors are removed.
+  GPU typed APIs now require sealed `QftGpuStorage`, admitting `Complex32` and
+  `[f16; 2]` while rejecting silent `Complex64` narrowing.
 - [major] `apollo-ntt` 0.3.0 migrates exact finite-field acceleration to the
   Hephaestus authored-kernel seam. `NttWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
@@ -56,6 +61,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] QFT dispatch now uses direct Eunomia `Complex32` Hephaestus bindings
+  and provider-owned transfer. The crate no longer depends directly on `wgpu`,
+  `pollster`, or `apollo-wgpu-helpers`.
 - [arch] NTT butterfly and inverse-scale dispatch now use typed Hephaestus
   bindings and an ordered command stream. Apollo retains the finite-field
   recurrence and WGSL source; Leto remains the host-array boundary. The crate

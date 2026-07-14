@@ -38,6 +38,16 @@ X[k] = N^(-1/2) sum_j x[j] exp(2*pi*i*j*k/N)
 The inverse uses the conjugate phase. The transform preserves norm because its
 matrix columns are orthonormal.
 
+## Hephaestus Accelerator Contract
+
+Apollo owns the unitary QFT formula and WGSL source; Hephaestus owns typed
+`Complex32` buffers, parameter upload, binding validation, dispatch, and
+readback. The concrete accelerator admits native `Complex32` plus explicit
+`[f16; 2]` host promotion, and rejects `Complex64` at compile time rather than
+silently narrowing it. The unitary identity is documented mathematics; the
+real-device CPU differential and inverse-roundtrip suite provides executable
+evidence rather than a machine-checked proof.
+
 ## Verification
 
 Tests cover two-point analytical output, norm preservation, inverse roundtrip,

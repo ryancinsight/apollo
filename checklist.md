@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: QFT [arch]
+
+- Target version: `apollo-qft` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU pipeline, binding, encoder, queue, and transfer ownership
+  with a typed Hephaestus `Complex32` kernel and command stream.
+- [x] Preserve the unitary QFT theorem and Leto host boundary; seal the concrete
+  GPU storage contract to native `Complex32` and explicit `[f16; 2]` promotion.
+- [x] Verify real-device CPU differential and inverse roundtrip, negative
+  contracts, format, warning-denied Clippy, nextest, doctest, and rustdoc.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion; 27
+  focused value-semantic tests including real-device dispatch. No machine-checked
+  proof is performed.
+
 ## Hephaestus kernel migration: NTT [arch]
 
 - Target version: `apollo-ntt` 0.3.0

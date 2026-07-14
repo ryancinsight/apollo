@@ -330,23 +330,21 @@ dependencies = [
 
 [[package]]
 name = "apollo-qft"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "apollo-fft",
- "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
  "eunomia",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "pollster",
  "proptest",
  "serde",
  "thiserror 2.0.18",
- "wgpu",
 ]
 
 [[package]]
