@@ -2,7 +2,6 @@
 
 use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
-use std::sync::Arc;
 
 use crate::FwhtStorage;
 use apollo_fft::PrecisionProfile;
@@ -11,7 +10,7 @@ use crate::infrastructure::transport::gpu::application::plan::FwhtWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::FwhtGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use hephaestus_wgpu::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -23,19 +22,18 @@ pub fn wgpu_available() -> bool {
 #[derive(Debug, Clone)]
 pub struct FwhtWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<FwhtGpuKernel>,
 }
 
 impl FwhtWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(FwhtGpuKernel::new(device.inner())?);
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-fwht-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-fwht-wgpu")?))
     }
 
     /// Return truthful current capabilities.
@@ -44,16 +42,10 @@ impl FwhtWgpuBackend {
         WgpuCapabilities::implemented(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
     /// Create a metadata-only plan descriptor.
@@ -65,7 +57,7 @@ impl FwhtWgpuBackend {
     /// Execute the unnormalized forward 1D FWHT for a real-valued `f32` signal.
     pub fn execute_forward(&self, plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(&self.device, input, false)
+        FwhtGpuKernel::execute(&self.device, input, false)
     }
 
     /// Execute the unnormalized forward 1D FWHT from a Leto `f32` view.
@@ -79,7 +71,7 @@ impl FwhtWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let input = leto_view1_cow(input);
         let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_slice(&output)
+        leto_array1_from_vec(output)
     }
 
     /// Execute the unnormalized forward 1D FWHT with caller-owned typed storage.
@@ -113,13 +105,13 @@ impl FwhtWgpuBackend {
         let input = leto_view1_cow(input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        leto_array1_from_vec(output)
     }
 
     /// Execute the normalized inverse 1D FWHT for a real-valued `f32` spectrum.
     pub fn execute_inverse(&self, plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(&self.device, input, true)
+        FwhtGpuKernel::execute(&self.device, input, true)
     }
 
     /// Execute the normalized inverse 1D FWHT from a Leto `f32` view.
@@ -132,7 +124,7 @@ impl FwhtWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let input = leto_view1_cow(input);
         let output = self.execute_inverse(plan, &input)?;
-        leto_array1_from_slice(&output)
+        leto_array1_from_vec(output)
     }
 
     /// Execute the normalized inverse 1D FWHT with caller-owned typed storage.
@@ -160,7 +152,7 @@ impl FwhtWgpuBackend {
         let input = leto_view1_cow(input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_inverse_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        leto_array1_from_vec(output)
     }
 
     fn validate_plan_input(plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<()> {
@@ -243,12 +235,13 @@ fn write_typed_output<T: FwhtStorage>(source: &[f32], output: &mut [T]) {
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
+fn leto_array1_from_vec<T>(
+    values: Vec<T>,
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto output".to_string(),
-    })
+    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([values.len()], values)
+        .map_err(|error| WgpuError::InvalidPlan {
+            message: format!("failed to construct Mnemosyne-backed Leto output: {error}"),
+        })
 }
 
 #[cfg(test)]

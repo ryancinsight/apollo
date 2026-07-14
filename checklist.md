@@ -3,21 +3,26 @@
 ## Hephaestus kernel migration: FWHT [arch]
 
 - Target version: `apollo-fwht` 0.3.0
-- Phase: Execution
+- Phase: Closure
 - [x] Audit FWHT's raw-WGPU boundary against Hephaestus's typed
   `ComputeDevice`/`KernelDevice` contracts and record ADR 0003.
-- [ ] Encode butterfly and inverse-scale kernels as ZST kernel interfaces with
+- [x] Encode butterfly and inverse-scale kernels as ZST kernel interfaces with
   dialect-specific source implementations.
-- [ ] Replace raw buffers, pipelines, bind groups, encoders, queues, and public
+- [x] Replace raw buffers, pipelines, bind groups, encoders, queues, and public
   device accessors with Hephaestus typed preparation and dispatch.
-- [ ] Delete `apollo-fwht`'s direct `wgpu`, `pollster`, and
+- [x] Delete `apollo-fwht`'s direct `wgpu`, `pollster`, and
   `apollo-wgpu-helpers` dependency edges and verify no raw-WGPU source remains
   in the FWHT bounded context.
-- [ ] Pass focused format, warning-denied Clippy, nextest, doctest, rustdoc,
+- [x] Pass focused format, warning-denied Clippy, nextest, doctest, rustdoc,
   provider-audit, locked metadata, and API classification gates; synchronize
   changelog and residual inventory.
-- Evidence tier at claim: source and type-contract audit only; execution
-  evidence is pending implementation.
+- Evidence tier: compile-time typed provider ownership plus 39 value-semantic
+  nextest cases, including real-device CPU differential, inverse, Leto
+  typed/strided, and exact Hadamard involution coverage; the full workspace
+  passes 1,028/1,028 nextest cases. The source/manifests scan finds no raw WGPU
+  or helper dependency in `apollo-fwht`; provider-audit, warning-denied
+  Clippy/rustdoc, doctest, locked metadata, and API classification gates pass.
+  No runtime performance claim is made.
 
 ## Release 0.15.0 WGPU 30 integration [major]
 

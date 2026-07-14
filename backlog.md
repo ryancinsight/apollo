@@ -62,16 +62,16 @@ Remaining replacement work:
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
-    already shared, but 18 transform crates still own raw WGPU mechanics.
+    already shared. `apollo-fwht` is complete; 17 transform crates remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-13; in-flight scope
-  `crates/apollo-fwht`, workspace dependency metadata, ADR 0003, and matching PM
-  artifacts. The first slice is complete when FWHT retains Leto host arrays and
+  owner Codex; last-update 2026-07-13; FWHT scope complete and next scope
+  `crates/apollo-czt`, workspace dependency metadata, and matching PM artifacts.
+  The first slice is complete: FWHT retains Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the

@@ -26,8 +26,8 @@ const PROVIDER_REQUIREMENTS: &[(&str, &str)] = &[
         "Atlas-owned strided array construction, views, slicing, broadcasting, axis iteration, and zero-copy transform boundaries",
     ),
     (
-        "wgpu",
-        "GPU kernels keep device buffers behind infrastructure crates while CPU planning, host staging, and verification stay provider-agnostic",
+        "hephaestus",
+        "backend-neutral typed device buffers, authored-kernel interfaces, prepared dispatch, command streams, synchronization, and transfers; raw WGPU/CUDA mechanics remain inside Hephaestus backend crates",
     ),
 ];
 
@@ -40,6 +40,7 @@ const SOURCE_PATTERNS: &[(&str, &str)] = &[
     ("hermes", "hermes"),
     ("hermes_simd", "hermes_simd"),
     ("leto", "leto"),
+    ("hephaestus", "hephaestus"),
     ("rayon", "rayon"),
     ("arc", "Arc<"),
     ("mutex", "Mutex<"),
@@ -103,6 +104,7 @@ struct WorkspaceAudit {
     melinoe_workspace_dep: bool,
     hermes_workspace_dep: bool,
     leto_workspace_dep: bool,
+    hephaestus_workspace_dep: bool,
 }
 
 #[derive(Debug)]
@@ -120,6 +122,7 @@ struct ManifestUsage {
     melinoe: bool,
     hermes: bool,
     leto: bool,
+    hephaestus: bool,
     rayon: bool,
 }
 
@@ -173,14 +176,19 @@ impl ProviderAudit {
             "Leto workspace dependency",
             self.workspace.leto_workspace_dep,
         );
+        push_bool_line(
+            &mut output,
+            "Hephaestus workspace dependency",
+            self.workspace.hephaestus_workspace_dep,
+        );
         output.push('\n');
 
         output.push_str("## Crate Usage\n");
         output.push_str(
-            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
+            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Hephaestus | Rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
         );
         output.push_str(
-            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
         );
         for crate_audit in &self.crates {
             let dyn_count = count(&crate_audit.source_usage, "box_dyn")
@@ -189,7 +197,7 @@ impl ProviderAudit {
                 + count(&crate_audit.source_usage, "collect_vec");
             writeln!(
                 &mut output,
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
                 crate_audit.name,
                 portable_display(&crate_audit.manifest),
                 mark(
@@ -213,6 +221,10 @@ impl ProviderAudit {
                     crate_audit.manifest_usage.leto || count(&crate_audit.source_usage, "leto") > 0
                 ),
                 mark(
+                    crate_audit.manifest_usage.hephaestus
+                        || count(&crate_audit.source_usage, "hephaestus") > 0
+                ),
+                mark(
                     crate_audit.manifest_usage.rayon
                         || count(&crate_audit.source_usage, "rayon") > 0
                 ),
@@ -234,7 +246,7 @@ impl ProviderAudit {
         }
         output.push_str("\n## Dependency Order\n");
         output.push_str(
-            "- Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
+            "- Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
         );
         output.push_str(
             "- Apollo must not add a local path override for provider work in committed manifests.\n",
@@ -341,6 +353,8 @@ fn collect_workspace_usage(root: &Path) -> Result<WorkspaceAudit> {
         hermes_workspace_dep: uncommented.contains("hermes-simd")
             && uncommented.contains("github.com"),
         leto_workspace_dep: uncommented.contains("leto") && uncommented.contains("github.com"),
+        hephaestus_workspace_dep: uncommented.contains("hephaestus")
+            && uncommented.contains("github.com"),
     })
 }
 
@@ -420,6 +434,7 @@ fn manifest_usage(text: &str) -> ManifestUsage {
         melinoe: uncommented.contains("melinoe"),
         hermes: uncommented.contains("hermes-simd") || uncommented.contains("hermes_simd"),
         leto: uncommented.contains("leto"),
+        hephaestus: uncommented.contains("hephaestus"),
         rayon: uncommented.contains("rayon"),
     }
 }
@@ -517,6 +532,7 @@ moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features 
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", default-features = false, features = ["std"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std"] }
+hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git" }
 "#,
         )?;
         fs::write(
@@ -531,6 +547,7 @@ moirai = { workspace = true }
 melinoe = { workspace = true }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
+hephaestus-core = { workspace = true }
 "#,
         )?;
         fs::write(
@@ -546,11 +563,12 @@ leto = { workspace = true }
         assert!(rendered.contains("Melinoe workspace dependency: yes"));
         assert!(rendered.contains("Hermes workspace dependency: yes"));
         assert!(rendered.contains("Leto workspace dependency: yes"));
+        assert!(rendered.contains("Hephaestus workspace dependency: yes"));
         assert!(rendered.contains(
-            "| apollo-demo | crates/apollo-demo/Cargo.toml | yes | no | yes | yes | yes | no |"
+            "| apollo-demo | crates/apollo-demo/Cargo.toml | yes | no | yes | yes | yes | yes | no |"
         ));
         assert!(rendered.contains(
-            "Moirai, Mnemosyne, Melinoe, Hermes, and Leto are consumed from Git dependencies"
+            "Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git dependencies"
         ));
 
         fs::remove_dir_all(root)?;

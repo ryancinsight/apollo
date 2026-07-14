@@ -17,8 +17,20 @@
   its ordered radix-2 stage sequence, while `H_n² = nI` supplies an independent
   algebraic oracle. Leto remains the host array/view boundary; Apollo retains
   transform mathematics; Hephaestus owns device mechanics. See ADR 0003.
-- Evidence tier: source inventory and compile-time contract inspection. No
-  migration execution claim is made before the focused gates pass.
+- Performed: `apollo-fwht` 0.3.0 now expresses its butterfly and inverse-scale
+  kernels as ZST `KernelInterface`/`KernelSource` implementations, prepares
+  them through `KernelDevice`, and encodes every stage into one typed command
+  stream over a single Hephaestus buffer. Readback storage moves directly into
+  the Mnemosyne-backed Leto result without a second output copy.
+- Evidence tier: compile-time typed provider ownership plus 39 value-semantic
+  nextest cases, including a real-device CPU differential suite and the
+  independent `H_n² = nI` oracle; the full workspace passes 1,028/1,028
+  nextest cases. Focused warning-denied Clippy, rustdoc, doctest,
+  provider-audit, locked metadata, and API classification gates pass. No
+  runtime performance claim is made.
+- Residual: 17 transform manifests and 53 Rust source files still own direct
+  WGPU dependencies or calls. The next bounded migration is `apollo-czt`; the
+  wrapper crate is deleted only after its final consumer is migrated.
 
 ## Release 0.15.0 eligibility [major]
 

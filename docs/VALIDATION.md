@@ -287,9 +287,10 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-dht-wgpu` exposes typed mixed-storage forward/inverse wrappers. Tests
   validate `f16` caller-owned storage against represented `f32` GPU execution and
   use an analytical `f16` quantization bound for inverse roundtrip values.
-- `apollo-fwht-wgpu` exposes typed mixed-storage forward/inverse wrappers. Tests
-  validate `f16` caller-owned storage against represented `f32` GPU execution and
-  use an analytical `f16` quantization bound for inverse roundtrip values.
+- `apollo-fwht --features wgpu` exposes typed mixed-storage forward/inverse
+  wrappers over Hephaestus typed buffers and authored-kernel dispatch. Tests
+  validate `f16` caller-owned storage against represented `f32` GPU execution
+  and use an analytical `f16` quantization bound for inverse roundtrip values.
 - CZT-WGPU, DCTDST-WGPU, FrFT-WGPU, GFT-WGPU, Hilbert-WGPU, Mellin-WGPU,
   QFT-WGPU, Radon-WGPU, SDFT-WGPU, SFT-WGPU, SHT-WGPU, STFT-WGPU, and
   Wavelet-WGPU expose typed mixed-storage wrappers over their existing `f32`
@@ -301,9 +302,9 @@ by unit and property tests against analytical identities and direct references.
   preserve standard fast-path output values.
 - CI regression prevention runs workspace formatting, clippy with warnings
   denied, all workspace tests, and the current `apollo-python` smoke tests.
-- `apollo-fwht-wgpu` now validates real 1D forward and inverse FWHT execution
-  against the owning CPU crate and reports support only for that implemented
-  `f32` kernel surface.
+- `apollo-fwht --features wgpu` validates real 1D forward and inverse execution
+  against the CPU implementation, verifies `H_n² = nI` exactly on dyadic test
+  values, and reports support only for that implemented `f32` kernel surface.
 - `apollo-dctdst-wgpu` now validates real 1D DCT-II, DCT-III, DST-II, and
   DST-III forward and inverse execution against the owning CPU crate and
   reports full DCT/DST support for that implemented `f32` kernel surface.

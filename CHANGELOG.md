@@ -8,6 +8,24 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Breaking
+
+- [major] `apollo-fwht` 0.3.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `FwhtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Replace
+  `apollo_wgpu_helpers::WgpuDevice` construction with the Hephaestus device and
+  remove error propagation from the infallible wrapper constructor.
+
+### Changed
+
+- [arch] FWHT butterfly and inverse-scale execution now uses Hephaestus typed
+  buffers, ZST `KernelInterface`/`KernelSource` descriptors, cached pipeline
+  preparation, and one ordered command stream. Leto remains the host
+  array/view boundary; Apollo retains the WGSL transform formulas. The crate no
+  longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`, and
+  downloaded storage moves directly into the Mnemosyne-backed Leto result.
+
 ## [0.15.0] - 2026-07-13
 
 ### Breaking

@@ -1,221 +1,129 @@
-//! GPU execution for the 1D Walsh-Hadamard butterfly network.
+//! Hephaestus execution for the 1D Walsh-Hadamard butterfly network.
 //!
 //! Let `H_n` denote the Hadamard matrix for `n = 2^m`, with entries
-//! `H_n[k, j] = (-1)^{popcount(k & j)}`. The radix-2 butterfly factorization
-//! of `H_n` is exactly the iterative stage sequence
-//! `(a, b) -> (a + b, a - b)` at strides `1, 2, 4, ..., n / 2`.
-//! Because `H_n^2 = n I`, the inverse applies the same butterfly network
-//! followed by multiplication by `1 / n`.
+//! `H_n[k, j] = (-1)^{popcount(k & j)}`. Its radix-2 factorization is the
+//! ordered stage sequence `(a, b) -> (a + b, a - b)` at strides
+//! `1, 2, 4, ..., n / 2`. Since `H_n² = nI`, inverse execution applies the
+//! same stages followed by multiplication by `1 / n`.
 
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
+use std::borrow::Cow;
+
 use bytemuck::{Pod, Zeroable};
-use std::num::NonZeroU64;
-use wgpu::util::DeviceExt;
+use hephaestus_core::{
+    Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
+    Wgsl,
+};
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
-const WORKGROUP_SIZE: u32 = 256;
+const WORKGROUP_SIZE: usize = 256;
+const FWHT_SOURCE: &str = include_str!("shaders/fwht.wgsl");
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct FwhtParams {
+pub(super) struct FwhtParams {
     len: u32,
     stride: u32,
-    _padding: [u32; 2],
+    padding: [u32; 2],
 }
 
-/// Cached WGPU kernel state for repeated FWHT dispatches.
-#[derive(Debug)]
-pub struct FwhtGpuKernel {
-    bind_group_layout: wgpu::BindGroupLayout,
-    butterfly_pipeline: wgpu::ComputePipeline,
-    scale_pipeline: wgpu::ComputePipeline,
+const _: () = assert!(core::mem::size_of::<FwhtParams>() == 16);
+
+pub(super) struct ButterflyKernel;
+
+impl KernelInterface for ButterflyKernel {
+    type Params = FwhtParams;
+
+    const LABEL: &'static str = "apollo-fwht-butterfly";
+    const BINDINGS: &'static [BindingDecl] = &[BindingDecl::read_write::<f32>()];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
 }
+
+impl KernelSource<Wgsl> for ButterflyKernel {
+    const ENTRY: &'static str = "fwht_butterfly";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(FWHT_SOURCE)
+    }
+}
+
+pub(super) struct InverseScaleKernel;
+
+impl KernelInterface for InverseScaleKernel {
+    type Params = FwhtParams;
+
+    const LABEL: &'static str = "apollo-fwht-inverse-scale";
+    const BINDINGS: &'static [BindingDecl] = &[BindingDecl::read_write::<f32>()];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl KernelSource<Wgsl> for InverseScaleKernel {
+    const ENTRY: &'static str = "fwht_scale_inverse";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(FWHT_SOURCE)
+    }
+}
+
+/// Zero-sized FWHT kernel orchestration over a Hephaestus kernel device.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct FwhtGpuKernel;
 
 impl FwhtGpuKernel {
-    /// Compile shader state and allocate the uniform parameter buffer.
-    pub fn new(device: &wgpu::Device) -> WgpuResult<Self> {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-fwht-wgpu shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/fwht.wgsl").into()),
-        });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-fwht-wgpu bind group layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: NonZeroU64::new(std::mem::size_of::<f32>() as u64),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: NonZeroU64::new(std::mem::size_of::<FwhtParams>() as u64),
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-fwht-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let butterfly_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-fwht-wgpu butterfly pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("fwht_butterfly"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let scale_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-fwht-wgpu scale pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("fwht_scale_inverse"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        Ok(Self {
-            bind_group_layout,
-            butterfly_pipeline,
-            scale_pipeline,
-        })
-    }
-
     /// Execute the forward or inverse 1D FWHT on a real-valued `f32` slice.
-    pub fn execute(
-        &self,
-        device: &WgpuDevice,
-        input: &[f32],
-        inverse: bool,
-    ) -> WgpuResult<Vec<f32>> {
-        let hep_device = device.hephaestus();
+    pub(super) fn execute<D>(device: &D, input: &[f32], inverse: bool) -> WgpuResult<Vec<f32>>
+    where
+        D: KernelDevice,
+        ButterflyKernel: KernelSource<D::Dialect>,
+        InverseScaleKernel: KernelSource<D::Dialect>,
+    {
         let len = input.len();
-        let storage = hep_device
-            .upload(input)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
+        let encoded_len = u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
+            message: format!("length {len} exceeds the provider parameter range"),
+        })?;
+        let storage = device.upload(input)?;
+        let butterfly = device.prepare(&ButterflyKernel)?;
+        let inverse_scale = inverse
+            .then(|| device.prepare(&InverseScaleKernel))
+            .transpose()?;
+        let mut stream = device.stream()?;
 
+        let butterfly_grid =
+            DispatchGrid::covering_domain([len / 2, 1, 1], [WORKGROUP_SIZE, 1, 1])?;
         let mut stride = 1usize;
         while stride < len {
-            let params_buffer =
-                device
-                    .inner()
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("apollo-fwht-wgpu params stage"),
-                        contents: bytemuck::bytes_of(&FwhtParams {
-                            len: len as u32,
-                            stride: stride as u32,
-                            _padding: [0; 2],
-                        }),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
-            let bind_group = device
-                .inner()
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("apollo-fwht-wgpu bind group"),
-                    layout: &self.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: storage.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: params_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
-
-            let mut encoder =
-                device
-                    .inner()
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("apollo-fwht-wgpu butterfly encoder"),
-                    });
-            {
-                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("apollo-fwht-wgpu butterfly pass"),
-                    timestamp_writes: None,
-                });
-                pass.set_pipeline(&self.butterfly_pipeline);
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.dispatch_workgroups(dispatch_count((len / 2) as u32), 1, 1);
-            }
-            device.queue().submit(std::iter::once(encoder.finish()));
+            let encoded_stride = u32::try_from(stride).map_err(|_| WgpuError::InvalidPlan {
+                message: format!("stride {stride} exceeds the provider parameter range"),
+            })?;
+            stream.encode(
+                &butterfly,
+                &[Binding::read_write(&storage)],
+                &FwhtParams {
+                    len: encoded_len,
+                    stride: encoded_stride,
+                    padding: [0; 2],
+                },
+                butterfly_grid,
+            )?;
             stride <<= 1;
         }
 
-        if inverse {
-            let params_buffer =
-                device
-                    .inner()
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("apollo-fwht-wgpu params scale"),
-                        contents: bytemuck::bytes_of(&FwhtParams {
-                            len: len as u32,
-                            stride: 0,
-                            _padding: [0; 2],
-                        }),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
-            let bind_group = device
-                .inner()
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("apollo-fwht-wgpu scale bind group"),
-                    layout: &self.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: storage.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: params_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
-
-            let mut encoder =
-                device
-                    .inner()
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("apollo-fwht-wgpu scale encoder"),
-                    });
-            {
-                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("apollo-fwht-wgpu scale pass"),
-                    timestamp_writes: None,
-                });
-                pass.set_pipeline(&self.scale_pipeline);
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.dispatch_workgroups(dispatch_count(len as u32), 1, 1);
-            }
-            device.queue().submit(std::iter::once(encoder.finish()));
+        if let Some(inverse_scale) = inverse_scale {
+            stream.encode(
+                &inverse_scale,
+                &[Binding::read_write(&storage)],
+                &FwhtParams {
+                    len: encoded_len,
+                    stride: 0,
+                    padding: [0; 2],
+                },
+                DispatchGrid::covering_domain([len, 1, 1], [WORKGROUP_SIZE, 1, 1])?,
+            )?;
         }
 
+        stream.submit()?;
         let mut output = vec![0.0_f32; len];
-        hep_device
-            .download(&storage, &mut output)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
+        device.download(&storage, &mut output)?;
         Ok(output)
     }
-}
-
-fn dispatch_count(items: u32) -> u32 {
-    items.div_ceil(WORKGROUP_SIZE)
 }
