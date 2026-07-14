@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-ntt` 0.3.0 migrates exact finite-field acceleration to the
+  Hephaestus authored-kernel seam. `NttWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and raw device and queue escape hatches are removed.
+  `NttGpuBuffers` now owns reusable host residues and twiddles only; all device
+  allocation, parameter upload, binding, dispatch, and transfer are
+  provider-owned.
 - [major] `apollo-gft` 0.3.0 migrates its graph Fourier accelerator to the
   Hephaestus authored-kernel seam. `GftWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
@@ -49,6 +56,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] NTT butterfly and inverse-scale dispatch now use typed Hephaestus
+  bindings and an ordered command stream. Apollo retains the finite-field
+  recurrence and WGSL source; Leto remains the host-array boundary. The crate
+  no longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
 - [arch] DHT transform and inverse-scale execution now uses Hephaestus typed
   buffers, ZST authored-kernel descriptors, and one ordered command stream.
   Leto output downloads directly into Mnemosyne-backed storage; mixed `f16`

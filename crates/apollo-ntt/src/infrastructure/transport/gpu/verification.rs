@@ -352,13 +352,13 @@ mod tests {
             let err = backend
                 .execute_forward_quantized_into(&plan, &[0; 8], &mut output)
                 .expect_err("output length mismatch must produce an error");
-            assert_eq!(
+            assert!(matches!(
                 err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
 
         // 12. reusable_buffers_reject_plan_length_mismatch
@@ -371,13 +371,13 @@ mod tests {
             let err = backend
                 .execute_forward_with_buffers(&plan, &[0; 8], &mut short_buffers)
                 .expect_err("buffer length mismatch must produce an error");
-            assert_eq!(
+            assert!(matches!(
                 err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
 
         // 13. rejects_invalid_plan_and_length_before_dispatch
@@ -413,13 +413,13 @@ mod tests {
                     &[0; 4],
                 )
                 .expect_err("input length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
     }
 

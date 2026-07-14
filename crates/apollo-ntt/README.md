@@ -35,6 +35,21 @@ The inverse uses `omega^-1` and multiplies by `n^-1 mod q`. Orthogonality of
 finite root-of-unity sums gives exact recovery of each input residue modulo
 `q`.
 
+## Hephaestus Accelerator Contract
+
+The GPU boundary preserves that same finite-field theorem. Apollo owns the
+bit-reversal permutation, residue normalization, twiddle construction, and
+WGSL recurrence; Hephaestus owns typed device buffers, parameter upload,
+binding validation, ordered command recording, dispatch, and readback.
+
+For each stage `s`, the butterfly kernel updates disjoint pairs
+`(i, i + 2^s)`, so no two invocations write the same residue. Hephaestus
+records stages in order; therefore each stage observes the preceding stage's
+writes. The inverse uses `omega^-1` and a final `n^-1` scale, yielding
+`INTT(NTT(x)) = x` exactly in `F_q^n`. This is documented mathematics, not a
+machine-checked proof; exact CPU/GPU differential and roundtrip tests provide
+the executable evidence tier.
+
 ## Execution Surfaces
 
 - `forward` and `inverse` allocate returned arrays.
@@ -48,5 +63,6 @@ plan modulus before applying butterflies.
 ## Verification
 
 The crate verifies single-point behavior, small-vector roundtrip, caller-owned
-parity, residue normalization, invalid length rejection, and property-based
-roundtrips over supported power-of-two lengths.
+parity, residue normalization, invalid length rejection, exact CPU/GPU
+differentials, and property-based roundtrips over supported power-of-two
+lengths.
