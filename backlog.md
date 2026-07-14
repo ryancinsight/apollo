@@ -69,8 +69,8 @@ Remaining replacement work:
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-13; FWHT scope complete and next scope
-  `crates/apollo-czt`, workspace dependency metadata, and matching PM artifacts.
+  owner Codex; last-update 2026-07-14; in-flight scope `crates/apollo-czt`,
+  workspace dependency metadata, and matching PM artifacts; FWHT scope complete.
   The first slice is complete: FWHT retains Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
