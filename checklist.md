@@ -28,8 +28,8 @@
   dependency policy pass. `apollo-fft` passes 196 applicable minor-release API
   checks; the intentionally breaking `apollo-wgpu-helpers` boundary is
   classified as a major release.
-- [ ] Commit and push the verified release candidate; synchronize Atlas's Apollo
-  gitlink without staging sibling peer work.
+- [x] Commit and push release candidate `af99c05`; Atlas gitlink synchronization
+  remains an integrator-owned parent-repository step.
 
 ## Moirai feature-contract cleanup [patch]
 - [x] Removed the empty `no-global-alloc` feature from Apollo's pinned Moirai
