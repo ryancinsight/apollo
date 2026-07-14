@@ -73,6 +73,11 @@ Remaining replacement work:
   owner Codex; last-update 2026-07-14; in-flight scope `crates/apollo-dht`,
   workspace dependency metadata, and matching PM artifacts; FWHT and CZT scopes
   complete.
+  - [/] D6-DCTDST: owner Codex; last-update 2026-07-14; claimed scope
+    `crates/apollo-dctdst` only. Replace the obsolete wrapper boundary with
+    native Hephaestus typed-kernel dispatch, retain the DCT/DST mathematical
+    specification and Leto CPU boundary, and add value-semantic differential
+    and analytical-oracle coverage before the slice can merge.
   The first two slices are complete: FWHT and CZT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
