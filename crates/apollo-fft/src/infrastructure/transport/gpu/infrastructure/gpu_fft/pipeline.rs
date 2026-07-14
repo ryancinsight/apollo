@@ -218,8 +218,8 @@ impl GpuFft3d {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu fft pipeline layout"),
-            bind_group_layouts: &[&data_layout, &params_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&data_layout), Some(&params_layout)],
+            immediate_size: 0,
         });
 
         let build_pipeline = |entry: &str| {
@@ -244,8 +244,12 @@ impl GpuFft3d {
         });
         let pack_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu pack pipeline layout"),
-            bind_group_layouts: &[&data_layout, &params_layout, &volume_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[
+                Some(&data_layout),
+                Some(&params_layout),
+                Some(&volume_layout),
+            ],
+            immediate_size: 0,
         });
         let build_pack_pipeline = |entry: &str| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -677,8 +681,8 @@ impl GpuFft3d {
         });
         let chirp_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu chirp pipeline layout"),
-            bind_group_layouts: &[&data_chirp_layout, params_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&data_chirp_layout), Some(params_layout)],
+            immediate_size: 0,
         });
         let build_pipeline = |entry: &str| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

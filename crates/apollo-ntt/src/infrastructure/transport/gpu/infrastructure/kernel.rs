@@ -129,8 +129,8 @@ impl NttGpuKernel {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-ntt-wgpu pipeline layout"),
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
         });
 
         let butterfly_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

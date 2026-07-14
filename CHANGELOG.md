@@ -7,6 +7,41 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ---
 
 ## [Unreleased]
+
+## [0.15.0] - 2026-07-13
+
+### Breaking
+
+- [major] Advance the provider-owned public GPU ABI to Hephaestus 0.13.0 and
+  WGPU 30. `apollo-wgpu-helpers::WgpuDevice::new` is infallible again because
+  Hephaestus no longer registers process-global Mnemosyne staging callbacks;
+  remove `?` from direct constructor calls. Default adapter acquisition remains
+  fallible. `apollo-wgpu-helpers` advances to 0.3.0.
+- [major] `GpuFft3d` forward/inverse and reusable-buffer methods now return
+  `ApolloResult`, and native-f16 methods return `Result<_, String>`, so WGPU 30
+  mapped-range failures propagate instead of being ignored.
+
+### Changed
+
+- [major] Migrate pipeline layouts, polling, adapter/device descriptors, and
+  mapped readbacks natively to WGPU 30 across every Apollo GPU leaf.
+- [patch] Pin Mnemosyne `4a9d2a3`, Leto `8651dfc`, Moirai `c43f86a`, and
+  Hephaestus `090611d`; refresh CI checkout metadata and the locked graph.
+
+### Fixed
+
+- [patch] Remove the `RUSTSEC-2024-0436` exception after WGPU 30 deletes the
+  archived `paste` dependency from Apollo's graph.
+- [patch] Align native-f16 storage buffers for odd element counts to WGPU's
+  four-byte binding requirement while preserving the logical element count.
+- [patch] Request and validate the six storage buffers required by the STFT
+  Chirp-Z pipeline before creating its WGPU pipeline layout.
+- [patch] Replace the invalid fixed native-f16 absolute tolerance with the
+  derived `γ₃₁·‖input‖₁` forward-error bound.
+- [patch] Delete uncompiled duplicate native-f16 and batched-matrix GPU source
+  trees left disconnected by the consolidated WGPU module topology.
+
+## [0.14.0] - 2026-07-13
 ### Breaking
 - [major] `apollo-wgpu-helpers::WgpuDevice::new` now returns
   `WgpuDeviceResult<Self>` because Hephaestus 0.12 registers Mnemosyne staging

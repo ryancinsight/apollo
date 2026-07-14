@@ -19,8 +19,8 @@
 //! where `W = exp(-2πi/N)` for each axis of length N.
 //!
 //! Twiddle factors are computed in f32 and narrowed to f16, bounding twiddle
-//! error at f32 precision before quantization. Butterfly accumulation error is
-//! bounded by O(log₂N) · ε_f16 · ‖input‖_∞ where ε_f16 ≈ 9.77×10⁻⁴.
+//! error at f32 precision before quantization. Per-output butterfly error is
+//! bounded by O(log₂N) · ε_f16 · ‖input‖₁ where ε_f16 ≈ 9.77×10⁻⁴.
 //! For Bluestein axes, N is replaced by M = next_pow2(2N − 1), giving
 //! O(log₂M) · ε_f16 ≈ O(log₂N) · ε_f16 asymptotically.
 //!
@@ -34,22 +34,21 @@ use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
 };
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
 use leto::{Array1, Array3};
+use std::mem::size_of;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-/// Validates that all three dimensions are at least 2.
+/// Validate the native-f16 plan's documented minimum axis length.
 ///
 /// Power-of-two axes use the radix-2 kernel; non-power-of-two axes use the
-/// Bluestein chirp-Z reduction. Both require N ≥ 2 (f16 buffer alignment).
+/// Bluestein chirp-Z reduction. This public plan currently requires N ≥ 2.
 fn validate_dimensions_f16(nx: usize, ny: usize, nz: usize) -> Result<(), String> {
     for (name, n) in [("nx", nx), ("ny", ny), ("nz", nz)] {
         if n == 0 {
             return Err(format!("{name}=0 is invalid for GpuFft3dF16Native"));
         }
         if n < 2 {
-            return Err(format!(
-                "{name}={n} < 2; f16 buffer alignment requires at least 2 elements per axis"
-            ));
+            return Err(format!("{name}={n} < 2; native-f16 axes require N >= 2"));
         }
     }
     Ok(())
@@ -85,6 +84,39 @@ fn f16_axis_workspace_elems(nx: usize, ny: usize, nz: usize, axis: Axis) -> usiz
         AxisStrategy::ChirpZ { m, .. } => m,
     };
     fft_len * batch
+}
+
+/// Return the WGPU-aligned byte capacity for `elements` packed f16 values.
+fn f16_buffer_size(elements: usize) -> Result<u64, String> {
+    let elements = u64::try_from(elements)
+        .map_err(|_| format!("f16 element count {elements} exceeds WGPU address space"))?;
+    let bytes = elements
+        .checked_mul(size_of::<u16>() as u64)
+        .ok_or_else(|| format!("f16 byte size overflow for {elements} elements"))?;
+    bytes
+        .checked_next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT)
+        .ok_or_else(|| format!("f16 WGPU alignment overflow for {bytes} bytes"))
+}
+
+/// Encode f32 values as packed f16 and retain WGPU-required tail padding.
+fn encode_f16_upload(
+    values: impl IntoIterator<Item = f32>,
+    aligned_byte_len: usize,
+) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::with_capacity(aligned_byte_len);
+    bytes.extend(
+        values
+            .into_iter()
+            .flat_map(|value| HalfF16::from_f32(value).to_bits().to_le_bytes()),
+    );
+    if bytes.len() > aligned_byte_len {
+        return Err(format!(
+            "encoded f16 upload is {} bytes but buffer capacity is {aligned_byte_len}",
+            bytes.len()
+        ));
+    }
+    bytes.resize(aligned_byte_len, 0);
+    Ok(bytes)
 }
 
 /// GPU-backed 3D FFT plan executing all arithmetic in native f16.
@@ -130,6 +162,8 @@ pub struct GpuFft3dF16Native {
     full_re_buf: wgpu::Buffer,
     /// Full-volume imaginary buffer (f16).
     full_im_buf: wgpu::Buffer,
+    /// WGPU-aligned byte capacity of each full-volume component buffer.
+    volume_buf_size: u64,
     /// Staging buffer for real readback.
     full_re_staging: wgpu::Buffer,
     /// Staging buffer for imaginary readback.
@@ -185,6 +219,7 @@ impl GpuFft3dF16Native {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }))
         .map_err(|e| format!("no WGPU adapter: {e}"))?;
         if !Self::device_supports_f16(&adapter) {
@@ -195,6 +230,7 @@ impl GpuFft3dF16Native {
             required_features: wgpu::Features::SHADER_F16,
             required_limits: wgpu::Limits::downlevel_defaults(),
             memory_hints: wgpu::MemoryHints::default(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             trace: wgpu::Trace::Off,
         }))
         .map_err(|e| format!("device request failed: {e}"))?;
@@ -273,13 +309,17 @@ impl GpuFft3dF16Native {
         // --- Pipeline layouts ------------------------------------------------
         let fft_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 fft pipeline layout"),
-            bind_group_layouts: &[&data_layout, &params_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&data_layout), Some(&params_layout)],
+            immediate_size: 0,
         });
         let pack_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 pack pipeline layout"),
-            bind_group_layouts: &[&data_layout, &params_layout, &volume_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[
+                Some(&data_layout),
+                Some(&params_layout),
+                Some(&volume_layout),
+            ],
+            immediate_size: 0,
         });
 
         // --- Compute pipelines -----------------------------------------------
@@ -311,10 +351,14 @@ impl GpuFft3dF16Native {
         let unpack_pipeline = build_pack_pipeline("fft_unpack_axis");
 
         // --- Buffers ---------------------------------------------------------
-        // f16 element = 2 bytes; for power-of-two nx,ny,nz >= 2:
-        //   n = nx*ny*nz >= 8, so n*2 >= 16, always a multiple of COPY_BUFFER_ALIGNMENT (4).
-        let n = nx * ny * nz;
-        let f16_buf_size = (n * 2) as u64;
+        let n = nx
+            .checked_mul(ny)
+            .and_then(|xy| xy.checked_mul(nz))
+            .ok_or_else(|| format!("f16 volume element count overflow for {nx}x{ny}x{nz}"))?;
+        // WGPU 30 requires the effective size of a storage binding to be a
+        // multiple of COPY_BUFFER_ALIGNMENT. Odd element counts therefore
+        // retain one unused f16 padding element at the buffer boundary.
+        let f16_buf_size = f16_buffer_size(n)?;
 
         // Compute per-axis strategies before sizing the workspace buffers.
         let strategy_x = f16_axis_strategy(nx);
@@ -332,10 +376,7 @@ impl GpuFft3dF16Native {
         .into_iter()
         .max()
         .unwrap_or(0);
-        // Workspace buffer size: workspace_capacity f16 elements × 2 bytes each.
-        // Guaranteed ≥ 4 bytes (COPY_BUFFER_ALIGNMENT) because workspace_capacity
-        // ≥ n ≥ 8 (nx,ny,nz ≥ 2 each) and each f16 is 2 bytes.
-        let workspace_size = (workspace_capacity * 2) as u64;
+        let workspace_size = f16_buffer_size(workspace_capacity)?;
 
         let working_usage = wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_SRC
@@ -572,6 +613,7 @@ impl GpuFft3dF16Native {
             _im_buf: im_buf,
             full_re_buf,
             full_im_buf,
+            volume_buf_size: f16_buf_size,
             full_re_staging,
             full_im_staging,
             data_bg,
@@ -606,23 +648,21 @@ impl GpuFft3dF16Native {
     ///
     /// `F[kx,ky,kz] = Σ_{x,y,z} f[x,y,z] · exp(-2πi(kx·x/Nx + ky·y/Ny + kz·z/Nz))`
     ///
-    /// Absolute error per element is bounded by O(log₂N) · ε_f16 · ‖f‖_∞
+    /// Absolute error per element is bounded by O(log₂N) · ε_f16 · ‖f‖₁
     /// where ε_f16 ≈ 9.77×10⁻⁴.
-    #[must_use]
-    pub fn forward_native_f16(&self, field: &Array3<f32>) -> Vec<f32> {
+    pub fn forward_native_f16(&self, field: &Array3<f32>) -> Result<Vec<f32>, String> {
         assert_eq!(
             field.shape(),
             [self.nx, self.ny, self.nz],
             "field dimensions must match plan"
         );
         let n = self.nx * self.ny * self.nz;
+        let upload_len = usize::try_from(self.volume_buf_size)
+            .map_err(|_| format!("WGPU upload size {} exceeds usize", self.volume_buf_size))?;
 
         // Convert f32 input → f16 bytes (little-endian IEEE 754 half).
-        let re_bytes: Vec<u8> = field
-            .iter()
-            .flat_map(|&v| HalfF16::from_f32(v).to_bits().to_le_bytes())
-            .collect();
-        let im_bytes = vec![0u8; n * 2];
+        let re_bytes = encode_f16_upload(field.iter().copied(), upload_len)?;
+        let im_bytes = vec![0u8; upload_len];
 
         self.queue.write_buffer(&self.full_re_buf, 0, &re_bytes);
         self.queue.write_buffer(&self.full_im_buf, 0, &im_bytes);
@@ -631,15 +671,15 @@ impl GpuFft3dF16Native {
         self.run_f16_axis_fft(Axis::Y, false);
         self.run_f16_axis_fft(Axis::X, false);
 
-        let re_out = self.read_back_f16_as_f32(&self.full_re_buf, &self.full_re_staging, n);
-        let im_out = self.read_back_f16_as_f32(&self.full_im_buf, &self.full_im_staging, n);
+        let re_out = self.read_back_f16_as_f32(&self.full_re_buf, &self.full_re_staging, n)?;
+        let im_out = self.read_back_f16_as_f32(&self.full_im_buf, &self.full_im_staging, n)?;
 
         let mut result = Vec::with_capacity(2 * n);
         for (re, im) in re_out.into_iter().zip(im_out.into_iter()) {
             result.push(re);
             result.push(im);
         }
-        result
+        Ok(result)
     }
 
     /// Inverse 3D FFT of an interleaved complex f32 spectrum.
@@ -651,24 +691,21 @@ impl GpuFft3dF16Native {
     /// # Normalization
     ///
     /// Each axis is normalized by `1/N_axis`, matching the FFTW convention.
-    #[must_use]
-    pub fn inverse_native_f16(&self, field_hat: &[f32]) -> Vec<f32> {
+    pub fn inverse_native_f16(&self, field_hat: &[f32]) -> Result<Vec<f32>, String> {
         let n = self.nx * self.ny * self.nz;
         assert_eq!(
             field_hat.len(),
             2 * n,
             "field_hat length must be 2·nx·ny·nz"
         );
+        let upload_len = usize::try_from(self.volume_buf_size)
+            .map_err(|_| format!("WGPU upload size {} exceeds usize", self.volume_buf_size))?;
 
         // De-interleave and convert to f16 bytes.
-        let re_bytes: Vec<u8> = field_hat
-            .chunks_exact(2)
-            .flat_map(|pair| HalfF16::from_f32(pair[0]).to_bits().to_le_bytes())
-            .collect();
-        let im_bytes: Vec<u8> = field_hat
-            .chunks_exact(2)
-            .flat_map(|pair| HalfF16::from_f32(pair[1]).to_bits().to_le_bytes())
-            .collect();
+        let re_bytes =
+            encode_f16_upload(field_hat.chunks_exact(2).map(|pair| pair[0]), upload_len)?;
+        let im_bytes =
+            encode_f16_upload(field_hat.chunks_exact(2).map(|pair| pair[1]), upload_len)?;
 
         self.queue.write_buffer(&self.full_re_buf, 0, &re_bytes);
         self.queue.write_buffer(&self.full_im_buf, 0, &im_bytes);
@@ -687,7 +724,7 @@ impl GpuFft3dF16Native {
     /// Size in bytes of a single f16 component buffer (re or im) for the full volume.
     #[inline]
     fn volume_buf_size(&self) -> u64 {
-        (self.nx * self.ny * self.nz * 2) as u64
+        self.volume_buf_size
     }
 
     /// Run one complete axis FFT pass (pack → [radix2 | chirp] → unpack) and submit.
@@ -856,8 +893,8 @@ impl GpuFft3dF16Native {
         });
         let chirp_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 chirp pipeline layout"),
-            bind_group_layouts: &[&data_chirp_layout, params_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&data_chirp_layout), Some(params_layout)],
+            immediate_size: 0,
         });
         let build_pipeline = |entry: &str| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -1142,7 +1179,7 @@ impl GpuFft3dF16Native {
         src: &wgpu::Buffer,
         staging: &wgpu::Buffer,
         n: usize,
-    ) -> Vec<f32> {
+    ) -> Result<Vec<f32>, String> {
         let size = self.volume_buf_size();
         let mut encoder = self
             .device
@@ -1154,10 +1191,12 @@ impl GpuFft3dF16Native {
 
         let slice = staging.slice(..size);
         slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = self.device.poll(wgpu::PollType::Wait);
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
 
         let result: Vec<f32> = {
-            let mapped = slice.get_mapped_range();
+            let mapped = slice
+                .get_mapped_range()
+                .map_err(|error| format!("native-f16 staging map failed: {error}"))?;
             mapped
                 .chunks_exact(2)
                 .take(n)
@@ -1168,7 +1207,7 @@ impl GpuFft3dF16Native {
                 .collect()
         };
         staging.unmap();
-        result
+        Ok(result)
     }
 }
 
@@ -1180,13 +1219,13 @@ mod tests {
     ///
     /// # Mathematical justification
     ///
-    /// f16 machine epsilon ε_f16 ≈ 9.77×10⁻⁴. For a 4×4×4 = 64-point 3D FFT,
-    /// the radix-2 butterfly accumulates log₂(64)=6 stages per axis. Expected
-    /// max absolute error per element:
-    ///
-    /// `err ≤ 3 · log₂(4) · ε_f16 · ‖input‖_∞ ≈ 3 · 2 · 1e-3 · 1.0 = 6e-3`
-    ///
-    /// The test allows 1e-2 (10× ε_f16) to account for inter-axis accumulation.
+    /// A radix-2 path performs two multiplications, one product addition, one
+    /// butterfly addition, and one twiddle quantization per component per
+    /// stage. Including input quantization, the 4×4×4 transform therefore has
+    /// `k = 1 + 5·(log₂4 + log₂4 + log₂4) = 31` rounding sites. With f16 unit
+    /// roundoff `u = 2⁻¹¹`, the standard accumulated bound is
+    /// `γₖ = ku/(1-ku)`. Each DFT component is a weighted input sum, so the
+    /// absolute forward-error bound is `γ₃₁·‖input‖₁`.
     #[test]
     fn native_f16_forward_matches_f32_within_f16_tolerance_when_device_exists() {
         let Ok(plan_f16) = GpuFft3dF16Native::try_new(4, 4, 4) else {
@@ -1200,6 +1239,7 @@ mod tests {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             }))
             .ok()
         else {
@@ -1211,6 +1251,7 @@ mod tests {
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
                 memory_hints: wgpu::MemoryHints::default(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 trace: wgpu::Trace::Off,
             }))
         else {
@@ -1238,9 +1279,18 @@ mod tests {
             let x = (i + j * 3 + k * 7) as f64;
             ((0.3 * x).sin() + 0.5 * (0.7 * x).cos()) as f32
         });
+        let input_l1 = field_f32.iter().map(|value| value.abs()).sum::<f32>();
+        let unit_roundoff = HalfF16::EPSILON.to_f32() / 2.0;
+        let rounding_sites = 31.0_f32;
+        let gamma = rounding_sites * unit_roundoff / (1.0 - rounding_sites * unit_roundoff);
+        let error_bound = gamma * input_l1;
 
-        let out_f32_ref = plan_f32.forward(&field_f64);
-        let out_f16_native = plan_f16.forward_native_f16(&field_f32);
+        let out_f32_ref = plan_f32
+            .forward(&field_f64)
+            .expect("GPU readback must succeed");
+        let out_f16_native = plan_f16
+            .forward_native_f16(&field_f32)
+            .expect("native-f16 GPU readback must succeed");
 
         assert_eq!(
             out_f32_ref.len(),
@@ -1250,10 +1300,10 @@ mod tests {
 
         for (idx, (a, b)) in out_f32_ref.iter().zip(out_f16_native.iter()).enumerate() {
             let err = (a - b).abs();
-            // 1e-2 = ~10 × ε_f16; derived from 3-axis log₂(4) accumulation bound.
             assert!(
-                err < 1e-2,
-                "f16 native vs f32 error {err:.2e} exceeds 1e-2 at index {idx} \
+                err <= error_bound,
+                "f16 native vs f32 error {err:.2e} exceeds derived bound \
+                 {error_bound:.2e} at index {idx} \
                  (f32_ref={a:.6}, f16_native={b:.6})"
             );
         }
@@ -1287,8 +1337,12 @@ mod tests {
             (0.3 * x).sin() + 0.5 * (0.7 * x).cos()
         });
 
-        let forward = plan.forward_native_f16(&field);
-        let roundtrip = plan.inverse_native_f16(&forward);
+        let forward = plan
+            .forward_native_f16(&field)
+            .expect("native-f16 GPU readback must succeed");
+        let roundtrip = plan
+            .inverse_native_f16(&forward)
+            .expect("native-f16 GPU readback must succeed");
 
         assert_eq!(
             roundtrip.len(),

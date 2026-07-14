@@ -171,20 +171,20 @@ impl NufftGpuKernel {
             });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-nufft-wgpu pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
         });
         let fast_spread_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-nufft-wgpu fast spread pipeline layout"),
-                bind_group_layouts: &[&fast_spread_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&fast_spread_layout)],
+                immediate_size: 0,
             });
         let fast_extract_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-nufft-wgpu fast extract pipeline layout"),
-                bind_group_layouts: &[&fast_extract_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&fast_extract_layout)],
+                immediate_size: 0,
             });
         let fast_3d_spread_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -217,14 +217,14 @@ impl NufftGpuKernel {
         let fast_3d_spread_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-nufft-wgpu fast 3d spread pipeline layout"),
-                bind_group_layouts: &[&fast_3d_spread_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&fast_3d_spread_layout)],
+                immediate_size: 0,
             });
         let fast_3d_extract_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-nufft-wgpu fast 3d extract pipeline layout"),
-                bind_group_layouts: &[&fast_3d_extract_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&fast_3d_extract_layout)],
+                immediate_size: 0,
             });
         let type1_1d_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("apollo-nufft-wgpu type1 1d pipeline"),

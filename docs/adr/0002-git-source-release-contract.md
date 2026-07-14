@@ -25,9 +25,9 @@ doctests, documentation, and Python binding tests. Crates.io publication is out
 of contract until every public first-party dependency is published under the
 required package name and version.
 
-The workspace stays on WGPU 26 while Hephaestus 0.12 exposes WGPU 26 types.
-WGPU is a provider-owned ABI boundary; upgrading Apollo alone would resolve two
-incompatible WGPU type families.
+The workspace follows Hephaestus's public WGPU ABI. Apollo 0.15.0 consumes
+Hephaestus 0.13.0 and WGPU 30 as one provider-owned contract; no second WGPU
+type family or downstream adapter exists.
 
 ## Rejected alternatives
 
@@ -35,8 +35,8 @@ incompatible WGPU type families.
   where the first-party packages do not exist.
 - Remove provider dependencies for packaging: produces a different artifact
   than the tested workspace.
-- Upgrade Apollo to WGPU 30 independently: forks the GPU device contract from
-  Hephaestus and duplicates backend types.
+- Upgrade Apollo independently of Hephaestus: forks the GPU device contract and
+  duplicates backend types.
 - Leave provider revisions floating: prevents a tag from reproducing the
   verified dependency graph.
 

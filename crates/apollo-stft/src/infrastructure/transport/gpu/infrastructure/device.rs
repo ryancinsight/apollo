@@ -6,6 +6,16 @@ use crate::infrastructure::transport::gpu::infrastructure::kernel::StftGpuKernel
 use apollo_wgpu_helpers::WgpuDevice;
 use std::sync::Arc;
 
+/// Four Chirp-Z work/kernel buffers plus two operation I/O buffers.
+const REQUIRED_STORAGE_BUFFERS_PER_STAGE: u32 = 6;
+
+fn required_limits() -> wgpu::Limits {
+    wgpu::Limits {
+        max_storage_buffers_per_shader_stage: REQUIRED_STORAGE_BUFFERS_PER_STAGE,
+        ..wgpu::Limits::downlevel_defaults()
+    }
+}
+
 /// Pre-allocated execution buffers.
 pub mod buffers;
 /// Forward execution implementations.
@@ -33,6 +43,19 @@ pub struct StftWgpuBackend {
 impl StftWgpuBackend {
     /// Create a backend from an existing device and queue.
     pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
+        let actual = device
+            .device()
+            .limits()
+            .max_storage_buffers_per_shader_stage;
+        if actual < REQUIRED_STORAGE_BUFFERS_PER_STAGE {
+            return Err(
+                crate::infrastructure::transport::gpu::domain::error::WgpuError::InsufficientDeviceLimit {
+                    limit: "max_storage_buffers_per_shader_stage",
+                    required: REQUIRED_STORAGE_BUFFERS_PER_STAGE,
+                    actual,
+                },
+            );
+        }
         let kernel = Arc::new(StftGpuKernel::new(device.inner()));
         Ok(Self { device, kernel })
     }
@@ -47,7 +70,7 @@ impl StftWgpuBackend {
         > = std::sync::OnceLock::new();
         INSTANCE
             .get_or_init(|| {
-                WgpuDevice::try_default("apollo-stft-wgpu")
+                WgpuDevice::try_default_with_limits("apollo-stft-wgpu", required_limits())
                     .map_err(crate::infrastructure::transport::gpu::domain::error::WgpuError::from)
                     .and_then(Self::new)
             })

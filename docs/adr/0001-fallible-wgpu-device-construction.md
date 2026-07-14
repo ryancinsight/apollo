@@ -1,6 +1,6 @@
 # ADR 0001: Fallible WGPU device construction
 
-- Status: Accepted
+- Status: Superseded by Hephaestus 0.13.0
 - Date: 2026-07-13
 - Change class: major
 
@@ -33,3 +33,10 @@ Callers propagate failure with `?`. The helper crate version advances from
 Rust's return type enforces failure handling at every call site. Unit tests
 assert exact adapter/device error variants and messages. Workspace format,
 clippy, nextest, doctest, and documentation gates validate integration.
+
+## Supersession
+
+Hephaestus 0.13.0 removes the process-global Mnemosyne WGPU callback contract.
+Apollo 0.15.0 therefore restores `WgpuDevice::new` as an infallible constructor
+and advances `apollo-wgpu-helpers` to 0.3.0. Default adapter acquisition remains
+fallible and retains the typed `WgpuDeviceResult` surface.

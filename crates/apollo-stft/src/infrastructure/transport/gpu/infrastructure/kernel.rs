@@ -133,8 +133,8 @@ impl StftGpuKernel {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-stft-wgpu pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
         });
 
         let inverse_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -215,8 +215,8 @@ impl StftGpuKernel {
         });
         let fft_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("apollo-stft-wgpu FFT pipeline layout"),
-            bind_group_layouts: &[&fft_data_bgl, &fft_params_bgl],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&fft_data_bgl), Some(&fft_params_bgl)],
+            immediate_size: 0,
         });
 
         let fft_inv_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -357,22 +357,26 @@ impl StftGpuKernel {
         let chirp_io_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-stft-wgpu chirp IO pipeline layout"),
-                bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl, &chirp_io_bgl],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[
+                    Some(&chirp_data_bgl),
+                    Some(&chirp_params_bgl),
+                    Some(&chirp_io_bgl),
+                ],
+                immediate_size: 0,
             });
 
         let chirp_radix2_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-stft-wgpu chirp radix2 pipeline layout"),
-                bind_group_layouts: &[&chirp_data_bgl, &chirp_radix2_params_bgl],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&chirp_data_bgl), Some(&chirp_radix2_params_bgl)],
+                immediate_size: 0,
             });
 
         let chirp_pm_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-stft-wgpu chirp pointmul pipeline layout"),
-                bind_group_layouts: &[&chirp_data_bgl, &chirp_params_bgl],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&chirp_data_bgl), Some(&chirp_params_bgl)],
+                immediate_size: 0,
             });
 
         let chirp_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

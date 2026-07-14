@@ -3,13 +3,18 @@
 ## Release 0.15.0 WGPU 30 integration [major]
 
 - Target version: 0.15.0
-- Phase: Execution
+- Phase: Closure
 - [x] Verify and push the Hephaestus 0.13.0 WGPU 30 provider release.
-- [ ] Pin the current Mnemosyne, Leto, Moirai, and Hephaestus provider revisions;
+- [x] Pin the current Mnemosyne, Leto, Moirai, and Hephaestus provider revisions;
   update the WGPU SSOT and Apollo helper constructor without compatibility code.
-- [ ] Run format, warning-denied Clippy, all-feature nextest, doctest, rustdoc,
+- [x] Run format, warning-denied Clippy, all-feature nextest, doctest, rustdoc,
   Python boundary, provider audit, RustSec, dependency policy, and semver gates.
-- [ ] Synchronize release artifacts, commit, push, and advance the Atlas gitlink.
+- [ ] Synchronize the Atlas gitlink after the verified Apollo commit is pushed.
+- Evidence: all-target/all-feature Clippy is warning-clean; nextest passes
+  1,029/1,029 including real WGPU execution; doctests and warning-denied rustdoc
+  pass; Python smoke tests pass 34/34; provider audit and RustSec pass; cargo-deny
+  reports advisories/bans/licenses/sources clean; semver-checks classifies both
+  0.14→0.15 and helper 0.2→0.3 as permitted pre-1.0 major changes.
 
 ## Release 0.14.0 eligibility [arch]
 

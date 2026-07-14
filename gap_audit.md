@@ -1,15 +1,49 @@
 # Apollo Gap Audit
 
+## Release 0.15.0 eligibility [major]
+
+- Provider ABI finding: Hephaestus 0.13.0 now owns WGPU 30, so Apollo advances
+  to the same ABI without a parallel device family. The obsolete Mnemosyne
+  callback constructor failure is deleted; mapping failures now propagate as
+  typed errors from the FFT and NUFFT readback boundaries.
+- Supply-chain finding: WGPU 30 removes Metal 0.32 and its archived `paste`
+  dependency. The `RUSTSEC-2024-0436` exception is deleted rather than carried
+  into the new release.
+- Toolchain finding: Apollo retains edition 2021 for 0.15.0 because moving its
+  SIMD-heavy unsafe kernels to edition 2024 activates 3,513 unsafe-operation
+  obligations requiring per-block soundness review and sanitizer/Miri evidence.
+  Treat that as a dedicated major safety increment; mixing a mechanical lint
+  suppression into the WGPU ABI release would produce unreviewed unsafe code.
+- Numerical decision: the prior native-f16 absolute-error claim omitted DFT
+  gain and was analytically invalid. The 0.15 differential gate uses
+  `γ₃₁·‖input‖₁`, with `γₖ = ku/(1-ku)` and f16 unit roundoff `u = 2⁻¹¹`,
+  derived from input quantization plus five rounding sites across each of six
+  radix-2 stages. A tighter bound requires a separately verified error model.
+- WGPU safety finding: native-f16 odd-volume storage buffers now round byte
+  capacity to `wgpu::COPY_BUFFER_ALIGNMENT`; logical reads remain limited to
+  the unpadded element count.
+- Capability finding: the STFT Chirp-Z pipeline requires four working/kernel
+  bindings plus two I/O bindings in one compute stage. Device acquisition now
+  requests six storage buffers and caller-supplied devices return a typed
+  `InsufficientDeviceLimit` error before pipeline construction when they expose
+  fewer.
+- Topology finding: deleted the disconnected `gpu_fft/reduced.rs`,
+  `gpu_fft/batched_matrix/`, and GPU validation tree. They were not declared by
+  any live module and duplicated the canonical native-f16 execution surface.
+- Dependency-policy residual: `cargo deny check` passes all four policy classes
+  but reports 12 transitive duplicate families. The primary incompatible roots
+  are the provider-owned rkyv 0.7 graph and Moirai's Windows 0.58 graph versus
+  the current WGPU 30/Windows 0.62 graph. Apollo does not suppress them with
+  `skip` rules; the upstream convergence item is tracked in `backlog.md`.
+
 ## Release 0.14.0 eligibility [arch]
 
 - Distribution finding: crates.io packaging is not a valid Apollo release gate
   because required Atlas packages are unpublished there. ADR 0002 makes the
   tested Git-source graph the SSOT instead of fabricating registry portability.
-- Dependency finding: WGPU 30 is current upstream, but Hephaestus 0.12 exposes
-  WGPU 26 types. Apollo remains on the latest compatible 26.0.1 patch until the
-  provider migrates the shared contract. WGPU 26's HAL also constrains
-  `ordered-float` to `<=5.0`, accounting for the only other package reported
-  behind the registry head by `cargo update --verbose`.
+- Dependency finding (historical): Hephaestus 0.12 exposed WGPU 26 types, so
+  Apollo 0.14.0 remained on the compatible 26.0.1 patch until the provider
+  migrated the shared contract.
 - Reproducibility finding: CI referenced stale provider revisions, omitted the
   Themis sibling required by Hephaestus, used a floating stable Rust channel,
   and bypassed nextest. The release increment pins each boundary.
@@ -27,7 +61,7 @@
 - Workflow finding: the GPU benchmark workflow called a deleted script and
   obsolete `*-wgpu` packages. The non-executable workflow and stale README
   claim were removed; no benchmark result or performance claim was changed.
-- Supply-chain residual: WGPU 26 selects Metal 0.32, which depends on the
+- Supply-chain residual (closed in 0.15.0): WGPU 26 selected Metal 0.32, which depends on the
   archived `paste` 1.0.15 (`RUSTSEC-2024-0436`). RustSec reports no safe
   upgrade. `deny.toml` records the narrow advisory exception; it closes only
   when Hephaestus advances the shared WGPU ABI.

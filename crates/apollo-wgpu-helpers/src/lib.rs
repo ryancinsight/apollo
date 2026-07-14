@@ -52,15 +52,12 @@ pub struct WgpuDevice {
 impl WgpuDevice {
     /// Wrap an existing device and queue.
     ///
-    /// # Errors
-    ///
-    /// Returns [`WgpuDeviceError::DeviceUnavailable`] when Mnemosyne's process
-    /// staging backend is already owned by a different WGPU callback pair.
+    /// Device-local staging remains owned by Hephaestus; construction performs
+    /// no global callback registration and cannot conflict with another device.
+    #[must_use]
     #[inline]
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> WgpuDeviceResult<Self> {
-        hephaestus_wgpu::WgpuDevice::new(device, queue)
-            .map(Self::from_hephaestus)
-            .map_err(map_device_error)
+    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        Self::from_hephaestus(hephaestus_wgpu::WgpuDevice::new(device, queue))
     }
 
     /// Wrap an existing hephaestus-wgpu WgpuDevice.

@@ -69,6 +69,17 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// The acquired device exposes fewer resources than a kernel requires.
+    #[error("wgpu device limit {limit} requires {required}, device exposes {actual}")]
+    InsufficientDeviceLimit {
+        /// WGPU limit field whose contract was not met.
+        limit: &'static str,
+        /// Minimum value required by the kernel topology.
+        required: u32,
+        /// Value exposed by the acquired device.
+        actual: u32,
+    },
+
     /// Numerical execution is unsupported for the requested operation.
     #[error("{operation} is unsupported by the current WGPU capability set")]
     UnsupportedExecution {
@@ -132,4 +143,31 @@ pub enum WgpuError {
         /// Actual signal length supplied.
         actual: usize,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WgpuError;
+
+    #[test]
+    fn insufficient_device_limit_preserves_contract_values() {
+        let error = WgpuError::InsufficientDeviceLimit {
+            limit: "max_storage_buffers_per_shader_stage",
+            required: 6,
+            actual: 4,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "wgpu device limit max_storage_buffers_per_shader_stage requires 6, device exposes 4"
+        );
+        assert_eq!(
+            error,
+            WgpuError::InsufficientDeviceLimit {
+                limit: "max_storage_buffers_per_shader_stage",
+                required: 6,
+                actual: 4,
+            }
+        );
+    }
 }

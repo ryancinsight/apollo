@@ -7,7 +7,7 @@ runs:
     - uses: actions/checkout@v6
       with:
         repository: ryancinsight/hephaestus
-        ref: f726742b6b0a73e519bf730ba609eac256e9c076
+        ref: 090611d207488d30dbf95c01f0489d6215714e7e
         path: hephaestus
     - uses: actions/checkout@v6
       with:
@@ -17,7 +17,7 @@ runs:
     - uses: actions/checkout@v6
       with:
         repository: ryancinsight/leto
-        ref: 1b125ce32e59fd920e946ad06804c5953a758a9e
+        ref: 8651dfc18c25b9cec0ff96ad90c61c4fc2132be9
         path: leto
     - uses: actions/checkout@v6
       with:
@@ -27,12 +27,12 @@ runs:
     - uses: actions/checkout@v6
       with:
         repository: ryancinsight/Mnemosyne
-        ref: eb0d94109c452cdca934c87c1e3dd53884f2ca28
+        ref: 4a9d2a32423f7c3f1413171193765d6aba34ad8e
         path: mnemosyne
     - uses: actions/checkout@v6
       with:
         repository: ryancinsight/Moirai
-        ref: b2f373293686d54859dfc3a976e65b81c93f648d
+        ref: c43f86a21e0ea73d8e3bba68d75db9cedae3abb3
         path: moirai
     - uses: actions/checkout@v6
       with:

@@ -81,7 +81,7 @@ The table below is the authoritative record of per-crate precision support. Each
 
 ### Key: native-f16 GPU (apollo-fft wgpu feature)
 
-When the `native-f16` feature is enabled and the WGPU adapter exposes `wgpu::Features::SHADER_F16`, `GpuFft3dF16Native` executes all butterfly arithmetic in `f16` inside the shader. The host boundary converts `f32` input to `f16` before upload and `f16` output to `f32` after readback. Twiddle factors are computed in `f32` then narrowed to `f16` at plan build time to bound two-source error. Accumulation error is `O(log N)·ε_f16` where `ε_f16 ≈ 9.77×10⁻⁴`. Non-power-of-two sizes are supported via a Bluestein chirp-Z f16 shader (`chirp_native_f16.wgsl`).
+When the `native-f16` feature is enabled and the WGPU adapter exposes `wgpu::Features::SHADER_F16`, `GpuFft3dF16Native` executes all butterfly arithmetic in `f16` inside the shader. The host boundary converts `f32` input to `f16` before upload and `f16` output to `f32` after readback. Twiddle factors are computed in `f32` then narrowed to `f16` at plan build time to bound two-source error. Per-output accumulation error is `O(log N)·ε_f16·‖input‖₁`, where `ε_f16 ≈ 9.77×10⁻⁴`. Non-power-of-two sizes are supported via a Bluestein chirp-Z f16 shader (`chirp_native_f16.wgsl`), and odd element counts use one padding element to satisfy WGPU storage-binding alignment without changing the logical shape.
 
 ### Key: NTT precision contract
 
