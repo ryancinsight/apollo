@@ -15,7 +15,7 @@ pub mod typed;
 #[cfg(test)]
 mod tests;
 
-pub use typed::RealTransformStorage;
+pub use typed::{RealTransformGpuStorage, RealTransformStorage};
 
 /// Reusable DCT/DST plan.
 ///

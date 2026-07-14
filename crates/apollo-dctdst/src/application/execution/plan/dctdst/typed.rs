@@ -205,3 +205,51 @@ impl RealTransformStorage for f16 {
         f16::from_f32(value as f32)
     }
 }
+
+mod sealed {
+    pub trait Sealed {}
+
+    impl Sealed for f32 {}
+    impl Sealed for apollo_fft::f16 {}
+}
+
+/// Storage whose compute profile is the concrete `f32` accelerator contract.
+///
+/// This sealed capability admits native `f32` storage and explicit mixed
+/// `f16`/`f32` storage. High-accuracy `f64` storage is intentionally excluded:
+/// accepting it would silently narrow the public typed API to the WGPU kernel's
+/// concrete arithmetic.
+///
+/// ```compile_fail
+/// use apollo_dctdst::RealTransformGpuStorage;
+///
+/// fn require_gpu_storage<T: RealTransformGpuStorage>() {}
+/// require_gpu_storage::<f64>();
+/// ```
+pub trait RealTransformGpuStorage: RealTransformStorage + sealed::Sealed {
+    /// Convert storage into the concrete `f32` accelerator contract.
+    fn to_gpu(self) -> f32;
+
+    /// Convert a concrete `f32` accelerator result back to storage.
+    fn from_gpu(value: f32) -> Self;
+}
+
+impl RealTransformGpuStorage for f32 {
+    fn to_gpu(self) -> f32 {
+        self
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        value
+    }
+}
+
+impl RealTransformGpuStorage for f16 {
+    fn to_gpu(self) -> f32 {
+        self.to_f32()
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        f16::from_f32(value)
+    }
+}

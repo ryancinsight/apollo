@@ -15,7 +15,7 @@ pub struct WgpuCapabilities {
     pub supports_dct: bool,
     /// Whether DST kinds are implemented.
     pub supports_dst: bool,
-    /// Whether mixed-precision (f16/f32/f64) typed storage dispatch is supported.
+    /// Whether native `f32` and mixed `f16`/`f32` typed dispatch is supported.
     pub supports_mixed_precision: bool,
     /// Default precision profile for GPU execution.
     pub default_precision_profile: PrecisionProfile,

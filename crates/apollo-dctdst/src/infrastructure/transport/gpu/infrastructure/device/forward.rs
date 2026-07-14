@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-
-use crate::{RealTransformKind, RealTransformStorage};
+use crate::{RealTransformGpuStorage, RealTransformKind};
 use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
@@ -9,7 +7,9 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     leto_array1_from_slice, leto_view1_cow,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
-use crate::infrastructure::transport::gpu::infrastructure::kernel::{DctMode, FiberLayout};
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{
+    DctGpuKernel, DctMode, FiberLayout,
+};
 
 impl DctDstWgpuBackend {
     /// The GPU kernel mode for the plan's forward transform (DCT-I requires
@@ -40,9 +40,23 @@ impl DctDstWgpuBackend {
     /// Execute the unnormalized configured 1-D real-to-real transform for a
     /// real-valued `f32` signal (DCT-I/II/III/IV, DST-I/II/III/IV).
     pub fn execute_forward(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
+        let mut output = vec![0.0_f32; plan.len()];
+        self.execute_forward_into(plan, input, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the unnormalized configured transform into caller-owned `f32`
+    /// storage without a host-side result allocation.
+    pub fn execute_forward_into(
+        &self,
+        plan: &DctDstWgpuPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
         Self::validate_plan_input(plan, input)?;
+        Self::validate_output(plan, output)?;
         let mode = Self::forward_mode(plan)?;
-        self.kernel.execute(&self.device, input, mode, 1.0)
+        DctGpuKernel::execute_into(&self.device, input, output, mode, 1.0)
     }
 
     /// Execute the unnormalized forward transform from a Leto 1D host view.
@@ -63,7 +77,7 @@ impl DctDstWgpuBackend {
     ///
     /// WGPU arithmetic is `f32`; mixed `f16` storage is promoted once to `f32` at
     /// the dispatch boundary and quantized at the output boundary.
-    pub fn execute_forward_typed_into<T: RealTransformStorage>(
+    pub fn execute_forward_typed_into<T: RealTransformGpuStorage>(
         &self,
         plan: &DctDstWgpuPlan,
         precision: PrecisionProfile,
@@ -71,52 +85,30 @@ impl DctDstWgpuBackend {
         output: &mut [T],
     ) -> WgpuResult<()> {
         Self::validate_dct_typed_precision::<T>(precision)?;
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        if input.len() != len {
-            return Err(WgpuError::LengthMismatch {
-                expected: len,
-                actual: input.len(),
-            });
-        }
-        if output.len() != len {
-            return Err(WgpuError::LengthMismatch {
-                expected: len,
-                actual: output.len(),
-            });
-        }
-        let represented = if let Some(slice_f32) = T::as_f32_slice(input) {
-            Cow::Borrowed(slice_f32)
-        } else {
-            let vec: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
-            Cow::Owned(vec)
-        };
-        let computed = self.execute_forward(plan, &represented)?;
-        if let Some(slice_f32) = T::as_f32_slice_mut(output) {
-            slice_f32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_f64(f64::from(value));
-            }
-        }
-        Ok(())
+        Self::validate_typed_plan_input::<T>(plan, input, output)?;
+        let mode = Self::forward_mode(plan)?;
+        self.execute_typed_into(input, output, mode, 1.0)
     }
 
     /// Execute typed forward transform from a Leto 1D host view.
-    pub fn execute_forward_leto_typed<T: RealTransformStorage>(
+    pub fn execute_forward_leto_typed<T: RealTransformGpuStorage + Default>(
         &self,
         plan: &DctDstWgpuPlan,
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let input = leto_view1_cow(input);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        self.execute_forward_typed_into(
+            plan,
+            precision,
+            &input,
+            output
+                .as_slice_mut()
+                .expect("DCT/DST typed Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     /// Execute the unnormalized 2D separable forward real-to-real transform.
@@ -127,22 +119,23 @@ impl DctDstWgpuBackend {
     /// Requires `input.len() == n²` where `n == plan.len()`.
     pub fn execute_forward_2d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        if input.len() != n * n {
+        let expected = Self::cubic_element_count(n, 2)?;
+        if input.len() != expected {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
-                    "2D input expected {n}x{n} = {} elements, got {}",
-                    n * n,
+                    "2D input expected {n}x{n} = {expected} elements, got {}",
                     input.len()
                 ),
             });
         }
         let mode = Self::forward_mode(plan)?;
         let passes = [
-            (mode, FiberLayout::axis(n, 2, 1)),
-            (mode, FiberLayout::axis(n, 2, 0)),
+            (mode, FiberLayout::axis(n, 2, 1)?),
+            (mode, FiberLayout::axis(n, 2, 0)?),
         ];
-        self.kernel
-            .execute_separable(&self.device, input, &passes, 1.0)
+        let mut output = vec![0.0_f32; input.len()];
+        DctGpuKernel::execute_separable_into(&self.device, input, &mut output, &passes, 1.0)?;
+        Ok(output)
     }
 
     /// Execute the unnormalized 2D separable forward transform from a Leto view.
@@ -167,23 +160,24 @@ impl DctDstWgpuBackend {
     /// downloaded once. Requires `input.len() == n³` where `n == plan.len()`.
     pub fn execute_forward_3d(&self, plan: &DctDstWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
         let n = plan.len();
-        if input.len() != n * n * n {
+        let expected = Self::cubic_element_count(n, 3)?;
+        if input.len() != expected {
             return Err(WgpuError::ShapeMismatch {
                 message: format!(
-                    "3D input expected {n}x{n}x{n} = {} elements, got {}",
-                    n * n * n,
+                    "3D input expected {n}x{n}x{n} = {expected} elements, got {}",
                     input.len()
                 ),
             });
         }
         let mode = Self::forward_mode(plan)?;
         let passes = [
-            (mode, FiberLayout::axis(n, 3, 2)),
-            (mode, FiberLayout::axis(n, 3, 1)),
-            (mode, FiberLayout::axis(n, 3, 0)),
+            (mode, FiberLayout::axis(n, 3, 2)?),
+            (mode, FiberLayout::axis(n, 3, 1)?),
+            (mode, FiberLayout::axis(n, 3, 0)?),
         ];
-        self.kernel
-            .execute_separable(&self.device, input, &passes, 1.0)
+        let mut output = vec![0.0_f32; input.len()];
+        DctGpuKernel::execute_separable_into(&self.device, input, &mut output, &passes, 1.0)?;
+        Ok(output)
     }
 
     /// Execute the unnormalized 3D separable forward transform from a Leto view.

@@ -18,6 +18,28 @@
   workspace gates, and API classification; synchronize exact residuals.
 - Evidence tier: pending source audit and executable verification.
 
+## Hephaestus kernel migration: DCT/DST [major]
+
+- Target version: `apollo-dctdst` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
+  transfer ownership with Hephaestus typed preparation, bindings, command
+  streams, and transfers.
+- [x] Encode transform and scale stages as typed ZST kernel interfaces with a
+  compile-time-checked 32-byte parameter layout; preserve the DCT/DST
+  inverse-pair theorem and CPU/Leto boundaries.
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges;
+  preserve Mnemosyne scratch and result storage, Hermes reductions, and Moirai
+  scheduling without a second execution implementation.
+- [x] Pass format, warning-denied Clippy, all-feature nextest, doctest, and
+  rustdoc. The focused suite executes 57 value-semantic cases, including the
+  available-device CPU differential path.
+- Residual: split the 800-line GPU verification harness as part of D8 shared
+  transport-harness consolidation; do not duplicate transform execution.
+- Evidence tier: type-level provider ownership and parameter layout assertion,
+  plus focused value-semantic and independent CPU-differential tests. No
+  machine-checked proof or runtime performance claim is made.
+
 ## Hephaestus kernel migration: CZT [arch]
 
 - Target version: `apollo-czt` 0.4.0

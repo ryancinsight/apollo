@@ -1,7 +1,5 @@
 //! WGPU value-semantic verification.
 
-#![allow(clippy::manual_memcpy)]
-
 #[cfg(test)]
 mod tests {
     use crate::{DctDstPlan, RealTransformKind};
@@ -33,17 +31,6 @@ mod tests {
         assert_eq!(plan.kind(), RealTransformKind::DctII);
         assert!(!DctDstWgpuPlan::new(64, RealTransformKind::DctIII).is_empty());
         assert!(DctDstWgpuPlan::new(0, RealTransformKind::DctII).is_empty());
-    }
-
-    #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
-        assert_eq!(
-            err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
-        );
     }
 
     #[test]
@@ -139,7 +126,28 @@ mod tests {
             }
         }
 
-        // 6. dst3_forward_matches_cpu_reference
+        // 6. caller_owned_forward_and_inverse_match_allocating_execution
+        {
+            let input = [0.5_f32, -1.25, 2.0, -0.75, 0.25, 1.5];
+            let plan = backend.plan(input.len(), RealTransformKind::DctII);
+            let expected_forward = backend.execute_forward(&plan, &input).expect("forward");
+            let mut forward = [0.0_f32; 6];
+            backend
+                .execute_forward_into(&plan, &input, &mut forward)
+                .expect("caller-owned forward");
+            assert_eq!(forward.as_slice(), expected_forward.as_slice());
+
+            let expected_inverse = backend
+                .execute_inverse(&plan, &expected_forward)
+                .expect("inverse");
+            let mut inverse = [0.0_f32; 6];
+            backend
+                .execute_inverse_into(&plan, &expected_forward, &mut inverse)
+                .expect("caller-owned inverse");
+            assert_eq!(inverse.as_slice(), expected_inverse.as_slice());
+        }
+
+        // 7. dst3_forward_matches_cpu_reference
         {
             let input = vec![0.25_f32, -1.0, 2.0, 0.5, -0.75, 1.25];
             let gpu_plan = backend.plan(input.len(), RealTransformKind::DstIII);
@@ -159,7 +167,7 @@ mod tests {
             }
         }
 
-        // 7. dst2_inverse_recovers_input
+        // 8. dst2_inverse_recovers_input
         {
             let input = vec![0.75_f32, -1.25, 0.5, 2.0, -0.5, 1.0];
             let plan = backend.plan(input.len(), RealTransformKind::DstII);
@@ -176,7 +184,7 @@ mod tests {
             }
         }
 
-        // 8. typed_mixed_storage_dct2_matches_represented_f32
+        // 9. typed_mixed_storage_dct2_matches_represented_f32
         {
             use apollo_fft::{f16, PrecisionProfile};
 
@@ -210,7 +218,7 @@ mod tests {
             }
         }
 
-        // 9. leto_forward_and_inverse_match_slice
+        // 10. leto_forward_and_inverse_match_slice
         {
             let input = vec![0.25_f32, -1.25, 2.0, -0.5, 3.0, 1.5];
             let plan = backend.plan(input.len(), RealTransformKind::DctII);
@@ -240,7 +248,7 @@ mod tests {
             );
         }
 
-        // 10. leto_strided_forward_matches_logical_slice
+        // 11. leto_strided_forward_matches_logical_slice
         {
             let logical = vec![1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5];
             let mut backing = Vec::with_capacity(logical.len() * 2);
@@ -262,7 +270,7 @@ mod tests {
             assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
 
-        // 11. typed_leto_forward_and_inverse_match_typed_slice
+        // 12. typed_leto_forward_and_inverse_match_typed_slice
         {
             use apollo_fft::{f16, PrecisionProfile};
 
@@ -317,7 +325,7 @@ mod tests {
             );
         }
 
-        // 12. typed_path_rejects_profile_storage_mismatch
+        // 13. typed_path_rejects_profile_storage_mismatch
         {
             use apollo_fft::PrecisionProfile;
 
@@ -332,10 +340,10 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
-        // 13. rejects_invalid_lengths
+        // 14. rejects_invalid_lengths
         {
             let empty_err = backend
                 .execute_forward(&DctDstWgpuPlan::new(0, RealTransformKind::DctII), &[])
@@ -345,16 +353,16 @@ mod tests {
             let mismatch_err = backend
                 .execute_forward(&DctDstWgpuPlan::new(8, RealTransformKind::DctII), &[0.0; 4])
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
 
-        // 14. dct1_forward_matches_cpu_reference
+        // 15. dct1_forward_matches_cpu_reference
         {
             let input = vec![1.0_f32, -0.5, 2.0, 0.75];
             let gpu_plan = backend.plan(input.len(), RealTransformKind::DctI);
@@ -531,9 +539,7 @@ mod tests {
             for r in 0..3 {
                 let row: Vec<f64> = (0..3).map(|c| f64::from(input[[r, c]])).collect();
                 let out = cpu_plan.forward(&row).expect("cpu row forward");
-                for c in 0..3 {
-                    tmp[r][c] = out[c];
-                }
+                tmp[r].copy_from_slice(&out);
             }
             let mut cpu_2d = [[0.0_f64; 3]; 3];
             for c in 0..3 {
@@ -670,9 +676,7 @@ mod tests {
                 for j in 0..3 {
                     let fiber: Vec<f64> = (0..3).map(|k| tmp1[i][j][k]).collect();
                     let out = cpu_plan.forward(&fiber).expect("cpu axis2");
-                    for k in 0..3 {
-                        cpu_3d[i][j][k] = out[k];
-                    }
+                    cpu_3d[i][j].copy_from_slice(&out);
                 }
             }
             assert_eq!(gpu_3d.len(), 27);

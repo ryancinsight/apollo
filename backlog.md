@@ -73,11 +73,15 @@ Remaining replacement work:
   owner Codex; last-update 2026-07-14; in-flight scope `crates/apollo-dht`,
   workspace dependency metadata, and matching PM artifacts; FWHT and CZT scopes
   complete.
-  - [/] D6-DCTDST: owner Codex; last-update 2026-07-14; claimed scope
-    `crates/apollo-dctdst` only. Replace the obsolete wrapper boundary with
-    native Hephaestus typed-kernel dispatch, retain the DCT/DST mathematical
-    specification and Leto CPU boundary, and add value-semantic differential
-    and analytical-oracle coverage before the slice can merge.
+  - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
+    boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
+    DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
+    array/view boundary. The source and manifest scan finds no direct `wgpu`,
+    `pollster`, or `apollo-wgpu-helpers` edge. Evidence: compile-time typed
+    bindings and parameter-layout assertion; 57 focused value-semantic tests,
+    including real-device CPU differential execution; warning-denied Clippy,
+    doctest, and rustdoc. The 800-line GPU verification suite is a tracked D8
+    harness-structure residual, not a second algorithm implementation.
   The first two slices are complete: FWHT and CZT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
