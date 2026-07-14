@@ -19,7 +19,7 @@ pub mod infrastructure;
 /// Value-semantic verification.
 pub mod verification;
 
-pub use application::execution::plan::dht::DhtPlan;
+pub use application::execution::plan::dht::{DhtPlan, HartleyGpuStorage, HartleyStorage};
 pub use domain::contracts::error::{DhtError, DhtResult};
 pub use domain::metadata::length::HartleyLength;
 pub use domain::spectrum::coefficients::HartleySpectrum;

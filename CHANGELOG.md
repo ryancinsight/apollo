@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-dht` 0.3.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `DhtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. GPU typed APIs
+  now require sealed `HartleyGpuStorage`, correctly excluding `f64` from the
+  concrete `f32` accelerator contract. Remove requests for the deleted no-op
+  `parallel` and `mnemosyne-memory` features.
 - [major] `apollo-czt` 0.4.0 migrates its concrete WGPU implementation to the
   Hephaestus authored-kernel seam. `CztWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
@@ -29,6 +36,18 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] DHT transform and inverse-scale execution now uses Hephaestus typed
+  buffers, ZST authored-kernel descriptors, and one ordered command stream.
+  Leto output downloads directly into Mnemosyne-backed storage; mixed `f16`
+  bridges reuse Mnemosyne scratch. The crate no longer depends directly on
+  `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [patch] DHT 2D/3D Leto paths now borrow dense and strided views through
+  storage-generic kernels instead of materializing contiguous input copies,
+  and the plan reuses the kernel-owned fast-path scratch pool rather than
+  retaining a duplicate thread-local complex buffer.
+- [patch] DHT WGSL converts Hartley row indices to `f32` before multiplication,
+  preventing valid `u32` plan lengths from overflowing integer `k*n` during
+  angle formation.
 - [arch] CZT forward and adjoint-inverse execution now uses Hephaestus typed
   buffers, ZST `KernelInterface`/`KernelSource` descriptors, prepared dispatch,
   and provider-owned transfer. Leto remains the host array/view boundary; the

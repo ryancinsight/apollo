@@ -37,6 +37,20 @@
   residuals are now 16 transform manifests and 51 source files. The wrapper
   crate is deleted only after its final consumer is migrated. No runtime
   performance claim is made.
+- Performed: `apollo-dht` 0.3.0 now expresses transform and inverse-scale as
+  ZST Hephaestus authored kernels encoded into one command stream. Leto 2D/3D
+  paths borrow storage without contiguous materialization; Mnemosyne owns GPU
+  typed bridge/output storage and one canonical fast scratch pool; existing
+  Moirai scheduling and Hermes reductions remain intact. A sealed
+  `HartleyGpuStorage` type contract admits `f32` and mixed `f16`/`f32` while
+  rejecting the previous hidden `f64 -> f32 -> f64` execution at compile time.
+  The WGSL angle expression converts indices before multiplication, removing
+  the `u32 k*n` overflow path. Focused Clippy, 34/34 nextest cases including a
+  real-device suite, and the compile-fail doctest pass. The full workspace
+  passes warning-denied Clippy, 1,025/1,025 nextest cases, doctest,
+  warning-denied rustdoc, provider-audit, locked metadata, and API
+  classification. Direct-WGPU residuals are now 15 transform manifests and 49
+  source files. No runtime performance claim is made.
 
 ## Release 0.15.0 eligibility [major]
 
@@ -138,8 +152,9 @@
   conversion through `ndarray::Array{1,2,3}` with shared Leto-to-NumPy helpers;
   removed the remaining Python input `as_array()` conversions by constructing
   Leto views/arrays from validated NumPy slices and shape metadata; replaced
-  stale Leto `ArrayView::as_array()` use in `apollo-dctdst`/`apollo-dht` with
-  native `to_contiguous()` materialization; removed the Rust `numpy` crate,
+  stale Leto `ArrayView::as_array()` use where an owned contiguous value was
+  required; DHT now retains `as_array()` specifically as a zero-copy borrowed
+  storage adapter for its storage-generic multidimensional kernels; removed the Rust `numpy` crate,
   Apollo's root `ndarray` workspace dependency, and Eunomia's `numpy` feature
   from `apollo-python`; removed `xtask provider-audit`'s stale
   ndarray-specific audit column and test dependency fixtures.
@@ -158,7 +173,8 @@
   apollo-python -i eunomia` shows Eunomia only through the transform crates
   consumed by the binding crate; `cargo fmt -p apollo-python -p apollo-dctdst -p apollo-dht --check`;
   `cargo check -p apollo-dctdst -p apollo-dht`; first-party source/manifest
-  `rg -n "as_array\(|ndarray::|use ndarray|^ndarray\s*=|\bndarray\b" Cargo.toml crates -g "*.rs" -g "Cargo.toml"` returns no matches;
+  `rg` scans report no `ndarray` package or import; the remaining DHT
+  `as_array()` calls are Leto-native zero-copy view adapters;
   final first-party source/manifest/lock/xtask `rg -n "ndarray" Cargo.toml
   Cargo.lock crates xtask -g "*.toml" -g "*.rs" -g "Cargo.lock"` returns no
   matches; `cargo fmt -p xtask --check`; `cargo nextest run -p xtask

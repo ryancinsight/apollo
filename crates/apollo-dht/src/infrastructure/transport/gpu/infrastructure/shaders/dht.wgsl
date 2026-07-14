@@ -30,7 +30,7 @@ fn dht_transform(@builtin(global_invocation_id) gid: vec3<u32>) {
     let factor = TAU / f32(params.len);
     var sum = 0.0;
     for (var n: u32 = 0u; n < params.len; n = n + 1u) {
-        let angle = factor * f32(k * n);
+        let angle = factor * f32(k) * f32(n);
         sum = sum + input_data[n] * hartley_cas(angle);
     }
     output_data[k] = sum;

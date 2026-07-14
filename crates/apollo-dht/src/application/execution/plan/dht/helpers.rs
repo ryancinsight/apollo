@@ -2,15 +2,18 @@
 
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use apollo_fft::PrecisionProfile;
-use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
+use std::borrow::Cow;
 
 thread_local! {
-    pub(crate) static FAST_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     pub(crate) static LANE_IN_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(crate) static LANE_OUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(crate) static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+}
+
+pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
+    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 #[inline]

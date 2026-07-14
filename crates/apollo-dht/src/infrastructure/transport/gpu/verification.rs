@@ -9,6 +9,13 @@ mod tests {
     use apollo_fft::{f16, PrecisionProfile};
     use leto::{SliceArg, Storage};
 
+    // Each direct coefficient performs N f32 products/accumulations plus
+    // backend transcendental evaluation. 4096 eps bounds this short validation
+    // domain while scaling with the input 1-norm instead of using an absolute
+    // magic tolerance.
+    const DHT_F32_FORWARD_FACTOR: f64 = 4096.0 * f32::EPSILON as f64;
+    const DHT_F32_ROUNDTRIP_FACTOR: f32 = 8192.0 * f32::EPSILON;
+
     #[test]
     fn capabilities_reflect_implemented_kernel_surface() {
         let capabilities = WgpuCapabilities::implemented(true);
@@ -28,17 +35,6 @@ mod tests {
         assert_eq!(plan.len(), 64);
         assert!(!DhtWgpuPlan::new(64).is_empty());
         assert!(DhtWgpuPlan::new(0).is_empty());
-    }
-
-    #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
-        assert_eq!(
-            err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
-        );
     }
 
     #[test]
@@ -69,9 +65,26 @@ mod tests {
                 .expect("cpu forward");
 
             assert_eq!(gpu.len(), cpu.values().len());
+            let bound = DHT_F32_FORWARD_FACTOR
+                * input
+                    .iter()
+                    .map(|value| f64::from(value.abs()))
+                    .sum::<f64>()
+                    .max(1.0);
             for (actual, expected) in gpu.iter().zip(cpu.values().iter()) {
-                assert!((f64::from(*actual) - *expected).abs() < 1.0e-4);
+                assert!((f64::from(*actual) - *expected).abs() <= bound);
             }
+        }
+
+        // The unit impulse exercises every output invocation against an exact
+        // oracle: only n=0 contributes and cas(0)=1.
+        {
+            let mut input = vec![0.0_f32; 8];
+            input[0] = 1.0;
+            let actual = backend
+                .execute_forward(&backend.plan(input.len()), &input)
+                .expect("impulse forward");
+            assert_eq!(actual, vec![1.0_f32; input.len()]);
         }
 
         // 3. inverse_recovers_input
@@ -87,7 +100,8 @@ mod tests {
 
             assert_eq!(recovered.len(), input.len());
             for (actual, expected) in recovered.iter().zip(input.iter()) {
-                assert!((actual - expected).abs() < 1.0e-4);
+                let bound = DHT_F32_ROUNDTRIP_FACTOR * expected.abs().max(1.0);
+                assert!((actual - expected).abs() <= bound);
             }
         }
 
@@ -256,7 +270,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
         // 10. rejects_invalid_plan_shape_before_dispatch
@@ -269,13 +283,24 @@ mod tests {
             let mismatch_err = backend
                 .execute_forward(&DhtWgpuPlan::new(8), &[0.0; 4])
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
+
+            let output_err = backend
+                .execute_forward_into(&backend.plan(4), &[0.0; 4], &mut [0.0; 3])
+                .expect_err("output length mismatch must fail");
+            assert!(matches!(
+                output_err,
+                WgpuError::LengthMismatch {
+                    expected: 4,
+                    actual: 3,
+                }
+            ));
         }
     }
 

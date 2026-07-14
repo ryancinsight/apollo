@@ -284,9 +284,11 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-nufft-wgpu` exposes typed mixed-storage direct and fast Type-1/Type-2 1D/3D
   execution wrappers. Tests validate `[f16; 2]` inputs and caller-owned outputs
   against the represented `Complex32` GPU path.
-- `apollo-dht-wgpu` exposes typed mixed-storage forward/inverse wrappers. Tests
-  validate `f16` caller-owned storage against represented `f32` GPU execution and
-  use an analytical `f16` quantization bound for inverse roundtrip values.
+- `apollo-dht --features wgpu` exposes typed mixed-storage forward/inverse
+  wrappers through the sealed `HartleyGpuStorage` capability. Tests validate
+  `f16` caller-owned storage against represented `f32` GPU execution and use an
+  analytical `f16` quantization bound for inverse roundtrip values; `f64` is
+  excluded at compile time from the concrete `f32` accelerator contract.
 - `apollo-fwht --features wgpu` exposes typed mixed-storage forward/inverse
   wrappers over Hephaestus typed buffers and authored-kernel dispatch. Tests
   validate `f16` caller-owned storage against represented `f32` GPU execution
@@ -349,8 +351,10 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-wavelet-wgpu` now validates forward and inverse Haar DWT execution
   against the owning CPU crate and reports support for the implemented `f32`
   Haar surface.
-- `apollo-dht-wgpu` now validates real 1D forward and inverse DHT execution
-  against the owning CPU crate and reports support only for that implemented
+- `apollo-dht --features wgpu` validates Hephaestus-authored real 1D forward
+  and inverse DHT execution against the owning CPU crate, the exact unit
+  impulse oracle, and the Hartley involution. Leto results download directly
+  into Mnemosyne storage, and the capability report covers only the implemented
   `f32` kernel surface.
 - `apollo-nufft-wgpu` now validates exact direct Type-1 and Type-2 summations
   for 1D and 3D against `apollo-nufft` exact reference functions and reports

@@ -58,7 +58,7 @@ fn coefficient_with_hermes(input: &[f64], factor: f64, k: usize) -> f64 {
         pool.with_scratch(input.len(), |row| {
             fill_hartley_row(row, factor, k);
             hermes_simd::dot::<f64>(input, row)
-                .expect("Hermes DHT coefficient dot uses equal-length finite row buffers")
+                .expect("Hermes DHT coefficient dot uses equal-length row buffers")
         })
     })
 }

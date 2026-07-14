@@ -3,20 +3,26 @@
 ## Hephaestus kernel migration: DHT [arch]
 
 - Target version: `apollo-dht` 0.3.0
-- Phase: Foundation
-- [ ] Audit DHT's forward/self-inverse GPU formulas and Atlas-provider
+- Phase: Closure
+- [x] Audit DHT's forward/self-inverse GPU formulas and Atlas-provider
   boundaries against ADR 0003 and the completed FWHT/CZT patterns.
-- [ ] Encode transform and inverse-scale stages as ZST authored-kernel
+- [x] Encode transform and inverse-scale stages as ZST authored-kernel
   interfaces over typed bindings and compile-time-checked parameters.
-- [ ] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
+- [x] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
   transfer ownership with one Hephaestus command stream per operation.
-- [ ] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges; compute
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges; compute
   Leto results directly in Mnemosyne storage and preserve the existing Hermes
   reduction and Moirai scheduling contracts without parallel variants.
-- [ ] Verify self-inverse, impulse/constant analytical oracles, Leto
+- [x] Verify self-inverse, impulse/constant analytical oracles, Leto
   contiguous/strided/typed boundaries, invalid lengths, provider audit,
   workspace gates, and API classification; synchronize exact residuals.
-- Evidence tier: pending source audit and executable verification.
+- Evidence tier: type-level provider ownership, a compile-time parameter-layout
+  assertion, and compile-fail exclusion of `f64` from the concrete `f32` GPU
+  contract. Focused warning-denied Clippy, 34/34 nextest cases including a
+  real-device suite, and the compile-fail doctest pass. The full workspace
+  passes warning-denied Clippy, 1,025/1,025 nextest cases, doctest,
+  warning-denied rustdoc, provider-audit, locked-metadata, and API-classification
+  gates. No runtime performance claim is made.
 
 ## Hephaestus kernel migration: CZT [arch]
 
