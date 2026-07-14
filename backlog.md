@@ -81,10 +81,15 @@ Remaining replacement work:
     including real-device CPU differential execution; warning-denied Clippy,
     doctest, and rustdoc. The 800-line GPU verification suite is a tracked D8
     harness-structure residual, not a second algorithm implementation.
-  - [/] D6-GFT: owner Codex root; last-update 2026-07-14; claimed scope
-    `crates/apollo-gft` only. Migrate its graph-basis transform to Hephaestus
-    typed dispatch.
-  The first four slices are complete: FWHT, CZT, DHT, and DCT/DST retain Leto host arrays and
+  - [x] D6-GFT: `apollo-gft` 0.3.0 replaces direct WGPU device ownership with
+    one direction-parameterized Hephaestus typed kernel and command stream.
+    Leto owns host views and Mnemosyne-backed outputs; the sealed GPU storage
+    contract admits `f32` and `f16` only, so the API cannot silently narrow
+    `f64`. Evidence: typed binding/layout compile checks; 21 focused
+    value-semantic tests including real-device CPU differential and roundtrip;
+    compile-fail `f64` rejection doctest; warning-denied Clippy/rustdoc; and a
+    source/manifest scan finding no direct `wgpu`, `pollster`, or wrapper edge.
+  The first five slices are complete: FWHT, CZT, DHT, DCT/DST, and GFT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the

@@ -30,13 +30,11 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
+    fn invalid_precision_error_preserves_typed_contract() {
+        let err = WgpuError::InvalidPrecisionProfile;
         assert_eq!(
             err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
+            "precision profile does not match typed GPU storage"
         );
     }
 
@@ -67,7 +65,7 @@ mod tests {
             assert_eq!(gpu_fwd.len(), 4);
             for (k, (g, c)) in gpu_fwd.iter().zip(cpu_fwd.iter()).enumerate() {
                 assert!(
-                    (*g as f64 - c).abs() < 1.0e-3_f64,
+                    (*g as f64 - c).abs() < PATH4_F32_DOT_ABS_TOLERANCE,
                     "forward k={}: gpu={} cpu={}",
                     k,
                     g,
@@ -92,7 +90,7 @@ mod tests {
             assert_eq!(gpu_inv.len(), 4);
             for (k, (g, c)) in gpu_inv.iter().zip(cpu_inv.iter()).enumerate() {
                 assert!(
-                    (*g as f64 - c).abs() < 1.0e-3_f64,
+                    (*g as f64 - c).abs() < PATH4_F32_DOT_ABS_TOLERANCE,
                     "inverse k={}: gpu={} cpu={}",
                     k,
                     g,
@@ -114,7 +112,7 @@ mod tests {
             assert_eq!(recovered.len(), 4);
             for (k, (actual, expected)) in recovered.iter().zip(signal_f32.iter()).enumerate() {
                 assert!(
-                    (actual - expected).abs() < 1.0e-3_f32,
+                    f64::from((actual - expected).abs()) < PATH4_F32_DOT_ABS_TOLERANCE,
                     "roundtrip k={}: got={} want={}",
                     k,
                     actual,
@@ -123,7 +121,30 @@ mod tests {
             }
         }
 
-        // 5. leto_forward_and_inverse_match_slice
+        // 5. caller_owned_forward_and_inverse_match_allocating_api
+        {
+            let (_cpu_plan, basis_f32, signal_f32) = path4_plan_and_basis();
+            let gpu_plan = GftWgpuPlan::new(4);
+            let expected_forward = backend
+                .execute_forward(&gpu_plan, &signal_f32, &basis_f32)
+                .expect("allocating forward");
+            let mut caller_forward = vec![0.0_f32; signal_f32.len()];
+            backend
+                .execute_forward_into(&gpu_plan, &signal_f32, &basis_f32, &mut caller_forward)
+                .expect("caller-owned forward");
+            assert_eq!(caller_forward, expected_forward);
+
+            let expected_inverse = backend
+                .execute_inverse(&gpu_plan, &expected_forward, &basis_f32)
+                .expect("allocating inverse");
+            let mut caller_inverse = vec![0.0_f32; signal_f32.len()];
+            backend
+                .execute_inverse_into(&gpu_plan, &caller_forward, &basis_f32, &mut caller_inverse)
+                .expect("caller-owned inverse");
+            assert_eq!(caller_inverse, expected_inverse);
+        }
+
+        // 6. leto_forward_and_inverse_match_slice
         {
             let (_cpu_plan, basis_f32, signal_f32) = path4_plan_and_basis();
             let gpu_plan = GftWgpuPlan::new(4);
@@ -162,7 +183,7 @@ mod tests {
             );
         }
 
-        // 6. leto_strided_forward_matches_logical_slice
+        // 7. leto_strided_forward_matches_logical_slice
         {
             let (_cpu_plan, basis_f32, signal_f32) = path4_plan_and_basis();
             let gpu_plan = GftWgpuPlan::new(4);
@@ -188,7 +209,7 @@ mod tests {
             assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
 
-        // 7. typed_leto_forward_and_inverse_match_typed_slice
+        // 8. typed_leto_forward_and_inverse_match_typed_slice
         {
             use apollo_fft::{f16, PrecisionProfile};
 
@@ -265,13 +286,13 @@ mod tests {
             );
         }
 
-        // 8. typed_mixed_storage_matches_represented_f32_execution
+        // 9. typed_mixed_storage_matches_represented_f32_execution
         {
             use apollo_fft::{f16, PrecisionProfile};
 
             let (_cpu_plan, basis_f32, signal_f32) = path4_plan_and_basis();
             let input: Vec<f16> = signal_f32.iter().copied().map(f16::from_f32).collect();
-            let represented_input: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
+            let represented_input: Vec<f32> = input.iter().map(|v| v.to_f32()).collect();
             let gpu_plan = GftWgpuPlan::new(4);
             let expected_fwd = backend
                 .execute_forward(&gpu_plan, &represented_input, &basis_f32)
@@ -316,7 +337,7 @@ mod tests {
             }
         }
 
-        // 9. typed_path_rejects_profile_mismatch
+        // 10. typed_path_rejects_profile_mismatch
         {
             use apollo_fft::{f16, PrecisionProfile};
             let (_cpu_plan, basis_f32, _) = path4_plan_and_basis();
@@ -332,9 +353,15 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(err, WgpuError::InvalidPrecisionProfile));
         }
     }
+
+    /// Four products plus three additions have first-order error `gamma_7`.
+    /// `64 * epsilon_f32 = 2^-17` conservatively covers that bound, f64-to-f32
+    /// basis quantization, and the second kernel launch in the path-four
+    /// roundtrip without masking a transform-scale error.
+    const PATH4_F32_DOT_ABS_TOLERANCE: f64 = 1.0 / 131_072.0;
 
     /// Build the 4-node path graph CPU plan and extract basis as f32.
     /// Adjacency: [[0,1,0,0],[1,0,1,0],[0,1,0,1],[0,0,1,0]]
