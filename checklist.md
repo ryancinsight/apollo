@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: DHT [arch]
+
+- Target version: `apollo-dht` 0.3.0
+- Phase: Foundation
+- [ ] Audit DHT's forward/self-inverse GPU formulas and Atlas-provider
+  boundaries against ADR 0003 and the completed FWHT/CZT patterns.
+- [ ] Encode transform and inverse-scale stages as ZST authored-kernel
+  interfaces over typed bindings and compile-time-checked parameters.
+- [ ] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
+  transfer ownership with one Hephaestus command stream per operation.
+- [ ] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges; compute
+  Leto results directly in Mnemosyne storage and preserve the existing Hermes
+  reduction and Moirai scheduling contracts without parallel variants.
+- [ ] Verify self-inverse, impulse/constant analytical oracles, Leto
+  contiguous/strided/typed boundaries, invalid lengths, provider audit,
+  workspace gates, and API classification; synchronize exact residuals.
+- Evidence tier: pending source audit and executable verification.
+
 ## Hephaestus kernel migration: CZT [arch]
 
 - Target version: `apollo-czt` 0.4.0
