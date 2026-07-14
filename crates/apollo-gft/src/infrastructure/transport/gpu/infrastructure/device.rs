@@ -1,78 +1,88 @@
-//! WGPU device acquisition and GFT execution backend.
+//! Hephaestus device acquisition and GFT execution boundary.
 
-use apollo_fft::application::utilities::leto_interop;
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
-use crate::GftStorage;
 use apollo_fft::PrecisionProfile;
+use mnemosyne::scratch::ScratchPool;
 
 use crate::infrastructure::transport::gpu::application::plan::GftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::kernel::GftGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::infrastructure::transport::gpu::infrastructure::kernel::{GftDirection, GftGpuKernel};
+use crate::GftGpuStorage;
+use apollo_fft::application::utilities::leto_interop;
+use hephaestus_wgpu::WgpuDevice;
 
-/// Return whether a default WGPU adapter/device can be acquired.
+thread_local! {
+    static GPU_INPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+    static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+}
+
+/// Return whether a default Hephaestus WGPU device can be acquired.
 #[must_use]
 pub fn wgpu_available() -> bool {
     GftWgpuBackend::try_default().is_ok()
 }
 
-/// WGPU backend for GFT execution.
+/// Hephaestus WGPU backend for graph Fourier execution.
 #[derive(Debug, Clone)]
 pub struct GftWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<GftGpuKernel>,
 }
 
 impl GftWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(GftGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
+    /// Create a backend by requesting a default Hephaestus WGPU device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-gft-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-gft-wgpu")?))
     }
 
-    /// Return truthful current capabilities (forward and inverse both implemented).
+    /// Return truthful current capabilities (forward and inverse are implemented).
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::implemented(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus WGPU device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
-    }
-
-    /// Create a metadata plan descriptor.
+    /// Create a metadata-only graph-order descriptor.
     #[must_use]
     pub const fn plan(&self, len: usize) -> GftWgpuPlan {
         GftWgpuPlan::new(len)
     }
 
-    /// Execute the forward GFT: `X[k] = sum_i U[i,k] * signal[i]`  (U^T x).
-    ///
-    /// Requires signal.len() == plan.len() and basis.len() == len*len.
+    /// Execute the forward GFT `X = U^T x`.
     pub fn execute_forward(
         &self,
         plan: &GftWgpuPlan,
         signal: &[f32],
         basis: &[f32],
     ) -> WgpuResult<Vec<f32>> {
-        Self::validate(plan, signal, basis)?;
-        self.kernel
-            .execute(&self.device, signal, basis, plan.len(), 0)
+        let mut output = vec![0.0_f32; plan.len()];
+        self.execute_forward_into(plan, signal, basis, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the forward GFT `X = U^T x` into caller-owned storage.
+    pub fn execute_forward_into(
+        &self,
+        plan: &GftWgpuPlan,
+        signal: &[f32],
+        basis: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate_plan_input(plan, signal, basis)?;
+        Self::validate_output(plan, output)?;
+        GftGpuKernel::execute_into(&self.device, signal, basis, output, GftDirection::Forward)
     }
 
     /// Execute the forward GFT from Leto host views.
@@ -87,22 +97,42 @@ impl GftWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let signal = leto_view1_cow(signal);
         let basis = leto_view1_cow(basis);
-        let output = self.execute_forward(plan, &signal, &basis)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
+        self.execute_forward_into(
+            plan,
+            &signal,
+            &basis,
+            output
+                .as_slice_mut()
+                .expect("GFT Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
-    /// Execute the inverse GFT: `x[i] = sum_k U[i,k] * spectrum[k]`  (U X).
-    ///
-    /// Requires spectrum.len() == plan.len() and basis.len() == len*len.
+    /// Execute the inverse GFT `x = U X`.
     pub fn execute_inverse(
         &self,
         plan: &GftWgpuPlan,
         spectrum: &[f32],
         basis: &[f32],
     ) -> WgpuResult<Vec<f32>> {
-        Self::validate(plan, spectrum, basis)?;
-        self.kernel
-            .execute(&self.device, spectrum, basis, plan.len(), 1)
+        let mut output = vec![0.0_f32; plan.len()];
+        self.execute_inverse_into(plan, spectrum, basis, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the inverse GFT `x = U X` into caller-owned storage.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &GftWgpuPlan,
+        spectrum: &[f32],
+        basis: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate_plan_input(plan, spectrum, basis)?;
+        Self::validate_output(plan, output)?;
+        GftGpuKernel::execute_into(&self.device, spectrum, basis, output, GftDirection::Inverse)
     }
 
     /// Execute the inverse GFT from Leto host views.
@@ -114,14 +144,21 @@ impl GftWgpuBackend {
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let spectrum = leto_view1_cow(spectrum);
         let basis = leto_view1_cow(basis);
-        let output = self.execute_inverse(plan, &spectrum, &basis)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
+        self.execute_inverse_into(
+            plan,
+            &spectrum,
+            &basis,
+            output
+                .as_slice_mut()
+                .expect("GFT Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
-    /// Execute the forward GFT with typed `f64`, `f32`, or mixed `f16` storage.
-    ///
-    /// The graph basis matrix must always be supplied as `f32`.
-    pub fn execute_forward_typed_into<T: GftStorage>(
+    /// Execute the forward GFT with storage admitted by the `f32` accelerator contract.
+    pub fn execute_forward_typed_into<T: GftGpuStorage>(
         &self,
         plan: &GftWgpuPlan,
         precision: PrecisionProfile,
@@ -129,35 +166,13 @@ impl GftWgpuBackend {
         basis: &[f32],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_gft_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented = if let Some(slice_f32) = T::as_f32_slice(signal) {
-            std::borrow::Cow::Borrowed(slice_f32)
-        } else {
-            let vec: Vec<f32> = signal.iter().map(|v| v.to_f64() as f32).collect();
-            std::borrow::Cow::Owned(vec)
-        };
-        let computed = self.execute_forward(plan, &represented, basis)?;
-        if let Some(slice_f32) = T::as_f32_slice_mut(output) {
-            slice_f32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_f64(f64::from(value));
-            }
-        }
-        Ok(())
+        Self::validate_typed_precision::<T>(precision)?;
+        Self::validate_typed_plan_input(plan, signal, basis, output)?;
+        self.execute_typed_into(signal, basis, output, GftDirection::Forward)
     }
 
     /// Execute typed forward GFT from Leto host views.
-    ///
-    /// The graph basis matrix must always be supplied as a logical `f32` Leto
-    /// 1D view in row-major flattened order.
-    pub fn execute_forward_leto_typed<T: GftStorage>(
+    pub fn execute_forward_leto_typed<T: GftGpuStorage + Default>(
         &self,
         plan: &GftWgpuPlan,
         precision: PrecisionProfile,
@@ -166,13 +181,22 @@ impl GftWgpuBackend {
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = leto_view1_cow(signal);
         let basis = leto_view1_cow(basis);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_forward_typed_into(plan, precision, &signal, &basis, &mut output)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        self.execute_forward_typed_into(
+            plan,
+            precision,
+            &signal,
+            &basis,
+            output
+                .as_slice_mut()
+                .expect("typed GFT Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
-    /// Execute the inverse GFT with typed `f64`, `f32`, or mixed `f16` storage.
-    pub fn execute_inverse_typed_into<T: GftStorage>(
+    /// Execute the inverse GFT with storage admitted by the `f32` accelerator contract.
+    pub fn execute_inverse_typed_into<T: GftGpuStorage>(
         &self,
         plan: &GftWgpuPlan,
         precision: PrecisionProfile,
@@ -180,32 +204,13 @@ impl GftWgpuBackend {
         basis: &[f32],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_gft_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented = if let Some(slice_f32) = T::as_f32_slice(spectrum) {
-            std::borrow::Cow::Borrowed(slice_f32)
-        } else {
-            let vec: Vec<f32> = spectrum.iter().map(|v| v.to_f64() as f32).collect();
-            std::borrow::Cow::Owned(vec)
-        };
-        let computed = self.execute_inverse(plan, &represented, basis)?;
-        if let Some(slice_f32) = T::as_f32_slice_mut(output) {
-            slice_f32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_f64(f64::from(value));
-            }
-        }
-        Ok(())
+        Self::validate_typed_precision::<T>(precision)?;
+        Self::validate_typed_plan_input(plan, spectrum, basis, output)?;
+        self.execute_typed_into(spectrum, basis, output, GftDirection::Inverse)
     }
 
     /// Execute typed inverse GFT from Leto host views.
-    pub fn execute_inverse_leto_typed<T: GftStorage>(
+    pub fn execute_inverse_leto_typed<T: GftGpuStorage + Default>(
         &self,
         plan: &GftWgpuPlan,
         precision: PrecisionProfile,
@@ -214,12 +219,55 @@ impl GftWgpuBackend {
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let spectrum = leto_view1_cow(spectrum);
         let basis = leto_view1_cow(basis);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_inverse_typed_into(plan, precision, &spectrum, &basis, &mut output)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        self.execute_inverse_typed_into(
+            plan,
+            precision,
+            &spectrum,
+            &basis,
+            output
+                .as_slice_mut()
+                .expect("typed GFT Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
-    fn validate_gft_typed_precision<T: GftStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
+    fn execute_typed_into<T: GftGpuStorage>(
+        &self,
+        input: &[T],
+        basis: &[f32],
+        output: &mut [T],
+        direction: GftDirection,
+    ) -> WgpuResult<()> {
+        if let (Some(input), Some(output)) = (T::as_f32_slice(input), T::as_f32_slice_mut(output)) {
+            return GftGpuKernel::execute_into(&self.device, input, basis, output, direction);
+        }
+        GPU_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |represented| {
+                for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *slot = value.to_gpu();
+                }
+                GPU_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |computed| {
+                        GftGpuKernel::execute_into(
+                            &self.device,
+                            represented,
+                            basis,
+                            computed,
+                            direction,
+                        )?;
+                        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                            *slot = T::from_gpu(value);
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
+    }
+
+    fn validate_typed_precision<T: GftGpuStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
         let expected = T::PROFILE;
         if precision.storage != expected.storage || precision.compute != expected.compute {
             return Err(WgpuError::InvalidPrecisionProfile);
@@ -227,26 +275,61 @@ impl GftWgpuBackend {
         Ok(())
     }
 
-    fn validate(plan: &GftWgpuPlan, signal: &[f32], basis: &[f32]) -> WgpuResult<()> {
+    fn validate_plan_input(plan: &GftWgpuPlan, input: &[f32], basis: &[f32]) -> WgpuResult<()> {
         let n = plan.len();
         if n == 0 {
             return Err(WgpuError::InvalidPlan {
-                message: "invalid plan: length must be greater than zero".to_owned(),
+                message: "length must be greater than zero".to_owned(),
             });
         }
-        if signal.len() != n {
+        if input.len() != n {
             return Err(WgpuError::LengthMismatch {
                 expected: n,
-                actual: signal.len(),
+                actual: input.len(),
             });
         }
-        if basis.len() != n * n {
+        Self::validate_basis_len(n, basis.len())
+    }
+
+    fn validate_typed_plan_input<T: GftGpuStorage>(
+        plan: &GftWgpuPlan,
+        input: &[T],
+        basis: &[f32],
+        output: &[T],
+    ) -> WgpuResult<()> {
+        let n = plan.len();
+        if n == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: "length must be greater than zero".to_owned(),
+            });
+        }
+        if input.len() != n {
+            return Err(WgpuError::LengthMismatch {
+                expected: n,
+                actual: input.len(),
+            });
+        }
+        Self::validate_output(plan, output)?;
+        Self::validate_basis_len(n, basis.len())
+    }
+
+    fn validate_output<T>(plan: &GftWgpuPlan, output: &[T]) -> WgpuResult<()> {
+        if output.len() != plan.len() {
+            return Err(WgpuError::LengthMismatch {
+                expected: plan.len(),
+                actual: output.len(),
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_basis_len(n: usize, actual: usize) -> WgpuResult<()> {
+        let expected = n.checked_mul(n).ok_or_else(|| WgpuError::InvalidPlan {
+            message: format!("basis element count overflows usize for graph order {n}"),
+        })?;
+        if actual != expected {
             return Err(WgpuError::ShapeMismatch {
-                message: format!(
-                    "basis length mismatch: expected={}, actual={}",
-                    n * n,
-                    basis.len()
-                ),
+                message: format!("expected {expected} elements for a {n}x{n} basis, got {actual}"),
             });
         }
         Ok(())
@@ -255,13 +338,6 @@ impl GftWgpuBackend {
 
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto GFT output".to_string(),
-    })
 }
 
 #[cfg(test)]

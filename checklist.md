@@ -3,19 +3,23 @@
 ## Hephaestus kernel migration: GFT [arch]
 
 - Target version: `apollo-gft` 0.3.0
-- Phase: Foundation
-- [ ] Audit forward/inverse basis orientation, Atlas-provider boundaries, and
+- Phase: Closure
+- [x] Audit forward/inverse basis orientation, Atlas-provider boundaries, and
   precision contracts against ADR 0003 and the completed provider slices.
-- [ ] Encode the basis transform as one direction-parameterized ZST authored
+- [x] Encode the basis transform as one direction-parameterized ZST authored
   kernel over typed signal, basis, and output bindings.
-- [ ] Replace raw WGPU ownership with Hephaestus preparation, dispatch,
+- [x] Replace raw WGPU ownership with Hephaestus preparation, dispatch,
   transfer, and caller-owned Mnemosyne/Leto output storage.
-- [ ] Preserve the existing Moirai, Hermes, and Mnemosyne CPU contracts; remove
+- [x] Preserve the existing Moirai, Hermes, and Mnemosyne CPU contracts; remove
   direct `wgpu`, `pollster`, helper, fake-generic, and duplicate adapter paths.
-- [ ] Verify analytical graph modes, forward/inverse CPU differential, Leto
+- [x] Verify analytical graph modes, forward/inverse CPU differential, Leto
   contiguous/strided/typed boundaries, negative contracts, workspace gates,
   provider audit, and API classification.
-- Evidence tier: pending source audit and executable verification.
+- Evidence tier: compile-time sealed storage and typed-binding/layout checks;
+  21 focused value-semantic tests including real-device CPU differential and
+  inverse roundtrip; compile-fail `f64` rejection doctest; warning-denied
+  Clippy/rustdoc; provider audit; and semver classification of the intentional
+  0.2.0-to-0.3.0 major change. No machine-checked proof is performed.
 
 ## Hephaestus kernel migration: DHT [arch]
 

@@ -216,23 +216,21 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "apollo-fft",
- "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "leto-ops",
  "mnemosyne",
  "moirai",
- "pollster",
  "proptest",
  "serde",
  "thiserror 2.0.18",
- "wgpu",
 ]
 
 [[package]]

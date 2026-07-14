@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-gft` 0.3.0 migrates its graph Fourier accelerator to the
+  Hephaestus authored-kernel seam. `GftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Forward and
+  inverse caller-owned output APIs now share the typed Hephaestus command-stream
+  dispatch. GPU typed APIs require sealed `GftGpuStorage`, admitting native
+  `f32` and explicit `f16`/`f32` storage while rejecting silent `f64` narrowing.
 - [major] `apollo-dht` 0.3.0 migrates its concrete WGPU implementation to the
   Hephaestus authored-kernel seam. `DhtWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns

@@ -1,5 +1,33 @@
 # Apollo Gap Audit
 
+## GFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced `apollo-gft`'s direct WGPU buffers, pipeline, bind group,
+  encoder, queue, and wrapper-device ownership with a single direction-selected
+  ZST `KernelInterface`/`KernelSource` dispatched by Hephaestus typed bindings
+  and command streams. Leto host views now write directly to Mnemosyne-backed
+  caller output. The accelerator contract is sealed to `f32` and explicit
+  `f16` promotion, excluding silent `f64` narrowing at compile time.
+- Mathematical contract: for the column-major orthonormal basis `U`, the
+  forward and inverse kernels evaluate `X[k] = sum_i U[i + kN]x[i]` and
+  `x[i] = sum_k U[i + kN]X[k]`; `U^T U = I` proves the exact-arithmetic
+  reconstruction identity. The executable path-four differential uses a
+  `64 * epsilon_f32 = 2^-17` bound derived from four products and three
+  additions plus basis quantization.
+- Verification: `cargo fmt --all -- --check`; `cargo check -p apollo-gft
+  --all-features`; `cargo clippy -p apollo-gft --all-targets --all-features --
+  -D warnings`; `cargo nextest run -p apollo-gft --all-features` (21 passed,
+  including real-device dispatch); `cargo test -p apollo-gft --doc
+  --all-features` (1 passed); `cargo doc -p apollo-gft --all-features
+  --no-deps`; `cargo run -p xtask -- provider-audit`; and `cargo semver-checks
+  check-release -p apollo-gft --baseline-rev d4ce4f149738db07c535718a1447a9ae01740e67`
+  (intentional major classification; no semver update required).
+- Evidence tier: type-level storage exclusion and parameter-layout assertion,
+  then value-semantic CPU differential/roundtrip and real-device execution.
+  No machine-checked proof is performed.
+- Residual: D6 still has 13 transform crates to migrate; GFT contains no local
+  raw-WGPU mechanics or wrapper dependency.
+
 ## Provider-native GPU kernel migration [arch]
 
 - Architecture finding: 18 Apollo transform manifests depend directly on
