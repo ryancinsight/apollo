@@ -3,25 +3,30 @@
 ## Hephaestus kernel migration: CZT [arch]
 
 - Target version: `apollo-czt` 0.4.0
-- Phase: Execution
+- Phase: Closure
 - [x] Audit CZT's current Atlas-provider boundaries and confirm ADR 0003 covers
   the direct forward/adjoint-inverse kernel family.
-- [ ] Encode forward and inverse CZT kernels as ZST authored-kernel interfaces
+- [x] Encode forward and inverse CZT kernels as ZST authored-kernel interfaces
   over typed read-only input and write-only output bindings.
-- [ ] Replace raw WGPU buffers, uniform allocation, pipelines, bind groups,
+- [x] Replace raw WGPU buffers, uniform allocation, pipelines, bind groups,
   encoders, queues, and public device accessors with Hephaestus preparation,
   one-operation command streams, and typed transfers.
-- [ ] Delete `apollo-czt`'s direct `wgpu`, `pollster`, and
+- [x] Delete `apollo-czt`'s direct `wgpu`, `pollster`, and
   `apollo-wgpu-helpers` dependency edges; consolidate its duplicate Leto `Cow`
   and Mnemosyne-output helpers onto the existing CZT SSOT; preserve the
   existing Hermes direct reduction, Moirai scheduling, and Mnemosyne scratch
   paths without parallel algorithm variants.
-- [ ] Verify forward and inverse GPU execution against the CPU/reference
+- [x] Verify forward and inverse GPU execution against the CPU/reference
   formulas, Leto contiguous/strided/typed boundaries, invalid-plan contracts,
   provider audit, full workspace gates, and API classification; synchronize
   changelog and exact residual inventory.
-- Evidence tier at claim: source and type-contract audit. Execution evidence is
-  pending implementation.
+- Evidence tier: type-level provider ownership and a compile-time parameter
+  layout assertion, plus 44 focused CZT cases and 1,026/1,026 workspace
+  value-semantic nextest cases. The suite includes real-device forward/inverse
+  CPU differential execution, Leto contiguous/strided/typed boundaries, an
+  exact unit-impulse oracle, invalid-plan rejection, and DFT round trips.
+  Warning-denied Clippy, doctest, rustdoc, provider-audit, locked-metadata, and
+  API-classification gates pass. No runtime performance claim is made.
 
 ## Hephaestus kernel migration: FWHT [arch]
 

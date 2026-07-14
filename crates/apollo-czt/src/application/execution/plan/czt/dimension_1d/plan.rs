@@ -1,6 +1,6 @@
 //! Reusable Chirp Z-Transform Plan
 
-use super::helpers::{leto_array1_from_vec, leto_view1_cow, with_forward_workspace};
+use super::helpers::{leto_view1_cow, with_forward_workspace};
 use super::typed::CztStorage;
 use crate::application::execution::kernel::bluestein::{
     czt_bjork_pereyra_inverse_into, czt_bluestein_forward_into_with_workspace, czt_inverse_nodes,
@@ -148,9 +148,19 @@ impl CztPlan {
             return Err(CztError::LengthMismatch);
         }
         let signal = leto_view1_cow(&input);
-        let mut output = vec![Complex64::new(0.0, 0.0); self.output_len()];
-        czt_direct_forward_slice_into(&signal, &mut output, self.a, self.w)?;
-        Ok(leto_array1_from_vec(output))
+        let mut output =
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
+                self.output_len()
+            ]);
+        czt_direct_forward_slice_into(
+            &signal,
+            output
+                .as_slice_mut()
+                .expect("CZT direct Mnemosyne output must be contiguous"),
+            self.a,
+            self.w,
+        )?;
+        Ok(output)
     }
 
     /// Forward CZT using Bluestein's convolution identity with precomputed caching.
@@ -173,9 +183,17 @@ impl CztPlan {
         input: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
         let signal = leto_view1_cow(&input);
-        let mut output = vec![Complex64::new(0.0, 0.0); self.output_len()];
-        self.forward_complex64_slice_into(&signal, &mut output)?;
-        Ok(leto_array1_from_vec(output))
+        let mut output =
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
+                self.output_len()
+            ]);
+        self.forward_complex64_slice_into(
+            &signal,
+            output
+                .as_slice_mut()
+                .expect("CZT forward Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     /// Forward CZT into caller-owned output storage.
@@ -236,15 +254,23 @@ impl CztPlan {
     }
 
     /// Forward CZT over a typed Leto complex-storage view.
-    pub fn forward_leto_typed<T: CztStorage>(
+    pub fn forward_leto_typed<T: CztStorage + Default>(
         &self,
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
         let signal = leto_view1_cow(&input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.output_len()];
-        T::forward_slice_into(self, &signal, &mut output, profile)?;
-        Ok(leto_array1_from_vec(output))
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([self.output_len()]);
+        T::forward_slice_into(
+            self,
+            &signal,
+            output
+                .as_slice_mut()
+                .expect("CZT typed Mnemosyne output must be contiguous"),
+            profile,
+        )?;
+        Ok(output)
     }
 
     /// In-place forward CZT.
@@ -299,9 +325,17 @@ impl CztPlan {
         spectrum: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
         let spectrum = leto_view1_cow(&spectrum);
-        let mut output = vec![Complex64::new(0.0, 0.0); self.input_len()];
-        self.inverse_complex64_slice_into(&spectrum, &mut output)?;
-        Ok(leto_array1_from_vec(output))
+        let mut output =
+            leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
+                self.input_len()
+            ]);
+        self.inverse_complex64_slice_into(
+            &spectrum,
+            output
+                .as_slice_mut()
+                .expect("CZT inverse Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     /// Inverse CZT over contiguous Complex64 slices.
@@ -336,14 +370,22 @@ impl CztPlan {
     }
 
     /// Inverse CZT over a typed Leto complex-storage spectrum view.
-    pub fn inverse_leto_typed<T: CztStorage>(
+    pub fn inverse_leto_typed<T: CztStorage + Default>(
         &self,
         spectrum: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
         let spectrum = leto_view1_cow(&spectrum);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.input_len()];
-        T::inverse_slice_into(self, &spectrum, &mut output, profile)?;
-        Ok(leto_array1_from_vec(output))
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([self.input_len()]);
+        T::inverse_slice_into(
+            self,
+            &spectrum,
+            output
+                .as_slice_mut()
+                .expect("CZT typed inverse Mnemosyne output must be contiguous"),
+            profile,
+        )?;
+        Ok(output)
     }
 }

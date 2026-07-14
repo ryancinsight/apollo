@@ -308,9 +308,11 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-dctdst-wgpu` now validates real 1D DCT-II, DCT-III, DST-II, and
   DST-III forward and inverse execution against the owning CPU crate and
   reports full DCT/DST support for that implemented `f32` kernel surface.
-- `apollo-czt-wgpu` now validates direct complex forward CZT execution against
-  the owning CPU crate's direct reference kernel and reports forward-only
-  support for the implemented `f32` complex surface.
+- `apollo-czt --features wgpu` validates Hephaestus-authored direct complex
+  forward CZT execution against the owning CPU reference and the exact unit
+  impulse oracle, validates the square-plan adjoint inverse by a DFT roundtrip,
+  and reports forward/inverse support for the implemented `f32` complex
+  surface. Leto outputs download directly into Mnemosyne-backed storage.
 - `apollo-gft-wgpu` now validates forward and inverse graph Fourier basis
   execution against the owning CPU crate and reports support for the
   implemented `f32` real basis surface.

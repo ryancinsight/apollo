@@ -28,9 +28,15 @@
   nextest cases. Focused warning-denied Clippy, rustdoc, doctest,
   provider-audit, locked metadata, and API classification gates pass. No
   runtime performance claim is made.
-- Residual: 17 transform manifests and 53 Rust source files still own direct
-  WGPU dependencies or calls. The next bounded migration is `apollo-czt`; the
-  wrapper crate is deleted only after its final consumer is migrated.
+- Performed: `apollo-czt` 0.4.0 now consumes the Hephaestus device and authored
+  kernel contracts directly. CZT Leto results now compute/download directly
+  into Mnemosyne storage, and the direct `N×M` gate selects explicit Moirai
+  parallel scheduling while retaining Hermes row reductions. Compile-time
+  provider ownership, 44 focused CZT cases, and 1,026/1,026 workspace nextest
+  cases pass, including real-device CPU differential execution. Direct-WGPU
+  residuals are now 16 transform manifests and 51 source files. The wrapper
+  crate is deleted only after its final consumer is migrated. No runtime
+  performance claim is made.
 
 ## Release 0.15.0 eligibility [major]
 

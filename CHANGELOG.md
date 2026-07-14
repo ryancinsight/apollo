@@ -10,6 +10,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-czt` 0.4.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `CztWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Replace
+  `apollo_wgpu_helpers::WgpuDevice` construction with the Hephaestus device and
+  remove error propagation from the infallible wrapper constructor. Custom
+  `CztStorage` implementations must provide the explicit `Complex32`
+  accelerator conversion methods; typed Leto-returning methods additionally
+  require `Default` at their allocation use sites. Remove requests for the
+  deleted no-op `parallel` and `mnemosyne-memory` features.
 - [major] `apollo-fwht` 0.3.0 migrates its concrete WGPU implementation to the
   Hephaestus authored-kernel seam. `FwhtWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
@@ -19,6 +29,21 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] CZT forward and adjoint-inverse execution now uses Hephaestus typed
+  buffers, ZST `KernelInterface`/`KernelSource` descriptors, prepared dispatch,
+  and provider-owned transfer. Leto remains the host array/view boundary; the
+  crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`. Caller-owned forward/inverse entry points download
+  directly into Mnemosyne-backed Leto storage; typed bridge buffers reuse
+  Mnemosyne thread-local scratch.
+- [patch] CZT CPU Leto return paths now allocate Mnemosyne-backed arrays first
+  and compute directly into their contiguous slices, removing one temporary
+  vector allocation and one full output copy per call.
+- [patch] Direct CZT uses explicit Moirai `Parallel` scheduling after its
+  existing `N×M` analytical work gate. Expensive transforms with fewer than
+  1,024 outputs no longer fall back through the output-length-only adaptive
+  policy; Hermes row reductions and per-worker Mnemosyne scratch remain the
+  canonical kernel path.
 - [arch] FWHT butterfly and inverse-scale execution now uses Hephaestus typed
   buffers, ZST `KernelInterface`/`KernelSource` descriptors, cached pipeline
   preparation, and one ordered command stream. Leto remains the host

@@ -81,23 +81,21 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "apollo-czt"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "apollo-fft",
- "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
  "eunomia",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "pollster",
  "proptest",
  "serde",
  "thiserror 2.0.18",
- "wgpu",
 ]
 
 [[package]]
@@ -1183,7 +1181,7 @@ version = "0.13.0"
 dependencies = [
  "bytemuck",
  "leto",
- "themis",
+ "themis 0.10.0",
  "thiserror 2.0.18",
 ]
 
@@ -1200,7 +1198,7 @@ dependencies = [
  "moirai-gpu",
  "moirai-sync",
  "num-complex",
- "themis",
+ "themis 0.10.0",
  "wgpu",
  "windows 0.62.2",
 ]
@@ -1215,7 +1213,7 @@ dependencies = [
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1227,7 +1225,7 @@ dependencies = [
  "half",
  "mnemosyne",
  "rkyv",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1366,7 +1364,7 @@ dependencies = [
  "hermes-simd",
  "leto",
  "moirai",
- "themis",
+ "themis 0.10.0",
  "thiserror 2.0.18",
 ]
 
@@ -1460,7 +1458,7 @@ dependencies = [
  "eunomia",
  "mnemosyne-backend",
  "mnemosyne-core",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1504,7 +1502,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1518,7 +1516,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -1590,7 +1588,7 @@ dependencies = [
  "mnemosyne-core",
  "moirai-core",
  "moirai-utils",
- "themis",
+ "themis 0.10.0",
 ]
 
 [[package]]
@@ -1604,7 +1602,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis 0.10.0",
  "thiserror 1.0.69",
 ]
 
@@ -1638,7 +1636,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis 0.10.0",
 ]
 
 [[package]]
@@ -2559,6 +2557,14 @@ dependencies = [
 [[package]]
 name = "themis"
 version = "0.9.17"
+source = "git+https://github.com/ryancinsight/themis?rev=6140468c79279ec8f112641ea7422cef4688c7f6#6140468c79279ec8f112641ea7422cef4688c7f6"
+dependencies = [
+ "melinoe",
+]
+
+[[package]]
+name = "themis"
+version = "0.10.0"
 dependencies = [
  "melinoe",
 ]

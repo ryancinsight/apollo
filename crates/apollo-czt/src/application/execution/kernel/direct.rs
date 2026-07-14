@@ -2,7 +2,7 @@ use crate::domain::contracts::error::CztError;
 use eunomia::Complex64;
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
-use moirai::ParallelSliceMut;
+use moirai::{enumerate_mut_with, Parallel};
 
 /// Below this O(NM) operation count, serial loops avoid scheduling overhead.
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
@@ -40,10 +40,9 @@ pub(crate) fn czt_direct_forward_slice_into(
     if input.is_empty() || output.is_empty() {
         return Err(CztError::EmptyLength);
     }
-    let work_items = input.len().saturating_mul(output.len());
-    if work_items >= DIRECT_PAR_OP_THRESHOLD {
+    if should_parallelize_direct(input.len(), output.len()) {
         let input_lanes = interleaved_lanes(input);
-        output.par_mut().enumerate(|k, slot| {
+        enumerate_mut_with::<Parallel, _, _>(output, |k, slot| {
             *slot = czt_direct_bin_hermes(input_lanes, k, a, w);
         });
     } else {
@@ -52,6 +51,11 @@ pub(crate) fn czt_direct_forward_slice_into(
         });
     }
     Ok(())
+}
+
+#[inline]
+const fn should_parallelize_direct(input_len: usize, output_len: usize) -> bool {
+    output_len > 1 && input_len.saturating_mul(output_len) >= DIRECT_PAR_OP_THRESHOLD
 }
 
 #[inline]
@@ -120,6 +124,14 @@ mod tests {
             assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-12);
             assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-12);
         }
+    }
+
+    #[test]
+    fn direct_parallel_gate_tracks_total_work_not_output_length() {
+        assert!(should_parallelize_direct(128, 128));
+        assert!(should_parallelize_direct(16_384, 2));
+        assert!(!should_parallelize_direct(16_383, 1));
+        assert!(!should_parallelize_direct(16_384, 1));
     }
 
     #[test]

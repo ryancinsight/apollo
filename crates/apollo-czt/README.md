@@ -15,6 +15,13 @@ The application plan is the single source of truth for transform lengths,
 spiral parameters, chirp factors, the convolution kernel, and the backing
 Apollo FFT plan.
 
+Leto owns host arrays and strided views. Mnemosyne owns reusable CPU/GPU bridge
+scratch and Leto result storage. Hermes supplies runtime-selected SIMD complex
+row reductions, while Moirai schedules direct rows and Bluestein buffer stages.
+Under the `wgpu` feature, Apollo retains the CZT WGSL formulas and Hephaestus
+owns typed device buffers, kernel preparation, command streams, submission,
+synchronization, and transfers; `apollo-czt` has no direct WGPU dependency.
+
 ## Precision Contract
 
 `forward_typed_into` supports:
@@ -71,6 +78,12 @@ The crate validates:
   allocating fast path within analytically derived storage bounds
 - inverse roundtrip at DFT parameters, general `A` offset, non-unit `W` spacing
 - inverse rejects non-square plans and wrong-length spectrum inputs
+- Hephaestus forward execution matches the CPU direct formula and the exact
+  unit-impulse oracle when a WGPU device is available
+- Hephaestus DFT-parameter forward/inverse execution satisfies the derived
+  `f32` roundtrip bound
+- Leto contiguous, strided, typed, and inverse boundaries preserve values while
+  computing or downloading directly into Mnemosyne-backed output storage
 
 Production CZT code depends on Apollo-owned FFT kernels. External FFT engines
 belong only in `apollo-validation`.

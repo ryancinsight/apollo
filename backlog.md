@@ -62,16 +62,17 @@ Remaining replacement work:
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
-    already shared. `apollo-fwht` is complete; 17 transform crates remain.
+    already shared. `apollo-fwht` and `apollo-czt` are complete; 16 transform
+    crates remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-14; in-flight scope `crates/apollo-czt`,
-  workspace dependency metadata, and matching PM artifacts; FWHT scope complete.
-  The first slice is complete: FWHT retains Leto host arrays and
+  owner Codex; last-update 2026-07-14; next scope `crates/apollo-dht`, workspace
+  dependency metadata, and matching PM artifacts; FWHT and CZT scopes complete.
+  The first two slices are complete: FWHT and CZT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
@@ -80,7 +81,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 18 consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 16 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
@@ -99,13 +100,13 @@ Remaining replacement work:
   live in `apollo-fft::application::utilities::leto_interop` (SRP violation —
   apollo-fft is a transform crate doubling as a shared utility lib), **17** other
   transform crates reach into `apollo_fft::…::leto_interop` (wrong dependency
-  direction: transform→transform), and they wrap it in **32** redundant per-crate
-  `leto_view1_cow`-style forwarders (apollo-czt defines that forwarder twice).
+  direction: transform→transform), and they wrap it in **31** redundant per-crate
+  `leto_view1_cow`-style forwarders after CZT consolidated its duplicate.
   Plan: move the canonical, **rank-polymorphic** helpers (`view_cow<…,const N>`,
   `try_dense_from_contiguous<T,S,const N>`, `try_array1_from_slice`,
   `leto_array1_from_vec`) into the shared crate; every transform (incl. apollo-fft)
   depends on it; delete the 32 forwarders and call the shared SSOT directly.
-  Net: ~32 duplicate fns → one generic set; one inward dependency edge per crate.
+  Net: ~31 duplicate fns → one generic set; one inward dependency edge per crate.
   Sequencing note: the helper bodies are being rewritten by the in-flight
   num_complex/ndarray→leto migration (branch `refactor/apollo-fft-eunomia`), so do
   D7 **after** that lands to avoid editing `leto_interop`'s home on two branches.

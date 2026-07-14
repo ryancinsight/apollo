@@ -12,6 +12,13 @@ mod tests {
         Complex32 as GpuComplex32, CztWgpuBackend, CztWgpuPlan, WgpuCapabilities, WgpuError,
     };
 
+    // Each direct term performs two polar reconstructions and complex
+    // products. Budgeting 512 eps per term covers those elementary operations;
+    // the four-term differential therefore carries 4 * 2 * 512 eps.
+    const DIRECT_DIFFERENTIAL_BOUND: f64 = 4096.0 * f32::EPSILON as f64;
+    // The eight-point DFT roundtrip applies two direct transforms.
+    const DFT_ROUNDTRIP_BOUND: f32 = 8192.0 * f32::EPSILON;
+
     #[test]
     fn capabilities_reflect_forward_inverse_kernel_surface() {
         let capabilities = WgpuCapabilities::forward_inverse(true);
@@ -39,17 +46,6 @@ mod tests {
         assert_eq!(plan.w(), GpuComplex32::new(0.9, -0.25));
         assert!(!plan.is_empty());
         assert!(CztWgpuPlan::new(0, 64, [0, 0], [0, 0]).is_empty());
-    }
-
-    #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
-        assert_eq!(
-            err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
-        );
     }
 
     #[test]
@@ -98,9 +94,27 @@ mod tests {
 
             assert_eq!(gpu.len(), cpu.size());
             for (actual, expected) in gpu.iter().zip(cpu.iter()) {
-                assert!((f64::from(actual.re) - expected.re).abs() < 5.0e-4);
-                assert!((f64::from(actual.im) - expected.im).abs() < 5.0e-4);
+                assert!((f64::from(actual.re) - expected.re).abs() < DIRECT_DIFFERENTIAL_BOUND);
+                assert!((f64::from(actual.im) - expected.im).abs() < DIRECT_DIFFERENTIAL_BOUND);
             }
+        }
+
+        // 2b. Unit impulse is an exact oracle for every finite non-zero spiral:
+        // only n=0 contributes, so X[k] = 1 for every k.
+        {
+            let a32 = Complex32::new(0.95, 0.1);
+            let w32 = Complex32::from_polar(1.0, -std::f32::consts::TAU / 9.0);
+            let input = [
+                Complex32::new(1.0, 0.0),
+                Complex32::new(0.0, 0.0),
+                Complex32::new(0.0, 0.0),
+                Complex32::new(0.0, 0.0),
+            ];
+            let plan = backend.plan(input.len(), 7, a32, w32);
+            let actual = backend
+                .execute_forward(&plan, &input)
+                .expect("impulse forward");
+            assert_eq!(actual, vec![Complex32::new(1.0, 0.0); 7]);
         }
 
         // 3. typed_mixed_storage_matches_represented_f32_execution
@@ -249,7 +263,7 @@ mod tests {
                     &mut out,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
         // 8. rejects_invalid_lengths_and_parameters_before_dispatch
@@ -270,13 +284,34 @@ mod tests {
                     &[Complex32::new(0.0, 0.0); 4],
                 )
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
-                    actual: 4,
+                    actual: 4
                 }
+            ));
+
+            let plan = CztWgpuPlan::new(
+                4,
+                5,
+                [1.0_f32.to_bits(), 0.0_f32.to_bits()],
+                [1.0_f32.to_bits(), 0.0_f32.to_bits()],
             );
+            let output_err = backend
+                .execute_forward_into(
+                    &plan,
+                    &[Complex32::new(0.0, 0.0); 4],
+                    &mut [Complex32::new(0.0, 0.0); 4],
+                )
+                .expect_err("output length mismatch must fail");
+            assert!(matches!(
+                output_err,
+                WgpuError::LengthMismatch {
+                    expected: 5,
+                    actual: 4
+                }
+            ));
 
             let invalid_param_err = backend
                 .execute_forward(
@@ -311,8 +346,14 @@ mod tests {
             for (i, (rec, orig)) in recovered.iter().zip(input.iter()).enumerate() {
                 let re_err = (rec.re - orig.re).abs();
                 let im_err = (rec.im - orig.im).abs();
-                assert!(re_err < 5.0e-4, "sample {i} re: err={re_err:.3e}");
-                assert!(im_err < 5.0e-4, "sample {i} im: err={im_err:.3e}");
+                assert!(
+                    re_err < DFT_ROUNDTRIP_BOUND,
+                    "sample {i} re: err={re_err:.3e}"
+                );
+                assert!(
+                    im_err < DFT_ROUNDTRIP_BOUND,
+                    "sample {i} im: err={im_err:.3e}"
+                );
             }
         }
 
