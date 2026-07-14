@@ -1,5 +1,24 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: FWHT [arch]
+
+- Target version: `apollo-fwht` 0.3.0
+- Phase: Execution
+- [x] Audit FWHT's raw-WGPU boundary against Hephaestus's typed
+  `ComputeDevice`/`KernelDevice` contracts and record ADR 0003.
+- [ ] Encode butterfly and inverse-scale kernels as ZST kernel interfaces with
+  dialect-specific source implementations.
+- [ ] Replace raw buffers, pipelines, bind groups, encoders, queues, and public
+  device accessors with Hephaestus typed preparation and dispatch.
+- [ ] Delete `apollo-fwht`'s direct `wgpu`, `pollster`, and
+  `apollo-wgpu-helpers` dependency edges and verify no raw-WGPU source remains
+  in the FWHT bounded context.
+- [ ] Pass focused format, warning-denied Clippy, nextest, doctest, rustdoc,
+  provider-audit, locked metadata, and API classification gates; synchronize
+  changelog and residual inventory.
+- Evidence tier at claim: source and type-contract audit only; execution
+  evidence is pending implementation.
+
 ## Release 0.15.0 WGPU 30 integration [major]
 
 - Target version: 0.15.0

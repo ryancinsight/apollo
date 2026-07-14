@@ -1,5 +1,25 @@
 # Apollo Gap Audit
 
+## Provider-native GPU kernel migration [arch]
+
+- Architecture finding: 18 Apollo transform manifests depend directly on
+  `wgpu`, and 55 Apollo source files own raw WGPU types or calls. The shared
+  `apollo-wgpu-helpers` crate delegates device acquisition to Hephaestus but
+  re-exposes raw device, queue, and buffer types, so the current graph is
+  version-aligned rather than dependency-inverted.
+- Provider capability finding: Hephaestus already owns backend-neutral typed
+  allocation and transfer (`ComputeDevice`), authored kernel contracts
+  (`KernelInterface`/`KernelSource`), typed bindings and prepared dispatch
+  (`KernelDevice`), and launch grids (`DispatchGrid`). Apollo needs no local
+  wrapper or new upstream runtime abstraction.
+- Decision: migrate one complete transform bounded context at a time. FWHT is
+  first because one in-place typed buffer and two ZST kernel-source types cover
+  its ordered radix-2 stage sequence, while `H_n² = nI` supplies an independent
+  algebraic oracle. Leto remains the host array/view boundary; Apollo retains
+  transform mathematics; Hephaestus owns device mechanics. See ADR 0003.
+- Evidence tier: source inventory and compile-time contract inspection. No
+  migration execution claim is made before the focused gates pass.
+
 ## Release 0.15.0 eligibility [major]
 
 - Provider ABI finding: Hephaestus 0.13.0 now owns WGPU 30, so Apollo advances

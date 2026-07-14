@@ -59,15 +59,23 @@ Remaining replacement work:
   `coeus-autograd` consuming Apollo one-way (cycle broken).
 - [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
   through moirai.
-- [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0001):
-  - [x] Re-base the `-wgpu` device plumbing onto `hephaestus-wgpu` (re-homes device/buffer/queue/pipeline acquisition, keeping Apollo WGSL kernels).
+- [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
+  - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
+    authored-kernel interfaces, and command streams. Device acquisition is
+    already shared, but 18 transform crates still own raw WGPU mechanics.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
-- [ ] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  it no longer fits the "apollo on leto + hephaestus backends" architecture, it
+- [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
+  owner Codex; last-update 2026-07-13; in-flight scope
+  `crates/apollo-fwht`, workspace dependency metadata, ADR 0003, and matching PM
+  artifacts. The first slice is complete when FWHT retains Leto host arrays and
+  Apollo-owned transform source while all device, typed-buffer, pipeline,
+  binding, dispatch, and transfer mechanics route through Hephaestus contracts
+  with no direct `wgpu` or helper dependency. The wrapper no longer fits the
+  "Apollo on Leto and Hephaestus backends" architecture: it
   is a redundant indirection over `hephaestus_wgpu` (`pub use hephaestus_wgpu`,
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
