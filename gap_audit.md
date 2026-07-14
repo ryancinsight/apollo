@@ -51,6 +51,19 @@
   warning-denied rustdoc, provider-audit, locked metadata, and API
   classification. Direct-WGPU residuals are now 15 transform manifests and 49
   source files. No runtime performance claim is made.
+- Performed: `apollo-dctdst` 0.3.0 now uses Hephaestus typed buffers,
+  `KernelInterface`/`KernelSource` ZST descriptors, prepared dispatch, and a
+  provider command stream for all WGPU execution. Apollo retains only the
+  transform equations, the inverse-pair theorem, and CPU/Leto conversions.
+  The manifest and source scan finds no direct `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers` edge in this bounded context.
+- Evidence tier: compile-time typed binding ownership and a 32-byte parameter
+  layout assertion; 57 value-semantic nextest cases including real-device CPU
+  differential execution; warning-denied Clippy, doctest, and rustdoc. No
+  machine-checked proof or runtime performance claim is made.
+- Residual: `gpu/verification.rs` is 800 lines. Its split is sequenced in D8
+  with the shared verification-harness consolidation; it must not introduce a
+  parallel transform implementation.
 
 ## Release 0.15.0 eligibility [major]
 

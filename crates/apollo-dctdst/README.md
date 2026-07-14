@@ -16,10 +16,21 @@ src/
 kind. Direct kernels remain the authoritative production implementation until a
 derived FFT acceleration is proven equivalent.
 
-Typed caller-owned paths support high-accuracy `f64`, low-precision `f32`, and
-mixed `f16` storage profiles. Lower storage profiles reuse the authoritative
-`f64` DCT/DST kernel and quantize once into caller-owned output, preserving one
-mathematical implementation across storage formats.
+CPU typed caller-owned paths support high-accuracy `f64`, low-precision `f32`,
+and mixed `f16` storage profiles. The Hephaestus WGPU boundary is concretely
+`f32`: it accepts native `f32` and explicit mixed `f16`/`f32` storage, while
+the type system excludes `f64` so high-accuracy inputs cannot silently narrow
+at accelerator dispatch.
+
+## Accelerator Contract
+
+The optional `wgpu` feature owns only orchestration at the CPU/GPU boundary.
+`DctGpuKernel` is a zero-sized Apollo kernel interface over Hephaestus typed
+buffers, command streams, and WGPU shader compilation. Apollo retains the
+eight transform formulas and normalization theorem; Leto owns host views and
+Mnemosyne-backed results; Hephaestus owns device allocation, transfer,
+pipeline preparation, binding validation, and submission. Separable 2D/3D
+passes ping-pong entirely on device and transfer the field only at the boundary.
 
 ## Mathematical Contract
 

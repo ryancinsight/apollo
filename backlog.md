@@ -62,24 +62,29 @@ Remaining replacement work:
 - [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
-    already shared. `apollo-fwht`, `apollo-czt`, and `apollo-dht` are complete;
-    15 transform crates remain.
+    already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`, and
+    `apollo-dctdst` are complete; 14 transform crates remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, and DHT.
-  - [/] D6-DCTDST: owner Codex; last-update 2026-07-14; claimed scope
-    `crates/apollo-dctdst` only. Replace the obsolete wrapper boundary with
-    native Hephaestus typed-kernel dispatch, retain the DCT/DST mathematical
-    specification and Leto CPU boundary, and add value-semantic differential
-    and analytical-oracle coverage before the slice can merge.
+  owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT, and
+  DCT/DST; GFT is in flight.
+  - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
+    boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
+    DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
+    array/view boundary. The source and manifest scan finds no direct `wgpu`,
+    `pollster`, or `apollo-wgpu-helpers` edge. Evidence: compile-time typed
+    bindings and parameter-layout assertion; 57 focused value-semantic tests,
+    including real-device CPU differential execution; warning-denied Clippy,
+    doctest, and rustdoc. The 800-line GPU verification suite is a tracked D8
+    harness-structure residual, not a second algorithm implementation.
   - [/] D6-GFT: owner Codex root; last-update 2026-07-14; claimed scope
     `crates/apollo-gft` only. Migrate its graph-basis transform to Hephaestus
-    typed dispatch while the peer-owned DCT/DST scope proceeds independently.
-  The first three slices are complete: FWHT, CZT, and DHT retain Leto host arrays and
+    typed dispatch.
+  The first four slices are complete: FWHT, CZT, DHT, and DCT/DST retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
@@ -88,7 +93,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 15 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 14 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
