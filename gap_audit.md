@@ -22,6 +22,41 @@
   value-semantic real-device evidence. No machine-checked proof is performed.
   Residual D6 scope: 10 crates.
 
+## FrFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced the direct FrFT and Candan--Gr\u00fcnbaum unitary FrFT
+  raw device pipelines, bind groups, encoders, queues, and transfer mechanics
+  with typed Hephaestus ZST kernel descriptors and ordered command streams.
+  The direct kernel owns two typed `Complex32` bindings; the unitary kernel
+  owns typed input, column-major Leto eigenbasis, coefficient, and output
+  bindings. Leto remains the host-view boundary and Mnemosyne owns returned
+  arrays.
+- Mathematical contract: the direct kernel preserves the documented
+  centered-coordinate rotation modes. The unitary path evaluates
+  `V diag(exp(-i a k pi / 2)) V^T`; `V^T V = I` and unit-modulus phases prove
+  norm preservation and inverse order negation in exact arithmetic. Three
+  ordered stream passes preserve the projection, phase, reconstruction data
+  dependency.
+- Type contract: sealed `FrftGpuStorage` admits `Complex32` and `[f16; 2]`
+  only. `Complex64` cannot enter the concrete `Complex32` accelerator API, so
+  silent narrowing is a compile-time error.
+- Verification: `cargo fmt --all -- --check`; `cargo check -p apollo-frft
+  --all-features --locked`; `cargo clippy -p apollo-frft --all-targets
+  --all-features -- -D warnings`; `cargo nextest run -p apollo-frft
+  --all-features` (40 passed, including real-device dispatch); `cargo test -p
+  apollo-frft --doc --all-features` (the `Complex64` compile-fail contract
+  passed); `cargo doc -p apollo-frft --all-features --no-deps`; locked
+  metadata; and `cargo run -p xtask -- provider-audit`. The immediate-parent
+  semver baseline classifies 0.2.0-to-0.3.0 as a major change with no required
+  semver update. `origin/main` cannot be used as the baseline because its
+  FrFT manifest names a missing workspace-local Hephaestus path.
+- Evidence tier: type-level binding/layout and storage exclusion, then 40
+  value-semantic nextest cases including real-device direct/unitary evidence.
+  No machine-checked proof is performed.
+- Residual: D6 has 9 transform crates remaining: FFT, Hilbert, Mellin, NUFFT,
+  Radon, SDFT, SFT, SHT, and STFT. FrFT contains no direct raw-WGPU mechanics,
+  pollster dependency, or `apollo-wgpu-helpers` edge.
+
 ## QFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct WGPU pipeline, binding, encoder, queue, and

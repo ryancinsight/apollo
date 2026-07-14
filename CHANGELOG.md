@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-frft` 0.3.0 migrates direct and Candan--Gr\u00fcnbaum unitary
+  acceleration to the Hephaestus authored-kernel seam. `FrftWgpuBackend::new`
+  accepts `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device
+  and queue accessors are removed. GPU typed APIs require sealed
+  `FrftGpuStorage`, admitting `Complex32` and `[f16; 2]` while rejecting silent
+  `Complex64` narrowing.
 - [major] `apollo-wavelet` 0.3.0 migrates Haar acceleration to the Hephaestus
   authored-kernel seam. `WaveletWgpuBackend::new` accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
@@ -67,6 +73,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] FrFT direct and unitary dispatch now use typed Hephaestus bindings,
+  ZST authored-kernel descriptors, and ordered command streams. Leto remains
+  the host-array boundary, Mnemosyne owns returned storage, and the crate no
+  longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
 - [arch] Wavelet multilevel Haar dispatch now uses typed Hephaestus analysis
   and synthesis kernels, provider-owned prefix transfers, and Leto/Mnemosyne
   host boundaries. Apollo no longer depends directly on `wgpu`, `pollster`, or

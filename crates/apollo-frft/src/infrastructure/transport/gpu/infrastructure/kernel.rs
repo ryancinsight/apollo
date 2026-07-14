@@ -1,204 +1,134 @@
-//! GPU execution kernel for the discrete fractional Fourier transform.
+//! Hephaestus execution kernel for the direct fractional Fourier transform.
 //!
-//! Evaluates the direct O(N^2) FrFT on centred coordinates.
-//! Five dispatch modes cover integer-order degenerate cases and general chirp.
+//! The direct kernel evaluates the centred-coordinate FrFT. Integer quarter
+//! rotations select their exact identity, DFT, reversal, or inverse-DFT
+//! specializations; non-integer orders select the chirp formula. The CPU
+//! differential suite is the executable evidence tier for the concrete
+//! `Complex32` accelerator contract.
+
+use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
-use wgpu::util::DeviceExt;
+use hephaestus_core::{
+    Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
+    Wgsl,
+};
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
 
-const WORKGROUP_SIZE: u32 = 64;
+const WORKGROUP_SIZE: usize = 64;
+const FRFT_SOURCE: &str = include_str!("shaders/frft.wgsl");
 
-/// Uniform parameter block (32 bytes). Fields match WGSL FrftParams exactly.
+/// Exact direct-FrFT mode selected before accelerator dispatch.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FrftMode {
+    /// Identity at orders congruent to zero modulo four.
+    Identity = 0,
+    /// Centered unitary DFT at orders congruent to one modulo four.
+    CenteredDft = 1,
+    /// Sample reversal at orders congruent to two modulo four.
+    Reversal = 2,
+    /// Centered unitary inverse DFT at orders congruent to three modulo four.
+    CenteredInverseDft = 3,
+    /// General centered-coordinate chirp kernel.
+    Chirp = 4,
+}
+
+/// Uniform parameters matching WGSL `FrftParams`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct FrftParams {
+pub struct FrftParams {
     len: u32,
     mode: u32,
     cot: f32,
     csc: f32,
     scale_re: f32,
     scale_im: f32,
-    _padding: [u32; 2],
+    padding: [u32; 2],
 }
 
-/// Cached WGPU pipeline and layout state for repeated FrFT dispatches.
-#[derive(Debug)]
-pub struct FrftGpuKernel {
-    bind_group_layout: wgpu::BindGroupLayout,
-    params_buffer: wgpu::Buffer,
-    pipeline: wgpu::ComputePipeline,
-}
+const _: () = assert!(core::mem::size_of::<FrftParams>() == 32);
 
-impl FrftGpuKernel {
-    /// Compile the FrFT shader and allocate the uniform parameter buffer.
-    #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-frft-wgpu shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/frft.wgsl").into()),
-        });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-frft-wgpu bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            std::num::NonZeroU64::new(std::mem::size_of::<FrftParams>() as u64)
-                                .expect("nonzero uniform size"),
-                        ),
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-frft-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-frft-wgpu pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("frft_transform"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("apollo-frft-wgpu params"),
-            contents: bytemuck::bytes_of(&FrftParams {
-                len: 0,
-                mode: 0,
-                cot: 0.0,
-                csc: 0.0,
-                scale_re: 1.0,
-                scale_im: 0.0,
-                _padding: [0; 2],
-            }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        Self {
-            bind_group_layout,
-            params_buffer,
-            pipeline,
-        }
-    }
-
-    /// Execute one FrFT dispatch on the GPU.
-    ///
-    /// mode: 0=identity, 1=centred DFT, 2=reversal, 3=centred IDFT, 4=general.
-    /// cot/csc/scale_re/scale_im are used only for mode 4.
-    pub fn execute(
-        &self,
-        device: &WgpuDevice,
-        input: &[Complex32],
+impl FrftParams {
+    fn new(
         len: usize,
-        mode: u32,
+        mode: FrftMode,
         cot: f32,
         csc: f32,
         scale_re: f32,
         scale_im: f32,
-    ) -> WgpuResult<Vec<Complex32>> {
-        let hep_device = device.hephaestus();
-        let input_buf = hep_device
-            .upload(input)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        let output_buf =
-            hep_device
-                .alloc_zeroed::<Complex32>(len)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        device.queue().write_buffer(
-            &self.params_buffer,
-            0,
-            bytemuck::bytes_of(&FrftParams {
-                len: len as u32,
-                mode,
-                cot,
-                csc,
-                scale_re,
-                scale_im,
-                _padding: [0; 2],
-            }),
-        );
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-frft-wgpu bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: output_buf.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-        let mut encoder = device
-            .inner()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-frft-wgpu encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("apollo-frft-wgpu pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(dispatch_count(len as u32), 1, 1);
-        }
-        device.queue().submit(std::iter::once(encoder.finish()));
-
-        let mut output = vec![Complex32::new(0.0, 0.0); len];
-        hep_device
-            .download(&output_buf, &mut output)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        Ok(output)
+    ) -> WgpuResult<Self> {
+        Ok(Self {
+            len: u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
+                message: format!("transform length {len} exceeds the accelerator parameter range"),
+            })?,
+            mode: mode as u32,
+            cot,
+            csc,
+            scale_re,
+            scale_im,
+            padding: [0; 2],
+        })
     }
 }
 
-fn dispatch_count(items: u32) -> u32 {
-    items.div_ceil(WORKGROUP_SIZE)
+/// Typed Hephaestus interface for the direct FrFT kernel.
+pub(crate) struct FrftKernel;
+
+impl KernelInterface for FrftKernel {
+    type Params = FrftParams;
+
+    const LABEL: &'static str = "apollo-frft-transform";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<Complex32>(),
+        BindingDecl::read_write::<Complex32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl KernelSource<Wgsl> for FrftKernel {
+    const ENTRY: &'static str = "frft_transform";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(FRFT_SOURCE)
+    }
+}
+
+/// Zero-sized direct FrFT orchestration over a Hephaestus device.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FrftGpuKernel;
+
+impl FrftGpuKernel {
+    /// Execute one direct FrFT into caller-owned host storage.
+    pub(crate) fn execute_into<D>(
+        device: &D,
+        input: &[Complex32],
+        output: &mut [Complex32],
+        mode: FrftMode,
+        cot: f32,
+        csc: f32,
+        scale_re: f32,
+        scale_im: f32,
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        FrftKernel: KernelSource<D::Dialect>,
+    {
+        let input_buffer = device.upload(input)?;
+        let output_buffer = device.alloc_zeroed::<Complex32>(output.len())?;
+        let kernel = device.prepare(&FrftKernel)?;
+        let bindings = [
+            Binding::read(&input_buffer),
+            Binding::read_write(&output_buffer),
+        ];
+        let grid = DispatchGrid::covering_domain([output.len(), 1, 1], [WORKGROUP_SIZE, 1, 1])?;
+        let params = FrftParams::new(input.len(), mode, cot, csc, scale_re, scale_im)?;
+        let mut stream = device.stream()?;
+        stream.encode(&kernel, &bindings, &params, grid)?;
+        stream.submit()?;
+        device.download(&output_buffer, output)?;
+        Ok(())
+    }
 }

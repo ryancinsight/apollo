@@ -11,7 +11,7 @@ pub struct WgpuCapabilities {
     pub supports_forward: bool,
     /// Whether inverse or adjoint transform execution is implemented.
     pub supports_inverse: bool,
-    /// Whether mixed-precision (f16/f32/f64) typed storage dispatch is supported.
+    /// Whether native `Complex32` and explicit `[f16; 2]` storage dispatch is supported.
     pub supports_mixed_precision: bool,
     /// Default precision profile for GPU execution.
     pub default_precision_profile: PrecisionProfile,

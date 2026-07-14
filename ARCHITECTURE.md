@@ -64,7 +64,7 @@ The table below is the authoritative record of per-crate precision support. Each
 | apollo-czt | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse CZT; f16 promoted at host boundary |
 | apollo-dctdst | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32 storage, f32 compute) | Mixed f16 host path present |
 | apollo-dht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
-| apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | f16 promoted at host boundary; UnitaryFrftGpuKernel |
+| apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Hephaestus typed direct/unitary kernels; Complex64 excluded from GPU |
 | apollo-fwht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-gft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-hilbert | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse analytic-mask; f16 promoted at boundary |
@@ -101,8 +101,9 @@ Its eigenvector basis V satisfies V^T V = I and eigenvectors are symmetric or an
 under index reversal. DFrFT_a(x) = V · diag(exp(−iakπ/2)) · V^T · x.
 
 The GPU backend (with the `wgpu` feature enabled) exposes `execute_unitary_forward` and `execute_unitary_inverse`
-via `UnitaryFrftGpuKernel`. V is precomputed on CPU (O(N³)) and uploaded as an f32 storage buffer.
-Three sequential GPU submissions execute the 3-pass algorithm with `device.poll` barriers between
-passes to guarantee cross-workgroup storage ordering.
+through a typed Hephaestus `UnitaryFrftKernel`. V is precomputed on CPU by Leto
+(O(N³)) and uploaded as a column-major `f32` storage buffer. One Hephaestus
+command stream encodes the projection, phase, and reconstruction as three
+ordered passes; stream boundaries provide the inter-pass dependency ordering.
 
 See `design_history_file/adr_unitary_frft.md` for the full algorithm selection record.

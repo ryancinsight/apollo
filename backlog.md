@@ -73,7 +73,7 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, and Wavelet; 10 transform crates remain.
+  DCT/DST, GFT, NTT, QFT, Wavelet, and FrFT; 9 transform crates remain.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
@@ -109,7 +109,16 @@ Remaining replacement work:
     pass without a wrapper or direct WGPU dependency. The committed consumer
     graph resolves Hephaestus `e527097`, Leto `7f216f1`, Mnemosyne `32b4a2a`,
     Moirai `8cd356c`, and Themis 0.10.0 without local overrides.
-  The first seven slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, and QFT retain Leto host arrays and
+  - [x] D6-FrFT: `apollo-frft` 0.3.0 replaces the direct and Candan--Gr\u00fcnbaum
+    unitary raw-device pipelines with typed Hephaestus kernels and ordered
+    command streams. Leto remains the host boundary, Mnemosyne owns returned
+    storage, and sealed `FrftGpuStorage` rejects `Complex64` before a concrete
+    `Complex32` accelerator dispatch. Acceptance: real-device direct CPU
+    differential, unitary identity/reversal/norm/roundtrip evidence, doctest,
+    warning-denied gates, provider audit, semver classification, and a source
+    scan with no direct `wgpu`, `pollster`, or helper edge.
+  The first nine slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
+  Wavelet, and FrFT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
@@ -118,7 +127,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 10 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 9 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus

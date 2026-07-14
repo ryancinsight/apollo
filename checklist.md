@@ -1,5 +1,22 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: FrFT [arch]
+
+- Target version: `apollo-frft` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU pipeline, binding, encoder, queue, and transfer
+  ownership in both direct and unitary FrFT paths with typed Hephaestus ZST
+  kernels and ordered command streams.
+- [x] Preserve the direct rotation contract and Candan--Gr\u00fcnbaum unitarity
+  theorem; retain Leto host views and Mnemosyne-backed outputs; seal concrete
+  GPU storage to `Complex32` and explicit `[f16; 2]` conversion.
+- [x] Verify real-device direct CPU differential and unitary
+  identity/reversal/norm/roundtrip laws, negative contracts, format,
+  warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and semver
+  classification; synchronize D6 residual count and changelog.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+
 ## Hephaestus kernel migration: Wavelet [arch]
 
 - Target version: `apollo-wavelet` 0.3.0
