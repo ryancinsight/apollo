@@ -1,5 +1,39 @@
 # Apollo Checklist
 
+## D8 NUFFT verification-tree normalization [major]
+
+- Target version: `apollo-nufft` 0.4.0 pre-1.0 breaking integration.
+- Phase: Closure
+- [x] Claim the 1,164-line NUFFT GPU verification monolith and inventory its
+  static capability, direct/fast Type-1/Type-2, dimensional, Leto, typed,
+  reusable-buffer, diagnostic, normalization, and rejection contracts.
+- [x] Move static metadata plus repeated device availability, tolerance, and
+  typed-error assertions into private leaves without altering device execution.
+- [x] Move direct Type-1 1D CPU differential, Leto, and represented-storage
+  contracts into one private leaf with its original derived tolerances.
+- [x] Move direct Type-2 1D rejection, CPU differential, strided Leto, and
+  represented-storage contracts into one private leaf with original values.
+- [x] Move direct Type-1 3D CPU differential, Leto shape boundary, and typed
+  storage contract into one private leaf with original tolerances.
+- [x] Move direct Type-2 3D mode-shape rejection, CPU differential, Leto, and
+  typed storage contracts into one private leaf with original values.
+- [x] Move reusable Type-1/Type-2 1D/3D capacity and input-length contracts
+  into a private leaf with the original error values.
+- [x] Partition every existing value-semantic contract into private operation
+  leaves, with one support leaf for repeated availability and assertion logic.
+- [x] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
+  finite-precision contracts with their existing derived tolerances.
+- [x] Address PR review: make the verification root test-only, remove the
+  obsolete public transport wrapper, and flatten fast-operation leaves so the
+  root is the sole test-compilation boundary.
+- [x] Remove the unused `wgpu_backend` forwarding module and public test-only
+  root verification module. Root accelerator exports remain the single native
+  migration target; ADR 0009 and the changelog record the pre-1.0 break.
+- [x] Verify the focused 73-case and all-feature workspace Nextest suites,
+  warning-denied diagnostics, package doctest/rustdoc, provider scan,
+  source-residue scan, and the documented pre-1.0 breaking SemVer
+  classification before publishing.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

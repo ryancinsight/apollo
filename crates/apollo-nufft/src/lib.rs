@@ -11,8 +11,8 @@ pub mod application;
 pub mod domain;
 /// Concrete NUFFT kernel primitives.
 pub mod infrastructure;
-/// Verification modules for crate-local invariants.
-pub mod verification;
+#[cfg(test)]
+mod verification;
 
 pub use application::execution::transform::dimension_1d::{
     nufft_type1_1d, nufft_type1_1d_fast, nufft_type2_1d, nufft_type2_1d_fast, NufftComplexStorage,
@@ -29,10 +29,5 @@ pub const DEFAULT_NUFFT_KERNEL_WIDTH: usize = 6;
 /// Default oversampling factor.
 pub const DEFAULT_NUFFT_OVERSAMPLING: usize = 2;
 
-/// GPU-accelerated backend using WGPU.
-#[cfg(feature = "wgpu")]
-pub mod wgpu_backend {
-    pub use crate::infrastructure::transport::gpu::*;
-}
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;

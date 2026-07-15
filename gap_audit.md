@@ -109,6 +109,42 @@
   remains provider-owned D8 work. This local split does not pre-empt the
   required Hephaestus provider contract.
 
+## NUFFT GPU verification-tree normalization [major]
+
+- Finding: the NUFFT transport has a 1,164-line verification monolith mixing
+  static capabilities, direct and fast Type-1/Type-2 contracts in 1D and 3D,
+  Leto and typed boundaries, reusable storage, diagnostics, normalization, and
+  typed errors.
+- Required resolution: split by operation family and dimensional concern while
+  preserving the direct adjoint theorem, its existing derived finite-precision
+  tolerances, and every device-present value-semantic contract. Shared
+  availability and comparison helpers remain private test support; they must
+  not become an Apollo transport abstraction.
+- Evidence required: focused and workspace nextest, warning-denied diagnostics,
+  provider audit, source-residue scans, and a documented pre-1.0 breaking
+  SemVer classification. The theorem remains a proof sketch with empirical
+  CPU-differential evidence, not a machine-checked proof.
+- Resolution: delete the monolith and its transitional aggregate `device.rs`;
+  retain metadata, reusable-storage, direct Type-1/Type-2 1D/3D, fast
+  Type-1/Type-2 1D/3D, and shared-support leaves. Shared 3D grid, positions,
+  type-1 values, and mode-field components have one support-leaf definition.
+  The transport now gates the whole tree under `cfg(test)`, so verification
+  does not leave a public release wrapper; fast leaves are flat test modules.
+  `apollo-nufft` 0.4.0 also removes its unused `wgpu_backend` forwarding
+  module and public root test module; root accelerator exports are the
+  migration target.
+- Evidence: 73/73 focused all-feature Nextest cases; all-feature workspace
+  check, Clippy, and Nextest; package doctest/rustdoc; `xtask provider-audit`;
+  source scans with no raw `wgpu`, `pollster`, `apollo-wgpu-helpers`,
+  `verification.rs`, or transitional verification `device.rs`; and SemVer
+  evidence that identifies the removed public module paths as the intentional
+  `apollo-nufft` 0.4.0 pre-1.0 break. Evidence remains empirical/type-level,
+  not a machine-checked theorem proof.
+- Residual risk: the now-private root theorem suite at
+  `crates/apollo-nufft/src/verification/mod.rs` remains 918 lines. D8-NUFFT-
+  root-verify is the next bounded structural scope; it must preserve every
+  analytical value and avoid a test helper or compatibility layer.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

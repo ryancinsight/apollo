@@ -333,6 +333,21 @@ Remaining replacement work:
   package doctest/rustdoc, provider audit, structural scans, and patch SemVer
   classification pass. The scope adds no Apollo-owned device abstraction or
   fallback path.
+  Fourth bounded NUFFT scope completed 2026-07-15 — partition the 1,164-line
+  GPU verification monolith into metadata, direct/fast Type-1/Type-2
+  dimensional leaves, reusable-buffer, and shared-support leaves (35–230
+  lines). The 73-case focused and all-feature workspace Nextest suites,
+  warning-denied diagnostics, package doctest/rustdoc, provider audit, source
+  scans, and documented `apollo-nufft` 0.4.0 pre-1.0 breaking SemVer
+  classification pass. The direct adjoint proof sketch and existing
+  finite-precision tolerances remain intact; the scope adds no Apollo-owned
+  abstraction or fallback path.
+  Next ready scope: [arch] D8-NUFFT-root-verify (status todo; owner Codex;
+  scope `crates/apollo-nufft/src/verification/`; last-update 2026-07-15;
+  acceptance: partition the 918-line root theorem suite into private
+  direct-identity, adjoint, kernel-width, and in-place-consistency leaves,
+  retain every exact reference value and derived tolerance, keep each leaf at
+  or below the structural target, and pass focused plus workspace Nextest).
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
