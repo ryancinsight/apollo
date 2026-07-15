@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: SDFT [arch]
+
+- Target version: `apollo-sdft` 0.3.0
+- Phase: Execution
+- [/] Replace direct sliding-DFT WGPU pipeline, binding, encoder, queue, and
+  transfer mechanics with a typed Hephaestus ZST and ordered command stream.
+- [ ] Preserve the direct-bin formula, Leto COW host boundary, Mnemosyne-backed
+  output, and concrete accelerator storage contract.
+- [ ] Verify real-device CPU differential, plan/storage negative contracts,
+  format, warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and
+  semver classification; update D6 artifacts.
+- Evidence tier planned: typed binding/layout and storage exclusion, then
+  value-semantic CPU differential evidence. No machine-checked proof is
+  planned.
+
 ## Hephaestus kernel migration: SFT [arch]
 
 - Target version: `apollo-sft` 0.3.0

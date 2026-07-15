@@ -90,6 +90,15 @@ Remaining replacement work:
     inverse execution, compile-fail storage exclusion, warning-denied Clippy,
     doctest, rustdoc, provider audit, immediate-parent semver classification,
     and source/manifest scan find no direct `wgpu`, `pollster`, or helper edge.
+  - [/] D6-SDFT [arch] (owner Codex, claimed 2026-07-14; scope
+    `crates/apollo-sdft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
+    entries): replace the direct sliding-DFT WGPU pipeline, binding, encoder,
+    queue, and transfer mechanics with a typed Hephaestus ZST and ordered
+    command stream. Preserve the direct-bin theorem, Leto COW host boundary,
+    Mnemosyne-backed output, and sealed concrete accelerator storage. Acceptance:
+    real-device CPU differential, plan/storage negative contracts, nextest,
+    doctest, warning-denied diagnostics, provider audit, semver classification,
+    and no direct `wgpu`, `pollster`, or helper edge.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
