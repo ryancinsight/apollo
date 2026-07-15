@@ -94,7 +94,10 @@
 - Active audit: native-f16 transport must request `ShaderF16` through the
   Hephaestus device-acquisition contract and use provider-owned typed buffers,
   descriptors, streams, and readback. Any missing provider capability belongs
-  in Hephaestus, not in an Apollo adapter.
+  in Hephaestus, not in an Apollo adapter. Hephaestus 0.14.0 now provides the
+  required-feature contract; Apollo temporarily pins its reviewed `196411e`
+  head pending [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
+  merge, then must remove the revision quarantine in the same consumer sweep.
 
 ## SHT Hephaestus command-stream migration [arch]
 

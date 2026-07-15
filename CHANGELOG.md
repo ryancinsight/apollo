@@ -18,6 +18,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   through typed Hephaestus descriptors and ordered command streams. Leto
   remains the host boundary; reusable Type-2 buffers now cover both the Fourier
   mode count and the configured sample capacity.
+- Apollo temporarily pins Hephaestus 0.14.0 at the reviewed required-feature
+  acquisition commit while its provider PR merges. The pin enables the native
+  f16 migration to request `ShaderF16` without a local WGPU or Pollster edge.
 
 ### Fixed
 

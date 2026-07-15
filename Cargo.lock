@@ -1137,8 +1137,8 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hephaestus-core"
-version = "0.13.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git?rev=e5270972ecb909659ce30e88dcdb85776729df46#e5270972ecb909659ce30e88dcdb85776729df46"
+version = "0.14.0"
+source = "git+https://github.com/ryancinsight/hephaestus.git?rev=196411e#196411e36b323ee2398282a23c67f4415d8858c8"
 dependencies = [
  "bytemuck",
  "leto",
@@ -1148,8 +1148,8 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.13.0"
-source = "git+https://github.com/ryancinsight/hephaestus.git?rev=e5270972ecb909659ce30e88dcdb85776729df46#e5270972ecb909659ce30e88dcdb85776729df46"
+version = "0.14.0"
+source = "git+https://github.com/ryancinsight/hephaestus.git?rev=196411e#196411e36b323ee2398282a23c67f4415d8858c8"
 dependencies = [
  "bytemuck",
  "hephaestus-core",

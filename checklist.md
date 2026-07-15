@@ -7,6 +7,9 @@
 - [/] Audit the native-f16 plan and the current Hephaestus capability surface;
   record whether typed f16 buffers, `ShaderF16` acquisition, descriptors,
   streams, and readback exist or require upstream ownership.
+- [x] Add the provider-owned required `DeviceFeature` acquisition capability
+  in Hephaestus 0.14.0 and temporarily pin its reviewed `196411e` head while
+  [PR 33](https://github.com/ryancinsight/hephaestus/pull/33) awaits merge.
 - [ ] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
   submission, and readback ownership with typed Hephaestus contracts while
   retaining WGSL `enable f16;` arithmetic and the documented forward bound.

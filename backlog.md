@@ -109,7 +109,11 @@ Remaining replacement work:
     Preserve its native f16 arithmetic and `ShaderF16` capability contract.
     Acceptance requires real-device radix/Bluestein f16 differential and
     roundtrip evidence plus a source/manifest scan with no direct `wgpu` or
-    `pollster` edge in `apollo-fft`.
+    `pollster` edge in `apollo-fft`. The temporary `196411e` provider pin
+    carries required `DeviceFeature` acquisition while
+    [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
+    awaits merge; remove the revision quarantine in the same consumer sweep
+    after its default-branch commit is available.
   - [x] D6-Radon [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-radon/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     ADR 0007, and D6 PM entries): `apollo-radon` 0.3.0 replaces direct WGPU
