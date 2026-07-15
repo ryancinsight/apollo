@@ -3,11 +3,12 @@
 ## DHT feature-boundary warning cleanup [patch]
 
 - Target version: `apollo-dht` 0.3.0; internal feature-boundary correction.
-- Phase: Execution
-- [/] Gate the live GPU-only zero-copy Leto view forwarder with the `wgpu`
+- Phase: Closure
+- [x] Gate the live GPU-only zero-copy Leto view forwarder with the `wgpu`
   feature so default builds do not compile an unreachable forwarding function.
-- [ ] Verify default and all-feature checks, warning-denied Clippy, and focused
-  value-semantic nextest coverage without deleting the GPU borrowed-view path.
+- [x] Verify default and all-feature checks, warning-denied Clippy, 30 default
+  and 34 all-feature nextest cases, the real-device suite, and final warning-
+  free workspace resolution without deleting the GPU borrowed-view path.
 
 ## Obsolete wrapper deletion: apollo-wgpu-helpers [arch]
 
@@ -21,9 +22,9 @@
 - [x] Verify `cargo fmt --all --check`; locked metadata; workspace resolution;
   provider audit and its six nextest contract tests; warning-denied `xtask`
   Clippy; the 44-case all-feature NUFFT suite including real-device execution;
-  and manifest/lockfile/source scans with no helper edge. The workspace check
-  exposes a separate pre-existing `apollo-dht::leto_view1_cow` dead-code
-  warning, which is the next cleanup increment rather than a deletion shim.
+  and manifest/lockfile/source scans with no helper edge. The separately
+  identified DHT feature-boundary warning is resolved in the next atomic
+  cleanup commit without introducing a deletion shim.
 
 ## Hephaestus kernel migration: NUFFT [arch]
 

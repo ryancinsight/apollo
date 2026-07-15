@@ -377,9 +377,10 @@
 - Deletion evidence: format, locked metadata, workspace resolution, provider
   audit, six `xtask` value-semantic contract cases, warning-denied `xtask`
   Clippy, and the 44-case all-feature NUFFT suite pass. The workspace check
-  exposes a DHT feature-boundary warning: the live GPU-only
-  `leto_view1_cow` forwarder compiles in default builds that omit its transport.
-  It is tracked as the next independent cleanup increment rather than hidden.
+  exposed a DHT feature-boundary warning; the live GPU-only `leto_view1_cow`
+  forwarder is now gated with its transport. DHT's default and all-feature
+  checks, warning-denied Clippy, 30/30 default and 34/34 all-feature nextest
+  cases, and the final workspace check pass.
 - Provider capability finding: Hephaestus already owns backend-neutral typed
   allocation and transfer (`ComputeDevice`), authored kernel contracts
   (`KernelInterface`/`KernelSource`), typed bindings and prepared dispatch

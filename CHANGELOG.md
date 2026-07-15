@@ -19,6 +19,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   remains the host boundary; reusable Type-2 buffers now cover both the Fourier
   mode count and the configured sample capacity.
 
+### Fixed
+
+- `apollo-dht` compiles its live zero-copy Leto view forwarder only with the
+  `wgpu` transport that consumes it. Default builds remain warning-clean, while
+  the GPU borrowed-view contract remains covered by the all-feature suite.
+
 ### Removed
 
 - The obsolete `apollo-wgpu-helpers` workspace crate is deleted. Its last
