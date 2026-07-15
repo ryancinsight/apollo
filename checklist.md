@@ -3,20 +3,22 @@
 ## Hephaestus kernel migration: SFT [arch]
 
 - Target version: `apollo-sft` 0.3.0
-- Phase: Execution
-- [/] Replace the direct DFT WGPU pipeline, binding, encoder, queue, and
+- Phase: Closure
+- [x] Replace the direct DFT WGPU pipeline, binding, encoder, queue, and
   transfer mechanics with one typed Hephaestus ZST descriptor and ordered
   command stream.
-- [ ] Preserve the direct-DFT inverse theorem, Leto COW boundaries,
+- [x] Preserve the direct-DFT inverse theorem, Leto COW boundaries,
   Mnemosyne-backed output, and deterministic sparse support selection; seal
-  concrete accelerator storage to `Complex32` and `[f16; 2]`.
-- [ ] Verify CPU differential and inverse reconstruction on a real device,
+  concrete accelerator storage to `Complex32` and `[f16; 2]`, and reject
+  non-representable `SparseSpectrum` values rather than silently narrowing;
+  provide `quantize_spectrum` as the explicit lossy boundary.
+- [x] Verify CPU differential and inverse reconstruction on a real device,
   negative storage/plan contracts, format, warning-denied Clippy, nextest,
   doctest, rustdoc, provider audit, and semver classification; update D6
   artifacts.
-- Evidence tier planned: type-level binding/layout and storage exclusion, then
-  value-semantic CPU differential and inverse evidence. No machine-checked
-  proof is planned.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  32 focused value-semantic nextest cases including real-device CPU
+  differential and inverse evidence. No machine-checked proof is performed.
 
 ## Hephaestus kernel migration: Mellin [arch]
 

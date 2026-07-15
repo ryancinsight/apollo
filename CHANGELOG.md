@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-sft` 0.3.0 migrates direct dense-DFT acceleration to the
+  Hephaestus authored-kernel seam. `SftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors are removed. Typed accelerator APIs require sealed
+  `SftGpuStorage`, admitting `Complex32` and `[f16; 2]` while rejecting
+  `Complex64`. Inverse staging rejects a `SparseSpectrum` component that is
+  not exactly representable in concrete `f32` storage; use the explicit
+  `quantize_spectrum` boundary when that loss is intentional.
 - [major] `apollo-mellin` 0.4.0 migrates log-resampling and inverse Mellin
   acceleration to the Hephaestus authored-kernel seam. `MellinWgpuPlan` and
   accelerator domain arguments now use concrete `f32`; raw device and queue
@@ -84,6 +92,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] SFT direct dense-DFT dispatch now uses one typed Hephaestus
+  direction-parameterized ZST and ordered command stream. Leto retains COW
+  host boundaries, Mnemosyne owns direct dense inverse output, and Apollo keeps
+  deterministic sparse support selection. The crate no longer depends directly
+  on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
 - [arch] Mellin log-resample, spectrum, inverse-spectrum, and exponential
   resample dispatch now use typed Hephaestus bindings, four ZST
   authored-kernel descriptors, and ordered command streams. Leto remains the

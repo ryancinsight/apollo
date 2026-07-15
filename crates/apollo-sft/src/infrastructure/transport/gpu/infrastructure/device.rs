@@ -1,42 +1,49 @@
-//! WGPU device acquisition for this transform backend.
+//! Hephaestus device acquisition and sparse Fourier execution boundary.
+//!
+//! The accelerator evaluates only the concrete `f32` dense DFT. Apollo owns
+//! the sparse-domain projection and validates every host conversion before
+//! device allocation, so a high-accuracy `SparseSpectrum` cannot silently
+//! narrow during inverse reconstruction.
 
-use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
-use std::sync::Arc;
 
-use crate::{SparseComplexStorage, SparseSpectrum};
-use apollo_fft::PrecisionProfile;
+use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
+use hephaestus_wgpu::WgpuDevice;
+use mnemosyne::scratch::ScratchPool;
 
 use crate::infrastructure::transport::gpu::application::plan::SftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{SftGpuKernel, SftMode};
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::{SftGpuStorage, SparseSpectrum};
 
-/// Return whether a default WGPU adapter/device can be acquired.
+thread_local! {
+    static COMPLEX_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
+}
+
+/// Return whether a default Hephaestus WGPU device can be acquired.
 #[must_use]
 pub fn wgpu_available() -> bool {
     SftWgpuBackend::try_default().is_ok()
 }
 
-/// WGPU backend descriptor.
+/// Hephaestus WGPU backend for direct dense SFT execution.
 #[derive(Debug, Clone)]
 pub struct SftWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<SftGpuKernel>,
 }
 
 impl SftWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(SftGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
+    /// Acquire the default Hephaestus WGPU device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-sft-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-sft-wgpu")?))
     }
 
     /// Return truthful current capabilities.
@@ -45,16 +52,10 @@ impl SftWgpuBackend {
         WgpuCapabilities::direct_dense_spectrum(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus WGPU device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
     /// Create a metadata-only plan descriptor.
@@ -73,23 +74,27 @@ impl SftWgpuBackend {
         plan: &SftWgpuPlan,
         input: &[Complex32],
     ) -> WgpuResult<SparseSpectrum> {
-        Self::validate_plan(plan)?;
-        if input.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: input.len(),
-            });
-        }
-        let dense = self
-            .kernel
-            .execute(&self.device, input, plan.len(), SftMode::Forward)?;
+        Self::validate_forward(plan, input.len(), plan.len())?;
+        let mut dense = vec![Complex32::new(0.0, 0.0); plan.len()];
+        self.execute_forward_into(plan, input, &mut dense)?;
         select_top_k(plan.len(), plan.sparsity(), &dense)
+    }
+
+    /// Execute the forward dense DFT into caller-owned storage before sparse selection.
+    pub fn execute_forward_into(
+        &self,
+        plan: &SftWgpuPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::validate_forward(plan, input.len(), output.len())?;
+        SftGpuKernel::execute_into(&self.device, input, output, SftMode::Forward)
     }
 
     /// Execute direct dense-spectrum SFT from a Leto complex `f32` view.
     ///
     /// Contiguous Leto views borrow host storage directly; strided views copy
-    /// once into logical order before dispatching to the existing WGPU slice path.
+    /// once into logical order before provider dispatch.
     pub fn execute_forward_leto(
         &self,
         plan: &SftWgpuPlan,
@@ -100,71 +105,109 @@ impl SftWgpuBackend {
     }
 
     /// Execute inverse reconstruction from a sparse spectrum.
+    ///
+    /// `SparseSpectrum` is the CPU domain's `Complex64` SSOT. Each component
+    /// must be exactly representable in the concrete `f32` accelerator before
+    /// dispatch; otherwise this method returns [`WgpuError::PrecisionLoss`]
+    /// rather than silently changing the requested reconstruction.
     pub fn execute_inverse(
         &self,
         plan: &SftWgpuPlan,
         spectrum: &SparseSpectrum,
     ) -> WgpuResult<Vec<Complex32>> {
-        Self::validate_plan(plan)?;
-        if spectrum.n != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: spectrum.n,
-            });
-        }
-        let dense: Vec<Complex32> = spectrum
-            .to_dense()
-            .iter()
-            .map(|value| Complex32::new(value.re as f32, value.im as f32))
-            .collect();
-        self.kernel
-            .execute(&self.device, &dense, plan.len(), SftMode::Inverse)
+        Self::validate_inverse(plan, spectrum, plan.len())?;
+        let mut output = vec![Complex32::new(0.0, 0.0); plan.len()];
+        self.execute_inverse_into(plan, spectrum, &mut output)?;
+        Ok(output)
     }
 
-    /// Execute inverse reconstruction from a sparse spectrum into a Leto dense signal.
+    /// Explicitly quantize a CPU-owned sparse spectrum for concrete `f32` execution.
+    ///
+    /// This is the only lossy bridge from the CPU `Complex64` domain into the
+    /// accelerator representation. Callers that need exact value preservation
+    /// should pass the original spectrum to [`Self::execute_inverse`], which
+    /// rejects non-representable components instead of quantizing them.
+    pub fn quantize_spectrum(
+        &self,
+        plan: &SftWgpuPlan,
+        spectrum: &SparseSpectrum,
+    ) -> WgpuResult<SparseSpectrum> {
+        Self::validate_inverse(plan, spectrum, plan.len())?;
+        let mut quantized = SparseSpectrum::new(plan.len());
+        for (&frequency, &value) in spectrum.frequencies.iter().zip(spectrum.values.iter()) {
+            quantized
+                .insert(
+                    frequency,
+                    Complex64::new(
+                        f64::from(quantize_accelerator_component(value.re, "real")?),
+                        f64::from(quantize_accelerator_component(value.im, "imaginary")?),
+                    ),
+                )
+                .map_err(|_| WgpuError::InvalidPlan {
+                    message: format!(
+                        "sparse frequency {frequency} is outside transform length {}",
+                        plan.len()
+                    ),
+                })?;
+        }
+        Ok(quantized)
+    }
+
+    /// Execute inverse reconstruction into caller-owned concrete accelerator storage.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &SftWgpuPlan,
+        spectrum: &SparseSpectrum,
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::validate_inverse(plan, spectrum, output.len())?;
+        COMPLEX_SCRATCH.with(|pool| {
+            pool.with_scratch(plan.len(), |dense| {
+                dense.fill(Complex32::new(0.0, 0.0));
+                populate_dense_spectrum(dense, spectrum, plan.len())?;
+                SftGpuKernel::execute_into(&self.device, dense, output, SftMode::Inverse)
+            })
+        })
+    }
+
+    /// Execute inverse reconstruction from a sparse spectrum into Leto storage.
     pub fn execute_inverse_leto(
         &self,
         plan: &SftWgpuPlan,
         spectrum: &SparseSpectrum,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let output = self.execute_inverse(plan, spectrum)?;
-        leto_array1_from_slice(&output)
+        Self::validate_inverse(plan, spectrum, plan.len())?;
+        let mut output = complex_output(plan.len());
+        let output_slice = output
+            .as_slice_mut()
+            .expect("SFT Mnemosyne output must be contiguous");
+        self.execute_inverse_into(plan, spectrum, output_slice)?;
+        Ok(output)
     }
 
-    /// Execute the forward SFT with typed `Complex64`, `Complex32`, or mixed `[f16; 2]` input storage.
-    ///
-    /// Promotes represented input once to `Complex32` before dispatch.
-    /// Returns an allocated `SparseSpectrum` with `Complex64` internal representation.
-    pub fn execute_forward_typed<T: SparseComplexStorage>(
+    /// Execute the forward SFT with storage admitted by the concrete GPU contract.
+    pub fn execute_forward_typed<T: SftGpuStorage>(
         &self,
         plan: &SftWgpuPlan,
         precision: PrecisionProfile,
         input: &[T],
     ) -> WgpuResult<SparseSpectrum> {
-        let expected = T::PROFILE;
-        if precision.storage != expected.storage || precision.compute != expected.compute {
-            return Err(WgpuError::InvalidPrecisionProfile);
+        Self::validate_typed_input::<T>(plan, precision, input)?;
+        if let Some(input) = T::as_gpu_slice(input) {
+            return self.execute_forward(plan, input);
         }
-        let represented = if let Some(slice_c32) = T::as_c32_slice(input) {
-            Cow::Borrowed(slice_c32)
-        } else {
-            let vec: Vec<Complex32> = input
-                .iter()
-                .map(|v| {
-                    let c = v.to_complex64();
-                    Complex32::new(c.re as f32, c.im as f32)
-                })
-                .collect();
-            Cow::Owned(vec)
-        };
-        self.execute_forward(plan, &represented)
+        COMPLEX_SCRATCH.with(|pool| {
+            pool.with_scratch(input.len(), |represented| {
+                for (target, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *target = value.to_gpu();
+                }
+                self.execute_forward(plan, represented)
+            })
+        })
     }
 
     /// Execute forward SFT from typed Leto complex storage.
-    ///
-    /// Precision-profile validation and host representation match
-    /// [`Self::execute_forward_typed`].
-    pub fn execute_forward_leto_typed<T: SparseComplexStorage>(
+    pub fn execute_forward_leto_typed<T: SftGpuStorage>(
         &self,
         plan: &SftWgpuPlan,
         precision: PrecisionProfile,
@@ -174,41 +217,44 @@ impl SftWgpuBackend {
         self.execute_forward_typed(plan, precision, &input)
     }
 
-    /// Execute the inverse SFT from a sparse spectrum with typed complex output storage.
-    pub fn execute_inverse_typed_into<T: SparseComplexStorage>(
+    /// Execute the inverse SFT from a sparse spectrum with admitted output storage.
+    pub fn execute_inverse_typed_into<T: SftGpuStorage>(
         &self,
         plan: &SftWgpuPlan,
         precision: PrecisionProfile,
         spectrum: &SparseSpectrum,
         output: &mut [T],
     ) -> WgpuResult<()> {
-        let expected = T::PROFILE;
-        if precision.storage != expected.storage || precision.compute != expected.compute {
-            return Err(WgpuError::InvalidPrecisionProfile);
+        Self::validate_typed_output::<T>(plan, precision, output.len())?;
+        if let Some(output) = T::as_gpu_slice_mut(output) {
+            return self.execute_inverse_into(plan, spectrum, output);
         }
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let computed = self.execute_inverse(plan, spectrum)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
-        }
-        Ok(())
+        COMPLEX_SCRATCH.with(|pool| {
+            pool.with_scratch(output.len(), |computed| {
+                self.execute_inverse_into(plan, spectrum, computed)?;
+                for (target, value) in output.iter_mut().zip(computed.iter().copied()) {
+                    *target = T::from_gpu(value);
+                }
+                Ok(())
+            })
+        })
     }
 
     /// Execute inverse SFT from a sparse spectrum into typed Leto dense storage.
-    pub fn execute_inverse_leto_typed<T: SparseComplexStorage>(
+    pub fn execute_inverse_leto_typed<T: SftGpuStorage + Default>(
         &self,
         plan: &SftWgpuPlan,
         precision: PrecisionProfile,
         spectrum: &SparseSpectrum,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.len()];
-        self.execute_inverse_typed_into(plan, precision, spectrum, &mut output)?;
-        leto_array1_from_slice(&output)
+        Self::validate_typed_output::<T>(plan, precision, plan.len())?;
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("SFT Mnemosyne typed output must be contiguous");
+        self.execute_inverse_typed_into(plan, precision, spectrum, output_slice)?;
+        Ok(output)
     }
 
     fn validate_plan(plan: &SftWgpuPlan) -> WgpuResult<()> {
@@ -239,24 +285,119 @@ impl SftWgpuBackend {
                 ),
             });
         }
-        if plan.len() > u32::MAX as usize {
+        if u32::try_from(plan.len()).is_err() {
             return Err(WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={}, sparsity={}: transform length must fit in u32 for WGPU dispatch", plan.len(), plan.sparsity()),
-                });
+                message: format!(
+                    "invalid plan len={}, sparsity={}: transform length exceeds the accelerator parameter range",
+                    plan.len(),
+                    plan.sparsity()
+                ),
+            });
         }
         Ok(())
+    }
+
+    fn validate_forward(plan: &SftWgpuPlan, input_len: usize, output_len: usize) -> WgpuResult<()> {
+        Self::validate_plan(plan)?;
+        validate_length(plan.len(), input_len)?;
+        validate_length(plan.len(), output_len)
+    }
+
+    fn validate_inverse(
+        plan: &SftWgpuPlan,
+        spectrum: &SparseSpectrum,
+        output_len: usize,
+    ) -> WgpuResult<()> {
+        Self::validate_plan(plan)?;
+        validate_length(plan.len(), spectrum.n)?;
+        validate_length(plan.len(), output_len)?;
+        if spectrum.frequencies.len() != spectrum.values.len() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "sparse spectrum frequency/value lengths differ: {} != {}",
+                    spectrum.frequencies.len(),
+                    spectrum.values.len()
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_typed_input<T: SftGpuStorage>(
+        plan: &SftWgpuPlan,
+        precision: PrecisionProfile,
+        input: &[T],
+    ) -> WgpuResult<()> {
+        if precision != T::PROFILE {
+            return Err(WgpuError::InvalidPrecisionProfile);
+        }
+        Self::validate_forward(plan, input.len(), plan.len())
+    }
+
+    fn validate_typed_output<T: SftGpuStorage>(
+        plan: &SftWgpuPlan,
+        precision: PrecisionProfile,
+        output_len: usize,
+    ) -> WgpuResult<()> {
+        if precision != T::PROFILE {
+            return Err(WgpuError::InvalidPrecisionProfile);
+        }
+        Self::validate_plan(plan)?;
+        validate_length(plan.len(), output_len)
+    }
+}
+
+fn validate_length(expected: usize, actual: usize) -> WgpuResult<()> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(WgpuError::LengthMismatch { expected, actual })
+    }
+}
+
+fn populate_dense_spectrum(
+    dense: &mut [Complex32],
+    spectrum: &SparseSpectrum,
+    len: usize,
+) -> WgpuResult<()> {
+    for (&frequency, &value) in spectrum.frequencies.iter().zip(spectrum.values.iter()) {
+        let Some(slot) = dense.get_mut(frequency) else {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("sparse frequency {frequency} is outside transform length {len}"),
+            });
+        };
+        *slot = Complex32::new(
+            exact_accelerator_component(value.re, "real")?,
+            exact_accelerator_component(value.im, "imaginary")?,
+        );
+    }
+    Ok(())
+}
+
+fn exact_accelerator_component(value: f64, component: &'static str) -> WgpuResult<f32> {
+    let represented = quantize_accelerator_component(value, component)?;
+    if value.is_finite() && f64::from(represented) == value {
+        Ok(represented)
+    } else {
+        Err(WgpuError::PrecisionLoss { component, value })
+    }
+}
+
+fn quantize_accelerator_component(value: f64, component: &'static str) -> WgpuResult<f32> {
+    let represented = value as f32;
+    if value.is_finite() && represented.is_finite() {
+        Ok(represented)
+    } else {
+        Err(WgpuError::PrecisionLoss { component, value })
     }
 }
 
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto output".to_string(),
-    })
+
+fn complex_output(len: usize) -> leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1> {
+    leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([len])
 }
 
 fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<SparseSpectrum> {
@@ -279,17 +420,25 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
     let mut spectrum = SparseSpectrum::new(len);
     for (frequency, value, _) in ranked {
         spectrum
-            .insert(frequency, Complex64::new(value.re as f64, value.im as f64))
+            .insert(
+                frequency,
+                Complex64::new(f64::from(value.re), f64::from(value.im)),
+            )
             .map_err(|_| WgpuError::InvalidPlan {
-                    message: format!("invalid plan len={len}, sparsity={sparsity}: selected support violates sparse spectrum invariants"),
-                })?;
+                message: format!(
+                    "invalid plan len={len}, sparsity={sparsity}: selected support violates sparse spectrum invariants"
+                ),
+            })?;
     }
     Ok(spectrum)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use eunomia::Complex32;
+    use leto::SliceArg;
 
     use super::leto_view1_cow;
 
@@ -301,7 +450,33 @@ mod tests {
         )
         .expect("leto input");
         let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, std::borrow::Cow::Borrowed(_)));
-        assert_eq!(&*cow, &[Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)]);
+        assert!(matches!(cow, Cow::Borrowed(_)));
+        assert_eq!(
+            cow.as_ref(),
+            &[Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)]
+        );
+    }
+
+    #[test]
+    fn leto_view1_cow_materializes_strided_views() {
+        let input = leto::Array1::from_shape_vec(
+            [4],
+            vec![
+                Complex32::new(1.0, 0.0),
+                Complex32::new(99.0, 0.0),
+                Complex32::new(2.0, 0.0),
+                Complex32::new(99.0, 0.0),
+            ],
+        )
+        .expect("leto input");
+        let view = input
+            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
+            .expect("strided view");
+        let cow = leto_view1_cow(view);
+        assert!(matches!(cow, Cow::Owned(_)));
+        assert_eq!(
+            cow.as_ref(),
+            &[Complex32::new(1.0, 0.0), Complex32::new(2.0, 0.0)]
+        );
     }
 }

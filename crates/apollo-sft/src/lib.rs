@@ -20,8 +20,10 @@ pub use application::execution::transform::sparse::{
     SparseComplexStorage, SparseFftPlan, SparseLetoSpectrum,
 };
 pub use domain::spectrum::sparse::SparseSpectrum;
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::gpu::domain::storage::SftGpuStorage;
 
-/// GPU-accelerated backend using WGPU.
+/// GPU-accelerated backend using the Hephaestus WGPU provider.
 #[cfg(feature = "wgpu")]
 pub mod wgpu_backend {
     pub use crate::infrastructure::transport::gpu::*;

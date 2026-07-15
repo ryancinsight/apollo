@@ -103,6 +103,37 @@
 - Residual: D6 has 7 transform crates remaining: FFT, NUFFT, Radon, SDFT, SFT,
   SHT, and STFT.
 
+## SFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced the direct SFT raw-device pipeline, binding, encoder,
+  queue, and transfer mechanics with one direction-parameterized typed
+  Hephaestus ZST and ordered command stream. Leto remains the host-view
+  boundary, and dense inverse output writes directly into Mnemosyne-backed
+  storage. Apollo keeps deterministic top-k sparse support selection as the
+  domain owner.
+- Mathematical contract: the shader evaluates the forward DFT and its
+  normalized inverse. The root-of-unity sum is `N delta_nm`, so composing the
+  two dense passes recovers the original input in exact arithmetic. Top-k
+  selection is a separate projection: it reconstructs retained support and
+  does not claim recovery of discarded coefficients.
+- Type contract: sealed `SftGpuStorage` admits `Complex32` and `[f16; 2]`.
+  `Complex64` cannot enter typed accelerator execution. The CPU
+  `SparseSpectrum` remains the `Complex64` SSOT; inverse staging rejects a
+  component not exactly representable in `f32`, so no high-accuracy coefficient
+  is silently changed at the device boundary. `quantize_spectrum` provides the
+  separate explicit lossy conversion when the caller chooses accelerator
+  precision.
+- Verification: all-feature locked package check and warning-denied Clippy;
+  32/32 nextest cases including real-device CPU forward differential and
+  inverse execution; the `Complex64` compile-fail doctest; rustdoc; provider
+  audit; locked metadata; immediate-parent semver classification from 0.2.0 to
+  0.3.0; and a source/manifest scan with no direct WGPU, pollster, or wrapper
+  residue.
+- Evidence tier: typed binding/layout and storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+- Residual: D6 has 6 transform crates remaining: FFT, NUFFT, Radon, SDFT, SHT,
+  and STFT.
+
 ## QFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct WGPU pipeline, binding, encoder, queue, and
