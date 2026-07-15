@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] NUFFT GPU verification is partitioned into metadata, reusable-buffer,
+  direct/fast Type-1/Type-2 dimensional, and shared-support leaves. Existing
+  CPU differentials, Leto host boundaries, finite-precision tolerances, and
+  the direct adjoint proof sketch remain intact; this adds no Apollo-owned GPU
+  wrapper or change to transform execution.
 - [arch] NTT GPU verification is partitioned into metadata, exact-residue,
   quantized-storage, reusable-buffer, and theorem-property leaves. The exact
   CPU/GPU differential, Leto boundary, inverse-pair, and convolution-law

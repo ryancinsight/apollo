@@ -4,23 +4,19 @@ use apollo_fft::{f16, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::{Array3, Storage};
 
-use crate::{infrastructure::transport::gpu::NufftWgpuPlan3D, nufft_type1_3d, UniformGrid3D};
+use crate::{infrastructure::transport::gpu::NufftWgpuPlan3D, nufft_type1_3d};
 
-use super::support::{assert_complex64_close, backend};
+use super::support::{assert_complex64_close, backend, grid3d, positions3d, type1_values3d};
 
 #[test]
 fn type1_matches_cpu_exact_reference() {
     let Some(backend) = backend() else {
         return;
     };
-    let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
+    let grid = grid3d();
     let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-    let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-    let values = [
-        Complex32::new(1.0, 0.0),
-        Complex32::new(-0.25, 0.5),
-        Complex32::new(0.75, -0.5),
-    ];
+    let positions = positions3d();
+    let values = type1_values3d();
     let expected_positions = positions
         .iter()
         .map(|(x, y, z)| (*x as f64, *y as f64, *z as f64))
@@ -44,14 +40,10 @@ fn type1_leto_matches_slice_path() {
     let Some(backend) = backend() else {
         return;
     };
-    let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
+    let grid = grid3d();
     let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-    let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-    let values = [
-        Complex32::new(1.0, 0.0),
-        Complex32::new(-0.25, 0.5),
-        Complex32::new(0.75, -0.5),
-    ];
+    let positions = positions3d();
+    let values = type1_values3d();
     let expected = backend
         .execute_type1_3d(&plan, &positions, &values)
         .expect("slice type1 3D");
@@ -79,9 +71,9 @@ fn type1_typed_storage_matches_represented_input() {
     let Some(backend) = backend() else {
         return;
     };
-    let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
+    let grid = grid3d();
     let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-    let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
+    let positions = positions3d();
     let values = [
         [f16::from_f32(1.0), f16::from_f32(0.0)],
         [f16::from_f32(-0.25), f16::from_f32(0.5)],

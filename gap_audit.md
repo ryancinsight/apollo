@@ -124,6 +124,16 @@
   provider audit, source-residue scans, and patch SemVer classification. The
   theorem remains a proof sketch with empirical CPU-differential evidence, not
   a machine-checked proof.
+- Resolution: delete the monolith and its transitional aggregate `device.rs`;
+  retain metadata, reusable-storage, direct Type-1/Type-2 1D/3D, fast
+  Type-1/Type-2 1D/3D, and shared-support leaves. Shared 3D grid, positions,
+  type-1 values, and mode-field components have one support-leaf definition.
+- Evidence: 73/73 focused all-feature Nextest cases; all-feature workspace
+  check, Clippy, and Nextest; package doctest/rustdoc; `xtask provider-audit`;
+  source scans with no raw `wgpu`, `pollster`, `apollo-wgpu-helpers`,
+  `verification.rs`, or transitional verification `device.rs`; and patch
+  SemVer classification. Evidence remains empirical/type-level, not a
+  machine-checked theorem proof.
 
 ## Shared Leto interop ownership [arch]
 

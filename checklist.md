@@ -19,12 +19,13 @@
   typed storage contracts into one private leaf with original values.
 - [x] Move reusable Type-1/Type-2 1D/3D capacity and input-length contracts
   into a private leaf with the original error values.
-- [ ] Partition every existing value-semantic contract into private operation
+- [x] Partition every existing value-semantic contract into private operation
   leaves, with one support leaf for repeated availability and assertion logic.
-- [ ] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
+- [x] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
   finite-precision contracts with their existing derived tolerances.
-- [ ] Verify focused and workspace nextest, diagnostics, provider scans, and
-  patch SemVer classification before publishing.
+- [x] Verify the focused 73-case and all-feature workspace Nextest suites,
+  warning-denied diagnostics, package doctest/rustdoc, provider scan,
+  source-residue scan, and patch SemVer classification before publishing.
 
 ## D8 NTT verification-tree normalization [arch]
 
