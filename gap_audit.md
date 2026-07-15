@@ -22,7 +22,8 @@
   Bluestein, reconstruction, and reusable-storage coverage. Clippy, rustdoc,
   provider audit, direct source/dependency scans, and semver classification
   pass. No machine-checked proof is performed.
-- Residual: FFT raw transport and the sole NUFFT helper consumer remain.
+- Current residual: native-f16 FFT transport is the only direct-provider
+  scope; the obsolete wrapper is deleted.
 
 ## NUFFT Hephaestus command-stream migration [arch]
 
@@ -48,9 +49,8 @@
   doctest, rustdoc, provider audit, repository-baseline semver classification,
   and direct source/dependency scans pass. No machine-checked proof is
   performed.
-- Residual: native-f16 FFT transport remains the only transform provider
-  migration scope; the now-unreferenced helper crate is the next deletion
-  increment.
+- Current residual: native-f16 FFT transport remains the only transform
+  provider migration scope; the obsolete wrapper is deleted.
 
 ## Radon Hephaestus command-stream migration [arch]
 
@@ -69,7 +69,8 @@
 - Evidence tier: typed binding/layout plus value-semantic 25-case suite with
   real-device execution, warning-denied Clippy, rustdoc, provider audit, and
   direct source/dependency scans. No machine-checked proof is performed.
-- Residual: FFT raw transport and the sole NUFFT helper consumer remain.
+- Current residual: native-f16 FFT transport is the only direct-provider
+  scope; the obsolete wrapper is deleted.
 
 ## FFT Hephaestus f32 migration [arch]
 
@@ -88,9 +89,8 @@
   machine-checked proof is performed.
 - Residual: `GpuFft3dF16Native` is the only direct WGPU/pollster transport in
   `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; the remaining direct
-  dependencies cannot be removed until D6-FFT-native-f16. NUFFT is re-opened
-  because the required f32 typed external-buffer stream now exists; it remains
-  the sole `apollo-wgpu-helpers` consumer.
+  dependencies cannot be removed until D6-FFT-native-f16. NUFFT now composes
+  the typed f32 external-buffer stream, and the obsolete wrapper is deleted.
 
 ## SHT Hephaestus command-stream migration [arch]
 
@@ -130,9 +130,8 @@
 - Evidence tier: typed binding/layout and compile-fail storage exclusion, then
   value-semantic negative-contract and real-device CPU differential evidence.
   No machine-checked proof is performed.
-- Residual: D6 has 4 transform crates remaining: FFT, NUFFT, Radon, and STFT.
-  The helper crate remains live only for those consumers and cannot be deleted
-  until each edge is migrated.
+- Current residual: native-f16 FFT transport is the only direct-provider
+  scope; the obsolete wrapper is deleted.
 
 ## SDFT Hephaestus command-stream migration [arch]
 
@@ -167,9 +166,8 @@
 - Evidence tier: typed binding/layout and storage exclusion, then
   value-semantic real-device differential, roundtrip, and negative-contract
   evidence. No machine-checked proof is performed.
-- Residual: D6 has 5 transform crates remaining: FFT, NUFFT, Radon, SHT, and
-  STFT. The helper crate remains live only for those consumers and cannot be
-  deleted until each edge is migrated.
+- Current residual: native-f16 FFT transport is the only direct-provider
+  scope; the obsolete wrapper is deleted.
 
 ## Wavelet Hephaestus command-stream migration [arch]
 
@@ -371,21 +369,27 @@
 
 ## Provider-native GPU kernel migration [arch]
 
-- Architecture finding: 18 Apollo transform manifests depend directly on
-  `wgpu`, and 55 Apollo source files own raw WGPU types or calls. The shared
-  `apollo-wgpu-helpers` crate delegates device acquisition to Hephaestus but
-  re-exposes raw device, queue, and buffer types, so the current graph is
-  version-aligned rather than dependency-inverted.
+- Architecture finding (resolved): the seventeen completed transform bounded
+  contexts acquire typed device, buffer, pipeline, binding, dispatch, and
+  transfer services from Hephaestus. `apollo-wgpu-helpers` is deleted; the
+  workspace manifest, lockfile, and Rust source scan contain no wrapper edge.
+  Native-f16 FFT transport remains the only direct-provider migration scope.
+- Deletion evidence: format, locked metadata, workspace resolution, provider
+  audit, six `xtask` value-semantic contract cases, warning-denied `xtask`
+  Clippy, and the 44-case all-feature NUFFT suite pass. The workspace check
+  exposes the pre-existing unused `apollo-dht::leto_view1_cow` helper; it is
+  tracked as the next independent cleanup increment rather than hidden.
 - Provider capability finding: Hephaestus already owns backend-neutral typed
   allocation and transfer (`ComputeDevice`), authored kernel contracts
   (`KernelInterface`/`KernelSource`), typed bindings and prepared dispatch
   (`KernelDevice`), and launch grids (`DispatchGrid`). Apollo needs no local
   wrapper or new upstream runtime abstraction.
-- Decision: migrate one complete transform bounded context at a time. FWHT is
-  first because one in-place typed buffer and two ZST kernel-source types cover
-  its ordered radix-2 stage sequence, while `H_n² = nI` supplies an independent
-  algebraic oracle. Leto remains the host array/view boundary; Apollo retains
-  transform mathematics; Hephaestus owns device mechanics. See ADR 0003.
+- Decision: the completed contexts migrate as whole bounded transforms: Leto
+  remains the host array/view boundary, Apollo retains transform mathematics,
+  and Hephaestus owns device mechanics. FWHT established the pattern with one
+  in-place typed buffer, two ZST kernel-source types, and the independent
+  `H_n² = nI` oracle. The remaining native-f16 FFT scope must use the same
+  ownership boundary. See ADR 0003.
 - Performed: `apollo-fwht` 0.3.0 now expresses its butterfly and inverse-scale
   kernels as ZST `KernelInterface`/`KernelSource` implementations, prepares
   them through `KernelDevice`, and encodes every stage into one typed command

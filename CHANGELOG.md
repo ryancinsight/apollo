@@ -21,6 +21,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Removed
 
+- The obsolete `apollo-wgpu-helpers` workspace crate is deleted. Its last
+  consumer migrated to typed Hephaestus dispatch, leaving no manifest, lockfile,
+  or source dependency edge.
 - `apollo-fft` no longer depends on the obsolete `apollo-wgpu-helpers`
   wrapper; its backend and buffer-reuse benchmark acquire the typed
   `hephaestus_wgpu::WgpuDevice` directly.

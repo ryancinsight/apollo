@@ -18,7 +18,6 @@ members = [
     "crates/apollo-sft",
     "crates/apollo-sht",
     "crates/apollo-stft",
-    "crates/apollo-wgpu-helpers",
     "crates/apollo-validation",
     "crates/apollo-wavelet",
     "crates/apollo-python",

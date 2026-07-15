@@ -487,16 +487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "apollo-wgpu-helpers"
-version = "0.3.0"
-dependencies = [
- "bytemuck",
- "hephaestus-wgpu",
- "thiserror 2.0.18",
- "wgpu",
-]
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

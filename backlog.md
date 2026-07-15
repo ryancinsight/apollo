@@ -72,17 +72,18 @@ Remaining replacement work:
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
-- [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT,
-  Radon, STFT, and NUFFT; no helper consumers remain. Delete the unreferenced
-  workspace crate after this migration is independently merged.
-  - [/] D6-helper-delete [arch] (owner Codex, claimed 2026-07-15; scope
-    `Cargo.toml`, `Cargo.lock`, `crates/apollo-wgpu-helpers/`, active D6
-    documentation, and PM entries): delete the unreferenced wrapper rather than
-    retaining a compatibility substrate. Acceptance requires locked metadata,
-    provider audit, a dependency-inversion scan with no helper package or source
-    edge, and the relevant workspace gates after removal.
+- [x] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
+  owner Codex; completed 2026-07-15. FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
+  Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, STFT, and NUFFT now
+  use their typed Hephaestus boundaries; the obsolete workspace crate is
+  deleted without a compatibility substrate.
+  - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
+    `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
+    locked metadata, provider audit, `xtask` contract tests, focused NUFFT
+    value-semantic regression, and manifest/lockfile/source scans pass with no
+    helper package or source edge. `cargo check --workspace` resolves the
+    deletion; its separately tracked pre-existing DHT dead-code warning is not
+    attributed to this wrapper removal.
   - [x] D6-FFT-f32 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
@@ -252,31 +253,13 @@ Remaining replacement work:
     storage/domain contracts, warning-denied gates, provider audit, semver
     classification, and source scan find no direct `wgpu`, `pollster`, or helper
     edge.
-  Sixteen slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
-  Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, and STFT retain Leto
-  host arrays and Apollo-owned transform source while all device, typed-buffer, pipeline,
-  binding, dispatch, and transfer mechanics route through Hephaestus contracts
-  with no direct `wgpu` or helper dependency. The wrapper no longer fits the
-  "Apollo on Leto and Hephaestus backends" architecture: it
-  is a redundant indirection over `hephaestus_wgpu` (`pub use hephaestus_wgpu`,
-  `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
-  `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
-  device plumbing is on hephaestus):
-  - 1 remaining helper consumer: NUFFT. FFT, Radon, and STFT now use
-    `hephaestus_wgpu::WgpuDevice` directly; FFT's raw f32/native-precision
-    transport migration remains the active D4/D6-FFT scope.
-  - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
-    `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
-    buffer / `ComputeBackend` directly; this also unwinds the lingering
-    apollo↔`coeus_core` GPU-storage coupling (only 2 apollo crates touch
-    coeus-core). leto is **CPU-only** and does not enter the GPU side at all —
-    GPU buffers are hephaestus's own types; the only leto seam is the CPU↔GPU
-    boundary, where a CPU `leto::Array` uploads to / downloads from a hephaestus
-    GPU buffer.
-  - `get_global_device()` singleton → keep apollo-local (a `OnceLock` over a
-    `hephaestus_wgpu::WgpuDevice`) or promote to hephaestus.
-  - delete `crates/apollo-wgpu-helpers` + its 18 dependency entries.
-  Feature-gated GPU code; verify under the wgpu feature, differential vs CPU.
+  Seventeen slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
+  Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, STFT, and NUFFT retain
+  Leto host arrays and Apollo-owned transform source while Hephaestus owns
+  device, typed-buffer, pipeline, binding, dispatch, and transfer mechanics.
+  The obsolete `apollo-wgpu-helpers` wrapper is deleted with no remaining
+  manifest, lockfile, or source edge. Native-f16 FFT transport is the only
+  remaining direct-provider scope.
 - [ ] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
   crate** (`apollo-leto-interop` or fold into a small `apollo-core`). Today they
   live in `apollo-fft::application::utilities::leto_interop` (SRP violation —

@@ -3,14 +3,18 @@
 ## Obsolete wrapper deletion: apollo-wgpu-helpers [arch]
 
 - Target version: workspace integration only; no published wrapper remains.
-- Phase: Execution
+- Phase: Closure
 - [x] Confirm `cargo tree -i apollo-wgpu-helpers --workspace` reports only the
   wrapper itself and manifest/source scans identify no remaining consumer.
-- [/] Remove the workspace member, wrapper source tree, lockfile package, and
+- [x] Remove the workspace member, wrapper source tree, lockfile package, and
   active dependency/documentation references without preserving a forwarding
   compatibility path.
-- [ ] Verify locked metadata, provider audit, source/dependency scans, and
-  relevant workspace gates; then mark D6 complete.
+- [x] Verify `cargo fmt --all --check`; locked metadata; workspace resolution;
+  provider audit and its six nextest contract tests; warning-denied `xtask`
+  Clippy; the 44-case all-feature NUFFT suite including real-device execution;
+  and manifest/lockfile/source scans with no helper edge. The workspace check
+  exposes a separate pre-existing `apollo-dht::leto_view1_cow` dead-code
+  warning, which is the next cleanup increment rather than a deletion shim.
 
 ## Hephaestus kernel migration: NUFFT [arch]
 
