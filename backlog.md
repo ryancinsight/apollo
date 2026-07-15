@@ -324,11 +324,15 @@ Remaining replacement work:
   Leto boundaries, and unitary laws. The 52-case FrFT and 1,037-case workspace
   suites pass; the scope owns no transform execution, provider wrapper, or
   fallback path.
-  Third bounded NTT scope claimed 2026-07-15 — partition the 550-line GPU
-  verification monolith by metadata, exact residue/Leto, quantized storage,
-  reusable-buffer, and theorem property contracts. The scope preserves exact
-  finite-field values and Hephaestus-only execution ownership; it adds no
-  Apollo-owned device abstraction or fallback path.
+  Third bounded NTT scope completed 2026-07-15 — the 550-line GPU verification
+  monolith is now metadata, exact-residue/Leto, quantized-storage,
+  reusable-buffer, theorem-property, and shared availability leaves (7–137
+  lines). The exact finite-field contracts, real-device values, and
+  Hephaestus-only execution ownership remain intact. The focused 37-case and
+  all-feature workspace nextest gates, workspace examples/check/Clippy,
+  package doctest/rustdoc, provider audit, structural scans, and patch SemVer
+  classification pass. The scope adds no Apollo-owned device abstraction or
+  fallback path.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

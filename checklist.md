@@ -3,16 +3,17 @@
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
-- Phase: Execution
-- [ ] Claim the 550-line NTT GPU verification monolith and retain exact residue,
+- Phase: Closure
+- [x] Claim the 550-line NTT GPU verification monolith and retain exact residue,
   Leto, quantized-storage, reusable-buffer, and rejection contracts in
   `apollo-ntt`.
-- [ ] Partition metadata, exact execution, quantized storage, reusable-buffer,
+- [x] Partition metadata, exact execution, quantized storage, reusable-buffer,
   GPU property, and CPU theorem contracts into private concern leaves.
-- [ ] Preserve the exact NTT inverse and convolution theorem properties with
+- [x] Preserve the exact NTT inverse and convolution theorem properties with
   their existing generated domains and real-device availability policy.
-- [ ] Verify focused and workspace nextest, diagnostics, provider scans, and
-  patch SemVer classification before publishing.
+- [x] Verify the focused 37-case all-feature suite, all-feature workspace
+  nextest, workspace examples/check/Clippy, package doctest/rustdoc, provider
+  audit, structural scans, and patch SemVer classification.
 
 ## D8 DCT/DST verification-tree normalization [arch]
 
