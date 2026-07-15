@@ -20,8 +20,9 @@ pub(crate) fn measure(config: BenchmarkConfig, mut operation: impl FnMut()) -> S
         warm_up_start.elapsed().as_nanos(),
         warm_up_iterations,
     );
-    let mut samples = Vec::with_capacity(config.sample_count());
-    for _ in 0..config.sample_count() {
+    let sample_count = config.sample_count().get();
+    let mut samples = Vec::with_capacity(sample_count);
+    for _ in 0..sample_count {
         let sample_start = Instant::now();
         for _ in 0..iterations_per_sample {
             operation();
@@ -30,4 +31,5 @@ pub(crate) fn measure(config: BenchmarkConfig, mut operation: impl FnMut()) -> S
     }
 
     SampleSummary::from_samples(samples, iterations_per_sample)
+        .expect("invariant: the non-zero sample count fills every timing sample")
 }

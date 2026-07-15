@@ -1,10 +1,12 @@
+use core::num::NonZeroUsize;
+
 pub(crate) fn iterations_per_sample(
     measurement_nanoseconds: u128,
-    sample_count: usize,
+    sample_count: NonZeroUsize,
     warm_up_nanoseconds: u128,
     warm_up_iterations: u64,
 ) -> u64 {
-    let sample_budget = ceil_div(measurement_nanoseconds, sample_count as u128);
+    let sample_budget = ceil_div(measurement_nanoseconds, sample_count.get() as u128);
     let elapsed = warm_up_nanoseconds.max(1);
     let estimate = ceil_div(
         sample_budget.saturating_mul(u128::from(warm_up_iterations.max(1))),
@@ -27,11 +29,13 @@ const fn ceil_div(dividend: u128, divisor: u128) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::iterations_per_sample;
+    use core::num::NonZeroUsize;
 
     #[test]
     fn calibration_scales_a_sample_to_its_budget() {
-        assert_eq!(iterations_per_sample(1_000, 10, 100, 2), 2);
-        assert_eq!(iterations_per_sample(1_000, 10, 100, 1), 1);
-        assert_eq!(iterations_per_sample(1_000, 10, 0, 0), 100);
+        let sample_count = NonZeroUsize::new(10).expect("invariant: literal is non-zero");
+        assert_eq!(iterations_per_sample(1_000, sample_count, 100, 2), 2);
+        assert_eq!(iterations_per_sample(1_000, sample_count, 100, 1), 1);
+        assert_eq!(iterations_per_sample(1_000, sample_count, 0, 0), 100);
     }
 }

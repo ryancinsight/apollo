@@ -10,11 +10,12 @@
   normalized sample collection, and CSV reporting. FFT, NUFFT, Radon, and STFT
   benchmark binaries call its native case API directly; Criterion macros and
   adapters are absent. ADR 0011 records the decision and median theorem.
-- Evidence tier: the order-statistic theorem is a proof sketch; five focused
+- Evidence tier: the order-statistic theorem is a proof sketch; seven focused
   nextest cases validate typed budgets, calibration arithmetic, median values,
-  real closure execution, and report values. Benchmark binaries compile through
-  `cargo bench --no-run`; no runtime speed or cross-harness equivalence claim is
-  made without a recorded baseline comparison.
+  empty-sample rejection, CSV escaping, real closure execution, and report
+  values. Benchmark binaries compile through `cargo bench --no-run`; no runtime
+  speed or cross-harness equivalence claim is made without a recorded baseline
+  comparison.
 - Residual: no Criterion/Rayon graph edge remains. GPU benchmark execution
   remains hardware-dependent and is not implied by binary compilation.
 

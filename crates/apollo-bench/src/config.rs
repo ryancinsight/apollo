@@ -1,13 +1,17 @@
 use core::fmt::{self, Display, Formatter};
+use core::num::NonZeroUsize;
 use std::error::Error;
 use std::time::Duration;
+
+const SAMPLE_COUNT: NonZeroUsize =
+    NonZeroUsize::new(100).expect("invariant: Apollo's fixed benchmark sample count is non-zero");
 
 /// Controls warm-up and sampling for one benchmark closure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BenchmarkConfig {
     warm_up: Duration,
     measurement: Duration,
-    sample_count: usize,
+    sample_count: NonZeroUsize,
 }
 
 impl BenchmarkConfig {
@@ -17,7 +21,7 @@ impl BenchmarkConfig {
         Self {
             warm_up: Duration::from_secs(3),
             measurement: Duration::from_secs(5),
-            sample_count: 100,
+            sample_count: SAMPLE_COUNT,
         }
     }
 
@@ -40,7 +44,7 @@ impl BenchmarkConfig {
         Ok(Self {
             warm_up,
             measurement,
-            sample_count: 100,
+            sample_count: SAMPLE_COUNT,
         })
     }
 
@@ -52,7 +56,7 @@ impl BenchmarkConfig {
         self.measurement
     }
 
-    pub(crate) const fn sample_count(self) -> usize {
+    pub(crate) const fn sample_count(self) -> NonZeroUsize {
         self.sample_count
     }
 }

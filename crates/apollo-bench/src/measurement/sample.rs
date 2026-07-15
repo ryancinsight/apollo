@@ -8,15 +8,15 @@ pub(crate) struct SampleSummary {
 }
 
 impl SampleSummary {
-    pub(crate) fn from_samples(mut samples: Vec<u128>, iterations_per_sample: u64) -> Self {
+    pub(crate) fn from_samples(mut samples: Vec<u128>, iterations_per_sample: u64) -> Option<Self> {
         samples.sort_unstable();
         let middle = samples.len() / 2;
-        Self {
-            minimum_nanoseconds: samples[0],
-            median_nanoseconds: samples[middle],
+        Some(Self {
+            minimum_nanoseconds: *samples.first()?,
+            median_nanoseconds: *samples.get(middle)?,
             sample_count: samples.len(),
             iterations_per_sample,
-        }
+        })
     }
 }
 
@@ -26,9 +26,15 @@ mod tests {
 
     #[test]
     fn median_resists_a_single_large_outlier() {
-        let summary = SampleSummary::from_samples(vec![3, 5, 4, 1_000_000, 2], 1);
+        let summary = SampleSummary::from_samples(vec![3, 5, 4, 1_000_000, 2], 1)
+            .expect("invariant: literal sample set is non-empty");
         assert_eq!(summary.minimum_nanoseconds, 2);
         assert_eq!(summary.median_nanoseconds, 4);
         assert_eq!(summary.sample_count, 5);
+    }
+
+    #[test]
+    fn empty_samples_do_not_invent_a_timing_summary() {
+        assert_eq!(SampleSummary::from_samples(Vec::new(), 1), None);
     }
 }
