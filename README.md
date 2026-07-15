@@ -16,6 +16,9 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
 - `apollo-leto-interop` owns the shared, rank-polymorphic Leto host-boundary
   contract; transform crates do not depend on FFT implementation modules for
   view materialization or Mnemosyne-backed output construction.
+- `apollo-bench` owns the native sequential measurement contract used by every
+  benchmark binary; it reports normalized median/minimum samples without
+  introducing a Rayon-backed harness.
 - `apollo-dctdst` owns DCT/DST real-to-real transform plan metadata,
   verified direct kernels, inverse scaling, and caller-owned output execution.
 - `apollo-dht` owns real-to-real Discrete Hartley Transform plans, coefficient storage, and self-inverse kernels.

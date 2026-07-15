@@ -28,7 +28,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 approx.workspace = true
-criterion = { workspace = true }
+apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
 [features]
 wgpu = [

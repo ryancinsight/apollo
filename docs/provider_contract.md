@@ -149,4 +149,5 @@ cargo run -p xtask -- provider-audit
 The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Leto, Hephaestus, Rayon,
 WGPU mentions, `Arc`, `Mutex`, `dyn`, clone-to-`Vec`, and `Cow` usage by crate.
 The evidence tier is static source analysis; performance claims still require
-Criterion or domain-specific benchmarks.
+the native `apollo-bench` runner or a domain-specific benchmark with a recorded
+baseline comparison.

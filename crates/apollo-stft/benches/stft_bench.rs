@@ -1,166 +1,113 @@
-//! Criterion benchmarks for STFT-WGPU forward and inverse FFT-accelerated paths.
+//! Native Apollo benchmarks for provider-backed STFT forward and inverse paths.
 //!
-//! Measures wall-clock cost (GPU dispatch + PCIe readback) for:
-//!   (A) **Allocating paths** — `execute_forward` / `execute_inverse`: all GPU buffers,
-//!       staging resources and typed provider bindings are created on every call.
-//!   (B) **Buffer-reuse paths** — `execute_forward_with_buffers` /
-//!       `execute_inverse_with_buffers`: only signal/spectrum data is uploaded per call;
-//!       all provider-owned storage (`StftGpuBuffers`) is pre-allocated once.
-//!
-//! Parameters cover three `(frame_len, hop_len, signal_len)` sets satisfying
-//! hop = frame_len / 2 (Hann COLA condition) at small, medium, and large frame sizes.
-//!
-//! # Mathematical justification
-//!
-//! STFT forward: X[m, k] = Σ_{n=0}^{N−1} w_a[n] · x[m·hop − N/2 + n] · exp(−2πi·k·n/N)
-//!   N = `frame_len` (power-of-two; Radix-2 DIT path).
-//! STFT inverse WOLA: y = OLA(IDFT(X) · w_s) / Σ_m w_s²  (COLA normalisation).
-//!
-//! Signal is a sum of two bin-aligned sinusoids (k₁=16, k₂=64) ensuring the DFT
-//! spectrum is analytically exact (zero spectral leakage); stable, non-trivial workload.
+//! The parameter matrix satisfies the Hann COLA relation `hop = frame / 2`.
+//! Each operation retains its original allocating or reusable-buffer closure.
 
 #![allow(missing_docs)]
 
+use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_stft::{StftWgpuBackend, StftWgpuPlan};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 
-/// Parameter sets: `(frame_len, hop_len, signal_len)`.
-/// Each hop = frame_len / 2 satisfies the Hann COLA condition.
-const PARAMS: &[(usize, usize, usize)] = &[(256, 128, 4096), (512, 256, 8192), (1024, 512, 16384)];
+const PARAMETERS: &[(usize, usize, usize)] =
+    &[(256, 128, 4096), (512, 256, 8192), (1024, 512, 16384)];
 
-/// Acquire a WGPU backend, or return `None` if no adapter is available.
 fn try_backend() -> Option<StftWgpuBackend> {
     StftWgpuBackend::try_default().ok()
 }
 
-/// Analytical signal: sum of two bin-aligned sinusoids.
-///
-/// `s[n] = sin(2π · k₁ · n / N) + 0.5 · sin(2π · k₂ · n / N)`, k₁=16, k₂=64.
-/// Bin alignment guarantees exact DFT spectrum (zero spectral leakage).
 fn analytical_signal(signal_len: usize, frame_len: usize) -> Vec<f32> {
     (0..signal_len)
-        .map(|n| {
-            let t = n as f32;
-            (2.0 * std::f32::consts::PI * 16.0 * t / frame_len as f32).sin()
-                + 0.5 * (2.0 * std::f32::consts::PI * 64.0 * t / frame_len as f32).sin()
+        .map(|index| {
+            let time = index as f32;
+            (2.0 * std::f32::consts::PI * 16.0 * time / frame_len as f32).sin()
+                + 0.5 * (2.0 * std::f32::consts::PI * 64.0 * time / frame_len as f32).sin()
         })
         .collect()
 }
 
-// ── Allocating path benchmarks ──────────────────────────────────────────────
-
-/// Benchmark the GPU forward STFT allocating path across three frame sizes.
-///
-/// `execute_forward` creates provider buffers, staging resources, and typed bindings
-/// per call. Measures end-to-end cost: host-to-device upload, N·log₂N butterfly
-/// stages, interleave pass, and device-to-host readback.
-fn bench_forward_fft(c: &mut Criterion) {
+fn bench_forward_fft(suite: &mut BenchmarkSuite) {
     let Some(backend) = try_backend() else {
-        eprintln!("No WGPU device; skipping bench_forward_fft");
+        eprintln!("No WGPU device available; skipping STFT forward benchmarks");
         return;
     };
 
-    let mut group = c.benchmark_group("stft_forward_fft");
-
-    for &(frame_len, hop_len, signal_len) in PARAMS {
+    for &(frame_len, hop_len, signal_len) in PARAMETERS {
         let plan = StftWgpuPlan::new(frame_len, hop_len);
         let signal = analytical_signal(signal_len, frame_len);
-
-        group.bench_with_input(
-            BenchmarkId::new("frame_len", frame_len),
-            &frame_len,
-            |b, _| {
-                b.iter(|| {
-                    backend
-                        .execute_forward(black_box(&plan), black_box(&signal))
-                        .expect("GPU forward STFT")
-                });
+        suite.run(
+            BenchmarkCase::new("stft_forward_fft", "frame_len", frame_len),
+            || {
+                let spectrum = backend
+                    .execute_forward(black_box(&plan), black_box(&signal))
+                    .expect("GPU forward STFT");
+                black_box(spectrum);
             },
         );
     }
-
-    group.finish();
 }
 
-/// Benchmark the GPU inverse STFT allocating path across three frame sizes.
-///
-/// Spectrum is pre-computed once (outside the benchmark loop) so only the
-/// inverse dispatch is measured: deinterleave → bitrev → butterfly×log₂N →
-/// scale+window → OLA → readback.
-fn bench_inverse_fft(c: &mut Criterion) {
+fn bench_inverse_fft(suite: &mut BenchmarkSuite) {
     let Some(backend) = try_backend() else {
-        eprintln!("No WGPU device; skipping bench_inverse_fft");
+        eprintln!("No WGPU device available; skipping STFT inverse benchmarks");
         return;
     };
 
-    let mut group = c.benchmark_group("stft_inverse_fft");
-
-    for &(frame_len, hop_len, signal_len) in PARAMS {
+    for &(frame_len, hop_len, signal_len) in PARAMETERS {
         let plan = StftWgpuPlan::new(frame_len, hop_len);
         let signal = analytical_signal(signal_len, frame_len);
-        // Pre-compute spectrum once; benchmark measures only the inverse path.
         let spectrum = backend
             .execute_forward(&plan, &signal)
             .expect("forward pass for inverse benchmark setup");
-
-        group.bench_with_input(
-            BenchmarkId::new("frame_len", frame_len),
-            &frame_len,
-            |b, _| {
-                b.iter(|| {
-                    backend
-                        .execute_inverse(
-                            black_box(&plan),
-                            black_box(&spectrum),
-                            black_box(signal_len),
-                        )
-                        .expect("GPU inverse STFT")
-                });
+        suite.run(
+            BenchmarkCase::new("stft_inverse_fft", "frame_len", frame_len),
+            || {
+                let output = backend
+                    .execute_inverse(
+                        black_box(&plan),
+                        black_box(&spectrum),
+                        black_box(signal_len),
+                    )
+                    .expect("GPU inverse STFT");
+                black_box(output);
             },
         );
     }
-
-    group.finish();
 }
 
-// ── Buffer-reuse vs allocating comparison benchmarks ───────────────────────
-
-/// Benchmark the GPU forward STFT: allocating vs `StftGpuBuffers` reuse.
-///
-/// "allocating": `execute_forward` — per-call provider storage, typed bindings,
-/// and stage parameter blocks.
-///
-/// "with_buffers": `execute_forward_with_buffers` — only signal data is uploaded
-///   per call through the provider upload operation; all device storage is
-///   pre-allocated.
-fn bench_forward_reuse(c: &mut Criterion) {
+fn bench_forward_reuse(suite: &mut BenchmarkSuite) {
     let Some(backend) = try_backend() else {
-        eprintln!("No WGPU device; skipping bench_forward_reuse");
+        eprintln!("No WGPU device available; skipping STFT forward reuse benchmarks");
         return;
     };
 
-    for &(frame_len, hop_len, signal_len) in PARAMS {
+    for &(frame_len, hop_len, signal_len) in PARAMETERS {
         let plan = StftWgpuPlan::new(frame_len, hop_len);
         let signal = analytical_signal(signal_len, frame_len);
-
-        let mut group = c.benchmark_group(format!("stft_forward_reuse_fl{frame_len}"));
-
-        // Allocating path: provider storage created per dispatch.
-        group.bench_function(BenchmarkId::new("allocating", frame_len), |b| {
-            b.iter(|| {
-                backend
+        suite.run(
+            BenchmarkCase::new(
+                format!("stft_forward_reuse_fl{frame_len}"),
+                "allocating",
+                frame_len,
+            ),
+            || {
+                let spectrum = backend
                     .execute_forward(black_box(&plan), black_box(&signal))
-                    .expect("allocating forward")
-            });
-        });
+                    .expect("allocating forward");
+                black_box(spectrum);
+            },
+        );
 
-        // Buffer-reuse path: provider storage is retained; only signal data uploads.
         let mut buffers = backend
             .make_buffers(&plan, signal_len)
-            .expect("make_buffers");
-        group.bench_function(BenchmarkId::new("with_buffers", frame_len), |b| {
-            b.iter(|| {
+            .expect("provider buffer allocation");
+        suite.run(
+            BenchmarkCase::new(
+                format!("stft_forward_reuse_fl{frame_len}"),
+                "with_buffers",
+                frame_len,
+            ),
+            || {
                 backend
                     .execute_forward_with_buffers(
                         black_box(&plan),
@@ -169,55 +116,51 @@ fn bench_forward_reuse(c: &mut Criterion) {
                     )
                     .expect("buffered forward");
                 black_box(buffers.fwd_output());
-            });
-        });
-
-        group.finish();
+            },
+        );
     }
 }
 
-/// Benchmark the GPU inverse STFT: allocating vs `StftGpuBuffers` reuse.
-///
-/// "allocating": `execute_inverse` — per-call provider storage and bindings.
-///
-/// "with_buffers": `execute_inverse_with_buffers` — only spectrum data is uploaded
-///   per call through the provider upload operation; all device storage is
-///   pre-allocated.
-fn bench_inverse_reuse(c: &mut Criterion) {
+fn bench_inverse_reuse(suite: &mut BenchmarkSuite) {
     let Some(backend) = try_backend() else {
-        eprintln!("No WGPU device; skipping bench_inverse_reuse");
+        eprintln!("No WGPU device available; skipping STFT inverse reuse benchmarks");
         return;
     };
 
-    for &(frame_len, hop_len, signal_len) in PARAMS {
+    for &(frame_len, hop_len, signal_len) in PARAMETERS {
         let plan = StftWgpuPlan::new(frame_len, hop_len);
         let signal = analytical_signal(signal_len, frame_len);
-        // Pre-compute spectrum once; only the inverse path is measured.
         let spectrum = backend
             .execute_forward(&plan, &signal)
-            .expect("forward for inverse benchmark setup");
-
-        let mut group = c.benchmark_group(format!("stft_inverse_reuse_fl{frame_len}"));
-
-        // Allocating path: provider storage created per dispatch.
-        group.bench_function(BenchmarkId::new("allocating", frame_len), |b| {
-            b.iter(|| {
-                backend
+            .expect("forward pass for inverse benchmark setup");
+        suite.run(
+            BenchmarkCase::new(
+                format!("stft_inverse_reuse_fl{frame_len}"),
+                "allocating",
+                frame_len,
+            ),
+            || {
+                let output = backend
                     .execute_inverse(
                         black_box(&plan),
                         black_box(&spectrum),
                         black_box(signal_len),
                     )
-                    .expect("allocating inverse")
-            });
-        });
+                    .expect("allocating inverse");
+                black_box(output);
+            },
+        );
 
-        // Buffer-reuse path: provider storage is retained; only spectrum data uploads.
         let mut buffers = backend
             .make_buffers(&plan, signal_len)
-            .expect("make_buffers");
-        group.bench_function(BenchmarkId::new("with_buffers", frame_len), |b| {
-            b.iter(|| {
+            .expect("provider buffer allocation");
+        suite.run(
+            BenchmarkCase::new(
+                format!("stft_inverse_reuse_fl{frame_len}"),
+                "with_buffers",
+                frame_len,
+            ),
+            || {
                 backend
                     .execute_inverse_with_buffers(
                         black_box(&plan),
@@ -227,18 +170,16 @@ fn bench_inverse_reuse(c: &mut Criterion) {
                     )
                     .expect("buffered inverse");
                 black_box(buffers.inv_output());
-            });
-        });
-
-        group.finish();
+            },
+        );
     }
 }
 
-criterion_group!(
-    benches,
-    bench_forward_fft,
-    bench_inverse_fft,
-    bench_forward_reuse,
-    bench_inverse_reuse
-);
-criterion_main!(benches);
+fn main() {
+    let mut suite = BenchmarkSuite::default();
+    bench_forward_fft(&mut suite);
+    bench_inverse_fft(&mut suite);
+    bench_forward_reuse(&mut suite);
+    bench_inverse_reuse(&mut suite);
+    suite.emit();
+}

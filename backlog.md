@@ -66,11 +66,20 @@ Remaining replacement work:
   `ComputeBackend`/`FftDeviceOps`-for-`WgpuBackend` bridge, and `apollo-wgpu-helpers`'
   `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
   `coeus-autograd` consuming Apollo one-way (cycle broken).
-- [ ] [arch] Stage B2: remove the remaining dev-only Rayon edge without
-  deleting benchmark coverage. Runtime source/provider audit shows all
-  data-parallel paths use Moirai; `cargo tree -i rayon --workspace` identifies
-  Criterion as the sole remaining dev-dependency source. Replace or upstream
-  the benchmark harness dependency before closing this item.
+- [x] [arch] Stage B2: remove the remaining dev-only Rayon edge without
+  deleting benchmark coverage. Owner: Codex; completed 2026-07-15; scope:
+  `apollo-bench`, all seven benchmark entry points, benchmark manifests, the
+  workspace dependency graph, and active benchmark documentation. The native
+  harness preserves every production closure and parameter matrix, runs timing
+  closures sequentially so measurements do not overlap, and reports normalized
+  median/minimum samples. `cargo tree -i criterion` and `cargo tree -i rayon`
+  now report no matching package; runtime transform parallelism remains Moirai.
+- [x] [patch] GPU test-process exclusivity (owner Codex, completed 2026-07-15;
+  scope `.config/nextest.toml` and active validation records): serialize all
+  Hephaestus device-acquiring test processes through the `gpu-device` test
+  group. The NTT GPU property test passes alone but previously aborted under
+  concurrent real-device acquisition with Windows error `0xc0000005`; the
+  shared device slot preserves the test and its full input domain.
 - [x] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [x] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is

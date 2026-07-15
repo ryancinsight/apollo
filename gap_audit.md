@@ -1,5 +1,39 @@
 # Apollo Gap Audit
 
+## Native benchmark runtime ownership [arch]
+
+- Finding: Criterion introduced Apollo's last resolved Rayon edge even though
+  transform runtime parallelism had already migrated to Moirai. Its benchmark
+  DSL duplicated only generic timing orchestration; the seven Apollo binaries
+  own all mathematical workloads and setup.
+- Resolution: `apollo-bench` owns sequential warm-up, adaptive batch sizing,
+  normalized sample collection, and CSV reporting. FFT, NUFFT, Radon, and STFT
+  benchmark binaries call its native case API directly; Criterion macros and
+  adapters are absent. ADR 0011 records the decision and median theorem.
+- Evidence tier: the order-statistic theorem is a proof sketch; eight focused
+  nextest cases validate typed budgets, calibration arithmetic, median values,
+  even-sample central-pair averaging, empty-sample rejection, CSV escaping,
+  real closure execution, and report values. Benchmark binaries compile
+  through `cargo bench --no-run`; no runtime speed or cross-harness equivalence
+  claim is made without a recorded baseline comparison.
+- Residual: no Criterion/Rayon graph edge remains. GPU benchmark execution
+  remains hardware-dependent and is not implied by binary compilation.
+
+## GPU test-process exclusivity [patch]
+
+- Finding: the all-feature workspace nextest gate aborted NTT's real-device
+  64-case property test with Windows error `0xc0000005` while concurrent GPU
+  tests initialized independent provider devices. The same property passed in
+  isolation, so this is a device-concurrency defect rather than a numerical
+  counterexample or a benchmark-runtime result.
+- Resolution: `.config/nextest.toml` assigns every GPU transport and dense-FFT
+  device test to `gpu-device`, a shared test group with `max-threads = 1`.
+  CPU tests retain normal parallelism; GPU tests retain their real execution,
+  complete property domain, and existing 30 s/60 s timeout contract.
+- Evidence tier: nextest's configured process-level mutual exclusion plus
+  value-semantic GPU tests. This does not prove driver correctness; it prevents
+  uncoordinated concurrent device acquisition within the test run.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

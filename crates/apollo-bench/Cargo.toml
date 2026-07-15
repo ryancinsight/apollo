@@ -1,0 +1,11 @@
+[package]
+name = "apollo-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apollo benchmark measurement runtime"
+
+[lints]
+workspace = true

@@ -191,7 +191,7 @@ Primary references:
   memory for GPU NUFFT.
 - Wu et al., “TurboFFT” shows that kernel fusion is central to competitive GPU FFT performance.
 
-## Local Criterion Benchmarks
+## Local Apollo Benchmarks
 
 Apollo FFT kernel strategy benchmarks live in `crates/apollo-fft/benches/kernel_strategy.rs`.
 Run them with:
@@ -200,14 +200,17 @@ Run them with:
 cargo bench -p apollo-fft --bench kernel_strategy
 ```
 
-The benchmark group compares:
+The native `apollo-bench` runner measures these cases:
 
 - `direct_dft`: the O(N^2) analytical baseline.
-- `radix2_inplace`: the power-of-two Cooley-Tukey path.
+- `generic_selector`: the production power-of-two/composite selector.
 - `generic_prime_inplace`: the prime-length Rader/Winograd path.
 
-These benchmarks are performance diagnostics only. Correctness remains enforced
-by unit and property tests against analytical identities and direct references.
+Each case warms the unchanged closure, selects a batch size from its observed
+mean duration, then reports per-operation minimum and median timing samples as
+CSV. The median is robust to a minority of delay outliers; it is not a
+cross-machine performance claim. Correctness remains enforced by unit and
+property tests against analytical identities and direct references.
 
 ## Current Memory-Efficiency Checks
 
@@ -215,7 +218,7 @@ by unit and property tests against analytical identities and direct references.
   gathered lane buffers in place, and scatter them back without constructing a
   second transformed-lane collection.
 - FFT 2D row passes and 3D innermost-axis passes now transform contiguous
-  backing-slice chunks directly with Rayon, eliminating the full-field
+  backing-slice chunks through Moirai, eliminating the full-field
   `Vec<Vec<Complex>>` lane-copy allocation for those axes.
 - Runtime Rader and ordered-Rader Good-Thomas paths retain only the
   generator-order table; inverse-generator scatter order is derived from
@@ -304,6 +307,9 @@ by unit and property tests against analytical identities and direct references.
   preserve standard fast-path output values.
 - CI regression prevention runs workspace formatting, clippy with warnings
   denied, all workspace tests, and the current `apollo-python` smoke tests.
+- Real-device tests run in Nextest's `gpu-device` group with one process slot.
+  This serializes provider device acquisition while retaining each GPU test's
+  full value-semantic workload and the repository's 30 s/60 s timeout policy.
 - `apollo-fwht --features wgpu` validates real 1D forward and inverse execution
   against the CPU implementation, verifies `H_n² = nI` exactly on dyadic test
   values, and reports support only for that implemented `f32` kernel surface.

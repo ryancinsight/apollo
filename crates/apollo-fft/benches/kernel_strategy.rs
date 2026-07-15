@@ -1,18 +1,19 @@
-//! Criterion benchmarks for Apollo FFT kernel strategies.
+//! Native Apollo benchmarks for FFT kernel strategies.
 
 #![allow(missing_docs)]
 
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 use apollo_fft::application::execution::kernel::{direct, fft_forward};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 #[cfg(feature = "kernel-strategy-bench")]
 use eunomia::Complex32;
 use eunomia::{Complex, Complex64};
 use half::f16;
 use std::hint::black_box;
+#[cfg(feature = "kernel-strategy-bench")]
+use std::time::Duration;
 
-/// Generate a deterministic complex sinusoidal test signal of the given length.
 fn signal(len: usize) -> Vec<Complex64> {
     (0..len)
         .map(|index| {
@@ -22,7 +23,6 @@ fn signal(len: usize) -> Vec<Complex64> {
         .collect()
 }
 
-/// Deterministic f16-complex signal used by mixed-precision selector benchmarks.
 fn signal_f16(len: usize) -> Vec<Complex<f16>> {
     (0..len)
         .map(|index| {
@@ -39,140 +39,134 @@ fn signal_f16(len: usize) -> Vec<Complex<f16>> {
 fn signal32(len: usize) -> Vec<Complex32> {
     signal(len)
         .into_iter()
-        .map(|z| Complex32::new(z.re as f32, z.im as f32))
+        .map(|value| Complex32::new(value.re as f32, value.im as f32))
         .collect()
 }
 
-/// Benchmark direct-DFT, mixed-radix, and auto-selector kernels.
-fn bench_fft_kernels(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fft_kernel_strategy");
-
-    for len in [16usize, 32, 64, 128, 256] {
+fn bench_fft_kernels(suite: &mut BenchmarkSuite) {
+    for len in [16_usize, 32, 64, 128, 256] {
         let input = signal(len);
         if len <= 128 {
-            group.bench_with_input(
-                BenchmarkId::new("direct_dft", len),
-                &input,
-                |bench, input| {
-                    bench.iter(|| {
-                        let output = direct::dft_forward(black_box(input));
-                        black_box(output);
-                    });
+            suite.run(
+                BenchmarkCase::new("fft_kernel_strategy", "direct_dft", len),
+                || {
+                    let output = direct::dft_forward(black_box(&input));
+                    black_box(output);
                 },
             );
         }
 
-        group.bench_with_input(
-            BenchmarkId::new("generic_selector", len),
-            &input,
-            |bench, input| {
-                bench.iter(|| {
-                    let mut data = input.clone();
-                    fft_forward(black_box(&mut data));
-                    black_box(data);
-                });
+        suite.run(
+            BenchmarkCase::new("fft_kernel_strategy", "generic_selector", len),
+            || {
+                let mut data = input.clone();
+                fft_forward(black_box(&mut data));
+                black_box(data);
             },
         );
     }
 
-    for len in [31usize, 63, 127] {
+    for len in [31_usize, 63, 127] {
         let input = signal(len);
-        group.bench_with_input(
-            BenchmarkId::new("generic_prime_inplace", len),
-            &input,
-            |bench, input| {
-                bench.iter(|| {
-                    let mut data = input.clone();
-                    fft_forward(black_box(&mut data));
-                    black_box(data);
-                });
+        suite.run(
+            BenchmarkCase::new("fft_kernel_strategy", "generic_prime_inplace", len),
+            || {
+                let mut data = input.clone();
+                fft_forward(black_box(&mut data));
+                black_box(data);
             },
         );
     }
 
-    for len in [64usize, 96] {
+    for len in [64_usize, 96] {
         let input = signal_f16(len);
-        group.bench_with_input(
-            BenchmarkId::new("mixed_precision_f16_auto", len),
-            &input,
-            |bench, input| {
-                bench.iter(|| {
-                    let mut data = input.clone();
-                    fft_forward(black_box(&mut data));
-                    black_box(data);
-                });
+        suite.run(
+            BenchmarkCase::new("fft_kernel_strategy", "mixed_precision_f16_auto", len),
+            || {
+                let mut data = input.clone();
+                fft_forward(black_box(&mut data));
+                black_box(data);
             },
         );
     }
-
-    group.finish();
 }
 
 #[cfg(feature = "kernel-strategy-bench")]
-fn bench_prime_strategy(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fft_prime_strategy_rader_vs_winograd_pair");
-    group.warm_up_time(std::time::Duration::from_millis(100));
-    group.measurement_time(std::time::Duration::from_millis(400));
-
-    for len in [19usize, 29, 31, 37, 41, 43, 47, 53] {
+fn bench_prime_strategy(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
+    for len in [19_usize, 29, 31, 37, 41, 43, 47, 53] {
         let input64 = signal(len);
-        group.bench_with_input(
-            BenchmarkId::new("rader_f64", len),
-            &input64,
-            |bench, input| {
-                let mut buf = input.clone();
-                bench.iter(|| {
-                    buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_forward::<f64>(black_box(&mut buf));
-                    black_box(&buf);
-                });
+        let mut rader64 = input64.clone();
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(
+                "fft_prime_strategy_rader_vs_winograd_pair",
+                "rader_f64",
+                len,
+            ),
+            || {
+                rader64.copy_from_slice(&input64);
+                benchmark_kernels::rader_prime_forward::<f64>(black_box(&mut rader64));
+                black_box(&rader64);
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("winograd_pair_f64", len),
-            &input64,
-            |bench, input| {
-                let mut buf = input.clone();
-                bench.iter(|| {
-                    buf.copy_from_slice(input);
-                    benchmark_kernels::winograd_pair_prime_forward::<f64>(black_box(&mut buf));
-                    black_box(&buf);
-                });
+        let mut winograd64 = input64.clone();
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(
+                "fft_prime_strategy_rader_vs_winograd_pair",
+                "winograd_pair_f64",
+                len,
+            ),
+            || {
+                winograd64.copy_from_slice(&input64);
+                benchmark_kernels::winograd_pair_prime_forward::<f64>(black_box(&mut winograd64));
+                black_box(&winograd64);
             },
         );
 
         let input32 = signal32(len);
-        group.bench_with_input(
-            BenchmarkId::new("rader_f32", len),
-            &input32,
-            |bench, input| {
-                let mut buf = input.clone();
-                bench.iter(|| {
-                    buf.copy_from_slice(input);
-                    benchmark_kernels::rader_prime_forward::<f32>(black_box(&mut buf));
-                    black_box(&buf);
-                });
+        let mut rader32 = input32.clone();
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(
+                "fft_prime_strategy_rader_vs_winograd_pair",
+                "rader_f32",
+                len,
+            ),
+            || {
+                rader32.copy_from_slice(&input32);
+                benchmark_kernels::rader_prime_forward::<f32>(black_box(&mut rader32));
+                black_box(&rader32);
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new("winograd_pair_f32", len),
-            &input32,
-            |bench, input| {
-                let mut buf = input.clone();
-                bench.iter(|| {
-                    buf.copy_from_slice(input);
-                    benchmark_kernels::winograd_pair_prime_forward::<f32>(black_box(&mut buf));
-                    black_box(&buf);
-                });
+        let mut winograd32 = input32.clone();
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(
+                "fft_prime_strategy_rader_vs_winograd_pair",
+                "winograd_pair_f32",
+                len,
+            ),
+            || {
+                winograd32.copy_from_slice(&input32);
+                benchmark_kernels::winograd_pair_prime_forward::<f32>(black_box(&mut winograd32));
+                black_box(&winograd32);
             },
         );
     }
-
-    group.finish();
 }
 
-#[cfg(feature = "kernel-strategy-bench")]
-criterion_group!(benches, bench_fft_kernels, bench_prime_strategy);
-#[cfg(not(feature = "kernel-strategy-bench"))]
-criterion_group!(benches, bench_fft_kernels);
-criterion_main!(benches);
+fn main() {
+    let mut suite = BenchmarkSuite::default();
+    bench_fft_kernels(&mut suite);
+    #[cfg(feature = "kernel-strategy-bench")]
+    {
+        let config = BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(100),
+            Duration::from_millis(400),
+        )
+        .expect("invariant: literal benchmark budgets are non-zero");
+        bench_prime_strategy(&mut suite, config);
+    }
+    suite.emit();
+}
