@@ -9,8 +9,9 @@
   contract now drives typed native-half buffers, descriptors, streams, and
   readback through the same dense-FFT provider plan as f32.
 - [x] Add the provider-owned required `DeviceFeature` acquisition capability
-  in Hephaestus 0.14.0 and temporarily pin its reviewed `196411e` head while
-  [PR 33](https://github.com/ryancinsight/hephaestus/pull/33) awaits merge.
+  in Hephaestus 0.14.0. [PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
+  merged at `4ef4f52`; Apollo now tracks the provider default branch and locks
+  that reviewed graph without a revision quarantine.
 - [x] Replace native-f16 adapter/device acquisition with `WgpuDevice`; remove
   the direct `pollster` dependency and reuse the same provider device for its
   f32 differential reference.
