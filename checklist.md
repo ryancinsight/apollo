@@ -1,5 +1,27 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: FFT [arch]
+
+- Target version: `apollo-fft` 0.16.0
+- Phase: Foundation
+- [x] Record ADR 0006: Apollo retains the dense-FFT mathematical kernels and
+  shader source, while Hephaestus exclusively owns GPU device acquisition,
+  typed buffers, pipeline construction, binding, command encoding, submission,
+  and transfer.
+- [ ] Partition the raw f32 and native reduced-precision transport into
+  domain storage, host conversion, typed kernel, and backend-orchestration
+  leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.
+- [ ] State the three-dimensional DFT/inverse theorem, explicit normalization,
+  storage precision contract, and command-stream dependency order in crate
+  Rustdoc, README, and ADR 0006.
+- [ ] Verify format; locked all-feature and no-default checks; warning-denied
+  Clippy; value-semantic CPU differential and inverse-roundtrip nextest cases;
+  doctests; rustdoc; provider audit; semver classification; examples; and a
+  source/manifest scan with no direct `wgpu`, `pollster`, or helper edge.
+- Evidence target: typed binding/layout and sealed-storage exclusion, then
+  value-semantic CPU differential and inverse-roundtrip evidence. No
+  machine-checked proof is planned.
+
 ## Hephaestus kernel migration: SHT [arch]
 
 - Target version: `apollo-sht` 0.3.0

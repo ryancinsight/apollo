@@ -75,6 +75,17 @@ Remaining replacement work:
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
   DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, and SHT; 4 transform crates remain.
+  - [/] D6-FFT [arch] (owner Codex, claimed 2026-07-15; scope
+    `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
+    `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
+    the direct dense-FFT pipeline, bind-group, encoder, queue, transfer, and
+    device-acquisition ownership with typed Hephaestus kernels and ordered
+    command streams. Preserve Apollo's FFT mathematics and Leto CPU boundary;
+    move only device ownership to Hephaestus. The acceptance contract includes
+    the documented three-dimensional DFT/inverse theorem, sealed native and
+    reduced accelerator storage, CPU differential and inverse-roundtrip tests,
+    provider audit, and a source/manifest scan with no direct `wgpu`,
+    `pollster`, or helper edge.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,
