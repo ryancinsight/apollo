@@ -22,6 +22,7 @@ hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
+apollo-leto-interop = { path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 mnemosyne = { workspace = true }
 moirai = { workspace = true }

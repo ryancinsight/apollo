@@ -61,7 +61,6 @@ use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use moirai::ParallelSliceMut;
-use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
@@ -254,7 +253,7 @@ impl SparseFftPlan {
         &self,
         signal: leto::ArrayView1<'_, Complex64>,
     ) -> ApolloResult<SparseSpectrum> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         self.forward(&signal)
     }
 
@@ -282,7 +281,13 @@ impl SparseFftPlan {
         spectrum: &SparseSpectrum,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
         let signal = self.inverse(spectrum)?;
-        leto_array1_from_slice(&signal)
+        apollo_leto_interop::try_array1_from_slice(&signal).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_array",
+                "rejected length",
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 
     /// Return the retained support as a list of (frequency, coefficient) pairs.
@@ -319,11 +324,17 @@ impl SparseFftPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<SparseLetoSpectrum<T>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut frequencies = Vec::new();
         let mut values = Vec::new();
         self.forward_typed_into(&signal, &mut frequencies, &mut values, profile)?;
-        let values = leto_array1_from_slice(&values)?;
+        let values = apollo_leto_interop::try_array1_from_slice(&values).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_array",
+                "rejected length",
+                "Mnemosyne-backed 1D array construction",
+            )
+        })?;
         Ok(SparseLetoSpectrum {
             frequencies,
             values,
@@ -348,10 +359,16 @@ impl SparseFftPlan {
         values: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let values = leto_view1_cow(values);
+        let values = apollo_leto_interop::view_cow(&values);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
         self.inverse_typed_into(frequencies, &values, &mut output, profile)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_array",
+                "rejected length",
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 }
 
@@ -534,7 +551,7 @@ impl SparseComplexStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ApolloResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(ApolloError::validation(
@@ -587,23 +604,6 @@ fn write_storage_from_owner_values<T: SparseComplexStorage>(
             *slot = T::from_complex64(value);
         }
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values).ok_or_else(
-        || {
-            ApolloError::validation(
-                "leto_array",
-                "rejected length",
-                "Mnemosyne-backed 1D array construction",
-            )
-        },
-    )
 }
 
 #[cfg(test)]

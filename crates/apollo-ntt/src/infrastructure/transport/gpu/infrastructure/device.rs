@@ -1,7 +1,5 @@
 //! Hephaestus device acquisition and NTT execution boundary.
 
-use std::borrow::Cow;
-
 use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 use hephaestus_wgpu::WgpuDevice;
 
@@ -147,9 +145,14 @@ impl NttWgpuBackend {
         plan: &NttWgpuPlan,
         input: leto::ArrayView1<'_, u64>,
     ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
-        let input = leto_view1_cow(input)?;
-        self.execute_forward(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_forward(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto NTT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute an inverse transform from a Leto host view.
@@ -158,9 +161,14 @@ impl NttWgpuBackend {
         plan: &NttWgpuPlan,
         input: leto::ArrayView1<'_, u64>,
     ) -> WgpuResult<leto::Array<u64, leto::MnemosyneStorage<u64>, 1>> {
-        let input = leto_view1_cow(input)?;
-        self.execute_inverse(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_inverse(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto NTT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute forward exact residues from a Leto host view.
@@ -247,10 +255,12 @@ impl NttWgpuBackend {
         input: leto::ArrayView1<'_, u32>,
         mode: NttMode,
     ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>> {
-        let input = leto_view1_cow(input)?;
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output = vec![0; plan.len()];
         self.execute_quantized_into(plan, &input, &mut output, mode)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto NTT output".to_owned(),
+        })
     }
 
     fn validate_plan_input_and_buffers_len(
@@ -308,61 +318,5 @@ impl NttWgpuBackend {
             (modulus - 1) / len as u64,
             modulus,
         ))
-    }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WgpuResult<Cow<'_, [T]>> {
-    if let Some(values) = view.as_slice() {
-        return Ok(Cow::Borrowed(values));
-    }
-    let mut values = Vec::with_capacity(view.shape()[0]);
-    for index in 0..view.shape()[0] {
-        values.push(
-            *view
-                .get([index])
-                .map_err(|error| WgpuError::ShapeMismatch {
-                    message: format!("invalid Leto NTT 1D view: {error:?}"),
-                })?,
-        );
-    }
-    Ok(Cow::Owned(values))
-}
-
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::from_mnemosyne_slice([values.len()], values).map_err(|error| {
-        WgpuError::InvalidPlan {
-            message: format!("failed to allocate Mnemosyne-backed Leto NTT output: {error:?}"),
-        }
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u64, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view()).expect("contiguous view");
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u64, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view).expect("strided view");
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }

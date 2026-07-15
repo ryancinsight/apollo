@@ -1,4 +1,4 @@
-use super::helpers::{dwt_coefficients_from_leto, leto_array1_from_slice};
+use super::helpers::dwt_coefficients_from_leto;
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
@@ -27,6 +27,7 @@ impl DwtPlan {
     ) -> WaveletResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
         let coefficients = dwt_coefficients_from_leto(coefficients)?;
         let signal = self.inverse(&coefficients)?;
-        leto_array1_from_slice(&signal)
+        apollo_leto_interop::try_array1_from_slice(&signal)
+            .ok_or(WaveletError::CoefficientShapeMismatch)
     }
 }

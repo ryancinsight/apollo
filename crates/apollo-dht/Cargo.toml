@@ -25,6 +25,7 @@ moirai = { workspace = true }
 mnemosyne = { workspace = true }
 thiserror = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
+apollo-leto-interop = { path = "../apollo-leto-interop" }
 leto = { workspace = true }
 eunomia = { workspace = true }
 serde = { workspace = true }

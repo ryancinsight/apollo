@@ -1,6 +1,5 @@
 //! WGPU device acquisition for this transform backend.
 
-use crate::application::execution::plan::czt::dimension_1d::helpers::leto_view1_cow;
 use crate::CztStorage;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
@@ -107,7 +106,7 @@ impl CztWgpuBackend {
         plan: &CztWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
                 plan.output_len()
@@ -169,7 +168,7 @@ impl CztWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.output_len()]);
         self.execute_forward_typed_into(
@@ -256,7 +255,7 @@ impl CztWgpuBackend {
         plan: &CztWgpuPlan,
         spectrum: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let spectrum = leto_view1_cow(&spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let mut output =
             leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
                 plan.input_len()

@@ -38,7 +38,6 @@ use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
-use std::borrow::Cow;
 use std::f64::consts::PI;
 
 thread_local! {
@@ -193,8 +192,8 @@ impl NufftPlan1D {
         positions: leto::ArrayView1<'_, f64>,
         values: leto::ArrayView1<'_, Complex64>,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let positions = leto_view1_cow(positions);
-        let values = leto_view1_cow(values);
+        let positions = apollo_leto_interop::view_cow(&positions);
+        let values = apollo_leto_interop::view_cow(&values);
         if positions.len() != values.len() {
             return Err(ApolloError::ShapeMismatch {
                 expected: positions.len().to_string(),
@@ -202,7 +201,16 @@ impl NufftPlan1D {
             });
         }
         let output = self.type1(positions.as_ref(), values.as_ref());
-        leto_array1_from_slice(output.as_slice().expect("NUFFT output must be contiguous"))
+        apollo_leto_interop::try_array1_from_slice(
+            output.as_slice().expect("NUFFT output must be contiguous"),
+        )
+        .ok_or_else(|| {
+            ApolloError::validation(
+                "leto_shape",
+                output.size().to_string(),
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 
     /// Run type-1 NUFFT mapping strictly inside zero-allocation bounding limits.
@@ -269,8 +277,8 @@ impl NufftPlan1D {
         fourier_coeffs: leto::ArrayView1<'_, Complex64>,
         positions: leto::ArrayView1<'_, f64>,
     ) -> ApolloResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
-        let positions = leto_view1_cow(positions);
+        let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
+        let positions = apollo_leto_interop::view_cow(&positions);
         if fourier_coeffs.len() != self.n_out {
             return Err(ApolloError::ShapeMismatch {
                 expected: self.n_out.to_string(),
@@ -285,7 +293,13 @@ impl NufftPlan1D {
             &mut spread,
             &mut output,
         );
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_shape",
+                output.len().to_string(),
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 
     /// Run type-2 NUFFT mapping strictly inside zero-allocation bounding limits.
@@ -390,8 +404,8 @@ impl NufftPlan1D {
         values: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let positions = leto_view1_cow(positions);
-        let values = leto_view1_cow(values);
+        let positions = apollo_leto_interop::view_cow(&positions);
+        let values = apollo_leto_interop::view_cow(&values);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n_out];
         self.type1_typed_into(
@@ -401,7 +415,13 @@ impl NufftPlan1D {
             &mut output,
             profile,
         )?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_shape",
+                output.len().to_string(),
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 
     /// Run type-2 NUFFT for `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
@@ -454,8 +474,8 @@ impl NufftPlan1D {
         positions: leto::ArrayView1<'_, f64>,
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
-        let positions = leto_view1_cow(positions);
+        let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
+        let positions = apollo_leto_interop::view_cow(&positions);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.type2_typed_into(
@@ -465,7 +485,13 @@ impl NufftPlan1D {
             &mut output,
             profile,
         )?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+            ApolloError::validation(
+                "leto_shape",
+                output.len().to_string(),
+                "Mnemosyne-backed 1D array construction",
+            )
+        })
     }
 }
 
@@ -572,7 +598,7 @@ pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> ApolloResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(ApolloError::validation(
@@ -590,23 +616,6 @@ pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], t
     for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
         *slot = T::from_complex64(value);
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values).ok_or_else(
-        || {
-            ApolloError::validation(
-                "leto_shape",
-                values.len().to_string(),
-                "Mnemosyne-backed 1D array construction",
-            )
-        },
-    )
 }
 
 /// Exact direct 1D type-1 NUFFT.

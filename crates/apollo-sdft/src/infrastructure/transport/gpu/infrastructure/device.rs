@@ -4,9 +4,7 @@
 //! Hephaestus owns concrete device allocation, kernel preparation, binding,
 //! dispatch, submission, synchronization, and transfer.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
@@ -87,7 +85,7 @@ impl SdftWgpuBackend {
         plan: &SdftWgpuPlan,
         window: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let window = leto_view1_cow(window);
+        let window = apollo_leto_interop::view_cow(&window);
         Self::validate_forward(plan, window.len(), plan.bin_count())?;
         let mut output = complex_output(plan.bin_count());
         let output_slice = output
@@ -135,7 +133,7 @@ impl SdftWgpuBackend {
         output_precision: PrecisionProfile,
         window: leto::ArrayView1<'_, I>,
     ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        let window = leto_view1_cow(window);
+        let window = apollo_leto_interop::view_cow(&window);
         let mut output =
             leto::Array::<O, leto::MnemosyneStorage<O>, 1>::zeros_mnemosyne([plan.bin_count()]);
         let output_slice = output
@@ -186,7 +184,7 @@ impl SdftWgpuBackend {
         plan: &SdftWgpuPlan,
         bins: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let bins = leto_view1_cow(bins);
+        let bins = apollo_leto_interop::view_cow(&bins);
         let mut output = real_output(plan.window_len());
         let output_slice = output
             .as_slice_mut()
@@ -297,10 +295,6 @@ fn validate_length(expected: usize, actual: usize) -> WgpuResult<()> {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
 fn complex_output(len: usize) -> leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1> {
     leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([len])
 }
@@ -311,33 +305,8 @@ fn real_output(len: usize) -> leto::Array<f32, leto::MnemosyneStorage<f32>, 1> {
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::{leto_view1_cow, SdftWgpuBackend};
+    use super::SdftWgpuBackend;
     use crate::infrastructure::transport::gpu::{SdftWgpuPlan, WgpuError};
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0])
-            .expect("invariant: test Leto input shape is valid");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1.0_f32, 2.0, 3.0, 4.0]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 99.0, 2.0, 99.0])
-            .expect("invariant: test Leto input shape is valid");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("invariant: test Leto slice is in bounds");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1.0_f32, 2.0]);
-    }
 
     #[test]
     fn inverse_rejects_partial_spectrum_before_device_acquisition() {

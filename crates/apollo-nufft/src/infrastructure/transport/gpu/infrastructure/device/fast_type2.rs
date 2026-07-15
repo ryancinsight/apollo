@@ -6,9 +6,9 @@ use leto::Array3;
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    array3_from_leto_view, fast_1d_metadata, fast_3d_metadata, leto_array1_from_slice,
-    leto_view1_cow, positions3_from_leto_view, typed_to_complex32, validate_fast_1d_plan,
-    validate_typed_profile, validate_usize_to_u32, write_typed_output,
+    array3_from_leto_view, fast_1d_metadata, fast_3d_metadata, host_array_error,
+    positions3_from_leto_view, typed_to_complex32, validate_fast_1d_plan, validate_typed_profile,
+    validate_usize_to_u32, write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
@@ -82,11 +82,11 @@ impl NufftWgpuBackend {
         fourier_coeffs: leto::ArrayView1<'_, Complex32>,
         positions: leto::ArrayView1<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
-        let positions = leto_view1_cow(positions);
+        let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
+        let positions = apollo_leto_interop::view_cow(&positions);
         let output =
             self.execute_fast_type2_1d(plan, fourier_coeffs.as_ref(), positions.as_ref())?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }
 
     /// Execute fast gridded Type-2 1D NUFFT from typed Leto views.
@@ -97,8 +97,8 @@ impl NufftWgpuBackend {
         fourier_coeffs: leto::ArrayView1<'_, T>,
         positions: leto::ArrayView1<'_, f32>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let fourier_coeffs = leto_view1_cow(fourier_coeffs);
-        let positions = leto_view1_cow(positions);
+        let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
+        let positions = apollo_leto_interop::view_cow(&positions);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_fast_type2_1d_typed_into(
             plan,
@@ -107,7 +107,7 @@ impl NufftWgpuBackend {
             &positions,
             &mut output,
         )?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }
 
     /// Execute fast gridded Type-2 1D NUFFT and return debug grid snapshots.
@@ -235,7 +235,7 @@ impl NufftWgpuBackend {
         let modes = array3_from_leto_view(modes);
         let positions = positions3_from_leto_view(positions)?;
         let output = self.execute_fast_type2_3d(plan, &modes, &positions)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }
 
     /// Execute fast gridded Type-2 3D NUFFT from typed Leto views.
@@ -250,7 +250,7 @@ impl NufftWgpuBackend {
         let positions = positions3_from_leto_view(positions)?;
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_fast_type2_3d_typed_into(plan, precision, &modes, &positions, &mut output)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }
 
     /// Execute fast gridded Type-2 3D NUFFT and return debug grid snapshots.

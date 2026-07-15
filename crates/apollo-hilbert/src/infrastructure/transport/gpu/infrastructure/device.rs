@@ -1,8 +1,6 @@
 //! Hephaestus device acquisition and Hilbert execution boundary.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
@@ -101,7 +99,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
                 plan.len()
@@ -156,7 +154,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -234,7 +232,7 @@ impl HilbertWgpuBackend {
         plan: &HilbertWgpuPlan,
         quadrature: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let quadrature = leto_view1_cow(quadrature);
+        let quadrature = apollo_leto_interop::view_cow(&quadrature);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -310,7 +308,7 @@ impl HilbertWgpuBackend {
         input: leto::ArrayView1<'_, T>,
         inverse: bool,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -355,39 +353,5 @@ impl HilbertWgpuBackend {
             });
         }
         Ok(())
-    }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1.0_f32, 99.0, 2.0, 99.0, 3.0, 99.0, 4.0, 99.0])
-                .expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
     }
 }

@@ -13,6 +13,9 @@ not available from that registry. See
 Stage 2 moves Apollo beyond the initial compatibility cut:
 
 - `apollo-fft` owns reusable dense CPU FFT plans, cache orchestration, shared contracts, and backend abstractions.
+- `apollo-leto-interop` owns the shared, rank-polymorphic Leto host-boundary
+  contract; transform crates do not depend on FFT implementation modules for
+  view materialization or Mnemosyne-backed output construction.
 - `apollo-dctdst` owns DCT/DST real-to-real transform plan metadata,
   verified direct kernels, inverse scaling, and caller-owned output execution.
 - `apollo-dht` owns real-to-real Discrete Hartley Transform plans, coefficient storage, and self-inverse kernels.
@@ -56,6 +59,8 @@ Mixed precision is now a first-class Apollo concept:
 ## Crates
 
 - `apollo-fft`: CPU FFT plans, cache management, shared types, and backend abstractions.
+- `apollo-leto-interop`: rank-polymorphic zero-copy Leto view materialization
+  and fallible Mnemosyne-backed output construction shared by transform crates.
 - `apollo-czt`: chirp z-transform plans, direct reference execution,
   Bluestein convolution execution, and caller-owned output paths.
 - `apollo-dctdst`: DCT/DST real-to-real transform plans, verified direct

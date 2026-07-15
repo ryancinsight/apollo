@@ -12,7 +12,6 @@ use crate::infrastructure::kernel::sliding::{
 use apollo_fft::{f16, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use mnemosyne::scratch::ScratchPool;
-use std::borrow::Cow;
 use std::collections::VecDeque;
 
 thread_local! {
@@ -79,7 +78,7 @@ impl SdftPlan {
         &self,
         window: leto::ArrayView1<'_, f64>,
     ) -> SdftResult<SdftState> {
-        let window = leto_view1_cow(window);
+        let window = apollo_leto_interop::view_cow(&window);
         self.state_from_window(&window)
     }
 
@@ -96,9 +95,9 @@ impl SdftPlan {
         &self,
         window: leto::ArrayView1<'_, f64>,
     ) -> SdftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let window = leto_view1_cow(window);
+        let window = apollo_leto_interop::view_cow(&window);
         let bins = self.direct_bins(&window)?;
-        leto_array1_from_slice(&bins)
+        apollo_leto_interop::try_array1_from_slice(&bins).ok_or(SdftError::OutputBinLengthMismatch)
     }
 
     /// Compute direct DFT bins for a full window into caller-owned storage.
@@ -145,10 +144,11 @@ impl SdftPlan {
         window: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> SdftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        let window = leto_view1_cow(window);
+        let window = apollo_leto_interop::view_cow(&window);
         let mut output = vec![O::from_complex64(Complex64::new(0.0, 0.0)); self.bin_count()];
         self.direct_bins_typed_into(&window, &mut output, profile)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output)
+            .ok_or(SdftError::OutputBinLengthMismatch)
     }
 }
 
@@ -163,16 +163,6 @@ fn with_typed_direct_workspaces<R>(
                 .with(|bins_cell| bins_cell.with_scratch(bin_count, |bins| f(window, bins)))
         })
     })
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> SdftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
-        .ok_or(SdftError::OutputBinLengthMismatch)
 }
 
 #[cfg(test)]
@@ -300,7 +290,7 @@ impl SdftBinStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> SdftResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(SdftError::PrecisionMismatch)

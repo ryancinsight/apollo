@@ -1,4 +1,4 @@
-use super::helpers::{dwt_coefficients_to_leto, leto_view1_cow};
+use super::helpers::dwt_coefficients_to_leto;
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
@@ -36,7 +36,10 @@ impl DwtPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> WaveletResult<DwtLetoCoefficients<f64>> {
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         let coefficients = self.forward(signal.as_ref())?;
         dwt_coefficients_to_leto(&coefficients)
     }

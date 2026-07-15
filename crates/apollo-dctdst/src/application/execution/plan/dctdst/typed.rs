@@ -1,4 +1,4 @@
-use super::helpers::{leto_array1_from_slice, leto_view1_cow, validate_profile};
+use super::helpers::validate_profile;
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, PrecisionProfile};
@@ -40,10 +40,11 @@ impl DctDstPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(&signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![T::from_f64(0.0); self.len()];
         T::forward_into(self, &signal, &mut output, profile)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(apollo_leto_interop::try_array1_from_slice(&output)
+            .expect("DCT/DST output length must match Leto output shape"))
     }
 
     /// Execute the inverse transform for `f64`, `f32`, or mixed `f16` storage.
@@ -62,10 +63,11 @@ impl DctDstPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(&signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![T::from_f64(0.0); self.len()];
         T::inverse_into(self, &signal, &mut output, profile)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(apollo_leto_interop::try_array1_from_slice(&output)
+            .expect("DCT/DST output length must match Leto output shape"))
     }
 }
 

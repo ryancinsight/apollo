@@ -1,5 +1,28 @@
 # Apollo Gap Audit
 
+## Shared Leto interop ownership [arch]
+
+- Finding: a transform-private FFT utility owned cross-transform Leto view and
+  output conversion. Consumer forwarding functions duplicated the same
+  ownership-free API and inverted the intended dependency direction.
+- Resolution: `apollo-leto-interop` is the canonical host-boundary crate.
+  `view_cow`, dense array/view materialization, dense slice construction, and
+  one-dimensional constructors live there; transform call sites map only their
+  own domain errors. `PrecisionProfile::matches_storage_and_compute` retains
+  the independent precision semantic in its owning type. The old FFT utility
+  and transform-local wrappers are deleted without compatibility aliases.
+- Mathematical contract: ADR 0010 records the logical-order representation
+  theorem for contiguous and strided views plus shape preservation for dense
+  output construction. This is a proof sketch over Leto's documented contract,
+  not a machine-checked proof.
+- Evidence: package checks for `apollo-leto-interop`, FFT, NUFFT, Radon, SHT,
+  STFT, and Wavelet pass; 10/10 value-semantic interop nextest cases cover
+  contiguous, strided, transposed, and rank-three paths. Locked all-feature,
+  no-default, and examples checks; warning-denied Clippy; configured all-feature
+  workspace nextest; doctest; warning-clean rustdoc; provider audit; direct
+  source/dependency scans; and 0.17.0 major SemVer classification against the
+  merged 0.16.0 baseline pass.
+
 ## Cargo Deny first-party source policy [patch]
 
 - Finding: the workspace deliberately resolves its Atlas providers from

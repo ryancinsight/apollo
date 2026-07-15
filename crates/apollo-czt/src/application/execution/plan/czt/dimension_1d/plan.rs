@@ -1,6 +1,6 @@
 //! Reusable Chirp Z-Transform Plan
 
-use super::helpers::{leto_view1_cow, with_forward_workspace};
+use super::helpers::with_forward_workspace;
 use super::typed::CztStorage;
 use crate::application::execution::kernel::bluestein::{
     czt_bjork_pereyra_inverse_into, czt_bluestein_forward_into_with_workspace, czt_inverse_nodes,
@@ -147,7 +147,7 @@ impl CztPlan {
         if input.shape()[0] != self.n {
             return Err(CztError::LengthMismatch);
         }
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
                 self.output_len()
@@ -182,7 +182,7 @@ impl CztPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
                 self.output_len()
@@ -259,7 +259,7 @@ impl CztPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([self.output_len()]);
         T::forward_slice_into(
@@ -324,7 +324,7 @@ impl CztPlan {
         &self,
         spectrum: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, CztError> {
-        let spectrum = leto_view1_cow(&spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let mut output =
             leto::Array::<Complex64, leto::MnemosyneStorage<Complex64>, 1>::zeros_mnemosyne([
                 self.input_len()
@@ -375,7 +375,7 @@ impl CztPlan {
         spectrum: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, CztError> {
-        let spectrum = leto_view1_cow(&spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([self.input_len()]);
         T::inverse_slice_into(

@@ -417,7 +417,7 @@ impl GftGpuStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> GftResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(GftError::PrecisionMismatch)

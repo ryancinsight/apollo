@@ -11,8 +11,6 @@ const BLUESTEIN_STORAGE_BINDINGS: u32 = 6;
 pub mod buffers;
 /// Forward execution implementations.
 pub mod forward;
-/// Layout translation helpers.
-pub mod helpers;
 /// Inverse execution implementations.
 pub mod inverse;
 

@@ -84,6 +84,7 @@ name = "apollo-czt"
 version = "0.4.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -103,6 +104,7 @@ name = "apollo-dctdst"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -122,6 +124,7 @@ name = "apollo-dht"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -138,9 +141,10 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "apollo-fft-macros",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "criterion",
@@ -175,6 +179,7 @@ name = "apollo-frft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -195,6 +200,7 @@ name = "apollo-fwht"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -214,6 +220,7 @@ name = "apollo-gft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "hephaestus-core",
@@ -233,6 +240,7 @@ name = "apollo-hilbert"
 version = "0.5.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -248,10 +256,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apollo-leto-interop"
+version = "0.15.0"
+dependencies = [
+ "leto",
+]
+
+[[package]]
 name = "apollo-mellin"
 version = "0.4.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -270,6 +286,7 @@ dependencies = [
 name = "apollo-ntt"
 version = "0.3.0"
 dependencies = [
+ "apollo-leto-interop",
  "bytemuck",
  "eunomia",
  "hephaestus-core",
@@ -287,6 +304,7 @@ name = "apollo-nufft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "criterion",
@@ -322,6 +340,7 @@ name = "apollo-qft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -341,6 +360,7 @@ name = "apollo-radon"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "criterion",
@@ -361,6 +381,7 @@ name = "apollo-sdft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -380,6 +401,7 @@ name = "apollo-sft"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -399,6 +421,7 @@ name = "apollo-sht"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",
@@ -418,6 +441,7 @@ name = "apollo-stft"
 version = "0.4.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "criterion",
@@ -468,6 +492,7 @@ name = "apollo-wavelet"
 version = "0.3.0"
 dependencies = [
  "apollo-fft",
+ "apollo-leto-interop",
  "approx",
  "bytemuck",
  "eunomia",

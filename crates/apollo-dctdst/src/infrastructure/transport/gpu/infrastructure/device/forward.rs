@@ -3,9 +3,6 @@ use apollo_fft::PrecisionProfile;
 
 use crate::infrastructure::transport::gpu::application::plan::DctDstWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    leto_array1_from_slice, leto_view1_cow,
-};
 use crate::infrastructure::transport::gpu::infrastructure::device::DctDstWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
     DctGpuKernel, DctMode, FiberLayout,
@@ -68,9 +65,11 @@ impl DctDstWgpuBackend {
         plan: &DctDstWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto DCT/DST 1D output".to_owned(),
+        })
     }
 
     /// Execute the forward real-to-real transform with typed storage.
@@ -97,7 +96,7 @@ impl DctDstWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_forward_typed_into(

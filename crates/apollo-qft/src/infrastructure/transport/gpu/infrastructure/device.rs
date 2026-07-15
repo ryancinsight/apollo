@@ -1,8 +1,5 @@
 //! Hephaestus device acquisition and unitary QFT execution boundary.
 
-use std::borrow::Cow;
-
-use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
@@ -105,9 +102,14 @@ impl QftWgpuBackend {
         plan: &QftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
-        self.execute_forward(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_forward(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto QFT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute inverse from a Leto host view.
@@ -116,9 +118,14 @@ impl QftWgpuBackend {
         plan: &QftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
-        self.execute_inverse(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_inverse(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto QFT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute forward with storage admitted by the concrete `f32` GPU contract.
@@ -223,7 +230,7 @@ impl QftWgpuBackend {
         input: leto::ArrayView1<'_, T>,
         mode: QftMode,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -274,16 +281,4 @@ impl QftWgpuBackend {
         }
         Ok(())
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto QFT output".to_owned(),
-    })
 }

@@ -1,10 +1,8 @@
 //! Reusable provider storage and host-boundary execution for dense FFT plans.
 
-use std::borrow::Cow;
-
 use leto::Array3;
 
-use crate::{application::utilities::leto_interop, f16, ApolloError, ApolloResult};
+use crate::{f16, ApolloError, ApolloResult};
 
 use super::pipeline::GpuFft3d;
 
@@ -118,11 +116,14 @@ impl GpuFft3d {
         field: leto::ArrayView3<'_, f64>,
     ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         self.validate_field_shape(field.shape())?;
-        let field = leto_view3_cow(field)?;
+        let field = apollo_leto_interop::view_cow(&field);
         let mut output = vec![0.0; 2 * self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self)?;
         self.forward_values(&field, &mut output, &mut buffers)?;
-        leto_array1_from_slice(&output, "FFT forward Leto spectrum")
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| ApolloError::Wgpu {
+            message: "failed to allocate Mnemosyne-backed Leto FFT forward Leto spectrum"
+                .to_owned(),
+        })
     }
 
     /// Forward transform from a Leto f16 view into Mnemosyne-backed spectrum storage.
@@ -131,7 +132,7 @@ impl GpuFft3d {
         field: leto::ArrayView3<'_, f16>,
     ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         self.validate_field_shape(field.shape())?;
-        let field = leto_view3_cow(field)?;
+        let field = apollo_leto_interop::view_cow(&field);
         let mut output = vec![0.0; 2 * self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self)?;
         buffers.imaginary_host.fill(0.0);
@@ -141,7 +142,10 @@ impl GpuFft3d {
             .zip(field.iter().copied())
             .for_each(|(destination, value)| *destination = value.to_f32());
         self.execute_forward(&mut output, &mut buffers)?;
-        leto_array1_from_slice(&output, "FFT f16 forward Leto spectrum")
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| ApolloError::Wgpu {
+            message: "failed to allocate Mnemosyne-backed Leto FFT f16 forward Leto spectrum"
+                .to_owned(),
+        })
     }
 
     /// Inverse transform from interleaved f32 spectrum into an f64 real field.
@@ -199,16 +203,16 @@ impl GpuFft3d {
         &self,
         spectrum: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let spectrum = leto_interop::view1_cow(&spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         self.validate_spectrum_len(spectrum.len())?;
         let mut buffers = GpuFft3dBuffers::new(self)?;
         Self::split_spectrum(&spectrum, &mut buffers);
         self.execute_inverse(&mut buffers)?;
         let output: Vec<f64> = buffers.real_host.iter().copied().map(f64::from).collect();
-        leto_array3_from_slice(
-            [self.nx, self.ny, self.nz],
-            &output,
-            "FFT inverse Leto field",
+        apollo_leto_interop::try_dense_from_slice([self.nx, self.ny, self.nz], &output).ok_or_else(
+            || ApolloError::Wgpu {
+                message: "failed to allocate Mnemosyne-backed Leto FFT inverse field".to_owned(),
+            },
         )
     }
 
@@ -217,7 +221,7 @@ impl GpuFft3d {
         &self,
         spectrum: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f16, leto::MnemosyneStorage<f16>, 3>> {
-        let spectrum = leto_interop::view1_cow(&spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         self.validate_spectrum_len(spectrum.len())?;
         let mut buffers = GpuFft3dBuffers::new(self)?;
         Self::split_spectrum(&spectrum, &mut buffers);
@@ -228,10 +232,11 @@ impl GpuFft3d {
             .copied()
             .map(f16::from_f32)
             .collect();
-        leto_array3_from_slice(
-            [self.nx, self.ny, self.nz],
-            &output,
-            "FFT f16 inverse Leto field",
+        apollo_leto_interop::try_dense_from_slice([self.nx, self.ny, self.nz], &output).ok_or_else(
+            || ApolloError::Wgpu {
+                message: "failed to allocate Mnemosyne-backed Leto FFT f16 inverse field"
+                    .to_owned(),
+            },
         )
     }
 
@@ -313,46 +318,4 @@ impl GpuFft3d {
             buffers.imaginary_host[index] = pair[1];
         }
     }
-}
-
-fn leto_view3_cow<T: Copy>(view: leto::ArrayView3<'_, T>) -> ApolloResult<Cow<'_, [T]>> {
-    if let Some(values) = view.as_slice() {
-        return Ok(Cow::Borrowed(values));
-    }
-    let shape = view.shape();
-    let mut values = Vec::with_capacity(shape[0] * shape[1] * shape[2]);
-    for x in 0..shape[0] {
-        for y in 0..shape[1] {
-            for z in 0..shape[2] {
-                values.push(
-                    *view
-                        .get([x, y, z])
-                        .map_err(|error| ApolloError::ShapeMismatch {
-                            expected: "valid Leto FFT view index".to_owned(),
-                            actual: format!("{error:?}"),
-                        })?,
-                );
-            }
-        }
-    }
-    Ok(Cow::Owned(values))
-}
-
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-    context: &str,
-) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| ApolloError::Wgpu {
-        message: format!("failed to allocate Mnemosyne-backed Leto {context}"),
-    })
-}
-
-fn leto_array3_from_slice<T: Copy>(
-    shape: [usize; 3],
-    values: &[T],
-    context: &str,
-) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    leto::Array::from_mnemosyne_slice(shape, values).map_err(|error| ApolloError::Wgpu {
-        message: format!("failed to allocate Mnemosyne-backed Leto {context}: {error:?}"),
-    })
 }

@@ -5,9 +5,7 @@
 //! device allocation, so a high-accuracy `SparseSpectrum` cannot silently
 //! narrow during inverse reconstruction.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
@@ -100,7 +98,7 @@ impl SftWgpuBackend {
         plan: &SftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<SparseSpectrum> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         self.execute_forward(plan, &input)
     }
 
@@ -213,7 +211,7 @@ impl SftWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<SparseSpectrum> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         self.execute_forward_typed(plan, precision, &input)
     }
 
@@ -392,10 +390,6 @@ fn quantize_accelerator_component(value: f64, component: &'static str) -> WgpuRe
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
 fn complex_output(len: usize) -> leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1> {
     leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([len])
 }
@@ -431,52 +425,4 @@ fn select_top_k(len: usize, sparsity: usize, dense: &[Complex32]) -> WgpuResult<
             })?;
     }
     Ok(spectrum)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use eunomia::Complex32;
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec(
-            [2],
-            vec![Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)],
-        )
-        .expect("leto input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(
-            cow.as_ref(),
-            &[Complex32::new(1.0, 2.0), Complex32::new(3.0, 4.0)]
-        );
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input = leto::Array1::from_shape_vec(
-            [4],
-            vec![
-                Complex32::new(1.0, 0.0),
-                Complex32::new(99.0, 0.0),
-                Complex32::new(2.0, 0.0),
-                Complex32::new(99.0, 0.0),
-            ],
-        )
-        .expect("leto input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(
-            cow.as_ref(),
-            &[Complex32::new(1.0, 0.0), Complex32::new(2.0, 0.0)]
-        );
-    }
 }

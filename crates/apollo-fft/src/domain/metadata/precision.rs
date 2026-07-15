@@ -63,6 +63,17 @@ pub struct PrecisionProfile {
 }
 
 impl PrecisionProfile {
+    /// Whether storage and arithmetic precision match `expected`.
+    ///
+    /// This intentionally ignores the high-level mode intent: two plans may
+    /// select different modes while executing with the same storage and compute
+    /// representation.
+    #[must_use]
+    #[inline]
+    pub fn matches_storage_and_compute(self, expected: Self) -> bool {
+        self.storage == expected.storage && self.compute == expected.compute
+    }
+
     /// CPU-style high-accuracy profile.
     pub const HIGH_ACCURACY_F64: Self = Self {
         mode: PrecisionMode::HighAccuracy,

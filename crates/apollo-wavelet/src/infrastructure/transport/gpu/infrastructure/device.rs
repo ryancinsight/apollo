@@ -1,8 +1,6 @@
 //! Hephaestus device acquisition and multilevel Haar execution boundary.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
 
@@ -105,9 +103,11 @@ impl WaveletWgpuBackend {
         plan: &WaveletWgpuPlan,
         signal: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let signal = leto_view1_cow(signal);
-        self.execute_forward(plan, &signal)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let signal = apollo_leto_interop::view_cow(&signal);
+        let output = self.execute_forward(plan, &signal)?;
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto Wavelet output".to_owned(),
+        })
     }
 
     /// Execute inverse Haar synthesis from a Leto host view.
@@ -116,9 +116,11 @@ impl WaveletWgpuBackend {
         plan: &WaveletWgpuPlan,
         coefficients: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let coefficients = leto_view1_cow(coefficients);
-        self.execute_inverse(plan, &coefficients)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let coefficients = apollo_leto_interop::view_cow(&coefficients);
+        let output = self.execute_inverse(plan, &coefficients)?;
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto Wavelet output".to_owned(),
+        })
     }
 
     /// Execute typed forward Haar analysis under the concrete `f32` GPU contract.
@@ -211,7 +213,7 @@ impl WaveletWgpuBackend {
         input: leto::ArrayView1<'_, T>,
         inverse: bool,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -248,16 +250,4 @@ impl WaveletWgpuBackend {
         }
         Ok(())
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto Wavelet output".to_owned(),
-    })
 }

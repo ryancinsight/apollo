@@ -1,6 +1,6 @@
 use super::helpers::{
-    dwt_typed_coefficients_to_leto, leto_array1_from_slice, leto_view1_cow,
-    validate_cwt_output_shape, validate_dwt_output_shapes, validate_profile,
+    dwt_typed_coefficients_to_leto, validate_cwt_output_shape, validate_dwt_output_shapes,
+    validate_profile,
 };
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
@@ -32,7 +32,10 @@ impl DwtPlan {
         profile: PrecisionProfile,
     ) -> WaveletResult<DwtLetoCoefficients<T>> {
         validate_profile(profile, T::PROFILE)?;
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         if signal.len() != self.len() {
             return Err(WaveletError::LengthMismatch);
         }
@@ -66,15 +69,26 @@ impl DwtPlan {
         if coefficients.len() != self.len() || coefficients.levels() != self.levels() {
             return Err(WaveletError::CoefficientShapeMismatch);
         }
-        let approximation = leto_view1_cow(coefficients.approximation().view())?;
+        let approximation_view = coefficients.approximation().view();
+        if approximation_view.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        let approximation = apollo_leto_interop::view_cow(&approximation_view);
         let details = coefficients
             .details()
             .iter()
-            .map(|detail| Ok(leto_view1_cow(detail.view())?.into_owned()))
+            .map(|detail| {
+                let detail_view = detail.view();
+                if detail_view.shape()[0] == 0 {
+                    return Err(WaveletError::EmptySignal);
+                }
+                Ok(apollo_leto_interop::view_cow(&detail_view).into_owned())
+            })
             .collect::<WaveletResult<Vec<_>>>()?;
         let mut output = vec![T::from_f64(0.0); self.len()];
         self.inverse_typed_into(approximation.as_ref(), &details, &mut output, profile)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output)
+            .ok_or(WaveletError::CoefficientShapeMismatch)
     }
 }
 

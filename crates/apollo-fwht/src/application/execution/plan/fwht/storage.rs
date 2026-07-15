@@ -253,7 +253,7 @@ fn validate_lengths(plan: &FwhtPlan, input: usize, output: usize) -> Result<(), 
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Result<(), FwhtError> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(FwhtError::PrecisionMismatch)

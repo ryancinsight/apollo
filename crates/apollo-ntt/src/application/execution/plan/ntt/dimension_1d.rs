@@ -6,8 +6,6 @@ use crate::domain::contracts::error::NttError;
 use crate::domain::contracts::math::{mod_inv, mod_mul, mod_pow};
 use leto::Array1;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-
 /// Reusable radix-2 NTT plan.
 ///
 /// # Theorem: Exact inverse over a supported prime field
@@ -267,7 +265,7 @@ impl NttPlan {
         F: Fn(&Self, &[u64], &mut [u64]) -> Result<(), NttError>,
     {
         self.check_len(output.shape()[0])?;
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         if let Some(output_slice) = output.as_mut_slice() {
             return execute(self, &signal, output_slice);
         }
@@ -298,23 +296,6 @@ impl NttPlan {
         }
         twiddles
     }
-}
-
-fn leto_view1_cow<'a>(view: &leto::ArrayView1<'a, u64>) -> Cow<'a, [u64]> {
-    if let Some(slice) = view.as_slice() {
-        return Cow::Borrowed(slice);
-    }
-
-    let len = view.shape()[0];
-    let mut values = Vec::with_capacity(len);
-    for index in 0..len {
-        values.push(
-            *view
-                .get([index])
-                .expect("Leto view shape and storage bounds must be valid"),
-        );
-    }
-    Cow::Owned(values)
 }
 
 #[cfg(test)]

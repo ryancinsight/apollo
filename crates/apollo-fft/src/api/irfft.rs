@@ -3,8 +3,8 @@
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::application::utilities::leto_interop::{try_dense_from_contiguous, view1_cow};
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
+use apollo_leto_interop::{try_dense_from_contiguous, view_cow};
 use eunomia::Complex;
 use eunomia::Complex64;
 use leto::{Array1, Array2, Array3};
@@ -195,7 +195,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let spectrum = view1_cow(&field_hat);
+    let spectrum = view_cow(&field_hat);
     let signal = ifft_1d_slice_typed::<T>(&spectrum);
     leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([signal.len()], signal)
         .expect("IFFT signal length must match Leto output shape")

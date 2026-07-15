@@ -66,7 +66,8 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let image = array2_from_leto_view(image);
         let sinogram = self.forward(&image)?;
-        leto_array2_from_dense(sinogram.values())
+        apollo_leto_interop::try_dense_from_array(sinogram.values())
+            .ok_or(RadonError::ImageShapeMismatch)
     }
 
     /// Execute the forward Radon transform into caller-owned storage.
@@ -103,7 +104,7 @@ impl RadonPlan {
             T::from_f64(0.0),
         );
         self.forward_typed_into(&image, &mut output, profile)?;
-        leto_array2_from_dense(&output)
+        apollo_leto_interop::try_dense_from_array(&output).ok_or(RadonError::ImageShapeMismatch)
     }
 
     /// Execute adjoint backprojection.
@@ -121,7 +122,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.backproject(&Sinogram::new(sinogram))?;
-        leto_array2_from_dense(&image)
+        apollo_leto_interop::try_dense_from_array(&image).ok_or(RadonError::ImageShapeMismatch)
     }
 
     /// Execute adjoint backprojection into caller-owned image storage.
@@ -162,7 +163,7 @@ impl RadonPlan {
             T::from_f64(0.0),
         );
         self.backproject_typed_into(&sinogram, &mut output, profile)?;
-        leto_array2_from_dense(&output)
+        apollo_leto_interop::try_dense_from_array(&output).ok_or(RadonError::ImageShapeMismatch)
     }
 
     /// Execute ramp-filtered backprojection.
@@ -223,7 +224,7 @@ impl RadonPlan {
     ) -> RadonResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
         let sinogram = array2_from_leto_view(sinogram);
         let image = self.filtered_backprojection(&Sinogram::new(sinogram))?;
-        leto_array2_from_dense(&image)
+        apollo_leto_interop::try_dense_from_array(&image).ok_or(RadonError::ImageShapeMismatch)
     }
 }
 
@@ -385,7 +386,7 @@ impl RadonStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(RadonError::PrecisionMismatch)
@@ -395,20 +396,6 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Rad
 fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()
 }
-fn leto_array2_from_dense<T: Copy>(
-    array: &Array2<T>,
-) -> RadonResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    if array.as_slice().is_some() {
-        apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
-            .ok_or(RadonError::ImageShapeMismatch)
-    } else {
-        let [rows, cols] = array.shape();
-        let values: Vec<T> = array.iter().copied().collect();
-        leto::Array::from_mnemosyne_vec([rows, cols], values)
-            .map_err(|_| RadonError::ImageShapeMismatch)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

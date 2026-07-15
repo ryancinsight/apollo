@@ -15,14 +15,17 @@ use mnemosyne::scratch::ScratchPool;
 use crate::{
     infrastructure::transport::gpu::{
         application::plan::ShtWgpuPlan,
-        domain::{capabilities::WgpuCapabilities, error::WgpuResult, storage::ShtGpuStorage},
+        domain::{
+            capabilities::WgpuCapabilities,
+            error::{WgpuError, WgpuResult},
+            storage::ShtGpuStorage,
+        },
         infrastructure::{
             conversion::{
                 array2_from_leto_view, coefficients_from_leto_view, coefficients_from_modes,
-                exact_accelerator_component, grid_samples, leto_array2_from_dense, leto_view1_cow,
-                mode_pairs, populate_modes, quantize_accelerator_component,
-                validate_coefficient_shape, validate_forward, validate_sample_shape,
-                validate_typed_input, validate_typed_output,
+                exact_accelerator_component, grid_samples, mode_pairs, populate_modes,
+                quantize_accelerator_component, validate_coefficient_shape, validate_forward,
+                validate_sample_shape, validate_typed_input, validate_typed_output,
             },
             kernel::ShtGpuKernel,
         },
@@ -106,14 +109,18 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let samples = array2_from_leto_view(samples);
         let coefficients = self.execute_forward(plan, &samples)?;
-        leto_array2_from_dense(coefficients.values(), "SHT coefficients")
+        apollo_leto_interop::try_dense_from_array(coefficients.values()).ok_or_else(|| {
+            WgpuError::InvalidPlan {
+                message: "failed to allocate Mnemosyne-backed Leto SHT coefficients".to_owned(),
+            }
+        })
     }
 
     /// Execute inverse complex SHT by direct synthesis matrix summation.
     ///
     /// The coefficient domain is `Complex64`, while the GPU kernel is
     /// `Complex32`. This method preserves caller values: non-representable
-    /// finite components return [`WgpuError::PrecisionLoss`](crate::WgpuError::PrecisionLoss) before provider
+    /// finite components return [`WgpuError::PrecisionLoss`] before provider
     /// allocation or dispatch. Use [`Self::quantize_coefficients`] to request
     /// the lossy boundary explicitly.
     pub fn execute_inverse(
@@ -182,7 +189,9 @@ impl ShtWgpuBackend {
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
         let coefficients = coefficients_from_leto_view(plan, coefficients)?;
         let samples = self.execute_inverse(plan, &coefficients)?;
-        leto_array2_from_dense(&samples, "SHT inverse samples")
+        apollo_leto_interop::try_dense_from_array(&samples).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto SHT inverse samples".to_owned(),
+        })
     }
 
     /// Execute forward SHT from storage admitted by the concrete GPU contract.
@@ -213,9 +222,14 @@ impl ShtWgpuBackend {
         precision: PrecisionProfile,
         flat_samples: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 2>> {
-        let flat_samples = leto_view1_cow(flat_samples);
+        let flat_samples = apollo_leto_interop::view_cow(&flat_samples);
         let coefficients = self.execute_forward_flat_typed(plan, precision, &flat_samples)?;
-        leto_array2_from_dense(coefficients.values(), "SHT typed coefficients")
+        apollo_leto_interop::try_dense_from_array(coefficients.values()).ok_or_else(|| {
+            WgpuError::InvalidPlan {
+                message: "failed to allocate Mnemosyne-backed Leto SHT typed coefficients"
+                    .to_owned(),
+            }
+        })
     }
 
     /// Execute inverse SHT and write the flat output to admitted typed storage.
