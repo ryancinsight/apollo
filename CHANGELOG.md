@@ -13,9 +13,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - `apollo-fft` no longer depends on the obsolete `apollo-wgpu-helpers`
   wrapper; its backend and buffer-reuse benchmark acquire the typed
   `hephaestus_wgpu::WgpuDevice` directly.
+- `apollo-stft` no longer depends directly on `apollo-wgpu-helpers`, `wgpu`,
+  or `pollster`. Its raw pipeline, binding, command encoding, queue, and
+  transfer mechanics are replaced by typed Hephaestus descriptors and ordered
+  command streams.
 
 ### Breaking
 
+- [major] `apollo-stft` 0.4.0 removes the `wgpu_backend` forwarding module and
+  raw device/queue accessors. `StftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` and returns `Self`; device limits are requested
+  through the backend-neutral Hephaestus API. `StftGpuKernel` is a zero-sized
+  typed descriptor with associated dispatch operations rather than a cached raw
+  pipeline owner.
 - [major] `apollo-radon` 0.3.0 routes forward projection, adjoint
   backprojection, and filtered backprojection through typed Hephaestus command
   streams. `RadonWgpuBackend::new` now returns `Self`; raw device and queue

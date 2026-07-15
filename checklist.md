@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: STFT [arch]
+
+- Target version: `apollo-stft` 0.4.0
+- Phase: Closure
+- [x] Replace direct radix-2, Bluestein, and overlap-add device ownership with
+  typed Hephaestus descriptors and ordered command streams. Request the six
+  Bluestein storage bindings through backend-neutral provider limits.
+- [x] Preserve the WOLA reconstruction theorem in ADR 0008 and the crate
+  README. Leto remains the host-array boundary; raw device/queue accessors, the
+  `wgpu_backend` forwarding module, and helper error re-exports are deleted.
+- [x] Verify format; all-feature and no-default checks; warning-denied Clippy;
+  46/46 nextest cases including real-device radix-2 and Bluestein execution;
+  doctest; rustdoc; provider audit; source/dependency scans; and immediate-
+  parent semver classification. The crate has no examples target.
+- Evidence tier: typed binding/layout and provider stream ordering, then
+  value-semantic CPU differential, WOLA reconstruction, reusable-storage, and
+  non-power-of-two device tests. No machine-checked proof is performed.
+
 ## Hephaestus kernel migration: Radon [arch]
 
 - Target version: `apollo-radon` 0.3.0

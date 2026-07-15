@@ -419,24 +419,22 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "apollo-fft",
- "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
  "criterion",
  "eunomia",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
  "mnemosyne",
  "moirai",
- "pollster",
  "proptest",
  "serde",
  "thiserror 2.0.18",
- "wgpu",
 ]
 
 [[package]]

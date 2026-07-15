@@ -65,7 +65,8 @@ Remaining replacement work:
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
       `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
       `apollo-wavelet`, `apollo-frft`, `apollo-hilbert`, `apollo-mellin`, and
-      `apollo-sft`, `apollo-sdft`, `apollo-sht`, and `apollo-radon` are complete; 3 transform crates
+      `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, and
+      `apollo-stft` are complete; 2 transform crates
       remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
@@ -74,8 +75,8 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, and SHT;
-  FFT's helper edge is removed and 2 helper consumers remain.
+  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT,
+  Radon, and STFT; FFT's helper edge is removed and 1 helper consumer remains.
   - [/] D6-FFT [arch] (owner Codex, claimed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
@@ -101,6 +102,18 @@ Remaining replacement work:
     deleted. Evidence: 25 focused nextest cases including real-device
     differential/adjoint/FBP paths, Clippy, doctest, rustdoc, provider audit,
     and direct source/dependency scans.
+  - [x] D6-STFT [arch] (owner Codex, completed 2026-07-15; scope
+    `crates/apollo-stft/{Cargo.toml,README.md,src,infrastructure,benches}`,
+    ADR 0008, and D6 PM entries): `apollo-stft` 0.4.0 replaces direct WGPU
+    pipeline, binding, encoder, queue, transfer, and helper ownership with
+    typed Hephaestus radix-2, Bluestein, and overlap-add descriptors. Leto
+    remains the host-array boundary. The provider requests the six Bluestein
+    storage bindings through backend-neutral device limits. The obsolete
+    `wgpu_backend` forwarding module and raw device/queue accessors are
+    deleted. The WOLA theorem is documented in the README and ADR 0008.
+    Evidence: 46 focused nextest cases including real-device CPU differential,
+    non-power-of-two, and reusable-storage execution; Clippy, doctest, rustdoc,
+    provider audit, direct source/dependency scans, and semver classification.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,
@@ -214,9 +227,9 @@ Remaining replacement work:
     storage/domain contracts, warning-denied gates, provider audit, semver
     classification, and source scan find no direct `wgpu`, `pollster`, or helper
     edge.
-  The first fourteen slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT,
-  QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, and SHT retain Leto host arrays and
-  Apollo-owned transform source while all device, typed-buffer, pipeline,
+  Sixteen slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
+  Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, and STFT retain Leto
+  host arrays and Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
   "Apollo on Leto and Hephaestus backends" architecture: it
@@ -224,8 +237,8 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 2 remaining helper consumers: NUFFT and STFT. FFT and Radon now use
-    `hephaestus_wgpu::WgpuDevice` directly; its raw f32/native-precision
+  - 1 remaining helper consumer: NUFFT. FFT, Radon, and STFT now use
+    `hephaestus_wgpu::WgpuDevice` directly; FFT's raw f32/native-precision
     transport migration remains the active D4/D6-FFT scope.
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus

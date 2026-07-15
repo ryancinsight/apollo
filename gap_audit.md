@@ -1,5 +1,29 @@
 # Apollo Gap Audit
 
+## STFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced direct radix-2, Bluestein, and overlap-add WGPU pipeline,
+  binding, encoding, submission, and transfer ownership with typed Hephaestus
+  descriptors and ordered command streams. The provider receives the six
+  Bluestein storage bindings through its backend-neutral device-limits API.
+- Mathematical contract: DFT orthogonality recovers each windowed frame in
+  exact arithmetic. Applying the synthesis window and dividing weighted
+  overlap-add by the non-zero squared-window sum recovers the original sample.
+  ADR 0008 and the crate README distinguish this theorem from finite-precision
+  evidence.
+- Structural cleanup: deleted the `wgpu_backend` forwarding module, raw
+  device/queue accessors, direct WGPU/pollster/helper dependencies, the raw
+  Chirp-Z implementation, and raw benchmark claims. `kernel/dispatch.rs` is
+  the canonical home for shared geometry, chirp preparation, and grouped
+  provider dispatch. Leto remains the host boundary; `StftGpuBuffers` retains
+  typed provider-owned radix-2 storage.
+- Evidence tier: typed binding/layout and ordered stream semantics, then 46
+  value-semantic tests including real-device CPU differential, non-power-of-two
+  Bluestein, reconstruction, and reusable-storage coverage. Clippy, rustdoc,
+  provider audit, direct source/dependency scans, and semver classification
+  pass. No machine-checked proof is performed.
+- Residual: FFT raw transport and the sole NUFFT helper consumer remain.
+
 ## Radon Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct projection, adjoint, and filtered-backprojection
@@ -17,7 +41,7 @@
 - Evidence tier: typed binding/layout plus value-semantic 25-case suite with
   real-device execution, warning-denied Clippy, rustdoc, provider audit, and
   direct source/dependency scans. No machine-checked proof is performed.
-- Residual: FFT raw transport plus NUFFT and STFT helper consumers remain.
+- Residual: FFT raw transport and the sole NUFFT helper consumer remain.
 
 ## FFT Hephaestus migration provider-fit audit [arch]
 
@@ -39,8 +63,8 @@
   still required after implementation.
 - Residual: `apollo-fft` now uses `hephaestus_wgpu::WgpuDevice` directly and
   has no helper edge. Its raw `wgpu` and `pollster` transport remains the
-  active D6-FFT migration. NUFFT, Radon, and STFT are the three remaining
-  helper consumers, so the wrapper cannot yet be deleted.
+  active D6-FFT migration. NUFFT is the sole helper consumer, so the wrapper
+  cannot yet be deleted.
 
 ## SHT Hephaestus command-stream migration [arch]
 
