@@ -17,17 +17,18 @@
 ## D8 FrFT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
-- Phase: Execution
-- [ ] Claim the 578-line FrFT GPU verification monolith and retain its
+- Phase: Closure
+- [x] Claim the 578-line FrFT GPU verification monolith and retain its
   transform-specific CPU oracles, Leto contracts, typed-storage boundary, and
   unitary FrFT laws in `apollo-frft`.
-- [ ] Partition standard FrFT, typed-storage, and unitary FrFT contracts into
+- [x] Partition standard FrFT, typed-storage, and unitary FrFT contracts into
   private concern leaves, with one support leaf for repeated CPU conversion and
   value comparison only.
-- [ ] Preserve every existing device-present test, its inputs, and its derived
+- [x] Preserve every existing device-present test, its inputs, and its derived
   thresholds; do not introduce an Apollo-owned device abstraction or fallback.
-- [ ] Verify the focused all-feature suite, Clippy, doctest, rustdoc, provider
-  audit, structural scans, workspace integration, and patch SemVer surface.
+- [x] Verify the focused 52-case all-feature suite, Clippy, doctest, rustdoc,
+  provider audit, structural scans, 1,037-case workspace integration, and the
+  patch SemVer surface.
 
 ## Benchmark runtime provider convergence [arch]
 

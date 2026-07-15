@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] FrFT GPU verification is partitioned into metadata, standard,
+  typed-storage, unitary, and shared-support leaves. The established CPU
+  differentials, Leto host boundaries, and unitary identity/reversal/norm/
+  inverse-pair contracts remain intact; this does not add an Apollo-owned GPU
+  wrapper or change transform execution.
 - [arch] DCT/DST GPU verification is partitioned into capability,
   one-dimensional, typed-storage, two-dimensional, three-dimensional, and
   shared-support leaves. The existing independent CPU-separable oracle and

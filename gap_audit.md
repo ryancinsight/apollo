@@ -56,6 +56,32 @@
   remains provider-owned D8 work. The local split does not substitute for that
   upstream contract.
 
+## FrFT GPU verification-tree normalization [arch]
+
+- Finding: the FrFT transport had a 578-line verification monolith that mixed
+  metadata, standard FrFT CPU differentials, typed Leto storage, and unitary
+  FrFT contracts. Its layout hid the independent proof obligations behind one
+  device-present test function.
+- Resolution: `gpu/verification/` now has metadata, standard, typed-storage,
+  unitary, and support leaves. The support leaf is the sole home for device
+  availability, CPU conversion, and repeated value comparisons; it owns no
+  device handle, kernel, transform execution, or fallback path.
+- Mathematical contract: the existing Candan--Grünbaum theorem states
+  `DFrFT_a = V diag(exp(-i a k pi / 2)) V^T`. Because `V` is orthogonal and
+  every diagonal phase has unit modulus, the exact operator preserves the L2
+  norm and `DFrFT_-a(DFrFT_a(x)) = x`. The unitary leaf retains identity,
+  reversal, inverse-pair, norm, and independent CPU-differential checks; the
+  theorem's full proof and references remain in the owning FrFT plan module.
+- Evidence tier: 52 all-feature FrFT nextest cases and the 1,037-case
+  all-feature workspace nextest suite pass, including all device-present
+  standard, typed-storage, Leto, and unitary contracts. Warning-denied Clippy,
+  doctest, rustdoc, provider audit, structural scans, and patch SemVer surface
+  checks pass. This is a proof sketch and value-semantic evidence, not a
+  machine-checked proof or GPU performance claim.
+- Residual risk: generic cross-transform device/error/capability extraction
+  remains provider-owned D8 work. This local split does not create an Apollo
+  transport abstraction.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and
