@@ -215,7 +215,7 @@ pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> StftResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(StftError::PrecisionMismatch)

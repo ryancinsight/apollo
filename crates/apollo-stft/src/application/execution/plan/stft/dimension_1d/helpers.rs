@@ -1,9 +1,8 @@
 //! Thread-local scratch pools and helpers for 1D Short-Time Fourier Transform.
 
-use crate::domain::contracts::error::{StftError, StftResult};
+use crate::domain::contracts::error::StftResult;
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
-use std::borrow::Cow;
 
 thread_local! {
     pub(crate) static TYPED_SIGNAL64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
@@ -103,22 +102,6 @@ pub(crate) fn window_complex_real_frame_into(
             *slot *= factor;
         }
     }
-}
-
-pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> StftResult<Cow<'_, [T]>> {
-    if view.shape()[0] == 0 {
-        return Err(StftError::InputTooShort);
-    }
-    Ok(apollo_fft::application::utilities::leto_interop::view1_cow(
-        &view,
-    ))
-}
-
-pub(crate) fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> StftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
-        .ok_or(StftError::LengthMismatch)
 }
 
 pub(crate) fn with_forward_typed_workspaces<R>(

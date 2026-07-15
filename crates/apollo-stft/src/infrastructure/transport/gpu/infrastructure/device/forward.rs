@@ -4,9 +4,6 @@ use eunomia::Complex32;
 
 use crate::infrastructure::transport::gpu::application::plan::StftWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    leto_array1_from_slice, leto_view1_cow,
-};
 use crate::infrastructure::transport::gpu::infrastructure::{
     device::StftWgpuBackend, kernel::StftGpuKernel,
 };
@@ -67,9 +64,11 @@ impl StftWgpuBackend {
         plan: &StftWgpuPlan,
         signal: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let output = self.execute_forward(plan, &signal)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto STFT output".to_owned(),
+        })
     }
 
     /// Execute the forward STFT with typed real input and typed complex spectrum output.
@@ -126,7 +125,7 @@ impl StftWgpuBackend {
         output_precision: PrecisionProfile,
         signal: leto::ArrayView1<'_, I>,
     ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let output_len = forward_output_len(plan, signal.len())?;
         let mut output = vec![O::from_complex64(eunomia::Complex64::new(0.0, 0.0)); output_len];
         self.execute_forward_typed_into(
@@ -136,7 +135,9 @@ impl StftWgpuBackend {
             &signal,
             &mut output,
         )?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to allocate Mnemosyne-backed Leto STFT output".to_owned(),
+        })
     }
 }
 

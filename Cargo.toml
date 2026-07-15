@@ -9,6 +9,7 @@ members = [
     "crates/apollo-fwht",
     "crates/apollo-gft",
     "crates/apollo-hilbert",
+    "crates/apollo-leto-interop",
     "crates/apollo-mellin",
     "crates/apollo-ntt",
     "crates/apollo-nufft",

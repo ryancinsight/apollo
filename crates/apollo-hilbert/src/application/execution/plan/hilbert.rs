@@ -1,7 +1,5 @@
 //! Reusable Hilbert transform plan.
 
-use std::borrow::Cow;
-
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use crate::domain::metadata::length::SignalLength;
 use crate::domain::signal::analytic::{envelope_values_into, phase_values_into, AnalyticSignal};
@@ -66,9 +64,10 @@ impl HilbertPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let analytic = self.analytic_signal(&signal)?;
-        leto_complex_array1_from_slice(analytic.values())
+        apollo_leto_interop::try_array1_from_slice(analytic.values())
+            .ok_or(HilbertError::LengthMismatch)
     }
 
     /// Compute the analytic signal `x + i H{x}` into caller-owned storage.
@@ -112,9 +111,9 @@ impl HilbertPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> HilbertResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let output = self.transform(&signal)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(HilbertError::LengthMismatch)
     }
 
     /// Compute only the Hilbert quadrature component into caller-owned storage.
@@ -141,10 +140,10 @@ impl HilbertPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![T::from_f64(0.0); self.len()];
         self.transform_typed_into(&signal, &mut output, profile)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(HilbertError::LengthMismatch)
     }
 
     /// Compute the instantaneous envelope from the analytic signal.
@@ -214,23 +213,6 @@ fn with_observable_analytic_workspace<R>(
     f: impl FnOnce(&mut [Complex64]) -> HilbertResult<R>,
 ) -> HilbertResult<R> {
     OBSERVABLE_ANALYTIC_SCRATCH.with(|scratch| scratch.with_scratch(len, f))
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
-        .ok_or(HilbertError::LengthMismatch)
-}
-
-fn leto_complex_array1_from_slice(
-    values: &[Complex64],
-) -> HilbertResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
-        .ok_or(HilbertError::LengthMismatch)
 }
 
 #[cfg(test)]
@@ -424,7 +406,7 @@ impl HilbertGpuStorage for f16 {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(HilbertError::PrecisionMismatch)

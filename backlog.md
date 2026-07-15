@@ -66,16 +66,20 @@ Remaining replacement work:
   `ComputeBackend`/`FftDeviceOps`-for-`WgpuBackend` bridge, and `apollo-wgpu-helpers`'
   `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
   `coeus-autograd` consuming Apollo one-way (cycle broken).
-- [ ] [patch] Stage B2: remove transitive rayon; ensure all data-parallel paths route
-  through moirai.
-- [/] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
-  - [/] Re-base each transform's GPU execution onto Hephaestus typed buffers,
+- [ ] [arch] Stage B2: remove the remaining dev-only Rayon edge without
+  deleting benchmark coverage. Runtime source/provider audit shows all
+  data-parallel paths use Moirai; `cargo tree -i rayon --workspace` identifies
+  Criterion as the sole remaining dev-dependency source. Replace or upstream
+  the benchmark harness dependency before closing this item.
+- [x] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
+  - [x] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
       `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
       `apollo-wavelet`, `apollo-frft`, `apollo-hilbert`, `apollo-mellin`, and
       `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, `apollo-stft`,
-      and `apollo-nufft` are complete; 1 transform crate remains.
+      and `apollo-nufft` are complete; FFT completes the eighteenth transform
+      scope. Apollo owns no raw WGPU API or dependency edge.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
@@ -281,24 +285,19 @@ Remaining replacement work:
   The obsolete `apollo-wgpu-helpers` wrapper is deleted with no remaining
   manifest, lockfile, or source edge. All eighteen transform slices now use
   typed provider transport; no Apollo-owned WGPU migration scope remains.
-- [/] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
-  crate** (`apollo-leto-interop` or fold into a small `apollo-core`). Today they
-  live in `apollo-fft::application::utilities::leto_interop` (SRP violation —
-  apollo-fft is a transform crate doubling as a shared utility lib), **17** other
-  transform crates reach into `apollo_fft::…::leto_interop` (wrong dependency
-  direction: transform→transform), and they wrap it in **31** redundant per-crate
-  `leto_view1_cow`-style forwarders after CZT consolidated its duplicate.
-  Plan: move the canonical, **rank-polymorphic** helpers (`view_cow<…,const N>`,
-  `try_dense_from_contiguous<T,S,const N>`, `try_array1_from_slice`,
-  `leto_array1_from_vec`) into the shared crate; every transform (incl. apollo-fft)
-  depends on it; delete the 32 forwarders and call the shared SSOT directly.
-  Net: ~31 duplicate fns → one generic set; one inward dependency edge per crate.
-  Owner: `codex/apollo-leto-interop` (claimed 2026-07-15). The former sequencing
-  branch `refactor/apollo-fft-eunomia` is an ancestor of `main` through merged
-  PR 6, so it no longer blocks this extraction. Acceptance: every transform
-  reaches the shared crate directly; the old `apollo-fft` module and every
-  forwarding wrapper are deleted; zero-copy/materialization laws have
-  value-semantic tests.
+- [x] [arch] Stage D7: shared Leto interop SSOT (owner Codex, completed
+  2026-07-15; scope `crates/apollo-leto-interop`, all transform manifests and
+  direct host-boundary call sites, ADR 0010): `apollo-leto-interop` now owns
+  rank-polymorphic Cow materialization plus dense/slice Mnemosyne constructors.
+  Every transform depends on it directly. The FFT-private utility and all
+  transform-local forwarding wrappers are deleted; only the dedicated PyO3
+  Leto-to-NumPy ABI conversions remain. `PrecisionProfile` owns its own
+  storage/compute comparison. The representation theorem is documented in ADR
+  0010 and supported by contiguous, strided, transposed, and rank-three
+  value-semantic tests. Closure evidence: locked all-feature/no-default and
+  examples checks, warning-denied Clippy, configured all-feature nextest,
+  doctest, warning-clean rustdoc, provider audit, source-residue scans, and
+  0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC

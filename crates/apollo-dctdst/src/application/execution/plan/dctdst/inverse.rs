@@ -1,4 +1,3 @@
-use super::helpers::{leto_array1_from_slice, leto_view1_cow};
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
@@ -35,10 +34,11 @@ impl DctDstPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> DctDstResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let signal = leto_view1_cow(&signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![0.0_f64; self.len()];
         self.inverse_into(&signal, &mut output)?;
-        Ok(leto_array1_from_slice(&output))
+        Ok(apollo_leto_interop::try_array1_from_slice(&output)
+            .expect("DCT/DST output length must match Leto output shape"))
     }
 
     /// Execute a separable 2D inverse transform over a square `N x N` field.

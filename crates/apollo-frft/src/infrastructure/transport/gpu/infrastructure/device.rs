@@ -1,8 +1,6 @@
 //! Hephaestus device acquisition and FrFT execution boundary.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
@@ -111,9 +109,14 @@ impl FrftWgpuBackend {
         plan: &FrftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
-        self.execute_forward(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_forward(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto FrFT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute inverse from a Leto complex host view.
@@ -122,9 +125,14 @@ impl FrftWgpuBackend {
         plan: &FrftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
-        self.execute_inverse(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+        let input = apollo_leto_interop::view_cow(&input);
+        self.execute_inverse(plan, &input).and_then(|output| {
+            apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                WgpuError::InvalidPlan {
+                    message: "failed to allocate Mnemosyne-backed Leto FrFT output".to_owned(),
+                }
+            })
+        })
     }
 
     /// Execute the forward Candan--Gr\u00fcnbaum unitary DFrFT.
@@ -151,9 +159,15 @@ impl FrftWgpuBackend {
         plan: &UnitaryFrftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         self.execute_unitary_forward(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+            .and_then(|output| {
+                apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                    WgpuError::InvalidPlan {
+                        message: "failed to allocate Mnemosyne-backed Leto FrFT output".to_owned(),
+                    }
+                })
+            })
     }
 
     /// Execute inverse unitary DFrFT from a Leto complex host view.
@@ -162,9 +176,15 @@ impl FrftWgpuBackend {
         plan: &UnitaryFrftWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         self.execute_unitary_inverse(plan, &input)
-            .and_then(|output| leto_array1_from_slice(&output))
+            .and_then(|output| {
+                apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
+                    WgpuError::InvalidPlan {
+                        message: "failed to allocate Mnemosyne-backed Leto FrFT output".to_owned(),
+                    }
+                })
+            })
     }
 
     /// Execute direct forward FrFT with storage admitted by the concrete GPU contract.
@@ -291,7 +311,7 @@ impl FrftWgpuBackend {
         input: leto::ArrayView1<'_, T>,
         inverse: bool,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         let output_slice = output
@@ -404,45 +424,4 @@ fn mode_params(plan: &FrftWgpuPlan, inverse: bool) -> WgpuResult<(FrftMode, f32,
         scale_radius * scale_angle.cos(),
         scale_radius * scale_angle.sin(),
     ))
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto FrFT output".to_owned(),
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
 }

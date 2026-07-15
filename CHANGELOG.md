@@ -10,6 +10,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] `apollo-leto-interop` is the shared, rank-polymorphic Leto boundary
+  for every transform crate. It owns copy-on-write view materialization and
+  fallible dense/Mnemosyne output construction; `apollo-fft` 0.17.0 retains
+  only FFT behavior and precision-profile semantics.
 - `apollo-fft` 0.16.0 routes its f32 dense-FFT storage, kernel preparation,
   binding validation, command ordering, submission, and transfer through
   Hephaestus. The provider-native external split-buffer stream contract permits
@@ -48,6 +52,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Removed
 
+- `apollo-fft::application::utilities::leto_interop` and all transform-local
+  Leto forwarding wrappers are removed. The PyO3 Leto-to-NumPy conversion
+  helpers remain the dedicated external-ABI boundary.
 - The obsolete `apollo-wgpu-helpers` workspace crate is deleted. Its last
   consumer migrated to typed Hephaestus dispatch, leaving no manifest, lockfile,
   or source dependency edge.
@@ -69,6 +76,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` 0.17.0 removes the public
+  `application::utilities::leto_interop` path. Downstream callers depend on
+  `apollo-leto-interop` directly; no re-export or compatibility adapter is
+  retained.
 - [major] `apollo-fft` 0.16.0 changes `GpuFft3d::new` to accept a
   `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs, changes
   `GpuFft3dBuffers::new` to report typed allocation failure, and replaces raw
@@ -418,7 +429,6 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   Python bindings are partitioned into per-family leaf modules with an
   unchanged Python API.
 - [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
-- [patch] Canonical `apollo_fft::application::utilities::leto_interop` module consolidates Leto view/array interop helpers (`view1_cow`, dense view copies, fallible Leto array builders, precision-profile matching) previously duplicated across 33 crates; crate-local wrappers now delegate with their own error mapping, and infallible wrappers shed their `Result` returns.
 - [patch] `apollo-dctdst-wgpu` 2D/3D separable transforms reuse a single lane buffer per pass and borrow contiguous rows zero-copy, removing O(n^2)/O(n^3) per-iteration allocations; `apollo-dctdst` typed paths adopt thread-local Mnemosyne scratch pools for f64 conversion workspaces.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `6c7899d` (`0.5.0`), importing provider-side dense reshape/into_shape, permute aliases, and row-major to_contiguous materialization for later ndarray replacement work.
 - [minor] Apollo now pins Leto/Leto Ops to pushed Leto `a46dea9` (`0.4.0`), importing provider-side broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` into caller-owned output layouts while keeping Apollo public APIs unchanged.

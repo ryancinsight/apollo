@@ -8,7 +8,6 @@ use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use leto::Array2;
 use moirai::ParallelSlice;
-use std::borrow::Cow;
 
 /// Reusable real-valued 1D CWT plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -87,9 +86,13 @@ impl CwtPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> WaveletResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 2>> {
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         let coefficients = self.transform(signal.as_ref())?;
-        leto_array2_from_dense(coefficients.values())
+        apollo_leto_interop::try_dense_from_array(coefficients.values())
+            .ok_or(WaveletError::CoefficientShapeMismatch)
     }
 
     /// Execute the CWT for `f64`, `f32`, or mixed `f16` storage into a
@@ -109,27 +112,15 @@ impl CwtPlan {
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(WaveletError::EmptySignal);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = Array2::<T>::from_elem([self.scales.len(), self.len], T::from_f64(0.0));
         self.transform_typed_into(signal.as_ref(), &mut output, profile)?;
-        leto_array2_from_dense(&output)
+        apollo_leto_interop::try_dense_from_array(&output)
+            .ok_or(WaveletError::CoefficientShapeMismatch)
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> WaveletResult<Cow<'_, [T]>> {
-    if view.shape()[0] == 0 {
-        return Err(WaveletError::EmptySignal);
-    }
-    Ok(apollo_fft::application::utilities::leto_interop::view1_cow(
-        &view,
-    ))
-}
-
-fn leto_array2_from_dense<T: Copy>(
-    array: &Array2<T>,
-) -> WaveletResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
-        .ok_or(WaveletError::CoefficientShapeMismatch)
 }
 
 #[cfg(test)]

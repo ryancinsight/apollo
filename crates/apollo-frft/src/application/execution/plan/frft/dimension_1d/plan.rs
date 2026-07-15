@@ -1,6 +1,5 @@
 //! 1D Fractional Fourier Transform Plan
 
-use super::helpers::leto_view1_cow;
 use crate::application::execution::kernel::direct::direct_frft_forward_into;
 use crate::application::execution::plan::frft::storage::FrftStorage;
 use crate::domain::contracts::error::FrftError;
@@ -84,7 +83,7 @@ impl FrftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, FrftError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.n];
         self.forward_complex64_slice_into(&signal, &mut output)?;
         Ok(
@@ -102,7 +101,7 @@ impl FrftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
         Ok(
@@ -160,7 +159,7 @@ impl FrftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> Result<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>, FrftError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.n];
         self.inverse_complex64_slice_into(&signal, &mut output)?;
         Ok(
@@ -178,7 +177,7 @@ impl FrftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
         T::inverse_slice_into(self, &signal, &mut output, profile)?;
         Ok(

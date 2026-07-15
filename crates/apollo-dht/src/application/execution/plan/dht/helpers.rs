@@ -11,19 +11,12 @@ thread_local! {
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
-#[cfg(feature = "wgpu")]
-pub(crate) fn leto_view1_cow<'a, T: Copy>(
-    view: &leto::ArrayView1<'a, T>,
-) -> std::borrow::Cow<'a, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(view)
-}
-
 #[inline]
 pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> DhtResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(DhtError::PrecisionMismatch)

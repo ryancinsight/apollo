@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -12,6 +12,7 @@ hephaestus-wgpu = { workspace = true, optional = true }
 hephaestus-core = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
+apollo-leto-interop = { path = "../apollo-leto-interop" }
 half = { workspace = true }
 hermes-simd = { workspace = true }
 leto = { workspace = true }

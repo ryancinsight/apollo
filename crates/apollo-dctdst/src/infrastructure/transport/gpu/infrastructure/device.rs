@@ -2,8 +2,6 @@
 
 /// Forward execution implementations.
 pub mod forward;
-/// Helper functions for device execution.
-pub mod helpers;
 /// Inverse execution implementations.
 pub mod inverse;
 

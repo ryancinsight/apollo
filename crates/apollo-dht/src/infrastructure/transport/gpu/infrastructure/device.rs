@@ -1,6 +1,5 @@
 //! WGPU device acquisition for this transform backend.
 
-use crate::application::execution::plan::dht::helpers::leto_view1_cow;
 use crate::application::execution::plan::dht::HartleyGpuStorage;
 use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
@@ -86,7 +85,7 @@ impl DhtWgpuBackend {
         plan: &DhtWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_forward_into(
@@ -124,7 +123,7 @@ impl DhtWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_forward_typed_into(
@@ -165,7 +164,7 @@ impl DhtWgpuBackend {
         plan: &DhtWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_into(
@@ -197,7 +196,7 @@ impl DhtWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(&input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_typed_into(
@@ -293,19 +292,5 @@ impl DhtWgpuBackend {
                 })
             })
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input =
-            leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("leto input");
-        let cow = leto_view1_cow(&input.view());
-        assert!(matches!(cow, std::borrow::Cow::Borrowed(_)));
-        assert_eq!(&*cow, &[1.0_f32, 2.0, 3.0, 4.0]);
     }
 }

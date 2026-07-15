@@ -1,8 +1,5 @@
 //! Hephaestus device acquisition and Mellin execution boundary.
 
-use std::borrow::Cow;
-
-use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
@@ -105,7 +102,7 @@ impl MellinWgpuBackend {
         signal_min: f32,
         signal_max: f32,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         Self::validate_forward(plan, &signal, signal_min, signal_max, plan.samples())?;
         let mut output = mellin_complex_output(plan.samples());
         let output_slice = output
@@ -159,7 +156,7 @@ impl MellinWgpuBackend {
         out_max: f32,
         out_len: usize,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let spectrum = leto_view1_cow(spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         Self::validate_inverse(plan, &spectrum, out_min, out_max, out_len)?;
         let mut output = mellin_real_output(out_len);
         let output_slice = output
@@ -224,7 +221,7 @@ impl MellinWgpuBackend {
         signal_min: f32,
         signal_max: f32,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         Self::validate_typed_forward::<T>(plan, precision, &signal, signal_min, signal_max)?;
         let mut output = mellin_complex_output(plan.samples());
         let output_slice = output
@@ -351,10 +348,6 @@ impl MellinWgpuBackend {
     }
 }
 
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
 fn mellin_complex_output(
     samples: usize,
 ) -> leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1> {
@@ -363,34 +356,4 @@ fn mellin_complex_output(
 
 fn mellin_real_output(samples: usize) -> leto::Array<f32, leto::MnemosyneStorage<f32>, 1> {
     leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([samples])
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1.0_f32, 99.0, 2.0, 99.0, 3.0, 99.0, 4.0, 99.0])
-                .expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1.0, 2.0, 3.0, 4.0]);
-    }
 }

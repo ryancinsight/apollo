@@ -2,12 +2,10 @@ use crate::infrastructure::kernel::kaiser_bessel::{fft_signed_index, i0, kb_kern
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::NufftComplexStorage;
-use apollo_fft::application::utilities::leto_interop;
 use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use leto::Array3;
 use std::borrow::Cow;
-
 pub(crate) struct Fast1DMetadata {
     pub(crate) oversampled_len: usize,
     pub(crate) beta: f64,
@@ -222,9 +220,6 @@ pub(crate) fn fast_3d_metadata(plan: &NufftWgpuPlan3D) -> NufftWgpuResult<Fast3D
     })
 }
 
-pub(crate) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
 pub(crate) fn positions3_from_leto_view(
     view: leto::ArrayView2<'_, f32>,
 ) -> NufftWgpuResult<Vec<(f32, f32, f32)>> {
@@ -260,18 +255,8 @@ pub(crate) fn positions3_from_leto_view(
 pub(crate) fn array3_from_leto_view<T: Copy>(view: leto::ArrayView3<'_, T>) -> Array3<T> {
     view.to_contiguous()
 }
-pub(crate) fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| NufftWgpuError::HostArrayLayout {
+pub(crate) fn host_array_error() -> NufftWgpuError {
+    NufftWgpuError::HostArrayLayout {
         message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output".to_string(),
-    })
-}
-
-pub(crate) fn leto_array3_from_dense<T: Copy>(
-    values: &Array3<T>,
-) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| NufftWgpuError::HostArrayLayout {
-        message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output".to_string(),
-    })
+    }
 }

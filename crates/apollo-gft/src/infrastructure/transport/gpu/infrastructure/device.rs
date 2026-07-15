@@ -1,7 +1,5 @@
 //! Hephaestus device acquisition and GFT execution boundary.
 
-use std::borrow::Cow;
-
 use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
 
@@ -10,7 +8,6 @@ use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilitie
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{GftDirection, GftGpuKernel};
 use crate::GftGpuStorage;
-use apollo_fft::application::utilities::leto_interop;
 use hephaestus_wgpu::WgpuDevice;
 
 thread_local! {
@@ -95,8 +92,8 @@ impl GftWgpuBackend {
         signal: leto::ArrayView1<'_, f32>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let signal = leto_view1_cow(signal);
-        let basis = leto_view1_cow(basis);
+        let signal = apollo_leto_interop::view_cow(&signal);
+        let basis = apollo_leto_interop::view_cow(&basis);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_forward_into(
@@ -142,8 +139,8 @@ impl GftWgpuBackend {
         spectrum: leto::ArrayView1<'_, f32>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let spectrum = leto_view1_cow(spectrum);
-        let basis = leto_view1_cow(basis);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
+        let basis = apollo_leto_interop::view_cow(&basis);
         let mut output =
             leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_into(
@@ -179,8 +176,8 @@ impl GftWgpuBackend {
         signal: leto::ArrayView1<'_, T>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal);
-        let basis = leto_view1_cow(basis);
+        let signal = apollo_leto_interop::view_cow(&signal);
+        let basis = apollo_leto_interop::view_cow(&basis);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_forward_typed_into(
@@ -217,8 +214,8 @@ impl GftWgpuBackend {
         spectrum: leto::ArrayView1<'_, T>,
         basis: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let spectrum = leto_view1_cow(spectrum);
-        let basis = leto_view1_cow(basis);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
+        let basis = apollo_leto_interop::view_cow(&basis);
         let mut output =
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_typed_into(
@@ -333,38 +330,5 @@ impl GftWgpuBackend {
             });
         }
         Ok(())
-    }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }

@@ -1,14 +1,12 @@
 //! 1D Fast Walsh-Hadamard Transform plan.
 
+use super::storage::FwhtStorage;
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use leto::Array1;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-
-use super::storage::FwhtStorage;
 
 fn scale_array<T>(data: &mut Array1<T>, scale: T)
 where
@@ -415,7 +413,7 @@ impl FwhtPlan {
         if input.size() != self.n || output.size() != self.n {
             return Err(FwhtError::LengthMismatch);
         }
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         if let Some(output_slice) = output.as_mut_slice() {
             return transform(self, &signal, output_slice);
         }
@@ -429,10 +427,6 @@ impl FwhtPlan {
         }
         Ok(())
     }
-}
-
-fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 #[cfg(test)]

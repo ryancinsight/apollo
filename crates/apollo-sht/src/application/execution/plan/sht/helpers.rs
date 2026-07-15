@@ -21,7 +21,7 @@ pub(super) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> ShtResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(ShtError::PrecisionMismatch)
@@ -182,20 +182,6 @@ pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> A
     // Contiguous views borrow without copy; strided views materialize once into
     // logical row-major order. One canonical Leto entry point covers both.
     view.to_contiguous()
-}
-
-pub(super) fn leto_array2_from_dense<T: Copy>(
-    array: &Array2<T>,
-) -> ShtResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    if array.as_slice().is_some() {
-        apollo_fft::application::utilities::leto_interop::try_dense_from_contiguous(array)
-            .ok_or(ShtError::CoefficientShapeMismatch)
-    } else {
-        let [rows, cols] = array.shape();
-        let values = array.iter().copied().collect::<Vec<_>>();
-        leto::Array::from_mnemosyne_vec([rows, cols], values)
-            .map_err(|_| ShtError::CoefficientShapeMismatch)
-    }
 }
 
 pub(super) fn coefficients_from_leto_view(

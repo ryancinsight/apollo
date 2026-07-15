@@ -7,8 +7,6 @@ use crate::infrastructure::kernel::resample::{
 };
 use apollo_fft::{f16, PrecisionProfile};
 use eunomia::Complex64;
-use std::borrow::Cow;
-
 /// Dense Mellin log-frequency spectrum.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MellinSpectrum {
@@ -94,10 +92,10 @@ impl MellinPlan {
         signal_min: f64,
         signal_max: f64,
     ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![0.0; self.config.samples()];
         self.forward_resample(&signal, signal_min, signal_max, &mut output)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(MellinError::LengthMismatch)
     }
 
     /// Resample typed input onto the logarithmic scale grid into caller-owned storage.
@@ -124,10 +122,10 @@ impl MellinPlan {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let mut output = vec![T::from_f64(0.0); self.config.samples()];
         self.forward_resample_typed_into(&signal, signal_min, signal_max, &mut output, profile)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(MellinError::LengthMismatch)
     }
 
     /// Evaluate the real Mellin moment `M(s) = int f(r) r^(s-1) dr`.
@@ -153,7 +151,7 @@ impl MellinPlan {
         signal_max: f64,
         exponent: f64,
     ) -> MellinResult<f64> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         self.moment(&signal, signal_min, signal_max, exponent)
     }
 
@@ -178,7 +176,7 @@ impl MellinPlan {
         exponent: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<f64> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         self.moment_typed(&signal, signal_min, signal_max, exponent, profile)
     }
 
@@ -205,9 +203,10 @@ impl MellinPlan {
         signal_min: f64,
         signal_max: f64,
     ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let spectrum = self.forward_spectrum(&signal, signal_min, signal_max)?;
-        leto_array1_from_slice(spectrum.values())
+        apollo_leto_interop::try_array1_from_slice(spectrum.values())
+            .ok_or(MellinError::LengthMismatch)
     }
 
     /// Compute the direct log-frequency Mellin spectrum for typed input storage.
@@ -229,9 +228,10 @@ impl MellinPlan {
         signal_max: f64,
         profile: PrecisionProfile,
     ) -> MellinResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal);
+        let signal = apollo_leto_interop::view_cow(&signal);
         let spectrum = self.forward_spectrum_typed(&signal, signal_min, signal_max, profile)?;
-        leto_array1_from_slice(spectrum.values())
+        apollo_leto_interop::try_array1_from_slice(spectrum.values())
+            .ok_or(MellinError::LengthMismatch)
     }
 
     /// Recover the time-domain signal from a log-frequency Mellin spectrum.
@@ -306,7 +306,7 @@ impl MellinPlan {
     ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
         let mut output = vec![0.0; output_len];
         self.inverse_spectrum(spectrum, output_min, output_max, &mut output)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(MellinError::LengthMismatch)
     }
 
     /// Recover an output signal from a Leto spectrum view.
@@ -317,7 +317,7 @@ impl MellinPlan {
         output_max: f64,
         output_len: usize,
     ) -> MellinResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let spectrum = leto_view1_cow(spectrum);
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         self.inverse_spectrum_leto(
             &MellinSpectrum::new(spectrum.into_owned()),
             output_min,
@@ -547,21 +547,11 @@ fn validate_signal_domain_typed<T>(
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> MellinResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(MellinError::PrecisionMismatch)
     }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    apollo_fft::application::utilities::leto_interop::try_array1_from_slice(values)
-        .ok_or(MellinError::LengthMismatch)
 }
 
 #[cfg(test)]

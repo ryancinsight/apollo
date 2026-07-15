@@ -1,8 +1,6 @@
 //! Validated SHT host conversion, grid construction, and Leto interop.
 
-use std::borrow::Cow;
-
-use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
 
@@ -254,10 +252,6 @@ fn quantize_grid_component(value: f64, component: &'static str) -> WgpuResult<f3
     quantize_accelerator_component(value, component)
 }
 
-pub(super) fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-
 pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()
 }
@@ -284,44 +278,12 @@ pub(super) fn coefficients_from_leto_view(
     ))
 }
 
-pub(super) fn leto_array2_from_dense<T: Copy>(
-    values: &Array2<T>,
-    label: &str,
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 2>> {
-    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: format!("failed to allocate Mnemosyne-backed Leto {label}"),
-    })
-}
-
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-
     use eunomia::Complex64;
-    use leto::SliceArg;
 
-    use super::{leto_view1_cow, populate_modes};
+    use super::populate_modes;
     use crate::SphericalHarmonicCoefficients;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
 
     #[test]
     fn inverse_rejects_nonrepresentable_coefficients_before_provider_dispatch() {

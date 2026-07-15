@@ -4,8 +4,6 @@ use crate::domain::contracts::error::CztError;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
-use std::borrow::Cow;
-
 thread_local! {
     pub(crate) static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -30,7 +28,7 @@ pub(crate) fn validate_profile(
     actual: PrecisionProfile,
     expected: PrecisionProfile,
 ) -> Result<(), CztError> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(CztError::PrecisionMismatch)
@@ -49,12 +47,6 @@ pub(crate) fn with_complex64_workspaces<R>(
                 .with(|out_pool| out_pool.with_scratch(output_len, |output64| f(input64, output64)))
         })
     })
-}
-
-#[must_use]
-#[inline]
-pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 #[cfg(test)]

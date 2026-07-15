@@ -15,8 +15,6 @@ use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-
 thread_local! {
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
@@ -77,7 +75,7 @@ impl QftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
         self.forward_complex64_slice_into(&signal, &mut output)?;
         Ok(
@@ -132,7 +130,7 @@ impl QftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
         Ok(
@@ -159,7 +157,7 @@ impl QftPlan {
         &self,
         input: leto::ArrayView1<'_, Complex64>,
     ) -> QftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![Complex64::new(0.0, 0.0); self.len()];
         self.inverse_complex64_slice_into(&signal, &mut output)?;
         Ok(
@@ -214,7 +212,7 @@ impl QftPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(&input);
+        let signal = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
         T::inverse_slice_into(self, &signal, &mut output, profile)?;
         Ok(
@@ -461,7 +459,7 @@ impl QftGpuStorage for [f16; 2] {
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
-    if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
+    if actual.matches_storage_and_compute(expected) {
         Ok(())
     } else {
         Err(QftError::PrecisionMismatch)
@@ -495,10 +493,6 @@ pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
         TYPED_OUTPUT64_SCRATCH
             .with(|output_scratch| (input_scratch.capacity(), output_scratch.capacity()))
     })
-}
-
-fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow<'a, [T]> {
-    apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
 /// Convenience wrapper for forward QFT.

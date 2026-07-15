@@ -5,9 +5,8 @@ use super::super::storage::{
     StftSpectrumStorage,
 };
 use super::helpers::{
-    leto_array1_from_slice, leto_view1_cow, window_complex_real_frame_into,
-    window_signal_frame_into, with_forward_typed_workspaces, with_inverse_typed_workspaces,
-    with_inverse_wola_workspaces,
+    window_complex_real_frame_into, window_signal_frame_into, with_forward_typed_workspaces,
+    with_inverse_typed_workspaces, with_inverse_wola_workspaces,
 };
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
@@ -116,11 +115,14 @@ impl StftPlan {
         &self,
         signal: leto::ArrayView1<'_, f64>,
     ) -> StftResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(StftError::InputTooShort);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         let frames = self.frame_count(signal.len());
         let mut output = vec![Complex64::new(0.0, 0.0); frames * self.spectrum_len()];
         self.forward_f64_slice_into(signal.as_ref(), &mut output)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(StftError::LengthMismatch)
     }
 
     /// Forward STFT with a user-supplied analysis window.
@@ -210,7 +212,10 @@ impl StftPlan {
     ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
-        let signal = leto_view1_cow(signal)?;
+        if signal.shape()[0] == 0 {
+            return Err(StftError::InputTooShort);
+        }
+        let signal = apollo_leto_interop::view_cow(&signal);
         let signal = Array1::from(signal.into_owned());
         let frames = self.frame_count(signal.size());
         let mut output = Array1::<O>::from_elem(
@@ -218,7 +223,10 @@ impl StftPlan {
             O::from_complex64(Complex64::new(0.0, 0.0)),
         );
         self.forward_typed_into(&signal, &mut output, profile)?;
-        leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
+        apollo_leto_interop::try_array1_from_slice(
+            output.as_slice().expect("STFT output must be contiguous"),
+        )
+        .ok_or(StftError::LengthMismatch)
     }
 
     pub(crate) fn forward_f64_slice_into(
@@ -291,10 +299,13 @@ impl StftPlan {
         spectrum: leto::ArrayView1<'_, Complex64>,
         signal_len: usize,
     ) -> StftResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 1>> {
-        let spectrum = leto_view1_cow(spectrum)?;
+        if spectrum.shape()[0] == 0 {
+            return Err(StftError::InputTooShort);
+        }
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let mut output = vec![0.0; signal_len];
         self.inverse_complex64_slice_into(spectrum.as_ref(), signal_len, &mut output)?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or(StftError::LengthMismatch)
     }
 
     /// Inverse STFT into a pre-allocated output buffer.
@@ -422,10 +433,16 @@ impl StftPlan {
     ) -> StftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
         validate_profile(profile, T::PROFILE)?;
         validate_profile(profile, O::PROFILE)?;
-        let spectrum = leto_view1_cow(spectrum)?;
+        if spectrum.shape()[0] == 0 {
+            return Err(StftError::InputTooShort);
+        }
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let spectrum = Array1::from(spectrum.into_owned());
         let mut output = Array1::<O>::from_elem([signal_len], O::from_f64(0.0));
         self.inverse_typed_into(&spectrum, signal_len, &mut output, profile)?;
-        leto_array1_from_slice(output.as_slice().expect("STFT output must be contiguous"))
+        apollo_leto_interop::try_array1_from_slice(
+            output.as_slice().expect("STFT output must be contiguous"),
+        )
+        .ok_or(StftError::LengthMismatch)
     }
 }

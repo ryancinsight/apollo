@@ -1,6 +1,5 @@
 //! WGPU device acquisition for this transform backend.
 
-use apollo_fft::application::utilities::leto_interop;
 use std::borrow::Cow;
 
 use crate::FwhtStorage;
@@ -69,9 +68,11 @@ impl FwhtWgpuBackend {
         plan: &FwhtWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_vec(output)
+        apollo_leto_interop::try_array1_from_vec(output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to construct Mnemosyne-backed Leto output".to_owned(),
+        })
     }
 
     /// Execute the unnormalized forward 1D FWHT with caller-owned typed storage.
@@ -102,10 +103,12 @@ impl FwhtWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_vec(output)
+        apollo_leto_interop::try_array1_from_vec(output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to construct Mnemosyne-backed Leto output".to_owned(),
+        })
     }
 
     /// Execute the normalized inverse 1D FWHT for a real-valued `f32` spectrum.
@@ -122,9 +125,11 @@ impl FwhtWgpuBackend {
         plan: &FwhtWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let output = self.execute_inverse(plan, &input)?;
-        leto_array1_from_vec(output)
+        apollo_leto_interop::try_array1_from_vec(output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to construct Mnemosyne-backed Leto output".to_owned(),
+        })
     }
 
     /// Execute the normalized inverse 1D FWHT with caller-owned typed storage.
@@ -149,10 +154,12 @@ impl FwhtWgpuBackend {
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
+        let input = apollo_leto_interop::view_cow(&input);
         let mut output = vec![T::from_f64(0.0); plan.len()];
         self.execute_inverse_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_vec(output)
+        apollo_leto_interop::try_array1_from_vec(output).ok_or_else(|| WgpuError::InvalidPlan {
+            message: "failed to construct Mnemosyne-backed Leto output".to_owned(),
+        })
     }
 
     fn validate_plan_input(plan: &FwhtWgpuPlan, input: &[f32]) -> WgpuResult<()> {
@@ -229,31 +236,5 @@ fn write_typed_output<T: FwhtStorage>(source: &[f32], output: &mut [T]) {
         for (slot, value) in output.iter_mut().zip(source.iter().copied()) {
             *slot = T::from_f64(f64::from(value));
         }
-    }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_vec<T>(
-    values: Vec<T>,
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([values.len()], values)
-        .map_err(|error| WgpuError::InvalidPlan {
-            message: format!("failed to construct Mnemosyne-backed Leto output: {error}"),
-        })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input =
-            leto::Array1::from_shape_vec([4], vec![1.0_f32, 2.0, 3.0, 4.0]).expect("leto input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, std::borrow::Cow::Borrowed(_)));
-        assert_eq!(&*cow, &[1.0_f32, 2.0, 3.0, 4.0]);
     }
 }

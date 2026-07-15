@@ -2,17 +2,19 @@
 
 ## Shared Leto interop ownership [arch]
 
-- Target version: `apollo-fft` next pre-1.0 breaking integration.
-- Phase: Execution
-- [/] Record the ownership decision and extract rank-polymorphic Leto view and
+- Target version: `apollo-fft` 0.17.0 pre-1.0 breaking integration.
+- Phase: Closure
+- [x] Record the ownership decision and extract rank-polymorphic Leto view and
   dense-array conversions into `apollo-leto-interop`; migrate all transform
   call sites directly with no `apollo-fft` forwarding module or local wrapper.
-- [ ] Move storage/compute profile comparison onto `PrecisionProfile`, where
+- [x] Move storage/compute profile comparison onto `PrecisionProfile`, where
   that semantic contract belongs, and delete the old utility function.
-- [ ] Verify dense views borrow, strided views materialize in logical
+- [x] Verify dense views borrow, strided views materialize in logical
   row-major order, and Mnemosyne outputs preserve shape and values.
-- [ ] Run workspace provider, examples, warning, test, doctest, rustdoc, and
-  source-residue gates; synchronize the D4/D7 audit record and release notes.
+- [x] Run locked all-feature/no-default and examples checks, warning-denied
+  Clippy, configured all-feature nextest, doctest, warning-clean rustdoc,
+  provider audit, source-residue scans, and major SemVer classification;
+  synchronize the D4/D7 audit record and release notes.
 
 ## Native-f16 FFT Hephaestus migration [arch]
 

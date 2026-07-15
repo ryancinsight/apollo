@@ -3,8 +3,8 @@
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
-use crate::application::utilities::leto_interop::{try_dense_from_contiguous, view1_cow};
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
+use apollo_leto_interop::{try_dense_from_contiguous, view_cow};
 use eunomia::Complex;
 use eunomia::Complex64;
 use leto::{Array1, Array2, Array3};
@@ -136,7 +136,7 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
-    let signal = view1_cow(&field);
+    let signal = view_cow(&field);
     let spectrum = fft_1d_slice_typed::<T>(&signal);
     leto::Array::<Complex<T::PlanScalar>, leto::MnemosyneStorage<Complex<T::PlanScalar>>, 1>::from_mnemosyne_vec(
         [spectrum.len()],

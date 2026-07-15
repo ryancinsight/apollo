@@ -6,9 +6,8 @@ use leto::{Array1, Array3};
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
-    leto_array1_from_slice, leto_array3_from_dense, leto_view1_cow, positions3_from_leto_view,
-    typed_to_complex32, validate_pair_lengths, validate_typed_profile, validate_usize_to_u32,
-    write_typed_output,
+    host_array_error, positions3_from_leto_view, typed_to_complex32, validate_pair_lengths,
+    validate_typed_profile, validate_usize_to_u32, write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::NufftGpuKernel;
@@ -72,12 +71,15 @@ impl NufftWgpuBackend {
         positions: leto::ArrayView1<'_, f32>,
         values: leto::ArrayView1<'_, Complex32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 1>> {
-        let positions = leto_view1_cow(positions);
-        let values = leto_view1_cow(values);
+        let positions = apollo_leto_interop::view_cow(&positions);
+        let values = apollo_leto_interop::view_cow(&values);
         let output = self.execute_type1_1d(plan, positions.as_ref(), values.as_ref())?;
-        leto_array1_from_slice(output.as_slice().ok_or(NufftWgpuError::InvalidPlan {
-            message: "type1 1D Leto output must be contiguous",
-        })?)
+        apollo_leto_interop::try_array1_from_slice(output.as_slice().ok_or(
+            NufftWgpuError::InvalidPlan {
+                message: "type1 1D Leto output must be contiguous",
+            },
+        )?)
+        .ok_or_else(host_array_error)
     }
 
     /// Execute exact direct Type-1 1D NUFFT from typed Leto views.
@@ -88,8 +90,8 @@ impl NufftWgpuBackend {
         positions: leto::ArrayView1<'_, f32>,
         values: leto::ArrayView1<'_, T>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let positions = leto_view1_cow(positions);
-        let values = leto_view1_cow(values);
+        let positions = apollo_leto_interop::view_cow(&positions);
+        let values = apollo_leto_interop::view_cow(&values);
         let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.domain().n];
         self.execute_type1_1d_typed_into(
             plan,
@@ -98,7 +100,7 @@ impl NufftWgpuBackend {
             values.as_ref(),
             &mut output,
         )?;
-        leto_array1_from_slice(&output)
+        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }
 
     /// Execute exact direct Type-1 3D NUFFT on WGPU.
@@ -170,9 +172,13 @@ impl NufftWgpuBackend {
         values: leto::ArrayView1<'_, Complex32>,
     ) -> NufftWgpuResult<leto::Array<Complex64, leto::MnemosyneStorage<Complex64>, 3>> {
         let positions = positions3_from_leto_view(positions)?;
-        let values = leto_view1_cow(values);
+        let values = apollo_leto_interop::view_cow(&values);
         let output = self.execute_type1_3d(plan, &positions, values.as_ref())?;
-        leto_array3_from_dense(&output)
+        apollo_leto_interop::try_dense_from_array(&output).ok_or_else(|| {
+            NufftWgpuError::HostArrayLayout {
+                message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output".to_owned(),
+            }
+        })
     }
 
     /// Execute exact direct Type-1 3D NUFFT from typed Leto views.
@@ -184,7 +190,7 @@ impl NufftWgpuBackend {
         values: leto::ArrayView1<'_, T>,
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
         let positions = positions3_from_leto_view(positions)?;
-        let values = leto_view1_cow(values);
+        let values = apollo_leto_interop::view_cow(&values);
         let grid = plan.grid();
         let mut output = Array3::from_elem(
             [grid.nx, grid.ny, grid.nz],
@@ -197,6 +203,10 @@ impl NufftWgpuBackend {
             values.as_ref(),
             &mut output,
         )?;
-        leto_array3_from_dense(&output)
+        apollo_leto_interop::try_dense_from_array(&output).ok_or_else(|| {
+            NufftWgpuError::HostArrayLayout {
+                message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output".to_owned(),
+            }
+        })
     }
 }
