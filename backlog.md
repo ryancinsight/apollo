@@ -74,6 +74,17 @@ Remaining replacement work:
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
   DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, and Mellin; 7 transform crates remain.
+  - [/] D6-SFT [arch] (owner Codex, claimed 2026-07-14; scope
+    `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
+    entries): replace the direct SFT WGPU pipeline, binding, encoder, queue,
+    and transfer mechanics with one typed Hephaestus kernel and ordered command
+    stream. Preserve the direct DFT/inverse theorem, Leto COW host boundaries,
+    Mnemosyne-backed outputs, and deterministic sparse support selection. Seal
+    accelerator storage to `Complex32` and `[f16; 2]`; reject `Complex64`
+    narrowing at compile time. Acceptance: real-device CPU differential and
+    inverse evidence, negative storage/plan contracts, nextest, doctest,
+    warning-denied diagnostics, provider audit, semver classification, and no
+    direct `wgpu`, `pollster`, or helper edge.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
