@@ -77,6 +77,12 @@ Remaining replacement work:
   DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT,
   Radon, STFT, and NUFFT; no helper consumers remain. Delete the unreferenced
   workspace crate after this migration is independently merged.
+  - [/] D6-helper-delete [arch] (owner Codex, claimed 2026-07-15; scope
+    `Cargo.toml`, `Cargo.lock`, `crates/apollo-wgpu-helpers/`, active D6
+    documentation, and PM entries): delete the unreferenced wrapper rather than
+    retaining a compatibility substrate. Acceptance requires locked metadata,
+    provider audit, a dependency-inversion scan with no helper package or source
+    edge, and the relevant workspace gates after removal.
   - [x] D6-FFT-f32 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace

@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## Obsolete wrapper deletion: apollo-wgpu-helpers [arch]
+
+- Target version: workspace integration only; no published wrapper remains.
+- Phase: Execution
+- [x] Confirm `cargo tree -i apollo-wgpu-helpers --workspace` reports only the
+  wrapper itself and manifest/source scans identify no remaining consumer.
+- [/] Remove the workspace member, wrapper source tree, lockfile package, and
+  active dependency/documentation references without preserving a forwarding
+  compatibility path.
+- [ ] Verify locked metadata, provider audit, source/dependency scans, and
+  relevant workspace gates; then mark D6 complete.
+
 ## Hephaestus kernel migration: NUFFT [arch]
 
 - Target version: `apollo-nufft` 0.3.0
