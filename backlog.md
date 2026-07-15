@@ -121,12 +121,10 @@ Remaining replacement work:
     device radix/Bluestein evidence, direct source/manifest scans, package and
     workspace gates, provider audit, and major SemVer classification pass. The
     3×3×3 Bluestein roundtrip uses the derived `γ_265·‖input‖₁` bound; this is
-    analytical plus empirical evidence, not a machine-checked proof. The
-    temporary `196411e` provider pin
-    carries required `DeviceFeature` acquisition while
+    analytical plus empirical evidence, not a machine-checked proof.
     [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
-    awaits merge; remove the revision quarantine in the same consumer sweep
-    after its default-branch commit is available.
+    merged at `4ef4f52`; the completed consumer sweep tracks the provider
+    default branch with `Cargo.lock` as the sole reproducibility pin.
   - [x] D6-Radon [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-radon/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     ADR 0007, and D6 PM entries): `apollo-radon` 0.3.0 replaces direct WGPU

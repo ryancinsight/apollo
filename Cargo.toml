@@ -66,8 +66,8 @@ leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
 # Hephaestus is Apollo's shared Atlas accelerator substrate (atlas ADR 0001).
 # Transform crates depend on its typed device and kernel contracts directly.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "196411e" }
-hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "196411e" }
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"

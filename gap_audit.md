@@ -135,9 +135,9 @@
   examples, major SemVer classification, and direct manifest/Rust API scans
   pass. The provider audit's lexical WGPU count includes feature labels, not a
   direct `wgpu` dependency or Rust API use.
-- Residual risk: Apollo temporarily pins reviewed `196411e` pending
-  [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
-  merge, then must remove the revision quarantine in the same consumer sweep.
+- Integration state: [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
+  merged at `4ef4f52`; Apollo tracks the provider default branch and relies on
+  `Cargo.lock` for reproducibility. No revision quarantine remains.
 - Semver classification: against `96e67a2` (0.15.0), the minor classifier
   rejects the raw-device constructor removals and deleted raw stage structs;
   the major classifier passes. This is the documented pre-1.0 0.16.0 breaking

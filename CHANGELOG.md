@@ -22,8 +22,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   plan. Its f16 WGSL sources and radix-two capability are selected by a sealed
   storage contract; f32 retains radix-four selection without a second
   dispatcher. `ShaderF16` remains a required provider capability.
-- Apollo temporarily pins Hephaestus 0.14.0 at the reviewed required-feature
-  acquisition commit while its provider PR merges.
+- Apollo now tracks the Hephaestus default branch after its reviewed required-
+  feature acquisition API merged. `Cargo.lock` remains the reproducible pin.
 
 ### Fixed
 
