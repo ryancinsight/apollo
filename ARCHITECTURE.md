@@ -64,11 +64,11 @@ The table below is the authoritative record of per-crate precision support. Each
 | apollo-czt | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse CZT; f16 promoted at host boundary |
 | apollo-dctdst | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32 storage, f32 compute) | Mixed f16 host path present |
 | apollo-dht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
-| apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | f16 promoted at host boundary; UnitaryFrftGpuKernel |
+| apollo-frft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Hephaestus typed direct/unitary kernels; Complex64 excluded from GPU |
 | apollo-fwht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-gft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
-| apollo-hilbert | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse analytic-mask; f16 promoted at boundary |
-| apollo-mellin | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse Mellin spectrum; f16 promoted at boundary |
+| apollo-hilbert | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Typed Hephaestus analytic/inverse masks; f16 promoted and f64 excluded at GPU boundary |
+| apollo-mellin | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Typed Hephaestus log-grid forward/inverse; f16 promoted and f64 excluded at GPU boundary |
 | apollo-ntt | exact u64 residues (u64 mod p) | exact u32 residues (u32 quantized, u32 modular) | Floating mixed-precision unsupported by design |
 | apollo-nufft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
 | apollo-qft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
@@ -81,7 +81,16 @@ The table below is the authoritative record of per-crate precision support. Each
 
 ### Key: native-f16 GPU (apollo-fft wgpu feature)
 
-When the `native-f16` feature is enabled and the WGPU adapter exposes `wgpu::Features::SHADER_F16`, `GpuFft3dF16Native` executes all butterfly arithmetic in `f16` inside the shader. The host boundary converts `f32` input to `f16` before upload and `f16` output to `f32` after readback. Twiddle factors are computed in `f32` then narrowed to `f16` at plan build time to bound two-source error. Per-output accumulation error is `O(log N)·ε_f16·‖input‖₁`, where `ε_f16 ≈ 9.77×10⁻⁴`. Non-power-of-two sizes are supported via a Bluestein chirp-Z f16 shader (`chirp_native_f16.wgsl`), and odd element counts use one padding element to satisfy WGPU storage-binding alignment without changing the logical shape.
+When the `native-f16` feature is enabled, `GpuFft3dF16Native` requires
+`DeviceFeature::ShaderF16` from `hephaestus_wgpu::WgpuDevice` and executes all
+butterfly arithmetic in `f16` inside the shader. The host boundary converts
+`f32` input to half bit patterns before upload and half output to `f32` after
+readback. The sealed FFT storage contract reuses the f32 typed descriptor and
+command stream while selecting f16 WGSL and radix-two entries. Twiddle factors
+are computed in `f32` then narrowed to `f16`. Non-power-of-two sizes use the
+Bluestein chirp-Z shader (`chirp_native_f16.wgsl`); the 3×3×3 roundtrip test
+uses the derived `γ_265·‖input‖₁` bound with half unit roundoff `u = 2⁻¹¹`.
+No Apollo-owned WGPU API remains in this path.
 
 ### Key: NTT precision contract
 
@@ -101,8 +110,9 @@ Its eigenvector basis V satisfies V^T V = I and eigenvectors are symmetric or an
 under index reversal. DFrFT_a(x) = V · diag(exp(−iakπ/2)) · V^T · x.
 
 The GPU backend (with the `wgpu` feature enabled) exposes `execute_unitary_forward` and `execute_unitary_inverse`
-via `UnitaryFrftGpuKernel`. V is precomputed on CPU (O(N³)) and uploaded as an f32 storage buffer.
-Three sequential GPU submissions execute the 3-pass algorithm with `device.poll` barriers between
-passes to guarantee cross-workgroup storage ordering.
+through a typed Hephaestus `UnitaryFrftKernel`. V is precomputed on CPU by Leto
+(O(N³)) and uploaded as a column-major `f32` storage buffer. One Hephaestus
+command stream encodes the projection, phase, and reconstruction as three
+ordered passes; stream boundaries provide the inter-pass dependency ordering.
 
 See `design_history_file/adr_unitary_frft.md` for the full algorithm selection record.

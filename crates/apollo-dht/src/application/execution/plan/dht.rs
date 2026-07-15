@@ -8,4 +8,4 @@ pub mod typed;
 mod tests;
 
 pub use plan::DhtPlan;
-pub use typed::HartleyStorage;
+pub use typed::{HartleyGpuStorage, HartleyStorage};

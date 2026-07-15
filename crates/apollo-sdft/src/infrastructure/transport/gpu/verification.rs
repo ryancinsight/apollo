@@ -11,19 +11,6 @@ mod tests {
     use leto::{SliceArg, Storage};
 
     #[test]
-    fn capabilities_reflect_forward_only_surface() {
-        let capabilities = WgpuCapabilities::forward_only(true);
-        assert!(capabilities.device_available);
-        assert!(capabilities.supports_forward);
-        assert!(!capabilities.supports_inverse);
-        assert!(capabilities.supports_mixed_precision);
-        assert_eq!(
-            capabilities.default_precision_profile,
-            apollo_fft::PrecisionProfile::LOW_PRECISION_F32
-        );
-    }
-
-    #[test]
     fn plan_preserves_window_and_bin_parameters() {
         let plan = SdftWgpuPlan::new(16, 8);
         assert_eq!(plan.window_len(), 16);
@@ -32,17 +19,6 @@ mod tests {
         assert!(!plan.is_empty());
         assert!(SdftWgpuPlan::new(0, 8).is_empty());
         assert!(SdftWgpuPlan::new(8, 0).is_empty());
-    }
-
-    #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "inverse",
-        };
-        assert_eq!(
-            err.to_string(),
-            "inverse is unsupported by the current WGPU capability set"
-        );
     }
 
     #[test]
@@ -74,14 +50,16 @@ mod tests {
 
         // 2. forward_matches_cpu_direct_bins
         {
-            let window_f32: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let window_f64: Vec<f64> = window_f32.iter().map(|&x| f64::from(x)).collect();
-            let plan = backend.plan(window_f32.len(), 4);
+            let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+            let reference_samples: Vec<f64> = samples.iter().map(|&x| f64::from(x)).collect();
+            let plan = backend.plan(samples.len(), 4);
             let gpu = backend
-                .execute_forward(&plan, &window_f32)
+                .execute_forward(&plan, &samples)
                 .expect("wgpu sdft forward execution");
             let cpu_plan = SdftPlan::new(8, 4).expect("cpu sdft plan");
-            let cpu = cpu_plan.direct_bins(&window_f64).expect("cpu direct bins");
+            let cpu = cpu_plan
+                .direct_bins(&reference_samples)
+                .expect("cpu direct bins");
             assert_eq!(gpu.len(), cpu.len(), "output bin count must match");
             for (index, (actual, expected)) in gpu.iter().zip(cpu.iter()).enumerate() {
                 let real_error = (f64::from(actual.re) - expected.re).abs();
@@ -143,22 +121,22 @@ mod tests {
             let mismatch_err = backend
                 .execute_forward(&SdftWgpuPlan::new(8, 4), &[0.0_f32; 4])
                 .expect_err("window length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4
                 }
-            );
+            ));
         }
 
         // 6. typed_mixed_storage_matches_represented_f32_execution
         {
-            let window_f32: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let window_f16: Vec<f16> = window_f32.iter().map(|&x| f16::from_f32(x)).collect();
-            let represented: Vec<f32> = window_f16.iter().map(|v| v.to_f32()).collect();
-            let plan = backend.plan(window_f16.len(), 4);
-            let f32_result = backend
+            let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+            let reduced_samples: Vec<f16> = samples.iter().map(|&x| f16::from_f32(x)).collect();
+            let represented: Vec<f32> = reduced_samples.iter().map(|v| v.to_f32()).collect();
+            let plan = backend.plan(reduced_samples.len(), 4);
+            let reference = backend
                 .execute_forward(&plan, &represented)
                 .expect("f32 reference");
             let mut typed_out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
@@ -167,43 +145,44 @@ mod tests {
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    &window_f16,
+                    &reduced_samples,
                     &mut typed_out,
                 )
                 .expect("typed mixed forward");
-            for (actual, expected) in typed_out.iter().zip(f32_result.iter()) {
-                let expected_f16 = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
+            for (actual, expected) in typed_out.iter().zip(reference.iter()) {
+                let expected_reduced = [f16::from_f32(expected.re), f16::from_f32(expected.im)];
                 assert_eq!(
                     actual[0].to_bits(),
-                    expected_f16[0].to_bits(),
+                    expected_reduced[0].to_bits(),
                     "re bits mismatch: actual={:?} expected={:?}",
                     actual[0],
-                    expected_f16[0]
+                    expected_reduced[0]
                 );
                 assert_eq!(
                     actual[1].to_bits(),
-                    expected_f16[1].to_bits(),
+                    expected_reduced[1].to_bits(),
                     "im bits mismatch: actual={:?} expected={:?}",
                     actual[1],
-                    expected_f16[1]
+                    expected_reduced[1]
                 );
             }
         }
 
         // 7. typed_leto_forward_matches_typed_slice_forward
         {
-            let window_f32: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let window_f16: Vec<f16> = window_f32.iter().map(|&x| f16::from_f32(x)).collect();
-            let input = leto::Array1::from_shape_vec([window_f16.len()], window_f16.clone())
-                .expect("input");
-            let plan = backend.plan(window_f16.len(), 4);
+            let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
+            let reduced_samples: Vec<f16> = samples.iter().map(|&x| f16::from_f32(x)).collect();
+            let input =
+                leto::Array1::from_shape_vec([reduced_samples.len()], reduced_samples.clone())
+                    .expect("input");
+            let plan = backend.plan(reduced_samples.len(), 4);
             let mut expected: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
             backend
                 .execute_forward_typed_into(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    &window_f16,
+                    &reduced_samples,
                     &mut expected,
                 )
                 .expect("typed slice forward");
@@ -233,19 +212,19 @@ mod tests {
 
         // 8. typed_path_rejects_profile_mismatch
         {
-            let window_f16: Vec<f16> = vec![f16::from_f32(1.0); 8];
+            let reduced_samples: Vec<f16> = vec![f16::from_f32(1.0); 8];
             let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
-            let plan = backend.plan(window_f16.len(), 4);
+            let plan = backend.plan(reduced_samples.len(), 4);
             let error = backend
                 .execute_forward_typed_into(
                     &plan,
                     PrecisionProfile::LOW_PRECISION_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    &window_f16,
+                    &reduced_samples,
                     &mut out,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
         // 9. inverse_roundtrip_matches_original_signal
@@ -320,13 +299,13 @@ mod tests {
             let error = backend
                 .execute_inverse(&plan, &bins)
                 .expect_err("bin count mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 error,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
     }
 }

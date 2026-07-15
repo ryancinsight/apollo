@@ -460,6 +460,53 @@ impl MellinStorage for f16 {
     }
 }
 
+mod gpu_storage_sealed {
+    pub trait Sealed {}
+
+    impl Sealed for f32 {}
+    impl Sealed for apollo_fft::f16 {}
+}
+
+/// Input storage admitted by the concrete `f32` Mellin accelerator.
+///
+/// Native [`f32`] input is borrowed through the host boundary. `f16` input is
+/// explicitly converted into a reusable `f32` workspace. [`f64`] is excluded
+/// so a high-accuracy CPU input cannot silently narrow before dispatch.
+///
+/// ```compile_fail
+/// use apollo_mellin::MellinGpuStorage;
+///
+/// fn require_gpu_storage<T: MellinGpuStorage>() {}
+/// require_gpu_storage::<f64>();
+/// ```
+pub trait MellinGpuStorage: MellinStorage + gpu_storage_sealed::Sealed {
+    /// Convert host input into the concrete accelerator representation.
+    fn to_gpu(self) -> f32;
+
+    /// Borrow native concrete storage when no host conversion is required.
+    fn as_gpu_slice(values: &[Self]) -> Option<&[f32]>;
+}
+
+impl MellinGpuStorage for f32 {
+    fn to_gpu(self) -> f32 {
+        self
+    }
+
+    fn as_gpu_slice(values: &[Self]) -> Option<&[f32]> {
+        Some(values)
+    }
+}
+
+impl MellinGpuStorage for f16 {
+    fn to_gpu(self) -> f32 {
+        self.to_f32()
+    }
+
+    fn as_gpu_slice(_: &[Self]) -> Option<&[f32]> {
+        None
+    }
+}
+
 fn validate_output_len(actual: usize, expected: usize) -> MellinResult<()> {
     if actual != expected {
         return Err(MellinError::LengthMismatch);

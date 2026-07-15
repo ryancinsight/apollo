@@ -1,23 +1,36 @@
-//! GPU compute kernels for the forward and inverse Short-Time Fourier Transform.
+//! Typed Hephaestus kernels for the short-time Fourier transform.
+//!
+//! The WGSL sources remain the numerical implementation.  This module owns
+//! their binding declarations, parameter ABI, and dispatch tiles once, while
+//! the forward, inverse, and Bluestein leaves own operation sequencing.
+
+use core::marker::PhantomData;
+use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
+use hephaestus_core::{
+    BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource, KernelInterface,
+    KernelSource, Wgsl,
+};
 
-/// Forward execution kernels for power-of-two frame sizes.
+/// Shared geometry validation and typed dispatch operations.
+mod dispatch;
+/// Execution implementations for power-of-two forward frames.
 pub mod forward;
-/// Forward execution kernels for non-power-of-two frame sizes via Chirp-Z.
+/// Execution implementations for non-power-of-two forward frames.
 pub mod forward_chirp;
-/// Inverse execution kernels for power-of-two frame sizes.
+/// Execution implementations for power-of-two inverse frames.
 pub mod inverse;
-/// Inverse execution kernels for non-power-of-two frame sizes via Bluestein/Chirp-Z.
+/// Execution implementations for non-power-of-two inverse frames.
 pub mod inverse_chirp;
 
-/// Workgroup size for the OLA reconstruction pass (matches `@workgroup_size(64)` in
-/// `stft_inverse.wgsl`).
-pub(crate) const WORKGROUP_SIZE: u32 = 64;
+pub(crate) use dispatch::{
+    chirp_frequency_kernel, chirp_padded_len, dimension, dispatch_chirp_radix, dispatch_grouped,
+    fft_grid, ola_grid,
+};
 
-/// Workgroup size for the four FFT inverse passes (matches `@workgroup_size(256)` in
-/// `stft_inverse_fft.wgsl`).
-pub(crate) const FFT_WORKGROUP_SIZE: u32 = 256;
+pub(crate) const OLA_WORKGROUP: usize = 64;
+pub(crate) const FFT_WORKGROUP: usize = 256;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -26,7 +39,6 @@ pub(crate) struct ComplexPod {
     pub(crate) im: f32,
 }
 
-/// Uniform parameter block for forward pass and OLA pass.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct StftParams {
@@ -36,17 +48,15 @@ pub(crate) struct StftParams {
     pub(crate) frame_count: u32,
 }
 
-/// Uniform parameter block for the FFT inverse passes.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct FftStageParams {
     pub(crate) frame_count: u32,
     pub(crate) frame_len: u32,
     pub(crate) stage: u32,
-    pub(crate) _pad: u32,
+    pub(crate) padding: u32,
 }
 
-/// Uniform parameter block for the FFT forward passes.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct FwdFftStageParams {
@@ -56,437 +66,332 @@ pub(crate) struct FwdFftStageParams {
     pub(crate) stage: u32,
 }
 
-/// GPU compute kernel encapsulating the forward and inverse FFT-accelerated STFT pipelines.
-#[derive(Debug)]
-pub struct StftGpuKernel {
-    pub(crate) bind_group_layout: wgpu::BindGroupLayout,
-    pub(crate) inverse_ola_pipeline: wgpu::ComputePipeline,
-    pub(crate) fft_data_bgl: wgpu::BindGroupLayout,
-    pub(crate) fft_params_bgl: wgpu::BindGroupLayout,
-    pub(crate) deinterleave_pipeline: wgpu::ComputePipeline,
-    pub(crate) bitrev_pipeline: wgpu::ComputePipeline,
-    pub(crate) butterfly_pipeline: wgpu::ComputePipeline,
-    pub(crate) scale_window_pipeline: wgpu::ComputePipeline,
-    pub(crate) fwd_pack_window_pipeline: wgpu::ComputePipeline,
-    pub(crate) fwd_bitrev_pipeline: wgpu::ComputePipeline,
-    pub(crate) fwd_butterfly_pipeline: wgpu::ComputePipeline,
-    pub(crate) fwd_interleave_pipeline: wgpu::ComputePipeline,
-
-    // Chirp-Z / Bluestein precompiled layouts and pipelines
-    pub(crate) chirp_data_bgl: wgpu::BindGroupLayout,
-    pub(crate) chirp_params_bgl: wgpu::BindGroupLayout,
-    pub(crate) chirp_io_bgl: wgpu::BindGroupLayout,
-    pub(crate) chirp_radix2_params_bgl: wgpu::BindGroupLayout,
-    pub(crate) premul_fwd_pipeline: wgpu::ComputePipeline,
-    pub(crate) premul_inv_pipeline: wgpu::ComputePipeline,
-    pub(crate) pointmul_pipeline: wgpu::ComputePipeline,
-    pub(crate) postmul_fwd_pipeline: wgpu::ComputePipeline,
-    pub(crate) postmul_inv_pipeline: wgpu::ComputePipeline,
-    pub(crate) chirp_bitrev_pipeline: wgpu::ComputePipeline,
-    pub(crate) chirp_fwd_butterfly_pipeline: wgpu::ComputePipeline,
-    pub(crate) chirp_inv_butterfly_pipeline: wgpu::ComputePipeline,
-    pub(crate) chirp_scale_pipeline: wgpu::ComputePipeline,
-    pub(crate) pointmul_fwd_pipeline: wgpu::ComputePipeline,
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub(crate) struct StftChirpParams {
+    pub(crate) frame_count: u32,
+    pub(crate) frame_len: u32,
+    pub(crate) chirp_len: u32,
+    pub(crate) hop_len: u32,
+    pub(crate) signal_len: u32,
+    pub(crate) padding: [u32; 3],
 }
 
-impl StftGpuKernel {
-    /// Create a new kernel by compiling all WGSL shaders and building all pipelines.
-    #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu BGL"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            std::num::NonZeroU64::new(std::mem::size_of::<StftParams>() as u64)
-                                .expect("nonzero size"),
-                        ),
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-stft-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub(crate) struct ChirpFftParams {
+    pub(crate) fft_len: u32,
+    pub(crate) stage: u32,
+    pub(crate) inverse_flag: u32,
+    pub(crate) batch_count: u32,
+}
 
-        let inverse_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-stft-wgpu inverse shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_inverse.wgsl").into()),
-        });
-        let inverse_ola_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu inverse ola pipeline"),
-                layout: Some(&pipeline_layout),
-                module: &inverse_shader,
-                entry_point: Some("stft_inverse_ola"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
+const _: () = assert!(core::mem::size_of::<ComplexPod>() == 8);
+const _: () = assert!(core::mem::size_of::<StftParams>() == 16);
+const _: () = assert!(core::mem::size_of::<FftStageParams>() == 16);
+const _: () = assert!(core::mem::size_of::<FwdFftStageParams>() == 16);
+const _: () = assert!(core::mem::size_of::<StftChirpParams>() == 32);
+const _: () = assert!(core::mem::size_of::<ChirpFftParams>() == 16);
 
-        let fft_data_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu FFT data BGL"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+const FORWARD_BINDINGS: [GroupedBindingDecl; 4] = [
+    GroupedBindingDecl::read_only::<f32>(0, 0),
+    GroupedBindingDecl::read_write::<f32>(0, 1),
+    GroupedBindingDecl::read_write::<f32>(0, 2),
+    GroupedBindingDecl::read_write::<ComplexPod>(0, 3),
+];
+const INVERSE_BINDINGS: [GroupedBindingDecl; 4] = [
+    GroupedBindingDecl::read_only::<f32>(0, 0),
+    GroupedBindingDecl::read_write::<f32>(0, 1),
+    GroupedBindingDecl::read_write::<f32>(0, 2),
+    GroupedBindingDecl::read_write::<f32>(0, 3),
+];
+const CHIRP_FORWARD_BINDINGS: [GroupedBindingDecl; 6] = [
+    GroupedBindingDecl::read_write::<f32>(0, 0),
+    GroupedBindingDecl::read_write::<f32>(0, 1),
+    GroupedBindingDecl::read_only::<f32>(0, 2),
+    GroupedBindingDecl::read_only::<f32>(0, 3),
+    GroupedBindingDecl::read_only::<f32>(2, 0),
+    GroupedBindingDecl::read_write::<ComplexPod>(2, 1),
+];
+const CHIRP_INVERSE_BINDINGS: [GroupedBindingDecl; 6] = [
+    GroupedBindingDecl::read_write::<f32>(0, 0),
+    GroupedBindingDecl::read_write::<f32>(0, 1),
+    GroupedBindingDecl::read_only::<f32>(0, 2),
+    GroupedBindingDecl::read_only::<f32>(0, 3),
+    GroupedBindingDecl::read_only::<f32>(2, 0),
+    GroupedBindingDecl::read_write::<f32>(2, 1),
+];
+const CHIRP_FFT_BINDINGS: [GroupedBindingDecl; 4] = [
+    GroupedBindingDecl::read_write::<f32>(0, 0),
+    GroupedBindingDecl::read_write::<f32>(0, 1),
+    GroupedBindingDecl::read_only::<f32>(0, 2),
+    GroupedBindingDecl::read_only::<f32>(0, 3),
+];
+const OLA_BINDINGS: [BindingDecl; 2] = [
+    BindingDecl::read_only::<f32>(),
+    BindingDecl::read_write::<f32>(),
+];
 
-        let fft_params_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu FFT params BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(
-                        std::num::NonZeroU64::new(std::mem::size_of::<FftStageParams>() as u64)
-                            .expect("nonzero size"),
-                    ),
-                },
-                count: None,
-            }],
-        });
-        let fft_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-stft-wgpu FFT pipeline layout"),
-            bind_group_layouts: &[Some(&fft_data_bgl), Some(&fft_params_bgl)],
-            immediate_size: 0,
-        });
+trait GroupedSpec {
+    type Params: Pod;
+    const LABEL: &'static str;
+    const ENTRY: &'static str;
+    const SOURCE: &'static str;
+    const BINDINGS: &'static [GroupedBindingDecl];
+    const WORKGROUP: [u32; 3];
+}
 
-        let fft_inv_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-stft-wgpu FFT inverse shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_inverse_fft.wgsl").into()),
-        });
-        let deinterleave_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu deinterleave pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_inv_shader,
-                entry_point: Some("stft_deinterleave"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
-        let bitrev_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-stft-wgpu bitrev pipeline"),
-            layout: Some(&fft_pipeline_layout),
-            module: &fft_inv_shader,
-            entry_point: Some("stft_bitrev"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let butterfly_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-stft-wgpu butterfly pipeline"),
-            layout: Some(&fft_pipeline_layout),
-            module: &fft_inv_shader,
-            entry_point: Some("stft_butterfly"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let scale_window_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu scale-window pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_inv_shader,
-                entry_point: Some("stft_scale_and_window"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
+struct GroupedKernel<S>(PhantomData<S>);
 
-        let fft_fwd_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-stft-wgpu FFT forward shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_forward_fft.wgsl").into()),
-        });
-        let fwd_pack_window_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu fwd pack-window pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_fwd_shader,
-                entry_point: Some("stft_fwd_pack_window"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
-        let fwd_bitrev_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu fwd bitrev pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_fwd_shader,
-                entry_point: Some("stft_fwd_bitrev"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
-        let fwd_butterfly_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu fwd butterfly pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_fwd_shader,
-                entry_point: Some("stft_fwd_butterfly"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
-        let fwd_interleave_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("apollo-stft-wgpu fwd interleave pipeline"),
-                layout: Some(&fft_pipeline_layout),
-                module: &fft_fwd_shader,
-                entry_point: Some("stft_fwd_interleave"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
-
-        let bgl_storage_entry = |binding: u32, read_only: bool| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
-        let chirp_data_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp data BGL"),
-            entries: &[
-                bgl_storage_entry(0, false),
-                bgl_storage_entry(1, false),
-                bgl_storage_entry(2, true),
-                bgl_storage_entry(3, true),
-            ],
-        });
-
-        let chirp_params_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp params BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let chirp_io_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-stft-wgpu chirp IO BGL"),
-            entries: &[bgl_storage_entry(0, true), bgl_storage_entry(1, false)],
-        });
-
-        let chirp_radix2_params_bgl =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("apollo-stft-wgpu chirp radix2 params BGL"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let chirp_io_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("apollo-stft-wgpu chirp IO pipeline layout"),
-                bind_group_layouts: &[
-                    Some(&chirp_data_bgl),
-                    Some(&chirp_params_bgl),
-                    Some(&chirp_io_bgl),
-                ],
-                immediate_size: 0,
-            });
-
-        let chirp_radix2_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("apollo-stft-wgpu chirp radix2 pipeline layout"),
-                bind_group_layouts: &[Some(&chirp_data_bgl), Some(&chirp_radix2_params_bgl)],
-                immediate_size: 0,
-            });
-
-        let chirp_pm_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("apollo-stft-wgpu chirp pointmul pipeline layout"),
-                bind_group_layouts: &[Some(&chirp_data_bgl), Some(&chirp_params_bgl)],
-                immediate_size: 0,
-            });
-
-        let chirp_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-stft-wgpu chirp shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_chirp.wgsl").into()),
-        });
-
-        let chirp_fft_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-stft-wgpu chirp sub-FFT shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/stft_chirp_fft.wgsl").into()),
-        });
-
-        let build_chirp_pipeline =
-            |layout: &wgpu::PipelineLayout, module: &wgpu::ShaderModule, entry: &str| {
-                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some(entry),
-                    layout: Some(layout),
-                    module,
-                    entry_point: Some(entry),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    cache: None,
-                })
-            };
-
-        let premul_fwd_pipeline = build_chirp_pipeline(
-            &chirp_io_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_premul_fwd",
-        );
-        let premul_inv_pipeline = build_chirp_pipeline(
-            &chirp_io_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_premul_inv",
-        );
-        let pointmul_pipeline = build_chirp_pipeline(
-            &chirp_pm_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_pointmul",
-        );
-        let postmul_fwd_pipeline = build_chirp_pipeline(
-            &chirp_io_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_postmul_fwd",
-        );
-        let postmul_inv_pipeline = build_chirp_pipeline(
-            &chirp_io_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_postmul_inv",
-        );
-        let chirp_bitrev_pipeline = build_chirp_pipeline(
-            &chirp_radix2_pipeline_layout,
-            &chirp_fft_shader,
-            "chirp_fft_bitrev",
-        );
-        let chirp_fwd_butterfly_pipeline = build_chirp_pipeline(
-            &chirp_radix2_pipeline_layout,
-            &chirp_fft_shader,
-            "chirp_fft_butterfly_fwd",
-        );
-        let chirp_inv_butterfly_pipeline = build_chirp_pipeline(
-            &chirp_radix2_pipeline_layout,
-            &chirp_fft_shader,
-            "chirp_fft_butterfly_inv",
-        );
-        let chirp_scale_pipeline = build_chirp_pipeline(
-            &chirp_radix2_pipeline_layout,
-            &chirp_fft_shader,
-            "chirp_fft_scale",
-        );
-        let pointmul_fwd_pipeline = build_chirp_pipeline(
-            &chirp_pm_pipeline_layout,
-            &chirp_shader,
-            "stft_chirp_pointmul_fwd",
-        );
-
-        Self {
-            bind_group_layout,
-            inverse_ola_pipeline,
-            fft_data_bgl,
-            fft_params_bgl,
-            deinterleave_pipeline,
-            bitrev_pipeline,
-            butterfly_pipeline,
-            scale_window_pipeline,
-            fwd_pack_window_pipeline,
-            fwd_bitrev_pipeline,
-            fwd_butterfly_pipeline,
-            fwd_interleave_pipeline,
-            chirp_data_bgl,
-            chirp_params_bgl,
-            chirp_io_bgl,
-            chirp_radix2_params_bgl,
-            premul_fwd_pipeline,
-            premul_inv_pipeline,
-            pointmul_pipeline,
-            postmul_fwd_pipeline,
-            postmul_inv_pipeline,
-            chirp_bitrev_pipeline,
-            chirp_fwd_butterfly_pipeline,
-            chirp_inv_butterfly_pipeline,
-            chirp_scale_pipeline,
-            pointmul_fwd_pipeline,
-        }
+impl<S> GroupedKernel<S> {
+    pub(crate) const fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-pub(crate) fn dispatch_count(total: u32) -> u32 {
-    total.div_ceil(WORKGROUP_SIZE)
+impl<S: GroupedSpec> GroupedKernelInterface for GroupedKernel<S> {
+    type Params = S::Params;
+    const LABEL: &'static str = S::LABEL;
+    const BINDINGS: &'static [GroupedBindingDecl] = S::BINDINGS;
+    const PARAM_GROUP: u32 = 1;
+    const PARAM_BINDING: u32 = 0;
+    const WORKGROUP: [u32; 3] = S::WORKGROUP;
 }
 
-pub(crate) fn fft_dispatch_count(total: u32) -> u32 {
-    total.div_ceil(FFT_WORKGROUP_SIZE)
+impl<S: GroupedSpec> GroupedKernelSource<Wgsl> for GroupedKernel<S> {
+    const ENTRY: &'static str = S::ENTRY;
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(S::SOURCE)
+    }
 }
+
+trait FlatSpec {
+    type Params: Pod;
+    const LABEL: &'static str;
+    const ENTRY: &'static str;
+    const SOURCE: &'static str;
+    const BINDINGS: &'static [BindingDecl];
+    const WORKGROUP: [u32; 3];
+}
+
+struct FlatKernel<S>(PhantomData<S>);
+
+impl<S> FlatKernel<S> {
+    pub(crate) const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<S: FlatSpec> KernelInterface for FlatKernel<S> {
+    type Params = S::Params;
+    const LABEL: &'static str = S::LABEL;
+    const BINDINGS: &'static [BindingDecl] = S::BINDINGS;
+    const WORKGROUP: [u32; 3] = S::WORKGROUP;
+}
+
+impl<S: FlatSpec> KernelSource<Wgsl> for FlatKernel<S> {
+    const ENTRY: &'static str = S::ENTRY;
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(S::SOURCE)
+    }
+}
+
+macro_rules! grouped_specs {
+    ($(($marker:ident, $params:ty, $label:literal, $entry:literal, $source:expr, $bindings:expr)),+ $(,)?) => {
+        $(
+            struct $marker;
+            impl GroupedSpec for $marker {
+                type Params = $params;
+                const LABEL: &'static str = $label;
+                const ENTRY: &'static str = $entry;
+                const SOURCE: &'static str = $source;
+                const BINDINGS: &'static [GroupedBindingDecl] = $bindings;
+                const WORKGROUP: [u32; 3] = [FFT_WORKGROUP as u32, 1, 1];
+            }
+        )+
+    };
+}
+
+grouped_specs!(
+    (
+        ForwardPack,
+        FwdFftStageParams,
+        "apollo-stft-forward-pack",
+        "stft_fwd_pack_window",
+        include_str!("shaders/stft_forward_fft.wgsl"),
+        &FORWARD_BINDINGS
+    ),
+    (
+        ForwardBitReverse,
+        FwdFftStageParams,
+        "apollo-stft-forward-bit-reverse",
+        "stft_fwd_bitrev",
+        include_str!("shaders/stft_forward_fft.wgsl"),
+        &FORWARD_BINDINGS
+    ),
+    (
+        ForwardButterfly,
+        FwdFftStageParams,
+        "apollo-stft-forward-butterfly",
+        "stft_fwd_butterfly",
+        include_str!("shaders/stft_forward_fft.wgsl"),
+        &FORWARD_BINDINGS
+    ),
+    (
+        ForwardInterleave,
+        FwdFftStageParams,
+        "apollo-stft-forward-interleave",
+        "stft_fwd_interleave",
+        include_str!("shaders/stft_forward_fft.wgsl"),
+        &FORWARD_BINDINGS
+    ),
+    (
+        InverseDeinterleave,
+        FftStageParams,
+        "apollo-stft-inverse-deinterleave",
+        "stft_deinterleave",
+        include_str!("shaders/stft_inverse_fft.wgsl"),
+        &INVERSE_BINDINGS
+    ),
+    (
+        InverseBitReverse,
+        FftStageParams,
+        "apollo-stft-inverse-bit-reverse",
+        "stft_bitrev",
+        include_str!("shaders/stft_inverse_fft.wgsl"),
+        &INVERSE_BINDINGS
+    ),
+    (
+        InverseButterfly,
+        FftStageParams,
+        "apollo-stft-inverse-butterfly",
+        "stft_butterfly",
+        include_str!("shaders/stft_inverse_fft.wgsl"),
+        &INVERSE_BINDINGS
+    ),
+    (
+        InverseScaleWindow,
+        FftStageParams,
+        "apollo-stft-inverse-scale-window",
+        "stft_scale_and_window",
+        include_str!("shaders/stft_inverse_fft.wgsl"),
+        &INVERSE_BINDINGS
+    ),
+    (
+        ChirpForwardPremultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-forward-premultiply",
+        "stft_chirp_premul_fwd",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_FORWARD_BINDINGS
+    ),
+    (
+        ChirpForwardPointMultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-forward-point-multiply",
+        "stft_chirp_pointmul_fwd",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_FORWARD_BINDINGS
+    ),
+    (
+        ChirpForwardPostmultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-forward-postmultiply",
+        "stft_chirp_postmul_fwd",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_FORWARD_BINDINGS
+    ),
+    (
+        ChirpInversePremultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-inverse-premultiply",
+        "stft_chirp_premul_inv",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_INVERSE_BINDINGS
+    ),
+    (
+        ChirpInversePointMultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-inverse-point-multiply",
+        "stft_chirp_pointmul",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_INVERSE_BINDINGS
+    ),
+    (
+        ChirpInversePostmultiply,
+        StftChirpParams,
+        "apollo-stft-chirp-inverse-postmultiply",
+        "stft_chirp_postmul_inv",
+        include_str!("shaders/stft_chirp.wgsl"),
+        &CHIRP_INVERSE_BINDINGS
+    ),
+    (
+        ChirpBitReverse,
+        ChirpFftParams,
+        "apollo-stft-chirp-bit-reverse",
+        "chirp_fft_bitrev",
+        include_str!("shaders/stft_chirp_fft.wgsl"),
+        &CHIRP_FFT_BINDINGS
+    ),
+    (
+        ChirpForwardButterfly,
+        ChirpFftParams,
+        "apollo-stft-chirp-forward-butterfly",
+        "chirp_fft_butterfly_fwd",
+        include_str!("shaders/stft_chirp_fft.wgsl"),
+        &CHIRP_FFT_BINDINGS
+    ),
+    (
+        ChirpInverseButterfly,
+        ChirpFftParams,
+        "apollo-stft-chirp-inverse-butterfly",
+        "chirp_fft_butterfly_inv",
+        include_str!("shaders/stft_chirp_fft.wgsl"),
+        &CHIRP_FFT_BINDINGS
+    ),
+    (
+        ChirpScale,
+        ChirpFftParams,
+        "apollo-stft-chirp-scale",
+        "chirp_fft_scale",
+        include_str!("shaders/stft_chirp_fft.wgsl"),
+        &CHIRP_FFT_BINDINGS
+    ),
+);
+
+struct OverlapAdd;
+
+impl FlatSpec for OverlapAdd {
+    type Params = StftParams;
+    const LABEL: &'static str = "apollo-stft-overlap-add";
+    const ENTRY: &'static str = "stft_inverse_ola";
+    const SOURCE: &'static str = include_str!("shaders/stft_inverse.wgsl");
+    const BINDINGS: &'static [BindingDecl] = &OLA_BINDINGS;
+    const WORKGROUP: [u32; 3] = [OLA_WORKGROUP as u32, 1, 1];
+}
+
+type ForwardPackKernel = GroupedKernel<ForwardPack>;
+type ForwardBitReverseKernel = GroupedKernel<ForwardBitReverse>;
+type ForwardButterflyKernel = GroupedKernel<ForwardButterfly>;
+type ForwardInterleaveKernel = GroupedKernel<ForwardInterleave>;
+type InverseDeinterleaveKernel = GroupedKernel<InverseDeinterleave>;
+type InverseBitReverseKernel = GroupedKernel<InverseBitReverse>;
+type InverseButterflyKernel = GroupedKernel<InverseButterfly>;
+type InverseScaleWindowKernel = GroupedKernel<InverseScaleWindow>;
+type ChirpForwardPremultiplyKernel = GroupedKernel<ChirpForwardPremultiply>;
+type ChirpForwardPointMultiplyKernel = GroupedKernel<ChirpForwardPointMultiply>;
+type ChirpForwardPostmultiplyKernel = GroupedKernel<ChirpForwardPostmultiply>;
+type ChirpInversePremultiplyKernel = GroupedKernel<ChirpInversePremultiply>;
+type ChirpInversePointMultiplyKernel = GroupedKernel<ChirpInversePointMultiply>;
+type ChirpInversePostmultiplyKernel = GroupedKernel<ChirpInversePostmultiply>;
+type ChirpBitReverseKernel = GroupedKernel<ChirpBitReverse>;
+type ChirpForwardButterflyKernel = GroupedKernel<ChirpForwardButterfly>;
+type ChirpInverseButterflyKernel = GroupedKernel<ChirpInverseButterfly>;
+type ChirpScaleKernel = GroupedKernel<ChirpScale>;
+type OverlapAddKernel = FlatKernel<OverlapAdd>;
+
+/// Zero-sized typed STFT GPU orchestration.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StftGpuKernel;

@@ -425,7 +425,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(err, WgpuError::InvalidPrecisionProfile));
         }
     }
 }

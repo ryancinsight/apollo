@@ -1,243 +1,249 @@
-//! WGPU device acquisition and backend orchestration for the Haar DWT.
+//! Hephaestus device acquisition and multilevel Haar execution boundary.
 
-use apollo_fft::application::utilities::leto_interop;
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
-use crate::WaveletStorage;
-use apollo_fft::PrecisionProfile;
+use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
+use hephaestus_wgpu::WgpuDevice;
+use mnemosyne::scratch::ScratchPool;
 
 use crate::infrastructure::transport::gpu::application::plan::WaveletWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::WaveletGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::WaveletGpuStorage;
 
-/// Return whether a default WGPU adapter/device can be acquired.
+thread_local! {
+    static GPU_INPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+    static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+}
+
+/// Return whether a default Hephaestus WGPU device can be acquired.
 #[must_use]
 pub fn wgpu_available() -> bool {
     WaveletWgpuBackend::try_default().is_ok()
 }
 
-/// WGPU backend for the Haar DWT.
-///
-/// Owns an acquired device/queue pair and a cached kernel pipeline.
+/// Hephaestus WGPU backend for the orthonormal Haar DWT.
 #[derive(Debug, Clone)]
 pub struct WaveletWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<WaveletGpuKernel>,
 }
 
 impl WaveletWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(WaveletGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
-    }
-
-    /// Create a backend by requesting a default adapter and device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-wavelet-wgpu")?)
-    }
-
-    /// Return truthful forward+inverse capability descriptor.
+    /// Create a backend from an acquired Hephaestus WGPU device.
     #[must_use]
-    pub fn capabilities(&self) -> WgpuCapabilities {
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
+    }
+
+    /// Acquire the default Hephaestus WGPU device.
+    pub fn try_default() -> WgpuResult<Self> {
+        Ok(Self::new(WgpuDevice::try_default("apollo-wavelet-wgpu")?))
+    }
+
+    /// Return truthful forward/inverse capability descriptor.
+    #[must_use]
+    pub const fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::implemented(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus WGPU device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
-    }
-
-    /// Create a plan descriptor for the given signal length and decomposition levels.
+    /// Create a metadata-only plan descriptor.
     #[must_use]
     pub const fn plan(&self, len: usize, levels: usize) -> WaveletWgpuPlan {
         WaveletWgpuPlan::new(len, levels)
     }
 
-    /// Execute the forward multi-level Haar DWT on .
-    ///
-    /// Returns a flat coefficient buffer in Mallat ordering:
-    /// .
-    ///
-    /// Validation:  must be a non-zero power of two,  must be
-    /// non-zero, , and .
+    /// Execute the forward multilevel Haar DWT in Mallat ordering.
     pub fn execute_forward(&self, plan: &WaveletWgpuPlan, signal: &[f32]) -> WgpuResult<Vec<f32>> {
-        Self::validate_plan(plan)?;
-        if signal.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: signal.len(),
-            });
-        }
-        self.kernel
-            .execute_forward(&self.device, signal, plan.len(), plan.levels())
+        let mut output = vec![0.0; plan.len()];
+        self.execute_forward_into(plan, signal, &mut output)?;
+        Ok(output)
     }
 
-    /// Execute the forward Haar DWT from a Leto 1D signal view.
-    ///
-    /// Contiguous views are borrowed without copying. Strided views are
-    /// materialized once into logical order before GPU upload.
+    /// Execute the inverse multilevel Haar DWT.
+    pub fn execute_inverse(
+        &self,
+        plan: &WaveletWgpuPlan,
+        coefficients: &[f32],
+    ) -> WgpuResult<Vec<f32>> {
+        let mut output = vec![0.0; plan.len()];
+        self.execute_inverse_into(plan, coefficients, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute forward Haar analysis into caller-owned storage.
+    pub fn execute_forward_into(
+        &self,
+        plan: &WaveletWgpuPlan,
+        signal: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate(plan, signal.len(), output.len())?;
+        WaveletGpuKernel::execute_forward_into(&self.device, signal, output, plan.levels())
+    }
+
+    /// Execute inverse Haar synthesis into caller-owned storage.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &WaveletWgpuPlan,
+        coefficients: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate(plan, coefficients.len(), output.len())?;
+        WaveletGpuKernel::execute_inverse_into(&self.device, coefficients, output, plan.levels())
+    }
+
+    /// Execute forward Haar analysis from a Leto host view.
     pub fn execute_forward_leto(
         &self,
         plan: &WaveletWgpuPlan,
         signal: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let signal = leto_view1_cow(signal);
-        let output = self.execute_forward(plan, &signal)?;
-        leto_array1_from_slice(&output)
+        self.execute_forward(plan, &signal)
+            .and_then(|output| leto_array1_from_slice(&output))
     }
 
-    /// Execute the inverse multi-level Haar DWT on .
-    ///
-    /// Expects input in Mallat ordering (output of ).
-    /// Returns the reconstructed signal of length .
-    ///
-    /// Validation mirrors .
-    pub fn execute_inverse(
-        &self,
-        plan: &WaveletWgpuPlan,
-        coefficients: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
-        Self::validate_plan(plan)?;
-        if coefficients.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: coefficients.len(),
-            });
-        }
-        self.kernel
-            .execute_inverse(&self.device, coefficients, plan.len(), plan.levels())
-    }
-
-    /// Execute the inverse Haar DWT from a Leto 1D coefficient view.
+    /// Execute inverse Haar synthesis from a Leto host view.
     pub fn execute_inverse_leto(
         &self,
         plan: &WaveletWgpuPlan,
         coefficients: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let coefficients = leto_view1_cow(coefficients);
-        let output = self.execute_inverse(plan, &coefficients)?;
-        leto_array1_from_slice(&output)
+        self.execute_inverse(plan, &coefficients)
+            .and_then(|output| leto_array1_from_slice(&output))
     }
 
-    /// Execute the forward Haar DWT with typed `f64`, `f32`, or mixed `f16` storage.
-    ///
-    /// Promotes represented input once to `f32`, dispatches the GPU forward kernel,
-    /// and quantizes output back to the requested storage type.
-    pub fn execute_forward_typed_into<T: WaveletStorage>(
+    /// Execute typed forward Haar analysis under the concrete `f32` GPU contract.
+    pub fn execute_forward_typed_into<T: WaveletGpuStorage>(
         &self,
         plan: &WaveletWgpuPlan,
         precision: PrecisionProfile,
         signal: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented: Vec<f32> = signal.iter().map(|v| v.to_f64() as f32).collect();
-        let computed = self.execute_forward(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_f64(f64::from(value));
-        }
-        Ok(())
+        self.execute_typed_into(plan, precision, signal, output, false)
     }
 
-    /// Execute typed forward Haar DWT from a Leto 1D signal view.
-    pub fn execute_forward_leto_typed<T: WaveletStorage>(
-        &self,
-        plan: &WaveletWgpuPlan,
-        precision: PrecisionProfile,
-        signal: leto::ArrayView1<'_, T>,
-    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let signal = leto_view1_cow(signal);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_forward_typed_into(plan, precision, &signal, &mut output)?;
-        leto_array1_from_slice(&output)
-    }
-
-    /// Execute the inverse Haar DWT with typed `f64`, `f32`, or mixed `f16` storage.
-    pub fn execute_inverse_typed_into<T: WaveletStorage>(
+    /// Execute typed inverse Haar synthesis under the concrete `f32` GPU contract.
+    pub fn execute_inverse_typed_into<T: WaveletGpuStorage>(
         &self,
         plan: &WaveletWgpuPlan,
         precision: PrecisionProfile,
         coefficients: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented: Vec<f32> = coefficients.iter().map(|v| v.to_f64() as f32).collect();
-        let computed = self.execute_inverse(plan, &represented)?;
-        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-            *slot = T::from_f64(f64::from(value));
-        }
-        Ok(())
+        self.execute_typed_into(plan, precision, coefficients, output, true)
     }
 
-    /// Execute typed inverse Haar DWT from a Leto 1D coefficient view.
-    pub fn execute_inverse_leto_typed<T: WaveletStorage>(
+    /// Execute typed forward Haar analysis from a Leto host view.
+    pub fn execute_forward_leto_typed<T: WaveletGpuStorage + Default>(
+        &self,
+        plan: &WaveletWgpuPlan,
+        precision: PrecisionProfile,
+        signal: leto::ArrayView1<'_, T>,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        self.execute_typed_leto(plan, precision, signal, false)
+    }
+
+    /// Execute typed inverse Haar synthesis from a Leto host view.
+    pub fn execute_inverse_leto_typed<T: WaveletGpuStorage + Default>(
         &self,
         plan: &WaveletWgpuPlan,
         precision: PrecisionProfile,
         coefficients: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let coefficients = leto_view1_cow(coefficients);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_inverse_typed_into(plan, precision, &coefficients, &mut output)?;
-        leto_array1_from_slice(&output)
+        self.execute_typed_leto(plan, precision, coefficients, true)
     }
 
-    fn validate_typed_precision<T: WaveletStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
-        let expected = T::PROFILE;
-        if precision.storage != expected.storage || precision.compute != expected.compute {
+    fn execute_typed_into<T: WaveletGpuStorage>(
+        &self,
+        plan: &WaveletWgpuPlan,
+        precision: PrecisionProfile,
+        input: &[T],
+        output: &mut [T],
+        inverse: bool,
+    ) -> WgpuResult<()> {
+        if precision != T::PROFILE {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
-        Ok(())
+        Self::validate(plan, input.len(), output.len())?;
+        if let (Some(input), Some(output)) = (T::as_f32_slice(input), T::as_f32_slice_mut(output)) {
+            return if inverse {
+                self.execute_inverse_into(plan, input, output)
+            } else {
+                self.execute_forward_into(plan, input, output)
+            };
+        }
+        GPU_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |represented| {
+                for (target, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *target = value.to_gpu();
+                }
+                GPU_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |computed| {
+                        if inverse {
+                            self.execute_inverse_into(plan, represented, computed)?;
+                        } else {
+                            self.execute_forward_into(plan, represented, computed)?;
+                        }
+                        for (target, value) in output.iter_mut().zip(computed.iter().copied()) {
+                            *target = T::from_gpu(value);
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
     }
 
-    /// Validate plan parameters before GPU dispatch.
-    ///
-    /// Invariants:
-    /// -  and  is a power of two (Haar requires dyadic length).
-    /// -  (at least one decomposition pass).
-    /// -  (each level halves the approximation subband).
-    fn validate_plan(plan: &WaveletWgpuPlan) -> WgpuResult<()> {
+    fn execute_typed_leto<T: WaveletGpuStorage + Default>(
+        &self,
+        plan: &WaveletWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+        inverse: bool,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input);
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("Wavelet Mnemosyne output must be contiguous");
+        self.execute_typed_into(plan, precision, &input, output_slice, inverse)?;
+        Ok(output)
+    }
+
+    fn validate(plan: &WaveletWgpuPlan, input_len: usize, output_len: usize) -> WgpuResult<()> {
         let len = plan.len();
         let levels = plan.levels();
         if len == 0 || !len.is_power_of_two() {
             return Err(WgpuError::InvalidPlan {
-                message: format!(
-                    "invalid length {len}, levels {levels}: len must be a non-zero power of two"
-                ),
+                message: format!("length {len} must be a non-zero power of two"),
             });
         }
-        if levels == 0 {
+        if levels == 0 || levels >= usize::BITS as usize || (1usize << levels) > len {
             return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}, levels {levels}: levels must be non-zero"),
+                message: format!("levels {levels} must satisfy 0 < levels <= log2({len})"),
             });
         }
-        if (1usize << levels) > len {
-            return Err(WgpuError::InvalidPlan {
-                message: format!(
-                    "invalid length {len}, levels {levels}: 2^levels must not exceed len"
-                ),
+        if input_len != len {
+            return Err(WgpuError::LengthMismatch {
+                expected: len,
+                actual: input_len,
+            });
+        }
+        if output_len != len {
+            return Err(WgpuError::LengthMismatch {
+                expected: len,
+                actual: output_len,
             });
         }
         Ok(())
@@ -247,39 +253,11 @@ impl WaveletWgpuBackend {
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
 }
+
 fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
     leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto Wavelet output".to_string(),
+        message: "failed to allocate Mnemosyne-backed Leto Wavelet output".to_owned(),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
 }

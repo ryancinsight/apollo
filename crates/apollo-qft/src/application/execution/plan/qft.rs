@@ -412,6 +412,54 @@ impl QftStorage for [f16; 2] {
     }
 }
 
+mod gpu_sealed {
+    pub trait Sealed {}
+
+    impl Sealed for eunomia::Complex32 {}
+    impl Sealed for [apollo_fft::f16; 2] {}
+}
+
+/// Storage admitted by the concrete `Complex32` QFT accelerator kernel.
+///
+/// The GPU kernel performs its arithmetic in single-precision complex lanes.
+/// Native `Complex32` storage is zero-copy at the host boundary; `[f16; 2]`
+/// uses an explicit conversion workspace. `Complex64` is intentionally
+/// excluded so this API cannot silently narrow a high-accuracy computation.
+///
+/// ```compile_fail
+/// use apollo_qft::QftGpuStorage;
+///
+/// fn require_gpu_storage<T: QftGpuStorage>() {}
+/// require_gpu_storage::<eunomia::Complex64>();
+/// ```
+pub trait QftGpuStorage: QftStorage + gpu_sealed::Sealed {
+    /// Convert host storage into the concrete accelerator representation.
+    fn to_gpu(self) -> Complex32;
+
+    /// Convert the concrete accelerator representation back into host storage.
+    fn from_gpu(value: Complex32) -> Self;
+}
+
+impl QftGpuStorage for Complex32 {
+    fn to_gpu(self) -> Complex32 {
+        self
+    }
+
+    fn from_gpu(value: Complex32) -> Self {
+        value
+    }
+}
+
+impl QftGpuStorage for [f16; 2] {
+    fn to_gpu(self) -> Complex32 {
+        Complex32::new(self[0].to_f32(), self[1].to_f32())
+    }
+
+    fn from_gpu(value: Complex32) -> Self {
+        [f16::from_f32(value.re), f16::from_f32(value.im)]
+    }
+}
+
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
     if apollo_fft::application::utilities::leto_interop::profile_matches(actual, expected) {
         Ok(())

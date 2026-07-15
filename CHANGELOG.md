@@ -8,8 +8,28 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Changed
+
+- `apollo-fft` 0.16.0 routes its f32 dense-FFT storage, kernel preparation,
+  binding validation, command ordering, submission, and transfer through
+  Hephaestus. The provider-native external split-buffer stream contract permits
+  downstream transforms to compose FFT stages without raw WGPU handles.
+- `apollo-nufft` 0.3.0 routes direct and Kaiser--Bessel fast 1D/3D execution
+  through typed Hephaestus descriptors and ordered command streams. Leto
+  remains the host boundary; reusable Type-2 buffers now cover both the Fourier
+  mode count and the configured sample capacity.
+- `GpuFft3dF16Native` now reuses the storage-generic typed Hephaestus FFT
+  plan. Its f16 WGSL sources and radix-two capability are selected by a sealed
+  storage contract; f32 retains radix-four selection without a second
+  dispatcher. `ShaderF16` remains a required provider capability.
+- Apollo temporarily pins Hephaestus 0.14.0 at the reviewed required-feature
+  acquisition commit while its provider PR merges.
+
 ### Fixed
 
+- [patch] Restrict Cargo Deny's first-party Git allowlist to the
+  `ryancinsight` GitHub organization. Other Git sources remain denied, while
+  the locked Atlas provider graph remains reproducibly verifiable.
 - [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`
   so the existing scalar path compiles for Apple Silicon consumers.
 - [patch] Align the CI Atlas checkout action and locked provider graph with the
@@ -18,6 +38,248 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Remove the committed `target-cpu=native` flag so CI and published
   builds use portable code generation; local performance builds opt in through
   an explicit `RUSTFLAGS` override.
+
+- `apollo-dht` compiles its live zero-copy Leto view forwarder only with the
+  `wgpu` transport that consumes it. Default builds remain warning-clean, while
+  the GPU borrowed-view contract remains covered by the all-feature suite.
+- `apollo-fft` now tests the derived dense-FFT workspace law for radix and
+  Bluestein axes. The previous `(2, 3, 4)` expectation contradicted
+  `transform_length * batch_count`; implementation sizing was already correct.
+
+### Removed
+
+- The obsolete `apollo-wgpu-helpers` workspace crate is deleted. Its last
+  consumer migrated to typed Hephaestus dispatch, leaving no manifest, lockfile,
+  or source dependency edge.
+- `apollo-fft` no longer depends on the obsolete `apollo-wgpu-helpers`
+  wrapper; its backend and buffer-reuse benchmark acquire the typed
+  `hephaestus_wgpu::WgpuDevice` directly.
+- `apollo-fft` no longer depends on `pollster`; native-f16 device acquisition
+  is delegated to `hephaestus_wgpu::WgpuDevice`.
+- `apollo-fft` no longer depends directly on `wgpu`. The obsolete native-f16
+  raw pipeline, binding, encoder, queue, transfer, and stage-owner leaves are
+  replaced by the shared typed descriptor and command-stream implementation.
+- `apollo-stft` no longer depends directly on `apollo-wgpu-helpers`, `wgpu`,
+  or `pollster`. Its raw pipeline, binding, command encoding, queue, and
+  transfer mechanics are replaced by typed Hephaestus descriptors and ordered
+  command streams.
+- `apollo-nufft` no longer depends directly on `apollo-wgpu-helpers`, `wgpu`,
+  or `pollster`; raw pipelines, bindings, encoders, queues, transfers, and the
+  obsolete no-op `debug-readbacks` feature are deleted.
+
+### Breaking
+
+- [major] `apollo-fft` 0.16.0 changes `GpuFft3d::new` to accept a
+  `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs, changes
+  `GpuFft3dBuffers::new` to report typed allocation failure, and replaces raw
+  encoder buffer APIs with `WgpuBuffer<f32>` plus `WgpuCommandStream`. Native
+  half execution shares that provider-owned transport through typed `u16`
+  physical storage.
+- [major] `apollo-fft` 0.16.0 changes `GpuFft3dF16Native::try_from_device` to
+  accept `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs.
+  `try_new` requires `DeviceFeature::ShaderF16` through the provider contract.
+
+- [major] `apollo-stft` 0.4.0 removes the `wgpu_backend` forwarding module and
+  raw device/queue accessors. `StftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` and returns `Self`; device limits are requested
+  through the backend-neutral Hephaestus API. `StftGpuKernel` is a zero-sized
+  typed descriptor with associated dispatch operations rather than a cached raw
+  pipeline owner.
+- [major] `apollo-radon` 0.3.0 routes forward projection, adjoint
+  backprojection, and filtered backprojection through typed Hephaestus command
+  streams. `RadonWgpuBackend::new` now returns `Self`; raw device and queue
+  accessors are removed.
+
+- [major] `apollo-nufft` 0.3.0 changes `NufftWgpuBackend` and reusable-buffer
+  construction to accept and expose `hephaestus_wgpu::WgpuDevice`; raw device
+  and queue accessors, helper errors, and raw transport types are removed.
+  `NufftWgpuError` now preserves opaque provider and FFT errors rather than
+  deriving equality over an incomplete error domain.
+
+- [major] `apollo-sht` 0.3.0 migrates direct spherical-harmonic acceleration
+  to the Hephaestus authored-kernel seam. `ShtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors and the `wgpu_backend` forwarding module are removed. GPU
+  typed APIs require sealed `ShtGpuStorage`, admitting `Complex32` and
+  `[f16; 2]` while rejecting `Complex64`. Inverse execution rejects CPU
+  coefficients not exactly representable in concrete accelerator storage; use
+  the explicit `quantize_coefficients` boundary when that loss is intentional.
+- [major] `apollo-sdft` 0.3.0 migrates direct-bin acceleration to the
+  Hephaestus authored-kernel seam. `SdftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors, the `wgpu_backend` forwarding module, and the CPU-marker
+  alias are removed. GPU typed APIs now require sealed `SdftGpuRealStorage`
+  and `SdftGpuBinStorage`, admitting concrete `f32`/`Complex32` and explicit
+  reduced storage while rejecting CPU `f64`/`Complex64`. Inverse execution now
+  requires a complete spectrum (`bin_count == window_len`); partial bins are a
+  projection rather than an inverse reconstruction.
+- [major] `apollo-sft` 0.3.0 migrates direct dense-DFT acceleration to the
+  Hephaestus authored-kernel seam. `SftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors are removed. Typed accelerator APIs require sealed
+  `SftGpuStorage`, admitting `Complex32` and `[f16; 2]` while rejecting
+  `Complex64`. Inverse staging rejects a `SparseSpectrum` component that is
+  not exactly representable in concrete `f32` storage; use the explicit
+  `quantize_spectrum` boundary when that loss is intentional.
+- [major] `apollo-mellin` 0.4.0 migrates log-resampling and inverse Mellin
+  acceleration to the Hephaestus authored-kernel seam. `MellinWgpuPlan` and
+  accelerator domain arguments now use concrete `f32`; raw device and queue
+  accessors are removed. GPU typed APIs require sealed `MellinGpuStorage`,
+  admitting `f32` and `f16` while rejecting silent `f64` narrowing.
+- [major] `apollo-hilbert` 0.5.0 migrates analytic-signal and inverse Hilbert
+  acceleration to the Hephaestus authored-kernel seam.
+  `HilbertWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice` directly and
+  returns `Self`; raw device and queue accessors are removed. GPU typed APIs
+  require sealed `HilbertGpuStorage`, admitting `f32` and `f16` while rejecting
+  silent `f64` narrowing.
+- [major] `apollo-frft` 0.3.0 migrates direct and Candan--Gr\u00fcnbaum unitary
+  acceleration to the Hephaestus authored-kernel seam. `FrftWgpuBackend::new`
+  accepts `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device
+  and queue accessors are removed. GPU typed APIs require sealed
+  `FrftGpuStorage`, admitting `Complex32` and `[f16; 2]` while rejecting silent
+  `Complex64` narrowing.
+- [major] `apollo-wavelet` 0.3.0 migrates Haar acceleration to the Hephaestus
+  authored-kernel seam. `WaveletWgpuBackend::new` accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors are removed. GPU typed APIs require sealed
+  `WaveletGpuStorage`, admitting `f32` and `f16` while rejecting silent `f64`
+  narrowing.
+- [major] `apollo-qft` 0.3.0 migrates unitary acceleration to the Hephaestus
+  authored-kernel seam. `QftWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice`
+  directly and returns `Self`; raw device and queue accessors are removed.
+  GPU typed APIs now require sealed `QftGpuStorage`, admitting `Complex32` and
+  `[f16; 2]` while rejecting silent `Complex64` narrowing.
+- [major] `apollo-ntt` 0.3.0 migrates exact finite-field acceleration to the
+  Hephaestus authored-kernel seam. `NttWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and raw device and queue escape hatches are removed.
+  `NttGpuBuffers` now owns reusable host residues and twiddles only; all device
+  allocation, parameter upload, binding, dispatch, and transfer are
+  provider-owned.
+- [major] `apollo-gft` 0.3.0 migrates its graph Fourier accelerator to the
+  Hephaestus authored-kernel seam. `GftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Forward and
+  inverse caller-owned output APIs now share the typed Hephaestus command-stream
+  dispatch. GPU typed APIs require sealed `GftGpuStorage`, admitting native
+  `f32` and explicit `f16`/`f32` storage while rejecting silent `f64` narrowing.
+- [major] `apollo-dht` 0.3.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `DhtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. GPU typed APIs
+  now require sealed `HartleyGpuStorage`, correctly excluding `f64` from the
+  concrete `f32` accelerator contract. Remove requests for the deleted no-op
+  `parallel` and `mnemosyne-memory` features.
+- [major] `apollo-czt` 0.4.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `CztWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Replace
+  `apollo_wgpu_helpers::WgpuDevice` construction with the Hephaestus device and
+  remove error propagation from the infallible wrapper constructor. Custom
+  `CztStorage` implementations must provide the explicit `Complex32`
+  accelerator conversion methods; typed Leto-returning methods additionally
+  require `Default` at their allocation use sites. Remove requests for the
+  deleted no-op `parallel` and `mnemosyne-memory` features.
+- [major] `apollo-fwht` 0.3.0 migrates its concrete WGPU implementation to the
+  Hephaestus authored-kernel seam. `FwhtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; `device()` returns
+  that provider device, and the raw queue accessor is removed. Replace
+  `apollo_wgpu_helpers::WgpuDevice` construction with the Hephaestus device and
+  remove error propagation from the infallible wrapper constructor.
+- [major] `apollo-dctdst` 0.3.0 migrates its concrete WGPU implementation to
+  the Hephaestus authored-kernel seam. `DctDstWgpuBackend::new` accepts
+  `hephaestus_wgpu::WgpuDevice` directly; its raw device and queue escape
+  hatches are removed. GPU typed storage is explicitly limited to `f32` and
+  mixed `f16`/`f32` representations, so `f64` cannot silently narrow at the
+  accelerator boundary.
+
+### Changed
+
+- [arch] SHT basis materialization and forward/inverse matrix reduction now
+  use typed Hephaestus bindings, two direction-parameterized ZST descriptors,
+  and one ordered command stream. Common, basis, and matrix WGSL concerns have
+  distinct canonical leaves; Leto retains host-array boundaries and Mnemosyne
+  owns conversion scratch and returned Leto storage. The crate no longer
+  depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [arch] SDFT direct-bin and complete-bin inverse dispatch now use typed
+  Hephaestus bindings, two ZST authored-kernel descriptors, and ordered command
+  streams. Leto retains COW host boundaries, Mnemosyne owns generated and
+  reduced-storage buffers, common WGSL terms have one canonical source leaf,
+  and the crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
+- [arch] SFT direct dense-DFT dispatch now uses one typed Hephaestus
+  direction-parameterized ZST and ordered command stream. Leto retains COW
+  host boundaries, Mnemosyne owns direct dense inverse output, and Apollo keeps
+  deterministic sparse support selection. The crate no longer depends directly
+  on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [arch] Mellin log-resample, spectrum, inverse-spectrum, and exponential
+  resample dispatch now use typed Hephaestus bindings, four ZST
+  authored-kernel descriptors, and ordered command streams. Leto remains the
+  host-array boundary, Mnemosyne owns scratch and returned storage, and the
+  crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
+- [arch] Hilbert analytic and inverse dispatch now use typed Hephaestus
+  bindings, four ZST authored-kernel descriptors, and ordered command streams.
+  Leto remains the host-array boundary, Mnemosyne owns scratch and returned
+  storage, and the crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
+- [arch] FrFT direct and unitary dispatch now use typed Hephaestus bindings,
+  ZST authored-kernel descriptors, and ordered command streams. Leto remains
+  the host-array boundary, Mnemosyne owns returned storage, and the crate no
+  longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [arch] Wavelet multilevel Haar dispatch now uses typed Hephaestus analysis
+  and synthesis kernels, provider-owned prefix transfers, and Leto/Mnemosyne
+  host boundaries. Apollo no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers` in this crate.
+- [patch] The Wavelet migration resolves the published Hephaestus `e527097`,
+  Leto `7f216f1`, Mnemosyne `32b4a2a`, Moirai `8cd356c`, and Themis 0.10.0
+  provider graph without a workspace-local override.
+- [arch] QFT dispatch now uses direct Eunomia `Complex32` Hephaestus bindings
+  and provider-owned transfer. The crate no longer depends directly on `wgpu`,
+  `pollster`, or `apollo-wgpu-helpers`.
+- [arch] NTT butterfly and inverse-scale dispatch now use typed Hephaestus
+  bindings and an ordered command stream. Apollo retains the finite-field
+  recurrence and WGSL source; Leto remains the host-array boundary. The crate
+  no longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [arch] DHT transform and inverse-scale execution now uses Hephaestus typed
+  buffers, ZST authored-kernel descriptors, and one ordered command stream.
+  Leto output downloads directly into Mnemosyne-backed storage; mixed `f16`
+  bridges reuse Mnemosyne scratch. The crate no longer depends directly on
+  `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
+- [patch] DHT 2D/3D Leto paths now borrow dense and strided views through
+  storage-generic kernels instead of materializing contiguous input copies,
+  and the plan reuses the kernel-owned fast-path scratch pool rather than
+  retaining a duplicate thread-local complex buffer.
+- [patch] DHT WGSL converts Hartley row indices to `f32` before multiplication,
+  preventing valid `u32` plan lengths from overflowing integer `k*n` during
+  angle formation.
+- [arch] CZT forward and adjoint-inverse execution now uses Hephaestus typed
+  buffers, ZST `KernelInterface`/`KernelSource` descriptors, prepared dispatch,
+  and provider-owned transfer. Leto remains the host array/view boundary; the
+  crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`. Caller-owned forward/inverse entry points download
+  directly into Mnemosyne-backed Leto storage; typed bridge buffers reuse
+  Mnemosyne thread-local scratch.
+- [patch] CZT CPU Leto return paths now allocate Mnemosyne-backed arrays first
+  and compute directly into their contiguous slices, removing one temporary
+  vector allocation and one full output copy per call.
+- [patch] Direct CZT uses explicit Moirai `Parallel` scheduling after its
+  existing `N×M` analytical work gate. Expensive transforms with fewer than
+  1,024 outputs no longer fall back through the output-length-only adaptive
+  policy; Hermes row reductions and per-worker Mnemosyne scratch remain the
+  canonical kernel path.
+- [arch] FWHT butterfly and inverse-scale execution now uses Hephaestus typed
+  buffers, ZST `KernelInterface`/`KernelSource` descriptors, cached pipeline
+  preparation, and one ordered command stream. Leto remains the host
+  array/view boundary; Apollo retains the WGSL transform formulas. The crate no
+  longer depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`, and
+  downloaded storage moves directly into the Mnemosyne-backed Leto result.
+- [arch] DCT/DST execution now uses Hephaestus typed buffers, ZST
+  `KernelInterface`/`KernelSource` descriptors, prepared dispatch, and one
+  command stream. Apollo retains the documented inverse-pair theorem and
+  transform formulas; Leto remains the CPU array/view boundary and Mnemosyne
+  owns scratch/result storage. The crate no longer depends directly on `wgpu`,
+  `pollster`, or `apollo-wgpu-helpers`.
 
 ## [0.15.0] - 2026-07-13
 

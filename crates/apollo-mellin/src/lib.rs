@@ -7,6 +7,11 @@
 //! Fourier transform over `u`, which is the source of scale-shift behavior used
 //! in scale-invariant matching.
 //!
+//! On a uniform log grid, forward scaling by `du` and inverse scaling by
+//! `1 / (N * du)` form an exact DFT inverse pair in exact arithmetic. The
+//! optional accelerator uses typed Hephaestus command streams over that same
+//! contract, with a concrete `f32` scale grid and sealed host storage.
+//!
 //! This crate owns positive scale-domain contracts, log-resampling, real
 //! Mellin moments, log-frequency Mellin spectra, and value-semantic tests.
 
@@ -19,7 +24,9 @@ pub mod infrastructure;
 /// Value-semantic verification.
 pub mod verification;
 
-pub use application::execution::plan::mellin::{MellinPlan, MellinSpectrum, MellinStorage};
+pub use application::execution::plan::mellin::{
+    MellinGpuStorage, MellinPlan, MellinSpectrum, MellinStorage,
+};
 pub use domain::contracts::error::{MellinError, MellinResult};
 pub use domain::metadata::scale::MellinScaleConfig;
 pub use infrastructure::kernel::resample::{
@@ -27,7 +34,7 @@ pub use infrastructure::kernel::resample::{
     mellin_moment,
 };
 
-/// GPU-accelerated backend using WGPU.
+/// GPU-accelerated backend using the Hephaestus WGPU provider.
 #[cfg(feature = "wgpu")]
 pub mod wgpu_backend {
     pub use crate::infrastructure::transport::gpu::*;

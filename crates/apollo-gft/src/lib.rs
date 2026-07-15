@@ -13,7 +13,7 @@ pub mod infrastructure;
 /// Value-semantic verification.
 pub mod verification;
 
-pub use application::execution::plan::gft::{GftPlan, GftStorage};
+pub use application::execution::plan::gft::{GftGpuStorage, GftPlan, GftStorage};
 pub use domain::contracts::error::{GftError, GftResult};
 pub use domain::graph::adjacency::GraphAdjacency;
 

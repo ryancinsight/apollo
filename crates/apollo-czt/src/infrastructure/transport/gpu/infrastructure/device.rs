@@ -1,17 +1,21 @@
 //! WGPU device acquisition for this transform backend.
 
-use apollo_fft::application::utilities::leto_interop;
-use std::{borrow::Cow, sync::Arc};
-
+use crate::application::execution::plan::czt::dimension_1d::helpers::leto_view1_cow;
 use crate::CztStorage;
 use apollo_fft::PrecisionProfile;
-use eunomia::{Complex32, Complex64};
+use eunomia::Complex32;
+use mnemosyne::scratch::ScratchPool;
 
 use crate::infrastructure::transport::gpu::application::plan::CztWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::CztGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use hephaestus_wgpu::WgpuDevice;
+
+thread_local! {
+    static GPU_INPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
+    static GPU_OUTPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
+}
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -23,19 +27,18 @@ pub fn wgpu_available() -> bool {
 #[derive(Debug, Clone)]
 pub struct CztWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<CztGpuKernel>,
 }
 
 impl CztWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(CztGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-czt-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-czt-wgpu")?))
     }
 
     /// Return truthful current capabilities.
@@ -44,16 +47,10 @@ impl CztWgpuBackend {
         WgpuCapabilities::forward_inverse(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
     /// Create a metadata-only plan descriptor.
@@ -79,8 +76,26 @@ impl CztWgpuBackend {
         plan: &CztWgpuPlan,
         input: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
+        let mut output = vec![Complex32::new(0.0, 0.0); plan.output_len()];
+        self.execute_forward_into(plan, input, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the direct forward CZT into caller-owned contiguous storage.
+    pub fn execute_forward_into(
+        &self,
+        plan: &CztWgpuPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
         Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(&self.device, plan, input)
+        if output.len() != plan.output_len() {
+            return Err(WgpuError::LengthMismatch {
+                expected: plan.output_len(),
+                actual: output.len(),
+            });
+        }
+        CztGpuKernel::execute_forward_into(&self.device, plan, input, output)
     }
 
     /// Execute the direct forward CZT from a Leto host view.
@@ -92,9 +107,19 @@ impl CztWgpuBackend {
         plan: &CztWgpuPlan,
         input: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let input = leto_view1_cow(input);
-        let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_slice(&output)
+        let input = leto_view1_cow(&input);
+        let mut output =
+            leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
+                plan.output_len()
+            ]);
+        self.execute_forward_into(
+            plan,
+            &input,
+            output
+                .as_slice_mut()
+                .expect("CZT Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     /// Execute the forward CZT with typed `Complex64`, `Complex32`, or mixed `[f16; 2]` storage.
@@ -116,40 +141,46 @@ impl CztWgpuBackend {
                 actual: output.len(),
             });
         }
-        let represented = if let Some(slice_c32) = T::as_c32_slice(input) {
-            std::borrow::Cow::Borrowed(slice_c32)
-        } else {
-            let vec: Vec<Complex32> = input
-                .iter()
-                .map(|v| {
-                    let c = v.to_complex64();
-                    Complex32::new(c.re as f32, c.im as f32)
-                })
-                .collect();
-            std::borrow::Cow::Owned(vec)
-        };
-        let computed = self.execute_forward(plan, &represented)?;
-        if let Some(slice_c32) = T::as_c32_slice_mut(output) {
-            slice_c32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_complex64(Complex64::new(f64::from(value.re), f64::from(value.im)));
-            }
+        if let (Some(input), Some(output)) = (T::as_c32_slice(input), T::as_c32_slice_mut(output)) {
+            return self.execute_forward_into(plan, input, output);
         }
-        Ok(())
+        GPU_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |represented| {
+                for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *slot = value.to_complex32();
+                }
+                GPU_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |computed| {
+                        self.execute_forward_into(plan, represented, computed)?;
+                        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                            *slot = T::from_complex32(value);
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
     }
 
     /// Execute typed forward CZT from a Leto host view into Mnemosyne-backed Leto storage.
-    pub fn execute_forward_leto_typed<T: CztStorage>(
+    pub fn execute_forward_leto_typed<T: CztStorage + Default>(
         &self,
         plan: &CztWgpuPlan,
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.output_len()];
-        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        let input = leto_view1_cow(&input);
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.output_len()]);
+        self.execute_forward_typed_into(
+            plan,
+            precision,
+            &input,
+            output
+                .as_slice_mut()
+                .expect("CZT typed Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     fn validate_czt_typed_precision<T: CztStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
@@ -171,12 +202,24 @@ impl CztWgpuBackend {
     ///
     /// # Errors
     ///
-    /// Returns `WgpuError::NotSquare` when `plan.input_len() != plan.output_len()`.
+    /// Returns [`WgpuError::LengthMismatch`] when the plan is not square.
     pub fn execute_inverse(
         &self,
         plan: &CztWgpuPlan,
         spectrum: &[Complex32],
     ) -> WgpuResult<Vec<Complex32>> {
+        let mut output = vec![Complex32::new(0.0, 0.0); plan.input_len()];
+        self.execute_inverse_into(plan, spectrum, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the square-plan adjoint inverse CZT into caller-owned storage.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &CztWgpuPlan,
+        spectrum: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
         if plan.input_len() != plan.output_len() {
             return Err(WgpuError::LengthMismatch {
                 expected: plan.input_len(),
@@ -195,7 +238,13 @@ impl CztWgpuBackend {
                 message: format!("CZT lengths input={n}, output={n} must be greater than zero"),
             });
         }
-        self.kernel.execute_inverse(&self.device, plan, spectrum)
+        if output.len() != n {
+            return Err(WgpuError::LengthMismatch {
+                expected: n,
+                actual: output.len(),
+            });
+        }
+        CztGpuKernel::execute_inverse_into(&self.device, plan, spectrum, output)
     }
 
     /// Execute the adjoint inverse CZT from a Leto host view.
@@ -207,9 +256,19 @@ impl CztWgpuBackend {
         plan: &CztWgpuPlan,
         spectrum: leto::ArrayView1<'_, Complex32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
-        let spectrum = leto_view1_cow(spectrum);
-        let output = self.execute_inverse(plan, &spectrum)?;
-        leto_array1_from_slice(&output)
+        let spectrum = leto_view1_cow(&spectrum);
+        let mut output =
+            leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
+                plan.input_len()
+            ]);
+        self.execute_inverse_into(
+            plan,
+            &spectrum,
+            output
+                .as_slice_mut()
+                .expect("CZT inverse Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
     }
 
     fn validate_plan_input(plan: &CztWgpuPlan, input: &[Complex32]) -> WgpuResult<()> {
@@ -238,45 +297,5 @@ impl CztWgpuBackend {
             });
         }
         Ok(())
-    }
-}
-
-fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
-    leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto CZT output".to_string(),
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use leto::SliceArg;
-
-    use super::leto_view1_cow;
-
-    #[test]
-    fn leto_view1_cow_borrows_contiguous_views() {
-        let input = leto::Array1::from_shape_vec([4], vec![1_u32, 2, 3, 4]).expect("input");
-        let cow = leto_view1_cow(input.view());
-        assert!(matches!(cow, Cow::Borrowed(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn leto_view1_cow_materializes_strided_views() {
-        let input =
-            leto::Array1::from_shape_vec([8], vec![1_u32, 99, 2, 99, 3, 99, 4, 99]).expect("input");
-        let view = input
-            .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
-            .expect("strided view");
-        let cow = leto_view1_cow(view);
-        assert!(matches!(cow, Cow::Owned(_)));
-        assert_eq!(cow.as_ref(), &[1, 2, 3, 4]);
     }
 }

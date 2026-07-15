@@ -1,8 +1,8 @@
 //! WGPU infrastructure.
 
-/// WGPU device acquisition.
+/// Hephaestus WGPU device acquisition and host boundary.
 pub mod device;
-/// GPU kernel state for the FrFT transform.
+/// Typed Hephaestus kernel for the direct FrFT transform.
 pub mod kernel;
-/// GPU kernel state for the unitary FrFT transform.
+/// Typed Hephaestus kernel for the unitary FrFT transform.
 pub mod unitary_kernel;

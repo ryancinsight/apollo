@@ -1,17 +1,20 @@
 //! NUFFT WGPU error contracts.
 
-use apollo_wgpu_helpers::WgpuDeviceError;
+use hephaestus_core::HephaestusError;
 use thiserror::Error;
 
 /// Result alias for NUFFT WGPU operations.
 pub type NufftWgpuResult<T> = Result<T, NufftWgpuError>;
 
 /// Errors produced by NUFFT WGPU backend operations.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum NufftWgpuError {
-    /// WGPU device acquisition failed.
-    #[error("wgpu device: {0}")]
-    Device(#[from] WgpuDeviceError),
+    /// Provider acquisition, allocation, dispatch, or transfer failed.
+    #[error(transparent)]
+    Provider(#[from] HephaestusError),
+    /// Composed dense-FFT stream construction or encoding failed.
+    #[error(transparent)]
+    Fft(#[from] apollo_fft::ApolloError),
     /// Plan parameters are invalid for WGPU execution.
     #[error("invalid NUFFT WGPU plan: reason={message}")]
     InvalidPlan {
@@ -26,10 +29,10 @@ pub enum NufftWgpuError {
         /// Actual length.
         actual: usize,
     },
-    /// Host readback from the staging buffer failed.
-    #[error("wgpu buffer map failed: {message}")]
-    BufferMapFailed {
-        /// Mapping failure context.
+    /// A host array could not preserve its validated logical layout.
+    #[error("host array layout: {message}")]
+    HostArrayLayout {
+        /// Conversion failure detail.
         message: String,
     },
     /// Numerical execution is unsupported for the requested operation.

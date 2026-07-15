@@ -1,5 +1,445 @@
 # Apollo Checklist
 
+## Native-f16 FFT Hephaestus migration [arch]
+
+- Target version: `apollo-fft` next pre-1.0 breaking integration.
+- Phase: Closure
+- [x] Audit the native-f16 plan and the current Hephaestus capability surface.
+  Hephaestus 0.14.0 owns required `ShaderF16` acquisition; the sealed storage
+  contract now drives typed native-half buffers, descriptors, streams, and
+  readback through the same dense-FFT provider plan as f32.
+- [x] Add the provider-owned required `DeviceFeature` acquisition capability
+  in Hephaestus 0.14.0 and temporarily pin its reviewed `196411e` head while
+  [PR 33](https://github.com/ryancinsight/hephaestus/pull/33) awaits merge.
+- [x] Replace native-f16 adapter/device acquisition with `WgpuDevice`; remove
+  the direct `pollster` dependency and reuse the same provider device for its
+  f32 differential reference.
+- [x] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
+  submission, and readback ownership with typed Hephaestus contracts while
+  retaining WGSL `enable f16;` arithmetic. `GpuFft3d<u16>` is the one storage-
+  generic core; the f16 source capability selects radix-two rather than a
+  duplicate dispatcher.
+- [x] Verify source/manifest removal, real-device radix and Bluestein
+  differential/roundtrip behavior, feature combinations, documentation, and
+  provider audit. Format, no-default/all-feature checks, warning-denied
+  Clippy, all-feature nextest, doctest, rustdoc, workspace/examples checks,
+  provider audit, major SemVer classification, and direct manifest/Rust API
+  scans pass. The 3×3×3 Bluestein bound is `γ_265·‖input‖₁`; no machine-checked
+  proof is claimed.
+
+## DHT feature-boundary warning cleanup [patch]
+
+- Target version: `apollo-dht` 0.3.0; internal feature-boundary correction.
+- Phase: Closure
+- [x] Gate the live GPU-only zero-copy Leto view forwarder with the `wgpu`
+  feature so default builds do not compile an unreachable forwarding function.
+- [x] Verify default and all-feature checks, warning-denied Clippy, 30 default
+  and 34 all-feature nextest cases, the real-device suite, and final warning-
+  free workspace resolution without deleting the GPU borrowed-view path.
+
+## Obsolete wrapper deletion: apollo-wgpu-helpers [arch]
+
+- Target version: workspace integration only; no published wrapper remains.
+- Phase: Closure
+- [x] Confirm `cargo tree -i apollo-wgpu-helpers --workspace` reports only the
+  wrapper itself and manifest/source scans identify no remaining consumer.
+- [x] Remove the workspace member, wrapper source tree, lockfile package, and
+  active dependency/documentation references without preserving a forwarding
+  compatibility path.
+- [x] Verify `cargo fmt --all --check`; locked metadata; workspace resolution;
+  provider audit and its six nextest contract tests; warning-denied `xtask`
+  Clippy; the 44-case all-feature NUFFT suite including real-device execution;
+  and manifest/lockfile/source scans with no helper edge. The separately
+  identified DHT feature-boundary warning is resolved in the next atomic
+  cleanup commit without introducing a deletion shim.
+
+## Hephaestus kernel migration: NUFFT [arch]
+
+- Target version: `apollo-nufft` 0.3.0
+- Phase: Closure
+- [x] Replace direct and fast 1D/3D raw transport with typed Hephaestus
+  descriptors, typed provider buffers, and one ordered stream per operation.
+  The fast path composes the provider-native `GpuFft3d` stream without a local
+  command-encoder bridge.
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges and the
+  obsolete no-op `debug-readbacks` feature. Leto remains the host-array/view
+  boundary; `NufftGpuBuffers` remains provider-owned reusable storage.
+- [x] Document the Type-1/Type-2 adjoint theorem, 1D inverse-normalization
+  convention, provider ownership, and reusable Type-2 capacity invariant in
+  the crate README and ADR 0009.
+- [x] Verify format; all-feature and no-default checks; warning-denied Clippy;
+  44/44 nextest cases including real-device execution; doctest; rustdoc;
+  no-op examples; provider audit; repository-baseline semver classification;
+  and source/dependency scans. The real-device suite proves bit-exact reusable
+  Type-2 parity for twelve samples over eight modes.
+- Evidence target: typed binding/layout and stream ordering, then
+  value-semantic direct/fast CPU differential, adjoint, normalization, and
+  reusable-storage tests. No machine-checked proof is claimed.
+
+## Hephaestus kernel migration: STFT [arch]
+
+- Target version: `apollo-stft` 0.4.0
+- Phase: Closure
+- [x] Replace direct radix-2, Bluestein, and overlap-add device ownership with
+  typed Hephaestus descriptors and ordered command streams. Request the six
+  Bluestein storage bindings through backend-neutral provider limits.
+- [x] Preserve the WOLA reconstruction theorem in ADR 0008 and the crate
+  README. Leto remains the host-array boundary; raw device/queue accessors, the
+  `wgpu_backend` forwarding module, and helper error re-exports are deleted.
+- [x] Verify format; all-feature and no-default checks; warning-denied Clippy;
+  46/46 nextest cases including real-device radix-2 and Bluestein execution;
+  doctest; rustdoc; provider audit; source/dependency scans; and immediate-
+  parent semver classification. The crate has no examples target.
+- Evidence tier: typed binding/layout and provider stream ordering, then
+  value-semantic CPU differential, WOLA reconstruction, reusable-storage, and
+  non-power-of-two device tests. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: Radon [arch]
+
+- Target version: `apollo-radon` 0.3.0
+- Phase: Closure
+- [x] Replace direct forward, adjoint, and filtered-backprojection WGPU
+  ownership with typed Hephaestus descriptors and an ordered filter-to-adjoint
+  command stream.
+- [x] Preserve the discrete adjoint theorem and filtered-backprojection
+  normalization in ADR 0007 and the crate README. Leto remains the host-array
+  boundary; raw device/queue accessors and helper error re-exports are deleted.
+- [x] Verify all-feature and no-default checks; warning-denied Clippy; 25/25
+  nextest cases including real-device execution; doctest; rustdoc; provider
+  audit; direct source/dependency scans; and immediate-parent semver
+  classification. Update D6 artifacts.
+- Evidence tier: typed binding/layout and provider stream ordering, then
+  value-semantic CPU differential, adjoint, and filtered-backprojection tests.
+  No machine-checked proof is performed.
+
+## Hephaestus kernel migration: FFT [arch]
+
+- Target version: `apollo-fft` 0.16.0
+- Phase: Closure
+- [x] Record ADR 0006: Apollo retains the dense-FFT mathematical kernels and
+  shader source, while Hephaestus exclusively owns GPU device acquisition,
+  typed buffers, pipeline construction, binding, command encoding, submission,
+  and transfer.
+- [x] Verify provider fit: `ComputeDevice::write_buffer` preserves the reusable
+  typed-buffer contract, and `CommandStream` records ordered axis/chirp passes
+  over one flat typed binding group. No upstream capability change is required.
+- [x] Remove the obsolete `apollo-wgpu-helpers` edge from the FFT backend and
+  buffer-reuse benchmark. Both now acquire `hephaestus_wgpu::WgpuDevice`
+  directly; 403 all-feature value-semantic nextest cases pass.
+- [x] Replace raw f32 radix, Chirp-Z, and pack/unpack ownership with typed
+  Hephaestus descriptors. Pack/unpack consolidates the two raw uniform blocks
+  into one POD parameter block and external split buffers compose through a
+  provider command stream; no compatibility adapter or algorithm fallback is
+  introduced.
+- [x] Publish the typed FFT buffer and command-stream contract required by
+  NUFFT. Its fast paths can compose FFT, spread, and extract stages in one
+  provider-owned stream without a raw command-encoder bridge.
+- [x] State the three-dimensional DFT/inverse theorem, explicit normalization,
+  f32 storage contract, and command-stream dependency order in the README and
+  ADR 0006.
+- [x] Verify the f32 slice: format; locked all-feature and no-default checks;
+  warning-denied Clippy; real-device value-semantic radix and Bluestein nextest
+  cases; source scan; and f32 provider ownership review.
+- [x] Migrate native-half transport into the same domain storage, host
+  conversion, typed kernel, and backend-orchestration leaves. Delete the final
+  direct WGPU edge from `apollo-fft`, including the obsolete stage owner.
+- [x] Complete release verification after native-half migration: doctests,
+  rustdoc, provider audit, major semver classification, examples, and a
+  whole-crate source/manifest scan with no direct `wgpu`, `pollster`, helper,
+  or retired stage edge.
+- [x] Restore the CI supply-chain gate without weakening it: Cargo Deny now
+  permits only the first-party `ryancinsight` GitHub organization, retaining
+  denial of every other Git source and every unknown registry.
+- Evidence target: typed binding/layout and external-buffer length validation,
+  then
+  value-semantic CPU differential and inverse-roundtrip evidence. No
+  machine-checked proof is planned.
+
+## Hephaestus kernel migration: SHT [arch]
+
+- Target version: `apollo-sht` 0.3.0
+- Phase: Closure
+- [x] Replace raw spherical-harmonic WGPU pipeline, binding, encoder, queue,
+  and transfer mechanics with typed Hephaestus kernel descriptors and ordered
+  command streams.
+- [x] Preserve and document the Gauss--Legendre quadrature/synthesis theorem
+  in ADR 0005 and crate Rustdoc/README. Leto remains the host boundary;
+  Mnemosyne owns complex conversion scratch and returned Leto storage. Seal
+  concrete accelerator storage to `Complex32` and `[f16; 2]`; reject a CPU
+  `Complex64` coefficient that is not exactly representable and expose only
+  `quantize_coefficients` as the explicit loss boundary.
+- [x] Verify format; all-feature locked and no-default checks; warning-denied
+  Clippy; 29/29 nextest cases including real-device CPU differential and
+  inverse execution; compile-fail storage exclusion; pure precision-loss
+  rejection; rustdoc; provider audit; no-op examples build; immediate-parent
+  0.2.0-to-0.3.0 semver classification with no required update; and a source
+  scan with no direct `wgpu`, `pollster`, or helper edge. Update D6 artifacts.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  value-semantic negative-contract and real-device CPU differential evidence.
+  No machine-checked proof is performed.
+
+## Hephaestus kernel migration: SDFT [arch]
+
+- Target version: `apollo-sdft` 0.3.0
+- Phase: Closure
+- [x] Replace direct sliding-DFT WGPU pipeline, binding, encoder, queue, and
+  transfer mechanics with typed forward and inverse Hephaestus ZST descriptors
+  and ordered command streams.
+- [x] Preserve the direct-bin formula, Leto COW host boundary, Mnemosyne-backed
+  output, and concrete accelerator storage contract. Seal `f32`/`Complex32`
+  plus explicit reduced storage; prohibit CPU `f64`/`Complex64` dispatch.
+- [x] Document and enforce the complete-bin inverse theorem: a partial SDFT
+  spectrum is a projection, so inverse execution rejects `bin_count !=
+  window_len` before device allocation.
+- [x] Verify real-device CPU differential, plan/storage negative contracts,
+  format, warning-denied Clippy, 28/28 nextest cases, two doctest compile-fail
+  storage exclusions, rustdoc, provider audit, no-default build, immediate-
+  parent 0.2.0-to-0.3.0 semver classification with no required update, and the
+  direct-provider source scan. Update D6 artifacts.
+- Evidence tier: typed binding/layout and storage exclusion, then
+  value-semantic CPU differential, roundtrip, and negative-contract evidence.
+  No machine-checked proof is performed.
+
+## Hephaestus kernel migration: SFT [arch]
+
+- Target version: `apollo-sft` 0.3.0
+- Phase: Closure
+- [x] Replace the direct DFT WGPU pipeline, binding, encoder, queue, and
+  transfer mechanics with one typed Hephaestus ZST descriptor and ordered
+  command stream.
+- [x] Preserve the direct-DFT inverse theorem, Leto COW boundaries,
+  Mnemosyne-backed output, and deterministic sparse support selection; seal
+  concrete accelerator storage to `Complex32` and `[f16; 2]`, and reject
+  non-representable `SparseSpectrum` values rather than silently narrowing;
+  provide `quantize_spectrum` as the explicit lossy boundary.
+- [x] Verify CPU differential and inverse reconstruction on a real device,
+  negative storage/plan contracts, format, warning-denied Clippy, nextest,
+  doctest, rustdoc, provider audit, and semver classification; update D6
+  artifacts.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  32 focused value-semantic nextest cases including real-device CPU
+  differential and inverse evidence. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: Mellin [arch]
+
+- Target version: `apollo-mellin` 0.4.0
+- Phase: Closure
+- [x] Replace raw WGPU log-resample, spectrum, inverse-spectrum, and
+  exponential-resample dispatch with typed Hephaestus ZST descriptors and one
+  ordered command stream per direction.
+- [x] Preserve the Mellin log-grid inverse-pair contract; retain Leto host
+  views and Mnemosyne outputs; seal the concrete `f32` forward GPU storage
+  contract.
+- [x] Verify real-device CPU forward differential and inverse constant-signal
+  evidence, Leto COW paths, negative storage/domain contracts, format,
+  warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and semver
+  classification; update D6 artifacts.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  32 focused value-semantic nextest cases including real-device CPU forward
+  differential and inverse constant-signal evidence. No machine-checked proof
+  is performed.
+
+## Hephaestus kernel migration: Hilbert [arch]
+
+- Target version: `apollo-hilbert` 0.5.0
+- Phase: Closure
+- [x] Replace the direct WGPU analytic-signal and inverse pipelines with four
+  typed Hephaestus ZST descriptors and one ordered command stream per path.
+- [x] Preserve the analytic-mask and inverse Hilbert theorem; retain Leto host
+  views and Mnemosyne outputs; seal the concrete `f32` GPU storage contract.
+- [x] Verify real-device CPU differential and inverse reconstruction, negative
+  contracts, format, warning-denied Clippy, nextest, doctest, rustdoc, provider
+  audit, and semver classification; update D6 artifacts.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  34 focused value-semantic nextest cases including real-device CPU differential
+  and inverse-projection evidence. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: FrFT [arch]
+
+- Target version: `apollo-frft` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU pipeline, binding, encoder, queue, and transfer
+  ownership in both direct and unitary FrFT paths with typed Hephaestus ZST
+  kernels and ordered command streams.
+- [x] Preserve the direct rotation contract and Candan--Gr\u00fcnbaum unitarity
+  theorem; retain Leto host views and Mnemosyne-backed outputs; seal concrete
+  GPU storage to `Complex32` and explicit `[f16; 2]` conversion.
+- [x] Verify real-device direct CPU differential and unitary
+  identity/reversal/norm/roundtrip laws, negative contracts, format,
+  warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and semver
+  classification; synchronize D6 residual count and changelog.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: Wavelet [arch]
+
+- Target version: `apollo-wavelet` 0.3.0
+- Phase: Closure
+- [x] Promote multilevel prefix transfer to Hephaestus and replace Apollo-owned
+  WGPU pipeline, binding, encoder, queue, and transfer mechanics with typed
+  Haar analysis/synthesis ZST kernels and command streams.
+- [x] Preserve the Haar orthonormality/inverse theorem and Leto host boundary;
+  seal GPU storage to native `f32` and explicit `f16` conversion.
+- [x] Verify analytical values, CPU differential, Parseval, inverse roundtrip,
+  Leto boundaries, typed `f16`, negative contracts, format, warning-denied
+  Clippy, nextest, doctest, rustdoc, and the provider audit against published
+  Hephaestus/Leto/Mnemosyne/Moirai/Themis revisions; classify the intentional
+  public break as major with `cargo semver-checks`.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion; 25
+  focused value-semantic nextest cases including real-device dispatch. No
+  machine-checked proof is performed.
+
+## Hephaestus kernel migration: QFT [arch]
+
+- Target version: `apollo-qft` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU pipeline, binding, encoder, queue, and transfer ownership
+  with a typed Hephaestus `Complex32` kernel and command stream.
+- [x] Preserve the unitary QFT theorem and Leto host boundary; seal the concrete
+  GPU storage contract to native `Complex32` and explicit `[f16; 2]` promotion.
+- [x] Verify real-device CPU differential and inverse roundtrip, negative
+  contracts, format, warning-denied Clippy, nextest, doctest, and rustdoc.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion; 27
+  focused value-semantic tests including real-device dispatch. No machine-checked
+  proof is performed.
+
+## Hephaestus kernel migration: NTT [arch]
+
+- Target version: `apollo-ntt` 0.3.0
+- Phase: Closure
+- [x] Audit modular forward/inverse kernel arithmetic, modulus validation, and
+  Atlas-provider boundaries against ADR 0003.
+- [x] Encode the existing exact-residue dispatch as typed Hephaestus kernels
+  with explicit forward/inverse direction and caller-owned output.
+- [x] Remove direct `wgpu`, `pollster`, helper, and raw-device ownership while
+  preserving Leto host boundaries and Moirai/Hermes/Mnemosyne CPU contracts.
+- [x] Verify known modular modes, CPU differential and inverse roundtrips,
+  negative modulus/length contracts, Leto boundaries, provider audit, and API
+  classification.
+- Evidence tier: type-level typed binding and parameter-layout enforcement;
+  27 focused value-semantic nextest cases including real-device CPU differential
+  and a 64-case exact roundtrip property; doctest, rustdoc, provider audit, and
+  API classification. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: GFT [arch]
+
+- Target version: `apollo-gft` 0.3.0
+- Phase: Closure
+- [x] Audit forward/inverse basis orientation, Atlas-provider boundaries, and
+  precision contracts against ADR 0003 and the completed provider slices.
+- [x] Encode the basis transform as one direction-parameterized ZST authored
+  kernel over typed signal, basis, and output bindings.
+- [x] Replace raw WGPU ownership with Hephaestus preparation, dispatch,
+  transfer, and caller-owned Mnemosyne/Leto output storage.
+- [x] Preserve the existing Moirai, Hermes, and Mnemosyne CPU contracts; remove
+  direct `wgpu`, `pollster`, helper, fake-generic, and duplicate adapter paths.
+- [x] Verify analytical graph modes, forward/inverse CPU differential, Leto
+  contiguous/strided/typed boundaries, negative contracts, workspace gates,
+  provider audit, and API classification.
+- Evidence tier: compile-time sealed storage and typed-binding/layout checks;
+  21 focused value-semantic tests including real-device CPU differential and
+  inverse roundtrip; compile-fail `f64` rejection doctest; warning-denied
+  Clippy/rustdoc; provider audit; and semver classification of the intentional
+  0.2.0-to-0.3.0 major change. No machine-checked proof is performed.
+
+## Hephaestus kernel migration: DHT [arch]
+
+- Target version: `apollo-dht` 0.3.0
+- Phase: Closure
+- [x] Audit DHT's forward/self-inverse GPU formulas and Atlas-provider
+  boundaries against ADR 0003 and the completed FWHT/CZT patterns.
+- [x] Encode transform and inverse-scale stages as ZST authored-kernel
+  interfaces over typed bindings and compile-time-checked parameters.
+- [x] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
+  transfer ownership with one Hephaestus command stream per operation.
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges; compute
+  Leto results directly in Mnemosyne storage and preserve the existing Hermes
+  reduction and Moirai scheduling contracts without parallel variants.
+- [x] Verify self-inverse, impulse/constant analytical oracles, Leto
+  contiguous/strided/typed boundaries, invalid lengths, provider audit,
+  workspace gates, and API classification; synchronize exact residuals.
+- Evidence tier: type-level provider ownership, a compile-time parameter-layout
+  assertion, and compile-fail exclusion of `f64` from the concrete `f32` GPU
+  contract. Focused warning-denied Clippy, 34/34 nextest cases including a
+  real-device suite, and the compile-fail doctest pass. The full workspace
+  passes warning-denied Clippy, 1,025/1,025 nextest cases, doctest,
+  warning-denied rustdoc, provider-audit, locked-metadata, and API-classification
+  gates. No runtime performance claim is made.
+
+## Hephaestus kernel migration: DCT/DST [major]
+
+- Target version: `apollo-dctdst` 0.3.0
+- Phase: Closure
+- [x] Replace raw WGPU device, buffer, pipeline, binding, encoder, queue, and
+  transfer ownership with Hephaestus typed preparation, bindings, command
+  streams, and transfers.
+- [x] Encode transform and scale stages as typed ZST kernel interfaces with a
+  compile-time-checked 32-byte parameter layout; preserve the DCT/DST
+  inverse-pair theorem and CPU/Leto boundaries.
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges;
+  preserve Mnemosyne scratch and result storage, Hermes reductions, and Moirai
+  scheduling without a second execution implementation.
+- [x] Pass format, warning-denied Clippy, all-feature nextest, doctest, and
+  rustdoc. The focused suite executes 57 value-semantic cases, including the
+  available-device CPU differential path.
+- Residual: split the 800-line GPU verification harness as part of D8 shared
+  transport-harness consolidation; do not duplicate transform execution.
+- Evidence tier: type-level provider ownership and parameter layout assertion,
+  plus focused value-semantic and independent CPU-differential tests. No
+  machine-checked proof or runtime performance claim is made.
+
+## Hephaestus kernel migration: CZT [arch]
+
+- Target version: `apollo-czt` 0.4.0
+- Phase: Closure
+- [x] Audit CZT's current Atlas-provider boundaries and confirm ADR 0003 covers
+  the direct forward/adjoint-inverse kernel family.
+- [x] Encode forward and inverse CZT kernels as ZST authored-kernel interfaces
+  over typed read-only input and write-only output bindings.
+- [x] Replace raw WGPU buffers, uniform allocation, pipelines, bind groups,
+  encoders, queues, and public device accessors with Hephaestus preparation,
+  one-operation command streams, and typed transfers.
+- [x] Delete `apollo-czt`'s direct `wgpu`, `pollster`, and
+  `apollo-wgpu-helpers` dependency edges; consolidate its duplicate Leto `Cow`
+  and Mnemosyne-output helpers onto the existing CZT SSOT; preserve the
+  existing Hermes direct reduction, Moirai scheduling, and Mnemosyne scratch
+  paths without parallel algorithm variants.
+- [x] Verify forward and inverse GPU execution against the CPU/reference
+  formulas, Leto contiguous/strided/typed boundaries, invalid-plan contracts,
+  provider audit, full workspace gates, and API classification; synchronize
+  changelog and exact residual inventory.
+- Evidence tier: type-level provider ownership and a compile-time parameter
+  layout assertion, plus 44 focused CZT cases and 1,026/1,026 workspace
+  value-semantic nextest cases. The suite includes real-device forward/inverse
+  CPU differential execution, Leto contiguous/strided/typed boundaries, an
+  exact unit-impulse oracle, invalid-plan rejection, and DFT round trips.
+  Warning-denied Clippy, doctest, rustdoc, provider-audit, locked-metadata, and
+  API-classification gates pass. No runtime performance claim is made.
+
+## Hephaestus kernel migration: FWHT [arch]
+
+- Target version: `apollo-fwht` 0.3.0
+- Phase: Closure
+- [x] Audit FWHT's raw-WGPU boundary against Hephaestus's typed
+  `ComputeDevice`/`KernelDevice` contracts and record ADR 0003.
+- [x] Encode butterfly and inverse-scale kernels as ZST kernel interfaces with
+  dialect-specific source implementations.
+- [x] Replace raw buffers, pipelines, bind groups, encoders, queues, and public
+  device accessors with Hephaestus typed preparation and dispatch.
+- [x] Delete `apollo-fwht`'s direct `wgpu`, `pollster`, and
+  `apollo-wgpu-helpers` dependency edges and verify no raw-WGPU source remains
+  in the FWHT bounded context.
+- [x] Pass focused format, warning-denied Clippy, nextest, doctest, rustdoc,
+  provider-audit, locked metadata, and API classification gates; synchronize
+  changelog and residual inventory.
+- Evidence tier: compile-time typed provider ownership plus 39 value-semantic
+  nextest cases, including real-device CPU differential, inverse, Leto
+  typed/strided, and exact Hadamard involution coverage; the full workspace
+  passes 1,028/1,028 nextest cases. The source/manifests scan finds no raw WGPU
+  or helper dependency in `apollo-fwht`; provider-audit, warning-denied
+  Clippy/rustdoc, doctest, locked metadata, and API classification gates pass.
+  No runtime performance claim is made.
+
 ## Release 0.15.0 WGPU 30 integration [major]
 
 - Target version: 0.15.0

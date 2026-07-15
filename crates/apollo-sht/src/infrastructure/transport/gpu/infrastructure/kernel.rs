@@ -1,380 +1,303 @@
-//! Direct complex spherical harmonic transform WGPU kernels.
+//! Typed Hephaestus kernels for direct spherical harmonic execution.
+//!
+//! The forward pass evaluates the quadrature projection
+//! `a_l^m = sum_j f_j conj(Y_l^m(j)) w_j`, while the inverse pass evaluates
+//! `f_j = sum_lm a_l^m Y_l^m(j)`.  A typed command stream materializes the
+//! respective basis before consuming it in the matrix reduction, so the
+//! provider owns the required device-side write-before-read synchronization.
+
+use std::{borrow::Cow, marker::PhantomData};
 
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
-use wgpu::util::DeviceExt;
+use hephaestus_core::{
+    Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
+    Wgsl,
+};
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::infrastructure::transport::gpu::{
+    application::plan::ShtWgpuPlan,
+    domain::error::{WgpuError, WgpuResult},
+};
 
-const WORKGROUP_SIZE: u32 = 64;
+const WORKGROUP_SIZE: usize = 64;
+const SHT_COMMON_SOURCE: &str = include_str!("shaders/common.wgsl");
+const SHT_BASIS_SOURCE: &str = include_str!("shaders/basis.wgsl");
+const SHT_MATRIX_SOURCE: &str = include_str!("shaders/matrix.wgsl");
 
+/// Uniform parameters for the matrix reduction.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ComplexPod {
-    re: f32,
-    im: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ShtParams {
+pub(crate) struct ShtParams {
     output_count: u32,
     reduction_count: u32,
-    _padding: [u32; 2],
+    padding: [u32; 2],
 }
 
+const _: () = assert!(core::mem::size_of::<ShtParams>() == 16);
+
+impl ShtParams {
+    fn new(output_count: usize, reduction_count: usize) -> WgpuResult<Self> {
+        Ok(Self {
+            output_count: u32::try_from(output_count).map_err(|_| WgpuError::InvalidPlan {
+                message: format!(
+                    "matrix output count {output_count} exceeds the accelerator parameter range"
+                ),
+            })?,
+            reduction_count: u32::try_from(reduction_count).map_err(|_| WgpuError::InvalidPlan {
+                message: format!(
+                    "matrix reduction count {reduction_count} exceeds the accelerator parameter range"
+                ),
+            })?,
+            padding: [0; 2],
+        })
+    }
+}
+
+/// One sampled spherical-grid point and its quadrature weight.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct GridPod {
     pub(crate) cos_theta: f32,
     pub(crate) phi: f32,
     pub(crate) weight: f32,
-    pub(crate) _padding: f32,
+    pub(crate) padding: f32,
 }
 
+const _: () = assert!(core::mem::size_of::<GridPod>() == 16);
+
+/// Uniform parameters for basis materialization.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct BasisParams {
+pub(crate) struct BasisParams {
     mode_count: u32,
     sample_count: u32,
     max_degree: u32,
     weighted: u32,
     conjugate: u32,
-    _padding: [u32; 3],
+    padding: [u32; 3],
 }
 
-/// Cached WGPU state for direct SHT dispatches.
-#[derive(Debug)]
-pub struct ShtGpuKernel {
-    bind_group_layout: wgpu::BindGroupLayout,
-    basis_bind_group_layout: wgpu::BindGroupLayout,
-    basis_pipeline: wgpu::ComputePipeline,
-    forward_pipeline: wgpu::ComputePipeline,
-    inverse_pipeline: wgpu::ComputePipeline,
+const _: () = assert!(core::mem::size_of::<BasisParams>() == 32);
+
+impl BasisParams {
+    fn new<P: ShtMatrixPass>(plan: &ShtWgpuPlan) -> WgpuResult<Self> {
+        Ok(Self {
+            mode_count: u32::try_from(plan.mode_count()).map_err(|_| WgpuError::InvalidPlan {
+                message: format!(
+                    "mode count {} exceeds the accelerator parameter range",
+                    plan.mode_count()
+                ),
+            })?,
+            sample_count: u32::try_from(plan.sample_count()).map_err(|_| {
+                WgpuError::InvalidPlan {
+                    message: format!(
+                        "sample count {} exceeds the accelerator parameter range",
+                        plan.sample_count()
+                    ),
+                }
+            })?,
+            max_degree: u32::try_from(plan.max_degree()).map_err(|_| WgpuError::InvalidPlan {
+                message: format!(
+                    "maximum degree {} exceeds the accelerator parameter range",
+                    plan.max_degree()
+                ),
+            })?,
+            weighted: u32::from(P::WEIGHTED),
+            conjugate: u32::from(P::CONJUGATE),
+            padding: [0; 3],
+        })
+    }
 }
+
+/// Compile-time direction selection for the SHT matrix pass.
+trait ShtMatrixPass {
+    /// Provider diagnostic label for the basis pipeline.
+    const BASIS_LABEL: &'static str;
+    /// Provider diagnostic label for the reduction pipeline.
+    const MATRIX_LABEL: &'static str;
+    /// Matrix entry point.
+    const ENTRY: &'static str;
+    /// Whether basis values include quadrature weights.
+    const WEIGHTED: bool;
+    /// Whether basis values use complex conjugation.
+    const CONJUGATE: bool;
+}
+
+/// Marker selecting forward quadrature projection.
+pub(crate) struct Forward;
+
+impl ShtMatrixPass for Forward {
+    const BASIS_LABEL: &'static str = "apollo-sht-forward-basis";
+    const MATRIX_LABEL: &'static str = "apollo-sht-forward-matrix";
+    const ENTRY: &'static str = "sht_forward";
+    const WEIGHTED: bool = true;
+    const CONJUGATE: bool = true;
+}
+
+/// Marker selecting inverse harmonic synthesis.
+pub(crate) struct Inverse;
+
+impl ShtMatrixPass for Inverse {
+    const BASIS_LABEL: &'static str = "apollo-sht-inverse-basis";
+    const MATRIX_LABEL: &'static str = "apollo-sht-inverse-matrix";
+    const ENTRY: &'static str = "sht_inverse";
+    const WEIGHTED: bool = false;
+    const CONJUGATE: bool = false;
+}
+
+/// Typed basis-generation interface for one transform direction.
+pub(crate) struct ShtBasisKernel<P>(PhantomData<P>);
+
+impl<P: ShtMatrixPass> KernelInterface for ShtBasisKernel<P> {
+    type Params = BasisParams;
+
+    const LABEL: &'static str = P::BASIS_LABEL;
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<GridPod>(),
+        BindingDecl::read_write::<Complex32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl<P: ShtMatrixPass> KernelSource<Wgsl> for ShtBasisKernel<P> {
+    const ENTRY: &'static str = "sht_basis";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Owned([SHT_COMMON_SOURCE, SHT_BASIS_SOURCE].concat())
+    }
+}
+
+/// Typed matrix-reduction interface for one transform direction.
+pub(crate) struct ShtMatrixKernel<P>(PhantomData<P>);
+
+impl<P: ShtMatrixPass> KernelInterface for ShtMatrixKernel<P> {
+    type Params = ShtParams;
+
+    const LABEL: &'static str = P::MATRIX_LABEL;
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<Complex32>(),
+        BindingDecl::read_only::<Complex32>(),
+        BindingDecl::read_write::<Complex32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl<P: ShtMatrixPass> KernelSource<Wgsl> for ShtMatrixKernel<P> {
+    const ENTRY: &'static str = P::ENTRY;
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Owned([SHT_COMMON_SOURCE, SHT_MATRIX_SOURCE].concat())
+    }
+}
+
+/// Zero-sized SHT orchestration over a Hephaestus device.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ShtGpuKernel;
 
 impl ShtGpuKernel {
-    /// Compile shader state and allocate the uniform parameter buffer.
-    #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-sht-wgpu shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/sht.wgsl").into()),
-        });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-sht-wgpu bind group layout"),
-            entries: &[
-                storage_layout_entry(0, true),
-                storage_layout_entry(1, true),
-                storage_layout_entry(2, false),
-                uniform_layout_entry(3),
-            ],
-        });
-        let basis_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("apollo-sht-wgpu basis bind group layout"),
-                entries: &[
-                    storage_layout_entry(4, true),
-                    storage_layout_entry(5, false),
-                    uniform_basis_layout_entry(6),
-                ],
-            });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-sht-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let basis_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("apollo-sht-wgpu basis pipeline layout"),
-                bind_group_layouts: &[Some(&basis_bind_group_layout)],
-                immediate_size: 0,
-            });
-        let basis_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-sht-wgpu basis pipeline"),
-            layout: Some(&basis_pipeline_layout),
-            module: &shader,
-            entry_point: Some("sht_basis"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let forward_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-sht-wgpu forward pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("sht_forward"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        let inverse_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-sht-wgpu inverse pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("sht_inverse"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        Self {
-            bind_group_layout,
-            basis_bind_group_layout,
-            basis_pipeline,
-            forward_pipeline,
-            inverse_pipeline,
-        }
-    }
-
-    /// Execute forward matrix sums.
-    pub(crate) fn execute_forward(
-        &self,
-        device: &WgpuDevice,
-        mode_count: usize,
-        sample_count: usize,
+    /// Execute forward quadrature into caller-owned mode storage.
+    pub(crate) fn execute_forward_into<D>(
+        device: &D,
+        plan: &ShtWgpuPlan,
         samples: &[Complex32],
         grid: &[GridPod],
-    ) -> WgpuResult<Vec<Complex32>> {
-        self.execute(
-            device,
-            mode_count,
-            sample_count,
-            samples,
-            grid,
-            mode_count,
-            sample_count,
-            true,
-            true,
-            &self.forward_pipeline,
-        )
+        coefficients: &mut [Complex32],
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        ShtBasisKernel<Forward>: KernelSource<D::Dialect> + KernelInterface<Params = BasisParams>,
+        ShtMatrixKernel<Forward>: KernelSource<D::Dialect> + KernelInterface<Params = ShtParams>,
+    {
+        Self::execute_into::<D, Forward>(device, plan, samples, grid, coefficients)
     }
 
-    /// Execute inverse matrix sums.
-    pub(crate) fn execute_inverse(
-        &self,
-        device: &WgpuDevice,
-        sample_count: usize,
-        mode_count: usize,
+    /// Execute inverse synthesis into caller-owned sample storage.
+    pub(crate) fn execute_inverse_into<D>(
+        device: &D,
+        plan: &ShtWgpuPlan,
         coefficients: &[Complex32],
         grid: &[GridPod],
-    ) -> WgpuResult<Vec<Complex32>> {
-        self.execute(
-            device,
-            sample_count,
-            mode_count,
-            coefficients,
-            grid,
-            mode_count,
-            sample_count,
-            false,
-            false,
-            &self.inverse_pipeline,
-        )
+        samples: &mut [Complex32],
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        ShtBasisKernel<Inverse>: KernelSource<D::Dialect> + KernelInterface<Params = BasisParams>,
+        ShtMatrixKernel<Inverse>: KernelSource<D::Dialect> + KernelInterface<Params = ShtParams>,
+    {
+        Self::execute_into::<D, Inverse>(device, plan, coefficients, grid, samples)
     }
 
-    fn execute(
-        &self,
-        device: &WgpuDevice,
-        output_count: usize,
-        reduction_count: usize,
+    fn execute_into<D, P>(
+        device: &D,
+        plan: &ShtWgpuPlan,
         input: &[Complex32],
         grid: &[GridPod],
-        mode_count: usize,
-        sample_count: usize,
-        weighted: bool,
-        conjugate: bool,
-        pipeline: &wgpu::ComputePipeline,
-    ) -> WgpuResult<Vec<Complex32>> {
-        let hep_device = device.hephaestus();
-        let input_data: Vec<ComplexPod> = input
-            .iter()
-            .map(|value| ComplexPod {
-                re: value.re,
-                im: value.im,
-            })
-            .collect();
-        let input_buffer =
-            hep_device
-                .upload(&input_data)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        let basis_buffer = hep_device
-            .alloc_zeroed::<ComplexPod>(mode_count * sample_count)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        let grid_buffer = hep_device
-            .upload(grid)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        let output_buffer = hep_device
-            .alloc_zeroed::<ComplexPod>(output_count)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-        let params_buffer = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-sht-wgpu params"),
-                contents: bytemuck::bytes_of(&ShtParams {
-                    output_count: output_count as u32,
-                    reduction_count: reduction_count as u32,
-                    _padding: [0; 2],
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
+        output: &mut [Complex32],
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        P: ShtMatrixPass,
+        ShtBasisKernel<P>: KernelSource<D::Dialect> + KernelInterface<Params = BasisParams>,
+        ShtMatrixKernel<P>: KernelSource<D::Dialect> + KernelInterface<Params = ShtParams>,
+    {
+        let (expected_input, expected_output) = if P::WEIGHTED {
+            (plan.sample_count(), plan.mode_count())
+        } else {
+            (plan.mode_count(), plan.sample_count())
+        };
+        if input.len() != expected_input || output.len() != expected_output {
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "SHT {} expects input length {expected_input} and output length {expected_output}, got {} and {}",
+                    P::MATRIX_LABEL,
+                    input.len(),
+                    output.len()
+                ),
             });
-        let basis_params_buffer =
-            device
-                .inner()
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("apollo-sht-wgpu basis params"),
-                    contents: bytemuck::bytes_of(&BasisParams {
-                        mode_count: mode_count as u32,
-                        sample_count: sample_count as u32,
-                        max_degree: (integer_sqrt(mode_count) - 1) as u32,
-                        weighted: u32::from(weighted),
-                        conjugate: u32::from(conjugate),
-                        _padding: [0; 3],
-                    }),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-        let basis_bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-sht-wgpu basis bind group"),
-                layout: &self.basis_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: grid_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 5,
-                        resource: basis_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: basis_params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-sht-wgpu bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: basis_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: output_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-        let mut encoder = device
-            .inner()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-sht-wgpu encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("apollo-sht-wgpu basis generation pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.basis_pipeline);
-            pass.set_bind_group(0, &basis_bind_group, &[]);
-            pass.dispatch_workgroups(dispatch_count((mode_count * sample_count) as u32), 1, 1);
         }
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("apollo-sht-wgpu matrix sum pass"),
-                timestamp_writes: None,
+        if grid.len() != plan.sample_count() {
+            return Err(WgpuError::ShapeMismatch {
+                message: format!(
+                    "SHT grid expects {} samples, got {}",
+                    plan.sample_count(),
+                    grid.len()
+                ),
             });
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(dispatch_count(output_count as u32), 1, 1);
         }
-        device.queue().submit(std::iter::once(encoder.finish()));
 
-        let mut pods = vec![ComplexPod::zeroed(); output_count];
-        hep_device
-            .download(&output_buffer, &mut pods)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
+        let input_buffer = device.upload(input)?;
+        let grid_buffer = device.upload(grid)?;
+        let basis_length = plan
+            .mode_count()
+            .checked_mul(plan.sample_count())
+            .ok_or_else(|| WgpuError::InvalidPlan {
+                message: "basis storage length overflows usize".to_owned(),
             })?;
-
-        Ok(pods
-            .iter()
-            .map(|value| Complex32::new(value.re, value.im))
-            .collect())
+        let basis_buffer = device.alloc_zeroed::<Complex32>(basis_length)?;
+        let output_buffer = device.alloc_zeroed::<Complex32>(output.len())?;
+        let basis = device.prepare(&ShtBasisKernel::<P>(PhantomData))?;
+        let matrix = device.prepare(&ShtMatrixKernel::<P>(PhantomData))?;
+        let basis_bindings = [
+            Binding::read(&grid_buffer),
+            Binding::read_write(&basis_buffer),
+        ];
+        let matrix_bindings = [
+            Binding::read(&input_buffer),
+            Binding::read(&basis_buffer),
+            Binding::read_write(&output_buffer),
+        ];
+        let basis_grid =
+            DispatchGrid::covering_domain([basis_length, 1, 1], [WORKGROUP_SIZE, 1, 1])?;
+        let matrix_grid =
+            DispatchGrid::covering_domain([output.len(), 1, 1], [WORKGROUP_SIZE, 1, 1])?;
+        let basis_params = BasisParams::new::<P>(plan)?;
+        let matrix_params = ShtParams::new(output.len(), expected_input)?;
+        let mut stream = device.stream()?;
+        stream.encode(&basis, &basis_bindings, &basis_params, basis_grid)?;
+        stream.encode(&matrix, &matrix_bindings, &matrix_params, matrix_grid)?;
+        stream.submit()?;
+        device.download(&output_buffer, output)?;
+        Ok(())
     }
-}
-
-fn storage_layout_entry(binding: u32, read_only: bool) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-fn uniform_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: Some(
-                std::num::NonZeroU64::new(std::mem::size_of::<ShtParams>() as u64)
-                    .expect("nonzero uniform size"),
-            ),
-        },
-        count: None,
-    }
-}
-
-fn uniform_basis_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: Some(
-                std::num::NonZeroU64::new(std::mem::size_of::<BasisParams>() as u64)
-                    .expect("nonzero uniform size"),
-            ),
-        },
-        count: None,
-    }
-}
-
-fn dispatch_count(items: u32) -> u32 {
-    items.div_ceil(WORKGROUP_SIZE)
-}
-
-fn integer_sqrt(value: usize) -> usize {
-    let mut root = 0;
-    while (root + 1) * (root + 1) <= value {
-        root += 1;
-    }
-    root
 }

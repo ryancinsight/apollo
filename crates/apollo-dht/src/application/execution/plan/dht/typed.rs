@@ -155,3 +155,50 @@ impl HartleyStorage for f16 {
         f16::from_f32(value as f32)
     }
 }
+
+mod sealed {
+    pub trait Sealed {}
+
+    impl Sealed for f32 {}
+    impl Sealed for apollo_fft::f16 {}
+}
+
+/// Storage whose declared compute profile is the native `f32` GPU contract.
+///
+/// This sealed capability admits `f32` and the explicit mixed `f16`/`f32`
+/// profile. `f64` is intentionally excluded so GPU typed APIs cannot silently
+/// narrow high-accuracy storage to `f32` arithmetic.
+///
+/// ```compile_fail
+/// use apollo_dht::HartleyGpuStorage;
+///
+/// fn require_gpu_storage<T: HartleyGpuStorage>() {}
+/// require_gpu_storage::<f64>();
+/// ```
+pub trait HartleyGpuStorage: HartleyStorage + sealed::Sealed {
+    /// Convert storage into the concrete `f32` accelerator contract.
+    fn to_gpu(self) -> f32;
+
+    /// Convert a concrete `f32` accelerator result back to storage.
+    fn from_gpu(value: f32) -> Self;
+}
+
+impl HartleyGpuStorage for f32 {
+    fn to_gpu(self) -> f32 {
+        self
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        value
+    }
+}
+
+impl HartleyGpuStorage for f16 {
+    fn to_gpu(self) -> f32 {
+        self.to_f32()
+    }
+
+    fn from_gpu(value: f32) -> Self {
+        f16::from_f32(value)
+    }
+}

@@ -11,7 +11,7 @@ pub struct WgpuCapabilities {
     pub supports_forward: bool,
     /// Whether inverse or adjoint transform execution is implemented.
     pub supports_inverse: bool,
-    /// Whether mixed-precision (f16/f32/f64) typed storage dispatch is supported.
+    /// Whether concrete `f32` and explicit reduced `f16` storage dispatch is supported.
     pub supports_mixed_precision: bool,
     /// Default precision profile for GPU execution.
     pub default_precision_profile: PrecisionProfile,
@@ -26,18 +26,6 @@ impl WgpuCapabilities {
             supports_forward: false,
             supports_inverse: false,
             supports_mixed_precision: false,
-            default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
-        }
-    }
-
-    /// Construct capabilities for a forward-only implementation.
-    #[must_use]
-    pub const fn forward_only(device_available: bool) -> Self {
-        Self {
-            device_available,
-            supports_forward: device_available,
-            supports_inverse: false,
-            supports_mixed_precision: true,
             default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
         }
     }

@@ -25,12 +25,12 @@ mod tests {
 
     #[test]
     fn plan_preserves_scale_configuration() {
-        let plan = MellinWgpuPlan::new(64, 0.25_f64.to_bits(), 4.0_f64.to_bits());
+        let plan = MellinWgpuPlan::new(64, 0.25, 4.0);
         assert_eq!(plan.samples(), 64);
         assert_eq!(plan.min_scale(), 0.25);
         assert_eq!(plan.max_scale(), 4.0);
         assert!(!plan.is_empty());
-        assert!(MellinWgpuPlan::new(0, 0.25_f64.to_bits(), 4.0_f64.to_bits()).is_empty());
+        assert!(MellinWgpuPlan::new(0, 0.25, 4.0).is_empty());
     }
 
     #[test]
@@ -61,8 +61,8 @@ mod tests {
         // 2. forward_spectrum_matches_cpu_reference
         {
             let signal = vec![1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
-            let signal_min = 1.0_f64;
-            let signal_max = 8.0_f64;
+            let signal_min = 1.0_f32;
+            let signal_max = 8.0_f32;
             let plan = backend.plan(8, 1.0, 8.0);
             let gpu = backend
                 .execute_forward(&plan, &signal, signal_min, signal_max)
@@ -75,8 +75,8 @@ mod tests {
                         .iter()
                         .map(|&value| f64::from(value))
                         .collect::<Vec<_>>(),
-                    signal_min,
-                    signal_max,
+                    f64::from(signal_min),
+                    f64::from(signal_max),
                 )
                 .expect("cpu forward");
 
@@ -90,8 +90,8 @@ mod tests {
         // 3. typed_mixed_storage_matches_represented_f32_execution
         {
             let signal_f32 = [1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
-            let signal_min = 1.0_f64;
-            let signal_max = 8.0_f64;
+            let signal_min = 1.0_f32;
+            let signal_max = 8.0_f32;
             let plan = backend.plan(8, 1.0, 8.0);
 
             // Quantize to f16 and recover represented f32 for the reference path.
@@ -127,8 +127,8 @@ mod tests {
         // 4. leto_forward_matches_slice
         {
             let signal = vec![1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
-            let signal_min = 1.0_f64;
-            let signal_max = 8.0_f64;
+            let signal_min = 1.0_f32;
+            let signal_max = 8.0_f32;
             let plan = backend.plan(8, 1.0, 8.0);
             let expected = backend
                 .execute_forward(&plan, &signal, signal_min, signal_max)
@@ -149,8 +149,8 @@ mod tests {
                 backing.push(value);
                 backing.push(99.0);
             }
-            let signal_min = 1.0_f64;
-            let signal_max = 8.0_f64;
+            let signal_min = 1.0_f32;
+            let signal_max = 8.0_f32;
             let plan = backend.plan(8, 1.0, 8.0);
             let expected = backend
                 .execute_forward(&plan, &logical, signal_min, signal_max)
@@ -169,8 +169,8 @@ mod tests {
         // 6. typed_leto_forward_matches_typed_slice
         {
             let signal_f32 = [1.0_f32, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5];
-            let signal_min = 1.0_f64;
-            let signal_max = 8.0_f64;
+            let signal_min = 1.0_f32;
+            let signal_max = 8.0_f32;
             let plan = backend.plan(8, 1.0, 8.0);
             let signal_f16: Vec<f16> = signal_f32.iter().copied().map(f16::from_f32).collect();
             let expected = backend
@@ -211,40 +211,30 @@ mod tests {
                     8.0,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(err, WgpuError::InvalidPrecisionProfile));
         }
 
         // 8. rejects_invalid_plan_and_signal_domain_before_dispatch
         {
             let invalid_plan = backend
-                .execute_forward(
-                    &MellinWgpuPlan::new(0, 1.0_f64.to_bits(), 8.0_f64.to_bits()),
-                    &[1.0],
-                    1.0,
-                    2.0,
-                )
+                .execute_forward(&MellinWgpuPlan::new(0, 1.0, 8.0), &[1.0], 1.0, 2.0)
                 .expect_err("empty plan must fail");
             assert!(matches!(invalid_plan, WgpuError::InvalidPlan { .. }));
 
             let empty_signal = backend
-                .execute_forward(
-                    &MellinWgpuPlan::new(8, 1.0_f64.to_bits(), 8.0_f64.to_bits()),
-                    &[],
-                    1.0,
-                    2.0,
-                )
+                .execute_forward(&MellinWgpuPlan::new(8, 1.0, 8.0), &[], 1.0, 2.0)
                 .expect_err("empty signal must fail");
-            assert_eq!(
+            assert!(matches!(
                 empty_signal,
                 WgpuError::LengthMismatch {
                     expected: 1,
                     actual: 0,
                 }
-            );
+            ));
 
             let invalid_domain = backend
                 .execute_forward(
-                    &MellinWgpuPlan::new(8, 1.0_f64.to_bits(), 8.0_f64.to_bits()),
+                    &MellinWgpuPlan::new(8, 1.0, 8.0),
                     &[1.0, 2.0, 3.0],
                     2.0,
                     1.0,
@@ -259,8 +249,8 @@ mod tests {
         // 9. gpu_inverse_roundtrip_constant_signal
         {
             let n = 16usize;
-            let min_scale = 1.0_f64;
-            let max_scale = 8.0_f64;
+            let min_scale = 1.0_f32;
+            let max_scale = 8.0_f32;
             let plan = backend.plan(n, min_scale, max_scale);
             let signal: Vec<f32> = vec![2.5; n];
             let spectrum = backend
@@ -282,8 +272,8 @@ mod tests {
         // 10. leto_inverse_matches_slice
         {
             let n = 16usize;
-            let min_scale = 1.0_f64;
-            let max_scale = 8.0_f64;
+            let min_scale = 1.0_f32;
+            let max_scale = 8.0_f32;
             let plan = backend.plan(n, min_scale, max_scale);
             let signal = vec![2.5_f32; n];
             let spectrum = backend

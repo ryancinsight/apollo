@@ -1,7 +1,7 @@
 //! WGPU device acquisition for this transform backend.
 
 use apollo_fft::application::utilities::leto_interop;
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use crate::RadonStorage;
 use apollo_fft::PrecisionProfile;
@@ -11,7 +11,7 @@ use crate::infrastructure::transport::gpu::application::plan::RadonWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::RadonGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use hephaestus_wgpu::WgpuDevice;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -23,37 +23,24 @@ pub fn wgpu_available() -> bool {
 #[derive(Debug, Clone)]
 pub struct RadonWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<RadonGpuKernel>,
 }
 
 impl RadonWgpuBackend {
     /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(RadonGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    #[must_use]
+    pub fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-radon-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-radon-wgpu")?))
     }
 
     /// Return truthful current capabilities.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::forward_inverse_and_fbp(true)
-    }
-
-    /// Return the acquired WGPU device.
-    #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
     }
 
     /// Create a metadata-only plan descriptor.
@@ -83,7 +70,7 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_inputs(plan, image, angles)?;
-        self.kernel.execute(&self.device, plan, image, angles)
+        RadonGpuKernel::execute_forward(&self.device, *plan, image, angles)
     }
 
     /// Execute the forward Radon projection from Leto image and angle views.
@@ -115,8 +102,7 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel
-            .execute_backproject(&self.device, plan, sinogram, angles)
+        RadonGpuKernel::execute_backproject(&self.device, *plan, sinogram, angles)
     }
 
     /// Execute GPU adjoint backprojection from Leto sinogram and angle views.
@@ -203,8 +189,7 @@ impl RadonWgpuBackend {
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
         Self::validate_sinogram_inputs(plan, sinogram, angles)?;
-        self.kernel
-            .execute_filtered_backproject(&self.device, plan, sinogram, angles)
+        RadonGpuKernel::execute_filtered_backproject(&self.device, *plan, sinogram, angles)
     }
 
     /// Execute GPU ramp-filtered backprojection from Leto sinogram and angle views.

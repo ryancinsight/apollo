@@ -284,12 +284,15 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-nufft-wgpu` exposes typed mixed-storage direct and fast Type-1/Type-2 1D/3D
   execution wrappers. Tests validate `[f16; 2]` inputs and caller-owned outputs
   against the represented `Complex32` GPU path.
-- `apollo-dht-wgpu` exposes typed mixed-storage forward/inverse wrappers. Tests
-  validate `f16` caller-owned storage against represented `f32` GPU execution and
-  use an analytical `f16` quantization bound for inverse roundtrip values.
-- `apollo-fwht-wgpu` exposes typed mixed-storage forward/inverse wrappers. Tests
-  validate `f16` caller-owned storage against represented `f32` GPU execution and
-  use an analytical `f16` quantization bound for inverse roundtrip values.
+- `apollo-dht --features wgpu` exposes typed mixed-storage forward/inverse
+  wrappers through the sealed `HartleyGpuStorage` capability. Tests validate
+  `f16` caller-owned storage against represented `f32` GPU execution and use an
+  analytical `f16` quantization bound for inverse roundtrip values; `f64` is
+  excluded at compile time from the concrete `f32` accelerator contract.
+- `apollo-fwht --features wgpu` exposes typed mixed-storage forward/inverse
+  wrappers over Hephaestus typed buffers and authored-kernel dispatch. Tests
+  validate `f16` caller-owned storage against represented `f32` GPU execution
+  and use an analytical `f16` quantization bound for inverse roundtrip values.
 - CZT-WGPU, DCTDST-WGPU, FrFT-WGPU, GFT-WGPU, Hilbert-WGPU, Mellin-WGPU,
   QFT-WGPU, Radon-WGPU, SDFT-WGPU, SFT-WGPU, SHT-WGPU, STFT-WGPU, and
   Wavelet-WGPU expose typed mixed-storage wrappers over their existing `f32`
@@ -301,15 +304,17 @@ by unit and property tests against analytical identities and direct references.
   preserve standard fast-path output values.
 - CI regression prevention runs workspace formatting, clippy with warnings
   denied, all workspace tests, and the current `apollo-python` smoke tests.
-- `apollo-fwht-wgpu` now validates real 1D forward and inverse FWHT execution
-  against the owning CPU crate and reports support only for that implemented
-  `f32` kernel surface.
+- `apollo-fwht --features wgpu` validates real 1D forward and inverse execution
+  against the CPU implementation, verifies `H_n² = nI` exactly on dyadic test
+  values, and reports support only for that implemented `f32` kernel surface.
 - `apollo-dctdst-wgpu` now validates real 1D DCT-II, DCT-III, DST-II, and
   DST-III forward and inverse execution against the owning CPU crate and
   reports full DCT/DST support for that implemented `f32` kernel surface.
-- `apollo-czt-wgpu` now validates direct complex forward CZT execution against
-  the owning CPU crate's direct reference kernel and reports forward-only
-  support for the implemented `f32` complex surface.
+- `apollo-czt --features wgpu` validates Hephaestus-authored direct complex
+  forward CZT execution against the owning CPU reference and the exact unit
+  impulse oracle, validates the square-plan adjoint inverse by a DFT roundtrip,
+  and reports forward/inverse support for the implemented `f32` complex
+  surface. Leto outputs download directly into Mnemosyne-backed storage.
 - `apollo-gft-wgpu` now validates forward and inverse graph Fourier basis
   execution against the owning CPU crate and reports support for the
   implemented `f32` real basis surface.
@@ -346,8 +351,10 @@ by unit and property tests against analytical identities and direct references.
 - `apollo-wavelet-wgpu` now validates forward and inverse Haar DWT execution
   against the owning CPU crate and reports support for the implemented `f32`
   Haar surface.
-- `apollo-dht-wgpu` now validates real 1D forward and inverse DHT execution
-  against the owning CPU crate and reports support only for that implemented
+- `apollo-dht --features wgpu` validates Hephaestus-authored real 1D forward
+  and inverse DHT execution against the owning CPU crate, the exact unit
+  impulse oracle, and the Hartley involution. Leto results download directly
+  into Mnemosyne storage, and the capability report covers only the implemented
   `f32` kernel surface.
 - `apollo-nufft-wgpu` now validates exact direct Type-1 and Type-2 summations
   for 1D and 3D against `apollo-nufft` exact reference functions and reports

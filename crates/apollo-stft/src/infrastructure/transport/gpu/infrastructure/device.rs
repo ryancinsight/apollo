@@ -2,19 +2,10 @@
 
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::WgpuResult;
-use crate::infrastructure::transport::gpu::infrastructure::kernel::StftGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
-use std::sync::Arc;
+use hephaestus_wgpu::{DevicePreference, WgpuDevice};
 
-/// Four Chirp-Z work/kernel buffers plus two operation I/O buffers.
-const REQUIRED_STORAGE_BUFFERS_PER_STAGE: u32 = 6;
-
-fn required_limits() -> wgpu::Limits {
-    wgpu::Limits {
-        max_storage_buffers_per_shader_stage: REQUIRED_STORAGE_BUFFERS_PER_STAGE,
-        ..wgpu::Limits::downlevel_defaults()
-    }
-}
+/// Bluestein binds four working/kernel buffers and two operation I/O buffers.
+const BLUESTEIN_STORAGE_BINDINGS: u32 = 6;
 
 /// Pre-allocated execution buffers.
 pub mod buffers;
@@ -33,65 +24,36 @@ pub fn wgpu_available() -> bool {
 
 /// WGPU backend for the STFT.
 ///
-/// Owns an acquired device/queue pair and a cached kernel pipeline.
+/// Owns a Hephaestus device for typed kernel dispatch.
 #[derive(Debug, Clone)]
 pub struct StftWgpuBackend {
     pub(crate) device: WgpuDevice,
-    pub(crate) kernel: Arc<StftGpuKernel>,
 }
 
 impl StftWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let actual = device
-            .device()
-            .limits()
-            .max_storage_buffers_per_shader_stage;
-        if actual < REQUIRED_STORAGE_BUFFERS_PER_STAGE {
-            return Err(
-                crate::infrastructure::transport::gpu::domain::error::WgpuError::InsufficientDeviceLimit {
-                    limit: "max_storage_buffers_per_shader_stage",
-                    required: REQUIRED_STORAGE_BUFFERS_PER_STAGE,
-                    actual,
-                },
-            );
-        }
-        let kernel = Arc::new(StftGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an existing Hephaestus device.
+    #[must_use]
+    pub fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
     /// Create a backend by requesting a default adapter and device.
     pub fn try_default() -> WgpuResult<Self> {
-        static INSTANCE: std::sync::OnceLock<
-            Result<
-                StftWgpuBackend,
-                crate::infrastructure::transport::gpu::domain::error::WgpuError,
-            >,
-        > = std::sync::OnceLock::new();
-        INSTANCE
-            .get_or_init(|| {
-                WgpuDevice::try_default_with_limits("apollo-stft-wgpu", required_limits())
-                    .map_err(crate::infrastructure::transport::gpu::domain::error::WgpuError::from)
-                    .and_then(Self::new)
-            })
-            .clone()
+        let mut limits = WgpuDevice::default_device_limits();
+        limits.max_storage_buffers_per_shader_stage = Some(BLUESTEIN_STORAGE_BINDINGS);
+        Ok(Self::new(
+            WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+                "apollo-stft-wgpu",
+                DevicePreference::HighPerformance,
+                &[],
+                limits,
+            )?,
+        ))
     }
 
     /// Return truthful forward-and-inverse capability descriptor.
     #[must_use]
     pub fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::forward_and_inverse(true)
-    }
-
-    /// Return the acquired WGPU device.
-    #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
     }
 }

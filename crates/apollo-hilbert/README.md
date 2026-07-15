@@ -7,10 +7,15 @@ real Apollo signals.
 
 ```text
 src/
-  domain/          signal length contracts and analytic-signal storage
-  application/     reusable Hilbert plan
-  infrastructure/  direct frequency-domain analytic masking
-  verification/    quadrature, envelope, and property tests
+  domain/             signal length contracts and analytic-signal storage
+  application/        reusable Hilbert plan
+  infrastructure/
+    kernel/           CPU frequency-domain analytic masking
+    transport/gpu/
+      domain/         GPU capability and error contracts
+      application/    metadata-only GPU plans
+      infrastructure/ typed Hephaestus kernels, device boundary, and WGSL
+  verification/       quadrature, envelope, and property tests
 ```
 
 `HilbertPlan` validates length and exposes Hilbert quadrature, analytic signal,
@@ -40,6 +45,14 @@ Typed execution uses Apollo's shared precision profile contract:
 
 Profile/storage mismatches return `HilbertError::PrecisionMismatch`.
 
+With the `wgpu` feature, the accelerator boundary uses typed Hephaestus
+buffers and ordered command streams. Leto views borrow contiguous host storage
+and materialize a logical contiguous copy only for strided input; returned
+arrays are Mnemosyne-backed Leto storage. The sealed `HilbertGpuStorage`
+contract admits native `f32` and explicit `f16` conversion only. CPU `f64`
+execution remains available through `HilbertPlan`; it cannot silently narrow
+into the concrete `f32` accelerator.
+
 ## Mathematical Contract
 
 The discrete Hilbert transform shifts positive-frequency components by
@@ -51,6 +64,21 @@ z[n] = x[n] + i H{x}[n]
 ```
 
 with envelope `|z[n]|` and instantaneous phase `arg(z[n])`.
+
+### Double-Hilbert theorem
+
+For the DFT convention `X[k] = sum_n x[n] exp(-2 pi i k n / N)`, define
+`H` by the multiplier `-i sgn(k)` on positive/negative bins and zero on DC
+and, for even `N`, Nyquist. Let `V` be the subspace with zero DC and Nyquist
+coefficients. Then `H(H(x)) = -x` for every `x` in `V`.
+
+Proof sketch: each nonzero, non-Nyquist bin is multiplied twice by
+`(-i sgn(k))^2 = -1`; every coefficient in `V` is of that form. The inverse
+GPU mask applies `-H`, therefore it reconstructs the projection of an input
+onto `V` and intentionally omits DC/Nyquist components. The
+`double_hilbert_negates_zero_mean_signal` test exercises the theorem on a
+resolved Fourier mode; the GPU suite separately differentially checks the
+forward analytic signal and the inverse projection against CPU references.
 
 The instantaneous frequency is derived from the analytic signal using the
 complex-derivative formula
@@ -77,4 +105,7 @@ bridge capacities across repeated calls and bitwise equal repeated output.
 Direct kernel tests cover caller-owned analytic parity, caller-owned quadrature
 parity, quadrature scratch capacity reuse, and output-length rejection.
 Analytic-signal tests cover caller-owned observable projection parity and length
-rejection.
+rejection. The all-feature GPU suite validates real-device CPU differential,
+inverse projection, Leto contiguous/strided views, and native/mixed typed
+storage. The `HilbertGpuStorage` compile-fail doctest verifies that `f64`
+cannot enter the concrete accelerator API.

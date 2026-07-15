@@ -1,6 +1,7 @@
 //! Shader-backed 3D FFT implementation for the Apollo WGPU backend.
 
 pub mod dispatch;
+pub mod kernel;
 pub mod pipeline;
 pub mod strategy;
 pub mod workspace;

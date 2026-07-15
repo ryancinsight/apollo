@@ -22,3 +22,6 @@ highlight = "all"
 unknown-git = "deny"
 unknown-registry = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[sources.allow-org]
+github = ["ryancinsight"]

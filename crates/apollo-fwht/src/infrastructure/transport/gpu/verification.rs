@@ -32,17 +32,6 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
-        assert_eq!(
-            err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
-        );
-    }
-
-    #[test]
     fn fwht_wgpu_execution_suite_when_device_exists() {
         let Ok(backend) = FwhtWgpuBackend::try_default() else {
             return;
@@ -63,13 +52,13 @@ mod tests {
             let mismatch_err = backend
                 .execute_forward(&FwhtWgpuPlan::new(8), &[0.0; 4])
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
 
         // 2. backend_reports_forward_and_inverse_when_device_exists
@@ -116,7 +105,21 @@ mod tests {
             }
         }
 
-        // 5. leto_forward_matches_slice_forward_when_device_exists
+        // 5. two_forward_passes_satisfy_hadamard_square_identity
+        {
+            let input = [1.0_f32, -2.0, 3.0, 4.0, -5.0, 6.0, 7.0, -8.0];
+            let plan = backend.plan(input.len());
+            let first = backend
+                .execute_forward(&plan, &input)
+                .expect("first provider forward");
+            let second = backend
+                .execute_forward(&plan, &first)
+                .expect("second provider forward");
+            let expected = [8.0_f32, -16.0, 24.0, 32.0, -40.0, 48.0, 56.0, -64.0];
+            assert_eq!(second, expected, "H_n squared must equal n times I");
+        }
+
+        // 6. leto_forward_matches_slice_forward_when_device_exists
         {
             let input = vec![0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
             let leto_input =
@@ -131,7 +134,7 @@ mod tests {
             assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
 
-        // 6. leto_strided_forward_matches_logical_slice_forward_when_device_exists
+        // 7. leto_strided_forward_matches_logical_slice_forward_when_device_exists
         {
             let logical = vec![0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
             let mut backing = Vec::with_capacity(logical.len() * 2);
@@ -153,7 +156,7 @@ mod tests {
             assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
 
-        // 7. leto_inverse_matches_slice_inverse_when_device_exists
+        // 8. leto_inverse_matches_slice_inverse_when_device_exists
         {
             let input = vec![0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
             let plan = backend.plan(input.len());
@@ -171,7 +174,7 @@ mod tests {
             assert_eq!(actual.storage().as_slice(), expected.as_slice());
         }
 
-        // 8. typed_mixed_storage_matches_represented_f32_execution_when_device_exists
+        // 9. typed_mixed_storage_matches_represented_f32_execution_when_device_exists
         {
             let represented = [0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
             let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
@@ -214,7 +217,7 @@ mod tests {
             }
         }
 
-        // 9. typed_leto_forward_and_inverse_match_typed_slice_when_device_exists
+        // 10. typed_leto_forward_and_inverse_match_typed_slice_when_device_exists
         {
             let represented = [0.5_f32, -1.25, 2.75, 4.0, -3.5, 1.0, 0.25, -0.125];
             let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
@@ -268,7 +271,7 @@ mod tests {
             );
         }
 
-        // 10. typed_path_rejects_profile_storage_mismatch_when_device_exists
+        // 11. typed_path_rejects_profile_storage_mismatch_when_device_exists
         {
             let plan = backend.plan(2);
             let input = [f16::from_f32(1.0), f16::from_f32(-1.0)];
@@ -281,7 +284,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
     }
 

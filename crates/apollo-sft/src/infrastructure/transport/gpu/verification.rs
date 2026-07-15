@@ -11,6 +11,14 @@ mod tests {
         SftWgpuBackend, SftWgpuPlan, WgpuCapabilities, WgpuError,
     };
 
+    // Four-term f32 inverse evaluation is bounded by twice gamma_12 times the
+    // largest retained magnitude (1/3); gamma_12 = 12u / (1 - 12u).
+    const INVERSE_N0_ERROR_BOUND: f32 = {
+        let unit_roundoff = f32::EPSILON / 2.0;
+        let gamma_12 = (12.0 * unit_roundoff) / (1.0 - 12.0 * unit_roundoff);
+        2.0 * gamma_12 / 3.0
+    };
+
     #[test]
     fn capabilities_advertise_direct_dense_sparse_execution() {
         let capabilities = WgpuCapabilities::direct_dense_spectrum(true);
@@ -64,20 +72,20 @@ mod tests {
             let error = backend
                 .execute_forward(&SftWgpuPlan::new(8, 2), &[Complex32::new(0.0, 0.0); 4])
                 .expect_err("mismatched input length must be invalid");
-            assert_eq!(
+            assert!(matches!(
                 error,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4
                 }
-            );
+            ));
         }
 
         // 3. forward_matches_cpu_sparse_support_and_coefficients
         {
             let plan = SftWgpuPlan::new(8, 2);
             let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
-            let signal_f32: Vec<Complex32> = signal
+            let represented_signal: Vec<Complex32> = signal
                 .iter()
                 .map(|value| Complex32::new(value.re as f32, value.im as f32))
                 .collect();
@@ -87,7 +95,7 @@ mod tests {
                 .forward(&signal)
                 .expect("CPU SFT");
             let gpu = backend
-                .execute_forward(&plan, &signal_f32)
+                .execute_forward(&plan, &represented_signal)
                 .expect("GPU SFT");
 
             assert_eq!(gpu.frequencies, cpu.frequencies);
@@ -102,7 +110,9 @@ mod tests {
             let plan = SftWgpuPlan::new(8, 2);
             let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
             let cpu_plan = SparseFftPlan::new(plan.len(), plan.sparsity()).expect("valid CPU plan");
-            let spectrum = cpu_plan.forward(&signal).expect("CPU SFT");
+            let spectrum = backend
+                .execute_forward(&plan, &represented_signal(&signal))
+                .expect("GPU forward SFT");
             let expected = cpu_plan.inverse(&spectrum).expect("CPU inverse");
 
             let actual = backend
@@ -172,10 +182,9 @@ mod tests {
         {
             let plan = SftWgpuPlan::new(8, 2);
             let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
-            let spectrum = SparseFftPlan::new(plan.len(), plan.sparsity())
-                .expect("valid CPU plan")
-                .forward(&signal)
-                .expect("CPU SFT");
+            let spectrum = backend
+                .execute_forward(&plan, &represented_signal(&signal))
+                .expect("GPU SFT");
             let expected = backend
                 .execute_inverse(&plan, &spectrum)
                 .expect("slice inverse");
@@ -188,26 +197,30 @@ mod tests {
         // 8. typed_mixed_storage_forward_matches_complex32_execution
         {
             let plan = SftWgpuPlan::new(4, 2);
-            let signal_c64 = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
-            let signal_c32: Vec<Complex32> = signal_c64
+            let source_signal = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
+            let native_input: Vec<Complex32> = source_signal
                 .iter()
                 .map(|v| Complex32::new(v.re as f32, v.im as f32))
                 .collect();
 
-            let input_f16: Vec<[f16; 2]> = signal_c32
+            let mixed_input: Vec<[f16; 2]> = native_input
                 .iter()
                 .map(|v| [f16::from_f32(v.re), f16::from_f32(v.im)])
                 .collect();
-            let represented_c32: Vec<Complex32> = input_f16
+            let represented_input: Vec<Complex32> = mixed_input
                 .iter()
                 .map(|v| Complex32::new(v[0].to_f32(), v[1].to_f32()))
                 .collect();
 
             let f32_result = backend
-                .execute_forward(&plan, &represented_c32)
+                .execute_forward(&plan, &represented_input)
                 .expect("represented f32 forward");
             let typed_result = backend
-                .execute_forward_typed(&plan, PrecisionProfile::MIXED_PRECISION_F16_F32, &input_f16)
+                .execute_forward_typed(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &mixed_input,
+                )
                 .expect("typed mixed forward");
 
             assert_eq!(typed_result.frequencies, f32_result.frequencies);
@@ -220,20 +233,24 @@ mod tests {
         // 9. typed_leto_forward_and_inverse_match_typed_slice
         {
             let plan = SftWgpuPlan::new(4, 2);
-            let signal_c64 = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
-            let signal_c32: Vec<Complex32> = signal_c64
+            let source_signal = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
+            let native_input: Vec<Complex32> = source_signal
                 .iter()
                 .map(|v| Complex32::new(v.re as f32, v.im as f32))
                 .collect();
-            let input_f16: Vec<[f16; 2]> = signal_c32
+            let mixed_input: Vec<[f16; 2]> = native_input
                 .iter()
                 .map(|v| [f16::from_f32(v.re), f16::from_f32(v.im)])
                 .collect();
-            let leto_input =
-                leto::Array1::from_shape_vec([input_f16.len()], input_f16.clone()).expect("input");
+            let leto_input = leto::Array1::from_shape_vec([mixed_input.len()], mixed_input.clone())
+                .expect("input");
 
             let expected_forward = backend
-                .execute_forward_typed(&plan, PrecisionProfile::MIXED_PRECISION_F16_F32, &input_f16)
+                .execute_forward_typed(
+                    &plan,
+                    PrecisionProfile::MIXED_PRECISION_F16_F32,
+                    &mixed_input,
+                )
                 .expect("typed slice forward");
             let actual_forward = backend
                 .execute_forward_leto_typed(
@@ -270,28 +287,76 @@ mod tests {
         // 10. typed_path_rejects_profile_mismatch
         {
             let plan = SftWgpuPlan::new(4, 2);
-            let input_f16: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
+            let mixed_input: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
 
             let fwd_err = backend
                 .execute_forward_typed::<[f16; 2]>(
                     &plan,
                     PrecisionProfile::LOW_PRECISION_F32,
-                    &input_f16,
+                    &mixed_input,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(fwd_err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(fwd_err, WgpuError::InvalidPrecisionProfile));
 
             let spectrum = SparseSpectrum::new(4);
-            let mut output_f16: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
+            let mut mixed_output: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
             let inv_err = backend
                 .execute_inverse_typed_into::<[f16; 2]>(
                     &plan,
                     PrecisionProfile::LOW_PRECISION_F32,
                     &spectrum,
-                    &mut output_f16,
+                    &mut mixed_output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(inv_err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(inv_err, WgpuError::InvalidPrecisionProfile));
+        }
+
+        // 11. high_accuracy_sparse_coefficients_are_not_silently_narrowed
+        {
+            let plan = SftWgpuPlan::new(4, 1);
+            let mut spectrum = SparseSpectrum::new(4);
+            spectrum
+                .insert(1, Complex64::new(1.0 / 3.0, 0.0))
+                .expect("in-range sparse coefficient");
+            let error = backend
+                .execute_inverse(&plan, &spectrum)
+                .expect_err("non-f32 sparse coefficient must be rejected");
+            assert!(matches!(
+                error,
+                WgpuError::PrecisionLoss {
+                    component: "real",
+                    value
+                } if value == 1.0 / 3.0
+            ));
+        }
+
+        // 12. explicit_quantization_is_required_and_value_visible
+        {
+            let plan = SftWgpuPlan::new(4, 1);
+            let mut spectrum = SparseSpectrum::new(4);
+            spectrum
+                .insert(1, Complex64::new(1.0 / 3.0, -1.0 / 7.0))
+                .expect("in-range sparse coefficient");
+            let quantized = backend
+                .quantize_spectrum(&plan, &spectrum)
+                .expect("explicit accelerator quantization");
+            assert_eq!(quantized.frequencies, spectrum.frequencies);
+            assert_eq!(
+                quantized.values,
+                vec![Complex64::new(
+                    f64::from((1.0_f64 / 3.0) as f32),
+                    f64::from((-1.0_f64 / 7.0) as f32),
+                )]
+            );
+            let actual = backend
+                .execute_inverse(&plan, &quantized)
+                .expect("quantized spectrum executes");
+            assert_eq!(actual.len(), plan.len());
+            assert_complex32_close(
+                actual[0],
+                Complex32::new(1.0 / 12.0, -1.0 / 28.0),
+                INVERSE_N0_ERROR_BOUND,
+            );
         }
     }
 
@@ -317,6 +382,13 @@ mod tests {
                     })
                     .sum()
             })
+            .collect()
+    }
+
+    fn represented_signal(signal: &[Complex64]) -> Vec<Complex32> {
+        signal
+            .iter()
+            .map(|value| Complex32::new(value.re as f32, value.im as f32))
             .collect()
     }
 

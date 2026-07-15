@@ -95,20 +95,15 @@ mod tests {
             let error = backend
                 .execute_type1_1d(&plan, &[0.0, 0.25], &[Complex32::new(1.0, 0.0)])
                 .expect_err("length mismatch must fail");
-            assert_eq!(
-                error,
-                NufftWgpuError::InputLengthMismatch {
-                    expected: 2,
-                    actual: 1
-                }
-            );
+            assert_input_length_mismatch(error, 2, 1);
         }
 
         // 2. fast_1d_reusable_buffers_reject_sample_capacity_overflow
         {
             let domain = UniformDomain1D::new(8, 0.25).expect("domain");
             let plan = NufftWgpuPlan1D::new(domain, 2, 6);
-            let buffers = NufftGpuBuffers1D::new(backend.device().as_ref(), 8, 16, 1);
+            let buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, 1)
+                .expect("provider buffer allocation");
             let error = backend
                 .execute_fast_type1_1d_with_buffers(
                     &plan,
@@ -117,33 +112,50 @@ mod tests {
                     &[Complex32::new(1.0, 0.0), Complex32::new(0.5, -0.25)],
                 )
                 .expect_err("sample capacity overflow must fail");
-            assert_eq!(
-                error,
-                NufftWgpuError::InputLengthMismatch {
-                    expected: 1,
-                    actual: 2
-                }
-            );
+            assert_input_length_mismatch(error, 1, 2);
         }
 
-        // 3. fast_3d_reusable_buffers_reject_sample_capacity_overflow
+        // 3. fast_1d_reusable_type2_supports_more_samples_than_modes
+        {
+            let domain = UniformDomain1D::new(8, 0.25).expect("domain");
+            let plan = NufftWgpuPlan1D::new(domain, 2, 6);
+            let coefficients = [
+                Complex32::new(1.0, 0.0),
+                Complex32::new(0.5, -0.25),
+                Complex32::new(-0.75, 0.5),
+                Complex32::new(0.25, 0.75),
+                Complex32::new(-0.5, -0.1),
+                Complex32::new(0.125, 0.25),
+                Complex32::new(0.8, -0.6),
+                Complex32::new(-0.3, 0.4),
+            ];
+            let positions = [
+                0.0_f32, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0, 1.15, 1.3, 1.45, 1.6,
+            ];
+            let expected = backend
+                .execute_fast_type2_1d(&plan, &coefficients, &positions)
+                .expect("non-reusable fast type2");
+            let buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, positions.len())
+                .expect("provider buffer allocation");
+            let actual = backend
+                .execute_fast_type2_1d_with_buffers(&plan, &buffers, &coefficients, &positions)
+                .expect("reusable fast type2");
+
+            assert_eq!(actual, expected);
+        }
+
+        // 4. fast_3d_reusable_buffers_reject_sample_capacity_overflow
         {
             let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
             let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let buffers =
-                NufftGpuBuffers3D::new(backend.device().as_ref(), (3, 2, 2), (16, 16, 16), 1);
+            let buffers = NufftGpuBuffers3D::new(backend.device(), (3, 2, 2), (16, 16, 16), 1)
+                .expect("provider buffer allocation");
             let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5)];
             let values = [Complex32::new(1.0, 0.0), Complex32::new(-0.25, 0.5)];
             let error = backend
                 .execute_fast_type1_3d_with_buffers(&plan, &buffers, &positions, &values)
                 .expect_err("sample capacity overflow must fail");
-            assert_eq!(
-                error,
-                NufftWgpuError::InputLengthMismatch {
-                    expected: 1,
-                    actual: 2
-                }
-            );
+            assert_input_length_mismatch(error, 1, 2);
         }
 
         // 4. type1_1d_matches_cpu_exact_reference
@@ -429,13 +441,7 @@ mod tests {
             let error = backend
                 .execute_type2_1d(&plan, &[Complex32::new(1.0, 0.0); 4], &[0.0_f32, 0.25, 0.7])
                 .expect_err("coefficient length mismatch must fail");
-            assert_eq!(
-                error,
-                NufftWgpuError::InputLengthMismatch {
-                    expected: 8,
-                    actual: 4
-                }
-            );
+            assert_input_length_mismatch(error, 8, 4);
         }
 
         // 13. type2_1d_matches_cpu_exact_reference
@@ -881,12 +887,7 @@ mod tests {
             let error = backend
                 .execute_type2_3d(&plan, &modes, &[(0.0, 0.0, 0.0)])
                 .expect_err("mode shape mismatch must fail");
-            assert_eq!(
-                error,
-                NufftWgpuError::InvalidPlan {
-                    message: "mode shape must match 3D plan grid dimensions"
-                }
-            );
+            assert_invalid_plan(error, "mode shape must match 3D plan grid dimensions");
         }
 
         // 25. type2_3d_matches_cpu_exact_reference
@@ -1139,5 +1140,25 @@ mod tests {
             (actual.im - expected.im).abs() <= tolerance,
             "imag mismatch: actual={actual:?}, expected={expected:?}"
         );
+    }
+
+    fn assert_input_length_mismatch(error: NufftWgpuError, expected: usize, actual: usize) {
+        match error {
+            NufftWgpuError::InputLengthMismatch {
+                expected: actual_expected,
+                actual: actual_actual,
+            } => {
+                assert_eq!(actual_expected, expected);
+                assert_eq!(actual_actual, actual);
+            }
+            other => panic!("expected input-length mismatch, received {other:?}"),
+        }
+    }
+
+    fn assert_invalid_plan(error: NufftWgpuError, expected_message: &'static str) {
+        match error {
+            NufftWgpuError::InvalidPlan { message } => assert_eq!(message, expected_message),
+            other => panic!("expected invalid plan, received {other:?}"),
+        }
     }
 }

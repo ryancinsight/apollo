@@ -70,7 +70,7 @@ var<storage, read_write> data: array<u32>;
 @group(0) @binding(1)
 var<storage, read> twiddles: array<u32>;
 
-// Binding 2: per-stage uniform parameters (dynamic offset).
+// Binding 2: per-dispatch uniform parameters supplied by Hephaestus.
 @group(0) @binding(2)
 var<uniform> params: NttParams;
 

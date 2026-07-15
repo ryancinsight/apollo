@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -8,10 +8,8 @@ repository.workspace = true
 description = "Reusable FFT planning, execution, and cache abstractions for Apollo"
 
 [dependencies]
-apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-wgpu = { workspace = true, optional = true }
-pollster = { workspace = true, optional = true }
+hephaestus-core = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { workspace = true }
@@ -33,10 +31,8 @@ criterion = { workspace = true }
 proptest.workspace = true
 [features]
 wgpu = [
-    "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
-    "dep:wgpu",
-    "dep:pollster"
+    "dep:hephaestus-core",
 ]
 native-f16 = ["wgpu"]
 default = ["parallel", "mnemosyne-memory"]

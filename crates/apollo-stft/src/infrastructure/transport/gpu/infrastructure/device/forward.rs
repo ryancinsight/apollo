@@ -7,7 +7,9 @@ use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult
 use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     leto_array1_from_slice, leto_view1_cow,
 };
-use crate::infrastructure::transport::gpu::infrastructure::device::StftWgpuBackend;
+use crate::infrastructure::transport::gpu::infrastructure::{
+    device::StftWgpuBackend, kernel::StftGpuKernel,
+};
 
 impl StftWgpuBackend {
     /// Execute the forward STFT on `signal` using the supplied plan.
@@ -50,7 +52,7 @@ impl StftWgpuBackend {
             });
         }
         let frame_count = 1 + signal.len().div_ceil(plan.hop_len());
-        self.kernel.execute_forward_fft(
+        StftGpuKernel::execute_forward_fft(
             &self.device,
             signal,
             plan.frame_len(),

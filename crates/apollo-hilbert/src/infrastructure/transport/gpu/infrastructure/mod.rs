@@ -1,6 +1,6 @@
 //! WGPU infrastructure.
 
-/// WGPU device acquisition.
+/// Hephaestus WGPU device acquisition and host boundary.
 pub mod device;
-/// Hilbert compute kernel orchestration.
+/// Typed Hephaestus Hilbert kernel orchestration.
 pub mod kernel;

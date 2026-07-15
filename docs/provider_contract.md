@@ -1,9 +1,9 @@
 # Apollo Provider Contract
 
 Apollo consumes provider crates through Git dependencies. Provider changes in
-Moirai, Mnemosyne, Melinoe, Hermes, or Leto must be committed and pushed before
-Apollo updates its dependency revision. Committed Apollo manifests must not use
-local path overrides for provider work.
+Moirai, Mnemosyne, Melinoe, Hermes, Leto, or Hephaestus must be committed and
+pushed before Apollo updates its dependency revision. Committed Apollo
+manifests must not use local path overrides for provider work.
 
 ## Current Surface
 
@@ -22,8 +22,10 @@ local path overrides for provider work.
 - Runtime NumPy arrays remain only at Python/external-reference boundaries.
   Apollo library crates must not use the Rust `numpy` crate or `ndarray` as an
   internal array substrate while Leto is the intended array provider.
-- WGPU crates own GPU device buffers and dispatch. CPU scheduling and host-side
-  allocation policy must remain decoupled from WGPU infrastructure types.
+- `hephaestus-core` owns backend-neutral typed buffer, kernel, binding, launch,
+  command-stream, synchronization, and transfer contracts;
+  `hephaestus-wgpu` implements them for WGPU. Apollo transform crates own only
+  transform parameters, formulas, dialect source, and Leto host boundaries.
 
 ## Apollo Requirements for Moirai
 
@@ -112,13 +114,29 @@ local path overrides for provider work.
   remains only for symmetric eigendecomposition until Leto owns that solver
   contract.
 
+## Apollo Requirements for Hephaestus
+
+- Typed device buffers and transfers through `ComputeDevice`; no raw device
+  buffer handles in Apollo APIs.
+- ZST-authored kernels through `KernelInterface` plus one real
+  `KernelSource<L>` implementation per supported backend dialect.
+- Prepared typed dispatch and ordered command streams through `KernelDevice`,
+  `Binding`, and `DispatchGrid`, with binding contracts validated before
+  submission.
+- Concrete WGPU and CUDA mechanics remain inside their Hephaestus backend
+  crates. Apollo must not reconstruct pipeline, bind-group, encoder, queue, or
+  stream APIs locally.
+- Unsupported dialects are compile-time missing implementations or typed
+  capability errors; no silent backend fallback.
+
 ## GPU Boundary
 
 Moirai, Mnemosyne, Melinoe, Hermes, and Leto optimize CPU scheduling, host memory,
-branded zero-copy access, host SIMD kernels, and host strided-array storage. WGPU
-execution remains in `*-wgpu` infrastructure crates. GPU buffers, command
-encoders, pipeline objects, and device futures must not leak into pure Apollo
-domain models or CPU mathematical kernels.
+branded zero-copy access, host SIMD kernels, and host strided-array storage.
+Apollo GPU modules bind to Hephaestus contracts. Raw WGPU/CUDA buffers,
+pipelines, bind groups, encoders, queues, streams, and futures remain inside
+Hephaestus backend crates and do not leak into Apollo domain or infrastructure
+types.
 
 ## Verification
 
@@ -128,7 +146,7 @@ Run:
 cargo run -p xtask -- provider-audit
 ```
 
-The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Leto, Rayon, WGPU, `Arc`,
-`Mutex`, `dyn`, clone-to-`Vec`, and `Cow` usage by crate. The evidence tier is
-static source analysis; performance claims still require Criterion or
-domain-specific benchmarks.
+The audit reports Moirai, Mnemosyne, Melinoe, Hermes, Leto, Hephaestus, Rayon,
+WGPU mentions, `Arc`, `Mutex`, `dyn`, clone-to-`Vec`, and `Cow` usage by crate.
+The evidence tier is static source analysis; performance claims still require
+Criterion or domain-specific benchmarks.

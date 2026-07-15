@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! WGPU backend boundary for Apollo SFT.
+//! Hephaestus WGPU backend boundary for Apollo SFT.
 //!
 //! This crate owns GPU capability and plan descriptors for this transform domain.
 //! Mathematical contracts remain in `apollo-sft`.

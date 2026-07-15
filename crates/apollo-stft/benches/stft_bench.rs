@@ -2,10 +2,10 @@
 //!
 //! Measures wall-clock cost (GPU dispatch + PCIe readback) for:
 //!   (A) **Allocating paths** — `execute_forward` / `execute_inverse`: all GPU buffers,
-//!       staging buffers, and bind groups are created on every call.
+//!       staging resources and typed provider bindings are created on every call.
 //!   (B) **Buffer-reuse paths** — `execute_forward_with_buffers` /
 //!       `execute_inverse_with_buffers`: only signal/spectrum data is uploaded per call;
-//!       all GPU objects (`StftGpuBuffers`) are pre-allocated once.
+//!       all provider-owned storage (`StftGpuBuffers`) is pre-allocated once.
 //!
 //! Parameters cover three `(frame_len, hop_len, signal_len)` sets satisfying
 //! hop = frame_len / 2 (Hann COLA condition) at small, medium, and large frame sizes.
@@ -52,9 +52,9 @@ fn analytical_signal(signal_len: usize, frame_len: usize) -> Vec<f32> {
 
 /// Benchmark the GPU forward STFT allocating path across three frame sizes.
 ///
-/// `execute_forward` creates all GPU buffers, staging buffers, and bind groups
-/// per call. Measures end-to-end cost: host→GPU upload, N·log₂N butterfly stages,
-/// interleave pass, GPU→host readback.
+/// `execute_forward` creates provider buffers, staging resources, and typed bindings
+/// per call. Measures end-to-end cost: host-to-device upload, N·log₂N butterfly
+/// stages, interleave pass, and device-to-host readback.
 fn bench_forward_fft(c: &mut Criterion) {
     let Some(backend) = try_backend() else {
         eprintln!("No WGPU device; skipping bench_forward_fft");
@@ -128,11 +128,12 @@ fn bench_inverse_fft(c: &mut Criterion) {
 
 /// Benchmark the GPU forward STFT: allocating vs `StftGpuBuffers` reuse.
 ///
-/// "allocating": `execute_forward` — per-call: 5–8 `device.create_buffer`,
-///   4+ `device.create_bind_group`, and log₂(N) uniform-buffer allocations.
+/// "allocating": `execute_forward` — per-call provider storage, typed bindings,
+/// and stage parameter blocks.
 ///
 /// "with_buffers": `execute_forward_with_buffers` — only signal data is uploaded
-///   per call via `queue.write_buffer`; all GPU objects pre-allocated.
+///   per call through the provider upload operation; all device storage is
+///   pre-allocated.
 fn bench_forward_reuse(c: &mut Criterion) {
     let Some(backend) = try_backend() else {
         eprintln!("No WGPU device; skipping bench_forward_reuse");
@@ -145,7 +146,7 @@ fn bench_forward_reuse(c: &mut Criterion) {
 
         let mut group = c.benchmark_group(format!("stft_forward_reuse_fl{frame_len}"));
 
-        // Allocating path: all GPU objects created per dispatch.
+        // Allocating path: provider storage created per dispatch.
         group.bench_function(BenchmarkId::new("allocating", frame_len), |b| {
             b.iter(|| {
                 backend
@@ -154,7 +155,7 @@ fn bench_forward_reuse(c: &mut Criterion) {
             });
         });
 
-        // Buffer-reuse path: GPU objects pre-allocated; only signal data uploaded.
+        // Buffer-reuse path: provider storage is retained; only signal data uploads.
         let mut buffers = backend
             .make_buffers(&plan, signal_len)
             .expect("make_buffers");
@@ -177,10 +178,11 @@ fn bench_forward_reuse(c: &mut Criterion) {
 
 /// Benchmark the GPU inverse STFT: allocating vs `StftGpuBuffers` reuse.
 ///
-/// "allocating": `execute_inverse` — per-call: all GPU objects created per dispatch.
+/// "allocating": `execute_inverse` — per-call provider storage and bindings.
 ///
 /// "with_buffers": `execute_inverse_with_buffers` — only spectrum data is uploaded
-///   per call via `queue.write_buffer`; all GPU objects pre-allocated.
+///   per call through the provider upload operation; all device storage is
+///   pre-allocated.
 fn bench_inverse_reuse(c: &mut Criterion) {
     let Some(backend) = try_backend() else {
         eprintln!("No WGPU device; skipping bench_inverse_reuse");
@@ -197,7 +199,7 @@ fn bench_inverse_reuse(c: &mut Criterion) {
 
         let mut group = c.benchmark_group(format!("stft_inverse_reuse_fl{frame_len}"));
 
-        // Allocating path: all GPU objects created per dispatch.
+        // Allocating path: provider storage created per dispatch.
         group.bench_function(BenchmarkId::new("allocating", frame_len), |b| {
             b.iter(|| {
                 backend
@@ -210,7 +212,7 @@ fn bench_inverse_reuse(c: &mut Criterion) {
             });
         });
 
-        // Buffer-reuse path: GPU objects pre-allocated; only spectrum data uploaded.
+        // Buffer-reuse path: provider storage is retained; only spectrum data uploads.
         let mut buffers = backend
             .make_buffers(&plan, signal_len)
             .expect("make_buffers");

@@ -57,15 +57,6 @@ pub(crate) fn leto_view1_cow<'a, T: Copy>(view: &leto::ArrayView1<'a, T>) -> Cow
     apollo_fft::application::utilities::leto_interop::view1_cow(view)
 }
 
-#[must_use]
-#[inline]
-pub(crate) fn leto_array1_from_vec<T>(
-    output: Vec<T>,
-) -> leto::Array<T, leto::MnemosyneStorage<T>, 1> {
-    leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([output.len()], output)
-        .expect("CZT output length must match Leto output shape")
-}
-
 #[cfg(test)]
 pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
     TYPED_INPUT64_SCRATCH.with(|in_pool| {

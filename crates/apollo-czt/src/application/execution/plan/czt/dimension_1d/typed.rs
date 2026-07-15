@@ -18,6 +18,12 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
     /// Convert owner arithmetic result back to storage.
     fn from_complex64(value: Complex64) -> Self;
 
+    /// Convert storage into the concrete `Complex32` accelerator contract.
+    fn to_complex32(self) -> Complex32;
+
+    /// Convert a concrete `Complex32` accelerator result back to storage.
+    fn from_complex32(value: Complex32) -> Self;
+
     /// View slice as `Complex32` if layout is identical.
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
@@ -132,6 +138,16 @@ impl CztStorage for Complex64 {
         value
     }
 
+    fn to_complex32(self) -> Complex32 {
+        // The selected accelerator profile fixes arithmetic to f32; narrowing
+        // occurs once at that typed storage/compute boundary.
+        Complex32::new(self.re as f32, self.im as f32)
+    }
+
+    fn from_complex32(value: Complex32) -> Self {
+        Complex64::new(f64::from(value.re), f64::from(value.im))
+    }
+
     fn forward_into(
         plan: &CztPlan,
         input: &Array1<Self>,
@@ -194,6 +210,14 @@ impl CztStorage for Complex32 {
         Complex32::new(value.re as f32, value.im as f32)
     }
 
+    fn to_complex32(self) -> Complex32 {
+        self
+    }
+
+    fn from_complex32(value: Complex32) -> Self {
+        value
+    }
+
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
         Some(slice)
@@ -217,5 +241,13 @@ impl CztStorage for [f16; 2] {
             f16::from_f32(value.re as f32),
             f16::from_f32(value.im as f32),
         ]
+    }
+
+    fn to_complex32(self) -> Complex32 {
+        Complex32::new(self[0].to_f32(), self[1].to_f32())
+    }
+
+    fn from_complex32(value: Complex32) -> Self {
+        [f16::from_f32(value.re), f16::from_f32(value.im)]
     }
 }

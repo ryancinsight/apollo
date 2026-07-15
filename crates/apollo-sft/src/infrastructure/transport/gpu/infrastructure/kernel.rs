@@ -1,18 +1,31 @@
-//! Direct dense DFT GPU kernel used by sparse Fourier execution.
+//! Typed Hephaestus direct-DFT kernel used by sparse Fourier execution.
 //!
-//! The sparse transform's mathematical owner remains `apollo-sft`. This module
-//! owns only the WGPU execution policy: compute the dense DFT or inverse DFT in
-//! `f32` and return values to the backend for sparse-domain projection.
+//! The sparse transform remains the mathematical owner. This module defines
+//! one direction-parameterized kernel interface; Hephaestus owns device
+//! allocation, pipeline preparation, binding, dispatch, submission, and
+//! transfer.
+//!
+//! For `x in C^N`, the shader evaluates
+//! `X[k] = sum_n x[n] exp(-2 pi i n k / N)` and its normalized inverse
+//! `x[n] = (1/N) sum_k X[k] exp(2 pi i n k / N)`. Root-of-unity orthogonality
+//! gives `sum_k exp(2 pi i k(n-m)/N) = N delta_nm`, proving that the inverse
+//! recovers the dense input in exact arithmetic. Sparse support selection is
+//! deliberately outside this kernel because it is the `apollo-sft` domain
+//! contract rather than a device concern.
+
+use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
-use wgpu::util::DeviceExt;
+use hephaestus_core::{
+    Binding, BindingDecl, CommandStream, DispatchGrid, KernelDevice, KernelInterface, KernelSource,
+    Wgsl,
+};
 
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
-use apollo_wgpu_helpers::hephaestus_wgpu::ComputeDevice;
-use apollo_wgpu_helpers::WgpuDevice;
 
-const WORKGROUP_SIZE: u32 = 64;
+const WORKGROUP_SIZE: usize = 64;
+const SFT_SOURCE: &str = include_str!("shaders/sft.wgsl");
 
 /// Execution mode for the direct dense transform.
 #[repr(u32)]
@@ -24,182 +37,83 @@ pub enum SftMode {
     Inverse = 1,
 }
 
+/// Uniform parameters matching WGSL `SftParams`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct ComplexPod {
-    re: f32,
-    im: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct SftParams {
+pub(crate) struct SftParams {
     len: u32,
     mode: u32,
-    _padding: [u32; 2],
+    padding: [u32; 2],
 }
 
-/// Cached WGPU state for direct dense SFT dispatches.
-#[derive(Debug)]
-pub struct SftGpuKernel {
-    bind_group_layout: wgpu::BindGroupLayout,
-    pipeline: wgpu::ComputePipeline,
+const _: () = assert!(core::mem::size_of::<SftParams>() == 16);
+
+impl SftParams {
+    fn new(len: usize, mode: SftMode) -> WgpuResult<Self> {
+        Ok(Self {
+            len: u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
+                message: format!("transform length {len} exceeds the accelerator parameter range"),
+            })?,
+            mode: mode as u32,
+            padding: [0; 2],
+        })
+    }
+}
+
+/// Zero-sized Hephaestus descriptor for the direction-parameterized direct DFT.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SftGpuKernel;
+
+impl KernelInterface for SftGpuKernel {
+    type Params = SftParams;
+
+    const LABEL: &'static str = "apollo-sft-direct-dft";
+    const BINDINGS: &'static [BindingDecl] = &[
+        BindingDecl::read_only::<Complex32>(),
+        BindingDecl::read_write::<Complex32>(),
+    ];
+    const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE as u32, 1, 1];
+}
+
+impl KernelSource<Wgsl> for SftGpuKernel {
+    const ENTRY: &'static str = "sft_direct_dft";
+
+    fn source(&self) -> Cow<'static, str> {
+        Cow::Borrowed(SFT_SOURCE)
+    }
 }
 
 impl SftGpuKernel {
-    /// Compile shader state and allocate the uniform parameter buffer.
-    #[must_use]
-    pub fn new(device: &wgpu::Device) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("apollo-sft-wgpu shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/sft.wgsl").into()),
-        });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("apollo-sft-wgpu bind group layout"),
-            entries: &[
-                storage_layout_entry(0, true),
-                storage_layout_entry(1, false),
-                uniform_layout_entry(2),
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-sft-wgpu pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("apollo-sft-wgpu direct DFT pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("sft_direct_dft"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-        Self {
-            bind_group_layout,
-            pipeline,
-        }
-    }
-
-    /// Execute the dense direct transform for the requested mode.
-    pub fn execute(
-        &self,
-        device: &WgpuDevice,
+    /// Execute the dense direct transform into caller-owned storage.
+    pub(crate) fn execute_into<D>(
+        device: &D,
         input: &[Complex32],
-        len: usize,
+        output: &mut [Complex32],
         mode: SftMode,
-    ) -> WgpuResult<Vec<Complex32>> {
-        let hep_device = device.hephaestus();
-        let input_data: Vec<ComplexPod> = input
-            .iter()
-            .map(|value| ComplexPod {
-                re: value.re,
-                im: value.im,
-            })
-            .collect();
-        let input_buffer =
-            hep_device
-                .upload(&input_data)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        let output_buffer =
-            hep_device
-                .alloc_zeroed::<ComplexPod>(len)
-                .map_err(|e| WgpuError::BufferMapFailed {
-                    message: e.to_string(),
-                })?;
-        let params_buffer = device
-            .inner()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("apollo-sft-wgpu params"),
-                contents: bytemuck::bytes_of(&SftParams {
-                    len: len as u32,
-                    mode: mode as u32,
-                    _padding: [0; 2],
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
+    ) -> WgpuResult<()>
+    where
+        D: KernelDevice,
+        SftGpuKernel: KernelSource<D::Dialect>,
+    {
+        if input.len() != output.len() {
+            return Err(WgpuError::LengthMismatch {
+                expected: input.len(),
+                actual: output.len(),
             });
-        let bind_group = device
-            .inner()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("apollo-sft-wgpu bind group"),
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: output_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: params_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-
-        let mut encoder = device
-            .inner()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-sft-wgpu encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("apollo-sft-wgpu direct DFT pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(dispatch_count(len as u32), 1, 1);
         }
-        device.queue().submit(std::iter::once(encoder.finish()));
-
-        let mut pods = vec![ComplexPod::zeroed(); len];
-        hep_device
-            .download(&output_buffer, &mut pods)
-            .map_err(|e| WgpuError::BufferMapFailed {
-                message: e.to_string(),
-            })?;
-
-        Ok(pods
-            .iter()
-            .map(|value| Complex32::new(value.re, value.im))
-            .collect())
+        let params = SftParams::new(input.len(), mode)?;
+        let input_buffer = device.upload(input)?;
+        let output_buffer = device.alloc_zeroed::<Complex32>(output.len())?;
+        let prepared = device.prepare(&Self)?;
+        let bindings = [
+            Binding::read(&input_buffer),
+            Binding::read_write(&output_buffer),
+        ];
+        let grid = DispatchGrid::covering_domain([input.len(), 1, 1], [WORKGROUP_SIZE, 1, 1])?;
+        let mut stream = device.stream()?;
+        stream.encode(&prepared, &bindings, &params, grid)?;
+        stream.submit()?;
+        device.download(&output_buffer, output)?;
+        Ok(())
     }
-}
-
-fn storage_layout_entry(binding: u32, read_only: bool) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-fn uniform_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: Some(
-                std::num::NonZeroU64::new(std::mem::size_of::<SftParams>() as u64)
-                    .expect("nonzero uniform size"),
-            ),
-        },
-        count: None,
-    }
-}
-
-fn dispatch_count(items: u32) -> u32 {
-    items.div_ceil(WORKGROUP_SIZE)
 }

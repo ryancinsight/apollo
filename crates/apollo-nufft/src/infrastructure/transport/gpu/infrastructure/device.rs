@@ -11,15 +11,14 @@ pub mod type1;
 /// Direct Type-2 execution implementations.
 pub mod type2;
 
-use std::sync::Arc;
-
 use crate::{UniformDomain1D, UniformGrid3D};
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::capabilities::NufftWgpuCapabilities;
-use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::kernel::NufftGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::infrastructure::transport::gpu::domain::error::NufftWgpuResult;
+use hephaestus_wgpu::{DevicePreference, WgpuDevice};
+
+const FAST_NUFFT_STORAGE_BINDINGS: u32 = 7;
 
 /// Return whether a default WGPU adapter/device can be acquired.
 #[must_use]
@@ -31,29 +30,26 @@ pub fn nufft_wgpu_available() -> bool {
 #[derive(Debug, Clone)]
 pub struct NufftWgpuBackend {
     pub(crate) device: WgpuDevice,
-    pub(crate) kernel: Arc<NufftGpuKernel>,
 }
 
 impl NufftWgpuBackend {
-    /// Create a NUFFT WGPU backend from an existing device and queue.
+    /// Create a NUFFT backend from an existing Hephaestus device.
     #[must_use]
     pub fn new(device: WgpuDevice) -> Self {
-        Self {
-            kernel: Arc::new(NufftGpuKernel::new(device.inner())),
-            device,
-        }
+        Self { device }
     }
 
     /// Create a backend by requesting a default WGPU adapter and device.
     pub fn try_default() -> NufftWgpuResult<Self> {
-        let device = WgpuDevice::try_default_with_limits(
-            "apollo-nufft-wgpu",
-            wgpu::Limits {
-                max_storage_buffers_per_shader_stage: 8,
-                ..wgpu::Limits::downlevel_defaults()
-            },
-        )
-        .map_err(NufftWgpuError::Device)?;
+        let mut limits = WgpuDevice::default_device_limits();
+        limits.max_storage_buffers_per_shader_stage = Some(FAST_NUFFT_STORAGE_BINDINGS);
+        let device =
+            WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+                "apollo-nufft-wgpu",
+                DevicePreference::HighPerformance,
+                &[],
+                limits,
+            )?;
         Ok(Self::new(device))
     }
 
@@ -63,16 +59,10 @@ impl NufftWgpuBackend {
         NufftWgpuCapabilities::direct_all_fast_all(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the provider-owned accelerator device.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
     /// Create a 1D plan descriptor.

@@ -24,7 +24,7 @@ pub mod infrastructure;
 pub use crate::application::execution::plan::frft::dimension_1d::{
     frft, frft_leto, frft_leto_typed, FrftPlan,
 };
-pub use crate::application::execution::plan::frft::storage::FrftStorage;
+pub use crate::application::execution::plan::frft::storage::{FrftGpuStorage, FrftStorage};
 pub use crate::application::execution::plan::frft::unitary::{GrunbaumBasis, UnitaryFrftPlan};
 pub use crate::domain::contracts::error::FrftError;
 

@@ -344,7 +344,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(error, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(error, WgpuError::InvalidPrecisionProfile));
         }
 
         // 10. inverse_recovers_input
