@@ -318,6 +318,12 @@ Remaining replacement work:
   This is the first vertical harness increment;
   it does not introduce an Apollo-owned device abstraction or compatibility
   layer before the cross-transform provider contract is available.
+  Second bounded FrFT scope completed 2026-07-15 — split the 578-line FrFT GPU
+  verification monolith into metadata, standard, typed-storage, unitary, and
+  support leaves (12–176 lines) while preserving the existing CPU oracles,
+  Leto boundaries, and unitary laws. The 52-case FrFT and 1,037-case workspace
+  suites pass; the scope owns no transform execution, provider wrapper, or
+  fallback path.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
