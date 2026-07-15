@@ -1,5 +1,24 @@
 # Apollo Gap Audit
 
+## Apple Silicon Stockham target boundary [patch]
+
+- Finding: RITK macOS CI uses `aarch64-apple-darwin`, but Apollo's Stockham
+  module re-exported AVX-only butterfly and precision symbols on every target.
+  The first failure exposed 43 compile errors, including missing fixed-length
+  AVX kernels and AVX backend imports.
+- Resolution: gate the AVX module, AVX butterfly modules and re-exports, AVX
+  precision imports, and AVX-only test imports on `target_arch = "x86_64"`.
+  Non-x86 targets retain the existing scalar Stockham/ZST dispatch path.
+- Verification: the pinned 1.97 toolchain `cargo check -p apollo-fft
+  --target aarch64-apple-darwin --all-features --locked` passes; host
+  warning-denied all-target Clippy passes; nextest passes 409/409; doctests
+  run 0/0; warning-clean rustdoc completes.
+- Evidence tier: cross-target compile/type validation plus host value-semantic
+  nextest and warning-denied linting. Cross-target checking still reports
+  existing unused-code warnings in scalar-only and platform-only branches;
+  those are not compile blockers and remain visible for a later warning-ratchet
+  increment.
+
 ## STFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct radix-2, Bluestein, and overlap-add WGPU pipeline,
@@ -22,8 +41,8 @@
   Bluestein, reconstruction, and reusable-storage coverage. Clippy, rustdoc,
   provider audit, direct source/dependency scans, and semver classification
   pass. No machine-checked proof is performed.
-- Current residual: native-f16 FFT transport is the only direct-provider
-  scope; the obsolete wrapper is deleted.
+- Historical residual at STFT closure: native-half FFT transport was the only
+  direct-provider scope; it is now migrated and the obsolete wrapper is deleted.
 
 ## NUFFT Hephaestus command-stream migration [arch]
 
@@ -49,8 +68,9 @@
   doctest, rustdoc, provider audit, repository-baseline semver classification,
   and direct source/dependency scans pass. No machine-checked proof is
   performed.
-- Current residual: native-f16 FFT transport remains the only transform
-  provider migration scope; the obsolete wrapper is deleted.
+- Historical residual at NUFFT closure: native-half FFT transport was the only
+  transform provider migration scope; it is now migrated and the obsolete
+  wrapper is deleted.
 
 ## Radon Hephaestus command-stream migration [arch]
 
@@ -69,8 +89,8 @@
 - Evidence tier: typed binding/layout plus value-semantic 25-case suite with
   real-device execution, warning-denied Clippy, rustdoc, provider audit, and
   direct source/dependency scans. No machine-checked proof is performed.
-- Current residual: native-f16 FFT transport is the only direct-provider
-  scope; the obsolete wrapper is deleted.
+- Historical residual at Radon closure: native-half FFT transport was the only
+  direct-provider scope; it is now migrated and the obsolete wrapper is deleted.
 
 ## FFT Hephaestus storage-generic migration [arch]
 
@@ -149,8 +169,8 @@
 - Evidence tier: typed binding/layout and compile-fail storage exclusion, then
   value-semantic negative-contract and real-device CPU differential evidence.
   No machine-checked proof is performed.
-- Current residual: native-f16 FFT transport is the only direct-provider
-  scope; the obsolete wrapper is deleted.
+- Historical residual at SHT closure: native-half FFT transport was the only
+  direct-provider scope; it is now migrated and the obsolete wrapper is deleted.
 
 ## SDFT Hephaestus command-stream migration [arch]
 
@@ -185,8 +205,8 @@
 - Evidence tier: typed binding/layout and storage exclusion, then
   value-semantic real-device differential, roundtrip, and negative-contract
   evidence. No machine-checked proof is performed.
-- Current residual: native-f16 FFT transport is the only direct-provider
-  scope; the obsolete wrapper is deleted.
+- Historical residual at SDFT closure: native-half FFT transport was the only
+  direct-provider scope; it is now migrated and the obsolete wrapper is deleted.
 
 ## Wavelet Hephaestus command-stream migration [arch]
 
@@ -392,7 +412,8 @@
   contexts acquire typed device, buffer, pipeline, binding, dispatch, and
   transfer services from Hephaestus. `apollo-wgpu-helpers` is deleted; the
   workspace manifest, lockfile, and Rust source scan contain no wrapper edge.
-  Native-f16 FFT transport remains the only direct-provider migration scope.
+  Native-half FFT transport subsequently completed the same typed-provider
+  migration, closing D6.
 - Deletion evidence: format, locked metadata, workspace resolution, provider
   audit, six `xtask` value-semantic contract cases, warning-denied `xtask`
   Clippy, and the 44-case all-feature NUFFT suite pass. The workspace check
@@ -409,8 +430,8 @@
   remains the host array/view boundary, Apollo retains transform mathematics,
   and Hephaestus owns device mechanics. FWHT established the pattern with one
   in-place typed buffer, two ZST kernel-source types, and the independent
-  `H_n² = nI` oracle. The remaining native-f16 FFT scope must use the same
-  ownership boundary. See ADR 0003.
+  `H_n² = nI` oracle. Native-half FFT subsequently used the same ownership
+  boundary. See ADR 0003.
 - Performed: `apollo-fwht` 0.3.0 now expresses its butterfly and inverse-scale
   kernels as ZST `KernelInterface`/`KernelSource` implementations, prepares
   them through `KernelDevice`, and encodes every stage into one typed command

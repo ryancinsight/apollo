@@ -8,8 +8,7 @@ repository.workspace = true
 description = "Validation and benchmark surface for Apollo FFT"
 
 [features]
-default = ["external-references", "parallel", "mnemosyne-memory"]
-external-references = ["dep:rustfft"]
+default = ["parallel", "mnemosyne-memory"]
 parallel = [
     "apollo-fft/parallel",
     "apollo-nufft/parallel",
@@ -72,8 +71,6 @@ melinoe = { workspace = true }
 moirai = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }
-
-rustfft = { workspace = true, optional = true }
 
 [lints]
 workspace = true

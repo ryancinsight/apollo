@@ -54,11 +54,10 @@ use crate::domain::report::{
     ExternalComparisonReport, GpuFftReport, NufftReport, PrecisionBenchmarkReport,
     PrecisionRunReport, PublishedReferenceReport, ValidationReport,
 };
+use crate::infrastructure::dft_reference::{dft_1d_array, dft_3d_real};
 use crate::infrastructure::numpy::{
     benchmark_fft, compare_fft, probe_python_environment, PythonEnvironmentProbe,
 };
-#[cfg(feature = "external-references")]
-use crate::infrastructure::rustfft_reference::{fft1_real, fft3_real};
 use apollo_fft::f16;
 use apollo_fft::{
     fft_1d_array, fft_1d_array_typed, ifft_1d_array, ifft_1d_array_typed, FftBackend, Shape3D,
@@ -378,81 +377,47 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
     )
     .unwrap();
 
-    let rustfft_available = cfg!(feature = "external-references");
-    let rustfft_report = if rustfft_available {
-        #[cfg(feature = "external-references")]
-        {
-            let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
-            let apollo = leto::Array1::from(apollo_leto.storage().as_slice().to_vec());
-            let rustfft = fft1_real(&signal_leto.view());
-            let rustfft_fft1_max_abs_error = max_complex_abs_delta(apollo.iter(), rustfft.iter());
+    let dft_report = {
+        let apollo_leto = apollo_fft::fft_1d_leto(signal_leto.view());
+        let apollo = leto::Array1::from(apollo_leto.storage().as_slice().to_vec());
+        let dft = dft_1d_array(&signal);
+        let dft_fft1_max_abs_error = max_complex_abs_delta(apollo.iter(), dft.iter());
 
-            let prime_signal = representative_signal_1d(17);
-            let prime_signal_leto =
-                leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
-                    [prime_signal.size()],
-                    prime_signal.as_slice().unwrap(),
-                )
+        let prime_signal = representative_signal_1d(17);
+        let prime_signal_leto =
+            leto::Array::<_, leto::MnemosyneStorage<_>, 1>::from_mnemosyne_slice(
+                [prime_signal.size()],
+                prime_signal.as_slice().unwrap(),
+            )
+            .unwrap();
+        let prime_apollo_leto = apollo_fft::fft_1d_leto(prime_signal_leto.view());
+        let prime_apollo = leto::Array1::from(prime_apollo_leto.storage().as_slice().to_vec());
+        let prime_dft = dft_1d_array(&prime_signal);
+        let dft_prime_error = max_complex_abs_delta(prime_apollo.iter(), prime_dft.iter());
+
+        let field = representative_field_3d([4, 4, 4]);
+        let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
+            [4, 4, 4],
+            field.as_slice().unwrap(),
+        )
+        .unwrap();
+        let apollo_3d_leto = apollo_fft::fft_3d_leto(field_leto.view());
+        let apollo_3d =
+            leto::Array3::from_shape_vec([4, 4, 4], apollo_3d_leto.storage().as_slice().to_vec())
                 .unwrap();
-            let prime_apollo_leto = apollo_fft::fft_1d_leto(prime_signal_leto.view());
-            let prime_apollo = leto::Array1::from(prime_apollo_leto.storage().as_slice().to_vec());
-            let prime_rustfft = fft1_real(&prime_signal_leto.view());
-            let rustfft_prime_error =
-                max_complex_abs_delta(prime_apollo.iter(), prime_rustfft.iter());
+        let dft_3d = dft_3d_real(&field);
+        let dft_fft3_max_abs_error = max_complex_abs_delta(apollo_3d.iter(), dft_3d.iter());
 
-            let field = representative_field_3d([4, 4, 4]);
-            let field_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
-                [4, 4, 4],
-                field.as_slice().unwrap(),
-            )
-            .unwrap();
-            let apollo_3d_leto = apollo_fft::fft_3d_leto(field_leto.view());
-            let apollo_3d = leto::Array3::from_shape_vec(
-                [4, 4, 4],
-                apollo_3d_leto.storage().as_slice().to_vec(),
-            )
-            .unwrap();
-            let rustfft_3d = fft3_real(&field_leto.view());
-            let rustfft_fft3_max_abs_error =
-                max_complex_abs_delta(apollo_3d.iter(), rustfft_3d.iter());
-
-            ExternalBackendReport {
-                backend: "rustfft".to_string(),
-                available: true,
-                attempted: true,
-                fft1_max_abs_error: Some(rustfft_fft1_max_abs_error),
-                fft1_prime_max_abs_error: Some(rustfft_prime_error),
-                fft3_max_abs_error: Some(rustfft_fft3_max_abs_error),
-                stability_max_abs_delta: Some(0.0),
-                version: None,
-                note: None,
-            }
-        }
-        #[cfg(not(feature = "external-references"))]
-        {
-            ExternalBackendReport {
-                backend: "rustfft".to_string(),
-                available: false,
-                attempted: false,
-                fft1_max_abs_error: None,
-                fft1_prime_max_abs_error: None,
-                fft3_max_abs_error: None,
-                stability_max_abs_delta: None,
-                version: None,
-                note: Some("rustfft validation is disabled for this build".to_string()),
-            }
-        }
-    } else {
         ExternalBackendReport {
-            backend: "rustfft".to_string(),
-            available: false,
-            attempted: false,
-            fft1_max_abs_error: None,
-            fft1_prime_max_abs_error: None,
-            fft3_max_abs_error: None,
-            stability_max_abs_delta: None,
+            backend: "dft".to_string(),
+            available: true,
+            attempted: true,
+            fft1_max_abs_error: Some(dft_fft1_max_abs_error),
+            fft1_prime_max_abs_error: Some(dft_prime_error),
+            fft3_max_abs_error: Some(dft_fft3_max_abs_error),
+            stability_max_abs_delta: Some(0.0),
             version: None,
-            note: Some("rustfft validation is disabled for this build".to_string()),
+            note: None,
         }
     };
 
@@ -470,16 +435,15 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
     };
     let published_references = run_published_reference_suite()?;
 
-    let passed = (!rustfft_report.attempted
-        || (rustfft_report
-            .fft1_max_abs_error
+    let passed = dft_report
+        .fft1_max_abs_error
+        .is_some_and(|error| error <= EXTERNAL_FFT_LIMIT)
+        && dft_report
+            .fft1_prime_max_abs_error
             .is_some_and(|error| error <= EXTERNAL_FFT_LIMIT)
-            && rustfft_report
-                .fft1_prime_max_abs_error
-                .is_some_and(|error| error <= EXTERNAL_FFT_LIMIT)
-            && rustfft_report
-                .fft3_max_abs_error
-                .is_some_and(|error| error <= EXTERNAL_FFT_LIMIT)))
+        && dft_report
+            .fft3_max_abs_error
+            .is_some_and(|error| error <= EXTERNAL_FFT_LIMIT)
         && (!numpy_report.attempted
             || numpy_report
                 .fft1_max_abs_error
@@ -488,9 +452,8 @@ pub fn run_external_comparison_suite() -> SuiteResult<ExternalComparisonReport> 
 
     Ok(ExternalComparisonReport {
         passed,
-        rustfft_checkout_present: cfg!(feature = "external-references"),
         pyfftw_checkout_present: Path::new("external/pyfftw").exists(),
-        rustfft: rustfft_report,
+        dft: dft_report,
         numpy: numpy_report,
         pyfftw: pyfftw_report,
         robustness_passed: true,
@@ -603,25 +566,12 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
         let _ = apollo_fft::ifft_3d_leto(spectrum.view());
     });
 
-    let rustfft_available = cfg!(feature = "external-references");
-    let (rustfft_fft1_ms, rustfft_fft3_ms) = if rustfft_available {
-        (
-            elapsed_ms(|| {
-                #[cfg(feature = "external-references")]
-                {
-                    let _ = fft1_real(&signal_leto.view());
-                }
-            }),
-            elapsed_ms(|| {
-                #[cfg(feature = "external-references")]
-                {
-                    let _ = fft3_real(&field_leto.view());
-                }
-            }),
-        )
-    } else {
-        (0.0, 0.0)
-    };
+    let dft_fft1_ms = elapsed_ms(|| {
+        let _ = dft_1d_array(&signal);
+    });
+    let dft_fft3_ms = elapsed_ms(|| {
+        let _ = dft_3d_real(&field);
+    });
 
     let signal_shape = [signal.size()];
     let numpy_bench = benchmark_fft(&signal_shape[..], signal.as_slice().unwrap_or(&[]), 1).ok();
@@ -657,8 +607,8 @@ pub fn run_benchmark_suite() -> SuiteResult<BenchmarkReport> {
         apollo_fft1_ms,
         apollo_fft3_forward_ms,
         apollo_fft3_inverse_ms,
-        rustfft_fft1_ms,
-        rustfft_fft3_ms,
+        dft_fft1_ms,
+        dft_fft3_ms,
         numpy_fft1_ms: numpy_bench.as_ref().and_then(|probe| probe.numpy_ms),
         numpy_fft3_ms: None,
         pyfftw_fft1_ms: numpy_bench.as_ref().and_then(|probe| probe.pyfftw_ms),
@@ -890,7 +840,7 @@ mod tests {
         assert!(report.nufft.passed);
         assert!(report.external.published_references.passed);
         assert_eq!(report.external.published_references.attempted, 59);
-        assert_eq!(report.external.rustfft.backend, "rustfft");
+        assert_eq!(report.external.dft.backend, "dft");
         assert_eq!(report.external.numpy.backend, "numpy");
 
         // Schema structure assertions
@@ -929,9 +879,8 @@ mod tests {
             .expect("external is a JSON object");
         for key in [
             "passed",
-            "rustfft_checkout_present",
             "pyfftw_checkout_present",
-            "rustfft",
+            "dft",
             "numpy",
             "pyfftw",
             "robustness_passed",

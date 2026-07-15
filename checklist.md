@@ -453,6 +453,19 @@
   reports advisories/bans/licenses/sources clean; semver-checks classifies both
   0.14→0.15 and helper 0.2→0.3 as permitted pre-1.0 major changes.
 
+## Apple Silicon Stockham target boundary [patch]
+
+- [x] Gate the AVX-only Stockham module, butterfly exports, precision imports,
+  and test imports on `target_arch = "x86_64"`.
+- [x] Verify the pinned Apollo toolchain compiles `apollo-fft` for
+  `aarch64-apple-darwin` with all features and the locked graph.
+- [x] Re-run format, warning-denied all-target Clippy, all-feature nextest,
+  doctests, and warning-clean rustdoc on the host target.
+- Evidence: pinned cross-target `cargo check` passes; host Clippy passes;
+  nextest passes 409/409; doctests run 0/0; rustdoc completes warning-free.
+- Residual: cross-target checking reports pre-existing unused-code warnings in
+  scalar-only and platform-only branches; CI does not deny those warnings.
+
 ## Release 0.14.0 eligibility [arch]
 
 - Target version: 0.14.0

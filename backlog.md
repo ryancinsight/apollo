@@ -18,6 +18,11 @@
   without skip rules): align the legacy rkyv and Windows dependency families
   that currently produce 12 transitive duplicate-version warnings. Re-open
   when Mnemosyne/Eunomia and Moirai publish compatible dependency increments.
+- [x] [patch] Apple Silicon Stockham target boundary (owner Codex, 2026-07-14;
+  scope `apollo-fft/src/application/execution/kernel/components/stockham`):
+  gate AVX-only modules, imports, and test symbols on `x86_64` so the scalar
+  Stockham path compiles on `aarch64-apple-darwin`. This closes the RITK
+  macOS CI provider blocker without a fallback or compatibility layer.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 

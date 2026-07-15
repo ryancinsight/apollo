@@ -60,7 +60,7 @@ bytemuck = { version = "1.25.1", features = ["derive"] }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false, features = ["std"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d", features = ["eunomia"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "bb07447f6c71978c6fed47114ba9ecfda965ddc9", default-features = false, features = ["alloc"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "1423e41d01f4f7787472ddc91961f0771f9728fe" }
 half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
@@ -78,7 +78,6 @@ pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
 rand = "0.10.2"
 # moirai: data-parallel runtime replacing direct scheduler usage.
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", features = ["melinoe"] }
-rustfft = "6.4.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }

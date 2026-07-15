@@ -29,8 +29,6 @@ thiserror = { workspace = true }
 approx.workspace = true
 criterion = { workspace = true }
 proptest.workspace = true
-rustfft = { workspace = true }
-
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",
@@ -45,10 +43,6 @@ cache-profiling = []
 
 [[bench]]
 name = "kernel_strategy"
-harness = false
-
-[[bench]]
-name = "vs_rustfft"
 harness = false
 
 [[bench]]
