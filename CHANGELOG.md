@@ -8,6 +8,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Changed
+
+- [patch] Resolve the released Hephaestus 0.14.0 and Moirai 0.3.0 provider
+  graph in `Cargo.lock`; Apollo's public API remains unchanged.
+
 ### Fixed
 
 - [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`

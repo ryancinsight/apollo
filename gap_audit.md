@@ -19,6 +19,17 @@
   those are not compile blockers and remain visible for a later warning-ratchet
   increment.
 
+## Provider release convergence [patch]
+
+- Finding: Apollo's reproducible lock graph still selected Hephaestus 0.13.0
+  and Moirai 0.2.0 after their released provider revisions advanced. That left
+  downstream FFT consumers resolving an obsolete Atlas graph.
+- Resolution: `Cargo.lock` now selects Hephaestus 0.14.0 and Moirai 0.3.0;
+  no Apollo source or public API changes are required.
+- Verification: `xtask provider-audit`, `cargo check -p apollo-fft --locked`,
+  and `cargo fmt --check` pass. Evidence tier: compiler-checked dependency
+  resolution and focused provider-consumer compilation.
+
 ## Release 0.15.0 eligibility [major]
 
 - Provider ABI finding: Hephaestus 0.13.0 now owns WGPU 30, so Apollo advances

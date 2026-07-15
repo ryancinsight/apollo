@@ -23,6 +23,10 @@
   gate AVX-only modules, imports, and test symbols on `x86_64` so the scalar
   Stockham path compiles on `aarch64-apple-darwin`. This closes the RITK
   macOS CI provider blocker without a fallback or compatibility layer.
+- [x] [patch] Provider release convergence (owner Codex, 2026-07-15; scope
+  `Cargo.lock` and release artifacts): resolve Hephaestus 0.14.0 and Moirai
+  0.3.0 after their upstream releases; `xtask provider-audit` and the locked
+  `apollo-fft` check pass without changing Apollo's public contract.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
