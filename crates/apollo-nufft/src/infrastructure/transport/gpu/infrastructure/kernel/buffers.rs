@@ -1,20 +1,43 @@
-use super::Position3Pod;
-use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
-use eunomia::Complex32;
+//! Reusable typed accelerator buffers for the fast NUFFT paths.
 
-/// Pre-allocated GPU buffers for repeated 1D NUFFT fast-path execution.
-///
-/// Buffers are sized for a specific transform configuration (`n`, `m`, `max_samples`).
-/// Reusing these buffers across calls eliminates per-dispatch GPU buffer creation overhead.
+use eunomia::Complex32;
+use hephaestus_core::ComputeDevice;
+use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
+
+use super::descriptors::Position3Pod;
+use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
+
+/// Snapshot of a complex grid for diagnostics and value-semantic tests.
+#[cfg(any(test, feature = "diagnostics"))]
+#[derive(Clone, Debug)]
+pub struct NufftGridSnapshot {
+    /// Real components in storage order.
+    pub re: Vec<f32>,
+    /// Imaginary components in storage order.
+    pub im: Vec<f32>,
+}
+
+/// Intermediate Type-2 grids captured at the declared diagnostic boundary.
+#[cfg(any(test, feature = "diagnostics"))]
+#[derive(Clone, Debug)]
+pub struct NufftType2GridDiagnostics {
+    /// Grid after loading the spectral coefficients.
+    pub after_load: NufftGridSnapshot,
+    /// Grid after the inverse FFT.
+    pub after_ifft: NufftGridSnapshot,
+}
+
+/// Pre-allocated provider buffers for repeated one-dimensional fast NUFFT execution.
+#[derive(Debug)]
 pub struct NufftGpuBuffers1D {
-    pub(crate) position_buffer: wgpu::Buffer,
-    pub(crate) value_buffer: wgpu::Buffer,
-    pub(crate) deconv_buffer: wgpu::Buffer,
-    pub(crate) re_buffer: wgpu::Buffer,
-    pub(crate) im_buffer: wgpu::Buffer,
-    pub(crate) output_buffer: wgpu::Buffer,
-    pub(crate) staging_buffer: wgpu::Buffer,
-    /// Output grid length (number of Fourier modes).
+    pub(crate) position_buffer: WgpuBuffer<Complex32>,
+    pub(crate) value_buffer: WgpuBuffer<Complex32>,
+    pub(crate) deconv_buffer: WgpuBuffer<Complex32>,
+    pub(crate) real_grid: WgpuBuffer<f32>,
+    pub(crate) imaginary_grid: WgpuBuffer<f32>,
+    pub(crate) output_buffer: WgpuBuffer<Complex32>,
+    pub(crate) padding_buffer: WgpuBuffer<Complex32>,
+    /// Output Fourier-mode count.
     pub(crate) n: usize,
     /// Oversampled grid length.
     pub(crate) m: usize,
@@ -23,103 +46,40 @@ pub struct NufftGpuBuffers1D {
 }
 
 impl NufftGpuBuffers1D {
-    /// Pre-allocate all GPU buffers for 1D fast-path transforms of the given configuration.
-    ///
-    /// `n` is the output grid length, `m` is the oversampled grid length, and
-    /// `max_samples` is the maximum number of non-uniform samples per dispatch.
-    /// Each call to `execute_fast_type1_1d_with_buffers` or
-    /// `execute_fast_type2_1d_with_buffers` may use fewer samples; the excess
-    /// capacity is unused but not reallocated.
-    pub fn new(device: &wgpu::Device, n: usize, m: usize, max_samples: usize) -> Self {
-        let upload_usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
-        let grid_usage = wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::COPY_DST;
-
-        let position_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d positions"),
-            size: position_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let value_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let value_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d values"),
-            size: value_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let deconv_size = (m.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let deconv_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d deconv"),
-            size: deconv_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let grid_elem_size = (m.max(1) * std::mem::size_of::<f32>()) as u64;
-        let re_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d grid re"),
-            size: grid_elem_size,
-            usage: grid_usage,
-            mapped_at_creation: false,
-        });
-        let im_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d grid im"),
-            size: grid_elem_size,
-            usage: grid_usage,
-            mapped_at_creation: false,
-        });
-
-        let output_size = (n.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d output"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let staging_size = output_size;
-        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers1d staging"),
-            size: staging_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        Self {
-            position_buffer,
-            value_buffer,
-            deconv_buffer,
-            re_buffer,
-            im_buffer,
-            output_buffer,
-            staging_buffer,
+    /// Allocate all provider buffers for one fast one-dimensional configuration.
+    pub fn new(
+        device: &WgpuDevice,
+        n: usize,
+        m: usize,
+        max_samples: usize,
+    ) -> NufftWgpuResult<Self> {
+        let sample_capacity = max_samples.max(1);
+        let output_capacity = n.max(max_samples).max(1);
+        Ok(Self {
+            position_buffer: device.alloc_zeroed(sample_capacity)?,
+            value_buffer: device.alloc_zeroed(sample_capacity)?,
+            deconv_buffer: device.alloc_zeroed(n.max(1))?,
+            real_grid: device.alloc_zeroed(m.max(1))?,
+            imaginary_grid: device.alloc_zeroed(m.max(1))?,
+            output_buffer: device.alloc_zeroed(output_capacity)?,
+            padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
             n,
             m,
             max_samples,
-        }
+        })
     }
 }
 
-/// Pre-allocated GPU buffers for repeated 3D NUFFT fast-path execution.
-///
-/// Buffers are sized for a specific transform configuration (`shape`, `oversampled`,
-/// `max_samples`). Reusing these buffers across calls eliminates per-dispatch GPU
-/// buffer creation overhead.
+/// Pre-allocated provider buffers for repeated three-dimensional fast NUFFT execution.
+#[derive(Debug)]
 pub struct NufftGpuBuffers3D {
-    pub(crate) position_buffer: wgpu::Buffer,
-    pub(crate) value_buffer: wgpu::Buffer,
-    pub(crate) deconv_buffer: wgpu::Buffer,
-    pub(crate) re_buffer: wgpu::Buffer,
-    pub(crate) im_buffer: wgpu::Buffer,
-    pub(crate) output_buffer: wgpu::Buffer,
-    pub(crate) staging_buffer: wgpu::Buffer,
+    pub(crate) position_buffer: WgpuBuffer<Position3Pod>,
+    pub(crate) value_buffer: WgpuBuffer<Complex32>,
+    pub(crate) deconv_buffer: WgpuBuffer<f32>,
+    pub(crate) real_grid: WgpuBuffer<f32>,
+    pub(crate) imaginary_grid: WgpuBuffer<f32>,
+    pub(crate) output_buffer: WgpuBuffer<Complex32>,
+    pub(crate) padding_buffer: WgpuBuffer<Complex32>,
     /// Output shape `(nx, ny, nz)`.
     pub(crate) shape: (usize, usize, usize),
     /// Oversampled grid dimensions `(mx, my, mz)`.
@@ -128,120 +88,49 @@ pub struct NufftGpuBuffers3D {
     pub(crate) max_samples: usize,
 }
 
-/// Diagnostic snapshot of split real/imaginary NUFFT grid state.
-///
-/// This type is compiled only for tests or the explicit `diagnostics` feature.
-/// It records computed GPU grid values after named fast-path checkpoints without
-/// changing production dispatch behavior.
-#[cfg(any(test, feature = "diagnostics"))]
-#[derive(Clone, Debug)]
-pub struct NufftGridSnapshot {
-    /// Real grid component in row-major storage order.
-    pub re: Vec<f32>,
-    /// Imaginary grid component in row-major storage order.
-    pub im: Vec<f32>,
-}
-
-/// Diagnostic checkpoints for fast type-2 NUFFT execution.
-#[cfg(any(test, feature = "diagnostics"))]
-#[derive(Clone, Debug)]
-pub struct NufftType2GridDiagnostics {
-    /// Grid state immediately after coefficient load/deconvolution.
-    pub after_load: NufftGridSnapshot,
-    /// Grid state immediately after inverse FFT and before interpolation.
-    pub after_ifft: NufftGridSnapshot,
-}
-
 impl NufftGpuBuffers3D {
-    /// Pre-allocate all GPU buffers for 3D fast-path transforms of the given configuration.
-    ///
-    /// `shape` is the output grid dimensions `(nx, ny, nz)`, `oversampled` is the
-    /// oversampled grid dimensions `(mx, my, mz)`, and `max_samples` is the maximum
-    /// number of non-uniform samples per dispatch.
+    /// Allocate all provider buffers for one fast three-dimensional configuration.
     pub fn new(
-        device: &wgpu::Device,
+        device: &WgpuDevice,
         shape: (usize, usize, usize),
         oversampled: (usize, usize, usize),
         max_samples: usize,
-    ) -> Self {
-        let upload_usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
-        let grid_usage = wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::COPY_DST;
-
-        let (nx, ny, nz) = shape;
-        let (mx, my, mz) = oversampled;
-        let grid_len = mx * my * mz;
-        let output_len = nx * ny * nz;
-
-        let position_size = (max_samples.max(1) * std::mem::size_of::<Position3Pod>()) as u64;
-        let position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d positions"),
-            size: position_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let value_size = (max_samples.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let value_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d values"),
-            size: value_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let deconv_size = (grid_len.max(1) * std::mem::size_of::<f32>()) as u64;
-        let deconv_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d deconv"),
-            size: deconv_size,
-            usage: upload_usage,
-            mapped_at_creation: false,
-        });
-
-        let grid_elem_size = (grid_len.max(1) * std::mem::size_of::<f32>()) as u64;
-        let re_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d grid re"),
-            size: grid_elem_size,
-            usage: grid_usage,
-            mapped_at_creation: false,
-        });
-        let im_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d grid im"),
-            size: grid_elem_size,
-            usage: grid_usage,
-            mapped_at_creation: false,
-        });
-
-        let output_size = (output_len.max(1) * std::mem::size_of::<Complex32>()) as u64;
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d output"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let staging_size = output_size;
-        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("apollo-nufft-wgpu buffers3d staging"),
-            size: staging_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        Self {
-            position_buffer,
-            value_buffer,
-            deconv_buffer,
-            re_buffer,
-            im_buffer,
-            output_buffer,
-            staging_buffer,
+    ) -> NufftWgpuResult<Self> {
+        let grid_len = oversampled
+            .0
+            .checked_mul(oversampled.1)
+            .and_then(|value| value.checked_mul(oversampled.2))
+            .ok_or(NufftWgpuError::InvalidPlan {
+                message: "oversampled 3D grid length overflows usize",
+            })?;
+        let mode_len = shape
+            .0
+            .checked_mul(shape.1)
+            .and_then(|value| value.checked_mul(shape.2))
+            .ok_or(NufftWgpuError::InvalidPlan {
+                message: "3D mode-grid length overflows usize",
+            })?;
+        let deconv_len = shape
+            .0
+            .checked_add(shape.1)
+            .and_then(|value| value.checked_add(shape.2))
+            .ok_or(NufftWgpuError::InvalidPlan {
+                message: "3D deconvolution length overflows usize",
+            })?;
+        let sample_capacity = max_samples.max(1);
+        let output_capacity = mode_len.max(max_samples).max(1);
+        Ok(Self {
+            position_buffer: device.alloc_zeroed(sample_capacity)?,
+            value_buffer: device.alloc_zeroed(sample_capacity)?,
+            deconv_buffer: device.alloc_zeroed(deconv_len.max(1))?,
+            real_grid: device.alloc_zeroed(grid_len.max(1))?,
+            imaginary_grid: device.alloc_zeroed(grid_len.max(1))?,
+            output_buffer: device.alloc_zeroed(output_capacity)?,
+            padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
             shape,
             oversampled,
             max_samples,
-        }
+        })
     }
 }
 

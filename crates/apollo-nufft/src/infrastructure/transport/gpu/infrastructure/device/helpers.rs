@@ -263,7 +263,7 @@ pub(crate) fn array3_from_leto_view<T: Copy>(view: leto::ArrayView3<'_, T>) -> A
 pub(crate) fn leto_array1_from_slice<T: Copy>(
     values: &[T],
 ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| NufftWgpuError::BufferMapFailed {
+    leto_interop::try_array1_from_slice(values).ok_or_else(|| NufftWgpuError::HostArrayLayout {
         message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 1D output".to_string(),
     })
 }
@@ -271,7 +271,7 @@ pub(crate) fn leto_array1_from_slice<T: Copy>(
 pub(crate) fn leto_array3_from_dense<T: Copy>(
     values: &Array3<T>,
 ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
-    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| NufftWgpuError::BufferMapFailed {
+    leto_interop::try_dense_from_contiguous(values).ok_or_else(|| NufftWgpuError::HostArrayLayout {
         message: "failed to allocate Mnemosyne-backed Leto NUFFT-WGPU 3D output".to_string(),
     })
 }

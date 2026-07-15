@@ -65,9 +65,8 @@ hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c53
 half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
 leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
 leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
-# hephaestus: shared Atlas GPU substrate (atlas ADR 0001). apollo-wgpu-helpers
-# delegates adapter/device acquisition here so the device layer is shared with
-# coeus without an apollo->coeus edge.
+# Hephaestus is Apollo's shared Atlas accelerator substrate (atlas ADR 0001).
+# Transform crates depend on its typed device and kernel contracts directly.
 hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "e5270972ecb909659ce30e88dcdb85776729df46" }
 hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "e5270972ecb909659ce30e88dcdb85776729df46" }
 proc-macro2 = "1.0.106"

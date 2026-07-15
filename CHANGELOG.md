@@ -14,6 +14,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   binding validation, command ordering, submission, and transfer through
   Hephaestus. The provider-native external split-buffer stream contract permits
   downstream transforms to compose FFT stages without raw WGPU handles.
+- `apollo-nufft` 0.3.0 routes direct and Kaiser--Bessel fast 1D/3D execution
+  through typed Hephaestus descriptors and ordered command streams. Leto
+  remains the host boundary; reusable Type-2 buffers now cover both the Fourier
+  mode count and the configured sample capacity.
 
 ### Removed
 
@@ -24,6 +28,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   or `pollster`. Its raw pipeline, binding, command encoding, queue, and
   transfer mechanics are replaced by typed Hephaestus descriptors and ordered
   command streams.
+- `apollo-nufft` no longer depends directly on `apollo-wgpu-helpers`, `wgpu`,
+  or `pollster`; raw pipelines, bindings, encoders, queues, transfers, and the
+  obsolete no-op `debug-readbacks` feature are deleted.
 
 ### Breaking
 
@@ -43,6 +50,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   backprojection, and filtered backprojection through typed Hephaestus command
   streams. `RadonWgpuBackend::new` now returns `Self`; raw device and queue
   accessors are removed.
+
+- [major] `apollo-nufft` 0.3.0 changes `NufftWgpuBackend` and reusable-buffer
+  construction to accept and expose `hephaestus_wgpu::WgpuDevice`; raw device
+  and queue accessors, helper errors, and raw transport types are removed.
+  `NufftWgpuError` now preserves opaque provider and FFT errors rather than
+  deriving equality over an incomplete error domain.
 
 - [major] `apollo-sht` 0.3.0 migrates direct spherical-harmonic acceleration
   to the Hephaestus authored-kernel seam. `ShtWgpuBackend::new` now accepts

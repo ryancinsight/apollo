@@ -143,7 +143,8 @@ fn bench_fast_type1_1d(c: &mut Criterion) {
             });
         });
 
-        let buffers = NufftGpuBuffers1D::new(backend.device(), n, oversampled_len, m_count);
+        let buffers = NufftGpuBuffers1D::new(backend.device(), n, oversampled_len, m_count)
+            .expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", n), |b| {
             b.iter(|| {
                 let out = backend
@@ -189,7 +190,8 @@ fn bench_fast_type2_1d(c: &mut Criterion) {
             });
         });
 
-        let buffers = NufftGpuBuffers1D::new(backend.device(), n, oversampled_len, m_count);
+        let buffers = NufftGpuBuffers1D::new(backend.device(), n, oversampled_len, m_count)
+            .expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", n), |b| {
             b.iter(|| {
                 let out = backend
@@ -253,7 +255,8 @@ fn bench_fast_type1_3d(c: &mut Criterion) {
             });
         });
 
-        let buffers = NufftGpuBuffers3D::new(backend.device(), shape, oversampled, m_count);
+        let buffers = NufftGpuBuffers3D::new(backend.device(), shape, oversampled, m_count)
+            .expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", n), |b| {
             b.iter(|| {
                 let out = backend
@@ -310,7 +313,8 @@ fn bench_fast_type2_3d(c: &mut Criterion) {
             });
         });
 
-        let buffers = NufftGpuBuffers3D::new(backend.device(), shape, oversampled, m_count);
+        let buffers = NufftGpuBuffers3D::new(backend.device(), shape, oversampled, m_count)
+            .expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", n), |b| {
             b.iter(|| {
                 let out = backend

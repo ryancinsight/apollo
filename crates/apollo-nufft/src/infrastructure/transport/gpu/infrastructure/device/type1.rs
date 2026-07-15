@@ -11,6 +11,7 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
+use crate::infrastructure::transport::gpu::infrastructure::kernel::NufftGpuKernel;
 
 impl NufftWgpuBackend {
     /// Execute exact direct Type-1 1D NUFFT on WGPU.
@@ -23,9 +24,8 @@ impl NufftWgpuBackend {
         validate_pair_lengths(positions.len(), values.len())?;
         validate_usize_to_u32(plan.domain().n)?;
         validate_usize_to_u32(positions.len())?;
-        let output = self.kernel.execute_type1_1d(
-            self.device.inner(),
-            self.device.queue().as_ref(),
+        let output = NufftGpuKernel::execute_type1_1d(
+            &self.device,
             plan.domain().n,
             plan.domain().length() as f32,
             positions,
@@ -115,9 +115,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(grid.nz)?;
         validate_usize_to_u32(positions.len())?;
         let (lx, ly, lz) = grid.lengths();
-        let output = self.kernel.execute_type1_3d(
-            self.device.inner(),
-            self.device.queue().as_ref(),
+        let output = NufftGpuKernel::execute_type1_3d(
+            &self.device,
             (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             positions,

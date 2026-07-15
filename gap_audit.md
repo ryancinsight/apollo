@@ -24,6 +24,34 @@
   pass. No machine-checked proof is performed.
 - Residual: FFT raw transport and the sole NUFFT helper consumer remain.
 
+## NUFFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced direct Type-1/Type-2 and fast Kaiser--Bessel 1D/3D raw
+  transport with typed Hephaestus descriptors, provider-owned reusable
+  buffers, and ordered streams. The fast path records load/spread,
+  `GpuFft3d`, and extract/interpolate in dependency order without a raw
+  command encoder.
+- Mathematical contract: Type-2 is the exact-arithmetic adjoint of Type-1
+  under the complex inner product. Fast paths approximate that pair through
+  Kaiser--Bessel gridding. The 1D fast load compensates the normalized inverse
+  FFT by the oversampled length; 3D retains its declared normalized convention.
+  ADR 0009 distinguishes this theorem from finite-precision evidence.
+- Structural cleanup: deleted the helper device owner, raw pipeline cache,
+  binding/encoder/queue/readback transport, six raw kernel leaves, and the
+  stale no-op diagnostics feature. `kernel/{descriptors,direct,fast,fast_support}`
+  now separates typed descriptors, direct dispatch, fast orchestration, and
+  shared fast support. Leto remains the host boundary.
+- Evidence tier: compile-time typed binding/layout and stream ordering, then
+  44/44 value-semantic nextest cases including real-device direct/fast CPU
+  differential and bit-exact reusable Type-2 output for twelve samples and
+  eight modes. Format, no-default/all-feature checks, warning-denied Clippy,
+  doctest, rustdoc, provider audit, repository-baseline semver classification,
+  and direct source/dependency scans pass. No machine-checked proof is
+  performed.
+- Residual: native-f16 FFT transport remains the only transform provider
+  migration scope; the now-unreferenced helper crate is the next deletion
+  increment.
+
 ## Radon Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct projection, adjoint, and filtered-backprojection

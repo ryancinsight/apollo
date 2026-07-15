@@ -65,9 +65,8 @@ Remaining replacement work:
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
       `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
       `apollo-wavelet`, `apollo-frft`, `apollo-hilbert`, `apollo-mellin`, and
-      `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, and
-      `apollo-stft` are complete; 2 transform crates
-      remain.
+      `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, `apollo-stft`,
+      and `apollo-nufft` are complete; 1 transform crate remains.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
@@ -76,7 +75,8 @@ Remaining replacement work:
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
   DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT,
-  Radon, and STFT; FFT's helper edge is removed and 1 helper consumer remains.
+  Radon, STFT, and NUFFT; no helper consumers remain. Delete the unreferenced
+  workspace crate after this migration is independently merged.
   - [x] D6-FFT-f32 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
@@ -119,18 +119,20 @@ Remaining replacement work:
     Evidence: 46 focused nextest cases including real-device CPU differential,
     non-power-of-two, and reusable-storage execution; Clippy, doctest, rustdoc,
     provider audit, direct source/dependency scans, and semver classification.
-  - [/] D6-NUFFT [arch] (owner Codex, re-opened 2026-07-15; scope
-    `crates/apollo-nufft/{Cargo.toml,README.md,src,infrastructure,benches}` and
-    D6 PM entries): replace direct and fast one-/three-dimensional NUFFT raw
-    pipeline, binding, encoder, queue, transfer, and helper ownership with
-    typed Hephaestus descriptors and ordered command streams. Preserve Apollo's
-    direct-sum and Kaiser--Bessel mathematics, Leto host boundary, and explicit
-    accelerator storage contract. The acceptance contract requires a theorem/
-    convention update, direct and fast CPU differential tests, reusable-storage
-    coverage, provider audit, and a source/manifest scan with no direct `wgpu`,
-    `pollster`, or helper edge. The typed `GpuFft3d` stream contract is now
-    available from D6-FFT-f32; migrate NUFFT directly against that provider
-    boundary without a local device or command-encoder bridge.
+  - [x] D6-NUFFT [arch] (owner Codex, completed 2026-07-15;
+    scope `crates/apollo-nufft/{Cargo.toml,README.md,src,infrastructure,benches}`,
+    `docs/adr/0009-nufft-hephaestus-dispatch.md`, and D6 PM entries): replace
+    direct and fast one-/three-dimensional NUFFT raw pipeline, binding, encoder,
+    queue, transfer, and helper ownership with typed Hephaestus descriptors and
+    ordered command streams. Preserve Apollo's direct-sum and Kaiser--Bessel
+    mathematics, Leto host boundary, and concrete accelerator storage contract.
+    The reusable Type-2 output contract covers `max(mode_count, sample_capacity)`;
+    a real-device value test proves bit-exact parity against non-reusable output
+    when samples exceed modes. Evidence: format; no-default/all-feature and
+    no-op examples checks; warning-denied Clippy; 44/44 nextest cases including
+    real-device execution; doctest; rustdoc; provider audit; repository-baseline
+    semver classification; and a source/manifest scan with no direct `wgpu`,
+    `pollster`, or helper edge.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,

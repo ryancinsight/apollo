@@ -10,6 +10,7 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
     typed_to_complex32, validate_typed_profile, validate_usize_to_u32, write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
+use crate::infrastructure::transport::gpu::infrastructure::kernel::NufftGpuKernel;
 
 impl NufftWgpuBackend {
     /// Execute exact direct Type-2 1D NUFFT on WGPU.
@@ -27,9 +28,8 @@ impl NufftWgpuBackend {
         }
         validate_usize_to_u32(plan.domain().n)?;
         validate_usize_to_u32(positions.len())?;
-        let output = self.kernel.execute_type2_1d(
-            self.device.inner(),
-            self.device.queue().as_ref(),
+        let output = NufftGpuKernel::execute_type2_1d(
+            &self.device,
             plan.domain().n,
             plan.domain().length() as f32,
             fourier_coeffs,
@@ -128,9 +128,8 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let (lx, ly, lz) = grid.lengths();
         let coefficients: Vec<Complex32> = modes.iter().copied().collect();
-        let output = self.kernel.execute_type2_3d(
-            self.device.inner(),
-            self.device.queue().as_ref(),
+        let output = NufftGpuKernel::execute_type2_3d(
+            &self.device,
             (grid.nx, grid.ny, grid.nz),
             (lx as f32, ly as f32, lz as f32),
             &coefficients,

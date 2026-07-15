@@ -1,5 +1,28 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: NUFFT [arch]
+
+- Target version: `apollo-nufft` 0.3.0
+- Phase: Closure
+- [x] Replace direct and fast 1D/3D raw transport with typed Hephaestus
+  descriptors, typed provider buffers, and one ordered stream per operation.
+  The fast path composes the provider-native `GpuFft3d` stream without a local
+  command-encoder bridge.
+- [x] Delete direct `wgpu`, `pollster`, and `apollo-wgpu-helpers` edges and the
+  obsolete no-op `debug-readbacks` feature. Leto remains the host-array/view
+  boundary; `NufftGpuBuffers` remains provider-owned reusable storage.
+- [x] Document the Type-1/Type-2 adjoint theorem, 1D inverse-normalization
+  convention, provider ownership, and reusable Type-2 capacity invariant in
+  the crate README and ADR 0009.
+- [x] Verify format; all-feature and no-default checks; warning-denied Clippy;
+  44/44 nextest cases including real-device execution; doctest; rustdoc;
+  no-op examples; provider audit; repository-baseline semver classification;
+  and source/dependency scans. The real-device suite proves bit-exact reusable
+  Type-2 parity for twelve samples over eight modes.
+- Evidence target: typed binding/layout and stream ordering, then
+  value-semantic direct/fast CPU differential, adjoint, normalization, and
+  reusable-storage tests. No machine-checked proof is claimed.
+
 ## Hephaestus kernel migration: STFT [arch]
 
 - Target version: `apollo-stft` 0.4.0

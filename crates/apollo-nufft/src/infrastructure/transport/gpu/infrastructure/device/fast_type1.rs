@@ -12,7 +12,7 @@ use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
-    NufftGpuBuffers1D, NufftGpuBuffers3D,
+    KaiserBesselOne, KaiserBesselThree, NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel,
 };
 
 impl NufftWgpuBackend {
@@ -27,16 +27,18 @@ impl NufftWgpuBackend {
         validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
-        let output = self.kernel.execute_fast_type1_1d(
-            self.device.device(),
-            self.device.queue(),
+        let configuration = KaiserBesselOne {
+            kernel_width: plan.kernel_width(),
+            length: plan.domain().length() as f32,
+            beta: fast.beta as f32,
+            i0_beta: fast.i0_beta as f32,
+            deconvolution: &fast.deconv,
+        };
+        let output = NufftGpuKernel::execute_fast_type1_1d(
+            &self.device,
             plan.domain().n,
             fast.oversampled_len,
-            plan.kernel_width(),
-            plan.domain().length() as f32,
-            fast.beta as f32,
-            fast.i0_beta as f32,
-            &fast.deconv,
+            configuration,
             positions,
             values,
         )?;
@@ -127,16 +129,18 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_3d_metadata(plan)?;
         let (lx, ly, lz) = grid.lengths();
-        let output = self.kernel.execute_fast_type1_3d(
-            self.device.device(),
-            self.device.queue(),
+        let configuration = KaiserBesselThree {
+            kernel_width: plan.kernel_width(),
+            lengths: (lx as f32, ly as f32, lz as f32),
+            beta: fast.beta as f32,
+            i0_beta: fast.i0_beta as f32,
+            deconvolution: &fast.deconv_xyz,
+        };
+        let output = NufftGpuKernel::execute_fast_type1_3d(
+            &self.device,
             (grid.nx, grid.ny, grid.nz),
             (fast.mx, fast.my, fast.mz),
-            plan.kernel_width(),
-            (lx as f32, ly as f32, lz as f32),
-            fast.beta as f32,
-            fast.i0_beta as f32,
-            &fast.deconv_xyz,
+            configuration,
             positions,
             values,
         )?;
@@ -230,15 +234,17 @@ impl NufftWgpuBackend {
         validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
         let fast = fast_1d_metadata(plan)?;
-        let output = self.kernel.execute_fast_type1_1d_with_buffers(
-            self.device.device(),
-            self.device.queue(),
+        let configuration = KaiserBesselOne {
+            kernel_width: plan.kernel_width(),
+            length: plan.domain().length() as f32,
+            beta: fast.beta as f32,
+            i0_beta: fast.i0_beta as f32,
+            deconvolution: &fast.deconv,
+        };
+        let output = NufftGpuKernel::execute_fast_type1_1d_with_buffers(
+            &self.device,
             buffers,
-            plan.kernel_width(),
-            plan.domain().length() as f32,
-            fast.beta as f32,
-            fast.i0_beta as f32,
-            &fast.deconv,
+            configuration,
             positions,
             values,
         )?;
@@ -264,15 +270,17 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(positions.len())?;
         let fast = fast_3d_metadata(plan)?;
         let (lx, ly, lz) = grid.lengths();
-        let output = self.kernel.execute_fast_type1_3d_with_buffers(
-            self.device.device(),
-            self.device.queue(),
+        let configuration = KaiserBesselThree {
+            kernel_width: plan.kernel_width(),
+            lengths: (lx as f32, ly as f32, lz as f32),
+            beta: fast.beta as f32,
+            i0_beta: fast.i0_beta as f32,
+            deconvolution: &fast.deconv_xyz,
+        };
+        let output = NufftGpuKernel::execute_fast_type1_3d_with_buffers(
+            &self.device,
             buffers,
-            plan.kernel_width(),
-            (lx as f32, ly as f32, lz as f32),
-            fast.beta as f32,
-            fast.i0_beta as f32,
-            &fast.deconv_xyz,
+            configuration,
             positions,
             values,
         )?;
