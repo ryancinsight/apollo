@@ -91,6 +91,10 @@
   `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; the remaining direct
   dependencies cannot be removed until D6-FFT-native-f16. NUFFT now composes
   the typed f32 external-buffer stream, and the obsolete wrapper is deleted.
+- Active audit: native-f16 transport must request `ShaderF16` through the
+  Hephaestus device-acquisition contract and use provider-owned typed buffers,
+  descriptors, streams, and readback. Any missing provider capability belongs
+  in Hephaestus, not in an Apollo adapter.
 
 ## SHT Hephaestus command-stream migration [arch]
 

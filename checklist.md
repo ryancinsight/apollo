@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## Native-f16 FFT Hephaestus migration [arch]
+
+- Target version: `apollo-fft` next pre-1.0 breaking integration.
+- Phase: Foundation
+- [/] Audit the native-f16 plan and the current Hephaestus capability surface;
+  record whether typed f16 buffers, `ShaderF16` acquisition, descriptors,
+  streams, and readback exist or require upstream ownership.
+- [ ] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
+  submission, and readback ownership with typed Hephaestus contracts while
+  retaining WGSL `enable f16;` arithmetic and the documented forward bound.
+- [ ] Verify source/manifest removal, real-device radix and Bluestein
+  differential/roundtrip behavior, feature combinations, documentation, and
+  provider audit.
+
 ## DHT feature-boundary warning cleanup [patch]
 
 - Target version: `apollo-dht` 0.3.0; internal feature-boundary correction.

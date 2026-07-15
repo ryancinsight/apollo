@@ -72,11 +72,11 @@ Remaining replacement work:
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
-- [x] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
-  owner Codex; completed 2026-07-15. FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
-  Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, STFT, and NUFFT now
-  use their typed Hephaestus boundaries; the obsolete workspace crate is
-  deleted without a compatibility substrate.
+- [/] [arch] Stage D6: **eliminate Apollo-owned WGPU transport** — owner Codex;
+  last-update 2026-07-15. FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT, Wavelet,
+  FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, STFT, and NUFFT now use typed
+  Hephaestus boundaries; the obsolete wrapper crate is deleted without a
+  compatibility substrate. Native-f16 FFT transport is the only remaining scope.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT
@@ -101,7 +101,7 @@ Remaining replacement work:
     and reusable typed-buffer contract are documented in ADR 0006 and the
     crate README. Evidence: all-feature/no-default checks, warning-denied
     Clippy, and real-device radix and Bluestein delta value tests.
-  - [ ] D6-FFT-native-f16 [arch] (owner unassigned; scope
+  - [/] D6-FFT-native-f16 [arch] (owner Codex, claimed 2026-07-15; scope
     `crates/apollo-fft/src/infrastructure/transport/gpu/infrastructure/gpu_fft/f16_plan{.rs,/}`,
     native-f16 shaders, Cargo feature edges, ADR 0006, and D6 PM entries):
     migrate the remaining native-f16 device acquisition, pipelines, bindings,
