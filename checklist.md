@@ -7,6 +7,8 @@
 - [x] Claim the 1,164-line NUFFT GPU verification monolith and inventory its
   static capability, direct/fast Type-1/Type-2, dimensional, Leto, typed,
   reusable-buffer, diagnostic, normalization, and rejection contracts.
+- [x] Move static metadata plus repeated device availability, tolerance, and
+  typed-error assertions into private leaves without altering device execution.
 - [ ] Partition every existing value-semantic contract into private operation
   leaves, with one support leaf for repeated availability and assertion logic.
 - [ ] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
