@@ -229,10 +229,10 @@ Remaining replacement work:
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
     array/view boundary. The source and manifest scan finds no direct `wgpu`,
     `pollster`, or `apollo-wgpu-helpers` edge. Evidence: compile-time typed
-    bindings and parameter-layout assertion; 57 focused value-semantic tests,
+    bindings and parameter-layout assertion; 72 focused value-semantic tests,
     including real-device CPU differential execution; warning-denied Clippy,
-    doctest, and rustdoc. The 800-line GPU verification suite is a tracked D8
-    harness-structure residual, not a second algorithm implementation.
+    doctest, and rustdoc. D8 now partitions this verification tree by contract;
+    only the cross-transform provider extraction remains open.
   - [x] D6-GFT: `apollo-gft` 0.3.0 replaces direct WGPU device ownership with
     one direction-parameterized Hephaestus typed kernel and command stream.
     Leto owns host views and Mnemosyne-backed outputs; the sealed GPU storage
@@ -308,6 +308,16 @@ Remaining replacement work:
   doctest, warning-clean rustdoc, provider audit, source-residue scans, and
   0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
+  In progress — owner Codex; first bounded DCT/DST scope completed 2026-07-15:
+  `apollo-dctdst` GPU verification tree, D8 ADR, and active PM records.
+  Completed acceptance: split the 796-line verification monolith by its distinct
+  capability, one-dimensional, typed-storage, dimensional, and rejection
+  contracts without changing a transform algorithm or weakening real-device
+  CPU-differential coverage. The resulting seven-leaf tree keeps every source
+  file below 500 lines and expands the focused all-feature suite to 72 cases.
+  This is the first vertical harness increment;
+  it does not introduce an Apollo-owned device abstraction or compatibility
+  layer before the cross-transform provider contract is available.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

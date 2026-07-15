@@ -34,6 +34,28 @@
   value-semantic GPU tests. This does not prove driver correctness; it prevents
   uncoordinated concurrent device acquisition within the test run.
 
+## DCT/DST GPU verification-tree normalization [arch]
+
+- Finding: the DCT/DST transport had a 796-line verification monolith mixing
+  capability, one-dimensional, typed-storage, Leto-boundary, dimensional, and
+  rejection contracts. The layout obscured independent CPU oracles and did not
+  meet the tree's file-size boundary.
+- Resolution: `gpu/verification/` now holds seven concern-specific leaves.
+  `support.rs` is the sole home for backend availability and repeated
+  value-comparison assertions; dimensional leaves retain the independent
+  tensor-product CPU construction. No production code, raw-WGPU edge, device
+  wrapper, or duplicate transform execution was introduced.
+- Mathematical contract: applying a one-dimensional DCT-II on each axis equals
+  the separable tensor-product DCT-II. ADR 0012 records the proof sketch and
+  keeps it distinct from the finite-precision CPU-differential evidence.
+- Evidence tier: 72 all-feature DCT/DST nextest cases, including device-present
+  CPU differentials, inverse pairs, typed storage, Leto boundaries, and shape
+  rejections; warning-denied Clippy, doctest, and rustdoc. This is not a
+  machine-checked proof or a GPU performance claim.
+- Residual risk: generic cross-transform device/error/capability extraction
+  remains provider-owned D8 work. The local split does not substitute for that
+  upstream contract.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and
@@ -542,12 +564,12 @@
   The manifest and source scan finds no direct `wgpu`, `pollster`, or
   `apollo-wgpu-helpers` edge in this bounded context.
 - Evidence tier: compile-time typed binding ownership and a 32-byte parameter
-  layout assertion; 57 value-semantic nextest cases including real-device CPU
+  layout assertion; 72 value-semantic nextest cases including real-device CPU
   differential execution; warning-denied Clippy, doctest, and rustdoc. No
   machine-checked proof or runtime performance claim is made.
-- Residual: `gpu/verification.rs` is 800 lines. Its split is sequenced in D8
-  with the shared verification-harness consolidation; it must not introduce a
-  parallel transform implementation.
+- Residual: the local verification tree is normalized. D8 still needs a
+  provider-owned cross-transform contract; it must not introduce a parallel
+  transform implementation.
 
 ## Release 0.15.0 eligibility [major]
 
