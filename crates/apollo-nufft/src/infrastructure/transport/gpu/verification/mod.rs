@@ -11,25 +11,14 @@
 //! operator tests are empirical finite-precision evidence, not a machine-
 //! checked proof.
 
-#[cfg(test)]
 mod direct_type1_1d;
-#[cfg(test)]
 mod direct_type1_3d;
-#[cfg(test)]
 mod direct_type2_1d;
-#[cfg(test)]
 mod direct_type2_3d;
-#[cfg(test)]
 mod fast_type1_1d;
-#[cfg(test)]
 mod fast_type1_3d;
-#[cfg(test)]
 mod fast_type2_1d;
-#[cfg(test)]
 mod fast_type2_3d;
-#[cfg(test)]
 mod metadata;
-#[cfg(test)]
 mod reusable;
-#[cfg(test)]
 mod support;

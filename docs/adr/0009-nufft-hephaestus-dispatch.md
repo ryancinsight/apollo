@@ -55,3 +55,20 @@ convention. The 3D implementation retains its already normalized convention.
 The theorem is a proof sketch of the mathematical contract, not a
 machine-checked proof. CPU differential, adjoint, normalization, and
 real-device reusable-buffer tests are empirical finite-precision evidence.
+
+## Compatibility and migration
+
+`apollo-nufft` 0.4.0 removes the public `wgpu_backend` forwarding module and
+the public verification-only module. Both contained no supported public
+operation, but their paths were externally importable. Consumers import GPU
+plans, errors, capabilities, buffers, and `NufftWgpuBackend` directly from
+the `apollo_nufft` root. Verification remains private test infrastructure and
+has no runtime replacement.
+
+## Consequences
+
+The release has no compatibility shim or duplicate transport surface. The
+single root export path retains typed Hephaestus ownership, while Leto remains
+the host-array boundary. `cargo semver-checks` classifies the removed module
+paths as a breaking pre-1.0 change; finite-precision test evidence does not
+constitute a machine-checked proof.

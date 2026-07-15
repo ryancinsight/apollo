@@ -13,8 +13,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [arch] NUFFT GPU verification is partitioned into metadata, reusable-buffer,
   direct/fast Type-1/Type-2 dimensional, and shared-support leaves. Existing
   CPU differentials, Leto host boundaries, finite-precision tolerances, and
-  the direct adjoint proof sketch remain intact; this adds no Apollo-owned GPU
-  wrapper or change to transform execution.
+  the direct adjoint proof sketch remain intact. The tree is test-only and its
+  fast-operation leaves are flat; this changes no transform execution or
+  Apollo-owned GPU mechanics.
 - [arch] NTT GPU verification is partitioned into metadata, exact-residue,
   quantized-storage, reusable-buffer, and theorem-property leaves. The exact
   CPU/GPU differential, Leto boundary, inverse-pair, and convolution-law
@@ -51,6 +52,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   dispatcher. `ShaderF16` remains a required provider capability.
 - Apollo now tracks the Hephaestus default branch after its reviewed required-
   feature acquisition API merged. `Cargo.lock` remains the reproducible pin.
+
+### Breaking
+
+- [major] `apollo-nufft` 0.4.0 removes the unused public
+  `apollo_nufft::wgpu_backend` forwarding module plus public test-only
+  verification paths. Migration: import typed accelerator items directly from
+  `apollo_nufft`; verification has no runtime replacement.
 
 ### Fixed
 

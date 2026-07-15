@@ -1,9 +1,9 @@
 # Apollo Checklist
 
-## D8 NUFFT verification-tree normalization [arch]
+## D8 NUFFT verification-tree normalization [major]
 
-- Target version: internal verification structure; no transform API change.
-- Phase: Execution
+- Target version: `apollo-nufft` 0.4.0 pre-1.0 breaking integration.
+- Phase: Closure
 - [x] Claim the 1,164-line NUFFT GPU verification monolith and inventory its
   static capability, direct/fast Type-1/Type-2, dimensional, Leto, typed,
   reusable-buffer, diagnostic, normalization, and rejection contracts.
@@ -23,9 +23,16 @@
   leaves, with one support leaf for repeated availability and assertion logic.
 - [x] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
   finite-precision contracts with their existing derived tolerances.
+- [x] Address PR review: make the verification root test-only, remove the
+  obsolete public transport wrapper, and flatten fast-operation leaves so the
+  root is the sole test-compilation boundary.
+- [x] Remove the unused `wgpu_backend` forwarding module and public test-only
+  root verification module. Root accelerator exports remain the single native
+  migration target; ADR 0009 and the changelog record the pre-1.0 break.
 - [x] Verify the focused 73-case and all-feature workspace Nextest suites,
   warning-denied diagnostics, package doctest/rustdoc, provider scan,
-  source-residue scan, and patch SemVer classification before publishing.
+  source-residue scan, and the documented pre-1.0 breaking SemVer
+  classification before publishing.
 
 ## D8 NTT verification-tree normalization [arch]
 
