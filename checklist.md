@@ -4,12 +4,15 @@
 
 - Target version: `apollo-fft` next pre-1.0 breaking integration.
 - Phase: Foundation
-- [/] Audit the native-f16 plan and the current Hephaestus capability surface;
-  record whether typed f16 buffers, `ShaderF16` acquisition, descriptors,
-  streams, and readback exist or require upstream ownership.
+- [x] Audit the native-f16 plan and the current Hephaestus capability surface.
+  Hephaestus 0.14.0 owns required `ShaderF16` acquisition; typed f16 buffers,
+  descriptors, streams, and readback remain the next provider work.
 - [x] Add the provider-owned required `DeviceFeature` acquisition capability
   in Hephaestus 0.14.0 and temporarily pin its reviewed `196411e` head while
   [PR 33](https://github.com/ryancinsight/hephaestus/pull/33) awaits merge.
+- [x] Replace native-f16 adapter/device acquisition with `WgpuDevice`; remove
+  the direct `pollster` dependency and reuse the same provider device for its
+  f32 differential reference.
 - [ ] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
   submission, and readback ownership with typed Hephaestus contracts while
   retaining WGSL `enable f16;` arithmetic and the documented forward bound.
@@ -132,10 +135,10 @@
   cases; source scan; and f32 provider ownership review.
 - [ ] Partition and migrate the remaining native-f16 transport into the same
   domain storage, host conversion, typed kernel, and backend-orchestration
-  leaves. Delete the final direct WGPU and `pollster` edge from `apollo-fft`.
+  leaves. Delete the final direct WGPU edge from `apollo-fft`.
 - [ ] Complete release verification after native-f16 migration: doctests,
   rustdoc, provider audit, semver classification, examples, and a whole-crate
-  source/manifest scan with no direct `wgpu`, `pollster`, or helper edge.
+  source/manifest scan with no direct `wgpu` or helper edge.
 - Evidence target: typed binding/layout and external-buffer length validation,
   then
   value-semantic CPU differential and inverse-roundtrip evidence. No

@@ -25,9 +25,13 @@ only `WgpuBuffer<f32>` plus `WgpuCommandStream` at its composition boundary.
 Host f64/f16 conversion remains explicit at the Leto boundary before f32
 provider storage is written.
 
-The native-f16 implementation is a separate residual scope. It remains inside
-its own `f16_plan` hierarchy until it receives the same provider descriptor
-implementation; it is not an f32 compatibility path or a fallback.
+The native-f16 implementation is a separate residual scope. Its constructors
+now accept or acquire `WgpuDevice` with the provider-owned required
+`ShaderF16` feature contract, so Apollo no longer owns adapter/device
+acquisition or Pollster orchestration. Its pipeline, binding, command-stream,
+and readback mechanics remain inside `f16_plan` until they receive the same
+provider descriptor implementation; it is not an f32 compatibility path or a
+fallback.
 
 Apollo retains the dense FFT algorithm and WGSL transform source. Each kernel
 descriptor declares bindings and dispatch geometry, while Hephaestus constructs
@@ -72,10 +76,13 @@ evidence after migration.
 - The f32 plan has no direct WGPU device, queue, pipeline, bind-group, command
   encoder, or transfer ownership. Hephaestus is the sole owner of those
   mechanics and no local compatibility adapter remains.
-- Native f16 remains the only direct WGPU residual in `apollo-fft`; the crate
-  cannot remove direct `wgpu` and `pollster` dependencies until that scope is
-  migrated.
+- Native f16 remains the only direct WGPU residual in `apollo-fft`; Pollster
+  is removed, while the direct `wgpu` dependency remains until its pipeline,
+  binding, command-stream, and readback scope is migrated.
 - The f32 host-to-device precision boundary and typed external-buffer contract
   are value-semantic test targets.
 - `GpuFft3d::new` now accepts `WgpuDevice` rather than raw device/queue arcs;
   the pre-1.0 release advances to 0.16.0 after semver classification.
+- `GpuFft3dF16Native::{try_new,try_from_device}` now use the same typed device
+  boundary and require `DeviceFeature::ShaderF16`; the feature is mandatory,
+  not an optional fallback.

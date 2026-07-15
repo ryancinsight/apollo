@@ -325,8 +325,8 @@ mod tests {
 
     #[test]
     fn axis_workspace_matches_axis_batch_geometry() {
-        assert_eq!(axis_workspace_elements(2, 3, 4, Axis::X), Ok(32));
-        assert_eq!(axis_workspace_elements(2, 3, 4, Axis::Y), Ok(32));
+        assert_eq!(axis_workspace_elements(2, 3, 4, Axis::X), Ok(24));
+        assert_eq!(axis_workspace_elements(2, 3, 4, Axis::Y), Ok(64));
         assert_eq!(axis_workspace_elements(2, 3, 4, Axis::Z), Ok(24));
     }
 

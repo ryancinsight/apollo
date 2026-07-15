@@ -104,12 +104,14 @@ Remaining replacement work:
   - [/] D6-FFT-native-f16 [arch] (owner Codex, claimed 2026-07-15; scope
     `crates/apollo-fft/src/infrastructure/transport/gpu/infrastructure/gpu_fft/f16_plan{.rs,/}`,
     native-f16 shaders, Cargo feature edges, ADR 0006, and D6 PM entries):
-    migrate the remaining native-f16 device acquisition, pipelines, bindings,
-    encoder, queue, and readback to the same Hephaestus descriptor boundary.
-    Preserve its native f16 arithmetic and `ShaderF16` capability contract.
+    migrate the remaining native-f16 pipelines, bindings, encoder, queue, and
+    readback to the same Hephaestus descriptor boundary. Device acquisition is
+    complete: `try_new` requires `ShaderF16` through `WgpuDevice`, and the
+    obsolete Pollster edge is deleted. Preserve native f16 arithmetic and its
+    `ShaderF16` capability contract.
     Acceptance requires real-device radix/Bluestein f16 differential and
-    roundtrip evidence plus a source/manifest scan with no direct `wgpu` or
-    `pollster` edge in `apollo-fft`. The temporary `196411e` provider pin
+    roundtrip evidence plus a source/manifest scan with no direct `wgpu` edge
+    in `apollo-fft`. The temporary `196411e` provider pin
     carries required `DeviceFeature` acquisition while
     [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
     awaits merge; remove the revision quarantine in the same consumer sweep

@@ -1,8 +1,8 @@
-//! Native f16 WGPU FFT plan using WGSL `enable f16;`.
+//! Native f16 FFT plan using Hephaestus device acquisition and WGSL `enable f16;`.
 //!
 //! # Architecture
 //!
-//! `GpuFft3dF16Native` requires a device created with `wgpu::Features::SHADER_F16`.
+//! `GpuFft3dF16Native` requires a Hephaestus device with `ShaderF16` enabled.
 //! All shader arithmetic executes in `f16`. Host conversion (f32→f16 upload,
 //! f16→f32 readback) occurs at the buffer boundary using little-endian IEEE 754
 //! half-precision bit patterns.
@@ -35,9 +35,10 @@ use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
     Axis, AxisStrategy,
 };
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
+use hephaestus_core::{DeviceFeature, DevicePreference};
+use hephaestus_wgpu::WgpuDevice;
 use leto::{Array1, Array3};
 use std::mem::size_of;
-use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 /// Validate the native-f16 plan's documented minimum axis length.
@@ -123,7 +124,7 @@ fn encode_f16_upload(
 
 /// GPU-backed 3D FFT plan executing all arithmetic in native f16.
 ///
-/// Requires a device created with [`wgpu::Features::SHADER_F16`]. All WGSL
+/// Requires a Hephaestus device with [`DeviceFeature::ShaderF16`]. All WGSL
 /// shaders use `enable f16;` and operate on `array<f16>` storage buffers.
 /// Host-side data is converted f32↔f16 at the upload/readback boundary.
 ///
@@ -136,10 +137,8 @@ pub struct GpuFft3dF16Native {
     ny: usize,
     /// Z dimension.
     nz: usize,
-    /// WGPU device (must have `SHADER_F16` enabled).
-    device: Arc<wgpu::Device>,
-    /// WGPU queue.
-    queue: Arc<wgpu::Queue>,
+    /// Hephaestus device (must have `ShaderF16` enabled).
+    device: WgpuDevice,
     /// Bit-reversal permutation pipeline (f16 workspace).
     bitrev_pipeline: wgpu::ComputePipeline,
     /// Butterfly pipeline (f16 workspace).
@@ -205,64 +204,50 @@ pub struct GpuFft3dF16Native {
 }
 
 impl GpuFft3dF16Native {
-    /// Return true when the adapter advertises `SHADER_F16` support.
+    /// Return true when the device was acquired with `ShaderF16` enabled.
     #[must_use]
-    pub fn device_supports_f16(adapter: &wgpu::Adapter) -> bool {
-        adapter.features().contains(wgpu::Features::SHADER_F16)
+    pub fn device_supports_f16(device: &WgpuDevice) -> bool {
+        device.supports_device_feature(DeviceFeature::ShaderF16)
     }
 
-    /// Create a plan by requesting a new WGPU device with `SHADER_F16` enabled.
+    /// Create a plan by requesting a Hephaestus device with `ShaderF16` enabled.
     ///
-    /// Returns `Err` if no adapter is available, if the adapter does not
-    /// support `SHADER_F16`, or if any dimension is < 2.
+    /// Returns `Err` if no Hephaestus device can satisfy `ShaderF16`, or if
+    /// any dimension is < 2.
     pub fn try_new(nx: usize, ny: usize, nz: usize) -> Result<Self, String> {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-            apply_limit_buckets: false,
-        }))
-        .map_err(|e| format!("no WGPU adapter: {e}"))?;
-        if !Self::device_supports_f16(&adapter) {
-            return Err("adapter does not support SHADER_F16".to_string());
-        }
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("apollo-fft-wgpu native-f16"),
-            required_features: wgpu::Features::SHADER_F16,
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::default(),
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            trace: wgpu::Trace::Off,
-        }))
-        .map_err(|e| format!("device request failed: {e}"))?;
-        Self::try_from_device(Arc::new(device), Arc::new(queue), nx, ny, nz)
+        let device = WgpuDevice::try_with_device_preference_and_required_device_features(
+            "apollo-fft-native-f16",
+            DevicePreference::HighPerformance,
+            &[DeviceFeature::ShaderF16],
+        )
+        .map_err(|error| error.to_string())?;
+        Self::try_from_device(device, nx, ny, nz)
     }
 
-    /// Create a plan from a caller-supplied device and queue.
+    /// Create a plan from a caller-supplied Hephaestus device.
     ///
-    /// Returns `Err` if the device was not created with `SHADER_F16`, or if
+    /// Returns `Err` if the device was not created with `ShaderF16`, or if
     /// any dimension violates the power-of-two constraint.
     pub fn try_from_device(
-        device: Arc<wgpu::Device>,
-        queue: Arc<wgpu::Queue>,
+        device: WgpuDevice,
         nx: usize,
         ny: usize,
         nz: usize,
     ) -> Result<Self, String> {
         validate_dimensions_f16(nx, ny, nz)?;
-        if !device.features().contains(wgpu::Features::SHADER_F16) {
-            return Err("device does not have SHADER_F16 enabled; \
-                 create the device with wgpu::Features::SHADER_F16"
+        if !Self::device_supports_f16(&device) {
+            return Err("device does not have ShaderF16 enabled; \
+                 acquire it with DeviceFeature::ShaderF16"
                 .to_string());
         }
+        let raw_device = device.inner();
 
         // --- Shader modules --------------------------------------------------
-        let fft_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let fft_module = raw_device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("apollo-fft-wgpu fft-native-f16 shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/fft_native_f16.wgsl").into()),
         });
-        let pack_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let pack_module = raw_device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("apollo-fft-wgpu pack-native-f16 shader"),
             source: wgpu::ShaderSource::Wgsl(
                 include_str!("../shaders/pack_native_f16.wgsl").into(),
@@ -291,15 +276,15 @@ impl GpuFft3dF16Native {
             count: None,
         };
 
-        let data_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let data_layout = raw_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 data layout"),
             entries: &[make_storage_entry(0), make_storage_entry(1)],
         });
-        let params_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let params_layout = raw_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 params layout"),
             entries: &[make_uniform_entry(0)],
         });
-        let volume_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let volume_layout = raw_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("apollo-fft-wgpu f16 volume layout"),
             entries: &[
                 make_storage_entry(0),
@@ -309,24 +294,26 @@ impl GpuFft3dF16Native {
         });
 
         // --- Pipeline layouts ------------------------------------------------
-        let fft_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-fft-wgpu f16 fft pipeline layout"),
-            bind_group_layouts: &[Some(&data_layout), Some(&params_layout)],
-            immediate_size: 0,
-        });
-        let pack_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("apollo-fft-wgpu f16 pack pipeline layout"),
-            bind_group_layouts: &[
-                Some(&data_layout),
-                Some(&params_layout),
-                Some(&volume_layout),
-            ],
-            immediate_size: 0,
-        });
+        let fft_pipeline_layout =
+            raw_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("apollo-fft-wgpu f16 fft pipeline layout"),
+                bind_group_layouts: &[Some(&data_layout), Some(&params_layout)],
+                immediate_size: 0,
+            });
+        let pack_pipeline_layout =
+            raw_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("apollo-fft-wgpu f16 pack pipeline layout"),
+                bind_group_layouts: &[
+                    Some(&data_layout),
+                    Some(&params_layout),
+                    Some(&volume_layout),
+                ],
+                immediate_size: 0,
+            });
 
         // --- Compute pipelines -----------------------------------------------
         let build_fft_pipeline = |entry: &str| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            raw_device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some(entry),
                 layout: Some(&fft_pipeline_layout),
                 module: &fft_module,
@@ -340,7 +327,7 @@ impl GpuFft3dF16Native {
         let scale_pipeline = build_fft_pipeline("fft_scale");
 
         let build_pack_pipeline = |entry: &str| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            raw_device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some(entry),
                 layout: Some(&pack_pipeline_layout),
                 module: &pack_module,
@@ -385,37 +372,37 @@ impl GpuFft3dF16Native {
             | wgpu::BufferUsages::COPY_DST;
         let staging_usage = wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ;
 
-        let re_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        let re_buf = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 workspace re"),
             size: workspace_size,
             usage: working_usage,
             mapped_at_creation: false,
         });
-        let im_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        let im_buf = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 workspace im"),
             size: workspace_size,
             usage: working_usage,
             mapped_at_creation: false,
         });
-        let full_re_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        let full_re_buf = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 full re"),
             size: f16_buf_size,
             usage: working_usage,
             mapped_at_creation: false,
         });
-        let full_im_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        let full_im_buf = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 full im"),
             size: f16_buf_size,
             usage: working_usage,
             mapped_at_creation: false,
         });
-        let full_re_staging = device.create_buffer(&wgpu::BufferDescriptor {
+        let full_re_staging = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 full re staging"),
             size: f16_buf_size,
             usage: staging_usage,
             mapped_at_creation: false,
         });
-        let full_im_staging = device.create_buffer(&wgpu::BufferDescriptor {
+        let full_im_staging = raw_device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("apollo-fft-wgpu f16 full im staging"),
             size: f16_buf_size,
             usage: staging_usage,
@@ -423,7 +410,7 @@ impl GpuFft3dF16Native {
         });
 
         // --- Bind groups -----------------------------------------------------
-        let data_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let data_bg = raw_device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("apollo-fft-wgpu f16 data bg"),
             layout: &data_layout,
             entries: &[
@@ -446,12 +433,13 @@ impl GpuFft3dF16Native {
                     Axis::Z => 2,
                 };
                 let fft_params_data = [axis_len, 0u32, 0u32, batch_count];
-                let fft_params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("apollo-fft-wgpu f16 pack fft params"),
-                    contents: bytemuck::cast_slice(&fft_params_data),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-                let fft_params_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                let fft_params_buf =
+                    raw_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("apollo-fft-wgpu f16 pack fft params"),
+                        contents: bytemuck::cast_slice(&fft_params_data),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                let fft_params_bg = raw_device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("apollo-fft-wgpu f16 pack fft params bg"),
                     layout: &params_layout,
                     entries: &[wgpu::BindGroupEntry {
@@ -462,12 +450,12 @@ impl GpuFft3dF16Native {
                 let params_data = [
                     nx as u32, ny as u32, nz as u32, axis_code, fft_len, 0u32, 0u32, 0u32,
                 ];
-                let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                let params_buf = raw_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("apollo-fft-wgpu f16 pack params"),
                     contents: bytemuck::cast_slice(&params_data),
                     usage: wgpu::BufferUsages::UNIFORM,
                 });
-                let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                let bg = raw_device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("apollo-fft-wgpu f16 volume bg"),
                     layout: &volume_layout,
                     entries: &[
@@ -524,37 +512,37 @@ impl GpuFft3dF16Native {
         // dispatched by dispatch_chirp_f16.
         let axis_fwd_x = match strategy_x {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, nx as u32, batch_x, false)
+                RadixStages::precompute(raw_device, &params_layout, nx as u32, batch_x, false)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
         let axis_inv_x = match strategy_x {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, nx as u32, batch_x, true)
+                RadixStages::precompute(raw_device, &params_layout, nx as u32, batch_x, true)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
         let axis_fwd_y = match strategy_y {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, ny as u32, batch_y, false)
+                RadixStages::precompute(raw_device, &params_layout, ny as u32, batch_y, false)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
         let axis_inv_y = match strategy_y {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, ny as u32, batch_y, true)
+                RadixStages::precompute(raw_device, &params_layout, ny as u32, batch_y, true)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
         let axis_fwd_z = match strategy_z {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, nz as u32, batch_z, false)
+                RadixStages::precompute(raw_device, &params_layout, nz as u32, batch_z, false)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
         let axis_inv_z = match strategy_z {
             AxisStrategy::Radix2 => {
-                RadixStages::precompute(&device, &params_layout, nz as u32, batch_z, true)
+                RadixStages::precompute(raw_device, &params_layout, nz as u32, batch_z, true)
             }
             AxisStrategy::ChirpZ { .. } => RadixStages::empty(),
         };
@@ -563,7 +551,7 @@ impl GpuFft3dF16Native {
         let chirp_x = match strategy_x {
             AxisStrategy::Radix2 => None,
             AxisStrategy::ChirpZ { n, m } => Some(Self::build_chirp_data_f16(
-                &device,
+                raw_device,
                 &params_layout,
                 &re_buf,
                 &im_buf,
@@ -575,7 +563,7 @@ impl GpuFft3dF16Native {
         let chirp_y = match strategy_y {
             AxisStrategy::Radix2 => None,
             AxisStrategy::ChirpZ { n, m } => Some(Self::build_chirp_data_f16(
-                &device,
+                raw_device,
                 &params_layout,
                 &re_buf,
                 &im_buf,
@@ -587,7 +575,7 @@ impl GpuFft3dF16Native {
         let chirp_z = match strategy_z {
             AxisStrategy::Radix2 => None,
             AxisStrategy::ChirpZ { n, m } => Some(Self::build_chirp_data_f16(
-                &device,
+                raw_device,
                 &params_layout,
                 &re_buf,
                 &im_buf,
@@ -602,7 +590,6 @@ impl GpuFft3dF16Native {
             ny,
             nz,
             device,
-            queue,
             bitrev_pipeline,
             forward_pipeline,
             scale_pipeline,
@@ -666,8 +653,12 @@ impl GpuFft3dF16Native {
         let re_bytes = encode_f16_upload(field.iter().copied(), upload_len)?;
         let im_bytes = vec![0u8; upload_len];
 
-        self.queue.write_buffer(&self.full_re_buf, 0, &re_bytes);
-        self.queue.write_buffer(&self.full_im_buf, 0, &im_bytes);
+        self.device
+            .queue()
+            .write_buffer(&self.full_re_buf, 0, &re_bytes);
+        self.device
+            .queue()
+            .write_buffer(&self.full_im_buf, 0, &im_bytes);
 
         self.run_f16_axis_fft(Axis::Z, false);
         self.run_f16_axis_fft(Axis::Y, false);
@@ -709,8 +700,12 @@ impl GpuFft3dF16Native {
         let im_bytes =
             encode_f16_upload(field_hat.chunks_exact(2).map(|pair| pair[1]), upload_len)?;
 
-        self.queue.write_buffer(&self.full_re_buf, 0, &re_bytes);
-        self.queue.write_buffer(&self.full_im_buf, 0, &im_bytes);
+        self.device
+            .queue()
+            .write_buffer(&self.full_re_buf, 0, &re_bytes);
+        self.device
+            .queue()
+            .write_buffer(&self.full_im_buf, 0, &im_bytes);
 
         self.run_f16_axis_fft(Axis::X, true);
         self.run_f16_axis_fft(Axis::Y, true);
@@ -736,11 +731,12 @@ impl GpuFft3dF16Native {
     fn run_f16_axis_fft(&self, axis: Axis, inverse: bool) {
         let axis_len = axis.len(self.nx, self.ny, self.nz) as u32;
         let batch_count = axis.batch_count(self.nx, self.ny, self.nz) as u32;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-fft-wgpu f16 axis encoder"),
-            });
+        let mut encoder =
+            self.device
+                .inner()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("apollo-fft-wgpu f16 axis encoder"),
+                });
 
         self.dispatch_pack(&mut encoder, axis, axis_len, batch_count);
 
@@ -805,7 +801,9 @@ impl GpuFft3dF16Native {
         }
 
         self.dispatch_unpack(&mut encoder, axis, axis_len, batch_count);
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.device
+            .queue()
+            .submit(std::iter::once(encoder.finish()));
     }
 
     // -------------------------------------------------------------------------
@@ -1183,17 +1181,23 @@ impl GpuFft3dF16Native {
         n: usize,
     ) -> Result<Vec<f32>, String> {
         let size = self.volume_buf_size();
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("apollo-fft-wgpu f16 readback encoder"),
-            });
+        let mut encoder =
+            self.device
+                .inner()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("apollo-fft-wgpu f16 readback encoder"),
+                });
         encoder.copy_buffer_to_buffer(src, 0, staging, 0, size);
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.device
+            .queue()
+            .submit(std::iter::once(encoder.finish()));
 
         let slice = staging.slice(..size);
         slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        let _ = self
+            .device
+            .inner()
+            .poll(wgpu::PollType::wait_indefinitely());
 
         let result: Vec<f32> = {
             let mapped = slice
@@ -1235,34 +1239,9 @@ mod tests {
             return;
         };
 
-        let instance = wgpu::Instance::default();
-        let Some(adapter) =
-            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-                apply_limit_buckets: false,
-            }))
-            .ok()
-        else {
-            return;
-        };
-        let Ok((device, queue)) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                label: Some("apollo-fft-wgpu f16 test f32 ref"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                memory_hints: wgpu::MemoryHints::default(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                trace: wgpu::Trace::Off,
-            }))
-        else {
-            return;
-        };
-
         let Ok(plan_f32) =
             crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
-                hephaestus_wgpu::WgpuDevice::new(Arc::new(device), Arc::new(queue)),
+                plan_f16.device.clone(),
                 4,
                 4,
                 4,

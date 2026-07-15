@@ -27,9 +27,9 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
   execution through its `wgpu` feature. Hephaestus exclusively owns device,
   queue, buffer, pipeline, command, and transfer mechanics.
 - `apollo-fft` owns the shader-backed 3D FFT algorithm with radix-2 and
-  Bluestein/Chirp-Z axis strategies. Its isolated `native-f16` residual still
-  directly queries `wgpu::Features::SHADER_F16` until D6-FFT-native-f16 moves
-  it to the provider boundary.
+  Bluestein/Chirp-Z axis strategies. Its isolated `native-f16` scope now
+  acquires `ShaderF16` only through Hephaestus; its remaining raw pipeline and
+  transfer mechanics remain the final D6-FFT-native-f16 migration boundary.
 - `apollo-nufft` owns exact and Kaiser-Bessel-gridded NUFFT algorithms;
   direct and fast execution use typed Hephaestus descriptors and compose
   oversampled FFT stages through the `apollo-fft` provider stream.

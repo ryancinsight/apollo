@@ -74,6 +74,14 @@
 
 ## FFT Hephaestus f32 migration [arch]
 
+- Test-oracle correction: `axis_workspace_matches_axis_batch_geometry` now
+  asserts the analytical workspace law `M_axis * batch_axis`. For shape
+  `(2, 3, 4)`, X and Z require `2*(3*4)=24` and `4*(2*3)=24`; Y uses
+  Bluestein `M=next_pow2(2*3-1)=8` over `2*4=8` batches, requiring 64.
+  The previous `(32, 32, 24)` expectations were incorrect; the implementation
+  already returned the derived values. Evidence tier: algebraic specification
+  encoded as a value-semantic unit test, not a test relaxation.
+
 - Performed: replaced f32 dense-FFT device acquisition, buffers, pipeline
   creation, bindings, command encoding, submission, and transfer with typed
   Hephaestus descriptors and streams. `ComputeDevice::write_buffer` preserves
@@ -87,17 +95,24 @@
   real-device value tests. A 2x2x2 delta is exact; a 2x3x2 Bluestein delta and
   inverse roundtrip satisfy the documented `gamma_256` f32 bound. No
   machine-checked proof is performed.
-- Residual: `GpuFft3dF16Native` is the only direct WGPU/pollster transport in
-  `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; the remaining direct
-  dependencies cannot be removed until D6-FFT-native-f16. NUFFT now composes
-  the typed f32 external-buffer stream, and the obsolete wrapper is deleted.
-- Active audit: native-f16 transport must request `ShaderF16` through the
-  Hephaestus device-acquisition contract and use provider-owned typed buffers,
-  descriptors, streams, and readback. Any missing provider capability belongs
-  in Hephaestus, not in an Apollo adapter. Hephaestus 0.14.0 now provides the
-  required-feature contract; Apollo temporarily pins its reviewed `196411e`
-  head pending [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
+- Residual: `GpuFft3dF16Native` is the only direct WGPU transport in
+  `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; its raw pipeline,
+  binding, command-stream, and readback mechanics cannot be removed until
+  D6-FFT-native-f16 completes. NUFFT composes the typed f32 external-buffer
+  stream, and the obsolete wrapper and Pollster edge are deleted.
+- Resolved acquisition boundary: native-f16 now requests `ShaderF16` through
+  the Hephaestus required-feature contract and accepts `WgpuDevice` rather
+  than raw device/queue arcs. Hephaestus 0.14.0 provides that contract; Apollo
+  temporarily pins reviewed `196411e` pending
+  [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
   merge, then must remove the revision quarantine in the same consumer sweep.
+- Active audit: typed f16 buffers, descriptors, streams, and readback belong
+  in Hephaestus. Any missing capability is implemented upstream, not through
+  an Apollo adapter.
+- Semver classification: against `96e67a2` (0.15.0), the minor classifier
+  rejects the raw-device constructor removals and deleted raw stage structs;
+  the major classifier passes. This is the documented pre-1.0 0.16.0 breaking
+  migration, not a reason to retain a compatibility wrapper.
 
 ## SHT Hephaestus command-stream migration [arch]
 

@@ -68,9 +68,12 @@ mathematical proof sketch, not a machine-checked proof. The real-device typed
 stream tests verify a 2x2x2 delta exactly and a 2x3x2 Bluestein delta within
 the documented f32 `gamma_256` rounding bound.
 
-Native f16 shader execution remains a separate migration scope. It is not a
-fallback for the provider-native f32 path and retains its own documented
-precision contract until it is converted to the same descriptor boundary.
+Native f16 shader execution is a separate migration scope. `try_new` requires
+`ShaderF16` through `hephaestus_wgpu::WgpuDevice`, so adapter selection never
+silently drops the capability and Apollo no longer owns device acquisition or
+Pollster orchestration. It is not a fallback for the provider-native f32 path;
+its remaining raw pipeline and transfer mechanics retain the documented
+precision contract until they move to the same descriptor boundary.
 
 ## Verification
 
