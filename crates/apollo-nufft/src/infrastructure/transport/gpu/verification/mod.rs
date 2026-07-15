@@ -9,6 +9,8 @@ mod device;
 #[cfg(test)]
 mod direct_type1_1d;
 #[cfg(test)]
+mod direct_type2_1d;
+#[cfg(test)]
 mod metadata;
 #[cfg(test)]
 mod support;
