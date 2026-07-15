@@ -3,18 +3,25 @@
 ## Hephaestus kernel migration: SHT [arch]
 
 - Target version: `apollo-sht` 0.3.0
-- Phase: Execution
-- [/] Replace raw spherical-harmonic WGPU pipeline, binding, encoder, queue,
+- Phase: Closure
+- [x] Replace raw spherical-harmonic WGPU pipeline, binding, encoder, queue,
   and transfer mechanics with typed Hephaestus kernel descriptors and ordered
   command streams.
-- [ ] Preserve the Gauss--Legendre quadrature theorem, Leto host boundary,
-  Mnemosyne output/scratch ownership, and concrete accelerator storage contract.
-- [ ] Verify real-device CPU differential, shape/storage negative contracts,
-  format, warning-denied Clippy, nextest, doctest, rustdoc, provider audit,
-  semver classification, and direct-provider source scan.
-- Evidence tier planned: typed binding/layout and storage exclusion, then
-  value-semantic CPU differential evidence. No machine-checked proof is
-  planned.
+- [x] Preserve and document the Gauss--Legendre quadrature/synthesis theorem
+  in ADR 0005 and crate Rustdoc/README. Leto remains the host boundary;
+  Mnemosyne owns complex conversion scratch and returned Leto storage. Seal
+  concrete accelerator storage to `Complex32` and `[f16; 2]`; reject a CPU
+  `Complex64` coefficient that is not exactly representable and expose only
+  `quantize_coefficients` as the explicit loss boundary.
+- [x] Verify format; all-feature locked and no-default checks; warning-denied
+  Clippy; 29/29 nextest cases including real-device CPU differential and
+  inverse execution; compile-fail storage exclusion; pure precision-loss
+  rejection; rustdoc; provider audit; no-op examples build; immediate-parent
+  0.2.0-to-0.3.0 semver classification with no required update; and a source
+  scan with no direct `wgpu`, `pollster`, or helper edge. Update D6 artifacts.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  value-semantic negative-contract and real-device CPU differential evidence.
+  No machine-checked proof is performed.
 
 ## Hephaestus kernel migration: SDFT [arch]
 

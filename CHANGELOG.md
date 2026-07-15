@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-sht` 0.3.0 migrates direct spherical-harmonic acceleration
+  to the Hephaestus authored-kernel seam. `ShtWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors and the `wgpu_backend` forwarding module are removed. GPU
+  typed APIs require sealed `ShtGpuStorage`, admitting `Complex32` and
+  `[f16; 2]` while rejecting `Complex64`. Inverse execution rejects CPU
+  coefficients not exactly representable in concrete accelerator storage; use
+  the explicit `quantize_coefficients` boundary when that loss is intentional.
 - [major] `apollo-sdft` 0.3.0 migrates direct-bin acceleration to the
   Hephaestus authored-kernel seam. `SdftWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
@@ -101,6 +109,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] SHT basis materialization and forward/inverse matrix reduction now
+  use typed Hephaestus bindings, two direction-parameterized ZST descriptors,
+  and one ordered command stream. Common, basis, and matrix WGSL concerns have
+  distinct canonical leaves; Leto retains host-array boundaries and Mnemosyne
+  owns conversion scratch and returned Leto storage. The crate no longer
+  depends directly on `wgpu`, `pollster`, or `apollo-wgpu-helpers`.
 - [arch] SDFT direct-bin and complete-bin inverse dispatch now use typed
   Hephaestus bindings, two ZST authored-kernel descriptors, and ordered command
   streams. Leto retains COW host boundaries, Mnemosyne owns generated and

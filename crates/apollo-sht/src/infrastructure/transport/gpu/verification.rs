@@ -39,17 +39,6 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_execution_error_identifies_operation() {
-        let err = WgpuError::UnsupportedExecution {
-            operation: "forward",
-        };
-        assert_eq!(
-            err.to_string(),
-            "forward is unsupported by the current WGPU capability set"
-        );
-    }
-
-    #[test]
     fn sht_wgpu_execution_suite_when_device_exists() {
         let Some(backend) = backend_or_skip() else {
             return;
@@ -85,12 +74,16 @@ mod tests {
                         0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
                     )
                 });
-            let samples_f32 =
+            let accelerator_samples =
                 samples.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
 
-            let expected = cpu_plan.forward_complex(&samples).expect("CPU forward");
+            let represented = accelerator_samples
+                .mapv(|value| Complex64::new(f64::from(value.re), f64::from(value.im)));
+            let expected = cpu_plan
+                .forward_complex(&represented)
+                .expect("CPU forward represented samples");
             let actual = backend
-                .execute_forward(&plan, &samples_f32)
+                .execute_forward(&plan, &accelerator_samples)
                 .expect("GPU forward");
 
             for degree in 0..=plan.max_degree() {
@@ -116,10 +109,14 @@ mod tests {
                         0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
                     )
                 });
-            let coefficients = cpu_plan.forward_complex(&samples).expect("CPU forward");
+            let represented =
+                samples.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
+            let coefficients = backend
+                .execute_forward(&plan, &represented)
+                .expect("GPU forward coefficients");
             let expected = cpu_plan
                 .inverse_complex(&coefficients)
-                .expect("CPU inverse");
+                .expect("CPU inverse GPU coefficients");
 
             let actual = backend
                 .execute_inverse(&plan, &coefficients)
@@ -212,19 +209,19 @@ mod tests {
             let plan = ShtWgpuPlan::new(3, 5, 2);
             let flat_len = plan.latitudes() * plan.longitudes();
 
-            let signal_f32: Vec<Complex32> = (0..flat_len)
+            let signal: Vec<Complex32> = (0..flat_len)
                 .map(|i| Complex32::new(0.5 + i as f32 * 0.1, 0.1 * (i as f32 + 1.0)))
                 .collect();
-            let input_f16: Vec<[f16; 2]> = signal_f32
+            let reduced_input: Vec<[f16; 2]> = signal
                 .iter()
                 .map(|v| [f16::from_f32(v.re), f16::from_f32(v.im)])
                 .collect();
-            let represented_f32: Vec<Complex32> = input_f16
+            let represented: Vec<Complex32> = reduced_input
                 .iter()
                 .map(|v| Complex32::new(v[0].to_f32(), v[1].to_f32()))
                 .collect();
             let samples_2d =
-                Array2::from_shape_vec([plan.latitudes(), plan.longitudes()], represented_f32)
+                Array2::from_shape_vec([plan.latitudes(), plan.longitudes()], represented)
                     .expect("reshape");
 
             let expected = backend
@@ -234,7 +231,7 @@ mod tests {
                 .execute_forward_flat_typed(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    &input_f16,
+                    &reduced_input,
                 )
                 .expect("typed flat mixed forward");
 
@@ -335,7 +332,7 @@ mod tests {
                     &flat_input,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(fwd_err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(fwd_err, WgpuError::InvalidPrecisionProfile));
 
             let coefficients = SphericalHarmonicCoefficients::zeros(plan.max_degree());
             let mut output: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; flat_len];
@@ -347,7 +344,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(inv_err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(inv_err, WgpuError::InvalidPrecisionProfile));
         }
     }
 

@@ -1,5 +1,47 @@
 # Apollo Gap Audit
 
+## SHT Hephaestus command-stream migration [arch]
+
+- Performed: replaced the direct spherical-harmonic WGPU pipeline, bind-group,
+  encoder, queue, and transfer ownership with typed Hephaestus basis and
+  matrix-reduction ZST descriptors recorded in one ordered command stream.
+  Hephaestus owns acquisition, allocation, preparation, binding validation,
+  dispatch, synchronization, and transfer.
+- Mathematical contract: forward basis generation materializes
+  `conj(Y_l^m) w_j` and matrix reduction evaluates the Gauss--Legendre/product
+  quadrature coefficient. Inverse materializes `Y_l^m` and evaluates harmonic
+  synthesis. For a band-limited function on the declared grid, quadrature
+  exactness plus spherical-harmonic orthonormality proves recovery in exact
+  arithmetic; command ordering establishes basis write-before-read. ADR 0005
+  and the crate README state the theorem and distinguish finite-precision
+  differential evidence from the theorem.
+- Type and ownership contract: `ShtGpuStorage` is sealed to `Complex32` and
+  explicit `[f16; 2]`; `Complex64` cannot enter typed accelerator APIs.
+  `SphericalHarmonicCoefficients` stays the CPU `Complex64` SSOT. Inverse
+  staging rejects non-representable values before provider allocation or dispatch, while
+  `quantize_coefficients` is the explicit loss boundary. Leto remains the
+  host-array boundary; Mnemosyne owns complex conversion scratch and returned
+  Leto storage.
+- Structural cleanup: deleted direct provider construction, raw device/queue
+  escape hatches, the `wgpu_backend` forwarding module, and the monolithic
+  shader. `common.wgsl`, `basis.wgsl`, and `matrix.wgsl` are the one-home
+  shader hierarchy for shared math, basis generation, and reduction. The
+  provider device boundary is 276 lines; `conversion.rs` owns validation,
+  grid/coefficient conversion, Leto interop, and its no-device regressions.
+- Verification: format; locked all-feature and no-default checks;
+  warning-denied Clippy; 29 focused nextest cases including a real-device CPU
+  differential/inverse run; the `Complex64` compile-fail storage exclusion;
+  a pure non-representable-coefficient rejection; rustdoc; provider audit;
+  immediate-parent semver classification; and a direct source scan with no raw
+  WGPU, `pollster`, or `apollo-wgpu-helpers` reference. The examples target is
+  absent, so its build check is a Cargo no-op.
+- Evidence tier: typed binding/layout and compile-fail storage exclusion, then
+  value-semantic negative-contract and real-device CPU differential evidence.
+  No machine-checked proof is performed.
+- Residual: D6 has 4 transform crates remaining: FFT, NUFFT, Radon, and STFT.
+  The helper crate remains live only for those consumers and cannot be deleted
+  until each edge is migrated.
+
 ## SDFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced the direct SDFT raw-device pipeline, binding, encoder,
