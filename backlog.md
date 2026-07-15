@@ -65,7 +65,7 @@ Remaining replacement work:
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
       `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
       `apollo-wavelet`, `apollo-frft`, `apollo-hilbert`, `apollo-mellin`, and
-      `apollo-sft` are complete; 6 transform crates
+      `apollo-sft`, and `apollo-sdft` are complete; 5 transform crates
       remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
@@ -74,7 +74,7 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, and SFT; 6 transform crates remain.
+  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, and SDFT; 5 transform crates remain.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,
@@ -90,15 +90,24 @@ Remaining replacement work:
     inverse execution, compile-fail storage exclusion, warning-denied Clippy,
     doctest, rustdoc, provider audit, immediate-parent semver classification,
     and source/manifest scan find no direct `wgpu`, `pollster`, or helper edge.
-  - [/] D6-SDFT [arch] (owner Codex, claimed 2026-07-14; scope
+  - [x] D6-SDFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sdft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
-    entries): replace the direct sliding-DFT WGPU pipeline, binding, encoder,
-    queue, and transfer mechanics with a typed Hephaestus ZST and ordered
-    command stream. Preserve the direct-bin theorem, Leto COW host boundary,
-    Mnemosyne-backed output, and sealed concrete accelerator storage. Acceptance:
-    real-device CPU differential, plan/storage negative contracts, nextest,
-    doctest, warning-denied diagnostics, provider audit, semver classification,
-    and no direct `wgpu`, `pollster`, or helper edge.
+    entries): replaces the direct sliding-DFT WGPU pipeline, binding, encoder,
+    queue, and transfer mechanics with two typed Hephaestus ZST descriptors
+    and ordered command streams. Leto preserves COW host boundaries and
+    Mnemosyne owns generated output. Sealed `SdftGpuRealStorage` and
+    `SdftGpuBinStorage` admit only concrete `f32`/`Complex32` and explicit
+    reduced `f16` storage, excluding CPU `f64`/`Complex64` at compile time.
+    The complete-bin root-of-unity inverse theorem now defines the contract:
+    inverse dispatch rejects `bin_count != window_len` rather than presenting
+    a partial projection as reconstruction. The `wgpu_backend` forwarding
+    module, raw device/queue accessors, and CPU-marker alias are deleted.
+    Evidence: 28 focused value-semantic nextest cases including real-device CPU
+    differential and roundtrip execution, two compile-fail storage exclusions,
+    Leto contiguous/strided paths, exact partial-inverse rejection, warning-
+    denied Clippy, doctest, rustdoc, provider audit, immediate-parent semver
+    classification from 0.2.0 to 0.3.0 with no required update, and
+    source/manifest scan with no direct `wgpu`, `pollster`, or helper edge.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
@@ -162,8 +171,8 @@ Remaining replacement work:
     storage/domain contracts, warning-denied gates, provider audit, semver
     classification, and source scan find no direct `wgpu`, `pollster`, or helper
     edge.
-  The first twelve slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
-  Wavelet, FrFT, Hilbert, Mellin, and SFT retain Leto host arrays and
+  The first thirteen slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT,
+  QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, and SDFT retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
@@ -172,7 +181,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 6 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 5 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus

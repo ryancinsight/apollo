@@ -20,10 +20,5 @@ pub use application::execution::plan::sdft::{
 pub use domain::contracts::error::{SdftError, SdftResult};
 pub use domain::metadata::window::SlidingDftConfig;
 
-/// GPU-accelerated backend using WGPU.
-#[cfg(feature = "wgpu")]
-pub mod wgpu_backend {
-    pub use crate::infrastructure::transport::gpu::*;
-}
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;

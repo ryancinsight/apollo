@@ -3,17 +3,24 @@
 ## Hephaestus kernel migration: SDFT [arch]
 
 - Target version: `apollo-sdft` 0.3.0
-- Phase: Execution
-- [/] Replace direct sliding-DFT WGPU pipeline, binding, encoder, queue, and
-  transfer mechanics with a typed Hephaestus ZST and ordered command stream.
-- [ ] Preserve the direct-bin formula, Leto COW host boundary, Mnemosyne-backed
-  output, and concrete accelerator storage contract.
-- [ ] Verify real-device CPU differential, plan/storage negative contracts,
-  format, warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and
-  semver classification; update D6 artifacts.
-- Evidence tier planned: typed binding/layout and storage exclusion, then
-  value-semantic CPU differential evidence. No machine-checked proof is
-  planned.
+- Phase: Closure
+- [x] Replace direct sliding-DFT WGPU pipeline, binding, encoder, queue, and
+  transfer mechanics with typed forward and inverse Hephaestus ZST descriptors
+  and ordered command streams.
+- [x] Preserve the direct-bin formula, Leto COW host boundary, Mnemosyne-backed
+  output, and concrete accelerator storage contract. Seal `f32`/`Complex32`
+  plus explicit reduced storage; prohibit CPU `f64`/`Complex64` dispatch.
+- [x] Document and enforce the complete-bin inverse theorem: a partial SDFT
+  spectrum is a projection, so inverse execution rejects `bin_count !=
+  window_len` before device allocation.
+- [x] Verify real-device CPU differential, plan/storage negative contracts,
+  format, warning-denied Clippy, 28/28 nextest cases, two doctest compile-fail
+  storage exclusions, rustdoc, provider audit, no-default build, immediate-
+  parent 0.2.0-to-0.3.0 semver classification with no required update, and the
+  direct-provider source scan. Update D6 artifacts.
+- Evidence tier: typed binding/layout and storage exclusion, then
+  value-semantic CPU differential, roundtrip, and negative-contract evidence.
+  No machine-checked proof is performed.
 
 ## Hephaestus kernel migration: SFT [arch]
 

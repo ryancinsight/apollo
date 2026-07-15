@@ -1,5 +1,42 @@
 # Apollo Gap Audit
 
+## SDFT Hephaestus command-stream migration [arch]
+
+- Performed: replaced the direct SDFT raw-device pipeline, binding, encoder,
+  queue, and transfer mechanics with two typed Hephaestus ZST descriptors and
+  ordered command streams. The forward descriptor binds real `f32` windows to
+  `Complex32` bins; the inverse descriptor binds complete `Complex32` spectra
+  to complex samples before Apollo extracts their real component. Hephaestus
+  owns acquisition, allocation, preparation, binding, submission,
+  synchronization, and transfer.
+- Mathematical contract: for a complete `N`-bin DFT, root-of-unity
+  orthogonality makes `(1/N) sum_k exp(2 pi i k(m-n)/N)` equal to
+  `delta_mn`; forward followed by inverse therefore recovers the input in
+  exact arithmetic. A partial spectrum does not identify an arbitrary window,
+  so inverse dispatch rejects `bin_count != window_len` before allocation.
+- Type contract: sealed `SdftGpuRealStorage` admits `f32` and explicit `f16`;
+  sealed `SdftGpuBinStorage` admits `Complex32` and explicit `[f16; 2]`.
+  CPU `f64` and `Complex64` cannot enter the concrete accelerator path. Leto
+  keeps contiguous inputs borrowed and materializes strided inputs once;
+  Mnemosyne owns generated output and reduced-storage scratch.
+- Structural cleanup: deleted the `wgpu_backend` forwarding module, raw device
+  and queue escape hatches, CPU-marker alias, legacy helper error re-export,
+  direct raw WGPU dependencies, and the monolithic shader. Common WGSL terms
+  now have one canonical leaf shared by typed forward and inverse sources.
+- Verification: all-feature locked check, no-default check, warning-denied
+  Clippy, 28/28 nextest cases including real-device CPU differential and
+  complete-bin roundtrip, two compile-fail storage exclusions, rustdoc,
+  provider audit, immediate-parent 0.2.0-to-0.3.0 semver classification with
+  no required update, and direct source scan with no raw WGPU, `pollster`, or
+  `apollo-wgpu-helpers` reference. The examples target is absent, so its build
+  check is a Cargo no-op.
+- Evidence tier: typed binding/layout and storage exclusion, then
+  value-semantic real-device differential, roundtrip, and negative-contract
+  evidence. No machine-checked proof is performed.
+- Residual: D6 has 5 transform crates remaining: FFT, NUFFT, Radon, SHT, and
+  STFT. The helper crate remains live only for those consumers and cannot be
+  deleted until each edge is migrated.
+
 ## Wavelet Hephaestus command-stream migration [arch]
 
 - Performed: extended the owning Hephaestus command stream with typed bounded
@@ -131,8 +168,8 @@
   residue.
 - Evidence tier: typed binding/layout and storage exclusion, then
   value-semantic real-device evidence. No machine-checked proof is performed.
-- Residual: D6 has 6 transform crates remaining: FFT, NUFFT, Radon, SDFT, SHT,
-  and STFT.
+- Residual at SFT closure: D6 had 6 transform crates remaining: FFT, NUFFT,
+  Radon, SDFT, SHT, and STFT.
 
 ## QFT Hephaestus command-stream migration [arch]
 

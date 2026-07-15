@@ -10,6 +10,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-sdft` 0.3.0 migrates direct-bin acceleration to the
+  Hephaestus authored-kernel seam. `SdftWgpuBackend::new` now accepts
+  `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
+  queue accessors, the `wgpu_backend` forwarding module, and the CPU-marker
+  alias are removed. GPU typed APIs now require sealed `SdftGpuRealStorage`
+  and `SdftGpuBinStorage`, admitting concrete `f32`/`Complex32` and explicit
+  reduced storage while rejecting CPU `f64`/`Complex64`. Inverse execution now
+  requires a complete spectrum (`bin_count == window_len`); partial bins are a
+  projection rather than an inverse reconstruction.
 - [major] `apollo-sft` 0.3.0 migrates direct dense-DFT acceleration to the
   Hephaestus authored-kernel seam. `SftWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and
@@ -92,6 +101,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] SDFT direct-bin and complete-bin inverse dispatch now use typed
+  Hephaestus bindings, two ZST authored-kernel descriptors, and ordered command
+  streams. Leto retains COW host boundaries, Mnemosyne owns generated and
+  reduced-storage buffers, common WGSL terms have one canonical source leaf,
+  and the crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
 - [arch] SFT direct dense-DFT dispatch now uses one typed Hephaestus
   direction-parameterized ZST and ordered command stream. Leto retains COW
   host boundaries, Mnemosyne owns direct dense inverse output, and Apollo keeps
