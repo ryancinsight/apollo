@@ -37,6 +37,15 @@ exposing WGPU. `CommandStream` records barrier-separated axis and chirp passes,
 and `GroupedKernelDevice` represents the pack/unpack shader's existing three
 binding groups. Therefore this migration requires no provider capability change.
 
+The f32 migration retains the existing radix-2/radix-4 and Bluestein Chirp-Z
+kernel mathematics. FFT and Chirp-Z descriptors bind their storage in group
+zero and their typed parameter block in group one. Pack/unpack currently carry
+two raw uniform blocks; their provider-native form consolidates those values
+into one `PackParams` POD block at the volume group. This is a layout-only
+change: the axis length, batch count, volume dimensions, axis selector, and
+workspace length retain their existing values. One grouped descriptor then
+becomes the SSOT for both packing directions.
+
 ## Mathematical contract
 
 For dimensions \(N_x,N_y,N_z\), the forward three-dimensional discrete Fourier

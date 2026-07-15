@@ -11,6 +11,10 @@
 - Decision: no upstream capability change is required. Apollo will convert the
   f32 and native reduced-precision transport directly to typed Hephaestus
   kernels, preserving Apollo's DFT mathematics and Leto CPU boundary.
+- Binding decision: radix and Chirp-Z retain their existing storage/parameter
+  split as grouped kernel descriptors. Pack/unpack combines the raw FFT and
+  volume uniforms into one POD parameter block at the provider boundary, so
+  one descriptor owns both directions without a WGPU bind-group adapter.
 - Evidence tier: source-level trait-contract inspection. This establishes API
   fitness only; value-semantic CPU/GPU differential and roundtrip evidence is
   still required after implementation.

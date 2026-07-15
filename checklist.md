@@ -15,6 +15,10 @@
 - [x] Remove the obsolete `apollo-wgpu-helpers` edge from the FFT backend and
   buffer-reuse benchmark. Both now acquire `hephaestus_wgpu::WgpuDevice`
   directly; 409 focused value-semantic nextest cases pass.
+- [x] Map the existing f32 radix, Chirp-Z, and pack/unpack stages to typed
+  Hephaestus command streams. The pack/unpack descriptor combines the two raw
+  uniform blocks into one POD parameter block; no compatibility adapter or
+  algorithm fallback is introduced.
 - [ ] Partition the raw f32 and native reduced-precision transport into
   domain storage, host conversion, typed kernel, and backend-orchestration
   leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.
