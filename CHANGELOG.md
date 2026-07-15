@@ -16,6 +16,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-radon` 0.3.0 routes forward projection, adjoint
+  backprojection, and filtered backprojection through typed Hephaestus command
+  streams. `RadonWgpuBackend::new` now returns `Self`; raw device and queue
+  accessors are removed.
+
 - [major] `apollo-sht` 0.3.0 migrates direct spherical-harmonic acceleration
   to the Hephaestus authored-kernel seam. `ShtWgpuBackend::new` now accepts
   `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device and

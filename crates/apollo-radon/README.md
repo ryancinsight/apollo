@@ -40,6 +40,25 @@ the same weights in reverse, giving the discrete adjoint identity:
 Filtered backprojection applies a ramp filter to each projection before the
 adjoint step.
 
+The accelerator path uses three typed Hephaestus descriptors. The filtered
+sinogram write is encoded before the adjoint read in one command stream, so the
+provider's inter-pass ordering establishes that dependency. Leto remains the
+CPU array boundary; Hephaestus owns typed buffers, pipeline preparation,
+binding validation, command encoding, submission, and readback.
+
+For a uniform angular quadrature, filtered backprojection evaluates
+
+```text
+f_hat = (pi / A) R* (h * p),
+```
+
+where `A` is the angle count, `R*` is the discrete adjoint, and `h` is the
+Ram-Lak impulse response. The adjoint identity is exact for the declared
+discrete interpolation pair in exact arithmetic. The filtered reconstruction
+is an approximation to the continuous inverse; real-device CPU differential
+tests are empirical finite-precision evidence, not a proof of continuous CT
+inversion.
+
 ## Verification
 
 Tests cover axis-aligned row/column sums, adjoint identity, detector mass

@@ -1,6 +1,6 @@
 [package]
 name = "apollo-radon"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -10,10 +10,8 @@ description = "Discrete Radon transform and filtered backprojection plans for Ap
 
 [features]
 wgpu = [
-    "dep:apollo-wgpu-helpers",
+    "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
-    "dep:wgpu",
-    "dep:pollster",
     "dep:bytemuck"
 ]
 default = ["parallel", "mnemosyne-memory"]
@@ -21,10 +19,8 @@ parallel = []
 mnemosyne-memory = []
 
 [dependencies]
-apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
+hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-wgpu = { workspace = true, optional = true }
-pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }

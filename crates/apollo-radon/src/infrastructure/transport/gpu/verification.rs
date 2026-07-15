@@ -387,7 +387,7 @@ mod tests {
                     &angles,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(err, WgpuError::InvalidPrecisionProfile));
         }
 
         // 10. rejects_invalid_plan_and_input_shape_before_dispatch
@@ -421,13 +421,13 @@ mod tests {
                     &[0.0_f32],
                 )
                 .expect_err("angle mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 angle_err,
                 WgpuError::LengthMismatch {
                     expected: 2,
                     actual: 1,
                 }
-            );
+            ));
         }
 
         // 11. backproject_satisfies_adjoint_identity

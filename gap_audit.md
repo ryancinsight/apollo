@@ -1,5 +1,24 @@
 # Apollo Gap Audit
 
+## Radon Hephaestus command-stream migration [arch]
+
+- Performed: replaced direct projection, adjoint, and filtered-backprojection
+  WGPU construction, binding, encoding, submission, and readback with three
+  typed Hephaestus descriptors. The filter and adjoint share one ordered stream
+  and one filtered device buffer, establishing write-before-read.
+- Mathematical contract: matching linear detector weights make the discrete
+  backprojection the adjoint of projection. Ram-Lak filtering followed by
+  `pi / angle_count` scaling is the declared filtered-backprojection
+  approximation. ADR 0007 distinguishes the exact discrete adjoint theorem
+  from empirical finite-precision reconstruction evidence.
+- Structural cleanup: deleted the helper error re-export, raw device/queue
+  accessors, direct WGPU/pollster dependencies, and the 534-line raw pipeline
+  implementation. Leto remains the CPU boundary and Hephaestus owns GPU data.
+- Evidence tier: typed binding/layout plus value-semantic 25-case suite with
+  real-device execution, warning-denied Clippy, rustdoc, provider audit, and
+  direct source/dependency scans. No machine-checked proof is performed.
+- Residual: FFT raw transport plus NUFFT and STFT helper consumers remain.
+
 ## FFT Hephaestus migration provider-fit audit [arch]
 
 - Performed: inspected the raw FFT transport against the current Hephaestus

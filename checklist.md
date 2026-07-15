@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: Radon [arch]
+
+- Target version: `apollo-radon` 0.3.0
+- Phase: Closure
+- [x] Replace direct forward, adjoint, and filtered-backprojection WGPU
+  ownership with typed Hephaestus descriptors and an ordered filter-to-adjoint
+  command stream.
+- [x] Preserve the discrete adjoint theorem and filtered-backprojection
+  normalization in ADR 0007 and the crate README. Leto remains the host-array
+  boundary; raw device/queue accessors and helper error re-exports are deleted.
+- [x] Verify all-feature and no-default checks; warning-denied Clippy; 25/25
+  nextest cases including real-device execution; doctest; rustdoc; provider
+  audit; direct source/dependency scans; and immediate-parent semver
+  classification. Update D6 artifacts.
+- Evidence tier: typed binding/layout and provider stream ordering, then
+  value-semantic CPU differential, adjoint, and filtered-backprojection tests.
+  No machine-checked proof is performed.
+
 ## Hephaestus kernel migration: FFT [arch]
 
 - Target version: `apollo-fft` 0.16.0
