@@ -84,6 +84,12 @@ Remaining replacement work:
     helper package or source edge. `cargo check --workspace` resolves the
     deletion; its separately tracked pre-existing DHT dead-code warning is not
     attributed to this wrapper removal.
+- [/] [patch] DHT feature-boundary warning cleanup (owner Codex, claimed
+  2026-07-15; scope `crates/apollo-dht/src/application/execution/plan/dht/helpers.rs`,
+  DHT GPU transport test boundary, and PM records): compile the zero-copy
+  `leto_view1_cow` forwarder only with the `wgpu` transport that calls it;
+  preserve its borrowed-view value contract. Acceptance requires default and
+  all-feature checks, warning-denied Clippy, and focused nextest coverage.
   - [x] D6-FFT-f32 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace

@@ -377,8 +377,9 @@
 - Deletion evidence: format, locked metadata, workspace resolution, provider
   audit, six `xtask` value-semantic contract cases, warning-denied `xtask`
   Clippy, and the 44-case all-feature NUFFT suite pass. The workspace check
-  exposes the pre-existing unused `apollo-dht::leto_view1_cow` helper; it is
-  tracked as the next independent cleanup increment rather than hidden.
+  exposes a DHT feature-boundary warning: the live GPU-only
+  `leto_view1_cow` forwarder compiles in default builds that omit its transport.
+  It is tracked as the next independent cleanup increment rather than hidden.
 - Provider capability finding: Hephaestus already owns backend-neutral typed
   allocation and transfer (`ComputeDevice`), authored kernel contracts
   (`KernelInterface`/`KernelSource`), typed bindings and prepared dispatch

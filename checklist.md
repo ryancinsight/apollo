@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## DHT feature-boundary warning cleanup [patch]
+
+- Target version: `apollo-dht` 0.3.0; internal feature-boundary correction.
+- Phase: Execution
+- [/] Gate the live GPU-only zero-copy Leto view forwarder with the `wgpu`
+  feature so default builds do not compile an unreachable forwarding function.
+- [ ] Verify default and all-feature checks, warning-denied Clippy, and focused
+  value-semantic nextest coverage without deleting the GPU borrowed-view path.
+
 ## Obsolete wrapper deletion: apollo-wgpu-helpers [arch]
 
 - Target version: workspace integration only; no published wrapper remains.
