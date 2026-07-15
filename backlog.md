@@ -114,6 +114,16 @@ Remaining replacement work:
     Evidence: 46 focused nextest cases including real-device CPU differential,
     non-power-of-two, and reusable-storage execution; Clippy, doctest, rustdoc,
     provider audit, direct source/dependency scans, and semver classification.
+  - [/] D6-NUFFT [arch] (owner Codex, claimed 2026-07-15; scope
+    `crates/apollo-nufft/{Cargo.toml,README.md,src,infrastructure,benches}` and
+    D6 PM entries): replace direct and fast one-/three-dimensional NUFFT raw
+    pipeline, binding, encoder, queue, transfer, and helper ownership with
+    typed Hephaestus descriptors and ordered command streams. Preserve Apollo's
+    direct-sum and Kaiser--Bessel mathematics, Leto host boundary, and explicit
+    accelerator storage contract. The acceptance contract requires a theorem/
+    convention update, direct and fast CPU differential tests, reusable-storage
+    coverage, provider audit, and a source/manifest scan with no direct `wgpu`,
+    `pollster`, or helper edge.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,
