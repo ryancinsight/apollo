@@ -68,7 +68,7 @@ The table below is the authoritative record of per-crate precision support. Each
 | apollo-fwht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-gft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 | apollo-hilbert | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Typed Hephaestus analytic/inverse masks; f16 promoted and f64 excluded at GPU boundary |
-| apollo-mellin | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Forward/inverse Mellin spectrum; f16 promoted at boundary |
+| apollo-mellin | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | Typed Hephaestus log-grid forward/inverse; f16 promoted and f64 excluded at GPU boundary |
 | apollo-ntt | exact u64 residues (u64 mod p) | exact u32 residues (u32 quantized, u32 modular) | Floating mixed-precision unsupported by design |
 | apollo-nufft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
 | apollo-qft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |

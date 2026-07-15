@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-mellin` 0.4.0 migrates log-resampling and inverse Mellin
+  acceleration to the Hephaestus authored-kernel seam. `MellinWgpuPlan` and
+  accelerator domain arguments now use concrete `f32`; raw device and queue
+  accessors are removed. GPU typed APIs require sealed `MellinGpuStorage`,
+  admitting `f32` and `f16` while rejecting silent `f64` narrowing.
 - [major] `apollo-hilbert` 0.5.0 migrates analytic-signal and inverse Hilbert
   acceleration to the Hephaestus authored-kernel seam.
   `HilbertWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice` directly and
@@ -79,6 +84,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Mellin log-resample, spectrum, inverse-spectrum, and exponential
+  resample dispatch now use typed Hephaestus bindings, four ZST
+  authored-kernel descriptors, and ordered command streams. Leto remains the
+  host-array boundary, Mnemosyne owns scratch and returned storage, and the
+  crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
 - [arch] Hilbert analytic and inverse dispatch now use typed Hephaestus
   bindings, four ZST authored-kernel descriptors, and ordered command streams.
   Leto remains the host-array boundary, Mnemosyne owns scratch and returned

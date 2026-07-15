@@ -1,21 +1,21 @@
 //! WGPU plan descriptors.
 
-/// Metadata-preserving WGPU plan descriptor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Metadata-preserving concrete-`f32` accelerator plan descriptor.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MellinWgpuPlan {
     samples: usize,
-    min_scale_bits: u64,
-    max_scale_bits: u64,
+    min_scale: f32,
+    max_scale: f32,
 }
 
 impl MellinWgpuPlan {
-    /// Create a WGPU plan descriptor carrying the Mellin scale grid.
+    /// Create an accelerator plan descriptor carrying the concrete-`f32` scale grid.
     #[must_use]
-    pub const fn new(samples: usize, min_scale_bits: u64, max_scale_bits: u64) -> Self {
+    pub const fn new(samples: usize, min_scale: f32, max_scale: f32) -> Self {
         Self {
             samples,
-            min_scale_bits,
-            max_scale_bits,
+            min_scale,
+            max_scale,
         }
     }
 
@@ -27,14 +27,14 @@ impl MellinWgpuPlan {
 
     /// Return the minimum Mellin scale.
     #[must_use]
-    pub const fn min_scale(self) -> f64 {
-        f64::from_bits(self.min_scale_bits)
+    pub const fn min_scale(self) -> f32 {
+        self.min_scale
     }
 
     /// Return the maximum Mellin scale.
     #[must_use]
-    pub const fn max_scale(self) -> f64 {
-        f64::from_bits(self.max_scale_bits)
+    pub const fn max_scale(self) -> f32 {
+        self.max_scale
     }
 
     /// Return whether the descriptor carries zero length.

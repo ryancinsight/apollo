@@ -1,4 +1,4 @@
-//! WGPU infrastructure.
+//! Hephaestus WGPU infrastructure.
 
 /// WGPU device acquisition.
 pub mod device;

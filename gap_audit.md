@@ -80,6 +80,29 @@
 - Residual: D6 has 8 transform crates remaining: FFT, Mellin, NUFFT, Radon,
   SDFT, SFT, SHT, and STFT.
 
+## Mellin Hephaestus command-stream migration [arch]
+
+- Performed: replaced raw WGPU log-resample, spectrum, inverse-spectrum, and
+  exponential-resample mechanics with four typed Hephaestus ZST descriptors
+  and ordered command streams. Leto remains the host-view boundary; Mnemosyne
+  owns f16 conversion scratch and returned Leto arrays.
+- Mathematical contract: on a uniform log grid, forward scaling by `du` and
+  inverse scaling by `1/(N du)` form an inverse DFT pair because the DFT root
+  sum is `N delta_nm`. Exponential resampling reconstructs the linear-grid
+  interpolation of the recovered log samples.
+- Type contract: accelerator scale metadata and domain bounds are concrete
+  `f32`; sealed `MellinGpuStorage` admits native `f32` and explicit `f16`
+  conversion only. `f64` cannot silently narrow into the accelerator API.
+- Verification: all-feature package check and warning-denied Clippy; 32/32
+  nextest cases including real-device CPU forward differential and inverse
+  constant-signal reconstruction; the `f64` compile-fail doctest; rustdoc,
+  provider audit, locked metadata, immediate-parent semver classification, and
+  source/manifest scan with no direct WGPU, pollster, or wrapper residue.
+- Evidence tier: type-level binding/layout and storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+- Residual: D6 has 7 transform crates remaining: FFT, NUFFT, Radon, SDFT, SFT,
+  SHT, and STFT.
+
 ## QFT Hephaestus command-stream migration [arch]
 
 - Performed: replaced direct WGPU pipeline, binding, encoder, queue, and
