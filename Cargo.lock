@@ -141,7 +141,6 @@ name = "apollo-fft"
 version = "0.15.0"
 dependencies = [
  "apollo-fft-macros",
- "apollo-wgpu-helpers",
  "approx",
  "bytemuck",
  "criterion",

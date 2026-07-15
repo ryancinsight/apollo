@@ -8,7 +8,6 @@ repository.workspace = true
 description = "Reusable FFT planning, execution, and cache abstractions for Apollo"
 
 [dependencies]
-apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
@@ -35,7 +34,6 @@ rustfft = { workspace = true }
 
 [features]
 wgpu = [
-    "dep:apollo-wgpu-helpers",
     "dep:hephaestus-wgpu",
     "dep:wgpu",
     "dep:pollster"

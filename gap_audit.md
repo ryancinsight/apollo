@@ -14,9 +14,10 @@
 - Evidence tier: source-level trait-contract inspection. This establishes API
   fitness only; value-semantic CPU/GPU differential and roundtrip evidence is
   still required after implementation.
-- Residual: `apollo-fft` retains raw `wgpu`, `pollster`, and
-  `apollo-wgpu-helpers` edges until its claimed D6-FFT source migration is
-  complete. The D6 wrapper cannot yet be deleted.
+- Residual: `apollo-fft` now uses `hephaestus_wgpu::WgpuDevice` directly and
+  has no helper edge. Its raw `wgpu` and `pollster` transport remains the
+  active D6-FFT migration. NUFFT, Radon, and STFT are the three remaining
+  helper consumers, so the wrapper cannot yet be deleted.
 
 ## SHT Hephaestus command-stream migration [arch]
 

@@ -12,6 +12,9 @@
   typed-buffer contract; `CommandStream` records ordered axis/chirp passes;
   and `GroupedKernelDevice` represents the pack/unpack group layout. No
   upstream capability change is required.
+- [x] Remove the obsolete `apollo-wgpu-helpers` edge from the FFT backend and
+  buffer-reuse benchmark. Both now acquire `hephaestus_wgpu::WgpuDevice`
+  directly; 409 focused value-semantic nextest cases pass.
 - [ ] Partition the raw f32 and native reduced-precision transport into
   domain storage, host conversion, typed kernel, and backend-orchestration
   leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.

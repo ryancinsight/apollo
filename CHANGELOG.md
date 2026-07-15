@@ -8,6 +8,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Removed
+
+- `apollo-fft` no longer depends on the obsolete `apollo-wgpu-helpers`
+  wrapper; its backend and buffer-reuse benchmark acquire the typed
+  `hephaestus_wgpu::WgpuDevice` directly.
+
 ### Breaking
 
 - [major] `apollo-sht` 0.3.0 migrates direct spherical-harmonic acceleration

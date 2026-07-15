@@ -74,7 +74,8 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, and SHT; 4 transform crates remain.
+  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, and SHT;
+  FFT's helper edge is removed and 3 helper consumers remain.
   - [/] D6-FFT [arch] (owner Codex, claimed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
@@ -213,8 +214,9 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 4 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
-    `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
+  - 3 remaining helper consumers: NUFFT, Radon, and STFT. FFT now uses
+    `hephaestus_wgpu::WgpuDevice` directly; its raw f32/native-precision
+    transport migration remains the active D4/D6-FFT scope.
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus
     buffer / `ComputeBackend` directly; this also unwinds the lingering

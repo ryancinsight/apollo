@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
-//! WGPU dense FFT backend surface for Apollo.
+//! Hephaestus device-backed dense FFT surface for Apollo.
 //!
-//! The current adapter validates device availability and exposes the same
+//! The adapter acquires `hephaestus_wgpu::WgpuDevice` and exposes the same
 //! numerical contract as the CPU dense FFT backend. NUFFT-specific GPU
 //! execution is intentionally owned by `apollo-nufft-wgpu`.
 
@@ -11,7 +11,7 @@ pub mod infrastructure;
 
 use crate::domain::contracts::backend::BackendCapabilities;
 use crate::{ApolloError, ApolloResult, BackendKind, FftBackend, Shape1D, Shape2D, Shape3D};
-use apollo_wgpu_helpers::WgpuDevice;
+use hephaestus_wgpu::WgpuDevice;
 pub use infrastructure::gpu_fft::{gpu_fft_available, GpuFft3d, GpuFft3dBuffers};
 
 #[cfg(feature = "native-f16")]

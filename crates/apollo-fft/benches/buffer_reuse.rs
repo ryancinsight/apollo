@@ -31,7 +31,7 @@ fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
 
 /// Acquire a WGPU device and build a `GpuFft3d` plan, or return `None` if unavailable.
 fn try_fft_plan(nx: usize, ny: usize, nz: usize) -> Option<GpuFft3d> {
-    let device = apollo_wgpu_helpers::WgpuDevice::try_default("apollo-fft-wgpu-bench").ok()?;
+    let device = hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench").ok()?;
     GpuFft3d::new(device.device().clone(), device.queue().clone(), nx, ny, nz).ok()
 }
 
