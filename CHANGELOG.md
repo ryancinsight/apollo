@@ -15,6 +15,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Align the CI Atlas checkout action and locked provider graph with the
   merged Mnemosyne, Leto, Moirai, Themis, Hephaestus, and Hermes revisions so
   locked CI builds consume the same provider sources as the manifest.
+- [patch] Remove the committed `target-cpu=native` flag so CI and published
+  builds use portable code generation; local performance builds opt in through
+  an explicit `RUSTFLAGS` override.
 
 ## [0.15.0] - 2026-07-13
 
