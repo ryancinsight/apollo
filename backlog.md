@@ -281,7 +281,7 @@ Remaining replacement work:
   The obsolete `apollo-wgpu-helpers` wrapper is deleted with no remaining
   manifest, lockfile, or source edge. All eighteen transform slices now use
   typed provider transport; no Apollo-owned WGPU migration scope remains.
-- [ ] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
+- [/] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
   crate** (`apollo-leto-interop` or fold into a small `apollo-core`). Today they
   live in `apollo-fft::application::utilities::leto_interop` (SRP violation —
   apollo-fft is a transform crate doubling as a shared utility lib), **17** other
@@ -293,9 +293,12 @@ Remaining replacement work:
   `leto_array1_from_vec`) into the shared crate; every transform (incl. apollo-fft)
   depends on it; delete the 32 forwarders and call the shared SSOT directly.
   Net: ~31 duplicate fns → one generic set; one inward dependency edge per crate.
-  Sequencing note: the helper bodies are being rewritten by the in-flight
-  num_complex/ndarray→leto migration (branch `refactor/apollo-fft-eunomia`), so do
-  D7 **after** that lands to avoid editing `leto_interop`'s home on two branches.
+  Owner: `codex/apollo-leto-interop` (claimed 2026-07-15). The former sequencing
+  branch `refactor/apollo-fft-eunomia` is an ancestor of `main` through merged
+  PR 6, so it no longer blocks this extraction. Acceptance: every transform
+  reaches the shared crate directly; the old `apollo-fft` module and every
+  forwarding wrapper are deleted; zero-copy/materialization laws have
+  value-semantic tests.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
