@@ -37,7 +37,7 @@ runs:
     - uses: actions/checkout@v6
       with:
         repository: ryancinsight/hermes
-        ref: 51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13
+        ref: 1423e41d01f4f7787472ddc91961f0771f9728fe
         path: hermes
     - uses: actions/checkout@v6
       with:

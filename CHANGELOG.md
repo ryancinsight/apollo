@@ -13,8 +13,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`
   so the existing scalar path compiles for Apple Silicon consumers.
 - [patch] Align the CI Atlas checkout action and locked provider graph with the
-  merged Mnemosyne, Leto, Moirai, Themis, and Hephaestus revisions so locked
-  CI builds consume the same provider sources as the manifest.
+  merged Mnemosyne, Leto, Moirai, Themis, Hephaestus, and Hermes revisions so
+  locked CI builds consume the same provider sources as the manifest.
 
 ## [0.15.0] - 2026-07-13
 
@@ -34,7 +34,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [major] Migrate pipeline layouts, polling, adapter/device descriptors, and
   mapped readbacks natively to WGPU 30 across every Apollo GPU leaf.
 - [patch] Pin Mnemosyne `32b4a2a`, Leto `7f216f1`, Moirai `8cd356c`, and
-  Hephaestus `dd93144`; refresh CI checkout metadata and the locked graph.
+  Hephaestus `dd93144`, and Hermes `1423e41`; refresh CI checkout metadata and
+  the locked graph.
 
 ### Fixed
 
