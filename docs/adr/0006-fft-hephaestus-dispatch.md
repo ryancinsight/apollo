@@ -31,6 +31,12 @@ and owns pipelines, buffers, bindings, encoders, submission, and readback.
 The command stream establishes every producer-before-consumer dependency among
 axis transforms, transposes, and output transfer.
 
+The provider contract already preserves the reusable-buffer API: its typed
+`ComputeDevice::write_buffer` overwrites an allocated accelerator buffer without
+exposing WGPU. `CommandStream` records barrier-separated axis and chirp passes,
+and `GroupedKernelDevice` represents the pack/unpack shader's existing three
+binding groups. Therefore this migration requires no provider capability change.
+
 ## Mathematical contract
 
 For dimensions \(N_x,N_y,N_z\), the forward three-dimensional discrete Fourier

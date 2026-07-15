@@ -85,7 +85,11 @@ Remaining replacement work:
     the documented three-dimensional DFT/inverse theorem, sealed native and
     reduced accelerator storage, CPU differential and inverse-roundtrip tests,
     provider audit, and a source/manifest scan with no direct `wgpu`,
-    `pollster`, or helper edge.
+    `pollster`, or helper edge. Provider-fit audit confirms that
+    `ComputeDevice::write_buffer` preserves reusable typed-buffer semantics,
+    `CommandStream` preserves pass order, and `GroupedKernelDevice` represents
+    the existing pack/unpack binding groups; no upstream capability change is
+    required.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,

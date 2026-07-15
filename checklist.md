@@ -3,11 +3,15 @@
 ## Hephaestus kernel migration: FFT [arch]
 
 - Target version: `apollo-fft` 0.16.0
-- Phase: Foundation
+- Phase: Execution
 - [x] Record ADR 0006: Apollo retains the dense-FFT mathematical kernels and
   shader source, while Hephaestus exclusively owns GPU device acquisition,
   typed buffers, pipeline construction, binding, command encoding, submission,
   and transfer.
+- [x] Verify provider fit: `ComputeDevice::write_buffer` preserves the reusable
+  typed-buffer contract; `CommandStream` records ordered axis/chirp passes;
+  and `GroupedKernelDevice` represents the pack/unpack group layout. No
+  upstream capability change is required.
 - [ ] Partition the raw f32 and native reduced-precision transport into
   domain storage, host conversion, typed kernel, and backend-orchestration
   leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.

@@ -1,5 +1,23 @@
 # Apollo Gap Audit
 
+## FFT Hephaestus migration provider-fit audit [arch]
+
+- Performed: inspected the raw FFT transport against the current Hephaestus
+  contracts before source migration. `ComputeDevice::write_buffer` and
+  `write_sub_buffer` preserve the public reusable typed-buffer contract;
+  `CommandStream` records the ordered axis and chirp passes; and
+  `GroupedKernelDevice`/`GroupedKernelSource` express the existing pack/unpack
+  shader groups without Apollo constructing bindings or pipelines.
+- Decision: no upstream capability change is required. Apollo will convert the
+  f32 and native reduced-precision transport directly to typed Hephaestus
+  kernels, preserving Apollo's DFT mathematics and Leto CPU boundary.
+- Evidence tier: source-level trait-contract inspection. This establishes API
+  fitness only; value-semantic CPU/GPU differential and roundtrip evidence is
+  still required after implementation.
+- Residual: `apollo-fft` retains raw `wgpu`, `pollster`, and
+  `apollo-wgpu-helpers` edges until its claimed D6-FFT source migration is
+  complete. The D6 wrapper cannot yet be deleted.
+
 ## SHT Hephaestus command-stream migration [arch]
 
 - Performed: replaced the direct spherical-harmonic WGPU pipeline, bind-group,
