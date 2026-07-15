@@ -3,15 +3,16 @@
 ## D8 DCT/DST verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
-- Phase: Execution
-- [ ] Record the D8 ownership boundary: DCT/DST retains transform-specific
+- Phase: Closure
+- [x] Record the D8 ownership boundary: DCT/DST retains transform-specific
   values and CPU oracles; only generic provider scaffolding may move upstream.
-- [ ] Partition the GPU verification suite by value-semantic concern and
+- [x] Partition the GPU verification suite by value-semantic concern and
   consolidate repeated assertions in one test-support leaf.
-- [ ] Preserve the device-present CPU-differential, inverse-pair, Leto view,
+- [x] Preserve the device-present CPU-differential, inverse-pair, Leto view,
   typed-storage, dimensional, and typed-error contracts without skipped cases.
-- [ ] Verify the wgpu feature suite, Clippy, doctest, rustdoc, provider audit,
-  and the structural source scan; then synchronize D8 artifacts and publish.
+- [x] Verify the wgpu feature suite, Clippy, doctest, rustdoc, provider audit,
+  and the structural source scan. The 796-line monolith is now seven leaves
+  (14–189 lines); publishing remains the final integration step.
 
 ## Benchmark runtime provider convergence [arch]
 
@@ -426,10 +427,10 @@
   preserve Mnemosyne scratch and result storage, Hermes reductions, and Moirai
   scheduling without a second execution implementation.
 - [x] Pass format, warning-denied Clippy, all-feature nextest, doctest, and
-  rustdoc. The focused suite executes 57 value-semantic cases, including the
+  rustdoc. The focused suite executes 72 value-semantic cases, including the
   available-device CPU differential path.
-- Residual: split the 800-line GPU verification harness as part of D8 shared
-  transport-harness consolidation; do not duplicate transform execution.
+- Residual: this local tree is split under D8. Cross-transform harness extraction
+  remains provider-owned and must not duplicate transform execution.
 - Evidence tier: type-level provider ownership and parameter layout assertion,
   plus focused value-semantic and independent CPU-differential tests. No
   machine-checked proof or runtime performance claim is made.

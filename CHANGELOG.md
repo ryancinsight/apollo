@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] DCT/DST GPU verification is partitioned into capability,
+  one-dimensional, typed-storage, two-dimensional, three-dimensional, and
+  shared-support leaves. The existing independent CPU-separable oracle and
+  inverse-pair contracts remain intact; this does not add an Apollo-owned GPU
+  wrapper or change transform execution.
 - [arch] `apollo-bench` is the shared native benchmark runtime for FFT, NUFFT,
   Radon, and STFT benchmark binaries. It preserves every measured closure and
   parameter matrix while reporting sequential normalized median/minimum samples.
