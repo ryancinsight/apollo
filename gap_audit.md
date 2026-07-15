@@ -82,6 +82,33 @@
   remains provider-owned D8 work. This local split does not create an Apollo
   transport abstraction.
 
+## NTT GPU verification-tree normalization [arch]
+
+- Finding: the NTT transport had a 550-line verification monolith mixing
+  static capabilities, exact CPU comparisons, Leto views, quantized storage,
+  reusable buffers, rejection paths, and finite-field property laws.
+- Resolution: `gpu/verification/` now has metadata, exact, quantized,
+  reusable, property, and shared-availability leaves (7–137 lines). The
+  support leaf is the sole availability boundary; all device-present leaves
+  retain computed residue assertions. The tree preserves all existing source
+  inputs and generated domains but makes each contract independently visible;
+  no production device mechanics, compatibility wrapper, or fallback path was
+  added.
+- Mathematical contract: in the finite field, the ordered butterfly stages
+  yield `INTT(NTT(x)) = x`, and pointwise multiplication yields
+  `INTT(NTT(a) ⊙ NTT(b)) = a ★ b`. The owning NTT plan and README retain the
+  proof sketch; generated exact-residue and direct cyclic-convolution checks
+  provide the executable evidence.
+- Evidence tier: 37 all-feature NTT nextest cases and the all-feature workspace
+  nextest suite pass, including real-device exact CPU differentials,
+  Leto/quantized storage, reusable buffers, and generated inverse/convolution
+  laws. Workspace examples/check and warning-denied Clippy, package doctest,
+  rustdoc, provider audit, structural scans, and patch SemVer classification
+  pass. This is not a machine-checked proof or a GPU performance claim.
+- Residual risk: generic cross-transform device/error/capability extraction
+  remains provider-owned D8 work. This local split does not pre-empt the
+  required Hephaestus provider contract.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] NTT GPU verification is partitioned into metadata, exact-residue,
+  quantized-storage, reusable-buffer, and theorem-property leaves. The exact
+  CPU/GPU differential, Leto boundary, inverse-pair, and convolution-law
+  contracts remain intact; this does not add an Apollo-owned GPU wrapper or
+  change transform execution.
 - [arch] FrFT GPU verification is partitioned into metadata, standard,
   typed-storage, unitary, and shared-support leaves. The established CPU
   differentials, Leto host boundaries, and unitary identity/reversal/norm/
