@@ -22,9 +22,10 @@ use apollo_nufft::{
     NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuBackend, NufftWgpuPlan1D, NufftWgpuPlan3D,
     UniformDomain1D, UniformGrid3D,
 };
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use eunomia::Complex32;
 use leto::Array3;
+use std::hint::black_box;
 
 // ---------------------------------------------------------------------------
 // 1D helpers (unchanged from original)

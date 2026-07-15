@@ -236,8 +236,8 @@ impl StftChirpData {
         let radix2_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-stft-wgpu chirp radix2 pipeline layout"),
-                bind_group_layouts: &[&chirp_data_bgl, &chirp_radix2_params_bgl],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&chirp_data_bgl), Some(&chirp_radix2_params_bgl)],
+                immediate_size: 0,
             });
 
         let premul_fwd_pipeline = kernel.premul_fwd_pipeline.clone();

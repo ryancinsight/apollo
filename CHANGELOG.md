@@ -7,15 +7,96 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ---
 
 ## [Unreleased]
+
+### Fixed
+
+- [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`
+  so the existing scalar path compiles for Apple Silicon consumers.
+- [patch] Align the CI Atlas checkout action and locked provider graph with the
+  merged Mnemosyne, Leto, Moirai, Themis, Hephaestus, and Hermes revisions so
+  locked CI builds consume the same provider sources as the manifest.
+- [patch] Remove the committed `target-cpu=native` flag so CI and published
+  builds use portable code generation; local performance builds opt in through
+  an explicit `RUSTFLAGS` override.
+
+## [0.15.0] - 2026-07-13
+
 ### Breaking
+
+- [major] Advance the provider-owned public GPU ABI to Hephaestus 0.13.0 and
+  WGPU 30. `apollo-wgpu-helpers::WgpuDevice::new` is infallible again because
+  Hephaestus no longer registers process-global Mnemosyne staging callbacks;
+  remove `?` from direct constructor calls. Default adapter acquisition remains
+  fallible. `apollo-wgpu-helpers` advances to 0.3.0.
+- [major] `GpuFft3d` forward/inverse and reusable-buffer methods now return
+  `ApolloResult`, and native-f16 methods return `Result<_, String>`, so WGPU 30
+  mapped-range failures propagate instead of being ignored.
+
+### Changed
+
+- [major] Migrate pipeline layouts, polling, adapter/device descriptors, and
+  mapped readbacks natively to WGPU 30 across every Apollo GPU leaf.
+- [patch] Pin Mnemosyne `32b4a2a`, Leto `7f216f1`, Moirai `8cd356c`, and
+  Hephaestus `dd93144`, and Hermes `1423e41`; refresh CI checkout metadata and
+  the locked graph.
+
+### Fixed
+
+- [patch] Remove the `RUSTSEC-2024-0436` exception after WGPU 30 deletes the
+  archived `paste` dependency from Apollo's graph.
+- [patch] Align native-f16 storage buffers for odd element counts to WGPU's
+  four-byte binding requirement while preserving the logical element count.
+- [patch] Request and validate the six storage buffers required by the STFT
+  Chirp-Z pipeline before creating its WGPU pipeline layout.
+- [patch] Replace the invalid fixed native-f16 absolute tolerance with the
+  derived `γ₃₁·‖input‖₁` forward-error bound.
+- [patch] Delete uncompiled duplicate native-f16 and batched-matrix GPU source
+  trees left disconnected by the consolidated WGPU module topology.
+
+## [0.14.0] - 2026-07-13
+### Breaking
+- [major] `apollo-wgpu-helpers::WgpuDevice::new` now returns
+  `WgpuDeviceResult<Self>` because Hephaestus 0.12 registers Mnemosyne staging
+  callbacks during construction and can reject conflicting process ownership.
+  Migration: append `?` and propagate `WgpuDeviceError`; do not unwrap device
+  initialization failures. `apollo-wgpu-helpers` advances to 0.2.0.
 - [arch] **Complete direct `num_complex`/`ndarray` removal — Apollo transform crates and Python bindings now run on the Atlas-native `leto` + `eunomia` substrate.** All first-party Rust transform, validation, benchmark, and PyO3 binding surfaces use `leto::Array`/`ArrayView` for owned/viewed arrays. Apollo no longer resolves any `ndarray` package in its Cargo graph; `apollo-python` uses PyO3-only dtype/shape/byte helpers at the Python NumPy ABI boundary and constructs runtime NumPy outputs without the Rust `numpy` crate or Eunomia's NumPy interop feature. Migration: replace `num_complex::Complex` with `eunomia::Complex`; replace `ndarray::Array{1,2,3}` with `leto::Array{1,2,3}`; `.dim()`→`.shape()` (returns `[usize; N]`, not a tuple); `.len()`→`.size()` on arrays. Current evidence for this cleanup: first-party source/manifest/lock `rg` scan has no `ndarray`, Rust `numpy`, or `as_array()` dependency residue outside local helper names/runtime import strings; `cargo tree -i ndarray` reports no matching package; `cargo fmt -p apollo-python -- --check`; `cargo check -p apollo-python`; `cargo nextest run -p apollo-python`; `git diff --check`.
 - [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Changed
-- [patch] Apollo now compiles Stockham AVX/FMA modules and precision strategies
-  only on x86_64. Apple Silicon uses the existing scalar Stockham strategy
-  without resolving x86-only symbols; x86_64 dispatch and numerical behavior
-  remain unchanged.
+- [patch] Consolidated member dependency requirements onto the workspace SSOT,
+  corrected every crate's repository metadata to Apollo, and pinned the CI
+  Rust and Python test tools used to reproduce a release tag.
+- [patch] Reconciled the changelog to one `Unreleased` section and removed
+  invalid control bytes from a historical entry.
+- [patch] Removed the orphaned GPU benchmark workflow and README claim after
+  its deleted runner script and obsolete `*-wgpu` package names made the
+  workflow non-executable. GPU benchmarks remain package-owned Criterion
+  targets and require a new provider-aware runner before automation returns.
+- [arch] Defined Apollo's reproducible Git-source release contract: Rust 1.97.0,
+  resolver 3, exact Atlas provider revisions, committed lockfile, and CI that
+  runs nextest instead of bypassing the repository timeout policy. Crates.io
+  publication remains outside the supported release channel while required
+  first-party packages are unpublished.
+- [major] Updated the workspace dependency SSOT to current stable releases,
+  including PyO3 0.29, Rand 0.10, Criterion 0.8, Pollster 1.0, Thiserror 2.0,
+  and current compatible patch releases. WGPU remains at 26.0.1 because
+  Hephaestus 0.12 owns and exposes that provider ABI.
+- [patch] Removed Apollo's redundant request for Moirai's empty
+  `no-global-alloc` feature. Allocator policy remains binary-owned; Apollo now
+  requests only the behavior-bearing `melinoe` integration. Refreshed the
+  locked local Atlas graph to one Melinoe 0.9 instance plus Mnemosyne 0.3,
+  Mnemosyne Backend 0.2, Hephaestus 0.12, and Themis `6140468c`.
+- [patch] Pinned the provider stack to standalone-Git-resolvable Hephaestus and
+  Leto commits. Their exact first-party requirements now work without relying
+  on Apollo's local sibling patch table.
+- [patch] Advanced Moirai, Leto, and Hephaestus to the final integrated
+  revisions verified by their provider release gates.
+- [patch] Completed the local Moirai patch set for Hephaestus's GPU, sync, and
+  utility leaves, eliminating duplicate path/Git source identities in Atlas
+  development builds.
+- [patch] Added Mnemosyne's backend leaf to the local provider patch set so
+  Hephaestus does not retain a second Git-source backend identity.
 - [patch] Routed the Apollo WGPU helper dependency on `hephaestus-wgpu`
   through the local Atlas Hephaestus checkout so downstream Atlas consumers
   share the current GPU substrate API instead of resolving the obsolete pinned
@@ -25,6 +106,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   and resolved Cargo graph remain free of the Rust `ndarray` crate; historical
   changelog migration notes remain intact as prior-state records.
 ### Added
+- [patch] Added a cargo-deny policy for approved licenses, registries, and Atlas
+  Git sources. The sole advisory exception documents WGPU 26's transitive
+  unmaintained `paste` dependency, which has no safe upgrade before the
+  Hephaestus-owned WGPU contract advances.
+- [patch] Added a pinned Rust 1.97.0 toolchain and corrected nextest's slow-test
+  policy to report after 30 seconds and terminate after 60 seconds.
 - [patch] `xtask provider-audit` now fails when first-party Cargo manifests,
   `Cargo.lock`, or Rust source reintroduce the Rust `ndarray` crate, with
   regression coverage for dependency/source hits and comment-only false
@@ -65,7 +152,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Apollo now makes `parallel` and `mnemosyne-memory` default feature contracts explicit in every package manifest. `apollo-ntt`, `apollo-ntt-wgpu`, and `apollo-validation` now forward Mnemosyne memory/provider features instead of remaining default-feature exceptions.
 - [patch] Apollo now pins Mnemosyne to pushed commit `938d0c2`, importing stable TLS feature routing and the top-level backend selector re-export used by local provider builds.
 - [patch] Apollo transform crates now expose default `parallel` and `mnemosyne-memory` feature contracts where they directly use Moirai/Mnemosyne; WGPU and Python boundary crates forward those defaults to their CPU transform dependencies. Apollo also pins Leto/Leto Ops to pushed Leto `d8d34c6` (`0.13.1`), importing the row-walk scan/zip/map traversal provider.
-- [patch] pollo-nufft-wgpu uploads Complex32 zero-copy (drops ComplexPod); pollo-python bindings split into per-family leaf modules with unchanged Python API.
+- [patch] Apollo NUFFT uploads `Complex32` without a conversion copy; Apollo
+  Python bindings are partitioned into per-family leaf modules with an
+  unchanged Python API.
 - [patch] WGPU dispatch paths: dctdst kernel reuses size-keyed GPU buffer sets across dispatches; num-complex `bytemuck` feature enables zero-copy `Complex32` uploads in CZT/FrFT kernels, removing per-dispatch `ComplexPod` marshaling.
 - [patch] Canonical `apollo_fft::application::utilities::leto_interop` module consolidates Leto view/array interop helpers (`view1_cow`, dense view copies, fallible Leto array builders, precision-profile matching) previously duplicated across 33 crates; crate-local wrappers now delegate with their own error mapping, and infallible wrappers shed their `Result` returns.
 - [patch] `apollo-dctdst-wgpu` 2D/3D separable transforms reuse a single lane buffer per pass and borrow contiguous rows zero-copy, removing O(n^2)/O(n^3) per-iteration allocations; `apollo-dctdst` typed paths adopt thread-local Mnemosyne scratch pools for f64 conversion workspaces.
@@ -1394,7 +1483,6 @@ See checklist/gap for details.
   310 ns (−25% vs RustFFT 415 ns); Apollo f32 is now 292 ns (−11% vs
   RustFFT 327 ns).
 
-## [Unreleased]
 ### Breaking
 - [major] `apollo-fft`: removed public type-suffixed mixed-radix twiddle
   wrapper entry points (`forward_inplace_64_with_twiddles`,

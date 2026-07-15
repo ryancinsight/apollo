@@ -4,7 +4,7 @@
 //! plan shape `(frame_count, frame_len, signal_len, hop_len)` at construction time.
 //!
 //! ## Pattern
-//! Mirrors `GpuFft3dBuffers` in `apollo-fft-wgpu`: construct once per plan shape;
+//! Mirrors `GpuFft3dBuffers` in `apollo-fft`: construct once per plan shape;
 //! call `StftWgpuBackend::execute_forward_with_buffers` / `execute_inverse_with_buffers`
 //! to reuse allocations across repeated STFT dispatches.
 //!

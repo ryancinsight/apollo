@@ -1,20 +1,95 @@
 # Apollo Gap Audit
 
-## Stockham architecture gating [patch]
-- Performed: moved the x86_64 condition from individual AVX function bodies to
-  the owning Stockham module, import, precision-strategy, and test boundaries.
-- Architecture effect: AArch64 no longer parses or resolves AVX-only modules;
-  it retains the existing scalar `PreciseStockham` and `ReducedStockham`
-  execution paths. No compatibility layer or alternate algorithm was added.
-- Verification: `cargo fmt -p apollo-fft -- --check` passes. A locked local
-  `aarch64-apple-darwin` cross-check stops before Apollo compilation in the
-  stale local Moirai checkout at its Linux-only `libc::__errno_location` call.
-  The coordinated RITK macOS wheel matrix is the end-to-end compile gate
-  against Moirai's corrected revision.
-- Evidence tier: compile-time architecture selection; no performance claim.
-- Residual: local package lint/test execution is blocked by incompatible rustc
-  artifacts already coexisting in the shared target tree. GitHub's clean target
-  matrix supplies the clean-build evidence without creating a second target.
+## Apple Silicon Stockham target boundary [patch]
+
+- Finding: RITK macOS CI uses `aarch64-apple-darwin`, but Apollo's Stockham
+  module re-exported AVX-only butterfly and precision symbols on every target.
+  The first failure exposed 43 compile errors, including missing fixed-length
+  AVX kernels and AVX backend imports.
+- Resolution: gate the AVX module, AVX butterfly modules and re-exports, AVX
+  precision imports, and AVX-only test imports on `target_arch = "x86_64"`.
+  Non-x86 targets retain the existing scalar Stockham/ZST dispatch path.
+- Verification: the pinned 1.97 toolchain `cargo check -p apollo-fft
+  --target aarch64-apple-darwin --all-features --locked` passes; host
+  warning-denied all-target Clippy passes; nextest passes 409/409; doctests
+  run 0/0; warning-clean rustdoc completes.
+- Evidence tier: cross-target compile/type validation plus host value-semantic
+  nextest and warning-denied linting. Cross-target checking still reports
+  existing unused-code warnings in scalar-only and platform-only branches;
+  those are not compile blockers and remain visible for a later warning-ratchet
+  increment.
+
+## Release 0.15.0 eligibility [major]
+
+- Provider ABI finding: Hephaestus 0.13.0 now owns WGPU 30, so Apollo advances
+  to the same ABI without a parallel device family. The obsolete Mnemosyne
+  callback constructor failure is deleted; mapping failures now propagate as
+  typed errors from the FFT and NUFFT readback boundaries.
+- Supply-chain finding: WGPU 30 removes Metal 0.32 and its archived `paste`
+  dependency. The `RUSTSEC-2024-0436` exception is deleted rather than carried
+  into the new release.
+- Toolchain finding: Apollo retains edition 2021 for 0.15.0 because moving its
+  SIMD-heavy unsafe kernels to edition 2024 activates 3,513 unsafe-operation
+  obligations requiring per-block soundness review and sanitizer/Miri evidence.
+  Treat that as a dedicated major safety increment; mixing a mechanical lint
+  suppression into the WGPU ABI release would produce unreviewed unsafe code.
+- Numerical decision: the prior native-f16 absolute-error claim omitted DFT
+  gain and was analytically invalid. The 0.15 differential gate uses
+  `γ₃₁·‖input‖₁`, with `γₖ = ku/(1-ku)` and f16 unit roundoff `u = 2⁻¹¹`,
+  derived from input quantization plus five rounding sites across each of six
+  radix-2 stages. A tighter bound requires a separately verified error model.
+- WGPU safety finding: native-f16 odd-volume storage buffers now round byte
+  capacity to `wgpu::COPY_BUFFER_ALIGNMENT`; logical reads remain limited to
+  the unpadded element count.
+- Capability finding: the STFT Chirp-Z pipeline requires four working/kernel
+  bindings plus two I/O bindings in one compute stage. Device acquisition now
+  requests six storage buffers and caller-supplied devices return a typed
+  `InsufficientDeviceLimit` error before pipeline construction when they expose
+  fewer.
+- Topology finding: deleted the disconnected `gpu_fft/reduced.rs`,
+  `gpu_fft/batched_matrix/`, and GPU validation tree. They were not declared by
+  any live module and duplicated the canonical native-f16 execution surface.
+- Dependency-policy residual: `cargo deny check` passes all four policy classes
+  but reports 12 transitive duplicate families. The primary incompatible roots
+  are the provider-owned rkyv 0.7 graph and Moirai's Windows 0.58 graph versus
+  the current WGPU 30/Windows 0.62 graph. Apollo does not suppress them with
+  `skip` rules; the upstream convergence item is tracked in `backlog.md`.
+
+## Release 0.14.0 eligibility [arch]
+
+- Distribution finding: crates.io packaging is not a valid Apollo release gate
+  because required Atlas packages are unpublished there. ADR 0002 makes the
+  tested Git-source graph the SSOT instead of fabricating registry portability.
+- Dependency finding (historical): Hephaestus 0.12 exposed WGPU 26 types, so
+  Apollo 0.14.0 remained on the compatible 26.0.1 patch until the provider
+  migrated the shared contract.
+- Reproducibility finding: CI referenced stale provider revisions, omitted the
+  Themis sibling required by Hephaestus, used a floating stable Rust channel,
+  and bypassed nextest. The release increment pins each boundary.
+- Metadata finding: member manifests retained stale dependency requirements and
+  Kwavers repository links, CI floated its test tools, and the changelog had two
+  `Unreleased` sections plus control bytes. The release increment consolidates
+  dependency versions, repository metadata, tool versions, and release history.
+- Provider-lineage finding: the required Moirai Mnemosyne 0.3 integration was
+  available only on a feature branch while `main` carried newer reactor fixes.
+  Release eligibility requires their verified union to land on Moirai `main`.
+- Local graph finding: Hephaestus reaches Moirai GPU leaf packages directly;
+  Apollo's path patch table now lists those leaves so Atlas development builds
+  use one Moirai source identity. Standalone Git builds use the same exact
+  `b2f3732` revision without path patches.
+- Workflow finding: the GPU benchmark workflow called a deleted script and
+  obsolete `*-wgpu` packages. The non-executable workflow and stale README
+  claim were removed; no benchmark result or performance claim was changed.
+- Supply-chain residual (closed in 0.15.0): WGPU 26 selected Metal 0.32, which depends on the
+  archived `paste` 1.0.15 (`RUSTSEC-2024-0436`). RustSec reports no safe
+  upgrade. `deny.toml` records the narrow advisory exception; it closes only
+  when Hephaestus advances the shared WGPU ABI.
+- Evidence tier: Cargo resolution and source-lineage inspection; compile-time
+  lint and rustdoc enforcement; 1027/1027 Rust value-semantic nextest cases;
+  34/34 Python boundary cases; RustSec and cargo-deny policy checks; and 196
+  applicable `apollo-fft` minor-release API checks. The historical API baseline
+  required only provider-revision alignment to resolve its dependency graph;
+  Apollo's baseline API surface was not changed.
 
 ## Hephaestus WGPU local provider edge [patch]
 - Performed: changed Apollo's workspace `hephaestus-wgpu` dependency from the
@@ -29,7 +104,7 @@
   `rustup run nightly cargo check -p kwavers-math --features gpu --all-targets`
   passes, focused `kwavers-math --features gpu` GPU FFT nextest passes 2/2,
   and `cargo tree -p kwavers-math --features gpu -i hephaestus-wgpu` resolves
-  `hephaestus-wgpu v0.11.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
+  `hephaestus-wgpu v0.12.0 (D:\atlas\repos\hephaestus\crates\hephaestus-wgpu)`.
 - Evidence tier: compile-time dependency/type validation plus downstream
   value-semantic GPU FFT tests.
 - Residual: Apollo has no real CUDA FFT provider yet. CUDA FFT requires
@@ -4205,6 +4280,30 @@ to 1e-2 for FRAME_LEN=1024 vs. CPU reference.
 ---
 
 ## Remaining Gaps
+
+### Hephaestus 0.12 fallible device construction (2026-07-13)
+
+- The local provider lock refresh exposed `E0308`: Apollo assumed
+  `hephaestus_wgpu::WgpuDevice::new` was infallible, but Hephaestus 0.12 returns
+  a typed error when Mnemosyne staging callback ownership conflicts.
+- Resolution: Apollo's public constructor now returns `WgpuDeviceResult<Self>`;
+  error translation is single-sourced and caller migration is `?` propagation.
+  See `docs/adr/0001-fallible-wgpu-device-construction.md`.
+- Evidence tier: compile-time API enforcement and value-semantic error-mapping
+  tests; the full gate is tracked in `checklist.md`. The semver probe identified
+  path-only provider declarations in Hephaestus and Leto. Those owning repos now
+  publish exact Git requirements; Apollo pins the corrected commits.
+
+### Moirai feature-contract cleanup (2026-07-13)
+
+- The pinned Moirai revision defines `no-global-alloc = []`; Apollo's workspace
+  dependency requested this inert feature alongside `melinoe`.
+- Resolution: remove only the empty feature request. This preserves binary-owned
+  allocator policy without changing Moirai behavior. The resolved local graph
+  now carries one Melinoe 0.9 package and current local Mnemosyne, Hephaestus,
+  and Themis provider revisions instead of duplicate older Melinoe packages.
+- Evidence tier: locked Cargo metadata resolves the narrowed feature set;
+  focused compile/test/doc gates are tracked in `checklist.md`.
 
 Open gaps are listed at the top of this audit. Future increments should:
 - Run the Criterion buffer-reuse benches on representative GPU hardware and record measured allocation-vs-reuse speedup ratios for 1D and 3D NUFFT fast paths.

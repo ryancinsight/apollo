@@ -52,8 +52,9 @@
 #![allow(missing_docs)]
 
 use apollo_radon::{RadonWgpuBackend, RadonWgpuPlan};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use leto::Array2;
+use std::hint::black_box;
 
 /// Parameter sets: `(image_size, angle_count, detector_count)`.
 ///

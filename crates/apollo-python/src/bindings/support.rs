@@ -83,7 +83,7 @@ impl<T: PyArrayElement, const N: usize> PyReadonlyArray<T, N> {
             .getattr("c_contiguous")?
             .extract::<bool>()?;
         let bytes_any = input.call_method0("tobytes")?;
-        let bytes = bytes_any.downcast::<PyBytes>()?;
+        let bytes = bytes_any.cast::<PyBytes>()?;
         let values = bytemuck::try_cast_slice::<u8, T>(bytes.as_bytes())
             .map_err(|error| PyValueError::new_err(error.to_string()))?
             .to_vec();
@@ -106,9 +106,11 @@ impl<T: PyArrayElement, const N: usize> PyReadonlyArray<T, N> {
     }
 }
 
-impl<T: PyArrayElement, const N: usize> FromPyObject<'_> for PyReadonlyArray<T, N> {
-    fn extract_bound(obj: &Bound<'_, PyAny>) -> PyResult<Self> {
-        Self::from_py_array(obj)
+impl<'py, T: PyArrayElement, const N: usize> FromPyObject<'_, 'py> for PyReadonlyArray<T, N> {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
+        Self::from_py_array(&obj)
     }
 }
 
@@ -322,7 +324,7 @@ pub(crate) fn require_profile_matches_f32(profile: PrecisionProfile, name: &str)
 pub(crate) fn leto_array1_into_pyarray<'py, T>(
     py: Python<'py>,
     array: Array<T, impl Storage<T>, 1>,
-) -> PyResult<PyObject>
+) -> PyResult<Py<PyAny>>
 where
     T: PyArrayElement,
 {
@@ -335,7 +337,7 @@ where
 pub(crate) fn leto_array2_into_pyarray<'py, T>(
     py: Python<'py>,
     array: Array<T, impl Storage<T>, 2>,
-) -> PyResult<PyObject>
+) -> PyResult<Py<PyAny>>
 where
     T: PyArrayElement,
 {
@@ -349,7 +351,7 @@ where
 pub(crate) fn leto_array3_into_pyarray<'py, T>(
     py: Python<'py>,
     array: Array<T, impl Storage<T>, 3>,
-) -> PyResult<PyObject>
+) -> PyResult<Py<PyAny>>
 where
     T: PyArrayElement,
 {
@@ -363,7 +365,7 @@ where
 pub(crate) fn vec1_into_pyarray<'py, T: PyArrayElement>(
     py: Python<'py>,
     values: Vec<T>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     values_into_pyarray(py, &values, [values.len()])
 }
 
@@ -371,7 +373,7 @@ pub(crate) fn values_into_pyarray<'py, T: PyArrayElement, const N: usize>(
     py: Python<'py>,
     values: &[T],
     shape: [usize; N],
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let numpy = py.import("numpy")?;
     let bytes = PyBytes::new(py, bytemuck::cast_slice(values));
     let array = numpy.getattr("frombuffer")?.call1((bytes, T::DTYPE))?;
@@ -388,8 +390,8 @@ mod tests {
 
     #[test]
     fn numpy_boundary_preserves_shape_and_values() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let numpy = py.import("numpy").expect("numpy import");
             let input = numpy
                 .getattr("array")

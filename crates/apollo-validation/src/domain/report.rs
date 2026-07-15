@@ -128,12 +128,10 @@ pub struct PublishedReferenceReport {
 pub struct ExternalComparisonReport {
     /// Whether the external comparison thresholds passed.
     pub passed: bool,
-    /// Whether an external `rustfft` checkout exists under the workspace.
-    pub rustfft_checkout_present: bool,
     /// Whether an external `pyfftw` checkout exists under the workspace.
     pub pyfftw_checkout_present: bool,
-    /// `rustfft` parity report.
-    pub rustfft: ExternalBackendReport,
+    /// Direct O(N²) DFT parity report (always available, no external dep).
+    pub dft: ExternalBackendReport,
     /// NumPy parity report.
     pub numpy: ExternalBackendReport,
     /// Optional `pyfftw` parity report.
@@ -157,10 +155,10 @@ pub struct BenchmarkReport {
     pub apollo_fft3_forward_ms: f64,
     /// Apollo CPU 3D FFT inverse wall time in milliseconds.
     pub apollo_fft3_inverse_ms: f64,
-    /// `rustfft` 1D FFT wall time in milliseconds.
-    pub rustfft_fft1_ms: f64,
-    /// `rustfft` 3D FFT wall time in milliseconds.
-    pub rustfft_fft3_ms: f64,
+    /// Direct O(N²) DFT 1D wall time in milliseconds.
+    pub dft_fft1_ms: f64,
+    /// Direct O(N²) DFT 3D wall time in milliseconds.
+    pub dft_fft3_ms: f64,
     /// NumPy 1D FFT wall time in milliseconds when available.
     pub numpy_fft1_ms: Option<f64>,
     /// NumPy 3D FFT wall time in milliseconds when available.

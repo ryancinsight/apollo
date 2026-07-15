@@ -1,10 +1,28 @@
 # Apollo Backlog
 
-## Stockham architecture gating [patch]
-- [x] Restrict AVX/FMA Stockham implementation modules and strategy types to
-  x86_64 so Apple Silicon builds select Apollo's existing scalar Stockham path.
-  The downstream RITK macOS wheel matrix is the acceptance gate because it
-  resolves the coordinated Moirai and Apollo provider revisions together.
+## Release 0.14.0 eligibility [arch]
+
+- [x] Pin the toolchain, current compatible third-party versions, and exact
+  Atlas provider revisions in one reproducible lock graph.
+- [x] Replace CI's stale provider branches and bare libtest invocation with
+  revision-pinned sibling checkouts and the committed nextest timeout policy.
+- [x] Pass the Rust, Python, API, supply-chain, and Git-source distribution
+  gates; the release candidate is eligible without publishing it.
+- [x] [major] WGPU 30 provider integration (owner Codex, 2026-07-13; scope
+  `Cargo.toml`, lockfile, `apollo-wgpu-helpers`, release/PM artifacts): consume
+  Hephaestus 0.13.0 at `090611d`, migrate the helper constructor natively to its
+  infallible contract, advance Apollo to 0.15.0, and pass the complete release
+  gate without a split WGPU ABI.
+- [ ] [patch] Provider-owned dependency convergence (owner upstream providers;
+  DoR: preserve all public contracts and reduce the cargo-deny duplicate set
+  without skip rules): align the legacy rkyv and Windows dependency families
+  that currently produce 12 transitive duplicate-version warnings. Re-open
+  when Mnemosyne/Eunomia and Moirai publish compatible dependency increments.
+- [x] [patch] Apple Silicon Stockham target boundary (owner Codex, 2026-07-14;
+  scope `apollo-fft/src/application/execution/kernel/components/stockham`):
+  gate AVX-only modules, imports, and test symbols on `x86_64` so the scalar
+  Stockham path compiles on `aarch64-apple-darwin`. This closes the RITK
+  macOS CI provider blocker without a fallback or compatibility layer.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 

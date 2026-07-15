@@ -51,12 +51,13 @@ pub struct WgpuDevice {
 
 impl WgpuDevice {
     /// Wrap an existing device and queue.
+    ///
+    /// Device-local staging remains owned by Hephaestus; construction performs
+    /// no global callback registration and cannot conflict with another device.
     #[must_use]
     #[inline]
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
-        Self {
-            inner_device: hephaestus_wgpu::WgpuDevice::new(device, queue),
-        }
+        Self::from_hephaestus(hephaestus_wgpu::WgpuDevice::new(device, queue))
     }
 
     /// Wrap an existing hephaestus-wgpu WgpuDevice.
@@ -126,14 +127,7 @@ impl WgpuDevice {
             required_features,
             required_limits,
         )
-        .map_err(|e| match e {
-            hephaestus_wgpu::HephaestusError::AdapterUnavailable { message } => {
-                WgpuDeviceError::AdapterUnavailable { message }
-            }
-            other => WgpuDeviceError::DeviceUnavailable {
-                message: other.to_string(),
-            },
-        })?;
+        .map_err(map_device_error)?;
         Ok(Self::from_hephaestus(acquired))
     }
 
@@ -175,5 +169,45 @@ impl WgpuDevice {
     #[inline]
     pub fn recycle_staging_buffer(&self, buffer: wgpu::Buffer) {
         self.inner_device.recycle_staging_buffer(buffer);
+    }
+}
+
+fn map_device_error(error: hephaestus_wgpu::HephaestusError) -> WgpuDeviceError {
+    match error {
+        hephaestus_wgpu::HephaestusError::AdapterUnavailable { message } => {
+            WgpuDeviceError::AdapterUnavailable { message }
+        }
+        other => WgpuDeviceError::DeviceUnavailable {
+            message: other.to_string(),
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_adapter_unavailability_without_losing_context() {
+        let message = "no compatible adapter".to_owned();
+        assert_eq!(
+            map_device_error(hephaestus_wgpu::HephaestusError::AdapterUnavailable {
+                message: message.clone(),
+            }),
+            WgpuDeviceError::AdapterUnavailable { message }
+        );
+    }
+
+    #[test]
+    fn maps_device_unavailability_without_losing_context() {
+        let message = "staging callback ownership conflict".to_owned();
+        assert_eq!(
+            map_device_error(hephaestus_wgpu::HephaestusError::DeviceUnavailable {
+                message: message.clone(),
+            }),
+            WgpuDeviceError::DeviceUnavailable {
+                message: format!("accelerator device creation failed: {message}"),
+            }
+        );
     }
 }

@@ -23,7 +23,7 @@ use super::support::{
 /// For `n=0` returns an empty array.
 #[pyfunction]
 #[pyo3(signature = (n, d=1.0))]
-pub(crate) fn fftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<PyObject> {
+pub(crate) fn fftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<Py<PyAny>> {
     vec1_into_pyarray(py, fftfreq(n, d))
 }
 
@@ -32,7 +32,7 @@ pub(crate) fn fftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<PyO
 /// Returns `n/2 + 1` non-negative bins. Numpy-compatible `rfftfreq(n, d)`.
 #[pyfunction]
 #[pyo3(signature = (n, d=1.0))]
-pub(crate) fn rfftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<PyObject> {
+pub(crate) fn rfftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<Py<PyAny>> {
     vec1_into_pyarray(py, rfftfreq(n, d))
 }
 
@@ -43,7 +43,7 @@ pub(crate) fn rfftfreq_py<'py>(py: Python<'py>, n: usize, d: f64) -> PyResult<Py
 pub(crate) fn fftshift_py<'py>(
     py: Python<'py>,
     input: PyReadonlyArray1<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let owned = py_array1_slice(&input, "fftshift input")?.to_vec();
     vec1_into_pyarray(py, fftshift(&owned))
 }
@@ -55,7 +55,7 @@ pub(crate) fn fftshift_py<'py>(
 pub(crate) fn ifftshift_py<'py>(
     py: Python<'py>,
     input: PyReadonlyArray1<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let owned = py_array1_slice(&input, "ifftshift input")?.to_vec();
     vec1_into_pyarray(py, ifftshift(&owned))
 }
@@ -67,10 +67,10 @@ pub(crate) fn ifftshift_py<'py>(
 pub(crate) fn fft_complex1<'py>(
     py: Python<'py>,
     input: PyReadonlyArray1<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&input, "fft_complex1 input")?;
     let mut output = py_array1_to_leto(&input, "fft_complex1 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         fft_1d_complex_inplace(&mut output);
     });
     leto_array1_into_pyarray(py, output)
@@ -81,10 +81,10 @@ pub(crate) fn fft_complex1<'py>(
 pub(crate) fn ifft_complex1<'py>(
     py: Python<'py>,
     input: PyReadonlyArray1<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_1d(&input, "ifft_complex1 input")?;
     let mut output = py_array1_to_leto(&input, "ifft_complex1 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         ifft_1d_complex_inplace(&mut output);
     });
     leto_array1_into_pyarray(py, output)
@@ -95,10 +95,10 @@ pub(crate) fn ifft_complex1<'py>(
 pub(crate) fn fft_complex2<'py>(
     py: Python<'py>,
     input: PyReadonlyArray2<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_2d(&input, "fft_complex2 input")?;
     let mut output = py_array2_to_leto(&input, "fft_complex2 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         fft_2d_complex_inplace(&mut output);
     });
     leto_array2_into_pyarray(py, output)
@@ -109,10 +109,10 @@ pub(crate) fn fft_complex2<'py>(
 pub(crate) fn ifft_complex2<'py>(
     py: Python<'py>,
     input: PyReadonlyArray2<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_2d(&input, "ifft_complex2 input")?;
     let mut output = py_array2_to_leto(&input, "ifft_complex2 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         ifft_2d_complex_inplace(&mut output);
     });
     leto_array2_into_pyarray(py, output)
@@ -123,10 +123,10 @@ pub(crate) fn ifft_complex2<'py>(
 pub(crate) fn fft_complex3<'py>(
     py: Python<'py>,
     input: PyReadonlyArray3<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_3d(&input, "fft_complex3 input")?;
     let mut output = py_array3_to_leto(&input, "fft_complex3 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         fft_3d_complex_inplace(&mut output);
     });
     leto_array3_into_pyarray(py, output)
@@ -137,10 +137,10 @@ pub(crate) fn fft_complex3<'py>(
 pub(crate) fn ifft_complex3<'py>(
     py: Python<'py>,
     input: PyReadonlyArray3<Complex64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     require_contiguous_3d(&input, "ifft_complex3 input")?;
     let mut output = py_array3_to_leto(&input, "ifft_complex3 input")?;
-    py.allow_threads(|| {
+    py.detach(|| {
         ifft_3d_complex_inplace(&mut output);
     });
     leto_array3_into_pyarray(py, output)

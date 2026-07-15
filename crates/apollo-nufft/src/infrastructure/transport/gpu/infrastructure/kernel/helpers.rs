@@ -93,7 +93,7 @@ impl NufftGpuKernel {
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result);
         });
-        let _ = device.poll(wgpu::PollType::Wait);
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
         match receiver.recv() {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
@@ -109,7 +109,12 @@ impl NufftGpuKernel {
         }
 
         let output = {
-            let mapped = slice.get_mapped_range();
+            let mapped =
+                slice
+                    .get_mapped_range()
+                    .map_err(|error| NufftWgpuError::BufferMapFailed {
+                        message: error.to_string(),
+                    })?;
             bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
         };
         staging.unmap();
@@ -244,7 +249,7 @@ pub(crate) fn read_complex_buffer(
     slice.map_async(wgpu::MapMode::Read, move |result| {
         let _ = sender.send(result);
     });
-    let _ = device.poll(wgpu::PollType::Wait);
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
     match receiver.recv() {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
@@ -259,7 +264,11 @@ pub(crate) fn read_complex_buffer(
         }
     }
     let output = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .map_err(|error| NufftWgpuError::BufferMapFailed {
+                message: error.to_string(),
+            })?;
         bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
     };
     staging.unmap();
@@ -284,7 +293,7 @@ pub(crate) fn read_complex_buffer_with_staging(
     slice.map_async(wgpu::MapMode::Read, move |result| {
         let _ = sender.send(result);
     });
-    let _ = device.poll(wgpu::PollType::Wait);
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
     match receiver.recv() {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
@@ -299,7 +308,11 @@ pub(crate) fn read_complex_buffer_with_staging(
         }
     }
     let output = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .map_err(|error| NufftWgpuError::BufferMapFailed {
+                message: error.to_string(),
+            })?;
         bytemuck::cast_slice::<u8, Complex32>(&mapped).to_vec()
     };
     staging.unmap();
@@ -330,7 +343,7 @@ pub(crate) fn read_real_buffer(
     slice.map_async(wgpu::MapMode::Read, move |result| {
         let _ = sender.send(result);
     });
-    let _ = device.poll(wgpu::PollType::Wait);
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
     match receiver.recv() {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
@@ -345,7 +358,11 @@ pub(crate) fn read_real_buffer(
         }
     }
     let output = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .map_err(|error| NufftWgpuError::BufferMapFailed {
+                message: error.to_string(),
+            })?;
         bytemuck::cast_slice(&mapped).to_vec()
     };
     staging.unmap();
@@ -409,7 +426,7 @@ pub(crate) fn read_split_grid(
     im_slice.map_async(wgpu::MapMode::Read, move |result| {
         let _ = im_tx.send(result);
     });
-    let _ = device.poll(wgpu::PollType::Wait);
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
     match (re_rx.recv(), im_rx.recv()) {
         (Ok(Ok(())), Ok(Ok(()))) => {}
         (Ok(Err(e)), _) | (_, Ok(Err(e))) => {
@@ -424,8 +441,18 @@ pub(crate) fn read_split_grid(
         }
     }
     let output = {
-        let re_mapped = re_slice.get_mapped_range();
-        let im_mapped = im_slice.get_mapped_range();
+        let re_mapped =
+            re_slice
+                .get_mapped_range()
+                .map_err(|error| NufftWgpuError::BufferMapFailed {
+                    message: error.to_string(),
+                })?;
+        let im_mapped =
+            im_slice
+                .get_mapped_range()
+                .map_err(|error| NufftWgpuError::BufferMapFailed {
+                    message: error.to_string(),
+                })?;
         let re_data: &[f32] = bytemuck::cast_slice(&re_mapped);
         let im_data: &[f32] = bytemuck::cast_slice(&im_mapped);
         re_data

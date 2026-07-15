@@ -14,8 +14,9 @@
 #![allow(missing_docs)]
 
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use leto::Array3;
+use std::hint::black_box;
 
 /// Build a deterministic real test field of shape `(nx, ny, nz)`.
 ///
@@ -56,7 +57,9 @@ fn bench_forward_3d(c: &mut Criterion) {
         // Allocating path: `forward` allocates Vec<f32> internally per call.
         group.bench_function(BenchmarkId::new("allocating", nx), |b| {
             b.iter(|| {
-                let result = plan.forward(black_box(&field));
+                let result = plan
+                    .forward(black_box(&field))
+                    .expect("GPU readback must succeed");
                 black_box(result);
             });
         });
@@ -69,7 +72,8 @@ fn bench_forward_3d(c: &mut Criterion) {
                     black_box(&field),
                     black_box(&mut out),
                     black_box(&mut buffers),
-                );
+                )
+                .expect("GPU readback must succeed");
                 black_box(&out);
             });
         });
@@ -92,7 +96,7 @@ fn bench_inverse_3d(c: &mut Criterion) {
             return;
         };
         let field = real_field(nx, ny, nz);
-        let spectrum = plan.forward(&field);
+        let spectrum = plan.forward(&field).expect("GPU readback must succeed");
 
         let mut group = c.benchmark_group(format!("fft3d_inverse_nx{nx}"));
 
@@ -100,7 +104,8 @@ fn bench_inverse_3d(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("allocating", nx), |b| {
             let mut out = Array3::<f64>::zeros([nx, ny, nz]);
             b.iter(|| {
-                plan.inverse(black_box(&spectrum), &mut out);
+                plan.inverse(black_box(&spectrum), &mut out)
+                    .expect("GPU readback must succeed");
                 black_box(&out);
             });
         });
@@ -110,7 +115,8 @@ fn bench_inverse_3d(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("with_buffers", nx), |b| {
             let mut out = Array3::<f64>::zeros([nx, ny, nz]);
             b.iter(|| {
-                plan.inverse_with_buffers(black_box(&spectrum), &mut out, black_box(&mut buffers));
+                plan.inverse_with_buffers(black_box(&spectrum), &mut out, black_box(&mut buffers))
+                    .expect("GPU readback must succeed");
                 black_box(&out);
             });
         });

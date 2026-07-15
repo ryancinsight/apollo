@@ -25,46 +25,16 @@ jobs:
       # outside $GITHUB_WORKSPACE, so apollo itself checks out into a
       # named subdirectory alongside each fleet sibling, all directly
       # under $GITHUB_WORKSPACE (the true common parent).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: apollo
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/hephaestus
-          ref: ks5-cholesky-panel
-          path: hephaestus
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/leto
-          ref: d9e8ac95949b8a684b26d739eb175874764f3e0e
-          path: leto
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/eunomia
-          path: eunomia
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/Mnemosyne
-          ref: a6cbccf207c271af640c126ff27435f995c7cb6c
-          path: mnemosyne
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/Moirai
-          ref: 37ff12d584e1fb472f41b4e40c702d708aba1dac
-          path: moirai
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/hermes
-          ref: 9d0a358d2196390ce626ca653c180b04eae1ed4a
-          path: hermes
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/melinoe
-          ref: ba9194613169827a6db55e7458b8e0320cd515e1
-          path: melinoe
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./apollo/.github/actions/checkout-atlas
+      - uses: dtolnay/rust-toolchain@1.97.0
         with:
           components: clippy, rustfmt
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apollo
@@ -76,10 +46,11 @@ jobs:
       # source.
       - name: Format
         run: |
-          pkgs=$(cargo metadata --no-deps --format-version=1 | python3 -c "import json,sys; print('\n'.join('-p ' + p['name'] for p in json.load(sys.stdin)['packages']))" | tr -d '\r')
-          cargo fmt $pkgs -- --check
+          cargo metadata --locked --no-deps --format-version=1 \
+            | jq -r '.packages[].name' \
+            | while read -r package; do cargo fmt -p "$package" -- --check; done
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       # apollo-python builds pyo3 with the "extension-module" feature, which
       # deliberately omits linking against libpython (Python dynamically
       # loads the .so and supplies those symbols at runtime). A `cargo test`
@@ -100,7 +71,17 @@ jobs:
       - name: Tests
         env:
           RUST_MIN_STACK: "16777216"
-        run: cargo test --workspace --all-targets --exclude apollo-python
+        run: cargo nextest run --locked --workspace --all-features --exclude apollo-python --no-fail-fast
+      - name: Doctests
+        run: cargo test --locked --doc --workspace --exclude apollo-python
+      - name: Documentation
+        run: cargo doc --locked --workspace --exclude apollo-python --no-deps
+      - name: Provider audit
+        run: cargo run --locked -p xtask -- provider-audit
+      - name: RustSec audit
+        run: cargo audit --deny warnings
+      - name: Dependency policy
+        run: cargo deny check
 
   python:
     name: python bindings
@@ -110,50 +91,17 @@ jobs:
       run:
         working-directory: apollo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: apollo
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/hephaestus
-          ref: ks5-cholesky-panel
-          path: hephaestus
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/leto
-          ref: d9e8ac95949b8a684b26d739eb175874764f3e0e
-          path: leto
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/eunomia
-          path: eunomia
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/Mnemosyne
-          ref: a6cbccf207c271af640c126ff27435f995c7cb6c
-          path: mnemosyne
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/Moirai
-          ref: 37ff12d584e1fb472f41b4e40c702d708aba1dac
-          path: moirai
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/hermes
-          ref: 9d0a358d2196390ce626ca653c180b04eae1ed4a
-          path: hermes
-      - uses: actions/checkout@v4
-        with:
-          repository: ryancinsight/melinoe
-          ref: ba9194613169827a6db55e7458b8e0320cd515e1
-          path: melinoe
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./apollo/.github/actions/checkout-atlas
+      - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apollo
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.14"
       # maturin develop requires an active virtualenv (or conda env) to
       # install into — there is none by default on the hosted runner.
       - name: Create virtualenv
@@ -162,7 +110,9 @@ jobs:
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Install Python test tools
-        run: python -m pip install --upgrade pip maturin pytest numpy
+        run: >-
+          python -m pip install --upgrade
+          pip==26.1.2 maturin==1.14.1 pytest==9.1.1 numpy==2.5.1
       - name: Build Python extension
         working-directory: apollo/crates/apollo-python
         run: maturin develop

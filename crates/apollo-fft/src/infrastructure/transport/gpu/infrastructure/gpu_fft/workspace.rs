@@ -86,7 +86,7 @@ impl GpuFft3dBuffers {
         self.nx * self.ny * self.nz
     }
 
-    fn read_split_into_host(&mut self, plan: &GpuFft3d) {
+    fn read_split_into_host(&mut self, plan: &GpuFft3d) -> ApolloResult<()> {
         let size = plan.component_buffer_size();
         let mut encoder = plan
             .device
@@ -101,33 +101,41 @@ impl GpuFft3dBuffers {
         let im_slice = self.im_staging.slice(..size);
         re_slice.map_async(wgpu::MapMode::Read, |_| {});
         im_slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = plan.device.poll(wgpu::PollType::Wait);
+        let _ = plan.device.poll(wgpu::PollType::wait_indefinitely());
 
         {
-            let mapped = re_slice.get_mapped_range();
+            let mapped = re_slice
+                .get_mapped_range()
+                .map_err(|error| ApolloError::Wgpu {
+                    message: format!("real-component staging map failed: {error}"),
+                })?;
             self.re_host.copy_from_slice(bytemuck::cast_slice(&mapped));
         }
         {
-            let mapped = im_slice.get_mapped_range();
+            let mapped = im_slice
+                .get_mapped_range()
+                .map_err(|error| ApolloError::Wgpu {
+                    message: format!("imaginary-component staging map failed: {error}"),
+                })?;
             self.im_host.copy_from_slice(bytemuck::cast_slice(&mapped));
         }
         self.re_staging.unmap();
         self.im_staging.unmap();
+        Ok(())
     }
 }
 
 impl GpuFft3d {
     /// Forward transform of a real field into an interleaved complex buffer.
-    #[must_use]
-    pub fn forward(&self, field: &Array3<f64>) -> Vec<f32> {
+    pub fn forward(&self, field: &Array3<f64>) -> ApolloResult<Vec<f32>> {
         let n = self.nx * self.ny * self.nz;
         let mut out = vec![0.0_f32; 2 * n];
-        self.forward_into(field, &mut out);
-        out
+        self.forward_into(field, &mut out)?;
+        Ok(out)
     }
 
     /// Forward transform of a real field into a caller-owned interleaved complex buffer.
-    pub fn forward_into(&self, field: &Array3<f64>, out: &mut [f32]) {
+    pub fn forward_into(&self, field: &Array3<f64>, out: &mut [f32]) -> ApolloResult<()> {
         assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * self.nx * self.ny * self.nz);
         let n = self.nx * self.ny * self.nz;
@@ -147,7 +155,7 @@ impl GpuFft3d {
         self.run_device_axis_fft(Axis::Y, false);
         self.run_device_axis_fft(Axis::X, false);
 
-        let (re_out, im_out) = self.read_back_full_buffers();
+        let (re_out, im_out) = self.read_back_full_buffers()?;
 
         for ((re, im), pair) in re_out
             .iter()
@@ -157,6 +165,7 @@ impl GpuFft3d {
             pair[0] = *re;
             pair[1] = *im;
         }
+        Ok(())
     }
 
     /// Forward transform using caller-retained reusable GPU and host buffers.
@@ -165,7 +174,7 @@ impl GpuFft3d {
         field: &Array3<f64>,
         out: &mut [f32],
         buffers: &mut GpuFft3dBuffers,
-    ) {
+    ) -> ApolloResult<()> {
         buffers.assert_matches(self);
         assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * buffers.len());
@@ -190,7 +199,7 @@ impl GpuFft3d {
         self.encode_forward_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)?;
         for ((re, im), pair) in buffers
             .re_host
             .iter()
@@ -200,6 +209,7 @@ impl GpuFft3d {
             pair[0] = *re;
             pair[1] = *im;
         }
+        Ok(())
     }
 
     /// Forward mixed-precision transform from `f16` storage into an interleaved
@@ -209,13 +219,12 @@ impl GpuFft3d {
     /// host inputs are stored as `f16`, promoted once to `f32` at the GPU buffer
     /// boundary, and the existing `f32` WGPU FFT kernels remain the single
     /// authoritative device implementation.
-    #[must_use]
-    pub fn forward_f16(&self, field: &Array3<f16>) -> Vec<f32> {
+    pub fn forward_f16(&self, field: &Array3<f16>) -> ApolloResult<Vec<f32>> {
         let n = self.nx * self.ny * self.nz;
         let mut out = vec![0.0_f32; 2 * n];
         let mut buffers = GpuFft3dBuffers::new(self);
-        self.forward_f16_into_with_buffers(field, &mut out, &mut buffers);
-        out
+        self.forward_f16_into_with_buffers(field, &mut out, &mut buffers)?;
+        Ok(out)
     }
 
     /// Forward mixed-precision transform using caller-retained reusable GPU and
@@ -225,7 +234,7 @@ impl GpuFft3d {
         field: &Array3<f16>,
         out: &mut [f32],
         buffers: &mut GpuFft3dBuffers,
-    ) {
+    ) -> ApolloResult<()> {
         buffers.assert_matches(self);
         assert_eq!(field.shape(), [self.nx, self.ny, self.nz]);
         assert_eq!(out.len(), 2 * buffers.len());
@@ -250,7 +259,7 @@ impl GpuFft3d {
         self.encode_forward_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)?;
         for ((re, im), pair) in buffers
             .re_host
             .iter()
@@ -260,6 +269,7 @@ impl GpuFft3d {
             pair[0] = *re;
             pair[1] = *im;
         }
+        Ok(())
     }
 
     /// Forward transform of a Leto real field into a Mnemosyne-backed
@@ -291,7 +301,7 @@ impl GpuFft3d {
     }
 
     /// Inverse transform of an interleaved complex buffer into a real field.
-    pub fn inverse(&self, field_hat: &[f32], out: &mut Array3<f64>) {
+    pub fn inverse(&self, field_hat: &[f32], out: &mut Array3<f64>) -> ApolloResult<()> {
         assert_eq!(field_hat.len(), 2 * self.nx * self.ny * self.nz);
         assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
 
@@ -312,7 +322,7 @@ impl GpuFft3d {
         self.run_device_axis_fft(Axis::Y, true);
         self.run_device_axis_fft(Axis::Z, true);
 
-        let (re_out, _) = self.read_back_full_buffers();
+        let (re_out, _) = self.read_back_full_buffers()?;
 
         for (dst, &value) in out
             .as_slice_mut()
@@ -322,6 +332,7 @@ impl GpuFft3d {
         {
             *dst = value as f64;
         }
+        Ok(())
     }
 
     /// Inverse transform using caller-retained reusable GPU and host buffers.
@@ -330,7 +341,7 @@ impl GpuFft3d {
         field_hat: &[f32],
         out: &mut Array3<f64>,
         buffers: &mut GpuFft3dBuffers,
-    ) {
+    ) -> ApolloResult<()> {
         buffers.assert_matches(self);
         assert_eq!(field_hat.len(), 2 * buffers.len());
         assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
@@ -353,7 +364,7 @@ impl GpuFft3d {
         self.encode_inverse_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)?;
         for (dst, &value) in out
             .as_slice_mut()
             .expect("contiguous output")
@@ -362,13 +373,14 @@ impl GpuFft3d {
         {
             *dst = value as f64;
         }
+        Ok(())
     }
 
     /// Inverse mixed-precision transform from an interleaved `f32` complex
     /// spectrum into `f16` real storage.
-    pub fn inverse_f16(&self, field_hat: &[f32], out: &mut Array3<f16>) {
+    pub fn inverse_f16(&self, field_hat: &[f32], out: &mut Array3<f16>) -> ApolloResult<()> {
         let mut buffers = GpuFft3dBuffers::new(self);
-        self.inverse_f16_with_buffers(field_hat, out, &mut buffers);
+        self.inverse_f16_with_buffers(field_hat, out, &mut buffers)
     }
 
     /// Inverse mixed-precision transform using caller-retained reusable GPU and
@@ -378,7 +390,7 @@ impl GpuFft3d {
         field_hat: &[f32],
         out: &mut Array3<f16>,
         buffers: &mut GpuFft3dBuffers,
-    ) {
+    ) -> ApolloResult<()> {
         buffers.assert_matches(self);
         assert_eq!(field_hat.len(), 2 * buffers.len());
         assert_eq!(out.shape(), [self.nx, self.ny, self.nz]);
@@ -401,7 +413,7 @@ impl GpuFft3d {
         self.encode_inverse_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)?;
         for (dst, &value) in out
             .as_slice_mut()
             .expect("contiguous output")
@@ -410,6 +422,7 @@ impl GpuFft3d {
         {
             *dst = f16::from_f32(value);
         }
+        Ok(())
     }
 
     /// Inverse transform of an interleaved complex Leto spectrum into a
@@ -491,7 +504,7 @@ impl GpuFft3d {
             .iter_mut()
             .zip(field.iter().copied())
             .for_each(|(dst, src)| *dst = src as f32);
-        self.execute_forward_buffers(out, buffers);
+        self.execute_forward_buffers(out, buffers)?;
         Ok(())
     }
 
@@ -516,7 +529,7 @@ impl GpuFft3d {
             .iter_mut()
             .zip(field.iter().copied())
             .for_each(|(dst, src)| *dst = src.to_f32());
-        self.execute_forward_buffers(out, buffers);
+        self.execute_forward_buffers(out, buffers)?;
         Ok(())
     }
 
@@ -536,7 +549,7 @@ impl GpuFft3d {
         }
 
         Self::load_interleaved_spectrum(field_hat, buffers);
-        self.execute_inverse_buffers(buffers);
+        self.execute_inverse_buffers(buffers)?;
         for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
             *dst = value as f64;
         }
@@ -559,14 +572,18 @@ impl GpuFft3d {
         }
 
         Self::load_interleaved_spectrum(field_hat, buffers);
-        self.execute_inverse_buffers(buffers);
+        self.execute_inverse_buffers(buffers)?;
         for (dst, &value) in out.iter_mut().zip(buffers.re_host.iter()) {
             *dst = f16::from_f32(value);
         }
         Ok(())
     }
 
-    fn execute_forward_buffers(&self, out: &mut [f32], buffers: &mut GpuFft3dBuffers) {
+    fn execute_forward_buffers(
+        &self,
+        out: &mut [f32],
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
         self.queue
             .write_buffer(&buffers.re_buf, 0, bytemuck::cast_slice(&buffers.re_host));
         self.queue
@@ -580,7 +597,7 @@ impl GpuFft3d {
         self.encode_forward_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)?;
         for ((re, im), pair) in buffers
             .re_host
             .iter()
@@ -590,6 +607,7 @@ impl GpuFft3d {
             pair[0] = *re;
             pair[1] = *im;
         }
+        Ok(())
     }
 
     fn load_interleaved_spectrum(field_hat: &[f32], buffers: &mut GpuFft3dBuffers) {
@@ -599,7 +617,7 @@ impl GpuFft3d {
         }
     }
 
-    fn execute_inverse_buffers(&self, buffers: &mut GpuFft3dBuffers) {
+    fn execute_inverse_buffers(&self, buffers: &mut GpuFft3dBuffers) -> ApolloResult<()> {
         self.queue
             .write_buffer(&buffers.re_buf, 0, bytemuck::cast_slice(&buffers.re_host));
         self.queue
@@ -613,7 +631,7 @@ impl GpuFft3d {
         self.encode_inverse_split(&mut encoder, &buffers.re_buf, &buffers.im_buf);
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        buffers.read_split_into_host(self);
+        buffers.read_split_into_host(self)
     }
 
     pub(crate) fn run_device_axis_fft(&self, axis: Axis, inverse: bool) {
@@ -830,7 +848,7 @@ impl GpuFft3d {
         self.dispatch_unpack(encoder, axis, axis_len, batch_count);
     }
 
-    pub(crate) fn read_back_full_buffers(&self) -> (Vec<f32>, Vec<f32>) {
+    pub(crate) fn read_back_full_buffers(&self) -> ApolloResult<(Vec<f32>, Vec<f32>)> {
         let n = self.nx * self.ny * self.nz;
         let buf_size = (n * std::mem::size_of::<f32>()) as u64;
         let mut encoder = self
@@ -846,19 +864,27 @@ impl GpuFft3d {
         let im_slice = self.full_im_staging.slice(..buf_size);
         re_slice.map_async(wgpu::MapMode::Read, |_| {});
         im_slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = self.device.poll(wgpu::PollType::Wait);
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
 
         let re_out = {
-            let mapped = re_slice.get_mapped_range();
+            let mapped = re_slice
+                .get_mapped_range()
+                .map_err(|error| ApolloError::Wgpu {
+                    message: format!("real-component staging map failed: {error}"),
+                })?;
             bytemuck::cast_slice(&mapped).to_vec()
         };
         let im_out = {
-            let mapped = im_slice.get_mapped_range();
+            let mapped = im_slice
+                .get_mapped_range()
+                .map_err(|error| ApolloError::Wgpu {
+                    message: format!("imaginary-component staging map failed: {error}"),
+                })?;
             bytemuck::cast_slice(&mapped).to_vec()
         };
         self.full_re_staging.unmap();
         self.full_im_staging.unmap();
-        (re_out, im_out)
+        Ok((re_out, im_out))
     }
 }
 
@@ -931,9 +957,10 @@ mod tests {
         .expect("field");
         let mut buffers = GpuFft3dBuffers::new(&plan);
 
-        let allocating_forward = plan.forward(&field);
+        let allocating_forward = plan.forward(&field).expect("GPU readback must succeed");
         let mut reusable_forward = vec![0.0_f32; allocating_forward.len()];
-        plan.forward_into_with_buffers(&field, &mut reusable_forward, &mut buffers);
+        plan.forward_into_with_buffers(&field, &mut reusable_forward, &mut buffers)
+            .expect("GPU readback must succeed");
 
         assert_eq!(reusable_forward.len(), allocating_forward.len());
         for (actual, expected) in reusable_forward.iter().zip(allocating_forward.iter()) {
@@ -945,8 +972,10 @@ mod tests {
 
         let mut allocating_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
         let mut reusable_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
-        plan.inverse(&allocating_forward, &mut allocating_inverse);
-        plan.inverse_with_buffers(&reusable_forward, &mut reusable_inverse, &mut buffers);
+        plan.inverse(&allocating_forward, &mut allocating_inverse)
+            .expect("GPU readback must succeed");
+        plan.inverse_with_buffers(&reusable_forward, &mut reusable_inverse, &mut buffers)
+            .expect("GPU readback must succeed");
 
         for (actual, expected) in reusable_inverse.iter().zip(allocating_inverse.iter()) {
             assert!(
@@ -987,9 +1016,12 @@ mod tests {
         .expect("represented field");
         let mut buffers = GpuFft3dBuffers::new(&plan);
 
-        let expected = plan.forward(&represented);
+        let expected = plan
+            .forward(&represented)
+            .expect("GPU readback must succeed");
         let mut actual = vec![0.0_f32; expected.len()];
-        plan.forward_f16_into_with_buffers(&field_f16, &mut actual, &mut buffers);
+        plan.forward_f16_into_with_buffers(&field_f16, &mut actual, &mut buffers)
+            .expect("GPU readback must succeed");
 
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert!(
@@ -999,7 +1031,8 @@ mod tests {
         }
 
         let mut reconstructed = leto::Array3::from_elem([2, 2, 2], f16::from_f32(0.0));
-        plan.inverse_f16_with_buffers(&actual, &mut reconstructed, &mut buffers);
+        plan.inverse_f16_with_buffers(&actual, &mut reconstructed, &mut buffers)
+            .expect("GPU readback must succeed");
 
         for (actual, expected) in reconstructed.iter().zip(field_f16.iter()) {
             assert_eq!(
@@ -1052,7 +1085,7 @@ mod tests {
         let field = leto::Array3::from_shape_vec([2, 2, 2], values.clone()).expect("field");
         let leto_field = leto::Array3::from_shape_vec([2, 2, 2], values).expect("leto field");
 
-        let expected_forward = plan.forward(&field);
+        let expected_forward = plan.forward(&field).expect("GPU readback must succeed");
         let actual_forward = plan.forward_leto(leto_field.view()).expect("leto forward");
         assert_eq!(
             actual_forward.storage().as_slice(),
@@ -1060,7 +1093,8 @@ mod tests {
         );
 
         let mut expected_inverse = leto::Array3::<f64>::zeros([2, 2, 2]);
-        plan.inverse(&expected_forward, &mut expected_inverse);
+        plan.inverse(&expected_forward, &mut expected_inverse)
+            .expect("GPU readback must succeed");
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
                 .expect("leto spectrum");
@@ -1103,7 +1137,7 @@ mod tests {
             ])
             .expect("strided view");
 
-        let expected = plan.forward(&field);
+        let expected = plan.forward(&field).expect("GPU readback must succeed");
         let actual = plan.forward_leto(view).expect("leto forward");
         assert_eq!(actual.storage().as_slice(), expected.as_slice());
     }
@@ -1128,7 +1162,9 @@ mod tests {
         )
         .expect("leto f16 field");
 
-        let expected_forward = plan.forward_f16(&field_f16);
+        let expected_forward = plan
+            .forward_f16(&field_f16)
+            .expect("GPU readback must succeed");
         let actual_forward = plan
             .forward_f16_leto(leto_field.view())
             .expect("leto f16 forward");
@@ -1138,7 +1174,8 @@ mod tests {
         );
 
         let mut expected_inverse = leto::Array3::from_elem([2, 2, 2], f16::from_f32(0.0));
-        plan.inverse_f16(&expected_forward, &mut expected_inverse);
+        plan.inverse_f16(&expected_forward, &mut expected_inverse)
+            .expect("GPU readback must succeed");
         let leto_spectrum =
             leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
                 .expect("leto spectrum");

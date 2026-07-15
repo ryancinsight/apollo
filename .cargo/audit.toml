@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+    # WGPU 26 selects metal 0.32, whose archived paste dependency has no safe
+    # upgrade. Apollo advances when the Hephaestus-owned WGPU ABI advances.
+    "RUSTSEC-2024-0436",
+]

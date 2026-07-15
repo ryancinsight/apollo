@@ -2,20 +2,20 @@
 name = "xtask"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 publish = false
 
 [dependencies]
 anyhow = { workspace = true }
 apollo-fft = { path = "../crates/apollo-fft", optional = true }
 eunomia = { workspace = true, optional = true }
-rustfft = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
 [features]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
-bench-runner = ["dep:apollo-fft", "dep:eunomia", "dep:rustfft"]
+bench-runner = ["dep:apollo-fft", "dep:eunomia"]
 
 [lints]
 workspace = true

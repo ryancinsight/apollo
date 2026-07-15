@@ -87,14 +87,14 @@ impl MellinGpuKernel {
         let resample_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-mellin-wgpu resample pipeline layout"),
-                bind_group_layouts: &[&resample_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&resample_layout)],
+                immediate_size: 0,
             });
         let spectrum_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("apollo-mellin-wgpu spectrum pipeline layout"),
-                bind_group_layouts: &[&spectrum_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&spectrum_layout)],
+                immediate_size: 0,
             });
         let resample_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("apollo-mellin-wgpu resample pipeline"),
