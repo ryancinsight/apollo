@@ -3,14 +3,18 @@
 ## Benchmark runtime provider convergence [arch]
 
 - Target version: workspace integration; no runtime transform API change.
-- Phase: Foundation
-- [ ] Inventory every Criterion bench target and its measurement contract;
-  confirm that no benchmark closure is deleted or simplified.
-- [ ] Specify the canonical first-party measurement boundary and its Moirai
-  scheduling contract before replacing the Criterion dependency graph.
-- [ ] Migrate all benchmark entry points, remove Criterion and Rayon from the
-  resolved workspace graph, then verify value semantics and the benchmark
-  harness without claiming a performance result absent a baseline comparison.
+- Phase: Closure
+- [x] Inventory all seven benchmark targets and retain every production closure,
+  parameter matrix, setup phase, and buffer-reset/reuse operation.
+- [x] Add the canonical `apollo-bench` measurement boundary with explicit
+  warm-up/measurement budgets, adaptive batches, and sequential timing that
+  does not overlap Moirai-owned runtime work.
+- [x] Migrate all benchmark entry points, remove Criterion and Rayon from the
+  resolved workspace graph, and verify the harness without claiming a
+  performance result absent a recorded baseline comparison.
+- [x] Serialize real-device test processes with the committed `gpu-device`
+  nextest group after the full workspace gate reproduces NTT's concurrent
+  access violation; retain the GPU property test and its full 64-case domain.
 
 ## Shared Leto interop ownership [arch]
 

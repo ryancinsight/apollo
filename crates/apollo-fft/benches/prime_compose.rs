@@ -1,17 +1,16 @@
-//! Sub-minute benchmarks for the recursive prime-CT dispatch path.
+//! Native Apollo benchmarks for the recursive prime-CT dispatch path.
 //!
-//! ## Goal
-//!
-//! Measure the `fft_forward` dispatch path (which routes through the recursive
-//! prime-CT engine for N ≤ PRIME_CT_MAX_N) and confirm sub-microsecond latency
-//! for small composite sizes across powers-of-two and smooth composites.
+//! Measures the `fft_forward` dispatch path for powers-of-two, smooth
+//! composites, and two-by-prime composites without deleting either the
+//! in-place or clone-inclusive workload.
 
 #![allow(missing_docs)]
 
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use apollo_fft::application::execution::kernel::FftPrecision;
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use eunomia::Complex64;
 use std::hint::black_box;
+use std::time::Duration;
 
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)
@@ -19,66 +18,51 @@ fn signal(n: usize) -> Vec<Complex64> {
         .collect()
 }
 
-fn bench_sizes(c: &mut Criterion, label: &str, sizes: &[usize]) {
-    let mut group = c.benchmark_group(label);
-    group.warm_up_time(std::time::Duration::from_millis(200));
-    group.measurement_time(std::time::Duration::from_millis(800));
-
+fn bench_sizes(suite: &mut BenchmarkSuite, group: &str, sizes: &[usize]) {
     for &n in sizes {
         let input = signal(n);
-
-        // In-place on pre-allocated buffer — measures the kernel cost only.
-        group.bench_with_input(
-            BenchmarkId::new("radix_composite_inplace", n),
-            &input,
-            |b, inp| {
-                let mut buf = inp.clone();
-                b.iter(|| {
-                    Complex64::fft_forward(black_box(&mut buf));
-                    black_box(&buf);
-                    buf.copy_from_slice(inp);
-                });
+        let mut in_place = input.clone();
+        suite.run(
+            BenchmarkCase::new(group, "radix_composite_inplace", n),
+            || {
+                Complex64::fft_forward(black_box(&mut in_place));
+                black_box(&in_place);
+                in_place.copy_from_slice(&input);
             },
         );
 
-        // Clone-inclusive — measures allocation + kernel.
-        group.bench_with_input(
-            BenchmarkId::new("radix_composite_clone_inclusive", n),
-            &input,
-            |b, inp| {
-                b.iter(|| {
-                    let mut buf = inp.clone();
-                    Complex64::fft_forward(black_box(&mut buf));
-                    black_box(buf);
-                });
+        suite.run(
+            BenchmarkCase::new(group, "radix_composite_clone_inclusive", n),
+            || {
+                let mut clone = input.clone();
+                Complex64::fft_forward(black_box(&mut clone));
+                black_box(clone);
             },
         );
     }
-
-    group.finish();
 }
 
-fn bench_pot(c: &mut Criterion) {
-    bench_sizes(c, "radix_composite_powers_of_two", &[4, 8, 16, 32, 64]);
-}
-
-fn bench_smooth(c: &mut Criterion) {
+fn main() {
+    let config =
+        BenchmarkConfig::try_with_budgets(Duration::from_millis(200), Duration::from_millis(800))
+            .expect("invariant: literal benchmark budgets are non-zero");
+    let mut suite = BenchmarkSuite::new(config);
     bench_sizes(
-        c,
+        &mut suite,
+        "radix_composite_powers_of_two",
+        &[4, 8, 16, 32, 64],
+    );
+    bench_sizes(
+        &mut suite,
         "radix_composite_smooth_composites",
         &[
             6, 9, 10, 12, 14, 15, 18, 20, 21, 24, 25, 27, 28, 30, 36, 45, 49, 50, 60, 63,
         ],
     );
-}
-
-fn bench_two_by_prime(c: &mut Criterion) {
     bench_sizes(
-        c,
+        &mut suite,
         "two_by_prime_coprime_composites",
         &[38, 58, 62, 74, 82, 86, 94, 106],
     );
+    suite.emit();
 }
-
-criterion_group!(benches, bench_pot, bench_smooth, bench_two_by_prime);
-criterion_main!(benches);

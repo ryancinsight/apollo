@@ -1,2 +1,13 @@
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+[test-groups]
+gpu-device = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(/infrastructure::transport::gpu/)'
+test-group = "gpu-device"
+
+[[profile.default.overrides]]
+filter = 'test(/gpu_fft/)'
+test-group = "gpu-device"

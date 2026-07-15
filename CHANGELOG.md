@@ -10,6 +10,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] `apollo-bench` is the shared native benchmark runtime for FFT, NUFFT,
+  Radon, and STFT benchmark binaries. It preserves every measured closure and
+  parameter matrix while reporting sequential normalized median/minimum samples.
 - [arch] `apollo-leto-interop` is the shared, rank-polymorphic Leto boundary
   for every transform crate. It owns copy-on-write view materialization and
   fallible dense/Mnemosyne output construction; `apollo-fft` 0.17.0 retains
@@ -42,6 +45,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Remove the committed `target-cpu=native` flag so CI and published
   builds use portable code generation; local performance builds opt in through
   an explicit `RUSTFLAGS` override.
+- [patch] Serialize real-device tests through Nextest's `gpu-device` group,
+  preventing concurrent provider device acquisition without skipping GPU
+  property coverage.
 
 - `apollo-dht` compiles its live zero-copy Leto view forwarder only with the
   `wgpu` transport that consumes it. Default builds remain warning-clean, while
@@ -52,6 +58,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Removed
 
+- Criterion and its dev-only Rayon graph edge are removed from the workspace.
+  Benchmark binaries now depend on `apollo-bench` rather than a compatibility
+  adapter around the retired API.
 - `apollo-fft::application::utilities::leto_interop` and all transform-local
   Leto forwarding wrappers are removed. The PyO3 Leto-to-NumPy conversion
   helpers remain the dedicated external-ABI boundary.
