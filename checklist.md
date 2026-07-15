@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## D8 DCT/DST verification-tree normalization [arch]
+
+- Target version: internal verification structure; no transform API change.
+- Phase: Execution
+- [ ] Record the D8 ownership boundary: DCT/DST retains transform-specific
+  values and CPU oracles; only generic provider scaffolding may move upstream.
+- [ ] Partition the GPU verification suite by value-semantic concern and
+  consolidate repeated assertions in one test-support leaf.
+- [ ] Preserve the device-present CPU-differential, inverse-pair, Leto view,
+  typed-storage, dimensional, and typed-error contracts without skipped cases.
+- [ ] Verify the wgpu feature suite, Clippy, doctest, rustdoc, provider audit,
+  and the structural source scan; then synchronize D8 artifacts and publish.
+
 ## Benchmark runtime provider convergence [arch]
 
 - Target version: workspace integration; no runtime transform API change.

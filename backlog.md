@@ -308,6 +308,14 @@ Remaining replacement work:
   doctest, warning-clean rustdoc, provider audit, source-residue scans, and
   0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
+  In progress — owner Codex, claimed 2026-07-15; first bounded scope:
+  `apollo-dctdst` GPU verification tree, D8 ADR, and active PM records.
+  Acceptance: split the 796-line verification monolith by its distinct
+  capability, one-dimensional, typed-storage, dimensional, and rejection
+  contracts without changing a transform algorithm or weakening real-device
+  CPU-differential coverage. This is the first vertical harness increment;
+  it does not introduce an Apollo-owned device abstraction or compatibility
+  layer before the cross-transform provider contract is available.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
