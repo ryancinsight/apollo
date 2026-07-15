@@ -45,30 +45,33 @@
   typed buffers, pipeline construction, binding, command encoding, submission,
   and transfer.
 - [x] Verify provider fit: `ComputeDevice::write_buffer` preserves the reusable
-  typed-buffer contract; `CommandStream` records ordered axis/chirp passes;
-  and `GroupedKernelDevice` represents the pack/unpack group layout. No
-  upstream capability change is required.
+  typed-buffer contract, and `CommandStream` records ordered axis/chirp passes
+  over one flat typed binding group. No upstream capability change is required.
 - [x] Remove the obsolete `apollo-wgpu-helpers` edge from the FFT backend and
   buffer-reuse benchmark. Both now acquire `hephaestus_wgpu::WgpuDevice`
-  directly; 409 focused value-semantic nextest cases pass.
-- [x] Map the existing f32 radix, Chirp-Z, and pack/unpack stages to typed
-  Hephaestus command streams. The pack/unpack descriptor combines the two raw
-  uniform blocks into one POD parameter block; no compatibility adapter or
-  algorithm fallback is introduced.
-- [ ] Publish the typed FFT buffer and command-stream contract before migrating
-  NUFFT. Its fast paths must compose FFT, spread, and extract stages in one
-  provider-owned stream; retaining a raw command-encoder bridge is prohibited.
-- [ ] Partition the raw f32 and native reduced-precision transport into
+  directly; 403 all-feature value-semantic nextest cases pass.
+- [x] Replace raw f32 radix, Chirp-Z, and pack/unpack ownership with typed
+  Hephaestus descriptors. Pack/unpack consolidates the two raw uniform blocks
+  into one POD parameter block and external split buffers compose through a
+  provider command stream; no compatibility adapter or algorithm fallback is
+  introduced.
+- [x] Publish the typed FFT buffer and command-stream contract required by
+  NUFFT. Its fast paths can compose FFT, spread, and extract stages in one
+  provider-owned stream without a raw command-encoder bridge.
+- [x] State the three-dimensional DFT/inverse theorem, explicit normalization,
+  f32 storage contract, and command-stream dependency order in the README and
+  ADR 0006.
+- [x] Verify the f32 slice: format; locked all-feature and no-default checks;
+  warning-denied Clippy; real-device value-semantic radix and Bluestein nextest
+  cases; source scan; and f32 provider ownership review.
+- [ ] Partition and migrate the remaining native-f16 transport into the same
   domain storage, host conversion, typed kernel, and backend-orchestration
-  leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.
-- [ ] State the three-dimensional DFT/inverse theorem, explicit normalization,
-  storage precision contract, and command-stream dependency order in crate
-  Rustdoc, README, and ADR 0006.
-- [ ] Verify format; locked all-feature and no-default checks; warning-denied
-  Clippy; value-semantic CPU differential and inverse-roundtrip nextest cases;
-  doctests; rustdoc; provider audit; semver classification; examples; and a
+  leaves. Delete the final direct WGPU and `pollster` edge from `apollo-fft`.
+- [ ] Complete release verification after native-f16 migration: doctests,
+  rustdoc, provider audit, semver classification, examples, and a whole-crate
   source/manifest scan with no direct `wgpu`, `pollster`, or helper edge.
-- Evidence target: typed binding/layout and sealed-storage exclusion, then
+- Evidence target: typed binding/layout and external-buffer length validation,
+  then
   value-semantic CPU differential and inverse-roundtrip evidence. No
   machine-checked proof is planned.
 

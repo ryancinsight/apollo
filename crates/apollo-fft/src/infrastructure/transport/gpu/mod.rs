@@ -66,13 +66,7 @@ impl FftBackend for WgpuBackend {
     }
 
     fn plan_3d(&self, shape: Shape3D) -> ApolloResult<Self::Plan3D> {
-        GpuFft3d::new(
-            self.device.device().clone(),
-            self.device.queue().clone(),
-            shape.nx,
-            shape.ny,
-            shape.nz,
-        )
-        .map_err(|message| ApolloError::Wgpu { message })
+        GpuFft3d::new(self.device.clone(), shape.nx, shape.ny, shape.nz)
+            .map_err(|message| ApolloError::Wgpu { message })
     }
 }

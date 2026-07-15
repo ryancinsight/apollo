@@ -6,11 +6,12 @@ Accepted for implementation on 2026-07-15.
 
 ## Context
 
-`apollo-fft` owns direct WGPU device acquisition, buffers, bind groups,
+The legacy f32 dense-FFT transport owns direct WGPU buffers, bind groups,
 pipelines, command encoders, queue submission, and map/readback mechanics.
-Those responsibilities duplicate `hephaestus-wgpu` and retain the obsolete
-`apollo-wgpu-helpers` wrapper. They also couple dense-FFT mathematics to one
-device API.
+Those responsibilities duplicate `hephaestus-wgpu` and couple dense-FFT
+mathematics to one device API. The obsolete `apollo-wgpu-helpers` dependency
+is already removed from this crate, but the raw transport still prevents typed
+composition with downstream GPU transforms.
 
 Apollo owns transform definitions, planning, CPU execution, and host-array
 boundaries. Hephaestus owns typed accelerator buffers and device execution.
@@ -18,12 +19,15 @@ Leto remains a CPU-only host boundary; it does not model GPU buffers.
 
 ## Decision
 
-Replace the raw f32 and native reduced-precision WGPU implementations with
-typed Hephaestus kernel descriptors and ordered command streams. A sealed
-accelerator storage trait admits only the concrete storage profiles implemented
-by the provider. Host conversion validates representability before a provider
-allocation or dispatch; any lossy reduced-precision conversion is an explicit
-operation.
+Replace the raw f32 implementation with typed Hephaestus kernel descriptors
+and ordered command streams. The f32 plan now accepts `WgpuDevice` and exposes
+only `WgpuBuffer<f32>` plus `WgpuCommandStream` at its composition boundary.
+Host f64/f16 conversion remains explicit at the Leto boundary before f32
+provider storage is written.
+
+The native-f16 implementation is a separate residual scope. It remains inside
+its own `f16_plan` hierarchy until it receives the same provider descriptor
+implementation; it is not an f32 compatibility path or a fallback.
 
 Apollo retains the dense FFT algorithm and WGSL transform source. Each kernel
 descriptor declares bindings and dispatch geometry, while Hephaestus constructs
@@ -31,20 +35,20 @@ and owns pipelines, buffers, bindings, encoders, submission, and readback.
 The command stream establishes every producer-before-consumer dependency among
 axis transforms, transposes, and output transfer.
 
-The provider contract already preserves the reusable-buffer API: its typed
-`ComputeDevice::write_buffer` overwrites an allocated accelerator buffer without
-exposing WGPU. `CommandStream` records barrier-separated axis and chirp passes,
-and `GroupedKernelDevice` represents the pack/unpack shader's existing three
-binding groups. Therefore this migration requires no provider capability change.
+The provider contract preserves the reusable-buffer API: typed
+`ComputeDevice::write_buffer` overwrites an allocated accelerator buffer,
+`CommandStream` records barrier-separated axis and chirp passes, and stream
+copy operations compose external NUFFT buffers with the plan-owned workspace.
+No provider capability change is required.
 
 The f32 migration retains the existing radix-2/radix-4 and Bluestein Chirp-Z
-kernel mathematics. FFT and Chirp-Z descriptors bind their storage in group
-zero and their typed parameter block in group one. Pack/unpack currently carry
-two raw uniform blocks; their provider-native form consolidates those values
-into one `PackParams` POD block at the volume group. This is a layout-only
-change: the axis length, batch count, volume dimensions, axis selector, and
-workspace length retain their existing values. One grouped descriptor then
-becomes the SSOT for both packing directions.
+kernel mathematics. All f32 descriptors use one provider-managed binding group:
+storage occupies bindings `0..N`, and the POD parameter block occupies the
+terminal binding. Pack/unpack consolidates the legacy FFT and volume uniforms
+into one `PackParams` block. This is a layout-only change: axis length, batch
+count, volume dimensions, axis selector, and workspace length retain their
+existing values. One generic pack descriptor owns both directions through an
+entry-point marker type.
 
 ## Mathematical contract
 
@@ -65,9 +69,13 @@ evidence after migration.
 
 ## Consequences
 
-- Apollo removes its direct WGPU and helper dependency edges from this crate.
-- Hephaestus is the sole owner of device mechanics; no local compatibility
-  adapter remains.
-- The host-to-device precision boundary is explicit and testable.
-- The public GPU surface may change; the pre-1.0 release advances to 0.16.0
-  after semver classification.
+- The f32 plan has no direct WGPU device, queue, pipeline, bind-group, command
+  encoder, or transfer ownership. Hephaestus is the sole owner of those
+  mechanics and no local compatibility adapter remains.
+- Native f16 remains the only direct WGPU residual in `apollo-fft`; the crate
+  cannot remove direct `wgpu` and `pollster` dependencies until that scope is
+  migrated.
+- The f32 host-to-device precision boundary and typed external-buffer contract
+  are value-semantic test targets.
+- `GpuFft3d::new` now accepts `WgpuDevice` rather than raw device/queue arcs;
+  the pre-1.0 release advances to 0.16.0 after semver classification.

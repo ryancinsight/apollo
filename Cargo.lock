@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "apollo-fft-macros",
  "approx",
@@ -146,6 +146,7 @@ dependencies = [
  "criterion",
  "eunomia",
  "half",
+ "hephaestus-core",
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",

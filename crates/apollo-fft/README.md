@@ -43,9 +43,39 @@ surface supports `f64` storage with `Complex64` compute, `f32` storage with
 precision profiles to avoid repeated spectrum allocation in memory-bound
 workloads.
 
+## Hephaestus accelerator contract
+
+The `wgpu` feature routes f32 dense-FFT execution through
+`hephaestus_wgpu::WgpuDevice`. Apollo supplies zero-sized descriptors for the
+radix, pack/unpack, and Bluestein stages; Hephaestus owns typed buffers,
+pipeline preparation, binding validation, ordered command streams, submission,
+and transfer. `GpuFft3d::encode_forward_split` and
+`GpuFft3d::encode_inverse_split` accept only provider-typed split-complex
+buffers and a provider command stream, so downstream composed operations such
+as NUFFT do not acquire a raw device, queue, buffer, or encoder.
+
+For dimensions `N_x`, `N_y`, and `N_z`, the provider stream records forward
+axes in Z/Y/X order and inverse axes in X/Y/Z order. The transform convention is
+
+```text
+X[k_x, k_y, k_z] = sum_{x,y,z} x[x,y,z]
+  exp(-2*pi*i*(k_x*x/N_x + k_y*y/N_y + k_z*z/N_z))
+```
+
+with inverse positive exponent and `1/(N_x*N_y*N_z)` normalization. Root-of-
+unity orthogonality proves `F^-1(F(x)) = x` in exact arithmetic. This is a
+mathematical proof sketch, not a machine-checked proof. The real-device typed
+stream tests verify a 2x2x2 delta exactly and a 2x3x2 Bluestein delta within
+the documented f32 `gamma_256` rounding bound.
+
+Native f16 shader execution remains a separate migration scope. It is not a
+fallback for the provider-native f32 path and retains its own documented
+precision contract until it is converted to the same descriptor boundary.
+
 ## Verification
 
 Tests cover analytical small transforms, radix-2 and Bluestein parity against
-direct DFT, inverse roundtrips, Parseval-style energy checks, linearity,
+direct DFT, inverse roundtrips, typed external-buffer command-stream
+composition, Parseval-style energy checks, linearity,
 caller-owned output paths, slice-level real-forward parity and shape rejection,
 precision profile behavior, and 2D/3D separable axis execution.

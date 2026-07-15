@@ -14,7 +14,7 @@ var<storage, read> chirp_re: array<f32>;
 @group(0) @binding(3)
 var<storage, read> chirp_im: array<f32>;
 
-@group(1) @binding(0)
+@group(0) @binding(4)
 var<uniform> params: ChirpParams;
 
 const PI: f32 = 3.14159265358979323846;

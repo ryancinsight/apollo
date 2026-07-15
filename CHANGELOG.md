@@ -8,6 +8,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Changed
+
+- `apollo-fft` 0.16.0 routes its f32 dense-FFT storage, kernel preparation,
+  binding validation, command ordering, submission, and transfer through
+  Hephaestus. The provider-native external split-buffer stream contract permits
+  downstream transforms to compose FFT stages without raw WGPU handles.
+
 ### Removed
 
 - `apollo-fft` no longer depends on the obsolete `apollo-wgpu-helpers`
@@ -19,6 +26,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   command streams.
 
 ### Breaking
+
+- [major] `apollo-fft` 0.16.0 changes `GpuFft3d::new` to accept a
+  `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs, changes
+  `GpuFft3dBuffers::new` to report typed allocation failure, and replaces raw
+  encoder buffer APIs with `WgpuBuffer<f32>` plus `WgpuCommandStream`.
+  Native-f16 execution remains a separately tracked raw-WGPU residual.
 
 - [major] `apollo-stft` 0.4.0 removes the `wgpu_backend` forwarding module and
   raw device/queue accessors. `StftWgpuBackend::new` now accepts

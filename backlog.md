@@ -77,23 +77,26 @@ Remaining replacement work:
   owner Codex; last-update 2026-07-15; completed scopes FWHT, CZT, DHT,
   DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, Hilbert, Mellin, SFT, SDFT, SHT,
   Radon, and STFT; FFT's helper edge is removed and 1 helper consumer remains.
-  - [/] D6-FFT [arch] (owner Codex, claimed 2026-07-15; scope
+  - [x] D6-FFT-f32 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     `docs/adr/0006-fft-hephaestus-dispatch.md`, and D6 PM entries): replace
-    the direct dense-FFT pipeline, bind-group, encoder, queue, transfer, and
+    the f32 dense-FFT pipeline, binding, encoder, queue, transfer, and
     device-acquisition ownership with typed Hephaestus kernels and ordered
-    command streams. Preserve Apollo's FFT mathematics and Leto CPU boundary;
-    move only device ownership to Hephaestus. The acceptance contract includes
-    the documented three-dimensional DFT/inverse theorem, sealed native and
-    reduced accelerator storage, CPU differential and inverse-roundtrip tests,
-    provider audit, and a source/manifest scan with no direct `wgpu`,
-    `pollster`, or helper edge. Provider-fit audit confirms that
-    `ComputeDevice::write_buffer` preserves reusable typed-buffer semantics,
-    `CommandStream` preserves pass order, and `GroupedKernelDevice` represents
-    the existing pack/unpack binding groups; no upstream capability change is
-    required. This is the active prerequisite for D6-NUFFT because its fast
-    paths must interleave FFT stages with spread/extract stages in one typed
-    command stream.
+    command streams. `apollo-fft` 0.16.0 exposes typed external split buffers
+    and one provider stream so NUFFT can compose spread/extract and FFT stages.
+    The mathematical convention, f32 rounding-bound tests, Leto host boundary,
+    and reusable typed-buffer contract are documented in ADR 0006 and the
+    crate README. Evidence: all-feature/no-default checks, warning-denied
+    Clippy, and real-device radix and Bluestein delta value tests.
+  - [ ] D6-FFT-native-f16 [arch] (owner unassigned; scope
+    `crates/apollo-fft/src/infrastructure/transport/gpu/infrastructure/gpu_fft/f16_plan{.rs,/}`,
+    native-f16 shaders, Cargo feature edges, ADR 0006, and D6 PM entries):
+    migrate the remaining native-f16 device acquisition, pipelines, bindings,
+    encoder, queue, and readback to the same Hephaestus descriptor boundary.
+    Preserve its native f16 arithmetic and `ShaderF16` capability contract.
+    Acceptance requires real-device radix/Bluestein f16 differential and
+    roundtrip evidence plus a source/manifest scan with no direct `wgpu` or
+    `pollster` edge in `apollo-fft`.
   - [x] D6-Radon [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-radon/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     ADR 0007, and D6 PM entries): `apollo-radon` 0.3.0 replaces direct WGPU
@@ -116,7 +119,7 @@ Remaining replacement work:
     Evidence: 46 focused nextest cases including real-device CPU differential,
     non-power-of-two, and reusable-storage execution; Clippy, doctest, rustdoc,
     provider audit, direct source/dependency scans, and semver classification.
-  - [!] D6-NUFFT [arch] (owner Codex, blocked 2026-07-15; scope
+  - [/] D6-NUFFT [arch] (owner Codex, re-opened 2026-07-15; scope
     `crates/apollo-nufft/{Cargo.toml,README.md,src,infrastructure,benches}` and
     D6 PM entries): replace direct and fast one-/three-dimensional NUFFT raw
     pipeline, binding, encoder, queue, transfer, and helper ownership with
@@ -125,11 +128,9 @@ Remaining replacement work:
     accelerator storage contract. The acceptance contract requires a theorem/
     convention update, direct and fast CPU differential tests, reusable-storage
     coverage, provider audit, and a source/manifest scan with no direct `wgpu`,
-    `pollster`, or helper edge. Blocker: the fast paths call
-    `apollo_fft::GpuFft3d::encode_forward_split` and `encode_inverse_split`
-    with raw WGPU buffers and a raw command encoder. Re-open after D6-FFT
-    exposes the equivalent typed-buffer, command-stream contract; a local
-    bridge would retain prohibited device ownership in Apollo.
+    `pollster`, or helper edge. The typed `GpuFft3d` stream contract is now
+    available from D6-FFT-f32; migrate NUFFT directly against that provider
+    boundary without a local device or command-encoder bridge.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,

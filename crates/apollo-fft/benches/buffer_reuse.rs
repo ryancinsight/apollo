@@ -32,7 +32,7 @@ fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
 /// Acquire a WGPU device and build a `GpuFft3d` plan, or return `None` if unavailable.
 fn try_fft_plan(nx: usize, ny: usize, nz: usize) -> Option<GpuFft3d> {
     let device = hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench").ok()?;
-    GpuFft3d::new(device.device().clone(), device.queue().clone(), nx, ny, nz).ok()
+    GpuFft3d::new(device, nx, ny, nz).ok()
 }
 
 /// Benchmark the forward 3D FFT comparing per-call-allocating vs buffer-reuse paths.
@@ -65,7 +65,7 @@ fn bench_forward_3d(c: &mut Criterion) {
         });
 
         // Reuse path: caller retains GPU buffers across repeated calls.
-        let mut buffers = GpuFft3dBuffers::new(&plan);
+        let mut buffers = GpuFft3dBuffers::new(&plan).expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", nx), |b| {
             b.iter(|| {
                 plan.forward_into_with_buffers(
@@ -111,7 +111,7 @@ fn bench_inverse_3d(c: &mut Criterion) {
         });
 
         // Reuse path: caller retains GPU buffers across repeated calls.
-        let mut buffers = GpuFft3dBuffers::new(&plan);
+        let mut buffers = GpuFft3dBuffers::new(&plan).expect("provider buffer allocation");
         group.bench_function(BenchmarkId::new("with_buffers", nx), |b| {
             let mut out = Array3::<f64>::zeros([nx, ny, nz]);
             b.iter(|| {

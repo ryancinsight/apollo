@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
@@ -9,6 +9,7 @@ description = "Reusable FFT planning, execution, and cache abstractions for Apol
 
 [dependencies]
 hephaestus-wgpu = { workspace = true, optional = true }
+hephaestus-core = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true }
@@ -35,6 +36,7 @@ rustfft = { workspace = true }
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",
+    "dep:hephaestus-core",
     "dep:wgpu",
     "dep:pollster"
 ]

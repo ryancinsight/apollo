@@ -28,9 +28,11 @@
 //!
 //! This module is compiled only when the `native-f16` feature is enabled.
 
-use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::pipeline::AxisPackStage;
+mod stages;
+
+use self::stages::{AxisPackStage, NativeChirpData as ChirpData, NativeRadixStages as RadixStages};
 use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
-    Axis, AxisStrategy, ChirpData, RadixStages,
+    Axis, AxisStrategy,
 };
 use crate::{f16 as HalfF16, fft_1d_complex_inplace, Complex64};
 use leto::{Array1, Array3};
@@ -1260,8 +1262,7 @@ mod tests {
 
         let Ok(plan_f32) =
             crate::infrastructure::transport::gpu::infrastructure::gpu_fft::GpuFft3d::new(
-                Arc::new(device),
-                Arc::new(queue),
+                hephaestus_wgpu::WgpuDevice::new(Arc::new(device), Arc::new(queue)),
                 4,
                 4,
                 4,

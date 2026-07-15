@@ -43,28 +43,26 @@
   direct source/dependency scans. No machine-checked proof is performed.
 - Residual: FFT raw transport and the sole NUFFT helper consumer remain.
 
-## FFT Hephaestus migration provider-fit audit [arch]
+## FFT Hephaestus f32 migration [arch]
 
-- Performed: inspected the raw FFT transport against the current Hephaestus
-  contracts before source migration. `ComputeDevice::write_buffer` and
-  `write_sub_buffer` preserve the public reusable typed-buffer contract;
-  `CommandStream` records the ordered axis and chirp passes; and
-  `GroupedKernelDevice`/`GroupedKernelSource` express the existing pack/unpack
-  shader groups without Apollo constructing bindings or pipelines.
-- Decision: no upstream capability change is required. Apollo will convert the
-  f32 and native reduced-precision transport directly to typed Hephaestus
-  kernels, preserving Apollo's DFT mathematics and Leto CPU boundary.
-- Binding decision: radix and Chirp-Z retain their existing storage/parameter
-  split as grouped kernel descriptors. Pack/unpack combines the raw FFT and
-  volume uniforms into one POD parameter block at the provider boundary, so
-  one descriptor owns both directions without a WGPU bind-group adapter.
-- Evidence tier: source-level trait-contract inspection. This establishes API
-  fitness only; value-semantic CPU/GPU differential and roundtrip evidence is
-  still required after implementation.
-- Residual: `apollo-fft` now uses `hephaestus_wgpu::WgpuDevice` directly and
-  has no helper edge. Its raw `wgpu` and `pollster` transport remains the
-  active D6-FFT migration. NUFFT is the sole helper consumer, so the wrapper
-  cannot yet be deleted.
+- Performed: replaced f32 dense-FFT device acquisition, buffers, pipeline
+  creation, bindings, command encoding, submission, and transfer with typed
+  Hephaestus descriptors and streams. `ComputeDevice::write_buffer` preserves
+  reusable typed storage; `CommandStream` records external-to-plan copy,
+  axis-pass, and plan-to-external copy ordering.
+- Binding decision: f32 radix and Chirp-Z descriptors use storage bindings
+  followed by one terminal POD parameter binding. Pack/unpack consolidates the
+  two legacy uniform blocks into `PackParams`; marker types select entry points
+  without duplicated kernel definitions.
+- Evidence tier: type-level typed-buffer/stream contract plus empirical
+  real-device value tests. A 2x2x2 delta is exact; a 2x3x2 Bluestein delta and
+  inverse roundtrip satisfy the documented `gamma_256` f32 bound. No
+  machine-checked proof is performed.
+- Residual: `GpuFft3dF16Native` is the only direct WGPU/pollster transport in
+  `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; the remaining direct
+  dependencies cannot be removed until D6-FFT-native-f16. NUFFT is re-opened
+  because the required f32 typed external-buffer stream now exists; it remains
+  the sole `apollo-wgpu-helpers` consumer.
 
 ## SHT Hephaestus command-stream migration [arch]
 
