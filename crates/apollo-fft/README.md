@@ -68,12 +68,22 @@ mathematical proof sketch, not a machine-checked proof. The real-device typed
 stream tests verify a 2x2x2 delta exactly and a 2x3x2 Bluestein delta within
 the documented f32 `gamma_256` rounding bound.
 
-Native f16 shader execution is a separate migration scope. `try_new` requires
-`ShaderF16` through `hephaestus_wgpu::WgpuDevice`, so adapter selection never
-silently drops the capability and Apollo no longer owns device acquisition or
-Pollster orchestration. It is not a fallback for the provider-native f32 path;
-its remaining raw pipeline and transfer mechanics retain the documented
-precision contract until they move to the same descriptor boundary.
+Native f16 shader execution reuses this same typed plan with `u16` physical
+storage and WGSL `array<f16>` declarations. The sealed storage contract selects
+the three shader sources and records radix-four availability, so f32 uses its
+radix-four entries while native half storage selects the source's radix-two
+entries without a parallel dispatcher. `try_new` requires `ShaderF16` through
+`hephaestus_wgpu::WgpuDevice`; adapter selection cannot silently drop the
+capability. Apollo owns only f32↔half conversion and FFT equations, while
+Hephaestus owns allocation, pipeline validation, binding, command encoding,
+submission, and readback for both storage representations.
+
+For the all-Bluestein 3×3×3 reconstruction fixture, the implementation counts
+265 half-rounding sites across input conversion and its three forward and three
+inverse axes. With unit roundoff `u = 2⁻¹¹` and
+`γ_k = ku/(1-ku)`, the value-semantic roundtrip assertion uses
+`γ_265 · ‖input‖₁`. This is an analytical finite-precision bound for the
+fixture, not a machine-checked proof.
 
 ## Verification
 

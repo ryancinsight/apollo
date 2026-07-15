@@ -1,6 +1,8 @@
 //! Ordered typed-kernel dispatch for dense FFT plans.
 
-use hephaestus_core::{Binding, CommandStream, DeviceBuffer, DispatchGrid, KernelDevice};
+use hephaestus_core::{
+    Binding, CommandStream, ComputeDevice, DeviceBuffer, DispatchGrid, KernelDevice,
+};
 use hephaestus_wgpu::{WgpuBuffer, WgpuCommandStream};
 
 use crate::{ApolloError, ApolloResult};
@@ -8,7 +10,7 @@ use crate::{ApolloError, ApolloResult};
 use super::{
     kernel::{
         BitReverse, Butterfly, ChirpKernel, ChirpNegateImaginary, ChirpPointMultiply,
-        ChirpPostmultiply, ChirpPremultiply, ChirpScale, FftKernel, Pack, PackKernel,
+        ChirpPostmultiply, ChirpPremultiply, ChirpScale, FftKernel, FftStorage, Pack, PackKernel,
         RadixFourBitReverse, RadixFourButterfly, Scale, Unpack,
     },
     pipeline::GpuFft3d,
@@ -33,7 +35,7 @@ fn product_grid(left: u32, right: u32) -> ApolloResult<DispatchGrid> {
     grid(elements)
 }
 
-impl GpuFft3d {
+impl<T: FftStorage> GpuFft3d<T> {
     fn encode_pack(&self, stream: &mut WgpuCommandStream<'_>, axis: Axis) -> ApolloResult<()> {
         let params = match axis {
             Axis::X => self.pack_x,
@@ -42,7 +44,7 @@ impl GpuFft3d {
         };
         let kernel = self
             .device
-            .prepare(&PackKernel::<Pack>::new())
+            .prepare(&PackKernel::<T, Pack>::new())
             .map_err(provider_error)?;
         let bindings = [
             Binding::read_write(&self.workspace_real),
@@ -68,7 +70,7 @@ impl GpuFft3d {
         };
         let kernel = self
             .device
-            .prepare(&PackKernel::<Unpack>::new())
+            .prepare(&PackKernel::<T, Unpack>::new())
             .map_err(provider_error)?;
         let bindings = [
             Binding::read_write(&self.workspace_real),
@@ -102,11 +104,11 @@ impl GpuFft3d {
         if stages.radix_four {
             let bit_reverse = self
                 .device
-                .prepare(&FftKernel::<RadixFourBitReverse>::new())
+                .prepare(&FftKernel::<T, RadixFourBitReverse>::new())
                 .map_err(provider_error)?;
             let butterfly = self
                 .device
-                .prepare(&FftKernel::<RadixFourButterfly>::new())
+                .prepare(&FftKernel::<T, RadixFourButterfly>::new())
                 .map_err(provider_error)?;
             stream
                 .encode(
@@ -125,11 +127,11 @@ impl GpuFft3d {
         } else {
             let bit_reverse = self
                 .device
-                .prepare(&FftKernel::<BitReverse>::new())
+                .prepare(&FftKernel::<T, BitReverse>::new())
                 .map_err(provider_error)?;
             let butterfly = self
                 .device
-                .prepare(&FftKernel::<Butterfly>::new())
+                .prepare(&FftKernel::<T, Butterfly>::new())
                 .map_err(provider_error)?;
             stream
                 .encode(
@@ -149,7 +151,7 @@ impl GpuFft3d {
         if let Some(params) = stages.inverse_scale {
             let scale = self
                 .device
-                .prepare(&FftKernel::<Scale>::new())
+                .prepare(&FftKernel::<T, Scale>::new())
                 .map_err(provider_error)?;
             stream
                 .encode(&scale, &bindings, &params, bit_reverse_grid)
@@ -161,7 +163,7 @@ impl GpuFft3d {
     fn encode_chirp(
         &self,
         stream: &mut WgpuCommandStream<'_>,
-        chirp: &ChirpData,
+        chirp: &ChirpData<T>,
         inverse: bool,
     ) -> ApolloResult<()> {
         let bindings = [
@@ -174,19 +176,19 @@ impl GpuFft3d {
         let output_grid = product_grid(chirp.params.n, chirp.params.batch_count)?;
         let premultiply = self
             .device
-            .prepare(&ChirpKernel::<ChirpPremultiply>::new())
+            .prepare(&ChirpKernel::<T, ChirpPremultiply>::new())
             .map_err(provider_error)?;
         let point_multiply = self
             .device
-            .prepare(&ChirpKernel::<ChirpPointMultiply>::new())
+            .prepare(&ChirpKernel::<T, ChirpPointMultiply>::new())
             .map_err(provider_error)?;
         let postmultiply = self
             .device
-            .prepare(&ChirpKernel::<ChirpPostmultiply>::new())
+            .prepare(&ChirpKernel::<T, ChirpPostmultiply>::new())
             .map_err(provider_error)?;
         let negate_imaginary = self
             .device
-            .prepare(&ChirpKernel::<ChirpNegateImaginary>::new())
+            .prepare(&ChirpKernel::<T, ChirpNegateImaginary>::new())
             .map_err(provider_error)?;
         if inverse {
             stream
@@ -207,7 +209,7 @@ impl GpuFft3d {
         if inverse {
             let scale = self
                 .device
-                .prepare(&ChirpKernel::<ChirpScale>::new())
+                .prepare(&ChirpKernel::<T, ChirpScale>::new())
                 .map_err(provider_error)?;
             stream
                 .encode(&negate_imaginary, &bindings, &chirp.params, output_grid)
@@ -287,11 +289,11 @@ impl GpuFft3d {
     /// The stream records external-to-plan copies, Z/Y/X axis transforms, and
     /// plan-to-external copies in that exact dependency order.  The caller
     /// submits the stream only after composing any adjacent typed kernels.
-    pub fn encode_forward_split(
+    pub(crate) fn encode_forward_split_typed(
         &self,
         stream: &mut WgpuCommandStream<'_>,
-        real: &WgpuBuffer<f32>,
-        imaginary: &WgpuBuffer<f32>,
+        real: &WgpuBuffer<T>,
+        imaginary: &WgpuBuffer<T>,
     ) -> ApolloResult<()> {
         self.validate_external_buffers(real, imaginary)?;
         stream
@@ -315,11 +317,11 @@ impl GpuFft3d {
     ///
     /// The inverse records X/Y/Z axis transforms.  Each inverse axis applies
     /// its `1/N` scale, so exact arithmetic satisfies `F^{-1}(F(x)) = x`.
-    pub fn encode_inverse_split(
+    pub(crate) fn encode_inverse_split_typed(
         &self,
         stream: &mut WgpuCommandStream<'_>,
-        real: &WgpuBuffer<f32>,
-        imaginary: &WgpuBuffer<f32>,
+        real: &WgpuBuffer<T>,
+        imaginary: &WgpuBuffer<T>,
     ) -> ApolloResult<()> {
         self.validate_external_buffers(real, imaginary)?;
         stream
@@ -341,8 +343,8 @@ impl GpuFft3d {
 
     fn validate_external_buffers(
         &self,
-        real: &WgpuBuffer<f32>,
-        imaginary: &WgpuBuffer<f32>,
+        real: &WgpuBuffer<T>,
+        imaginary: &WgpuBuffer<T>,
     ) -> ApolloResult<()> {
         let expected = self.element_count();
         for (component, actual) in [("real", real.len()), ("imaginary", imaginary.len())] {
@@ -354,6 +356,93 @@ impl GpuFft3d {
             }
         }
         Ok(())
+    }
+
+    /// Submit a forward transform from and back into typed host components.
+    pub(crate) fn execute_forward_in_place(
+        &self,
+        real: &mut [T],
+        imaginary: &mut [T],
+    ) -> ApolloResult<()> {
+        self.execute_in_place(real, imaginary, false)
+    }
+
+    /// Submit an inverse transform from and back into typed host components.
+    pub(crate) fn execute_inverse_in_place(
+        &self,
+        real: &mut [T],
+        imaginary: &mut [T],
+    ) -> ApolloResult<()> {
+        self.execute_in_place(real, imaginary, true)
+    }
+
+    fn execute_in_place(
+        &self,
+        real: &mut [T],
+        imaginary: &mut [T],
+        inverse: bool,
+    ) -> ApolloResult<()> {
+        let expected = self.element_count();
+        for (component, values) in [("real", real.len()), ("imaginary", imaginary.len())] {
+            if values != expected {
+                return Err(ApolloError::ShapeMismatch {
+                    expected: format!("{expected} {component} FFT values"),
+                    actual: format!("{values} {component} FFT values"),
+                });
+            }
+        }
+        self.device
+            .write_buffer(&self.volume_real, real)
+            .map_err(provider_error)?;
+        self.device
+            .write_buffer(&self.volume_imaginary, imaginary)
+            .map_err(provider_error)?;
+        let mut stream = self.device.stream().map_err(provider_error)?;
+        if inverse {
+            self.encode_axis(&mut stream, Axis::X, true)?;
+            self.encode_axis(&mut stream, Axis::Y, true)?;
+            self.encode_axis(&mut stream, Axis::Z, true)?;
+        } else {
+            self.encode_axis(&mut stream, Axis::Z, false)?;
+            self.encode_axis(&mut stream, Axis::Y, false)?;
+            self.encode_axis(&mut stream, Axis::X, false)?;
+        }
+        stream.submit().map_err(provider_error)?;
+        self.device
+            .download(&self.volume_real, real)
+            .map_err(provider_error)?;
+        self.device
+            .download(&self.volume_imaginary, imaginary)
+            .map_err(provider_error)
+    }
+}
+
+impl GpuFft3d<f32> {
+    /// Encode a forward transform over external typed split-complex buffers.
+    ///
+    /// The stream records external-to-plan copies, Z/Y/X axis transforms, and
+    /// plan-to-external copies in that exact dependency order. The caller
+    /// submits the stream only after composing any adjacent typed kernels.
+    pub fn encode_forward_split(
+        &self,
+        stream: &mut WgpuCommandStream<'_>,
+        real: &WgpuBuffer<f32>,
+        imaginary: &WgpuBuffer<f32>,
+    ) -> ApolloResult<()> {
+        self.encode_forward_split_typed(stream, real, imaginary)
+    }
+
+    /// Encode an inverse transform over external typed split-complex buffers.
+    ///
+    /// The inverse records X/Y/Z axis transforms. Each inverse axis applies
+    /// its `1/N` scale, so exact arithmetic satisfies `F^{-1}(F(x)) = x`.
+    pub fn encode_inverse_split(
+        &self,
+        stream: &mut WgpuCommandStream<'_>,
+        real: &WgpuBuffer<f32>,
+        imaginary: &WgpuBuffer<f32>,
+    ) -> ApolloResult<()> {
+        self.encode_inverse_split_typed(stream, real, imaginary)
     }
 }
 

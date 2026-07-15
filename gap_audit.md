@@ -72,7 +72,7 @@
 - Current residual: native-f16 FFT transport is the only direct-provider
   scope; the obsolete wrapper is deleted.
 
-## FFT Hephaestus f32 migration [arch]
+## FFT Hephaestus storage-generic migration [arch]
 
 - Test-oracle correction: `axis_workspace_matches_axis_batch_geometry` now
   asserts the analytical workspace law `M_axis * batch_axis`. For shape
@@ -82,33 +82,30 @@
   already returned the derived values. Evidence tier: algebraic specification
   encoded as a value-semantic unit test, not a test relaxation.
 
-- Performed: replaced f32 dense-FFT device acquisition, buffers, pipeline
-  creation, bindings, command encoding, submission, and transfer with typed
-  Hephaestus descriptors and streams. `ComputeDevice::write_buffer` preserves
-  reusable typed storage; `CommandStream` records external-to-plan copy,
-  axis-pass, and plan-to-external copy ordering.
-- Binding decision: f32 radix and Chirp-Z descriptors use storage bindings
-  followed by one terminal POD parameter binding. Pack/unpack consolidates the
-  two legacy uniform blocks into `PackParams`; marker types select entry points
-  without duplicated kernel definitions.
+- Performed: replaced f32 and native-half dense-FFT device acquisition,
+  buffers, pipeline creation, bindings, command encoding, submission, and
+  transfer with one `GpuFft3d<T>` typed Hephaestus plan. `ComputeDevice::write_buffer`
+  preserves reusable typed storage; `CommandStream` records external-to-plan
+  copy, axis-pass, and plan-to-external copy ordering.
+- Binding decision: the sealed `FftStorage` contract selects WGSL sources,
+  coefficient encoding, and radix capability for f32 or physical `u16` half
+  storage. Every descriptor uses one flat binding group and a terminal POD
+  parameter block. Pack/unpack consolidates legacy uniform blocks into
+  `PackParams`; marker types select entries without duplicated dispatch code.
+- Mathematical contract: f32 retains the exact 3D DFT/inverse theorem. The
+  all-Bluestein 3×3×3 half roundtrip counts 265 rounding sites, hence asserts
+  `γ_265·‖input‖₁` with half unit roundoff `u = 2⁻¹¹`. This is an analytical
+  fixture bound, not a machine-checked proof.
 - Evidence tier: type-level typed-buffer/stream contract plus empirical
-  real-device value tests. A 2x2x2 delta is exact; a 2x3x2 Bluestein delta and
-  inverse roundtrip satisfy the documented `gamma_256` f32 bound. No
-  machine-checked proof is performed.
-- Residual: `GpuFft3dF16Native` is the only direct WGPU transport in
-  `apollo-fft`. It is isolated under `gpu_fft/f16_plan`; its raw pipeline,
-  binding, command-stream, and readback mechanics cannot be removed until
-  D6-FFT-native-f16 completes. NUFFT composes the typed f32 external-buffer
-  stream, and the obsolete wrapper and Pollster edge are deleted.
-- Resolved acquisition boundary: native-f16 now requests `ShaderF16` through
-  the Hephaestus required-feature contract and accepts `WgpuDevice` rather
-  than raw device/queue arcs. Hephaestus 0.14.0 provides that contract; Apollo
-  temporarily pins reviewed `196411e` pending
+  real-device value tests. The f32 2×2×2 delta is exact; f32 Bluestein and
+  inverse tests satisfy `gamma_256`; native-half radix differential and
+  Bluestein roundtrip tests pass. Package and workspace gates, provider audit,
+  examples, major SemVer classification, and direct manifest/Rust API scans
+  pass. The provider audit's lexical WGPU count includes feature labels, not a
+  direct `wgpu` dependency or Rust API use.
+- Residual risk: Apollo temporarily pins reviewed `196411e` pending
   [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
   merge, then must remove the revision quarantine in the same consumer sweep.
-- Active audit: typed f16 buffers, descriptors, streams, and readback belong
-  in Hephaestus. Any missing capability is implemented upstream, not through
-  an Apollo adapter.
 - Semver classification: against `96e67a2` (0.15.0), the minor classifier
   rejects the raw-device constructor removals and deleted raw stage structs;
   the major classifier passes. This is the documented pre-1.0 0.16.0 breaking

@@ -3,22 +3,29 @@
 ## Native-f16 FFT Hephaestus migration [arch]
 
 - Target version: `apollo-fft` next pre-1.0 breaking integration.
-- Phase: Foundation
+- Phase: Closure
 - [x] Audit the native-f16 plan and the current Hephaestus capability surface.
-  Hephaestus 0.14.0 owns required `ShaderF16` acquisition; typed f16 buffers,
-  descriptors, streams, and readback remain the next provider work.
+  Hephaestus 0.14.0 owns required `ShaderF16` acquisition; the sealed storage
+  contract now drives typed native-half buffers, descriptors, streams, and
+  readback through the same dense-FFT provider plan as f32.
 - [x] Add the provider-owned required `DeviceFeature` acquisition capability
   in Hephaestus 0.14.0 and temporarily pin its reviewed `196411e` head while
   [PR 33](https://github.com/ryancinsight/hephaestus/pull/33) awaits merge.
 - [x] Replace native-f16 adapter/device acquisition with `WgpuDevice`; remove
   the direct `pollster` dependency and reuse the same provider device for its
   f32 differential reference.
-- [ ] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
+- [x] Replace local WGPU acquisition, buffer, pipeline, binding, encoder,
   submission, and readback ownership with typed Hephaestus contracts while
-  retaining WGSL `enable f16;` arithmetic and the documented forward bound.
-- [ ] Verify source/manifest removal, real-device radix and Bluestein
+  retaining WGSL `enable f16;` arithmetic. `GpuFft3d<u16>` is the one storage-
+  generic core; the f16 source capability selects radix-two rather than a
+  duplicate dispatcher.
+- [x] Verify source/manifest removal, real-device radix and Bluestein
   differential/roundtrip behavior, feature combinations, documentation, and
-  provider audit.
+  provider audit. Format, no-default/all-feature checks, warning-denied
+  Clippy, all-feature nextest, doctest, rustdoc, workspace/examples checks,
+  provider audit, major SemVer classification, and direct manifest/Rust API
+  scans pass. The 3×3×3 Bluestein bound is `γ_265·‖input‖₁`; no machine-checked
+  proof is claimed.
 
 ## DHT feature-boundary warning cleanup [patch]
 
@@ -133,12 +140,13 @@
 - [x] Verify the f32 slice: format; locked all-feature and no-default checks;
   warning-denied Clippy; real-device value-semantic radix and Bluestein nextest
   cases; source scan; and f32 provider ownership review.
-- [ ] Partition and migrate the remaining native-f16 transport into the same
-  domain storage, host conversion, typed kernel, and backend-orchestration
-  leaves. Delete the final direct WGPU edge from `apollo-fft`.
-- [ ] Complete release verification after native-f16 migration: doctests,
-  rustdoc, provider audit, semver classification, examples, and a whole-crate
-  source/manifest scan with no direct `wgpu` or helper edge.
+- [x] Migrate native-half transport into the same domain storage, host
+  conversion, typed kernel, and backend-orchestration leaves. Delete the final
+  direct WGPU edge from `apollo-fft`, including the obsolete stage owner.
+- [x] Complete release verification after native-half migration: doctests,
+  rustdoc, provider audit, major semver classification, examples, and a
+  whole-crate source/manifest scan with no direct `wgpu`, `pollster`, helper,
+  or retired stage edge.
 - Evidence target: typed binding/layout and external-buffer length validation,
   then
   value-semantic CPU differential and inverse-roundtrip evidence. No

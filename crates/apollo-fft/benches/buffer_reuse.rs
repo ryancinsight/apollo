@@ -8,8 +8,8 @@
 //!
 //! Parseval's theorem: the 3D FFT preserves energy (‖F‖² = N·‖f‖²).
 //! Benchmark measures total round-trip cost: host→GPU upload, compute, GPU→host
-//! readback. Buffer reuse eliminates `wgpu::Device::create_buffer` calls on
-//! every dispatch, which are O(1) but involve driver allocation and zeroing.
+//! readback. Buffer reuse eliminates provider-buffer allocation on every
+//! dispatch, which is O(1) but involves driver allocation and zeroing.
 
 #![allow(missing_docs)]
 

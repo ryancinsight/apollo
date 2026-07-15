@@ -6,7 +6,7 @@ use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 use leto::Array1;
 
 use super::{
-    kernel::{ChirpParams, PackParams},
+    kernel::{ChirpParams, FftStorage, PackParams},
     strategy::{Axis, AxisStrategy, ChirpData, RadixStages},
 };
 
@@ -21,24 +21,24 @@ pub fn gpu_fft_available() -> bool {
 /// The plan owns provider-native scratch and volume storage.  External typed
 /// buffers can be transformed through the command-stream methods without
 /// exposing WGPU handles or encoders.
-pub struct GpuFft3d {
+pub struct GpuFft3d<T = f32> {
     pub(crate) nx: usize,
     pub(crate) ny: usize,
     pub(crate) nz: usize,
     pub(crate) device: WgpuDevice,
-    pub(crate) workspace_real: WgpuBuffer<f32>,
-    pub(crate) workspace_imaginary: WgpuBuffer<f32>,
-    pub(crate) volume_real: WgpuBuffer<f32>,
-    pub(crate) volume_imaginary: WgpuBuffer<f32>,
+    pub(crate) workspace_real: WgpuBuffer<T>,
+    pub(crate) workspace_imaginary: WgpuBuffer<T>,
+    pub(crate) volume_real: WgpuBuffer<T>,
+    pub(crate) volume_imaginary: WgpuBuffer<T>,
     pub(crate) strategy_x: AxisStrategy,
     pub(crate) strategy_y: AxisStrategy,
     pub(crate) strategy_z: AxisStrategy,
     pub(crate) pack_x: PackParams,
     pub(crate) pack_y: PackParams,
     pub(crate) pack_z: PackParams,
-    pub(crate) chirp_x: Option<ChirpData>,
-    pub(crate) chirp_y: Option<ChirpData>,
-    pub(crate) chirp_z: Option<ChirpData>,
+    pub(crate) chirp_x: Option<ChirpData<T>>,
+    pub(crate) chirp_y: Option<ChirpData<T>>,
+    pub(crate) chirp_z: Option<ChirpData<T>>,
     pub(crate) axis_forward_x: RadixStages,
     pub(crate) axis_inverse_x: RadixStages,
     pub(crate) axis_forward_y: RadixStages,
@@ -87,7 +87,7 @@ fn axis_workspace_elements(nx: usize, ny: usize, nz: usize, axis: Axis) -> Resul
         .ok_or_else(|| format!("FFT workspace element count overflows for {axis:?} axis"))
 }
 
-fn validate_dimensions(
+fn validate_dimensions<T>(
     max_buffer_size: u64,
     nx: usize,
     ny: usize,
@@ -115,7 +115,7 @@ fn validate_dimensions(
     let required_bytes = u64::try_from(required_elements)
         .map_err(|_| "GpuFft3d: workspace element count exceeds u64".to_owned())?
         .checked_mul(
-            u64::try_from(core::mem::size_of::<f32>()).expect("invariant: f32 size fits u64"),
+            u64::try_from(core::mem::size_of::<T>()).expect("invariant: element size fits u64"),
         )
         .ok_or_else(|| "GpuFft3d: workspace byte count overflows".to_owned())?;
     if required_bytes > max_buffer_size {
@@ -134,10 +134,21 @@ fn provider_error(error: impl core::fmt::Display) -> String {
     error.to_string()
 }
 
-impl GpuFft3d {
+impl GpuFft3d<f32> {
     /// Create a plan over a Hephaestus WGPU device.
     pub fn new(device: WgpuDevice, nx: usize, ny: usize, nz: usize) -> Result<Self, String> {
-        validate_dimensions(device.device_limits().max_buffer_size, nx, ny, nz)?;
+        Self::new_typed(device, nx, ny, nz)
+    }
+}
+
+impl<T: FftStorage> GpuFft3d<T> {
+    pub(crate) fn new_typed(
+        device: WgpuDevice,
+        nx: usize,
+        ny: usize,
+        nz: usize,
+    ) -> Result<Self, String> {
+        validate_dimensions::<T>(device.device_limits().max_buffer_size, nx, ny, nz)?;
         let strategy_x = axis_strategy_for(nx)?;
         let strategy_y = axis_strategy_for(ny)?;
         let strategy_z = axis_strategy_for(nz)?;
@@ -211,6 +222,10 @@ impl GpuFft3d {
         })
     }
 
+    pub(crate) fn element_count(&self) -> usize {
+        self.nx * self.ny * self.nz
+    }
+
     fn pack_params(
         axis: Axis,
         nx: usize,
@@ -252,7 +267,7 @@ impl GpuFft3d {
             return Ok(RadixStages::empty());
         }
         let fft_len = dimension(axis_len, "radix axis length")?;
-        if fft_len.trailing_zeros() % 2 == 0 {
+        if T::SUPPORTS_RADIX_FOUR && fft_len.trailing_zeros() % 2 == 0 {
             Ok(RadixStages::radix_four(fft_len, batch_count, inverse))
         } else {
             Ok(RadixStages::radix_two(fft_len, batch_count, inverse))
@@ -263,7 +278,7 @@ impl GpuFft3d {
         device: &WgpuDevice,
         strategy: AxisStrategy,
         batch_count: u32,
-    ) -> Result<Option<ChirpData>, String> {
+    ) -> Result<Option<ChirpData<T>>, String> {
         let AxisStrategy::ChirpZ { n, m } = strategy else {
             return Ok(None);
         };
@@ -279,8 +294,14 @@ impl GpuFft3d {
         fft_1d_complex_inplace(&mut chirp);
         // The WGSL kernel contract is native f32 storage; this is the explicit
         // host-to-device precision boundary for precomputed chirp coefficients.
-        let real: Vec<f32> = chirp.iter().map(|value| value.re as f32).collect();
-        let imaginary: Vec<f32> = chirp.iter().map(|value| value.im as f32).collect();
+        let real: Vec<T> = chirp
+            .iter()
+            .map(|value| T::encode_coefficient(value.re as f32))
+            .collect();
+        let imaginary: Vec<T> = chirp
+            .iter()
+            .map(|value| T::encode_coefficient(value.im as f32))
+            .collect();
         let n = dimension(n, "Bluestein axis length")?;
         let m = dimension(m, "Bluestein workspace length")?;
         Ok(Some(ChirpData {
@@ -302,6 +323,7 @@ impl GpuFft3d {
 mod tests {
     use super::{
         axis_strategy_for, axis_workspace_elements, next_power_of_two, validate_dimensions,
+        GpuFft3d,
     };
     use crate::infrastructure::transport::gpu::infrastructure::gpu_fft::strategy::{
         Axis, AxisStrategy,
@@ -332,12 +354,25 @@ mod tests {
 
     #[test]
     fn validate_dimensions_rejects_zero_and_oversized_shapes() {
-        assert!(validate_dimensions(1024, 0, 2, 2).is_err());
-        assert!(validate_dimensions(4, 2, 2, 2).is_err());
+        assert!(validate_dimensions::<f32>(1024, 0, 2, 2).is_err());
+        assert!(validate_dimensions::<f32>(4, 2, 2, 2).is_err());
     }
 
     #[test]
     fn validate_dimensions_accepts_small_valid_shapes() {
-        assert_eq!(validate_dimensions(1024, 2, 2, 2), Ok(()));
+        assert_eq!(validate_dimensions::<f32>(1024, 2, 2, 2), Ok(()));
+    }
+
+    #[test]
+    fn typed_storage_selects_only_supported_radix() {
+        let full_stages = GpuFft3d::<f32>::radix_stages(4, AxisStrategy::Radix2, 1, false)
+            .expect("f32 radix stages");
+        let half_stages = GpuFft3d::<u16>::radix_stages(4, AxisStrategy::Radix2, 1, false)
+            .expect("half-storage radix stages");
+
+        assert!(full_stages.radix_four);
+        assert!(!half_stages.radix_four);
+        assert_eq!(full_stages.butterflies.len(), 1);
+        assert_eq!(half_stages.butterflies.len(), 2);
     }
 }

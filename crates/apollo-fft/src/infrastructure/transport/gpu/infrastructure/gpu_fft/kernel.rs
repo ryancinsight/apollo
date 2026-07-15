@@ -1,4 +1,4 @@
-//! Typed Hephaestus kernel descriptors for the f32 dense FFT.
+//! Typed Hephaestus kernel descriptors for dense FFT storage.
 //!
 //! Each descriptor is zero-sized.  Apollo owns the FFT equations and WGSL;
 //! Hephaestus owns pipeline construction, binding validation, command encoding,
@@ -6,10 +6,63 @@
 
 use std::{borrow::Cow, marker::PhantomData};
 
+use crate::f16 as HalfF16;
 use bytemuck::{Pod, Zeroable};
 use hephaestus_core::{BindingDecl, KernelInterface, KernelSource, Wgsl};
 
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
+
+mod storage_sealed {
+    pub trait Sealed {}
+
+    impl Sealed for f32 {}
+    impl Sealed for u16 {}
+}
+
+/// Physical storage and WGSL source contract for one dense-FFT precision.
+///
+/// `u16` stores native half-precision bit patterns while its WGSL source
+/// declares `array<f16>`; the typed binding still validates the two-byte
+/// physical layout at the provider boundary.
+pub trait FftStorage: Pod + storage_sealed::Sealed {
+    /// WGSL source containing radix and scaling entries for this storage.
+    const FFT_SOURCE: &'static str;
+    /// WGSL source containing axis pack and unpack entries for this storage.
+    const PACK_SOURCE: &'static str;
+    /// WGSL source containing Bluestein chirp entries for this storage.
+    const CHIRP_SOURCE: &'static str;
+
+    /// Whether this source provides the radix-four entry points.
+    ///
+    /// The planner selects radix two when this is `false`, preserving the
+    /// source contract without a separate dispatch implementation.
+    const SUPPORTS_RADIX_FOUR: bool;
+
+    /// Encode an f32 coefficient at this storage precision.
+    fn encode_coefficient(value: f32) -> Self;
+}
+
+impl FftStorage for f32 {
+    const FFT_SOURCE: &'static str = include_str!("../shaders/fft.wgsl");
+    const PACK_SOURCE: &'static str = include_str!("../shaders/pack.wgsl");
+    const CHIRP_SOURCE: &'static str = include_str!("../shaders/chirp.wgsl");
+    const SUPPORTS_RADIX_FOUR: bool = true;
+
+    fn encode_coefficient(value: f32) -> Self {
+        value
+    }
+}
+
+impl FftStorage for u16 {
+    const FFT_SOURCE: &'static str = include_str!("../shaders/fft_native_f16.wgsl");
+    const PACK_SOURCE: &'static str = include_str!("../shaders/pack_native_f16.wgsl");
+    const CHIRP_SOURCE: &'static str = include_str!("../shaders/chirp_native_f16.wgsl");
+    const SUPPORTS_RADIX_FOUR: bool = false;
+
+    fn encode_coefficient(value: f32) -> Self {
+        HalfF16::from_f32(value).to_bits()
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -55,29 +108,29 @@ pub(crate) trait FftEntry {
     const ENTRY: &'static str;
 }
 
-pub(crate) struct FftKernel<E>(PhantomData<E>);
+pub(crate) struct FftKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> FftKernel<E> {
+impl<T, E> FftKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: FftEntry> KernelInterface for FftKernel<E> {
+impl<T: FftStorage, E: FftEntry> KernelInterface for FftKernel<T, E> {
     type Params = FftParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: FftEntry> KernelSource<Wgsl> for FftKernel<E> {
+impl<T: FftStorage, E: FftEntry> KernelSource<Wgsl> for FftKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("../shaders/fft.wgsl"))
+        Cow::Borrowed(T::FFT_SOURCE)
     }
 }
 
@@ -113,31 +166,31 @@ pub(crate) trait PackEntry {
     const ENTRY: &'static str;
 }
 
-pub(crate) struct PackKernel<E>(PhantomData<E>);
+pub(crate) struct PackKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> PackKernel<E> {
+impl<T, E> PackKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: PackEntry> KernelInterface for PackKernel<E> {
+impl<T: FftStorage, E: PackEntry> KernelInterface for PackKernel<T, E> {
     type Params = PackParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: PackEntry> KernelSource<Wgsl> for PackKernel<E> {
+impl<T: FftStorage, E: PackEntry> KernelSource<Wgsl> for PackKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("../shaders/pack.wgsl"))
+        Cow::Borrowed(T::PACK_SOURCE)
     }
 }
 
@@ -158,31 +211,31 @@ pub(crate) trait ChirpEntry {
     const ENTRY: &'static str;
 }
 
-pub(crate) struct ChirpKernel<E>(PhantomData<E>);
+pub(crate) struct ChirpKernel<T, E>(PhantomData<(T, E)>);
 
-impl<E> ChirpKernel<E> {
+impl<T, E> ChirpKernel<T, E> {
     pub(crate) const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<E: ChirpEntry> KernelInterface for ChirpKernel<E> {
+impl<T: FftStorage, E: ChirpEntry> KernelInterface for ChirpKernel<T, E> {
     type Params = ChirpParams;
     const LABEL: &'static str = E::LABEL;
     const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_only::<f32>(),
-        BindingDecl::read_only::<f32>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_write::<T>(),
+        BindingDecl::read_only::<T>(),
+        BindingDecl::read_only::<T>(),
     ];
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<E: ChirpEntry> KernelSource<Wgsl> for ChirpKernel<E> {
+impl<T: FftStorage, E: ChirpEntry> KernelSource<Wgsl> for ChirpKernel<T, E> {
     const ENTRY: &'static str = E::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
-        Cow::Borrowed(include_str!("../shaders/chirp.wgsl"))
+        Cow::Borrowed(T::CHIRP_SOURCE)
     }
 }
 

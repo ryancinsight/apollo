@@ -18,10 +18,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   through typed Hephaestus descriptors and ordered command streams. Leto
   remains the host boundary; reusable Type-2 buffers now cover both the Fourier
   mode count and the configured sample capacity.
-- `GpuFft3dF16Native` now acquires `ShaderF16` through the reviewed
-  Hephaestus 0.14.0 required-feature contract. Apollo no longer owns native-f16
-  adapter/device acquisition or a `pollster` dependency; its raw pipeline,
-  binding, command-stream, and readback scope remains tracked separately.
+- `GpuFft3dF16Native` now reuses the storage-generic typed Hephaestus FFT
+  plan. Its f16 WGSL sources and radix-two capability are selected by a sealed
+  storage contract; f32 retains radix-four selection without a second
+  dispatcher. `ShaderF16` remains a required provider capability.
 - Apollo temporarily pins Hephaestus 0.14.0 at the reviewed required-feature
   acquisition commit while its provider PR merges.
 
@@ -44,6 +44,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `hephaestus_wgpu::WgpuDevice` directly.
 - `apollo-fft` no longer depends on `pollster`; native-f16 device acquisition
   is delegated to `hephaestus_wgpu::WgpuDevice`.
+- `apollo-fft` no longer depends directly on `wgpu`. The obsolete native-f16
+  raw pipeline, binding, encoder, queue, transfer, and stage-owner leaves are
+  replaced by the shared typed descriptor and command-stream implementation.
 - `apollo-stft` no longer depends directly on `apollo-wgpu-helpers`, `wgpu`,
   or `pollster`. Its raw pipeline, binding, command encoding, queue, and
   transfer mechanics are replaced by typed Hephaestus descriptors and ordered
@@ -57,8 +60,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [major] `apollo-fft` 0.16.0 changes `GpuFft3d::new` to accept a
   `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs, changes
   `GpuFft3dBuffers::new` to report typed allocation failure, and replaces raw
-  encoder buffer APIs with `WgpuBuffer<f32>` plus `WgpuCommandStream`.
-  Native-f16 execution remains a separately tracked raw-WGPU residual.
+  encoder buffer APIs with `WgpuBuffer<f32>` plus `WgpuCommandStream`. Native
+  half execution shares that provider-owned transport through typed `u16`
+  physical storage.
 - [major] `apollo-fft` 0.16.0 changes `GpuFft3dF16Native::try_from_device` to
   accept `hephaestus_wgpu::WgpuDevice` rather than raw device and queue arcs.
   `try_new` requires `DeviceFeature::ShaderF16` through the provider contract.

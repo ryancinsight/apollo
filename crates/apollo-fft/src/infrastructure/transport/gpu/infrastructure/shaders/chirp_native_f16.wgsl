@@ -13,9 +13,8 @@
 //   (a * h) is the M-point circular convolution via radix-2 FFT
 //
 // Normalization: the 1/M factor from the inverse radix-2 FFT (fft_scale in
-// fft_native_f16.wgsl) already normalizes the convolution correctly.
-// chirp_scale is therefore a no-op; it exists only to match the ChirpData
-// pipeline-handle layout expected by the Rust dispatch code.
+// fft_native_f16.wgsl) normalizes the convolution. The inverse original-axis
+// transform also needs its 1/N factor, applied by chirp_scale.
 //
 // Twiddle precision: all trigonometric values are computed in f32 and then
 // narrowed to f16 via explicit cast. This bounds twiddle error at f32 precision
@@ -30,9 +29,9 @@
 //   chirp_pointmul total = params.m * params.batch_count
 //   chirp_postmul  total = params.n * params.batch_count
 //   chirp_negate_im total = params.n * params.batch_count
-//   chirp_scale    total = params.n * params.batch_count (no-op body)
+//   chirp_scale    total = params.n * params.batch_count
 //
-// This module requires `enable f16;` (wgpu::Features::SHADER_F16).
+// This module requires `enable f16;` and provider `ShaderF16` acquisition.
 
 enable f16;
 
@@ -49,17 +48,13 @@ var<storage, read_write> data_re: array<f16>;
 @group(0) @binding(1)
 var<storage, read_write> data_im: array<f16>;
 
-// chirp_re and chirp_im are treated as read-only by all entry points in this
-// module.  The binding type is Storage (read_write) at the WGPU API level so
-// that a single BindGroupLayout covers all four bindings uniformly; the shader
-// never writes to these two bindings.
 @group(0) @binding(2)
-var<storage, read_write> chirp_re: array<f16>;
+var<storage, read> chirp_re: array<f16>;
 
 @group(0) @binding(3)
-var<storage, read_write> chirp_im: array<f16>;
+var<storage, read> chirp_im: array<f16>;
 
-@group(1) @binding(0)
+@group(0) @binding(4)
 var<uniform> params: ChirpParams;
 
 // PI in f32 precision; twiddle factors are computed in f32 before narrowing

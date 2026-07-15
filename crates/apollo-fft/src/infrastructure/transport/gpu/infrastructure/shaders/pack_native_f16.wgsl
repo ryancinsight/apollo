@@ -1,13 +1,10 @@
 enable f16;
 
-struct FftParams {
+struct PackParams {
     n: u32,
     stage: u32,
     inverse: u32,
     batch_count: u32,
-}
-
-struct PackParams {
     nx: u32,
     ny: u32,
     nz: u32,
@@ -23,18 +20,15 @@ var<storage, read_write> data_re: array<f16>;
 @group(0) @binding(1)
 var<storage, read_write> data_im: array<f16>;
 
-@group(1) @binding(0)
-var<uniform> params: FftParams;
-
-@group(2) @binding(0)
+@group(0) @binding(2)
 var<storage, read_write> volume_re: array<f16>;
-@group(2) @binding(1)
+@group(0) @binding(3)
 var<storage, read_write> volume_im: array<f16>;
-@group(2) @binding(2)
-var<uniform> pack_params: PackParams;
+@group(0) @binding(4)
+var<uniform> params: PackParams;
 
 fn volume_index(ix: u32, iy: u32, iz: u32) -> u32 {
-    return (ix * pack_params.ny + iy) * pack_params.nz + iz;
+    return (ix * params.ny + iy) * params.nz + iz;
 }
 
 @compute @workgroup_size(256, 1, 1)
@@ -48,23 +42,23 @@ fn fft_pack_axis(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let row = idx / axis_len;
     let local = idx % axis_len;
-    let workspace_idx = row * pack_params.fft_len + local;
+    let workspace_idx = row * params.fft_len + local;
 
     var ix: u32 = 0u;
     var iy: u32 = 0u;
     var iz: u32 = 0u;
 
-    if pack_params.axis == 2u {
-        ix = row / pack_params.ny;
-        iy = row % pack_params.ny;
+    if params.axis == 2u {
+        ix = row / params.ny;
+        iy = row % params.ny;
         iz = local;
-    } else if pack_params.axis == 1u {
-        ix = row / pack_params.nz;
-        iz = row % pack_params.nz;
+    } else if params.axis == 1u {
+        ix = row / params.nz;
+        iz = row % params.nz;
         iy = local;
     } else {
-        iy = row / pack_params.nz;
-        iz = row % pack_params.nz;
+        iy = row / params.nz;
+        iz = row % params.nz;
         ix = local;
     }
 
@@ -84,23 +78,23 @@ fn fft_unpack_axis(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let row = idx / axis_len;
     let local = idx % axis_len;
-    let workspace_idx = row * pack_params.fft_len + local;
+    let workspace_idx = row * params.fft_len + local;
 
     var ix: u32 = 0u;
     var iy: u32 = 0u;
     var iz: u32 = 0u;
 
-    if pack_params.axis == 2u {
-        ix = row / pack_params.ny;
-        iy = row % pack_params.ny;
+    if params.axis == 2u {
+        ix = row / params.ny;
+        iy = row % params.ny;
         iz = local;
-    } else if pack_params.axis == 1u {
-        ix = row / pack_params.nz;
-        iz = row % pack_params.nz;
+    } else if params.axis == 1u {
+        ix = row / params.nz;
+        iz = row % params.nz;
         iy = local;
     } else {
-        iy = row / pack_params.nz;
-        iz = row % pack_params.nz;
+        iy = row / params.nz;
+        iz = row % params.nz;
         ix = local;
     }
 

@@ -10,7 +10,6 @@ description = "Reusable FFT planning, execution, and cache abstractions for Apol
 [dependencies]
 hephaestus-wgpu = { workspace = true, optional = true }
 hephaestus-core = { workspace = true, optional = true }
-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
 half = { workspace = true }
@@ -36,7 +35,6 @@ rustfft = { workspace = true }
 wgpu = [
     "dep:hephaestus-wgpu",
     "dep:hephaestus-core",
-    "dep:wgpu"
 ]
 native-f16 = ["wgpu"]
 default = ["parallel", "mnemosyne-memory"]

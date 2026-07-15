@@ -19,19 +19,20 @@ Leto remains a CPU-only host boundary; it does not model GPU buffers.
 
 ## Decision
 
-Replace the raw f32 implementation with typed Hephaestus kernel descriptors
-and ordered command streams. The f32 plan now accepts `WgpuDevice` and exposes
-only `WgpuBuffer<f32>` plus `WgpuCommandStream` at its composition boundary.
-Host f64/f16 conversion remains explicit at the Leto boundary before f32
-provider storage is written.
+Replace raw dense-FFT transport with typed Hephaestus kernel descriptors and
+ordered command streams. `GpuFft3d<T>` owns the storage-generic plan; its
+sealed `FftStorage` contract selects the WGSL source, physical coefficient
+encoding, and available radix entries. The f32 composition boundary exposes
+only `WgpuBuffer<f32>` plus `WgpuCommandStream`. Native half storage uses
+`WgpuBuffer<u16>` for IEEE-754 bit patterns while its WGSL declares
+`array<f16>`. Host conversion remains explicit at the Leto boundary.
 
-The native-f16 implementation is a separate residual scope. Its constructors
-now accept or acquire `WgpuDevice` with the provider-owned required
-`ShaderF16` feature contract, so Apollo no longer owns adapter/device
-acquisition or Pollster orchestration. Its pipeline, binding, command-stream,
-and readback mechanics remain inside `f16_plan` until they receive the same
-provider descriptor implementation; it is not an f32 compatibility path or a
-fallback.
+Both storage representations use the same typed allocation, pipeline,
+binding, command-stream, submission, and readback implementation. Native half
+constructors accept or acquire `WgpuDevice` with the provider-owned required
+`ShaderF16` contract. The half shader provides radix-two entries only, which
+the storage capability selects at plan construction; this is not an f32
+fallback or a second dispatcher.
 
 Apollo retains the dense FFT algorithm and WGSL transform source. Each kernel
 descriptor declares bindings and dispatch geometry, while Hephaestus constructs
@@ -71,14 +72,22 @@ sketch of the mathematical contract, not a machine-checked proof. CPU/GPU
 differential and inverse-roundtrip tests provide empirical finite-precision
 evidence after migration.
 
+For the native-half all-Bluestein 3×3×3 reconstruction fixture, each forward
+axis has 43 half-rounding sites and each inverse axis has 45, including
+twiddle narrowing, radix arithmetic, and normalization. Together with input
+quantization this gives \(k=1+3(43+45)=265\). The test asserts
+\(\gamma_{265}\lVert x\rVert_1\), where
+\(\gamma_k=ku/(1-ku)\) and \(u=2^{-11}\). This is an analytical fixture
+bound; real-device roundtrip remains empirical evidence.
+
 ## Consequences
 
 - The f32 plan has no direct WGPU device, queue, pipeline, bind-group, command
   encoder, or transfer ownership. Hephaestus is the sole owner of those
   mechanics and no local compatibility adapter remains.
-- Native f16 remains the only direct WGPU residual in `apollo-fft`; Pollster
-  is removed, while the direct `wgpu` dependency remains until its pipeline,
-  binding, command-stream, and readback scope is migrated.
+- Native half storage has no direct WGPU, Pollster, pipeline, binding,
+  command-stream, or readback ownership in `apollo-fft`; it reuses the sealed
+  typed storage implementation.
 - The f32 host-to-device precision boundary and typed external-buffer contract
   are value-semantic test targets.
 - `GpuFft3d::new` now accepts `WgpuDevice` rather than raw device/queue arcs;

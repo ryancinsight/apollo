@@ -72,11 +72,12 @@ Remaining replacement work:
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
-- [/] [arch] Stage D6: **eliminate Apollo-owned WGPU transport** — owner Codex;
+- [x] [arch] Stage D6: **eliminate Apollo-owned WGPU transport** — owner Codex;
   last-update 2026-07-15. FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT, Wavelet,
   FrFT, Hilbert, Mellin, SFT, SDFT, SHT, Radon, STFT, and NUFFT now use typed
   Hephaestus boundaries; the obsolete wrapper crate is deleted without a
-  compatibility substrate. Native-f16 FFT transport is the only remaining scope.
+  compatibility substrate. Native-half FFT transport now shares the same typed
+  provider core, completing the stage.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT
@@ -101,17 +102,18 @@ Remaining replacement work:
     and reusable typed-buffer contract are documented in ADR 0006 and the
     crate README. Evidence: all-feature/no-default checks, warning-denied
     Clippy, and real-device radix and Bluestein delta value tests.
-  - [/] D6-FFT-native-f16 [arch] (owner Codex, claimed 2026-07-15; scope
+  - [x] D6-FFT-native-f16 [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-fft/src/infrastructure/transport/gpu/infrastructure/gpu_fft/f16_plan{.rs,/}`,
     native-f16 shaders, Cargo feature edges, ADR 0006, and D6 PM entries):
-    migrate the remaining native-f16 pipelines, bindings, encoder, queue, and
-    readback to the same Hephaestus descriptor boundary. Device acquisition is
-    complete: `try_new` requires `ShaderF16` through `WgpuDevice`, and the
-    obsolete Pollster edge is deleted. Preserve native f16 arithmetic and its
-    `ShaderF16` capability contract.
-    Acceptance requires real-device radix/Bluestein f16 differential and
-    roundtrip evidence plus a source/manifest scan with no direct `wgpu` edge
-    in `apollo-fft`. The temporary `196411e` provider pin
+    migrate native-half pipelines, bindings, encoder, queue, and readback to
+    the one `GpuFft3d<T>` Hephaestus descriptor boundary. The sealed `u16`
+    storage contract retains WGSL `enable f16;` arithmetic and selects its
+    radix-two-only source capability without a duplicate dispatcher. Real-
+    device radix/Bluestein evidence, direct source/manifest scans, package and
+    workspace gates, provider audit, and major SemVer classification pass. The
+    3×3×3 Bluestein roundtrip uses the derived `γ_265·‖input‖₁` bound; this is
+    analytical plus empirical evidence, not a machine-checked proof. The
+    temporary `196411e` provider pin
     carries required `DeviceFeature` acquisition while
     [Hephaestus PR 33](https://github.com/ryancinsight/hephaestus/pull/33)
     awaits merge; remove the revision quarantine in the same consumer sweep
@@ -270,8 +272,8 @@ Remaining replacement work:
   Leto host arrays and Apollo-owned transform source while Hephaestus owns
   device, typed-buffer, pipeline, binding, dispatch, and transfer mechanics.
   The obsolete `apollo-wgpu-helpers` wrapper is deleted with no remaining
-  manifest, lockfile, or source edge. Native-f16 FFT transport is the only
-  remaining direct-provider scope.
+  manifest, lockfile, or source edge. All eighteen transform slices now use
+  typed provider transport; no Apollo-owned WGPU migration scope remains.
 - [ ] [arch] Stage D7: **extract the Leto interop helpers into a shared SSOT
   crate** (`apollo-leto-interop` or fold into a small `apollo-core`). Today they
   live in `apollo-fft::application::utilities::leto_interop` (SRP violation —

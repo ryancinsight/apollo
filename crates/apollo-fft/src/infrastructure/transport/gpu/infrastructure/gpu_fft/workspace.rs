@@ -2,15 +2,13 @@
 
 use std::borrow::Cow;
 
-use hephaestus_core::{CommandStream, ComputeDevice, KernelDevice};
-use hephaestus_wgpu::WgpuBuffer;
 use leto::Array3;
 
 use crate::{application::utilities::leto_interop, f16, ApolloError, ApolloResult};
 
 use super::pipeline::GpuFft3d;
 
-/// Reusable typed accelerator and host buffers for repeated `GpuFft3d` dispatch.
+/// Reusable host buffers for repeated `GpuFft3d` dispatch.
 ///
 /// The shape invariant is `len = nx * ny * nz`; each split component stores
 /// exactly `len` f32 values and each interleaved spectrum stores `2 * len`.
@@ -19,16 +17,8 @@ pub struct GpuFft3dBuffers {
     nx: usize,
     ny: usize,
     nz: usize,
-    real: WgpuBuffer<f32>,
-    imaginary: WgpuBuffer<f32>,
     real_host: Vec<f32>,
     imaginary_host: Vec<f32>,
-}
-
-fn provider_error(error: impl core::fmt::Display) -> ApolloError {
-    ApolloError::Wgpu {
-        message: error.to_string(),
-    }
 }
 
 impl GpuFft3dBuffers {
@@ -39,8 +29,6 @@ impl GpuFft3dBuffers {
             nx: plan.nx,
             ny: plan.ny,
             nz: plan.nz,
-            real: plan.device.alloc_zeroed(len).map_err(provider_error)?,
-            imaginary: plan.device.alloc_zeroed(len).map_err(provider_error)?,
             real_host: vec![0.0; len],
             imaginary_host: vec![0.0; len],
         })
@@ -61,15 +49,6 @@ impl GpuFft3dBuffers {
 
     fn len(&self) -> usize {
         self.nx * self.ny * self.nz
-    }
-
-    fn read_into_host(&mut self, plan: &GpuFft3d) -> ApolloResult<()> {
-        plan.device
-            .download(&self.real, &mut self.real_host)
-            .map_err(provider_error)?;
-        plan.device
-            .download(&self.imaginary, &mut self.imaginary_host)
-            .map_err(provider_error)
     }
 }
 
@@ -256,10 +235,6 @@ impl GpuFft3d {
         )
     }
 
-    pub(crate) fn element_count(&self) -> usize {
-        self.nx * self.ny * self.nz
-    }
-
     fn validate_field_shape(&self, actual: [usize; 3]) -> ApolloResult<()> {
         let expected = [self.nx, self.ny, self.nz];
         if actual == expected {
@@ -315,16 +290,7 @@ impl GpuFft3d {
         output: &mut [f32],
         buffers: &mut GpuFft3dBuffers,
     ) -> ApolloResult<()> {
-        self.device
-            .write_buffer(&buffers.real, &buffers.real_host)
-            .map_err(provider_error)?;
-        self.device
-            .write_buffer(&buffers.imaginary, &buffers.imaginary_host)
-            .map_err(provider_error)?;
-        let mut stream = self.device.stream().map_err(provider_error)?;
-        self.encode_forward_split(&mut stream, &buffers.real, &buffers.imaginary)?;
-        stream.submit().map_err(provider_error)?;
-        buffers.read_into_host(self)?;
+        self.execute_forward_in_place(&mut buffers.real_host, &mut buffers.imaginary_host)?;
         for ((real, imaginary), destination) in buffers
             .real_host
             .iter()
@@ -338,16 +304,7 @@ impl GpuFft3d {
     }
 
     fn execute_inverse(&self, buffers: &mut GpuFft3dBuffers) -> ApolloResult<()> {
-        self.device
-            .write_buffer(&buffers.real, &buffers.real_host)
-            .map_err(provider_error)?;
-        self.device
-            .write_buffer(&buffers.imaginary, &buffers.imaginary_host)
-            .map_err(provider_error)?;
-        let mut stream = self.device.stream().map_err(provider_error)?;
-        self.encode_inverse_split(&mut stream, &buffers.real, &buffers.imaginary)?;
-        stream.submit().map_err(provider_error)?;
-        buffers.read_into_host(self)
+        self.execute_inverse_in_place(&mut buffers.real_host, &mut buffers.imaginary_host)
     }
 
     fn split_spectrum(spectrum: &[f32], buffers: &mut GpuFft3dBuffers) {
