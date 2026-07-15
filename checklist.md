@@ -55,6 +55,9 @@
   Hephaestus command streams. The pack/unpack descriptor combines the two raw
   uniform blocks into one POD parameter block; no compatibility adapter or
   algorithm fallback is introduced.
+- [ ] Publish the typed FFT buffer and command-stream contract before migrating
+  NUFFT. Its fast paths must compose FFT, spread, and extract stages in one
+  provider-owned stream; retaining a raw command-encoder bridge is prohibited.
 - [ ] Partition the raw f32 and native reduced-precision transport into
   domain storage, host conversion, typed kernel, and backend-orchestration
   leaves. Delete all direct WGPU and `apollo-wgpu-helpers` paths.

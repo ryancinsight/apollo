@@ -91,7 +91,9 @@ Remaining replacement work:
     `ComputeDevice::write_buffer` preserves reusable typed-buffer semantics,
     `CommandStream` preserves pass order, and `GroupedKernelDevice` represents
     the existing pack/unpack binding groups; no upstream capability change is
-    required.
+    required. This is the active prerequisite for D6-NUFFT because its fast
+    paths must interleave FFT stages with spread/extract stages in one typed
+    command stream.
   - [x] D6-Radon [arch] (owner Codex, completed 2026-07-15; scope
     `crates/apollo-radon/{Cargo.toml,README.md,src/infrastructure/transport/gpu}`,
     ADR 0007, and D6 PM entries): `apollo-radon` 0.3.0 replaces direct WGPU
@@ -114,7 +116,7 @@ Remaining replacement work:
     Evidence: 46 focused nextest cases including real-device CPU differential,
     non-power-of-two, and reusable-storage execution; Clippy, doctest, rustdoc,
     provider audit, direct source/dependency scans, and semver classification.
-  - [/] D6-NUFFT [arch] (owner Codex, claimed 2026-07-15; scope
+  - [!] D6-NUFFT [arch] (owner Codex, blocked 2026-07-15; scope
     `crates/apollo-nufft/{Cargo.toml,README.md,src,infrastructure,benches}` and
     D6 PM entries): replace direct and fast one-/three-dimensional NUFFT raw
     pipeline, binding, encoder, queue, transfer, and helper ownership with
@@ -123,7 +125,11 @@ Remaining replacement work:
     accelerator storage contract. The acceptance contract requires a theorem/
     convention update, direct and fast CPU differential tests, reusable-storage
     coverage, provider audit, and a source/manifest scan with no direct `wgpu`,
-    `pollster`, or helper edge.
+    `pollster`, or helper edge. Blocker: the fast paths call
+    `apollo_fft::GpuFft3d::encode_forward_split` and `encode_inverse_split`
+    with raw WGPU buffers and a raw command encoder. Re-open after D6-FFT
+    exposes the equivalent typed-buffer, command-stream contract; a local
+    bridge would retain prohibited device ownership in Apollo.
   - [x] D6-SFT [arch] (owner Codex, completed 2026-07-14; scope
     `crates/apollo-sft/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
     entries): replaces the direct SFT WGPU pipeline, binding, encoder, queue,
