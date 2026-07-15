@@ -67,10 +67,14 @@ Remaining replacement work:
   `WgpuStorage`/`coeus-core` dep. No Apollo crate depends on Coeus; autograd lives in
   `coeus-autograd` consuming Apollo one-way (cycle broken).
 - [ ] [arch] Stage B2: remove the remaining dev-only Rayon edge without
-  deleting benchmark coverage. Runtime source/provider audit shows all
-  data-parallel paths use Moirai; `cargo tree -i rayon --workspace` identifies
-  Criterion as the sole remaining dev-dependency source. Replace or upstream
-  the benchmark harness dependency before closing this item.
+  deleting benchmark coverage. Owner: Codex; status: in-progress; scope:
+  benchmark manifests, benchmark entry points, the workspace dependency graph,
+  and the B2 documentation. DoR: retain each measured production closure and
+  establish a first-party, Moirai-compatible measurement harness before
+  deleting Criterion. Runtime source/provider audit shows all data-parallel
+  paths use Moirai; `cargo tree -i rayon --workspace` identifies Criterion as
+  the sole remaining dev-dependency source. Replace or upstream the benchmark
+  harness dependency before closing this item.
 - [x] [arch] Stage D4: GPU backend integration over `hephaestus` (atlas ADR 0003):
   - [x] Re-base each transform's GPU execution onto Hephaestus typed buffers,
     authored-kernel interfaces, and command streams. Device acquisition is

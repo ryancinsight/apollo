@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## Benchmark runtime provider convergence [arch]
+
+- Target version: workspace integration; no runtime transform API change.
+- Phase: Foundation
+- [ ] Inventory every Criterion bench target and its measurement contract;
+  confirm that no benchmark closure is deleted or simplified.
+- [ ] Specify the canonical first-party measurement boundary and its Moirai
+  scheduling contract before replacing the Criterion dependency graph.
+- [ ] Migrate all benchmark entry points, remove Criterion and Rayon from the
+  resolved workspace graph, then verify value semantics and the benchmark
+  harness without claiming a performance result absent a baseline comparison.
+
 ## Shared Leto interop ownership [arch]
 
 - Target version: `apollo-fft` 0.17.0 pre-1.0 breaking integration.
