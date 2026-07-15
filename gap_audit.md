@@ -109,6 +109,22 @@
   remains provider-owned D8 work. This local split does not pre-empt the
   required Hephaestus provider contract.
 
+## NUFFT GPU verification-tree normalization [arch]
+
+- Finding: the NUFFT transport has a 1,164-line verification monolith mixing
+  static capabilities, direct and fast Type-1/Type-2 contracts in 1D and 3D,
+  Leto and typed boundaries, reusable storage, diagnostics, normalization, and
+  typed errors.
+- Required resolution: split by operation family and dimensional concern while
+  preserving the direct adjoint theorem, its existing derived finite-precision
+  tolerances, and every device-present value-semantic contract. Shared
+  availability and comparison helpers remain private test support; they must
+  not become an Apollo transport abstraction.
+- Evidence required: focused and workspace nextest, warning-denied diagnostics,
+  provider audit, source-residue scans, and patch SemVer classification. The
+  theorem remains a proof sketch with empirical CPU-differential evidence, not
+  a machine-checked proof.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

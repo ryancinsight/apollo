@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## D8 NUFFT verification-tree normalization [arch]
+
+- Target version: internal verification structure; no transform API change.
+- Phase: Execution
+- [x] Claim the 1,164-line NUFFT GPU verification monolith and inventory its
+  static capability, direct/fast Type-1/Type-2, dimensional, Leto, typed,
+  reusable-buffer, diagnostic, normalization, and rejection contracts.
+- [ ] Partition every existing value-semantic contract into private operation
+  leaves, with one support leaf for repeated availability and assertion logic.
+- [ ] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path
+  finite-precision contracts with their existing derived tolerances.
+- [ ] Verify focused and workspace nextest, diagnostics, provider scans, and
+  patch SemVer classification before publishing.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

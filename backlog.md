@@ -333,6 +333,13 @@ Remaining replacement work:
   package doctest/rustdoc, provider audit, structural scans, and patch SemVer
   classification pass. The scope adds no Apollo-owned device abstraction or
   fallback path.
+  Fourth bounded NUFFT scope claimed 2026-07-15 — partition the 1,164-line GPU
+  verification monolith by static metadata, direct and fast Type-1/Type-2
+  operation family, dimensionality, Leto/typed storage, reusable-buffer,
+  diagnostic, normalization, and rejection contracts. The scope preserves the
+  direct adjoint theorem, existing finite-precision tolerances, and
+  Hephaestus-only execution ownership; it adds no Apollo-owned abstraction or
+  fallback path.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
