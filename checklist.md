@@ -1,5 +1,21 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: SHT [arch]
+
+- Target version: `apollo-sht` 0.3.0
+- Phase: Execution
+- [/] Replace raw spherical-harmonic WGPU pipeline, binding, encoder, queue,
+  and transfer mechanics with typed Hephaestus kernel descriptors and ordered
+  command streams.
+- [ ] Preserve the Gauss--Legendre quadrature theorem, Leto host boundary,
+  Mnemosyne output/scratch ownership, and concrete accelerator storage contract.
+- [ ] Verify real-device CPU differential, shape/storage negative contracts,
+  format, warning-denied Clippy, nextest, doctest, rustdoc, provider audit,
+  semver classification, and direct-provider source scan.
+- Evidence tier planned: typed binding/layout and storage exclusion, then
+  value-semantic CPU differential evidence. No machine-checked proof is
+  planned.
+
 ## Hephaestus kernel migration: SDFT [arch]
 
 - Target version: `apollo-sdft` 0.3.0

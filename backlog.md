@@ -108,6 +108,15 @@ Remaining replacement work:
     denied Clippy, doctest, rustdoc, provider audit, immediate-parent semver
     classification from 0.2.0 to 0.3.0 with no required update, and
     source/manifest scan with no direct `wgpu`, `pollster`, or helper edge.
+  - [/] D6-SHT [arch] (owner Codex, claimed 2026-07-14; scope
+    `crates/apollo-sht/{Cargo.toml,src,infrastructure,README.md}` and D6 PM
+    entries): replace raw spherical-harmonic WGPU kernel/device ownership with
+    direct Hephaestus typed dispatch. Preserve the Gauss--Legendre quadrature
+    contract, Leto host arrays, Mnemosyne output/scratch ownership, and an
+    explicit concrete accelerator storage boundary. Acceptance: real-device
+    CPU differential, negative shape/storage contracts, nextest, doctest,
+    warning-denied diagnostics, provider audit, semver classification, and no
+    direct `wgpu`, `pollster`, or helper edge.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
