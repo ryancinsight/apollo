@@ -17,4 +17,6 @@ mod direct_type2_3d;
 #[cfg(test)]
 mod metadata;
 #[cfg(test)]
+mod reusable;
+#[cfg(test)]
 mod support;

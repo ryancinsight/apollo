@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::super::support::{assert_complex64_close, assert_input_length_mismatch, backend};
+    use super::super::support::{assert_complex64_close, backend};
 
     use crate::{
         nufft_type1_1d_fast, nufft_type1_3d_fast, nufft_type2_1d_fast, nufft_type2_3d_fast,
@@ -11,85 +11,13 @@ mod tests {
     use leto::Storage;
     use leto::{Array1, Array3};
 
-    use crate::infrastructure::transport::gpu::{
-        NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuPlan1D, NufftWgpuPlan3D,
-    };
+    use crate::infrastructure::transport::gpu::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 
     #[test]
     fn nufft_wgpu_execution_suite_when_device_exists() {
         let Some(backend) = backend() else {
             return;
         };
-
-        // 1. length_mismatch_reports_expected_and_actual
-        {
-            let domain = UniformDomain1D::new(8, 0.25).expect("domain");
-            let plan = NufftWgpuPlan1D::new(domain, 2, 6);
-            let error = backend
-                .execute_type1_1d(&plan, &[0.0, 0.25], &[Complex32::new(1.0, 0.0)])
-                .expect_err("length mismatch must fail");
-            assert_input_length_mismatch(error, 2, 1);
-        }
-
-        // 2. fast_1d_reusable_buffers_reject_sample_capacity_overflow
-        {
-            let domain = UniformDomain1D::new(8, 0.25).expect("domain");
-            let plan = NufftWgpuPlan1D::new(domain, 2, 6);
-            let buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, 1)
-                .expect("provider buffer allocation");
-            let error = backend
-                .execute_fast_type1_1d_with_buffers(
-                    &plan,
-                    &buffers,
-                    &[0.0, 0.25],
-                    &[Complex32::new(1.0, 0.0), Complex32::new(0.5, -0.25)],
-                )
-                .expect_err("sample capacity overflow must fail");
-            assert_input_length_mismatch(error, 1, 2);
-        }
-
-        // 3. fast_1d_reusable_type2_supports_more_samples_than_modes
-        {
-            let domain = UniformDomain1D::new(8, 0.25).expect("domain");
-            let plan = NufftWgpuPlan1D::new(domain, 2, 6);
-            let coefficients = [
-                Complex32::new(1.0, 0.0),
-                Complex32::new(0.5, -0.25),
-                Complex32::new(-0.75, 0.5),
-                Complex32::new(0.25, 0.75),
-                Complex32::new(-0.5, -0.1),
-                Complex32::new(0.125, 0.25),
-                Complex32::new(0.8, -0.6),
-                Complex32::new(-0.3, 0.4),
-            ];
-            let positions = [
-                0.0_f32, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0, 1.15, 1.3, 1.45, 1.6,
-            ];
-            let expected = backend
-                .execute_fast_type2_1d(&plan, &coefficients, &positions)
-                .expect("non-reusable fast type2");
-            let buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, positions.len())
-                .expect("provider buffer allocation");
-            let actual = backend
-                .execute_fast_type2_1d_with_buffers(&plan, &buffers, &coefficients, &positions)
-                .expect("reusable fast type2");
-
-            assert_eq!(actual, expected);
-        }
-
-        // 4. fast_3d_reusable_buffers_reject_sample_capacity_overflow
-        {
-            let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
-            let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let buffers = NufftGpuBuffers3D::new(backend.device(), (3, 2, 2), (16, 16, 16), 1)
-                .expect("provider buffer allocation");
-            let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5)];
-            let values = [Complex32::new(1.0, 0.0), Complex32::new(-0.25, 0.5)];
-            let error = backend
-                .execute_fast_type1_3d_with_buffers(&plan, &buffers, &positions, &values)
-                .expect_err("sample capacity overflow must fail");
-            assert_input_length_mismatch(error, 1, 2);
-        }
 
         // 8. typed_leto_fast_type1_1d_matches_typed_slice_path
         {
