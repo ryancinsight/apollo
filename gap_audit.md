@@ -1,5 +1,17 @@
 # Apollo Gap Audit
 
+## Cargo Deny first-party source policy [patch]
+
+- Finding: the workspace deliberately resolves its Atlas providers from
+  `ryancinsight` Git repositories, but Cargo Deny's `unknown-git = "deny"`
+  configuration had no first-party exception. CI therefore rejected the
+  locked provider graph despite passing advisories, bans, and licenses.
+- Resolution: `sources.allow-org.github = ["ryancinsight"]` admits only the
+  first-party organization. Unknown Git sources and unknown registries remain
+  denied; this is a source-policy correction, not a broad Git exception.
+- Evidence tier: Cargo Deny's source-graph policy check validates the resolved
+  lock graph. It does not prove the trustworthiness of the allowed organization.
+
 ## Apple Silicon Stockham target boundary [patch]
 
 - Finding: RITK macOS CI uses `aarch64-apple-darwin`, but Apollo's Stockham

@@ -115,7 +115,7 @@
 ## Hephaestus kernel migration: FFT [arch]
 
 - Target version: `apollo-fft` 0.16.0
-- Phase: Execution
+- Phase: Closure
 - [x] Record ADR 0006: Apollo retains the dense-FFT mathematical kernels and
   shader source, while Hephaestus exclusively owns GPU device acquisition,
   typed buffers, pipeline construction, binding, command encoding, submission,
@@ -147,6 +147,9 @@
   rustdoc, provider audit, major semver classification, examples, and a
   whole-crate source/manifest scan with no direct `wgpu`, `pollster`, helper,
   or retired stage edge.
+- [x] Restore the CI supply-chain gate without weakening it: Cargo Deny now
+  permits only the first-party `ryancinsight` GitHub organization, retaining
+  denial of every other Git source and every unknown registry.
 - Evidence target: typed binding/layout and external-buffer length validation,
   then
   value-semantic CPU differential and inverse-roundtrip evidence. No

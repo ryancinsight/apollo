@@ -27,6 +27,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Fixed
 
+- [patch] Restrict Cargo Deny's first-party Git allowlist to the
+  `ryancinsight` GitHub organization. Other Git sources remain denied, while
+  the locked Atlas provider graph remains reproducibly verifiable.
 - [patch] Gate Apollo's AVX-only Stockham modules and test imports on `x86_64`
   so the existing scalar path compiles for Apple Silicon consumers.
 - [patch] Align the CI Atlas checkout action and locked provider graph with the

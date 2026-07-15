@@ -23,6 +23,10 @@
   gate AVX-only modules, imports, and test symbols on `x86_64` so the scalar
   Stockham path compiles on `aarch64-apple-darwin`. This closes the RITK
   macOS CI provider blocker without a fallback or compatibility layer.
+- [x] [patch] Cargo Deny first-party source policy (owner Codex, 2026-07-15;
+  scope `deny.toml` and release PM artifacts): admit only the `ryancinsight`
+  GitHub organization so the locked Atlas provider graph passes `sources`
+  validation while all other Git sources and unknown registries remain denied.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
