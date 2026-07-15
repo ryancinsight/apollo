@@ -15,6 +15,8 @@
   represented-storage contracts into one private leaf with original values.
 - [x] Move direct Type-1 3D CPU differential, Leto shape boundary, and typed
   storage contract into one private leaf with original tolerances.
+- [x] Move direct Type-2 3D mode-shape rejection, CPU differential, Leto, and
+  typed storage contracts into one private leaf with original values.
 - [ ] Partition every existing value-semantic contract into private operation
   leaves, with one support leaf for repeated availability and assertion logic.
 - [ ] Preserve the direct Type-1/Type-2 adjoint theorem and the fast-path

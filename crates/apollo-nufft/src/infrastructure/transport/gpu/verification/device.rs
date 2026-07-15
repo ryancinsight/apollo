@@ -1,13 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::super::support::{
-        assert_complex64_close, assert_input_length_mismatch, assert_invalid_plan, backend,
-    };
+    use super::super::support::{assert_complex64_close, assert_input_length_mismatch, backend};
 
     use crate::{
-        nufft_type1_1d_fast, nufft_type1_3d_fast, nufft_type2_1d_fast, nufft_type2_3d,
-        nufft_type2_3d_fast, UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
-        DEFAULT_NUFFT_OVERSAMPLING,
+        nufft_type1_1d_fast, nufft_type1_3d_fast, nufft_type2_1d_fast, nufft_type2_3d_fast,
+        UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING,
     };
     use apollo_fft::{f16, PrecisionProfile};
     use eunomia::{Complex32, Complex64};
@@ -489,120 +486,6 @@ mod tests {
                     .any(|value| value.abs() > 0.0),
                 "3D IFFT diagnostic grid must contain interpolable spatial samples"
             );
-        }
-
-        // 24. type2_3d_rejects_mode_shape_mismatch
-        {
-            let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
-            let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let modes = Array3::from_elem([2, 2, 2], Complex32::new(1.0, 0.0));
-            let error = backend
-                .execute_type2_3d(&plan, &modes, &[(0.0, 0.0, 0.0)])
-                .expect_err("mode shape mismatch must fail");
-            assert_invalid_plan(error, "mode shape must match 3D plan grid dimensions");
-        }
-
-        // 25. type2_3d_matches_cpu_exact_reference
-        {
-            let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
-            let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
-                Complex32::new(
-                    0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
-                    -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
-                )
-            });
-            let expected_positions: Vec<(f64, f64, f64)> = positions
-                .iter()
-                .map(|(x, y, z)| (*x as f64, *y as f64, *z as f64))
-                .collect();
-            let expected_modes =
-                modes.mapv(|value| Complex64::new(value.re as f64, value.im as f64));
-            let expected = nufft_type2_3d(&expected_positions, &expected_modes, grid);
-
-            let actual = backend
-                .execute_type2_3d(&plan, &modes, &positions)
-                .expect("GPU type2 3D");
-
-            assert_eq!(actual.len(), expected.len());
-            for (actual, expected) in actual.iter().zip(expected.iter()) {
-                assert_complex64_close(*actual, *expected, 1.2e-4);
-            }
-        }
-
-        // 26. leto_type2_3d_matches_slice_path
-        {
-            let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
-            let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
-                Complex32::new(
-                    0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32,
-                    -0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32,
-                )
-            });
-            let expected = backend
-                .execute_type2_3d(&plan, &modes, &positions)
-                .expect("slice type2 3D");
-            let leto_positions = leto::Array2::from_shape_vec(
-                [positions.len(), 3],
-                positions
-                    .iter()
-                    .flat_map(|(x, y, z)| [*x, *y, *z])
-                    .collect(),
-            )
-            .expect("positions");
-            let leto_modes = leto::Array3::from_shape_vec(
-                [grid.nx, grid.ny, grid.nz],
-                modes.iter().copied().collect(),
-            )
-            .expect("modes");
-
-            let actual = backend
-                .execute_type2_3d_leto(&plan, leto_modes.view(), leto_positions.view())
-                .expect("leto type2 3D");
-
-            for (actual, expected) in actual.storage().as_slice().iter().zip(expected.iter()) {
-                assert_complex64_close(*actual, *expected, 1.0e-6);
-            }
-        }
-
-        // 27. type2_3d_typed_mixed_storage_matches_represented_input
-        {
-            let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
-            let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-            let positions = [(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5), (1.1, 0.2, 1.4)];
-            let modes16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |[kx, ky, kz]| {
-                [
-                    f16::from_f32(0.25 + 0.1 * kx as f32 - 0.05 * ky as f32 + 0.03 * kz as f32),
-                    f16::from_f32(-0.4 + 0.07 * kx as f32 + 0.11 * ky as f32 - 0.02 * kz as f32),
-                ]
-            });
-            let represented =
-                modes16.mapv(|value| Complex32::new(value[0].to_f32(), value[1].to_f32()));
-            let expected = backend
-                .execute_type2_3d(&plan, &represented, &positions)
-                .expect("represented type2 3D");
-            let mut actual = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
-
-            backend
-                .execute_type2_3d_typed_into(
-                    &plan,
-                    PrecisionProfile::MIXED_PRECISION_F16_F32,
-                    &modes16,
-                    &positions,
-                    &mut actual,
-                )
-                .expect("mixed type2 3D");
-
-            assert_eq!(actual.len(), expected.len());
-            for (actual, expected) in actual.iter().zip(expected.iter()) {
-                let expected_re = f16::from_f32(expected.re as f32);
-                let expected_im = f16::from_f32(expected.im as f32);
-                assert_eq!(actual[0].to_bits(), expected_re.to_bits());
-                assert_eq!(actual[1].to_bits(), expected_im.to_bits());
-            }
         }
 
         // 28. fast_type2_1d_normalization_invariance

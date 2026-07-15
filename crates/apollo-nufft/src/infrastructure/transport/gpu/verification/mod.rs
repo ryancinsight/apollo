@@ -13,6 +13,8 @@ mod direct_type1_3d;
 #[cfg(test)]
 mod direct_type2_1d;
 #[cfg(test)]
+mod direct_type2_3d;
+#[cfg(test)]
 mod metadata;
 #[cfg(test)]
 mod support;
