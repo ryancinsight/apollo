@@ -10,10 +10,11 @@ pub(crate) struct SampleSummary {
 impl SampleSummary {
     pub(crate) fn from_samples(mut samples: Vec<u128>, iterations_per_sample: u64) -> Option<Self> {
         samples.sort_unstable();
-        let middle = samples.len() / 2;
+        let lower = *samples.get((samples.len().checked_sub(1)?) / 2)?;
+        let upper = *samples.get(samples.len() / 2)?;
         Some(Self {
             minimum_nanoseconds: *samples.first()?,
-            median_nanoseconds: *samples.get(middle)?,
+            median_nanoseconds: lower + (upper - lower) / 2,
             sample_count: samples.len(),
             iterations_per_sample,
         })
@@ -31,6 +32,13 @@ mod tests {
         assert_eq!(summary.minimum_nanoseconds, 2);
         assert_eq!(summary.median_nanoseconds, 4);
         assert_eq!(summary.sample_count, 5);
+    }
+
+    #[test]
+    fn even_sample_median_averages_the_central_pair() {
+        let summary = SampleSummary::from_samples(vec![10, 2, 7, 4], 1)
+            .expect("invariant: literal sample set is non-empty");
+        assert_eq!(summary.median_nanoseconds, 5);
     }
 
     #[test]

@@ -2,11 +2,12 @@
 //!
 //! # Estimator theorem
 //!
-//! Let `x₁, …, x₂m₊₁` be per-operation timing samples and let `x₍m₊₁₎` be
-//! their sorted middle element. At least `m + 1` samples are no smaller than
-//! `x₍m₊₁₎`, and at least `m + 1` samples are no greater. Therefore a minority
-//! of arbitrarily large scheduler or device-delay outliers cannot move the
-//! reported median outside the central order statistic.
+//! Let `x₁, …, x₂m` be the 100 per-operation timing samples and let the
+//! reported value be `⌊(xₘ + x₍m₊₁₎) / 2⌋` after sorting. At least `m` samples
+//! are no greater than `xₘ`, and at least `m` samples are no smaller than
+//! `x₍m₊₁₎`. Therefore fewer than `m` arbitrarily large scheduler or
+//! device-delay outliers cannot replace the central pair that determines the
+//! reported median.
 //!
 //! The proof follows directly from sorted-index cardinality. This is a robust
 //! summary property, not a claim that wall-clock measurements are noise-free

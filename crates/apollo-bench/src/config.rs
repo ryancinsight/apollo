@@ -25,7 +25,7 @@ impl BenchmarkConfig {
         }
     }
 
-    /// Creates a configuration with the established 100-sample estimator.
+    /// Creates a configuration with the established non-zero 100-sample estimator.
     ///
     /// # Errors
     ///
