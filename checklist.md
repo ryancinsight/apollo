@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## Hephaestus kernel migration: Mellin [arch]
+
+- Target version: `apollo-mellin` 0.4.0
+- Phase: Execution
+- [ ] Replace raw WGPU log-resample, spectrum, inverse-spectrum, and
+  exponential-resample dispatch with typed Hephaestus ZST descriptors and one
+  ordered command stream per direction.
+- [ ] Preserve the Mellin log-grid inverse-pair contract; retain Leto host
+  views and Mnemosyne outputs; seal the concrete `f32` forward GPU storage
+  contract.
+- [ ] Verify real-device CPU forward differential and inverse constant-signal
+  evidence, Leto COW paths, negative storage/domain contracts, format,
+  warning-denied Clippy, nextest, doctest, rustdoc, provider audit, and semver
+  classification; update D6 artifacts.
+
 ## Hephaestus kernel migration: Hilbert [arch]
 
 - Target version: `apollo-hilbert` 0.5.0

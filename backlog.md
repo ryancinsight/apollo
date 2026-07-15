@@ -126,6 +126,16 @@ Remaining replacement work:
     storage/length contracts, warning-denied gates, provider audit, semver
     classification, and source scan find no direct `wgpu`, `pollster`, or helper
     edge.
+  - [/] D6-Mellin: `apollo-mellin` 0.4.0 migrates log-resampling, spectrum,
+    inverse-spectrum, and exponential-resampling as four typed Hephaestus
+    kernels over ordered command streams. Leto remains the host boundary and
+    Mnemosyne owns scratch and returned arrays; sealed `MellinGpuStorage` must
+    reject silent `f64` narrowing into the concrete `f32` forward accelerator.
+    Acceptance: preserve the log-grid inverse-pair contract, real-device CPU
+    forward differential and inverse constant-signal evidence, Leto
+    contiguous/strided paths, negative storage/domain contracts, warning-denied
+    gates, provider audit, semver classification, and no direct `wgpu`,
+    `pollster`, or helper edge.
   The first ten slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
   Wavelet, FrFT, and Hilbert retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
