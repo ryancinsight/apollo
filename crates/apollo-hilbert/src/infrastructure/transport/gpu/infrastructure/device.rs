@@ -1,42 +1,47 @@
-//! WGPU device acquisition for this transform backend.
+//! Hephaestus device acquisition and Hilbert execution boundary.
 
-use apollo_fft::application::utilities::leto_interop;
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
+use apollo_fft::{application::utilities::leto_interop, PrecisionProfile};
 use eunomia::Complex32;
-
-use crate::HilbertStorage;
-use apollo_fft::PrecisionProfile;
+use hephaestus_wgpu::WgpuDevice;
+use mnemosyne::scratch::ScratchPool;
 
 use crate::infrastructure::transport::gpu::application::plan::HilbertWgpuPlan;
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
 use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::kernel::HilbertGpuKernel;
-use apollo_wgpu_helpers::WgpuDevice;
+use crate::HilbertGpuStorage;
 
-/// Return whether a default WGPU adapter/device can be acquired.
+thread_local! {
+    static COMPLEX_INPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
+    static COMPLEX_OUTPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
+    static REAL_INPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+    static REAL_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
+}
+
+/// Return whether a default Hephaestus WGPU device can be acquired.
 #[must_use]
 pub fn wgpu_available() -> bool {
     HilbertWgpuBackend::try_default().is_ok()
 }
 
-/// WGPU backend descriptor.
+/// Hephaestus WGPU backend for analytic and inverse Hilbert execution.
 #[derive(Debug, Clone)]
 pub struct HilbertWgpuBackend {
     device: WgpuDevice,
-    kernel: Arc<HilbertGpuKernel>,
 }
 
 impl HilbertWgpuBackend {
-    /// Create a backend from an existing device and queue.
-    pub fn new(device: WgpuDevice) -> WgpuResult<Self> {
-        let kernel = Arc::new(HilbertGpuKernel::new(device.inner()));
-        Ok(Self { device, kernel })
+    /// Create a backend from an acquired Hephaestus WGPU device.
+    #[must_use]
+    pub const fn new(device: WgpuDevice) -> Self {
+        Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
+    /// Acquire the default Hephaestus WGPU device.
     pub fn try_default() -> WgpuResult<Self> {
-        Self::new(WgpuDevice::try_default("apollo-hilbert-wgpu")?)
+        Ok(Self::new(WgpuDevice::try_default("apollo-hilbert-wgpu")?))
     }
 
     /// Return truthful current capabilities.
@@ -45,16 +50,10 @@ impl HilbertWgpuBackend {
         WgpuCapabilities::forward_and_inverse(true)
     }
 
-    /// Return the acquired WGPU device.
+    /// Return the acquired Hephaestus WGPU device implementation.
     #[must_use]
-    pub fn device(&self) -> &Arc<wgpu::Device> {
-        self.device.device()
-    }
-
-    /// Return the acquired WGPU queue.
-    #[must_use]
-    pub fn queue(&self) -> &Arc<wgpu::Queue> {
-        self.device.queue()
+    pub const fn device(&self) -> &WgpuDevice {
+        &self.device
     }
 
     /// Create a metadata-only plan descriptor.
@@ -63,119 +62,170 @@ impl HilbertWgpuBackend {
         HilbertWgpuPlan::new(len)
     }
 
-    /// Execute the analytic signal `x + i H{x}` for a real-valued `f32` signal.
+    /// Execute the analytic signal `x + i H{x}`.
     pub fn execute_analytic_signal(
         &self,
         plan: &HilbertWgpuPlan,
         input: &[f32],
     ) -> WgpuResult<Vec<Complex32>> {
-        Self::validate_plan_input(plan, input)?;
-        self.kernel.execute(&self.device, input)
+        let mut output = vec![Complex32::new(0.0, 0.0); plan.len()];
+        self.execute_analytic_signal_into(plan, input, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the analytic signal into caller-owned complex output storage.
+    pub fn execute_analytic_signal_into(
+        &self,
+        plan: &HilbertWgpuPlan,
+        input: &[f32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::validate_lengths(plan, input.len(), output.len())?;
+        COMPLEX_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |complex_input| {
+                for (target, value) in complex_input.iter_mut().zip(input.iter().copied()) {
+                    *target = Complex32::new(value, 0.0);
+                }
+                HilbertGpuKernel::execute_analytic_into(&self.device, complex_input, output)?;
+                for (sample, original) in output.iter_mut().zip(input.iter().copied()) {
+                    sample.re = original;
+                }
+                Ok(())
+            })
+        })
     }
 
     /// Execute the analytic signal from a Leto real-valued host view.
-    ///
-    /// Contiguous views are borrowed without copying. Strided views are
-    /// materialized once into logical order before GPU upload.
     pub fn execute_analytic_signal_leto(
         &self,
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<Complex32, leto::MnemosyneStorage<Complex32>, 1>> {
         let input = leto_view1_cow(input);
-        let output = self.execute_analytic_signal(plan, &input)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<Complex32, leto::MnemosyneStorage<Complex32>, 1>::zeros_mnemosyne([
+                plan.len()
+            ]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("Hilbert Mnemosyne output must be contiguous");
+        self.execute_analytic_signal_into(plan, &input, output_slice)?;
+        Ok(output)
     }
 
-    /// Execute the forward Hilbert quadrature component `H{x}` for a real-valued `f32` signal.
+    /// Execute the forward Hilbert quadrature component `H{x}`.
     pub fn execute_forward(&self, plan: &HilbertWgpuPlan, input: &[f32]) -> WgpuResult<Vec<f32>> {
-        Ok(self
-            .execute_analytic_signal(plan, input)?
-            .into_iter()
-            .map(|value| value.im)
-            .collect())
+        let mut output = vec![0.0; plan.len()];
+        self.execute_forward_into(plan, input, &mut output)?;
+        Ok(output)
     }
 
-    /// Execute the forward Hilbert quadrature component from a Leto host view.
+    /// Execute the forward Hilbert quadrature into caller-owned storage.
+    pub fn execute_forward_into(
+        &self,
+        plan: &HilbertWgpuPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate_lengths(plan, input.len(), output.len())?;
+        COMPLEX_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |complex_input| {
+                for (target, value) in complex_input.iter_mut().zip(input.iter().copied()) {
+                    *target = Complex32::new(value, 0.0);
+                }
+                COMPLEX_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |analytic| {
+                        HilbertGpuKernel::execute_analytic_into(
+                            &self.device,
+                            complex_input,
+                            analytic,
+                        )?;
+                        for (target, value) in output.iter_mut().zip(analytic.iter()) {
+                            *target = value.im;
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
+    }
+
+    /// Execute the forward Hilbert quadrature from a Leto host view.
     pub fn execute_forward_leto(
         &self,
         plan: &HilbertWgpuPlan,
         input: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let input = leto_view1_cow(input);
-        let output = self.execute_forward(plan, &input)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("Hilbert Mnemosyne output must be contiguous");
+        self.execute_forward_into(plan, &input, output_slice)?;
+        Ok(output)
     }
 
-    /// Execute the forward Hilbert quadrature transform with typed `f64`, `f32`, or mixed `f16` storage.
-    ///
-    /// Promotes represented input once to `f32`, dispatches the GPU analytic-signal kernel,
-    /// extracts the imaginary (quadrature) component, and quantizes output back to storage type.
-    pub fn execute_forward_typed_into<T: HilbertStorage>(
+    /// Execute forward Hilbert quadrature with storage admitted by the concrete GPU contract.
+    pub fn execute_forward_typed_into<T: HilbertGpuStorage>(
         &self,
         plan: &HilbertWgpuPlan,
         precision: PrecisionProfile,
         input: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_hilbert_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented = if let Some(slice_f32) = T::as_f32_slice(input) {
-            std::borrow::Cow::Borrowed(slice_f32)
-        } else {
-            let vec: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
-            std::borrow::Cow::Owned(vec)
-        };
-        let computed = self.execute_forward(plan, &represented)?;
-        if let Some(slice_f32) = T::as_f32_slice_mut(output) {
-            slice_f32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_f64(f64::from(value));
-            }
-        }
-        Ok(())
+        self.execute_typed_into(plan, precision, input, output, false)
     }
 
     /// Execute typed forward Hilbert quadrature from a Leto host view.
-    pub fn execute_forward_leto_typed<T: HilbertStorage>(
+    pub fn execute_forward_leto_typed<T: HilbertGpuStorage + Default>(
         &self,
         plan: &HilbertWgpuPlan,
         precision: PrecisionProfile,
         input: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let input = leto_view1_cow(input);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_forward_typed_into(plan, precision, &input, &mut output)?;
-        leto_array1_from_slice(&output)
+        self.execute_typed_leto(plan, precision, input, false)
     }
 
-    fn validate_hilbert_typed_precision<T: HilbertStorage>(
-        precision: PrecisionProfile,
-    ) -> WgpuResult<()> {
-        let expected = T::PROFILE;
-        if precision.storage != expected.storage || precision.compute != expected.compute {
-            return Err(WgpuError::InvalidPrecisionProfile);
-        }
-        Ok(())
-    }
-
-    /// Execute the inverse Hilbert transform: recover the original real signal from its quadrature component.
-    ///
-    /// By the Hilbert inversion theorem H(H(x)) = -I, the original signal is
-    /// `x[n] = -H{H{x}[n]} = -H{quadrature[n]}`.
+    /// Execute the inverse Hilbert transform.
     pub fn execute_inverse(
         &self,
         plan: &HilbertWgpuPlan,
         quadrature: &[f32],
     ) -> WgpuResult<Vec<f32>> {
-        Self::validate_plan_input(plan, quadrature)?;
-        self.kernel.execute_inverse(&self.device, quadrature)
+        let mut output = vec![0.0; plan.len()];
+        self.execute_inverse_into(plan, quadrature, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the inverse Hilbert transform into caller-owned storage.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &HilbertWgpuPlan,
+        quadrature: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::validate_lengths(plan, quadrature.len(), output.len())?;
+        COMPLEX_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(quadrature.len(), |complex_input| {
+                for (target, value) in complex_input.iter_mut().zip(quadrature.iter().copied()) {
+                    *target = Complex32::new(value, 0.0);
+                }
+                COMPLEX_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |recovered| {
+                        HilbertGpuKernel::execute_inverse_into(
+                            &self.device,
+                            complex_input,
+                            recovered,
+                        )?;
+                        for (target, value) in output.iter_mut().zip(recovered.iter()) {
+                            *target = value.re;
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
     }
 
     /// Execute the inverse Hilbert transform from a Leto quadrature view.
@@ -185,66 +235,123 @@ impl HilbertWgpuBackend {
         quadrature: leto::ArrayView1<'_, f32>,
     ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
         let quadrature = leto_view1_cow(quadrature);
-        let output = self.execute_inverse(plan, &quadrature)?;
-        leto_array1_from_slice(&output)
+        let mut output =
+            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne([plan.len()]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("Hilbert Mnemosyne output must be contiguous");
+        self.execute_inverse_into(plan, &quadrature, output_slice)?;
+        Ok(output)
     }
 
-    /// Execute the inverse Hilbert transform with typed storage.
-    pub fn execute_inverse_typed_into<T: HilbertStorage>(
+    /// Execute inverse Hilbert quadrature with storage admitted by the concrete GPU contract.
+    pub fn execute_inverse_typed_into<T: HilbertGpuStorage>(
         &self,
         plan: &HilbertWgpuPlan,
         precision: PrecisionProfile,
         quadrature: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_hilbert_typed_precision::<T>(precision)?;
-        if output.len() != plan.len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.len(),
-                actual: output.len(),
-            });
-        }
-        let represented = if let Some(slice_f32) = T::as_f32_slice(quadrature) {
-            std::borrow::Cow::Borrowed(slice_f32)
-        } else {
-            let vec: Vec<f32> = quadrature.iter().map(|v| v.to_f64() as f32).collect();
-            std::borrow::Cow::Owned(vec)
-        };
-        let computed = self.execute_inverse(plan, &represented)?;
-        if let Some(slice_f32) = T::as_f32_slice_mut(output) {
-            slice_f32.copy_from_slice(&computed);
-        } else {
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_f64(f64::from(value));
-            }
-        }
-        Ok(())
+        self.execute_typed_into(plan, precision, quadrature, output, true)
     }
 
-    /// Execute typed inverse Hilbert transform from a Leto quadrature view.
-    pub fn execute_inverse_leto_typed<T: HilbertStorage>(
+    /// Execute typed inverse Hilbert quadrature from a Leto host view.
+    pub fn execute_inverse_leto_typed<T: HilbertGpuStorage + Default>(
         &self,
         plan: &HilbertWgpuPlan,
         precision: PrecisionProfile,
         quadrature: leto::ArrayView1<'_, T>,
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-        let quadrature = leto_view1_cow(quadrature);
-        let mut output = vec![T::from_f64(0.0); plan.len()];
-        self.execute_inverse_typed_into(plan, precision, &quadrature, &mut output)?;
-        leto_array1_from_slice(&output)
+        self.execute_typed_leto(plan, precision, quadrature, true)
     }
 
-    fn validate_plan_input(plan: &HilbertWgpuPlan, input: &[f32]) -> WgpuResult<()> {
-        let len = plan.len();
-        if len == 0 {
+    fn execute_typed_into<T: HilbertGpuStorage>(
+        &self,
+        plan: &HilbertWgpuPlan,
+        precision: PrecisionProfile,
+        input: &[T],
+        output: &mut [T],
+        inverse: bool,
+    ) -> WgpuResult<()> {
+        Self::validate_typed(plan, precision, input, output)?;
+        if let (Some(input), Some(output)) = (T::as_f32_slice(input), T::as_f32_slice_mut(output)) {
+            return if inverse {
+                self.execute_inverse_into(plan, input, output)
+            } else {
+                self.execute_forward_into(plan, input, output)
+            };
+        }
+        REAL_INPUT_SCRATCH.with(|input_pool| {
+            input_pool.with_scratch(input.len(), |represented| {
+                for (target, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *target = value.to_gpu();
+                }
+                REAL_OUTPUT_SCRATCH.with(|output_pool| {
+                    output_pool.with_scratch(output.len(), |computed| {
+                        if inverse {
+                            self.execute_inverse_into(plan, represented, computed)?;
+                        } else {
+                            self.execute_forward_into(plan, represented, computed)?;
+                        }
+                        for (target, value) in output.iter_mut().zip(computed.iter().copied()) {
+                            *target = T::from_gpu(value);
+                        }
+                        Ok(())
+                    })
+                })
+            })
+        })
+    }
+
+    fn execute_typed_leto<T: HilbertGpuStorage + Default>(
+        &self,
+        plan: &HilbertWgpuPlan,
+        precision: PrecisionProfile,
+        input: leto::ArrayView1<'_, T>,
+        inverse: bool,
+    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        let input = leto_view1_cow(input);
+        let mut output =
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+        let output_slice = output
+            .as_slice_mut()
+            .expect("Hilbert Mnemosyne output must be contiguous");
+        self.execute_typed_into(plan, precision, &input, output_slice, inverse)?;
+        Ok(output)
+    }
+
+    fn validate_typed<T: HilbertGpuStorage>(
+        plan: &HilbertWgpuPlan,
+        precision: PrecisionProfile,
+        input: &[T],
+        output: &[T],
+    ) -> WgpuResult<()> {
+        if precision != T::PROFILE {
+            return Err(WgpuError::InvalidPrecisionProfile);
+        }
+        Self::validate_lengths(plan, input.len(), output.len())
+    }
+
+    fn validate_lengths(
+        plan: &HilbertWgpuPlan,
+        input_len: usize,
+        output_len: usize,
+    ) -> WgpuResult<()> {
+        if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
+                message: "transform length must be greater than zero".to_owned(),
             });
         }
-        if input.len() != len {
+        if input_len != plan.len() {
             return Err(WgpuError::LengthMismatch {
-                expected: len,
-                actual: input.len(),
+                expected: plan.len(),
+                actual: input_len,
+            });
+        }
+        if output_len != plan.len() {
+            return Err(WgpuError::LengthMismatch {
+                expected: plan.len(),
+                actual: output_len,
             });
         }
         Ok(())
@@ -253,13 +360,6 @@ impl HilbertWgpuBackend {
 
 fn leto_view1_cow<T: Copy>(view: leto::ArrayView1<'_, T>) -> Cow<'_, [T]> {
     leto_interop::view1_cow(&view)
-}
-fn leto_array1_from_slice<T: Copy>(
-    values: &[T],
-) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
-    leto_interop::try_array1_from_slice(values).ok_or_else(|| WgpuError::InvalidPlan {
-        message: "failed to allocate Mnemosyne-backed Leto Hilbert output".to_string(),
-    })
 }
 
 #[cfg(test)]

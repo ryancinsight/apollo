@@ -1,6 +1,6 @@
 [package]
 name = "apollo-hilbert"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -10,20 +10,16 @@ description = "Hilbert transform and analytic-signal plans for Apollo"
 
 [features]
 wgpu = [
-    "dep:apollo-wgpu-helpers",
+    "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
-    "dep:wgpu",
-    "dep:pollster"
 ]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
 
 [dependencies]
-apollo-wgpu-helpers = { path = "../apollo-wgpu-helpers", optional = true }
+hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
-wgpu = { workspace = true, optional = true }
-pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft = { path = "../apollo-fft" }
 hermes-simd = { workspace = true }

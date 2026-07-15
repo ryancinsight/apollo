@@ -11,10 +11,10 @@ struct HilbertParams {
 }
 
 @group(0) @binding(0)
-var<storage, read_write> inout_a: array<ComplexValue>;
+var<storage, read> input_data: array<ComplexValue>;
 
 @group(0) @binding(1)
-var<storage, read_write> inout_b: array<ComplexValue>;
+var<storage, read_write> output_data: array<ComplexValue>;
 
 @group(0) @binding(2)
 var<uniform> params: HilbertParams;
@@ -40,11 +40,11 @@ fn hilbert_forward_dft(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var n: u32 = 0u; n < params.len; n = n + 1u) {
         let angle = factor * f32(k * n);
         let twiddle = vec2<f32>(cos(angle), sin(angle));
-        let sample = vec2<f32>(inout_a[n].re, 0.0);
+        let sample = vec2<f32>(input_data[n].re, 0.0);
         acc = acc + cmul(sample, twiddle);
     }
-    inout_b[k].re = acc.x;
-    inout_b[k].im = acc.y;
+    output_data[k].re = acc.x;
+    output_data[k].im = acc.y;
 }
 
 @compute @workgroup_size(64, 1, 1)
@@ -61,8 +61,8 @@ fn hilbert_apply_mask(@builtin(global_invocation_id) gid: vec3<u32>) {
     } else if k < positive_end {
         scale = 2.0;
     }
-    inout_b[k].re = inout_b[k].re * scale;
-    inout_b[k].im = inout_b[k].im * scale;
+    output_data[k].re = output_data[k].re * scale;
+    output_data[k].im = output_data[k].im * scale;
 }
 
 @compute @workgroup_size(64, 1, 1)
@@ -77,11 +77,11 @@ fn hilbert_inverse_dft(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var k: u32 = 0u; k < params.len; k = k + 1u) {
         let angle = factor * f32(k * n);
         let twiddle = vec2<f32>(cos(angle), sin(angle));
-        let coefficient = vec2<f32>(inout_a[k].re, inout_a[k].im);
+        let coefficient = vec2<f32>(input_data[k].re, input_data[k].im);
         acc = acc + cmul(coefficient, twiddle);
     }
-    inout_b[n].re = acc.x * scale;
-    inout_b[n].im = acc.y * scale;
+    output_data[n].re = acc.x * scale;
+    output_data[n].im = acc.y * scale;
 }
 
 /// Inverse Hilbert mask: recover the original DFT spectrum X[k] from the
@@ -97,8 +97,8 @@ fn hilbert_inverse_dft(@builtin(global_invocation_id) gid: vec3<u32>) {
 /// unrecoverable from the quadrature alone. We set X[0] and X[N/2] to zero;
 /// the recovered signal will have zero mean (the DC offset is lost).
 ///
-/// Reads from inout_a (the DFT of the quadrature input) and writes to
-/// inout_b (the recovered original spectrum).
+/// Reads from input_data (the DFT of the quadrature input) and writes to
+/// output_data (the recovered original spectrum).
 @compute @workgroup_size(64, 1, 1)
 fn hilbert_inverse_mask(@builtin(global_invocation_id) gid: vec3<u32>) {
     let k = gid.x;
@@ -110,19 +110,19 @@ fn hilbert_inverse_mask(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     if k == 0u {
         // DC: Hilbert of constant is zero. X[0] is unrecoverable.
-        inout_b[k].re = 0.0;
-        inout_b[k].im = 0.0;
+        output_data[k].re = 0.0;
+        output_data[k].im = 0.0;
     } else if (N & 1u) == 0u && k == N / 2u {
         // Nyquist (even N): same as DC, lost in Hilbert transform.
-        inout_b[k].re = 0.0;
-        inout_b[k].im = 0.0;
+        output_data[k].re = 0.0;
+        output_data[k].im = 0.0;
     } else if k < positive_end {
         // Positive frequency: Q[k] = -j * X[k], so X[k] = j * Q[k] = (-Q.im, Q.re).
-        inout_b[k].re = -inout_a[k].im;
-        inout_b[k].im = inout_a[k].re;
+        output_data[k].re = -input_data[k].im;
+        output_data[k].im = input_data[k].re;
     } else {
         // Negative frequency: Q[k] = j * X[k], so X[k] = -j * Q[k] = (Q.im, -Q.re).
-        inout_b[k].re = inout_a[k].im;
-        inout_b[k].im = -inout_a[k].re;
+        output_data[k].re = input_data[k].im;
+        output_data[k].im = -input_data[k].re;
     }
 }

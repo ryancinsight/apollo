@@ -64,7 +64,7 @@ Remaining replacement work:
     authored-kernel interfaces, and command streams. Device acquisition is
       already shared. `apollo-fwht`, `apollo-czt`, `apollo-dht`,
       `apollo-dctdst`, `apollo-gft`, `apollo-ntt`, `apollo-qft`, and
-      `apollo-wavelet` are complete; 10 transform crates
+      `apollo-wavelet`, `apollo-frft`, and `apollo-hilbert` are complete; 8 transform crates
       remain.
   - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
   Start with FFT; differential vs CPU and wgpu.
@@ -73,7 +73,7 @@ Remaining replacement work:
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
 - [/] [arch] Stage D6: **eliminate the `apollo-wgpu-helpers` wrapper crate** —
   owner Codex; last-update 2026-07-14; completed scopes FWHT, CZT, DHT,
-  DCT/DST, GFT, NTT, QFT, Wavelet, and FrFT; 9 transform crates remain.
+  DCT/DST, GFT, NTT, QFT, Wavelet, FrFT, and Hilbert; 8 transform crates remain.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
@@ -117,16 +117,17 @@ Remaining replacement work:
     differential, unitary identity/reversal/norm/roundtrip evidence, doctest,
     warning-denied gates, provider audit, semver classification, and a source
     scan with no direct `wgpu`, `pollster`, or helper edge.
-  - [/] D6-Hilbert: `apollo-hilbert` 0.5.0 migrates the analytic-signal and
+  - [x] D6-Hilbert: `apollo-hilbert` 0.5.0 migrates the analytic-signal and
     inverse Hilbert paths as four typed Hephaestus kernels over an ordered
     command stream. Leto remains the host boundary and Mnemosyne owns scratch
-    and returned arrays; a sealed `HilbertGpuStorage` contract must reject
-    silent `f64` narrowing. Acceptance: preserve `H(H(x)) = -x`, real-device
-    CPU differential and inverse evidence, negative storage/length contracts,
-    warning-denied gates, provider audit, semver classification, and no direct
-    `wgpu`, `pollster`, or helper edge.
-  The first nine slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
-  Wavelet, and FrFT retain Leto host arrays and
+    and returned arrays; sealed `HilbertGpuStorage` rejects silent `f64`
+    narrowing. `H(H(x)) = -x` is documented on the DC/Nyquist-free subspace;
+    real-device CPU differential and inverse-projection evidence, negative
+    storage/length contracts, warning-denied gates, provider audit, semver
+    classification, and source scan find no direct `wgpu`, `pollster`, or helper
+    edge.
+  The first ten slices are complete: FWHT, CZT, DHT, DCT/DST, GFT, NTT, QFT,
+  Wavelet, FrFT, and Hilbert retain Leto host arrays and
   Apollo-owned transform source while all device, typed-buffer, pipeline,
   binding, dispatch, and transfer mechanics route through Hephaestus contracts
   with no direct `wgpu` or helper dependency. The wrapper no longer fits the
@@ -135,7 +136,7 @@ Remaining replacement work:
   `WgpuDevice::from_hephaestus`/`hephaestus()`), and some kernels already call
   `hephaestus_wgpu::WgpuDevice` directly. Plan (mostly mechanical now that the
   device plumbing is on hephaestus):
-  - 9 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
+  - 8 remaining consumer crates: `apollo_wgpu_helpers::WgpuDevice` →
     `hephaestus_wgpu::WgpuDevice` (the wrapper's `try_default*` simply forward).
   - `WgpuStorage<T>` (a `coeus_core::Storage`/`StorageMut` GPU bridge over
     `hephaestus_wgpu::WgpuBuffer`, used in **only 1 file**) → use the hephaestus

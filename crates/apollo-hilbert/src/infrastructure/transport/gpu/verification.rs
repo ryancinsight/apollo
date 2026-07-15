@@ -126,13 +126,13 @@ mod tests {
             let mismatch_err = backend
                 .execute_forward(&HilbertWgpuPlan::new(8), &[0.0; 4])
                 .expect_err("length mismatch must fail");
-            assert_eq!(
+            assert!(matches!(
                 mismatch_err,
                 WgpuError::LengthMismatch {
                     expected: 8,
                     actual: 4,
                 }
-            );
+            ));
         }
 
         // 5. typed_mixed_storage_matches_represented_f32_execution
@@ -404,7 +404,7 @@ mod tests {
                     &mut output,
                 )
                 .expect_err("profile mismatch must fail");
-            assert_eq!(err, WgpuError::InvalidPrecisionProfile);
+            assert!(matches!(err, WgpuError::InvalidPrecisionProfile));
         }
     }
 }

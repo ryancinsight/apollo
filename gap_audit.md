@@ -53,9 +53,32 @@
 - Evidence tier: type-level binding/layout and storage exclusion, then 40
   value-semantic nextest cases including real-device direct/unitary evidence.
   No machine-checked proof is performed.
-- Residual: D6 has 9 transform crates remaining: FFT, Hilbert, Mellin, NUFFT,
-  Radon, SDFT, SFT, SHT, and STFT. FrFT contains no direct raw-WGPU mechanics,
+- Residual at FrFT closure: D6 had 9 transform crates remaining: FFT, Hilbert,
+  Mellin, NUFFT, Radon, SDFT, SFT, SHT, and STFT. FrFT contains no direct raw-WGPU mechanics,
   pollster dependency, or `apollo-wgpu-helpers` edge.
+
+## Hilbert Hephaestus command-stream migration [arch]
+
+- Performed: replaced the analytic-signal and inverse raw-device pipeline,
+  binding, encoder, queue, and transfer mechanics with four typed Hephaestus
+  ZST descriptors over ordered command streams. Leto remains the host-view
+  boundary; Mnemosyne owns conversion scratch and returned Leto arrays.
+- Mathematical contract: with DFT multiplier `-i sign(k)` away from DC and
+  Nyquist, `H(H(x)) = -x` on the DC/Nyquist-free subspace. The inverse mask
+  applies `-H`, so it recovers exactly that projection and cannot reconstruct
+  deliberately discarded DC/Nyquist coefficients.
+- Type contract: sealed `HilbertGpuStorage` admits only native `f32` and
+  explicit `f16` conversion. `f64` cannot silently narrow into the concrete
+  accelerator kernel.
+- Verification: all-feature package check, warning-denied Clippy, 34/34
+  nextest cases including real-device CPU forward differential and
+  inverse-projection checks, the `f64` compile-fail doctest, rustdoc,
+  provider audit, locked metadata, immediate-parent semver classification, and
+  a source/manifest scan with no direct WGPU, pollster, or wrapper residue.
+- Evidence tier: type-level binding/layout and storage exclusion, then
+  value-semantic real-device evidence. No machine-checked proof is performed.
+- Residual: D6 has 8 transform crates remaining: FFT, Mellin, NUFFT, Radon,
+  SDFT, SFT, SHT, and STFT.
 
 ## QFT Hephaestus command-stream migration [arch]
 

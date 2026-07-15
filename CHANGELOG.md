@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-hilbert` 0.5.0 migrates analytic-signal and inverse Hilbert
+  acceleration to the Hephaestus authored-kernel seam.
+  `HilbertWgpuBackend::new` accepts `hephaestus_wgpu::WgpuDevice` directly and
+  returns `Self`; raw device and queue accessors are removed. GPU typed APIs
+  require sealed `HilbertGpuStorage`, admitting `f32` and `f16` while rejecting
+  silent `f64` narrowing.
 - [major] `apollo-frft` 0.3.0 migrates direct and Candan--Gr\u00fcnbaum unitary
   acceleration to the Hephaestus authored-kernel seam. `FrftWgpuBackend::new`
   accepts `hephaestus_wgpu::WgpuDevice` directly and returns `Self`; raw device
@@ -73,6 +79,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Hilbert analytic and inverse dispatch now use typed Hephaestus
+  bindings, four ZST authored-kernel descriptors, and ordered command streams.
+  Leto remains the host-array boundary, Mnemosyne owns scratch and returned
+  storage, and the crate no longer depends directly on `wgpu`, `pollster`, or
+  `apollo-wgpu-helpers`.
 - [arch] FrFT direct and unitary dispatch now use typed Hephaestus bindings,
   ZST authored-kernel descriptors, and ordered command streams. Leto remains
   the host-array boundary, Mnemosyne owns returned storage, and the crate no
