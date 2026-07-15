@@ -1,7 +1,7 @@
 //! Pure O(N²) DFT reference oracle — no external dependencies.
 //!
 //! Implements the textbook Discrete Fourier Transform:
-//! X[k] = Σ_{n=0}^{N-1} x[n] · exp(-2πi·k·n/N)
+//! X\[k\] = Σ_{n=0}^{N-1} x\[n\] · exp(-2πi·k·n/N)
 //!
 //! O(N²) complexity by construction. This is the gold-standard reference:
 //! trivially correct, matching the mathematical definition exactly, with no
@@ -9,7 +9,7 @@
 //! Used as the authoritative oracle for validating Apollo's O(N log N) FFT.
 //!
 //! # Theorem: Discrete Fourier Transform
-//! X[k] = Σ_{n=0}^{N-1} x[n] · (cos(2π·k·n/N) — i·sin(2π·k·n/N))
+//! X\[k\] = Σ_{n=0}^{N-1} x\[n\] · (cos(2π·k·n/N) — i·sin(2π·k·n/N))
 
 use eunomia::Complex64;
 use leto::{Array1, Array3};
