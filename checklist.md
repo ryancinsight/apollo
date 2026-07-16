@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## CUDA FFT provider path [major]
+
+- Target version: `apollo-fft` 0.22.0 pre-1.0 breaking release.
+- Phase: Closure
+- [x] Record ADR 0030 with the radix-two DFT/inverse theorem and the derived
+  finite-precision differential bounds.
+- [x] Add the `cuda` feature, typed `CudaBackend`, one-dimensional f32
+  `CudaFft1d`, and `BackendKind::Cuda` without a consumer-owned CUDA driver or
+  device-acquisition wrapper.
+- [x] Move the typed FFT descriptor and radix-stage values into their common
+  transport leaf; WGSL and CUDA C now implement dialect sources on one
+  interface.
+- [x] Pass focused CUDA/CPU/WGPU value-semantic Nextest, warning-denied
+  diagnostics, doctest, rustdoc, provider audit, source-residue scan, and the
+  0.21.0 to 0.22.0 pre-1.0 major SemVer comparison. The device-present lane
+  runs with the installed RTX 5080 CUDA driver; the GNU target links its
+  generated `libcuda.dll.a` import archive from the shared ignored target tree.
+
 ## Raw-WGPU audit boundary [patch]
 
 - Phase: Closure

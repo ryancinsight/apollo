@@ -1,5 +1,28 @@
 # Apollo Gap Audit
 
+## CUDA FFT provider path (2026-07-16)
+
+- Finding: Apollo had no CUDA FFT provider although Hephaestus now owns a
+  typed CUDA device, buffer, kernel, command-stream, and synchronization
+  substrate.
+- Risk: a consumer-local CUDA wrapper or a duplicated WGPU/CUDA FFT descriptor
+  would reintroduce provider ownership and create two drifting recurrence
+  contracts.
+- Implementation: `apollo-fft` now carries a feature-gated `CudaBackend` and
+  a one-dimensional f32 `CudaFft1d` plan over `CudaDevice`. The common
+  transport leaf owns `FftParams`, zero-sized entries, and radix stages;
+  provider dialects implement `KernelSource` on that single descriptor. The
+  Leto complex boundary reuses typed split-complex device buffers and host
+  staging. No Apollo source imports a CUDA driver or a raw WGPU path.
+- Evidence tier: compile-time feature/all-target validation, warning-denied
+  Clippy, rustdoc, SemVer classification, and value-semantic CUDA/CPU/WGPU
+  Nextest pass. `nvidia-smi -L` identifies the RTX 5080 used by the
+  device-present lane. The GNU linker requires an import archive for its
+  installed `nvcuda.dll`; the generated archive lives only in the shared
+  ignored target tree and does not alter the Apollo dependency graph. ADR 0030
+  records the derived bounds and that this is empirical, not machine-checked,
+  GPU evidence.
+
 ## Raw-WGPU audit boundary (2026-07-16)
 
 - Finding: `xtask provider-audit` counts the substring `wgpu`, which reports

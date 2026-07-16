@@ -76,3 +76,6 @@ pub use api::utils::*;
 
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;
+
+#[cfg(feature = "cuda")]
+pub use infrastructure::transport::cuda::*;

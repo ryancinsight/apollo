@@ -97,4 +97,17 @@ impl BackendCapabilities {
             PrecisionProfile::MIXED_PRECISION_F16_F32,
         ],
     };
+
+    /// CUDA backend capabilities as a compile-time constant.
+    pub const CUDA: Self = Self {
+        kind: BackendKind::Cuda,
+        normalization: Normalization::FftwCompatible,
+        supports_1d: true,
+        supports_2d: false,
+        supports_3d: false,
+        supports_real_to_complex: false,
+        supports_mixed_precision: false,
+        default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
+        supported_precision_profiles: &[PrecisionProfile::LOW_PRECISION_F32],
+    };
 }

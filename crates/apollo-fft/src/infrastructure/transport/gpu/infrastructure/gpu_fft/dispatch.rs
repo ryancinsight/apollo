@@ -5,16 +5,19 @@ use hephaestus_core::{
 };
 use hephaestus_wgpu::{WgpuBuffer, WgpuCommandStream};
 
+use crate::infrastructure::transport::fft::{
+    kernel::{BitReverse, Butterfly, FftKernel, RadixFourBitReverse, RadixFourButterfly, Scale},
+    stages::RadixStages,
+};
 use crate::{ApolloError, ApolloResult};
 
 use super::{
     kernel::{
-        BitReverse, Butterfly, ChirpKernel, ChirpNegateImaginary, ChirpPointMultiply,
-        ChirpPostmultiply, ChirpPremultiply, ChirpScale, FftKernel, FftStorage, Pack, PackKernel,
-        RadixFourBitReverse, RadixFourButterfly, Scale, Unpack,
+        ChirpKernel, ChirpNegateImaginary, ChirpPointMultiply, ChirpPostmultiply, ChirpPremultiply,
+        ChirpScale, FftStorage, Pack, PackKernel, Unpack,
     },
     pipeline::GpuFft3d,
-    strategy::{Axis, AxisStrategy, ChirpData, RadixStages},
+    strategy::{Axis, AxisStrategy, ChirpData},
 };
 
 fn provider_error(error: impl core::fmt::Display) -> ApolloError {

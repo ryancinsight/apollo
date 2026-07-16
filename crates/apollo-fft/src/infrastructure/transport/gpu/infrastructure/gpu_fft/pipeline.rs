@@ -5,9 +5,11 @@ use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 use leto::Array1;
 
+use crate::infrastructure::transport::fft::stages::RadixStages;
+
 use super::{
     kernel::{ChirpParams, FftStorage, PackParams},
-    strategy::{Axis, AxisStrategy, ChirpData, RadixStages},
+    strategy::{Axis, AxisStrategy, ChirpData},
 };
 
 /// Returns true when this crate is linked with its Hephaestus device backend.

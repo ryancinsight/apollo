@@ -9,5 +9,9 @@ filter = 'test(/infrastructure::transport::gpu/)'
 test-group = "gpu-device"
 
 [[profile.default.overrides]]
+filter = 'test(/infrastructure::transport::cuda/)'
+test-group = "gpu-device"
+
+[[profile.default.overrides]]
 filter = 'test(/gpu_fft/)'
 test-group = "gpu-device"
