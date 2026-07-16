@@ -16,7 +16,7 @@
 pub mod application;
 /// Domain contracts for WGPU NUFFT execution.
 pub mod domain;
-/// Infrastructure boundary for WGPU device acquisition.
+/// Infrastructure boundary for provider-built device dispatch.
 pub mod infrastructure;
 #[cfg(test)]
 mod verification;

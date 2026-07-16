@@ -1,12 +1,30 @@
 # Apollo Gap Audit
 
+## Limit-bearing acquisition-forwarder removal (2026-07-16)
+
+- Resolution: `apollo-nufft` and `apollo-stft` delete their final public
+  `try_default` factories. Each typed backend retains one canonical
+  `required_device_limits` method: fast NUFFT requests seven storage buffers
+  and STFT Bluestein requests six. Tests and benchmark code now request a
+  Hephaestus device directly, then pass it to the existing backend constructor.
+- Theorem boundary: ADR 0027 records the resource-precondition argument
+  `b(K) <= L` from the current WGSL binding declarations. Hardware-free tests
+  pin the two lower bounds; this is not a proof of accelerator numerical
+  behavior or host-device availability.
+- Evidence tier: the focused 119-case all-feature Nextest gate, two direct
+  hardware-free resource-contract regressions, warning-denied all-target
+  Clippy, doctest, rustdoc, four provider-audit contracts, API-source scan,
+  and both pre-1.0 major SemVer classifications pass. This is API-surface and
+  empirical test evidence, not a machine-checked proof of accelerator behavior.
+
 ## Provider acquisition-forwarder removal (2026-07-16)
 
 - Resolution: fifteen transform `try_default` factories that only wrapped
   `hephaestus_wgpu::WgpuDevice::try_default` are deleted. Test and benchmark
   callers acquire the typed provider device directly; test skips are limited to
-  `HephaestusError::AdapterUnavailable`. NUFFT/STFT retain their separate
-  limit-bearing paths, and the shared FFT adapter remains outside this scope.
+  `HephaestusError::AdapterUnavailable`. The follow-on ADR 0027 removes the
+  former NUFFT/STFT limit-bearing paths; the shared FFT adapter remains outside
+  this scope.
 - Evidence tier: focused and workspace value-semantic Nextest, warning-denied
   Clippy, rustdoc, provider audit, API-source scan, and pre-1.0 major SemVer
   classification. This is release-boundary evidence, not an accelerator proof.

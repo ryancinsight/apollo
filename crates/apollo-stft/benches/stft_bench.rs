@@ -13,7 +13,16 @@ const PARAMETERS: &[(usize, usize, usize)] =
     &[(256, 128, 4096), (512, 256, 8192), (1024, 512, 16384)];
 
 fn try_backend() -> Option<StftWgpuBackend> {
-    StftWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+        "apollo-stft-wgpu-bench",
+        hephaestus_core::DevicePreference::HighPerformance,
+        &[],
+        StftWgpuBackend::required_device_limits(),
+    ) {
+        Ok(device) => Some(StftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("STFT GPU benchmark requires a working provider: {error}"),
+    }
 }
 
 fn analytical_signal(signal_len: usize, frame_len: usize) -> Vec<f32> {

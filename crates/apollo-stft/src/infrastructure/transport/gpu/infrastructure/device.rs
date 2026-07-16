@@ -1,8 +1,7 @@
-//! WGPU device acquisition and backend orchestration for the STFT.
+//! Hephaestus-device-backed STFT backend descriptors.
 
 use crate::infrastructure::transport::gpu::domain::capabilities::WgpuCapabilities;
-use crate::infrastructure::transport::gpu::domain::error::WgpuResult;
-use hephaestus_wgpu::{DevicePreference, WgpuDevice};
+use hephaestus_wgpu::{DeviceLimits, WgpuDevice};
 
 /// Bluestein binds four working/kernel buffers and two operation I/O buffers.
 const BLUESTEIN_STORAGE_BINDINGS: u32 = 6;
@@ -29,23 +28,32 @@ impl StftWgpuBackend {
         Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
-    pub fn try_default() -> WgpuResult<Self> {
+    /// Return the Hephaestus limits required by Bluestein dispatch.
+    ///
+    /// The Bluestein chirp shader binds four working buffers and two operation
+    /// buffers in one stage. The returned request preserves provider defaults
+    /// and raises only that lower bound.
+    #[must_use]
+    pub fn required_device_limits() -> DeviceLimits {
         let mut limits = WgpuDevice::default_device_limits();
         limits.max_storage_buffers_per_shader_stage = Some(BLUESTEIN_STORAGE_BINDINGS);
-        Ok(Self::new(
-            WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
-                "apollo-stft-wgpu",
-                DevicePreference::HighPerformance,
-                &[],
-                limits,
-            )?,
-        ))
+        limits
     }
 
     /// Return truthful forward-and-inverse capability descriptor.
     #[must_use]
     pub fn capabilities(&self) -> WgpuCapabilities {
         WgpuCapabilities::forward_and_inverse(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StftWgpuBackend;
+
+    #[test]
+    fn bluestein_limit_matches_shader_storage_bindings() {
+        let limits = StftWgpuBackend::required_device_limits();
+        assert_eq!(limits.max_storage_buffers_per_shader_stage, Some(6));
     }
 }

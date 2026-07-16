@@ -1,4 +1,4 @@
-//! WGPU device acquisition for NUFFT backends.
+//! Hephaestus-device-backed NUFFT backend descriptors.
 
 /// Fast Type-1 execution implementations.
 pub mod fast_type1;
@@ -15,9 +15,9 @@ use crate::{UniformDomain1D, UniformGrid3D};
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::capabilities::NufftWgpuCapabilities;
-use crate::infrastructure::transport::gpu::domain::error::NufftWgpuResult;
-use hephaestus_wgpu::{DevicePreference, WgpuDevice};
+use hephaestus_wgpu::{DeviceLimits, WgpuDevice};
 
+/// Fast NUFFT shaders bind storage buffers `0..=6` in one shader stage.
 const FAST_NUFFT_STORAGE_BINDINGS: u32 = 7;
 
 /// WGPU NUFFT backend descriptor.
@@ -33,18 +33,16 @@ impl NufftWgpuBackend {
         Self { device }
     }
 
-    /// Create a backend by requesting a default WGPU adapter and device.
-    pub fn try_default() -> NufftWgpuResult<Self> {
+    /// Return the Hephaestus limits required by the fast NUFFT kernels.
+    ///
+    /// The fast one- and three-dimensional shader descriptors bind seven
+    /// storage buffers in one stage. The returned request preserves the
+    /// provider default limits and raises only that lower bound.
+    #[must_use]
+    pub fn required_device_limits() -> DeviceLimits {
         let mut limits = WgpuDevice::default_device_limits();
         limits.max_storage_buffers_per_shader_stage = Some(FAST_NUFFT_STORAGE_BINDINGS);
-        let device =
-            WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
-                "apollo-nufft-wgpu",
-                DevicePreference::HighPerformance,
-                &[],
-                limits,
-            )?;
-        Ok(Self::new(device))
+        limits
     }
 
     /// Return truthful current capabilities.
@@ -79,5 +77,16 @@ impl NufftWgpuBackend {
         kernel_width: usize,
     ) -> NufftWgpuPlan3D {
         NufftWgpuPlan3D::new(grid, oversampling, kernel_width)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NufftWgpuBackend;
+
+    #[test]
+    fn fast_nufft_limit_matches_shader_storage_bindings() {
+        let limits = NufftWgpuBackend::required_device_limits();
+        assert_eq!(limits.max_storage_buffers_per_shader_stage, Some(7));
     }
 }
