@@ -1,8 +1,8 @@
 #![warn(missing_docs)]
 //! Hephaestus device-backed dense FFT surface for Apollo.
 //!
-//! The adapter acquires `hephaestus_wgpu::WgpuDevice` and exposes the same
-//! numerical contract as the CPU dense FFT backend. NUFFT-specific GPU
+//! The caller acquires `hephaestus_wgpu::WgpuDevice`; this module exposes the
+//! same numerical contract as the CPU dense FFT backend. NUFFT-specific GPU
 //! execution is intentionally owned by `apollo-nufft-wgpu`.
 
 pub mod application;
@@ -28,15 +28,6 @@ impl WgpuBackend {
     #[must_use]
     pub fn new(device: WgpuDevice) -> Self {
         Self { device }
-    }
-
-    /// Create a backend by requesting a default adapter and device.
-    pub fn try_default() -> ApolloResult<Self> {
-        Ok(Self::new(
-            WgpuDevice::try_default("apollo-fft-wgpu").map_err(|e| ApolloError::Wgpu {
-                message: e.to_string(),
-            })?,
-        ))
     }
 }
 

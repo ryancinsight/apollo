@@ -18,14 +18,21 @@ fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
 }
 
 fn try_fft_plan(nx: usize, ny: usize, nz: usize) -> Option<GpuFft3d> {
-    let device = hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench").ok()?;
-    GpuFft3d::new(device, nx, ny, nz).ok()
+    let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench") {
+        Ok(device) => device,
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return None,
+        Err(error) => panic!("FFT GPU benchmark requires a working provider: {error}"),
+    };
+    Some(
+        GpuFft3d::new(device, nx, ny, nz)
+            .expect("invariant: fixed benchmark dimensions form a valid FFT plan"),
+    )
 }
 
 fn bench_forward_3d(suite: &mut BenchmarkSuite) {
     for (nx, ny, nz) in [(4_usize, 4, 4), (8, 8, 8), (16, 16, 16)] {
         let Some(plan) = try_fft_plan(nx, ny, nz) else {
-            eprintln!("No WGPU device; skipping bench_forward_3d n={nx}");
+            eprintln!("No compatible Hephaestus adapter; skipping bench_forward_3d n={nx}");
             return;
         };
         let field = real_field(nx, ny, nz);
@@ -60,7 +67,7 @@ fn bench_forward_3d(suite: &mut BenchmarkSuite) {
 fn bench_inverse_3d(suite: &mut BenchmarkSuite) {
     for (nx, ny, nz) in [(4_usize, 4, 4), (8, 8, 8), (16, 16, 16)] {
         let Some(plan) = try_fft_plan(nx, ny, nz) else {
-            eprintln!("No WGPU device; skipping bench_inverse_3d n={nx}");
+            eprintln!("No compatible Hephaestus adapter; skipping bench_inverse_3d n={nx}");
             return;
         };
         let field = real_field(nx, ny, nz);

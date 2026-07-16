@@ -15,6 +15,19 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## D8 FFT acquisition-forwarder removal [major]
+
+- Target version: `apollo-fft` 0.20.0 pre-1.0 breaking release.
+- Phase: Closure
+- [x] Record ADR 0028 and delete the final shared composition acquisition
+  wrapper without an alias.
+- [x] Move the benchmark and private device-present regressions to direct
+  Hephaestus acquisition; only `AdapterUnavailable` skips and every other
+  provider failure surfaces.
+- [x] Update the lockfile and verify all-target diagnostics, focused Nextest,
+  doctest, rustdoc, provider audit, source scan, and major SemVer.
+- [ ] Commit, push, and merge the verified increment.
+
 ## D8 limit-bearing acquisition-forwarder removal [major]
 
 - Target version: `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 pre-1.0
