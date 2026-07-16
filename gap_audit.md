@@ -274,6 +274,14 @@
   existing derived bound; each private leaf is concern-named and bounded. No
   provider wrapper, fallback, or transform algorithm enters this structural
   slice.
+- Resolution: the manifest plus `metadata`, `forward`, `inverse`, `leto`,
+  `typed`, `precision`, and shared `support` leaves are 20–103 lines. The
+  former suite's three static and twelve device-present contracts now run
+  independently. Focused all-feature Nextest passes 41/41; locked workspace
+  format, examples check, warning-denied Clippy, Nextest (1,114/1,114),
+  doctest, rustdoc, provider audit, and patch SemVer classification pass. This
+  evidence is type-level tree structure plus empirical numerical verification,
+  not a machine-checked theorem proof.
 
 ## Shared Leto interop ownership [arch]
 

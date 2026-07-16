@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] SFT GPU verification is partitioned into metadata/rejection, forward,
+  inverse-reconstruction, Leto host-boundary, represented-storage,
+  explicit-precision, and shared-support leaves. The dense root-of-unity
+  inverse-recovery contract retains its CPU oracle and finite-precision bounds;
+  all three static tests and twelve device-present contracts now run
+  independently. This changes no public, mathematical, or Hephaestus-provider
+  contract.
 - [arch] Wavelet GPU verification is partitioned into metadata, forward,
   inverse-law, Leto host-boundary, represented-storage, and shared-support
   leaves. The Haar reconstruction and Parseval contracts retain their existing
