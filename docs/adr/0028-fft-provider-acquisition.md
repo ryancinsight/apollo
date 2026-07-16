@@ -17,6 +17,8 @@ Delete `WgpuBackend::try_default` without an alias. Callers acquire
 `hephaestus_wgpu::WgpuDevice` directly and pass it to `WgpuBackend::new`.
 Benchmarks and device-present regressions skip only `AdapterUnavailable`; any
 other provider or fixed-plan failure is surfaced.
+PyO3 capability probes and validation suites also acquire `WgpuDevice`
+directly; only adapter absence is reported as unavailable.
 
 ## Theorem and evidence boundary
 

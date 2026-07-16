@@ -24,9 +24,13 @@
 - [x] Move the benchmark and private device-present regressions to direct
   Hephaestus acquisition; only `AdapterUnavailable` skips and every other
   provider failure surfaces.
+- [x] Migrate the PyO3 capability probe and validation GPU suite to direct
+  typed Hephaestus acquisition; stale consumer factory calls are absent.
 - [x] Update the lockfile and verify all-target diagnostics, focused Nextest,
   doctest, rustdoc, provider audit, source scan, and major SemVer.
-- [ ] Commit, push, and merge the verified increment.
+- [x] Build the PyO3 extension with Maturin and pass the 34 Python smoke tests
+  that exercise the published binding surface.
+- [x] Commit, push, and merge the verified increment through PR #37.
 
 ## D8 limit-bearing acquisition-forwarder removal [major]
 

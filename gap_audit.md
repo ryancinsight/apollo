@@ -5,13 +5,16 @@
 - Resolution: the shared `apollo-fft::WgpuBackend::try_default` wrapper is
   deleted. `WgpuBackend::new` remains the composition boundary; device
   acquisition remains in Hephaestus. Benchmark and private device-present
-  regression callers skip only `AdapterUnavailable`; other provider faults
-  surface. ADR 0028 records the unchanged FFT theorem/evidence boundary.
+  regression callers skip only `AdapterUnavailable`; the PyO3 capability probe
+  and validation suite report only that condition as unavailable. Other
+  provider faults surface. ADR 0028 records the unchanged FFT theorem/evidence
+  boundary.
 - Evidence tier: formatting; warning-denied all-target diagnostics; focused
-  all-feature Nextest; doctest; rustdoc; provider audit; empty public-factory,
-  obsolete-call, and benchmark-fallback scans; and the cached pre-1.0 major
-  SemVer comparison against `origin/main` pass. This is API-surface and
-  empirical-test evidence, not a machine-checked proof of accelerator behavior.
+  all-feature Nextest; doctest; rustdoc; provider audit; Maturin extension
+  build with 34 Python smoke tests; empty public-factory, obsolete-call, and
+  benchmark-fallback scans; and the cached pre-1.0 major SemVer comparison
+  against `origin/main` pass. This is API-surface and empirical-test evidence,
+  not a machine-checked proof of accelerator behavior.
 
 ## Limit-bearing acquisition-forwarder removal (2026-07-16)
 
