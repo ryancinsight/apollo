@@ -9,7 +9,11 @@ use crate::infrastructure::transport::gpu::GftWgpuBackend;
 pub(super) const PATH4_F32_DOT_ABS_TOLERANCE: f64 = 1.0 / 131_072.0;
 
 pub(super) fn backend() -> Option<GftWgpuBackend> {
-    GftWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-gft-wgpu") {
+        Ok(device) => Some(GftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("GFT GPU verification requires a working provider: {error}"),
+    }
 }
 
 /// Builds the path-four CPU plan and extracts its basis and signal as `f32`.

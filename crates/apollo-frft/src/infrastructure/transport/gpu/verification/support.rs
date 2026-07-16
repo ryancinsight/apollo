@@ -12,7 +12,11 @@ pub(super) const CPU_DIFFERENTIAL_TOLERANCE: f64 = 1.0e-3;
 pub(super) const UNITARY_VALUE_TOLERANCE: f32 = 1.0e-5;
 
 pub(super) fn backend() -> Option<FrftWgpuBackend> {
-    FrftWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-frft-wgpu") {
+        Ok(device) => Some(FrftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("FrFT GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn cpu_input(input: &[Complex32]) -> leto::Array1<Complex64> {

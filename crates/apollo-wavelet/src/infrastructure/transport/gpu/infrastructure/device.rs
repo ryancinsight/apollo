@@ -28,11 +28,6 @@ impl WaveletWgpuBackend {
         Self { device }
     }
 
-    /// Acquire the default Hephaestus WGPU device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Ok(Self::new(WgpuDevice::try_default("apollo-wavelet-wgpu")?))
-    }
-
     /// Return truthful forward/inverse capability descriptor.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {

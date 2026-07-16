@@ -7,7 +7,11 @@ pub(super) const ONE_DIMENSIONAL_TOLERANCE: f64 = 1.0e-4;
 pub(super) const DIMENSIONAL_TOLERANCE: f64 = 1.0e-3;
 
 pub(super) fn backend() -> Option<DctDstWgpuBackend> {
-    DctDstWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-dctdst-wgpu") {
+        Ok(device) => Some(DctDstWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("DCT/DST GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn cpu_forward(input: &[f32], kind: RealTransformKind) -> Vec<f64> {

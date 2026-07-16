@@ -12,7 +12,11 @@ pub(super) const INVERSE_N0_ERROR_BOUND: f32 = {
 };
 
 pub(super) fn backend() -> Option<SftWgpuBackend> {
-    SftWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-sft-wgpu") {
+        Ok(device) => Some(SftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("SFT GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn two_tone_signal(len: usize, tones: &[(usize, f64)]) -> Vec<Complex64> {

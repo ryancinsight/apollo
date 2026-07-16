@@ -33,9 +33,12 @@ mod tests {
 
     #[test]
     fn fwht_wgpu_execution_suite_when_device_exists() {
-        let Ok(backend) = FwhtWgpuBackend::try_default() else {
-            return;
+        let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-fwht-wgpu") {
+            Ok(device) => device,
+            Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return,
+            Err(error) => panic!("FWHT GPU verification requires a working provider: {error}"),
         };
+        let backend = FwhtWgpuBackend::new(device);
 
         // 1. rejects_invalid_plan_shape_before_dispatch
         {

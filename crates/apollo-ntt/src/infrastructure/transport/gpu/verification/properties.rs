@@ -27,9 +27,12 @@ mod gpu_roundtrip {
                     state % DEFAULT_MODULUS
                 })
                 .collect::<Vec<_>>();
-            let Ok(backend) = NttWgpuBackend::try_default() else {
-                return Ok(());
+            let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-ntt-wgpu") {
+                Ok(device) => device,
+                Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return Ok(()),
+                Err(error) => panic!("NTT GPU verification requires a working provider: {error}"),
             };
+            let backend = NttWgpuBackend::new(device);
             let plan = backend.plan(length);
             let spectrum = backend
                 .execute_forward(&plan, &input)

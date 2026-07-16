@@ -3,5 +3,9 @@
 use crate::infrastructure::transport::gpu::WaveletWgpuBackend;
 
 pub(super) fn backend() -> Option<WaveletWgpuBackend> {
-    WaveletWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-wavelet-wgpu") {
+        Ok(device) => Some(WaveletWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("Wavelet GPU verification requires a working provider: {error}"),
+    }
 }

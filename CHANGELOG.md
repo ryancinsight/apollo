@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] Fifteen transform GPU backends no longer expose zero-behavior
+  `try_default` acquisition wrappers. Callers acquire the typed device from
+  Hephaestus and construct the transform backend with it; device-present tests
+  skip only a missing adapter and surface every other provider fault. NUFFT,
+  STFT, and the shared FFT adapter retain their nontrivial acquisition
+  contracts. ADR 0026 records the boundary.
 - [major] Ten transform crate-root `verification` paths are now private,
   test-gated modules rather than release API. DCT/DST further partitions its
   672-line test monolith into private one-dimensional, multidimensional,

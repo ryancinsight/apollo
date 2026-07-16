@@ -1,4 +1,4 @@
-use crate::infrastructure::transport::gpu::{ShtWgpuBackend, ShtWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::{ShtWgpuBackend, ShtWgpuPlan};
 use eunomia::{Complex32, Complex64};
 use hephaestus_core::HephaestusError;
 use leto::Array2;
@@ -7,9 +7,9 @@ pub(super) const CPU_DIFFERENTIAL_TOLERANCE: f64 = 2.0e-5;
 pub(super) const REPRESENTED_STORAGE_TOLERANCE: f64 = 1.0e-3;
 
 pub(super) fn backend() -> Option<ShtWgpuBackend> {
-    match ShtWgpuBackend::try_default() {
-        Ok(backend) => Some(backend),
-        Err(WgpuError::Provider(HephaestusError::AdapterUnavailable { .. })) => None,
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-sht-wgpu") {
+        Ok(device) => Some(ShtWgpuBackend::new(device)),
+        Err(HephaestusError::AdapterUnavailable { .. }) => None,
         Err(error) => panic!("SHT GPU verification requires a working provider: {error}"),
     }
 }

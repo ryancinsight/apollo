@@ -23,11 +23,6 @@ impl NttWgpuBackend {
         Self { device }
     }
 
-    /// Acquire the default Hephaestus WGPU device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Ok(Self::new(WgpuDevice::try_default("apollo-ntt-wgpu")?))
-    }
-
     /// Return the operations implemented by this backend.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {

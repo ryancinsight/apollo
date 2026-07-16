@@ -33,10 +33,11 @@ fn detector_spacing(detector_count: usize) -> f64 {
 }
 
 fn bench_forward(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = RadonWgpuBackend::try_default() else {
+    let Ok(device) = hephaestus_wgpu::WgpuDevice::try_default("apollo-radon-wgpu") else {
         eprintln!("No WGPU device available; skipping Radon forward benchmarks");
         return;
     };
+    let backend = RadonWgpuBackend::new(device);
 
     for &(image_size, angle_count, detector_count) in PARAMETERS {
         let plan = RadonWgpuPlan::new(
@@ -61,10 +62,11 @@ fn bench_forward(suite: &mut BenchmarkSuite) {
 }
 
 fn bench_filtered_backproject(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = RadonWgpuBackend::try_default() else {
+    let Ok(device) = hephaestus_wgpu::WgpuDevice::try_default("apollo-radon-wgpu") else {
         eprintln!("No WGPU device available; skipping Radon FBP benchmarks");
         return;
     };
+    let backend = RadonWgpuBackend::new(device);
 
     for &(image_size, angle_count, detector_count) in PARAMETERS {
         let plan = RadonWgpuPlan::new(

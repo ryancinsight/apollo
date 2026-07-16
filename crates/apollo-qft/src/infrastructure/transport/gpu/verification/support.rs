@@ -6,7 +6,9 @@ pub(super) const CPU_DIFFERENTIAL_TOLERANCE: f64 = 2.0e-4;
 pub(super) const ROUNDTRIP_TOLERANCE: f32 = 5.0e-4;
 
 pub(super) fn backend() -> WgpuResult<QftWgpuBackend> {
-    QftWgpuBackend::try_default()
+    hephaestus_wgpu::WgpuDevice::try_default("apollo-qft-wgpu")
+        .map(QftWgpuBackend::new)
+        .map_err(Into::into)
 }
 
 pub(super) fn forward_input() -> Vec<Complex32> {
