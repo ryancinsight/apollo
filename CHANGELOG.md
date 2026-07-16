@@ -10,6 +10,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` 0.20.0 removes `WgpuBackend::try_default`. Acquire a
+  typed Hephaestus device and construct the composition backend with
+  `WgpuBackend::new(device)`; ADR 0028 records the provider-boundary cleanup.
 - [major] `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 no longer expose
   limit-bearing `try_default` acquisition wrappers. Callers acquire a typed
   Hephaestus device using the backend's canonical

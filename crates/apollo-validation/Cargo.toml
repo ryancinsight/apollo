@@ -72,6 +72,8 @@ melinoe = { workspace = true }
 moirai = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }
+hephaestus-core = { workspace = true }
+hephaestus-wgpu = { workspace = true }
 
 [lints]
 workspace = true

@@ -117,6 +117,13 @@ Remaining replacement work:
     Acceptance: no old factory residue, resource values pinned without
     hardware, direct provider acquisition, and focused/workspace/provider/
     SemVer gates.
+  - [x] [major] D8 FFT acquisition-forwarder removal (owner Codex, completed
+    2026-07-16; scope `apollo-fft`, ADR 0028, and D8 PM records): delete the
+    shared composition factory. Callers acquire typed Hephaestus devices and
+    construct `WgpuBackend` with `new(device)`; no Apollo device-acquisition
+    wrapper remains. Acceptance: source residue, direct test/benchmark/PyO3/
+    validation acquisition, focused diagnostics/Nextest/doctest/rustdoc/provider/
+    SemVer, Maturin, and Python-smoke gates.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT

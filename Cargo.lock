@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",
@@ -305,6 +305,8 @@ dependencies = [
  "apollo-nufft",
  "bytemuck",
  "eunomia",
+ "hephaestus-core",
+ "hephaestus-wgpu",
  "leto",
  "pyo3",
 ]
@@ -454,6 +456,8 @@ dependencies = [
  "apollo-stft",
  "apollo-wavelet",
  "eunomia",
+ "hephaestus-core",
+ "hephaestus-wgpu",
  "leto",
  "melinoe",
  "moirai",

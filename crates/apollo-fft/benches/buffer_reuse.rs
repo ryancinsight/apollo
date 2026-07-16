@@ -9,6 +9,7 @@ use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
 use leto::Array3;
 use std::hint::black_box;
+use std::sync::OnceLock;
 
 fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
     Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
@@ -17,15 +18,32 @@ fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
     })
 }
 
+fn benchmark_device() -> Option<hephaestus_wgpu::WgpuDevice> {
+    static DEVICE: OnceLock<Option<hephaestus_wgpu::WgpuDevice>> = OnceLock::new();
+
+    DEVICE
+        .get_or_init(
+            || match hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench") {
+                Ok(device) => Some(device),
+                Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+                Err(error) => panic!("FFT GPU benchmark requires a working provider: {error}"),
+            },
+        )
+        .clone()
+}
+
 fn try_fft_plan(nx: usize, ny: usize, nz: usize) -> Option<GpuFft3d> {
-    let device = hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench").ok()?;
-    GpuFft3d::new(device, nx, ny, nz).ok()
+    let device = benchmark_device()?;
+    Some(
+        GpuFft3d::new(device, nx, ny, nz)
+            .expect("invariant: fixed benchmark dimensions form a valid FFT plan"),
+    )
 }
 
 fn bench_forward_3d(suite: &mut BenchmarkSuite) {
     for (nx, ny, nz) in [(4_usize, 4, 4), (8, 8, 8), (16, 16, 16)] {
         let Some(plan) = try_fft_plan(nx, ny, nz) else {
-            eprintln!("No WGPU device; skipping bench_forward_3d n={nx}");
+            eprintln!("No compatible Hephaestus adapter; skipping bench_forward_3d n={nx}");
             return;
         };
         let field = real_field(nx, ny, nz);
@@ -60,7 +78,7 @@ fn bench_forward_3d(suite: &mut BenchmarkSuite) {
 fn bench_inverse_3d(suite: &mut BenchmarkSuite) {
     for (nx, ny, nz) in [(4_usize, 4, 4), (8, 8, 8), (16, 16, 16)] {
         let Some(plan) = try_fft_plan(nx, ny, nz) else {
-            eprintln!("No WGPU device; skipping bench_inverse_3d n={nx}");
+            eprintln!("No compatible Hephaestus adapter; skipping bench_inverse_3d n={nx}");
             return;
         };
         let field = real_field(nx, ny, nz);

@@ -1,23 +1,32 @@
 //! Backend availability and capability introspection for Python callers.
 
 use apollo_fft::{CpuBackend, FftBackend};
+use hephaestus_core::HephaestusError;
+use hephaestus_wgpu::WgpuDevice;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use super::support::precision_name;
 
-fn wgpu_backend_usable() -> bool {
-    apollo_fft::WgpuBackend::try_default().is_ok()
+fn probe_wgpu_device() -> PyResult<Option<WgpuDevice>> {
+    match WgpuDevice::try_default("apollo-python-wgpu") {
+        Ok(device) => Ok(Some(device)),
+        Err(HephaestusError::AdapterUnavailable { .. }) => Ok(None),
+        Err(error) => Err(PyRuntimeError::new_err(format!(
+            "Apollo Python WGPU provider acquisition failed: {error}"
+        ))),
+    }
 }
 
 /// Return the backend names that are genuinely usable from Python on this host.
 #[pyfunction]
-pub(crate) fn available_backends() -> Vec<String> {
+pub(crate) fn available_backends() -> PyResult<Vec<String>> {
     let mut backends = vec!["cpu".to_string()];
-    if wgpu_backend_usable() {
+    if probe_wgpu_device()?.is_some() {
         backends.push("wgpu".to_string());
     }
-    backends
+    Ok(backends)
 }
 
 /// Return backend capability metadata for Python callers.
@@ -54,7 +63,8 @@ pub(crate) fn backend_capabilities(py: Python<'_>) -> PyResult<Py<PyAny>> {
     backends.set_item("cpu", cpu)?;
 
     let wgpu = PyDict::new(py);
-    if let Ok(backend) = apollo_fft::WgpuBackend::try_default() {
+    if let Some(device) = probe_wgpu_device()? {
+        let backend = apollo_fft::WgpuBackend::new(device);
         let caps = backend.capabilities();
         wgpu.set_item("available", true)?;
         wgpu.set_item("supports_1d", caps.supports_1d)?;

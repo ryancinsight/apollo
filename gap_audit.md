@@ -1,5 +1,22 @@
 # Apollo Gap Audit
 
+## FFT acquisition-forwarder removal (2026-07-16)
+
+- Resolution: the shared `apollo-fft::WgpuBackend::try_default` wrapper is
+  deleted. `WgpuBackend::new` remains the composition boundary; device
+  acquisition remains in Hephaestus. The benchmark acquires its provider device
+  once and clones the shared handle for fixed-dimension plans; private
+  device-present regression callers skip only `AdapterUnavailable`; the PyO3
+  capability probe and validation suite report only that condition as
+  unavailable. Other provider faults surface. ADR 0028 records the unchanged
+  FFT theorem/evidence boundary.
+- Evidence tier: formatting; warning-denied all-target diagnostics; focused
+  all-feature Nextest; doctest; rustdoc; provider audit; Maturin extension
+  build with 34 Python smoke tests; empty public-factory, obsolete-call, and
+  benchmark-fallback scans; and the cached pre-1.0 major SemVer comparison
+  against `origin/main` pass. This is API-surface and empirical-test evidence,
+  not a machine-checked proof of accelerator behavior.
+
 ## Limit-bearing acquisition-forwarder removal (2026-07-16)
 
 - Resolution: `apollo-nufft` and `apollo-stft` delete their final public

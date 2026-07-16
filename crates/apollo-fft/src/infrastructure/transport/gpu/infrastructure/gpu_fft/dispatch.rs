@@ -448,14 +448,24 @@ impl GpuFft3d<f32> {
 
 #[cfg(test)]
 mod tests {
-    use hephaestus_core::{CommandStream, ComputeDevice, KernelDevice};
+    use hephaestus_core::{CommandStream, ComputeDevice, HephaestusError, KernelDevice};
     use hephaestus_wgpu::WgpuDevice;
 
     use super::GpuFft3d;
 
+    fn device_or_skip(application_name: &str) -> Option<WgpuDevice> {
+        match WgpuDevice::try_default(application_name) {
+            Ok(device) => Some(device),
+            Err(HephaestusError::AdapterUnavailable { .. }) => None,
+            Err(error) => {
+                panic!("typed FFT device-present regression requires a working provider: {error}");
+            }
+        }
+    }
+
     #[test]
     fn typed_external_buffers_preserve_delta_roundtrip_when_device_exists() {
-        let Ok(device) = WgpuDevice::try_default("apollo-fft-typed-stream-test") else {
+        let Some(device) = device_or_skip("apollo-fft-typed-stream-test") else {
             return;
         };
         let plan = GpuFft3d::new(device.clone(), 2, 2, 2)
@@ -503,7 +513,7 @@ mod tests {
 
     #[test]
     fn typed_external_bluestein_delta_matches_dft_and_roundtrips_when_device_exists() {
-        let Ok(device) = WgpuDevice::try_default("apollo-fft-typed-bluestein-test") else {
+        let Some(device) = device_or_skip("apollo-fft-typed-bluestein-test") else {
             return;
         };
         let plan = GpuFft3d::new(device.clone(), 2, 3, 2)

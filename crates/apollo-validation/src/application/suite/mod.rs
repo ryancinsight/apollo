@@ -67,6 +67,8 @@ use apollo_nufft::{
     nufft_type2_1d_fast, UniformDomain1D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
 };
 use eunomia::Complex64;
+use hephaestus_core::HephaestusError;
+use hephaestus_wgpu::WgpuDevice;
 use leto::Array1;
 use leto::{self, Storage};
 use std::error::Error;
@@ -178,15 +180,15 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
 pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
     let surface_reported_available = apollo_fft::gpu_fft_available();
 
-    let backend = match apollo_fft::WgpuBackend::try_default() {
-        Err(error) => {
+    let backend = match WgpuDevice::try_default("apollo-validation-fft-wgpu") {
+        Err(HephaestusError::AdapterUnavailable { .. }) => {
             return Ok(GpuFftReport {
                 surface_reported_available,
                 attempted: false,
                 passed: false,
                 forward_max_abs_error: None,
                 inverse_max_abs_error: None,
-                note: Some(format!("WGPU adapter unavailable on this host: {error}")),
+                note: Some("WGPU adapter unavailable on this host".to_string()),
                 precision_profiles: vec![PrecisionRunReport {
                     profile: "low_precision".to_string(),
                     attempted: false,
@@ -198,7 +200,8 @@ pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
                 }],
             });
         }
-        Ok(b) => b,
+        Err(error) => return Err(Box::new(error)),
+        Ok(device) => apollo_fft::WgpuBackend::new(device),
     };
 
     let shape = Shape3D::new(4, 4, 4).expect("valid shape");
