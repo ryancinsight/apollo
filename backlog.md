@@ -348,6 +348,14 @@ Remaining replacement work:
   in-place-consistency, and dimension-specific typed-storage leaves. Every
   fixture, analytical reference, and derived tolerance is retained; the seven
   leaves are 19–280 lines and the focused all-feature Nextest suite passes.
+  [x] [major] D8-NUFFT-acquisition-wrapper (owner Codex, completed 2026-07-16;
+  scope
+  `crates/apollo-nufft/src/infrastructure/transport/gpu/`, ADR 0009): remove
+  the unused public `nufft_wgpu_available` boolean wrapper. The transform
+  backend retains only typed Hephaestus acquisition with its NuFFT-specific
+  seven-storage-buffer limit; all callers must observe the provider result.
+  Focused and workspace gates, provider audit, and 0.5.0 major SemVer
+  classification pass.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

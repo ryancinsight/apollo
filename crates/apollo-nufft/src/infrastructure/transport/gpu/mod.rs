@@ -24,7 +24,7 @@ mod verification;
 pub use application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 pub use domain::capabilities::NufftWgpuCapabilities;
 pub use domain::error::{NufftWgpuError, NufftWgpuResult};
-pub use infrastructure::device::{nufft_wgpu_available, NufftWgpuBackend};
+pub use infrastructure::device::NufftWgpuBackend;
 pub use infrastructure::{NufftGpuBuffers1D, NufftGpuBuffers3D};
 #[cfg(any(test, feature = "diagnostics"))]
 pub use infrastructure::{NufftGridSnapshot, NufftType2GridDiagnostics};

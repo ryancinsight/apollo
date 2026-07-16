@@ -152,6 +152,26 @@
   provider-owned D8 concern. This split creates no helper wrapper,
   compatibility path, or Apollo-owned device abstraction.
 
+## NUFFT provider-acquisition wrapper removal [major]
+
+- Finding: the public `nufft_wgpu_available` function discarded
+  `NufftWgpuBackend::try_default`'s typed Hephaestus failure and duplicated a
+  consumer-side availability probe. It had no in-repository caller.
+- Resolution: `apollo-nufft` 0.5.0 deletes the function and its root re-export.
+  Consumers now use the existing typed `NufftWgpuBackend::try_default` result.
+  That constructor remains transform-local because NuFFT, unlike the default
+  provider request, requires seven storage buffers per shader stage.
+- Mathematical contract: unaffected; this changes acquisition error visibility
+  only, not the Type-1/Type-2 operators or their documented theorem evidence.
+- Evidence: major pre-1.0 SemVer classification against `origin/main`, focused
+  and workspace value-semantic gates, provider audit, and source scan prove the
+  wrapper is absent. The provider audit retains NuFFT's Leto and Hephaestus
+  dependencies and reports no Apollo-owned raw WGPU surface.
+- Residual risk: the repeated transform-specific acquisition constructors are
+  the next D8 provider-seam inventory. They cannot be replaced by a local
+  generic Apollo wrapper; only a Hephaestus contract that accepts per-transform
+  limits can own that consolidation.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

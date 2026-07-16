@@ -59,6 +59,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-nufft` 0.5.0 removes the unused public
+  `nufft_wgpu_available` boolean wrapper. Migration: call
+  `NufftWgpuBackend::try_default()` and handle its typed provider result.
 - [major] `apollo-nufft` 0.4.0 removes the unused public
   `apollo_nufft::wgpu_backend` forwarding module plus public test-only
   verification paths. Migration: import typed accelerator items directly from
