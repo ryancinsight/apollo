@@ -201,6 +201,11 @@
 - Acceptance: each leaf is concern-named and bounded; every relocated test
   retains its existing value oracle and tolerance; focused and locked
   workspace gates pass. This is not a new GPU-correctness proof.
+- Resolution: the manifest plus `metadata`, `forward`, `inverse`, `typed`,
+  `reusable`, and shared `support` leaves are 7–297 lines. All 44 tests run.
+  The four former existence-only Chirp-Z/buffer checks now assert CPU values
+  or allocated geometry and zero-value contracts. Focused and locked
+  all-feature gates, provider audit, and patch SemVer classification pass.
 
 ## Shared Leto interop ownership [arch]
 

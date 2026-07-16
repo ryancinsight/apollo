@@ -64,13 +64,14 @@
 ## D8 STFT GPU verification-tree normalization [arch]
 
 - Target version: private verification structure; no transform API change.
-- Phase: Execution
+- Phase: Closure
 - [x] Record ADR 0014: provider acquisition remains in Hephaestus and the
   existing weighted-overlap-add theorem remains in its owning test contract.
-- [ ] Partition the 961-line private verification module into independent
+- [x] Partition the 961-line private verification module into independent
   metadata, forward, inverse, typed-host-boundary, and reusable-storage leaves.
-- [ ] Preserve every value-semantic test, run the focused STFT and locked
-  workspace gates, then publish the bounded vertical slice.
+- [x] Retain all 44 tests, replace four existence-only acceptance assertions
+  with CPU differentials or explicit buffer/value contracts, and pass focused
+  STFT plus locked workspace gates and patch SemVer classification.
 
 ## D8 NTT verification-tree normalization [arch]
 
