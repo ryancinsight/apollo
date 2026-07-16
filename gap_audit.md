@@ -1,5 +1,13 @@
 # Apollo Gap Audit
 
+## Raw-WGPU audit boundary (2026-07-16)
+
+- Finding: `xtask provider-audit` counts the substring `wgpu`, which reports
+  Hephaestus provider imports as if they were raw Apollo WGPU mechanics.
+- Risk: the migration audit cannot distinguish a compliant provider boundary
+  from a direct raw-WGPU residual.
+- Status: implementation in progress under `AUDIT-RAW-WGPU-1`.
+
 ## Native-f16 FFT provider-boundary cleanup (2026-07-16)
 
 - Finding: public `GpuFft3dF16Native::try_new` acquires a `ShaderF16` device
