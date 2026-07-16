@@ -176,8 +176,25 @@
   classification. Evidence: 28/28 focused all-feature Nextest cases, locked
   workspace check/Clippy/Nextest, doctest, rustdoc, provider audit, direct
   dependency scans, and major SemVer classification. Delete the public
-  test-only verification module and `wgpu_backend` re-export rather than keep
-  a production compatibility shell.
+  test-only verification module and `wgpu_backend::verification` path rather
+  than keep a production compatibility shell.
+
+## D8 QFT GPU verification-tree normalization [major]
+
+- Target version: `apollo-qft` 0.5.0 pre-1.0 breaking integration.
+- Phase: Closure
+- [x] Record ADR 0021: the unitary QFT matrix obeys `U†U = I`; retain the
+  existing CPU plan as the independent oracle and retain analytically justified
+  finite-precision bounds.
+- [x] Partition static metadata, forward, inverse/reconstruction, Leto
+  host-boundary, represented-storage, precision-rejection, pre-dispatch
+  rejection, and shared device-acquisition contracts into test-private leaves.
+- [x] Preserve every fixture and value-semantic assertion; verify focused and
+  locked workspace gates, provider audit, residue scans, doctest, rustdoc, and
+  the correct pre-1.0 SemVer classification without retaining test-only or
+  forwarding release compatibility modules. Evidence: 37/37 focused all-feature Nextest cases,
+  locked workspace check/Clippy/Nextest, doctest, rustdoc, provider audit,
+  direct dependency scans, and major SemVer classification.
 
 ## D8 NTT verification-tree normalization [arch]
 

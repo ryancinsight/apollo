@@ -436,11 +436,24 @@ Remaining replacement work:
   represented-storage, precision-rejection, and shared-support leaves. Preserve
   every fixture, CPU differential, graph-Fourier reconstruction theorem, and
   derived finite-precision bound. The public test-only verification module and
-  `wgpu_backend` re-export are removed rather than preserved as a production
-  compatibility shell; `apollo-gft` advances to 0.5.0. Focused all-feature
+  `wgpu_backend::verification` path are removed rather than preserved as a
+  production compatibility shell; `apollo-gft` advances to 0.5.0. Focused all-feature
   Nextest passes 28/28; locked workspace gates, provider audit, and major SemVer
   classification pass. The scope adds no provider wrapper, fallback, or
   transform algorithm.
+  [x] [major] D8-QFT-verification-tree (owner Codex, completed 2026-07-16;
+  scope `crates/apollo-qft/src/infrastructure/transport/gpu/verification/`,
+  ADR 0021): replace the 381-line mixed GPU verification module with private
+  metadata, forward, inverse/reconstruction, Leto host-boundary,
+  represented-storage, precision-rejection, pre-dispatch rejection, and shared
+  support leaves. Preserve each fixture, CPU differential, QFT unitarity law,
+  and derived finite-precision bound. Remove the public test-only transport
+  verification path and obsolete `wgpu_backend` forwarding module rather than
+  preserve release wrappers; classify the resulting `apollo-qft` 0.5.0 API
+  removal with `cargo-semver-checks`. Focused all-feature Nextest passes 37/37;
+  locked workspace gates, provider audit, and major SemVer classification pass.
+  No provider wrapper, fallback, or transform algorithm belongs in this
+  structural slice.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

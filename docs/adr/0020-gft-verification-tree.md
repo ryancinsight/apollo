@@ -28,9 +28,10 @@ error, f64-to-f32 basis quantization, and the two launches in the round-trip.
 
 - Static and device-present contracts run independently without changing
   transform execution, fixture values, or provider fallback behavior.
-- The prior public test-only verification module and `wgpu_backend` re-export
-  are removed in `apollo-gft` 0.5.0 rather than retained as a compatibility
-  shell; runtime callers use the typed accelerator API directly.
+- The prior public test-only verification module and
+  `wgpu_backend::verification` path are removed in `apollo-gft` 0.5.0 rather
+  than retained as a compatibility shell; runtime callers use the typed
+  accelerator API directly.
 - The theorem is a proof sketch; the tests are finite-precision empirical
   evidence, not a machine-checked proof.
 - No shared Apollo device abstraction is introduced; cross-transform provider
