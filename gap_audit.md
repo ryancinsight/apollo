@@ -1,5 +1,21 @@
 # Apollo Gap Audit
 
+## Radon benchmark provider-error preservation (2026-07-16)
+
+- Finding: `radon_wgpu_bench.rs` used `let Ok(device)` for two direct
+  Hephaestus acquisitions. That discarded provider faults instead of limiting
+  a benchmark skip to `AdapterUnavailable`.
+- Risk: a broken GPU driver or provider configuration can appear as an omitted
+  benchmark result, hiding a real integration failure.
+- Resolution: one `OnceLock<Option<WgpuDevice>>` retains the directly acquired
+  provider handle across the two benchmark families. Only
+  `AdapterUnavailable` initializes the unavailable state; every other typed
+  error panics at the benchmark boundary.
+- Evidence tier: compile-time exhaustive typed-error handling; all-target
+  benchmark compilation; warning-denied Clippy; focused all-feature Radon
+  Nextest; doctest; rustdoc; provider audit; and an exact stale-pattern scan.
+  No runtime GPU benchmark result is claimed without a compatible adapter.
+
 ## FFT acquisition-forwarder removal (2026-07-16)
 
 - Resolution: the shared `apollo-fft::WgpuBackend::try_default` wrapper is

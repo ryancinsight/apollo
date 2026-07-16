@@ -10,8 +10,23 @@ use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_radon::{RadonWgpuBackend, RadonWgpuPlan};
 use leto::Array2;
 use std::hint::black_box;
+use std::sync::OnceLock;
 
 const PARAMETERS: &[(usize, usize, usize)] = &[(64, 90, 91), (128, 180, 182), (256, 360, 362)];
+
+fn benchmark_device() -> Option<hephaestus_wgpu::WgpuDevice> {
+    static DEVICE: OnceLock<Option<hephaestus_wgpu::WgpuDevice>> = OnceLock::new();
+
+    DEVICE
+        .get_or_init(
+            || match hephaestus_wgpu::WgpuDevice::try_default("apollo-radon-wgpu") {
+                Ok(device) => Some(device),
+                Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+                Err(error) => panic!("Radon GPU benchmarks require a working provider: {error}"),
+            },
+        )
+        .clone()
+}
 
 fn gaussian_phantom(rows: usize, columns: usize) -> Array2<f32> {
     const SIGMA_SQUARED: f32 = 0.25 * 0.25;
@@ -33,7 +48,7 @@ fn detector_spacing(detector_count: usize) -> f64 {
 }
 
 fn bench_forward(suite: &mut BenchmarkSuite) {
-    let Ok(device) = hephaestus_wgpu::WgpuDevice::try_default("apollo-radon-wgpu") else {
+    let Some(device) = benchmark_device() else {
         eprintln!("No WGPU device available; skipping Radon forward benchmarks");
         return;
     };
@@ -62,7 +77,7 @@ fn bench_forward(suite: &mut BenchmarkSuite) {
 }
 
 fn bench_filtered_backproject(suite: &mut BenchmarkSuite) {
-    let Ok(device) = hephaestus_wgpu::WgpuDevice::try_default("apollo-radon-wgpu") else {
+    let Some(device) = benchmark_device() else {
         eprintln!("No WGPU device available; skipping Radon FBP benchmarks");
         return;
     };
