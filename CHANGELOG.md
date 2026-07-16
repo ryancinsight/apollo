@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Radon GPU verification is partitioned into metadata, projection,
+  adjoint-backprojection, Leto host-boundary, represented-storage,
+  filtered-backprojection, and shared-support leaves. ADR 0007's discrete
+  adjoint and Ram-Lak filtered-backprojection contracts retain their existing
+  CPU oracles and finite-precision bounds; all five static tests and thirteen
+  device-present contracts now run independently. This changes no public,
+  mathematical, or Hephaestus-provider contract.
 - [arch] STFT GPU verification is partitioned into metadata, forward,
   inverse/weighted-overlap-add, typed Leto-boundary, reusable-storage, and
   shared-support leaves. The existing WOLA theorem and 44 value-semantic tests

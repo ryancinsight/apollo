@@ -223,6 +223,14 @@
 - Acceptance: every moved test retains its fixture, oracle, and existing
   derived bound; each private leaf is concern-named and bounded. No provider
   wrapper, fallback, or transform algorithm enters this structural slice.
+- Resolution: the manifest plus `metadata`, `forward`, `backprojection`,
+  `leto`, `typed`, `filtered`, and shared `support` leaves are 7–123 lines.
+  The former suite's five static tests and thirteen device-present contracts
+  now run independently. Focused all-feature Nextest passes 35/35; locked
+  workspace format, examples check, warning-denied Clippy, Nextest
+  (1,090/1,090), doctest, rustdoc, provider audit, and patch SemVer
+  classification pass. This evidence is type-level tree structure plus
+  empirical numerical verification, not a machine-checked theorem proof.
 
 ## Shared Leto interop ownership [arch]
 

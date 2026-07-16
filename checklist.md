@@ -76,16 +76,20 @@
 ## D8 Radon GPU verification-tree normalization [arch]
 
 - Target version: private verification structure; no transform API change.
-- Phase: Execution
+- Phase: Closure
 - [x] Record ADR 0015: Hephaestus retains provider mechanics while Radon
   retains its geometry and numerical contracts; ADR 0007 remains the theorem
   source for the discrete adjoint and Ram-Lak filtered backprojection.
-- [ ] Partition the 536-line private verification module into metadata,
+- [x] Partition the 536-line private verification module into metadata,
   projection, backprojection, Leto host-boundary, typed-storage, and filtered
-  backprojection leaves with one shared acquisition support leaf.
-- [ ] Retain all thirteen device-present contract blocks, their fixtures, CPU
+  backprojection leaves with one shared acquisition support leaf. The manifest
+  plus seven leaves are 7–123 lines.
+- [x] Retain all thirteen device-present contract blocks, their fixtures, CPU
   differentials, error values, and existing finite-precision bounds; then run
-  focused and locked workspace gates plus patch SemVer classification.
+  focused and locked workspace gates plus patch SemVer classification. Focused
+  all-feature Nextest runs 35/35; locked workspace format, examples check,
+  warning-denied Clippy, Nextest (1,090/1,090), doctest, rustdoc, provider
+  audit, and patch SemVer classification pass.
 
 ## D8 NTT verification-tree normalization [arch]
 
