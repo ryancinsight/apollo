@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Wavelet GPU verification is partitioned into metadata, forward,
+  inverse-law, Leto host-boundary, represented-storage, and shared-support
+  leaves. The Haar reconstruction and Parseval contracts retain their existing
+  CPU oracles and finite-precision bounds; all three static tests and fourteen
+  device-present contracts now run independently. This changes no public,
+  mathematical, or Hephaestus-provider contract.
 - [arch] Radon GPU verification is partitioned into metadata, projection,
   adjoint-backprojection, Leto host-boundary, represented-storage,
   filtered-backprojection, and shared-support leaves. ADR 0007's discrete
