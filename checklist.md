@@ -46,6 +46,17 @@
 - [x] Verify benchmark compilation, focused Radon diagnostics/Nextest, provider
   audit, and the source-residue scan; then commit, push, and merge the patch.
 
+## QFT verification provider-error preservation [patch]
+
+- Target version: internal verification correctness; no public API change.
+- Phase: Execution
+- [x] Identify the shared QFT acquisition helper and every test branch that
+  discards a provider error through `let Ok`.
+- [ ] Replace that boundary so only `AdapterUnavailable` skips verification and
+  every other typed provider fault terminates the contract.
+- [ ] Verify focused QFT diagnostics/Nextest, doctest, rustdoc, provider audit,
+  and an exact source-residue scan; then commit, push, and merge the patch.
+
 ## D8 limit-bearing acquisition-forwarder removal [major]
 
 - Target version: `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 pre-1.0

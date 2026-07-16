@@ -131,6 +131,15 @@ Remaining replacement work:
     other provider fault must terminate the benchmark with its typed error.
     Acceptance: direct provider acquisition remains; benchmark compilation,
     focused Radon diagnostics/Nextest, provider audit, and source scan pass.
+  - [ ] [patch] QFT verification provider-error preservation (owner Codex;
+    in-progress 2026-07-16; scope
+    `crates/apollo-qft/src/infrastructure/transport/gpu/verification/`, D8 PM
+    records): replace the shared `WgpuResult` acquisition helper and ten
+    `let Ok` device-present test branches. Only `AdapterUnavailable` may skip;
+    every other Hephaestus provider fault must fail the relevant contract.
+    Acceptance: direct provider acquisition remains; all QFT verification
+    callers preserve typed fault visibility; focused diagnostics/Nextest,
+    rustdoc, provider audit, and an exact residue scan pass.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT

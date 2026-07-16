@@ -1,5 +1,22 @@
 # Apollo Gap Audit
 
+## QFT verification provider-error preservation (2026-07-16)
+
+- Finding: the private QFT verification helper returned `WgpuResult`, while
+  ten device-present test branches used `let Ok(backend) = backend() else {
+  return; }`. That pattern suppresses every Hephaestus provider fault rather
+  than restricting a skip to adapter absence.
+- Risk: provider initialization failures can appear as passing omitted QFT
+  verification, concealing a real accelerator integration regression.
+- Planned resolution: make the helper map only `AdapterUnavailable` to an
+  optional backend and panic at the verification boundary for every other
+  typed provider error. Keep the direct `WgpuDevice` acquisition and existing
+  QFT CPU-oracle/theorem contracts unchanged.
+- Evidence target: compile-time exhaustive typed-error handling; focused
+  QFT all-feature diagnostics and Nextest; doctest; rustdoc; provider audit;
+  and an exact stale-pattern scan. No runtime GPU result is claimed without a
+  compatible adapter.
+
 ## Radon benchmark provider-error preservation (2026-07-16)
 
 - Finding: `radon_wgpu_bench.rs` used `let Ok(device)` for two direct
