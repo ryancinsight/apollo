@@ -121,6 +121,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   dispatcher. `ShaderF16` remains a required provider capability.
 ### Breaking
 
+- [major] `apollo-czt` 0.7.0, `apollo-dctdst` 0.6.0, `apollo-dht` 0.6.0,
+  `apollo-fft` 0.19.0, `apollo-frft` 0.6.0, `apollo-fwht` 0.6.0,
+  `apollo-gft` 0.7.0, `apollo-hilbert` 0.8.0, `apollo-mellin` 0.7.0,
+  `apollo-ntt` 0.6.0, `apollo-radon` 0.6.0, `apollo-sft` 0.6.0, and
+  `apollo-wavelet` 0.6.0 remove their obsolete `wgpu_backend` forwarding
+  modules. Migration: import the typed Hephaestus accelerator API directly
+  from the transform crate root; no raw WGPU or compatibility replacement is
+  provided.
 - [major] `apollo-sht` 0.5.0 removes its public GPU verification module. The
   contracts are crate-private test evidence, not runtime API. Migration: no
   runtime replacement exists; import only the typed SHT accelerator API from

@@ -15,6 +15,21 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## D8 root accelerator-forwarder removal [major]
+
+- Target version: pre-1.0 breaking increments for thirteen transform crates.
+- Phase: Closure
+- [x] Record ADR 0023: the crate root is the canonical typed Hephaestus
+  accelerator boundary; `wgpu_backend` re-exports are obsolete wrappers.
+- [x] Verify the thirteen forwarding definitions have no in-repository caller.
+- [x] Delete every forwarding module without a compatibility alias; retain the
+  existing feature-gated root exports as the sole migration target.
+- [x] Update affected package versions, lockfile, ADR, changelog, and PM
+  records.
+- [x] Verify focused and workspace value-semantic Nextest, warning-denied
+  diagnostics, doctest, rustdoc, provider audit, residue scan, and thirteen
+  major SemVer classifications before publication.
+
 ## D8 NUFFT verification-tree normalization [major]
 
 - Target version: `apollo-nufft` 0.4.0 pre-1.0 breaking integration.

@@ -23,10 +23,5 @@ pub use domain::spectrum::sparse::SparseSpectrum;
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::domain::storage::SftGpuStorage;
 
-/// GPU-accelerated backend using the Hephaestus WGPU provider.
-#[cfg(feature = "wgpu")]
-pub mod wgpu_backend {
-    pub use crate::infrastructure::transport::gpu::*;
-}
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;
