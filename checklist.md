@@ -41,9 +41,9 @@
 - Phase: Execution
 - [x] Identify the two Radon GPU benchmark acquisition sites that erase every
   provider failure with `let Ok`.
-- [ ] Replace both sites with typed direct acquisition that skips only
+- [x] Replace both sites with typed direct acquisition that skips only
   `AdapterUnavailable` and surfaces every other provider error.
-- [ ] Verify benchmark compilation, focused Radon diagnostics/Nextest, provider
+- [x] Verify benchmark compilation, focused Radon diagnostics/Nextest, provider
   audit, and the source-residue scan; then commit, push, and merge the patch.
 
 ## D8 limit-bearing acquisition-forwarder removal [major]

@@ -124,8 +124,8 @@ Remaining replacement work:
     wrapper remains. Acceptance: source residue, direct test/benchmark/PyO3/
     validation acquisition, focused diagnostics/Nextest/doctest/rustdoc/provider/
     SemVer, Maturin, and Python-smoke gates.
-  - [ ] [patch] Radon benchmark provider-error preservation (owner Codex;
-    in-progress 2026-07-16; scope `crates/apollo-radon/benches/`, D8 PM
+  - [x] [patch] Radon benchmark provider-error preservation (owner Codex;
+    completed 2026-07-16; scope `crates/apollo-radon/benches/`, D8 PM
     records): replace the `let Ok` acquisition branch that suppresses all
     Hephaestus failures. Benchmarks may skip only `AdapterUnavailable`; every
     other provider fault must terminate the benchmark with its typed error.
