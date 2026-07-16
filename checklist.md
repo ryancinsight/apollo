@@ -21,14 +21,15 @@
 - Phase: Execution
 - [x] Record ADR 0029: direct Hephaestus acquisition, including
   `ShaderF16`, stays outside the native-half FFT plan.
-- [ ] Delete `GpuFft3dF16Native::try_new` without an alias; retain
+- [x] Delete `GpuFft3dF16Native::try_new` without an alias; retain
   `try_from_device` as the sole plan-construction boundary.
-- [ ] Move the f16 value-semantic tests to direct feature-qualified provider
+- [x] Move the f16 value-semantic tests to direct feature-qualified provider
   acquisition; only `AdapterUnavailable` may skip and every other provider
   error must fail the test.
-- [ ] Advance the pre-1.0 major version and synchronize the release records.
-- [ ] Verify focused native-f16 diagnostics/Nextest, doctest, rustdoc,
-  provider audit, source scans, and major SemVer; then commit, push, and merge.
+- [x] Advance the pre-1.0 major version and synchronize the release records.
+- [x] Update to Hephaestus commit `369dff41` and verify focused native-f16
+  diagnostics/Nextest, doctest, rustdoc, provider audit, source scans, and
+  major SemVer; then commit, push, and merge.
 
 ## D8 FFT acquisition-forwarder removal [major]
 

@@ -22,7 +22,6 @@
 //! machine-checked proof.
 
 use crate::f16 as HalfF16;
-use hephaestus_core::{DeviceFeature, DevicePreference};
 use hephaestus_wgpu::WgpuDevice;
 use leto::Array3;
 
@@ -45,7 +44,8 @@ fn validate_dimensions(nx: usize, ny: usize, nz: usize) -> Result<(), String> {
 
 /// GPU-backed 3D FFT plan executing all shader arithmetic in native f16.
 ///
-/// The plan requires a Hephaestus device with [`DeviceFeature::ShaderF16`].
+/// The plan requires a Hephaestus device with
+/// [`hephaestus_core::DeviceFeature::ShaderF16`].
 /// Host data crosses the boundary as IEEE-754 half bit patterns and is decoded
 /// back to f32 only after provider-owned readback completes.
 pub struct GpuFft3dF16Native {
@@ -63,24 +63,7 @@ impl GpuFft3dF16Native {
     /// Return true when the device was acquired with `ShaderF16` enabled.
     #[must_use]
     pub fn device_supports_f16(device: &WgpuDevice) -> bool {
-        device.supports_device_feature(DeviceFeature::ShaderF16)
-    }
-
-    /// Create a plan by requesting a Hephaestus device with `ShaderF16`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if no available adapter can satisfy `ShaderF16`, or if
-    /// any axis has fewer than two samples.
-    pub fn try_new(nx: usize, ny: usize, nz: usize) -> Result<Self, String> {
-        validate_dimensions(nx, ny, nz)?;
-        let device = WgpuDevice::try_with_device_preference_and_required_device_features(
-            "apollo-fft-native-f16",
-            DevicePreference::HighPerformance,
-            &[DeviceFeature::ShaderF16],
-        )
-        .map_err(|error| error.to_string())?;
-        Self::try_from_device(device, nx, ny, nz)
+        device.supports_device_feature(hephaestus_core::DeviceFeature::ShaderF16)
     }
 
     /// Create a plan from a caller-supplied Hephaestus device.
@@ -189,6 +172,21 @@ fn interleave_components(real: &[u16], imaginary: &[u16]) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hephaestus_core::{DeviceFeature, DevicePreference};
+
+    fn device_or_skip() -> Option<WgpuDevice> {
+        match WgpuDevice::try_with_device_preference_and_required_device_features(
+            "apollo-fft-native-f16",
+            DevicePreference::HighPerformance,
+            &[DeviceFeature::ShaderF16],
+        ) {
+            Ok(device) => Some(device),
+            Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+            Err(error) => {
+                panic!("native-half FFT verification requires a working provider: {error}");
+            }
+        }
+    }
 
     /// Verify native-half forward FFT against the typed f32 provider plan.
     ///
@@ -201,9 +199,11 @@ mod tests {
     /// absolute bound `γ₃₁·‖input‖₁`.
     #[test]
     fn native_f16_forward_matches_f32_within_f16_tolerance_when_device_exists() {
-        let Ok(plan_f16) = GpuFft3dF16Native::try_new(4, 4, 4) else {
+        let Some(device) = device_or_skip() else {
             return;
         };
+        let plan_f16 = GpuFft3dF16Native::try_from_device(device, 4, 4, 4)
+            .expect("native-half plan must accept the feature-qualified provider device");
         let plan_f32 = GpuFft3d::new(plan_f16.plan.device.clone(), 4, 4, 4)
             .expect("f32 provider plan must share the acquired native-half device");
 
@@ -252,9 +252,11 @@ mod tests {
     /// `γₖ·‖input‖₁`, where `γₖ = ku/(1-ku)`.
     #[test]
     fn non_pow2_f16_forward_inverse_roundtrip_when_device_exists() {
-        let Ok(plan) = GpuFft3dF16Native::try_new(3, 3, 3) else {
+        let Some(device) = device_or_skip() else {
             return;
         };
+        let plan = GpuFft3dF16Native::try_from_device(device, 3, 3, 3)
+            .expect("native-half plan must accept the feature-qualified provider device");
         let field = leto::Array3::from_shape_fn([3, 3, 3], |[i, j, k]| {
             let value = (i * 9 + j * 3 + k) as f32;
             (0.21 * value).sin() + 0.2 * (0.37 * value).cos()
@@ -285,8 +287,8 @@ mod tests {
 
     #[test]
     fn native_f16_rejects_singleton_axis() {
-        let Err(error) = GpuFft3dF16Native::try_new(1, 2, 2) else {
-            panic!("singleton native-half axis must be rejected before device acquisition")
+        let Err(error) = validate_dimensions(1, 2, 2) else {
+            panic!("singleton native-half axis must be rejected before provider acquisition")
         };
         assert_eq!(error, "nx=1 is invalid; native-half axes require N >= 2");
     }
