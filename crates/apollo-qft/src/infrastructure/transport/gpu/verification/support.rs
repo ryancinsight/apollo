@@ -51,16 +51,16 @@ pub(super) fn assert_matches_cpu(
     operation: &str,
 ) {
     assert_eq!(actual.len(), expected.size());
-    for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
-        let real_error = (f64::from(actual.re) - expected.re).abs();
-        let imag_error = (f64::from(actual.im) - expected.im).abs();
+    for (index, (actual_value, expected_value)) in actual.iter().zip(expected.iter()).enumerate() {
+        let real_error = (f64::from(actual_value.re) - expected_value.re).abs();
+        let imag_error = (f64::from(actual_value.im) - expected_value.im).abs();
         assert!(
             real_error < CPU_DIFFERENTIAL_TOLERANCE && imag_error < CPU_DIFFERENTIAL_TOLERANCE,
             "{operation} mismatch at index {index}: actual=({},{}) expected=({},{}) real_error={} imag_error={}",
-            actual.re,
-            actual.im,
-            expected.re,
-            expected.im,
+            actual_value.re,
+            actual_value.im,
+            expected_value.re,
+            expected_value.im,
             real_error,
             imag_error
         );
