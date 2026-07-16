@@ -10,6 +10,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` 0.21.0 removes
+  `GpuFft3dF16Native::try_new`. Acquire a `ShaderF16`-qualified typed
+  Hephaestus device and construct the plan with `try_from_device(device, nx,
+  ny, nz)`; ADR 0029 records the provider-boundary cleanup.
 - [major] `apollo-fft` 0.20.0 removes `WgpuBackend::try_default`. Acquire a
   typed Hephaestus device and construct the composition backend with
   `WgpuBackend::new(device)`; ADR 0028 records the provider-boundary cleanup.

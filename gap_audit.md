@@ -1,5 +1,23 @@
 # Apollo Gap Audit
 
+## Native-f16 FFT provider-boundary cleanup (2026-07-16)
+
+- Finding: public `GpuFft3dF16Native::try_new` acquires a `ShaderF16` device
+  through Hephaestus and erases its typed fault into `String`. Its two
+  device-present tests use `let Ok` and therefore suppress every provider
+  failure instead of only adapter absence.
+- Risk: the native-half plan retains a consumer-owned acquisition wrapper, and
+  a failed driver or feature-qualified provider initialization can appear as
+  omitted numerical verification.
+- Planned resolution: delete `try_new` without an alias. The native-half plan
+  accepts an already acquired `WgpuDevice` through `try_from_device`; tests
+  acquire their `ShaderF16` device from Hephaestus and match only
+  `AdapterUnavailable` as unavailable.
+- Evidence target: API-removal SemVer classification, compile-time typed-error
+  handling, derived native-half value-semantic tests, rustdoc, provider audit,
+  and direct-residue scans. This does not prove adapter availability or GPU
+  arithmetic beyond the compatible hardware actually exercised.
+
 ## QFT verification provider-error preservation (2026-07-16)
 
 - Finding: the private QFT verification helper returned `WgpuResult`, while

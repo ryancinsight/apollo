@@ -140,6 +140,15 @@ Remaining replacement work:
     Acceptance: direct provider acquisition remains; all QFT verification
     callers preserve typed fault visibility; focused diagnostics/Nextest,
     rustdoc, provider audit, and an exact residue scan pass.
+  - [ ] [major] Native-f16 FFT provider-boundary cleanup (owner Codex;
+    in-progress 2026-07-16; scope
+    `crates/apollo-fft/src/infrastructure/transport/gpu/infrastructure/gpu_fft/f16_plan.rs`,
+    `docs/adr/0029-*`, version/PM records): delete the public
+    `GpuFft3dF16Native::try_new` acquisition forwarder. Test code acquires a
+    `ShaderF16`-qualified typed Hephaestus device directly and may skip only
+    `AdapterUnavailable`; every other provider fault fails the contract.
+    Acceptance: no wrapper/caller residue; native-f16 diagnostics, value
+    tests, rustdoc, provider audit, source scan, and major SemVer pass.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT
