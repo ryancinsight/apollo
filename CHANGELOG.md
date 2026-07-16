@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] SHT GPU verification is partitioned into metadata, rejection, forward,
+  inverse, Leto host-boundary, typed-storage, and shared-support leaves. ADR
+  0022 records Gauss-Legendre/Fourier orthogonality for the documented
+  band-limited grid; all original CPU differentials and finite-precision bounds
+  remain. Device-present tests skip only a missing Hephaestus adapter; all
+  other acquisition failures are test failures. No mathematical or
+  Hephaestus-provider contract changes.
 - [minor] Apollo's direct Atlas providers now follow their merged default
   branches. The root manifest deletes revision quarantine and local patch
   overrides for Eunomia, Mnemosyne, Melinoe, Hermes, Leto, Moirai, and
@@ -114,6 +121,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   dispatcher. `ShaderF16` remains a required provider capability.
 ### Breaking
 
+- [major] `apollo-sht` 0.5.0 removes its public GPU verification module. The
+  contracts are crate-private test evidence, not runtime API. Migration: no
+  runtime replacement exists; import only the typed SHT accelerator API from
+  `apollo_sht`.
 - Rust 1.95 is the minimum supported toolchain for every Apollo crate.
 - [major] `apollo-gft` 0.5.0 removes its public GPU verification module and
   `wgpu_backend::verification` path. The contracts are crate-private test

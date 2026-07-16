@@ -211,6 +211,26 @@
   locked workspace check/Clippy/Nextest, doctest, rustdoc, provider audit,
   direct dependency scans, and major SemVer classification.
 
+## D8 SHT GPU verification-tree normalization [major]
+
+- Target version: `apollo-sht` pre-1.0 breaking verification-boundary cleanup.
+- Phase: Closure
+- [x] Record ADR 0022: Gauss-Legendre exactness and spherical-harmonic
+  orthonormality yield `inverse(forward(f)) = f` for the documented
+  band-limited grid; preserve the CPU representation differential as empirical
+  finite-precision evidence.
+- [x] Partition the 343-line GPU verification monolith into test-private
+  metadata, rejection, forward, inverse, Leto host-boundary, typed-storage,
+  and shared-support leaves.
+- [x] Preserve all original fixtures, rejection values, CPU oracles, and
+  tolerances; remove the public test-only transport path without a release
+  wrapper; then run SemVer, focused/workspace gates, provider audit, and source
+  residue scans. Evidence: 35/35 focused all-feature Nextest contracts,
+  warning-denied Clippy, package and workspace doctest/rustdoc, workspace
+  check/Clippy/Nextest, provider audit, direct source scan, and major SemVer
+  verification. Only `AdapterUnavailable` skips a device-present contract;
+  every other provider acquisition failure fails it.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
