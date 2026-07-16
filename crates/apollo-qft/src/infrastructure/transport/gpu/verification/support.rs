@@ -1,14 +1,16 @@
-use crate::infrastructure::transport::gpu::{QftWgpuBackend, WgpuResult};
+use crate::infrastructure::transport::gpu::QftWgpuBackend;
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 
 pub(super) const CPU_DIFFERENTIAL_TOLERANCE: f64 = 2.0e-4;
 pub(super) const ROUNDTRIP_TOLERANCE: f32 = 5.0e-4;
 
-pub(super) fn backend() -> WgpuResult<QftWgpuBackend> {
-    hephaestus_wgpu::WgpuDevice::try_default("apollo-qft-wgpu")
-        .map(QftWgpuBackend::new)
-        .map_err(Into::into)
+pub(super) fn backend() -> Option<QftWgpuBackend> {
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-qft-wgpu") {
+        Ok(device) => Some(QftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("QFT GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn forward_input() -> Vec<Complex32> {

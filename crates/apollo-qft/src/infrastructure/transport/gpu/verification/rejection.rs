@@ -7,7 +7,7 @@ use super::support::backend;
 
 #[test]
 fn typed_path_rejects_profile_storage_mismatch_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let plan = backend.plan(2);
@@ -29,7 +29,7 @@ fn typed_path_rejects_profile_storage_mismatch_when_device_exists() {
 
 #[test]
 fn rejects_invalid_plan_and_length_mismatch_before_dispatch_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let invalid_error = backend

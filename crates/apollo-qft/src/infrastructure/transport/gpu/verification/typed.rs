@@ -15,7 +15,7 @@ fn mixed_input() -> Vec<[f16; 2]> {
 
 #[test]
 fn typed_mixed_storage_matches_represented_f32_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = mixed_input();
@@ -50,7 +50,7 @@ fn typed_mixed_storage_matches_represented_f32_when_device_exists() {
 
 #[test]
 fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = mixed_input();
