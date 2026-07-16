@@ -18,6 +18,8 @@ Replace the monolith with a test-only manifest and concern-named leaves.
 representation conversion, and the established finite-precision comparison; it
 does not wrap or implement a provider API. Hephaestus retains device mechanics;
 Apollo retains SHT mathematics; Leto owns host-array and view boundaries.
+Only Hephaestus' explicit `AdapterUnavailable` result skips a device-present
+contract; every other acquisition failure fails the test.
 
 The SHT kernel documentation proves the applicable exact-arithmetic contract.
 For a field band-limited to degree `L`, `L < N_lat`, and

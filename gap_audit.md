@@ -125,6 +125,31 @@
 - Residual risk: cross-transform backend/acquisition consolidation remains a
   Hephaestus-owned provider concern; this split adds no Apollo wrapper.
 
+## SHT GPU verification-tree normalization [major]
+
+- Finding: the 343-line SHT GPU verification module mixed static metadata,
+  rejection, CPU differentials, Leto boundaries, typed storage, and device
+  acquisition while exposing an empty release module.
+- Resolution: `gpu/verification/` now has one test-only manifest and seven
+  concern-named leaves. `support.rs` is the sole home for fixture construction,
+  represented CPU comparison, finite-precision limits, and test acquisition;
+  it owns no SHT execution or provider implementation. The public transport
+  verification path is removed in `apollo-sht` 0.5.0.
+- Mathematical contract: for the documented band-limited grid,
+  `L < N_lat` and `2L + 1 <= N_lon`, Gauss-Legendre exactness and longitude
+  Fourier orthogonality yield `inverse(forward(f)) = f`. The CPU plan is the
+  independent representation oracle. ADR 0022 records the proof sketch and
+  existing `2.0e-5` finite-precision differential limit.
+- Evidence tier: 11 test-private contracts (two static and nine device-present),
+  35/35 focused all-feature Nextest cases, workspace check/Clippy/Nextest,
+  doctest, rustdoc, provider audit, source scan, and major SemVer verification.
+  This is finite-precision empirical evidence, not a machine-checked proof.
+- Review: the inherited acquisition helper skipped every provider error. It now
+  skips only Hephaestus `AdapterUnavailable`; a device-creation or other
+  provider failure fails the test. No P0 or P1 finding remains in this scope.
+- Residual risk: cross-transform backend/acquisition consolidation remains a
+  Hephaestus-owned provider concern; this split adds no Apollo wrapper.
+
 ## DCT/DST GPU verification-tree normalization [arch]
 
 - Finding: the DCT/DST transport had a 796-line verification monolith mixing

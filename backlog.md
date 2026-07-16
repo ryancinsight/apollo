@@ -224,7 +224,7 @@ Remaining replacement work:
     warning-denied Clippy, doctest, rustdoc, provider audit, immediate-parent
     semver classification, and source/manifest scan with no direct `wgpu`,
     `pollster`, or helper edge.
-  - [ ] D8-SHT-verification-tree [major] (owner Codex; claimed 2026-07-16;
+  - [x] D8-SHT-verification-tree [major] (owner Codex; completed 2026-07-16;
     scope `crates/apollo-sht/src/infrastructure/transport/gpu/{mod.rs,verification.rs,verification/}`,
     `crates/apollo-sht/Cargo.toml`, ADR 0022, and D8 PM entries): replace the
     public test-only verification monolith with a private concern tree, retain
@@ -232,6 +232,11 @@ Remaining replacement work:
     release path without an Apollo device wrapper. Acceptance: every original
     static and device-present value contract remains, the public path is
     classified by SemVer, and the focused/workspace/provider gates pass.
+    Delivered in `apollo-sht` 0.5.0: 343 lines become a test-only manifest plus
+    seven concern leaves; 35/35 focused all-feature Nextest contracts, warning-
+    denied Clippy, doctest, rustdoc, provider audit, source scan, and major
+    SemVer verification pass. Only `AdapterUnavailable` skips device-present
+    tests; all other provider acquisition failures now fail the contract.
   - [x] D6-DCTDST: `apollo-dctdst` 0.3.0 replaces the obsolete wrapper
     boundary with native Hephaestus typed-kernel dispatch. Apollo retains the
     DCT/DST formulas and documented inverse-pair theorem; Leto remains the CPU
