@@ -18,7 +18,7 @@ pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use eunomia::Complex32;
 pub use infrastructure::buffers::StftGpuBuffers;
-pub use infrastructure::device::{wgpu_available, StftWgpuBackend};
+pub use infrastructure::device::StftWgpuBackend;
 pub use infrastructure::kernel::StftGpuKernel;
 
 /// CPU transform marker proving dependency direction into the owning transform crate.

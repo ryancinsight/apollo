@@ -172,6 +172,23 @@
   generic Apollo wrapper; only a Hephaestus contract that accepts per-transform
   limits can own that consolidation.
 
+## Provider-acquisition probe removal [major]
+
+- Finding: sixteen transform crates duplicated an unused public
+  `wgpu_available` boolean probe, each suppressing typed Hephaestus acquisition
+  errors with `is_ok()`.
+- Resolution: ADR 0013 removes every definition and re-export in one bounded
+  pre-1.0 breaking migration. Transform-specific constructors remain because
+  they declare the provider limits their authored kernels require; no Apollo
+  shared probe or compatibility alias replaces the deleted API.
+- Evidence: all sixteen major SemVer classifications, locked format,
+  examples-check, warning-denied Clippy, all-feature Nextest, doctest,
+  rustdoc, metadata, and provider-audit gates pass. Direct raw-WGPU and
+  `wgpu_available` source scans are empty. The mathematical transform
+  contracts are unaffected; this changes failure visibility at the acquisition
+  boundary. This is API/type-level and empirical test evidence, not a
+  machine-checked theorem or GPU-performance proof.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

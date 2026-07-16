@@ -14,12 +14,6 @@ pub mod forward;
 /// Inverse execution implementations.
 pub mod inverse;
 
-/// Return whether a default WGPU adapter/device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    StftWgpuBackend::try_default().is_ok()
-}
-
 /// WGPU backend for the STFT.
 ///
 /// Owns a Hephaestus device for typed kernel dispatch.

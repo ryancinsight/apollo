@@ -17,7 +17,7 @@ pub use application::plan::FrftWgpuPlan;
 pub use application::plan::UnitaryFrftWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
-pub use infrastructure::device::{wgpu_available, FrftWgpuBackend};
+pub use infrastructure::device::FrftWgpuBackend;
 
 /// CPU transform marker proving dependency direction into the owning transform crate.
 pub type CpuTransformMarker = crate::FrftPlan;

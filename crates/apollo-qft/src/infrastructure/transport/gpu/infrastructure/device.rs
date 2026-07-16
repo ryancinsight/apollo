@@ -16,12 +16,6 @@ thread_local! {
     static GPU_OUTPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    QftWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for direct unitary QFT execution.
 #[derive(Debug, Clone)]
 pub struct QftWgpuBackend {

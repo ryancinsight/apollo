@@ -17,4 +17,4 @@ pub use application::plan::SdftWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use domain::storage::{SdftGpuBinStorage, SdftGpuRealStorage};
-pub use infrastructure::device::{wgpu_available, SdftWgpuBackend};
+pub use infrastructure::device::SdftWgpuBackend;

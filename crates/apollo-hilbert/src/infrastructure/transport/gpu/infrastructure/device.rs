@@ -18,12 +18,6 @@ thread_local! {
     static REAL_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    HilbertWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for analytic and inverse Hilbert execution.
 #[derive(Debug, Clone)]
 pub struct HilbertWgpuBackend {

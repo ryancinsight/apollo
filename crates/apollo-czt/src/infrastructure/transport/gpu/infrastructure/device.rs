@@ -16,12 +16,6 @@ thread_local! {
     static GPU_OUTPUT_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default WGPU adapter/device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    CztWgpuBackend::try_default().is_ok()
-}
-
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct CztWgpuBackend {
