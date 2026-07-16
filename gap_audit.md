@@ -1,5 +1,16 @@
 # Apollo Gap Audit
 
+## Provider acquisition-forwarder removal (2026-07-16)
+
+- Resolution: fifteen transform `try_default` factories that only wrapped
+  `hephaestus_wgpu::WgpuDevice::try_default` are deleted. Test and benchmark
+  callers acquire the typed provider device directly; test skips are limited to
+  `HephaestusError::AdapterUnavailable`. NUFFT/STFT retain their separate
+  limit-bearing paths, and the shared FFT adapter remains outside this scope.
+- Evidence tier: focused and workspace value-semantic Nextest, warning-denied
+  Clippy, rustdoc, provider audit, API-source scan, and pre-1.0 major SemVer
+  classification. This is release-boundary evidence, not an accelerator proof.
+
 ## Root verification-boundary removal [major]
 
 - Finding: ten transform crates publish root `verification` modules whose

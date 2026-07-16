@@ -28,11 +28,6 @@ impl GftWgpuBackend {
         Self { device }
     }
 
-    /// Create a backend by requesting a default Hephaestus WGPU device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Ok(Self::new(WgpuDevice::try_default("apollo-gft-wgpu")?))
-    }
-
     /// Return truthful current capabilities (forward and inverse are implemented).
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {

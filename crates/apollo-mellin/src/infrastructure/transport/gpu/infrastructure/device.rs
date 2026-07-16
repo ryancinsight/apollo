@@ -28,11 +28,6 @@ impl MellinWgpuBackend {
         Self { device }
     }
 
-    /// Acquire the default Hephaestus WGPU device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Ok(Self::new(WgpuDevice::try_default("apollo-mellin-wgpu")?))
-    }
-
     /// Return truthful current capabilities.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {

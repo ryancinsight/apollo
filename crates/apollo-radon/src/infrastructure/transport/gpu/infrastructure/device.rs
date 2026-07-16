@@ -23,11 +23,6 @@ impl RadonWgpuBackend {
         Self { device }
     }
 
-    /// Create a backend by requesting a default adapter and device.
-    pub fn try_default() -> WgpuResult<Self> {
-        Ok(Self::new(WgpuDevice::try_default("apollo-radon-wgpu")?))
-    }
-
     /// Return truthful current capabilities.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {

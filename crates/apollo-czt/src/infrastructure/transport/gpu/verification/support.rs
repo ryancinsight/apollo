@@ -12,7 +12,11 @@ pub(super) const DIRECT_DIFFERENTIAL_BOUND: f64 = 4096.0 * f32::EPSILON as f64;
 pub(super) const DFT_ROUNDTRIP_BOUND: f32 = 8192.0 * f32::EPSILON;
 
 pub(super) fn backend() -> Option<CztWgpuBackend> {
-    CztWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_default("apollo-czt-wgpu") {
+        Ok(device) => Some(CztWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("CZT GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn reference_parameters() -> (Complex32, Complex32) {

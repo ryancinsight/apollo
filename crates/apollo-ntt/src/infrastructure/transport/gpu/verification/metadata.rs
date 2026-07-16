@@ -46,9 +46,12 @@ fn unsupported_execution_error_identifies_operation() {
 
 #[test]
 fn available_backend_reports_execution_capabilities() {
-    let Ok(backend) = NttWgpuBackend::try_default() else {
-        return;
+    let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-ntt-wgpu") {
+        Ok(device) => device,
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return,
+        Err(error) => panic!("NTT GPU verification requires a working provider: {error}"),
     };
+    let backend = NttWgpuBackend::new(device);
     let capabilities = backend.capabilities();
     assert!(capabilities.device_available);
     assert!(capabilities.supports_forward);

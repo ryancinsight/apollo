@@ -46,9 +46,12 @@ mod tests {
 
     #[test]
     fn mellin_wgpu_execution_suite_when_device_exists() {
-        let Ok(backend) = MellinWgpuBackend::try_default() else {
-            return;
+        let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-mellin-wgpu") {
+            Ok(device) => device,
+            Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return,
+            Err(error) => panic!("Mellin GPU verification requires a working provider: {error}"),
         };
+        let backend = MellinWgpuBackend::new(device);
 
         // 1. backend_reports_forward_and_inverse
         {

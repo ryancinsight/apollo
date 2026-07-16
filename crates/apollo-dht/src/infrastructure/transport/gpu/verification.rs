@@ -39,9 +39,12 @@ mod tests {
 
     #[test]
     fn dht_wgpu_execution_suite_when_device_exists() {
-        let Ok(backend) = DhtWgpuBackend::try_default() else {
-            return;
+        let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-dht-wgpu") {
+            Ok(device) => device,
+            Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return,
+            Err(error) => panic!("DHT GPU verification requires a working provider: {error}"),
         };
+        let backend = DhtWgpuBackend::new(device);
 
         // 1. backend_reports_forward_and_inverse
         {

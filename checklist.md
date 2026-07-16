@@ -15,6 +15,22 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## D8 provider acquisition-forwarder removal [major]
+
+- Target version: pre-1.0 breaking increments for fifteen transform crates.
+- Phase: Closure
+- [x] Record ADR 0026: Hephaestus owns default device acquisition; transform
+  backends retain only their algorithm boundary.
+- [x] Inventory the fifteen zero-behavior public factories and exclude the
+  NUFFT/STFT limit-bearing paths and the shared FFT adapter.
+- [x] Delete each selected factory without an alias and construct backends
+  from directly acquired Hephaestus devices.
+- [x] Restrict device-present test skips to `AdapterUnavailable`; surface all
+  other provider failures.
+- [x] Update lockfile, changelog, backlog, and risk record.
+- [x] Verify focused/workspace value-semantic Nextest, diagnostics, doctest,
+  rustdoc, provider audit, source scan, and major SemVer classification.
+
 ## D8 root verification-boundary removal [major]
 
 - Target version: pre-1.0 breaking increments for ten transform crates.

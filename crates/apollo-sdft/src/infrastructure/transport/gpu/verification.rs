@@ -36,9 +36,12 @@ mod tests {
 
     #[test]
     fn sdft_wgpu_execution_suite_when_device_exists() {
-        let Ok(backend) = SdftWgpuBackend::try_default() else {
-            return;
+        let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-sdft-wgpu") {
+            Ok(device) => device,
+            Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return,
+            Err(error) => panic!("SDFT GPU verification requires a working provider: {error}"),
         };
+        let backend = SdftWgpuBackend::new(device);
 
         // 1. backend_reports_forward_and_inverse
         {

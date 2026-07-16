@@ -502,6 +502,17 @@ Remaining replacement work:
   every leaf is at most 500 lines, affected pre-1.0 packages advance, and
   focused/workspace value-semantic Nextest, diagnostics, rustdoc, provider
   audit, residue scans, and major SemVer classifications pass.
+  - [x] [major] D8-provider-acquisition-forwarders (owner Codex, completed
+  2026-07-16; scope fifteen transform GPU backend constructors, their local
+  verification/benchmark callers, and ADR 0026): delete the zero-behavior
+  public `try_default` factories that only wrap
+  `hephaestus_wgpu::WgpuDevice::try_default`. Acquire the provider device
+  directly and retain the existing transform `new(device)` boundary. Exclude
+  NUFFT/STFT device-limit contracts and the shared FFT adapter. Acceptance:
+  only `AdapterUnavailable` skips device-present verification; all other
+  provider failures surface; affected pre-1.0 packages advance; and focused/
+  workspace value-semantic Nextest, diagnostics, rustdoc, provider audit,
+  source scans, and major SemVer classification pass.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
