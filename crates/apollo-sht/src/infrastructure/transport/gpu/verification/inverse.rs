@@ -1,3 +1,4 @@
+use crate::infrastructure::transport::gpu::ShtWgpuPlan;
 use crate::ShtPlan;
 
 use super::support::{assert_complex_close, backend, complex_samples, represented_samples};
@@ -7,7 +8,7 @@ fn inverse_matches_cpu_complex_samples_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = crate::infrastructure::transport::gpu::ShtWgpuPlan::new(4, 5, 1);
+    let plan = ShtWgpuPlan::new(4, 5, 1);
     let cpu_plan = ShtPlan::new(plan.latitudes(), plan.longitudes(), plan.max_degree())
         .expect("valid CPU SHT plan");
     let represented = represented_samples(&complex_samples(&plan));

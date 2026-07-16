@@ -1,3 +1,4 @@
+use crate::infrastructure::transport::gpu::ShtWgpuPlan;
 use crate::ShtPlan;
 use eunomia::Complex64;
 
@@ -8,7 +9,7 @@ fn forward_matches_cpu_complex_coefficients_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = crate::infrastructure::transport::gpu::ShtWgpuPlan::new(4, 5, 1);
+    let plan = ShtWgpuPlan::new(4, 5, 1);
     let cpu_plan = ShtPlan::new(plan.latitudes(), plan.longitudes(), plan.max_degree())
         .expect("valid CPU SHT plan");
     let samples = complex_samples(&plan);

@@ -1,3 +1,4 @@
+use crate::infrastructure::transport::gpu::ShtWgpuPlan;
 use eunomia::Complex32;
 use leto::{Array2, SliceArg, Storage};
 
@@ -8,7 +9,7 @@ fn leto_forward_and_inverse_match_slice_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = crate::infrastructure::transport::gpu::ShtWgpuPlan::new(4, 5, 1);
+    let plan = ShtWgpuPlan::new(4, 5, 1);
     let samples = Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
         Complex32::new(
             0.25 + lat as f32 * 0.5 - lon as f32 * 0.125,
@@ -50,7 +51,7 @@ fn leto_strided_forward_matches_logical_slice_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = crate::infrastructure::transport::gpu::ShtWgpuPlan::new(4, 5, 1);
+    let plan = ShtWgpuPlan::new(4, 5, 1);
     let samples = Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
         Complex32::new(lat as f32 + lon as f32 * 0.25, 0.5 + lon as f32 * 0.1)
     });
