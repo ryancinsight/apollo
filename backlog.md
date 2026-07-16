@@ -103,8 +103,13 @@ Remaining replacement work:
       `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, `apollo-stft`,
       and `apollo-nufft` are complete; FFT completes the eighteenth transform
       scope. Apollo owns no raw WGPU API or dependency edge.
-  - [ ] Add NVIDIA/CUDA transform path on `hephaestus-cuda` (cuda-oxide + cutile) once `hephaestus-cuda` is delivered.
-  Start with FFT; differential vs CPU and wgpu.
+  - [ ] [major] CUDA FFT provider path (owner Codex, in-progress 2026-07-16;
+    scope `apollo-fft` CUDA transport, typed provider dependency, ADR 0030,
+    and CUDA PM records): consume `hephaestus-cuda` directly through its typed
+    `CudaDevice`/kernel/stream contracts. Start with one-dimensional f32 FFT;
+    prove the inverse round trip and differential agreement against CPU and
+    Hephaestus WGPU when their respective adapters are present. No Apollo
+    raw-CUDA, raw-WGPU, acquisition, or compatibility wrapper is permitted.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)
