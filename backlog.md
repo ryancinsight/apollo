@@ -364,6 +364,12 @@ Remaining replacement work:
   provider limits stay in their owning transform backend. All sixteen
   pre-1.0 major SemVer classifications plus locked workspace gates, provider
   audit, and empty direct raw-WGPU/probe source scans pass.
+  [in-progress] [arch] D8-STFT-verification-tree (owner Codex; scope
+  `crates/apollo-stft/src/infrastructure/transport/gpu/verification*`, ADR
+  0014): replace the 961-line private GPU verification monolith with
+  concern-named leaves. Preserve metadata/rejection, CPU-differential,
+  weighted-overlap-add, typed/Leto, non-power-of-two, and reusable-buffer
+  contracts; add no provider wrapper or transform implementation.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

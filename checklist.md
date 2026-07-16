@@ -61,6 +61,17 @@
   rustdoc, metadata, and provider-audit gates. The direct raw-WGPU and probe
   source scans are empty.
 
+## D8 STFT GPU verification-tree normalization [arch]
+
+- Target version: private verification structure; no transform API change.
+- Phase: Execution
+- [x] Record ADR 0014: provider acquisition remains in Hephaestus and the
+  existing weighted-overlap-add theorem remains in its owning test contract.
+- [ ] Partition the 961-line private verification module into independent
+  metadata, forward, inverse, typed-host-boundary, and reusable-storage leaves.
+- [ ] Preserve every value-semantic test, run the focused STFT and locked
+  workspace gates, then publish the bounded vertical slice.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
