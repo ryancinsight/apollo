@@ -140,10 +140,17 @@
   evidence that identifies the removed public module paths as the intentional
   `apollo-nufft` 0.4.0 pre-1.0 break. Evidence remains empirical/type-level,
   not a machine-checked theorem proof.
-- Residual risk: the now-private root theorem suite at
-  `crates/apollo-nufft/src/verification/mod.rs` remains 918 lines. D8-NUFFT-
-  root-verify is the next bounded structural scope; it must preserve every
-  analytical value and avoid a test helper or compatibility layer.
+- Resolution extension: D8-NUFFT-root-verify replaces the private 918-line
+  root theorem suite with direct-identity, adjoint, kernel-width,
+  in-place-consistency, and 1D/3D typed-storage leaves. The manifest is 19
+  lines; leaves are 69–280 lines. The exact fixtures, analytical references,
+  derived tolerances, and theorem comments remain in their owning leaves.
+- Evidence extension: focused all-feature Nextest runs 73/73 value-semantic
+  tests, including every relocated theorem and typed-storage contract. This is
+  empirical finite-precision evidence, not a machine-checked proof.
+- Residual risk: generic cross-transform verification support remains a
+  provider-owned D8 concern. This split creates no helper wrapper,
+  compatibility path, or Apollo-owned device abstraction.
 
 ## Shared Leto interop ownership [arch]
 

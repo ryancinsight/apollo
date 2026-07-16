@@ -342,12 +342,12 @@ Remaining replacement work:
   classification pass. The direct adjoint proof sketch and existing
   finite-precision tolerances remain intact; the scope adds no Apollo-owned
   abstraction or fallback path.
-  Next ready scope: [arch] D8-NUFFT-root-verify (status todo; owner Codex;
-  scope `crates/apollo-nufft/src/verification/`; last-update 2026-07-15;
-  acceptance: partition the 918-line root theorem suite into private
-  direct-identity, adjoint, kernel-width, and in-place-consistency leaves,
-  retain every exact reference value and derived tolerance, keep each leaf at
-  or below the structural target, and pass focused plus workspace Nextest).
+  [x] [arch] D8-NUFFT-root-verify (owner Codex, completed 2026-07-15; scope
+  `crates/apollo-nufft/src/verification/`): replace the private 918-line root
+  theorem suite with direct-identity, adjoint, kernel-width,
+  in-place-consistency, and dimension-specific typed-storage leaves. Every
+  fixture, analytical reference, and derived tolerance is retained; the seven
+  leaves are 19–280 lines and the focused all-feature Nextest suite passes.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

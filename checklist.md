@@ -33,6 +33,11 @@
   warning-denied diagnostics, package doctest/rustdoc, provider scan,
   source-residue scan, and the documented pre-1.0 breaking SemVer
   classification before publishing.
+- [x] Partition the private 918-line root theorem suite into direct-identity,
+  adjoint, kernel-width, in-place-consistency, and 1D/3D typed-storage leaves
+  without changing any fixture, reference value, or derived tolerance.
+- [x] Verify the restructured 73-case all-feature NUFFT suite; each private
+  verification leaf is at or below 280 lines and no release module exists.
 
 ## D8 NTT verification-tree normalization [arch]
 
