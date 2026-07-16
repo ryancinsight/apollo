@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## Provider default-source convergence [minor]
+
+- Target version: pre-1.0 minor releases; Rust 1.95 provider contract.
+- Phase: Closure
+- [x] Replace Moirai's retired release revision with its merged default source.
+- [x] Remove direct revisions and local patches for Eunomia, Mnemosyne,
+  Melinoe, Hermes, Leto, Moirai, and Hephaestus.
+- [x] Declare Rust 1.95 in every workspace member and advance each published
+  pre-1.0 package to its next minor release.
+- [x] Regenerate the lockfile after the merged Hermes, Leto, Hephaestus,
+  Moirai, and Themis heads, then prove a single first-party source identity.
+- [x] Prove Rust 1.95 accepts while Rust 1.94.1 rejects the graph; run the
+  provider audit, focused all-feature value-semantic gate, warning-denied
+  Clippy, rustdoc, and the minor SemVer comparison before publication.
+
 ## D8 NUFFT verification-tree normalization [major]
 
 - Target version: `apollo-nufft` 0.4.0 pre-1.0 breaking integration.
