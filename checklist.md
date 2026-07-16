@@ -758,7 +758,8 @@
   update the WGPU SSOT and Apollo helper constructor without compatibility code.
 - [x] Run format, warning-denied Clippy, all-feature nextest, doctest, rustdoc,
   Python boundary, provider audit, RustSec, dependency policy, and semver gates.
-- [ ] Synchronize the Atlas gitlink after the verified Apollo commit is pushed.
+- [x] Synchronize the Atlas gitlink after the verified Apollo commit is pushed.
+  Atlas PR 2 merged at `06dfcd821`, advancing `repos/apollo` to `937cf765`.
 - Evidence: all-target/all-feature Clippy is warning-clean; nextest passes
   1,029/1,029 including real WGPU execution; doctests and warning-denied rustdoc
   pass; Python smoke tests pass 34/34; provider audit and RustSec pass; cargo-deny
