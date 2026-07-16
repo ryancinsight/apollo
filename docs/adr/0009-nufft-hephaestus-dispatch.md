@@ -59,16 +59,20 @@ real-device reusable-buffer tests are empirical finite-precision evidence.
 ## Compatibility and migration
 
 `apollo-nufft` 0.4.0 removes the public `wgpu_backend` forwarding module and
-the public verification-only module. Both contained no supported public
-operation, but their paths were externally importable. Consumers import GPU
-plans, errors, capabilities, buffers, and `NufftWgpuBackend` directly from
-the `apollo_nufft` root. Verification remains private test infrastructure and
-has no runtime replacement.
+the public verification-only module. Version 0.5.0 removes the unused
+`nufft_wgpu_available` boolean probe: it only erased the acquisition failure
+from `NufftWgpuBackend::try_default()`. Consumers import GPU plans, errors,
+capabilities, buffers, and `NufftWgpuBackend` directly from the
+`apollo_nufft` root, then handle the typed provider acquisition result.
+Verification remains private test infrastructure and has no runtime
+replacement.
 
 ## Consequences
 
 The release has no compatibility shim or duplicate transport surface. The
 single root export path retains typed Hephaestus ownership, while Leto remains
-the host-array boundary. `cargo semver-checks` classifies the removed module
-paths as a breaking pre-1.0 change; finite-precision test evidence does not
-constitute a machine-checked proof.
+the host-array boundary. `NufftWgpuBackend::try_default` remains only because
+NuFFT must request its transform-specific seven-storage-buffer lower bound
+through the provider; it does not implement a device API. `cargo
+semver-checks` classifies the removed public paths as breaking pre-1.0 changes;
+finite-precision test evidence does not constitute a machine-checked proof.

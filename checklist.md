@@ -39,6 +39,15 @@
 - [x] Verify the restructured 73-case all-feature NUFFT suite; each private
   verification leaf is at or below 280 lines and no release module exists.
 
+## D8 NUFFT provider-acquisition wrapper removal [major]
+
+- Target version: `apollo-nufft` 0.5.0 pre-1.0 breaking integration.
+- Phase: Execution
+- [x] Delete the unused `nufft_wgpu_available` public boolean wrapper instead
+  of preserving a failure-erasing compatibility path.
+- [x] Verify the 0.5.0 major SemVer classification, focused/workspace gates,
+  provider audit, and source scan before publishing.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

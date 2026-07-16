@@ -20,12 +20,6 @@ use hephaestus_wgpu::{DevicePreference, WgpuDevice};
 
 const FAST_NUFFT_STORAGE_BINDINGS: u32 = 7;
 
-/// Return whether a default WGPU adapter/device can be acquired.
-#[must_use]
-pub fn nufft_wgpu_available() -> bool {
-    NufftWgpuBackend::try_default().is_ok()
-}
-
 /// WGPU NUFFT backend descriptor.
 #[derive(Debug, Clone)]
 pub struct NufftWgpuBackend {
