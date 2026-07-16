@@ -429,6 +429,18 @@ Remaining replacement work:
   existing finite-precision bound. Focused all-feature Nextest passes 55/55;
   locked workspace gates, provider audit, and patch SemVer classification pass.
   The scope adds no provider wrapper, fallback, or transform algorithm.
+  [x] [major] D8-GFT-verification-tree (owner Codex, completed 2026-07-16;
+  scope `crates/apollo-gft/src/infrastructure/transport/gpu/verification/`, ADR
+  0020): replace the 381-line private GPU verification monolith with separate
+  metadata, forward, inverse/reconstruction, Leto host-boundary,
+  represented-storage, precision-rejection, and shared-support leaves. Preserve
+  every fixture, CPU differential, graph-Fourier reconstruction theorem, and
+  derived finite-precision bound. The public test-only verification module and
+  `wgpu_backend` re-export are removed rather than preserved as a production
+  compatibility shell; `apollo-gft` advances to 0.5.0. Focused all-feature
+  Nextest passes 28/28; locked workspace gates, provider audit, and major SemVer
+  classification pass. The scope adds no provider wrapper, fallback, or
+  transform algorithm.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

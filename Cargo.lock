@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
