@@ -4,7 +4,7 @@ use super::support::{assert_matches_cpu, backend, cpu_input, forward_input};
 
 #[test]
 fn forward_matches_cpu_reference_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = forward_input();

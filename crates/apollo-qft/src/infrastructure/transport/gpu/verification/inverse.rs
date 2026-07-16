@@ -6,7 +6,7 @@ use super::support::{
 
 #[test]
 fn inverse_matches_cpu_reference_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = inverse_input();
@@ -24,7 +24,7 @@ fn inverse_matches_cpu_reference_when_device_exists() {
 
 #[test]
 fn inverse_recovers_forward_input_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = roundtrip_input();

@@ -36,7 +36,7 @@ fn unsupported_execution_error_identifies_operation() {
 
 #[test]
 fn backend_reports_forward_and_inverse_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let capabilities = backend.capabilities();

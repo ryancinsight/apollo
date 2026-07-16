@@ -8,13 +8,13 @@
   than restricting a skip to adapter absence.
 - Risk: provider initialization failures can appear as passing omitted QFT
   verification, concealing a real accelerator integration regression.
-- Planned resolution: make the helper map only `AdapterUnavailable` to an
-  optional backend and panic at the verification boundary for every other
-  typed provider error. Keep the direct `WgpuDevice` acquisition and existing
-  QFT CPU-oracle/theorem contracts unchanged.
-- Evidence target: compile-time exhaustive typed-error handling; focused
-  QFT all-feature diagnostics and Nextest; doctest; rustdoc; provider audit;
-  and an exact stale-pattern scan. No runtime GPU result is claimed without a
+- Resolution: the helper now maps only `AdapterUnavailable` to an optional
+  backend and panics at the verification boundary for every other typed
+  provider error. All ten callers use `Option`; direct `WgpuDevice` acquisition
+  and the QFT CPU-oracle/theorem contracts remain unchanged.
+- Evidence tier: compile-time exhaustive typed-error handling; focused QFT
+  all-feature diagnostics and Nextest; doctest; rustdoc; provider audit; and
+  an exact stale-pattern scan. No runtime GPU result is claimed without a
   compatible adapter.
 
 ## Radon benchmark provider-error preservation (2026-07-16)

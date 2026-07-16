@@ -4,7 +4,7 @@ use super::support::{backend, inverse_input, roundtrip_input};
 
 #[test]
 fn leto_forward_matches_slice_forward_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = roundtrip_input();
@@ -21,7 +21,7 @@ fn leto_forward_matches_slice_forward_when_device_exists() {
 
 #[test]
 fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let logical = roundtrip_input();
@@ -46,7 +46,7 @@ fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
 
 #[test]
 fn leto_inverse_matches_slice_inverse_when_device_exists() {
-    let Ok(backend) = backend() else {
+    let Some(backend) = backend() else {
         return;
     };
     let input = inverse_input();

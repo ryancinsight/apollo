@@ -131,8 +131,8 @@ Remaining replacement work:
     other provider fault must terminate the benchmark with its typed error.
     Acceptance: direct provider acquisition remains; benchmark compilation,
     focused Radon diagnostics/Nextest, provider audit, and source scan pass.
-  - [ ] [patch] QFT verification provider-error preservation (owner Codex;
-    in-progress 2026-07-16; scope
+  - [x] [patch] QFT verification provider-error preservation (owner Codex;
+    completed 2026-07-16; scope
     `crates/apollo-qft/src/infrastructure/transport/gpu/verification/`, D8 PM
     records): replace the shared `WgpuResult` acquisition helper and ten
     `let Ok` device-present test branches. Only `AdapterUnavailable` may skip;
