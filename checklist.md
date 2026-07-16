@@ -91,6 +91,20 @@
   warning-denied Clippy, Nextest (1,090/1,090), doctest, rustdoc, provider
   audit, and patch SemVer classification pass.
 
+## D8 Wavelet GPU verification-tree normalization [arch]
+
+- Target version: private verification structure; no transform API change.
+- Phase: Execution
+- [x] Record ADR 0016: Hephaestus retains provider mechanics while Wavelet
+  retains its Haar numerical contracts. The Haar orthonormality proof sketch
+  establishes inverse reconstruction and Parseval conservation.
+- [ ] Partition the 431-line private verification module into metadata,
+  forward, inverse-law, Leto host-boundary, and typed-storage leaves with one
+  shared acquisition support leaf.
+- [ ] Retain all fourteen device-present contract blocks, their fixtures, CPU
+  differentials, error values, and existing finite-precision bounds; then run
+  focused and locked workspace gates plus patch SemVer classification.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

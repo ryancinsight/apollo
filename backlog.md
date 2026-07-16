@@ -384,6 +384,14 @@ Remaining replacement work:
   (35/35), locked workspace format/examples/Clippy/Nextest (1,090/1,090),
   doctest, rustdoc, provider audit, and patch SemVer classification pass; no
   provider wrapper or GPU fallback was added.
+  [ ] [arch] D8-Wavelet-verification-tree (owner Codex, in progress
+  2026-07-15; scope
+  `crates/apollo-wavelet/src/infrastructure/transport/gpu/verification/`, ADR
+  0016): partition the 431-line private GPU verification monolith by metadata,
+  forward, inverse-law, Leto host-boundary, and typed-storage contracts.
+  Preserve every fixture, CPU oracle, and existing derived bound, including the
+  Haar reconstruction and Parseval laws. This must not add an Apollo provider
+  wrapper or a GPU fallback.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

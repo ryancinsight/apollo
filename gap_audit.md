@@ -232,6 +232,23 @@
   classification pass. This evidence is type-level tree structure plus
   empirical numerical verification, not a machine-checked theorem proof.
 
+## Wavelet GPU verification-tree normalization [arch]
+
+- Finding: `apollo-wavelet` keeps 431 lines of private GPU verification in one
+  module, mixing metadata, rejection, analytical Haar, inverse-law, CPU,
+  Leto, and represented-storage contracts.
+- Decision: ADR 0016 partitions this test-only tree by those contracts.
+  Hephaestus remains the sole owner of generic acquisition and execution;
+  Wavelet owns the transform-specific values and errors.
+- Mathematical contract: one Haar pair uses
+  `H = (1 / sqrt(2)) [[1, 1], [1, -1]]`, so `H^T H = I`. Multilevel
+  reconstruction and Parseval conservation follow by composition. Existing
+  finite-precision tests are empirical evidence for those statements, not a
+  machine-checked proof.
+- Acceptance: every moved test retains its fixture, oracle, and existing
+  derived bound; each private leaf is concern-named and bounded. No provider
+  wrapper, fallback, or transform algorithm enters this structural slice.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and
