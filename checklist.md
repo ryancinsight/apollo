@@ -109,6 +109,21 @@
   warning-denied Clippy, Nextest (1,103/1,103), doctest, rustdoc, provider
   audit, and patch SemVer classification pass.
 
+## D8 SFT GPU verification-tree normalization [arch]
+
+- Target version: private verification structure; no transform API change.
+- Phase: Execution
+- [x] Record ADR 0017: Hephaestus retains provider mechanics while SFT retains
+  sparse-domain numerical contracts. Dense inverse recovery follows
+  root-of-unity orthogonality; top-`k` projection is explicitly outside that
+  exact-recovery theorem.
+- [ ] Partition the 416-line private verification module into metadata,
+  forward, inverse, Leto host-boundary, typed-storage, precision-boundary, and
+  shared acquisition leaves.
+- [ ] Retain all twelve device-present contract blocks, their fixtures, CPU
+  differentials, rejection values, and existing finite-precision bounds; run
+  focused and locked workspace gates plus patch SemVer classification.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
