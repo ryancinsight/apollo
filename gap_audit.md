@@ -54,6 +54,26 @@
 - Residual risk: cross-transform backend/acquisition consolidation remains a
   Hephaestus-owned provider concern; this split adds no Apollo wrapper.
 
+## CZT GPU verification-tree normalization [arch]
+
+- Finding: the 395-line private CZT GPU verification module mixed static
+  metadata, direct CPU differential, impulse, Leto, represented-storage,
+  precision, rejection, and inverse contracts.
+- Resolution: `gpu/verification/` now has one manifest and eight
+  concern-named leaves. `support.rs` is the sole home for test device
+  acquisition, shared fixtures, and the existing analytical bounds; it owns no
+  provider implementation.
+- Mathematical contract: `X_k = sum_(n=0)^(N-1) x_n A^(-n) W^(nk)`. The
+  inverse round-trip applies only to the DFT specialization `A = 1`,
+  `W = exp(-2 pi i / N)`, and equal input/output lengths. ADR 0019 records the
+  proof sketch and the existing `8192 eps_f32` two-transform bound.
+- Evidence tier: 14 private contracts (two static, twelve device-present),
+  55/55 focused all-feature Nextest cases, locked workspace gates, provider
+  audit, and patch SemVer classification. This is finite-precision empirical
+  evidence, not a machine-checked proof.
+- Residual risk: cross-transform backend/acquisition consolidation remains a
+  Hephaestus-owned provider concern; this split adds no Apollo wrapper.
+
 ## DCT/DST GPU verification-tree normalization [arch]
 
 - Finding: the DCT/DST transport had a 796-line verification monolith mixing

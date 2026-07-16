@@ -420,6 +420,15 @@ Remaining replacement work:
   focused all-feature suite passes 43/43; the coherent Leto/Moirai/Hephaestus
   graph has one source identity per provider. No provider wrapper, fallback, or
   transform algorithm enters this structural slice.
+  [x] [arch] D8-CZT-verification-tree (owner Codex, completed 2026-07-16;
+  scope `crates/apollo-czt/src/infrastructure/transport/gpu/verification/`, ADR
+  0019): replace the 395-line private GPU verification monolith with separate
+  metadata, forward/impulse, inverse, Leto host-boundary, represented-storage,
+  precision rejection, pre-dispatch rejection, and shared-support leaves.
+  Preserve every fixture, CPU differential, DFT-specialization theorem, and
+  existing finite-precision bound. Focused all-feature Nextest passes 55/55;
+  locked workspace gates, provider audit, and patch SemVer classification pass.
+  The scope adds no provider wrapper, fallback, or transform algorithm.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
