@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Hilbert GPU verification is partitioned into metadata/rejection,
+  analytic/quadrature forward, inverse projection, Leto host-boundary,
+  represented-storage, precision-boundary, and shared-support leaves. The DFT
+  multiplier theorem `H(H(x)) = -x` remains explicitly restricted to the
+  zero-DC/Nyquist subspace; inverse execution therefore verifies its projected
+  reconstruction against an independent CPU frequency-domain oracle. All four
+  static and twelve device-present contracts now run independently, without a
+  public, mathematical, or Hephaestus-provider contract change.
 - [arch] SFT GPU verification is partitioned into metadata/rejection, forward,
   inverse-reconstruction, Leto host-boundary, represented-storage,
   explicit-precision, and shared-support leaves. The dense root-of-unity
@@ -80,9 +88,6 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   plan. Its f16 WGSL sources and radix-two capability are selected by a sealed
   storage contract; f32 retains radix-four selection without a second
   dispatcher. `ShaderF16` remains a required provider capability.
-- Apollo now tracks the Hephaestus default branch after its reviewed required-
-  feature acquisition API merged. `Cargo.lock` remains the reproducible pin.
-
 ### Breaking
 
 - [major] `apollo-czt` 0.5.0, `apollo-dctdst` 0.4.0, `apollo-dht` 0.4.0,
@@ -103,6 +108,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Fixed
 
+- [patch] Apollo pins Leto `30de5b7`, Moirai `33d4211`, and Hephaestus
+  `1e9a442` to the coherent provider graph and removes the obsolete workspace
+  Hermes path override. The established Eunomia and Melinoe development patches
+  remain while their upstream consumer line advances independently.
 - [patch] Restrict Cargo Deny's first-party Git allowlist to the
   `ryancinsight` GitHub organization. Other Git sources remain denied, while
   the locked Atlas provider graph remains reproducibly verifiable.

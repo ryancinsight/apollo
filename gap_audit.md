@@ -34,6 +34,26 @@
   value-semantic GPU tests. This does not prove driver correctness; it prevents
   uncoordinated concurrent device acquisition within the test run.
 
+## Hilbert GPU verification-tree normalization [arch]
+
+- Finding: the 410-line private Hilbert verification module mixed metadata,
+  analytic/quadrature execution, inverse projection, Leto boundaries, typed
+  storage, precision boundaries, and shared backend setup.
+- Resolution: `gpu/verification/` now has one manifest and seven
+  concern-named leaves. `support.rs` is the sole home for repeated device
+  acquisition; it owns no transform execution or provider implementation.
+- Mathematical contract: for the documented DFT convention, the multiplier is
+  `-i sgn(k)`. Thus `H(H(x)) = -x` only after DC and even-length Nyquist modes
+  are removed; inverse execution reconstructs that projection and compares it
+  with an independent CPU frequency-domain reference. ADR 0018 contains the
+  proof sketch.
+- Evidence tier: 16 private verification contracts (four static, twelve
+  device-present) and 43/43 all-feature package Nextest cases, plus Clippy,
+  doctest, rustdoc, provider audit, and patch SemVer classification. This is
+  finite-precision empirical evidence, not a machine-checked proof.
+- Residual risk: cross-transform backend/acquisition consolidation remains a
+  Hephaestus-owned provider concern; this split adds no Apollo wrapper.
+
 ## DCT/DST GPU verification-tree normalization [arch]
 
 - Finding: the DCT/DST transport had a 796-line verification monolith mixing
@@ -282,6 +302,25 @@
   doctest, rustdoc, provider audit, and patch SemVer classification pass. This
   evidence is type-level tree structure plus empirical numerical verification,
   not a machine-checked theorem proof.
+
+## Hilbert GPU verification-tree normalization [arch]
+
+- Finding: `apollo-hilbert` keeps 410 lines of private GPU verification in one
+  module, mixing metadata, rejection, CPU analytic/quadrature differentials,
+  inverse projection, Leto boundaries, represented storage, and explicit
+  precision conversion.
+- Decision: ADR 0018 partitions the test-only tree by those contracts.
+  Hephaestus remains the sole owner of generic acquisition and execution;
+  Hilbert owns transform-specific frequency-mask values and errors.
+- Mathematical contract: on the subspace without DC or Nyquist coefficients,
+  the multiplier `-i sgn(k)` satisfies `H(H(x)) = -x`. The inverse GPU mask
+  applies `-H`, so it reconstructs that projection rather than unrecoverable
+  DC/Nyquist components. Existing finite-precision tests are empirical
+  evidence, not a machine-checked proof.
+- Acceptance: every moved test retains its fixture, oracle, error value, and
+  existing derived bound; each private leaf is concern-named and bounded. No
+  provider wrapper, fallback, or transform algorithm enters this structural
+  slice.
 
 ## Shared Leto interop ownership [arch]
 
