@@ -35,6 +35,17 @@
   that exercise the published binding surface.
 - [x] Commit, push, and merge the verified increment through PR #37.
 
+## Radon benchmark provider-error preservation [patch]
+
+- Target version: internal benchmark correctness; no public API change.
+- Phase: Execution
+- [x] Identify the two Radon GPU benchmark acquisition sites that erase every
+  provider failure with `let Ok`.
+- [ ] Replace both sites with typed direct acquisition that skips only
+  `AdapterUnavailable` and surfaces every other provider error.
+- [ ] Verify benchmark compilation, focused Radon diagnostics/Nextest, provider
+  audit, and the source-residue scan; then commit, push, and merge the patch.
+
 ## D8 limit-bearing acquisition-forwarder removal [major]
 
 - Target version: `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 pre-1.0
