@@ -18,7 +18,7 @@ pub mod verification;
 pub use application::plan::RadonWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
-pub use infrastructure::device::{wgpu_available, RadonWgpuBackend};
+pub use infrastructure::device::RadonWgpuBackend;
 
 /// CPU transform marker proving dependency direction into the owning transform crate.
 pub type CpuTransformMarker = crate::RadonPlan;

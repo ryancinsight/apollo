@@ -15,12 +15,6 @@ thread_local! {
     static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    WaveletWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for the orthonormal Haar DWT.
 #[derive(Debug, Clone)]
 pub struct WaveletWgpuBackend {

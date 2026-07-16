@@ -59,6 +59,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-czt` 0.5.0, `apollo-dctdst` 0.4.0, `apollo-dht` 0.4.0,
+  `apollo-frft` 0.4.0, `apollo-fwht` 0.4.0, `apollo-gft` 0.4.0,
+  `apollo-hilbert` 0.6.0, `apollo-mellin` 0.5.0, `apollo-ntt` 0.4.0,
+  `apollo-qft` 0.4.0, `apollo-radon` 0.4.0, `apollo-sdft` 0.4.0,
+  `apollo-sft` 0.4.0, `apollo-sht` 0.4.0, `apollo-stft` 0.5.0, and
+  `apollo-wavelet` 0.4.0 remove unused `wgpu_available` boolean probes.
+  Migration: call the transform's typed Hephaestus backend constructor and
+  handle its provider result.
 - [major] `apollo-nufft` 0.5.0 removes the unused public
   `nufft_wgpu_available` boolean wrapper. Migration: call
   `NufftWgpuBackend::try_default()` and handle its typed provider result.

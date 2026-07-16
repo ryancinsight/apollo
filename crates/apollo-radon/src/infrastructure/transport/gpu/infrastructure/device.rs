@@ -10,12 +10,6 @@ use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult
 use crate::infrastructure::transport::gpu::infrastructure::kernel::RadonGpuKernel;
 use hephaestus_wgpu::WgpuDevice;
 
-/// Return whether a default WGPU adapter/device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    RadonWgpuBackend::try_default().is_ok()
-}
-
 /// WGPU backend descriptor.
 #[derive(Debug, Clone)]
 pub struct RadonWgpuBackend {

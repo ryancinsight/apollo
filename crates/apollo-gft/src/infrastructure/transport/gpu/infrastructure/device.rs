@@ -15,12 +15,6 @@ thread_local! {
     static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    GftWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for graph Fourier execution.
 #[derive(Debug, Clone)]
 pub struct GftWgpuBackend {

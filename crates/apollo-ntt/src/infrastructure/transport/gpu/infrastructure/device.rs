@@ -10,12 +10,6 @@ use crate::infrastructure::transport::gpu::infrastructure::kernel::{
     mod_pow_u64, NttGpuBuffers, NttGpuKernel, NttMode,
 };
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    NttWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for exact finite-field transforms.
 #[derive(Debug, Clone)]
 pub struct NttWgpuBackend {

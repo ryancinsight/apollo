@@ -37,12 +37,6 @@ thread_local! {
     static COMPLEX_SCRATCH: ScratchPool<Complex32> = const { ScratchPool::new() };
 }
 
-/// Return whether a default Hephaestus WGPU device can be acquired.
-#[must_use]
-pub fn wgpu_available() -> bool {
-    ShtWgpuBackend::try_default().is_ok()
-}
-
 /// Hephaestus WGPU backend for direct spherical harmonic execution.
 #[derive(Debug, Clone)]
 pub struct ShtWgpuBackend {

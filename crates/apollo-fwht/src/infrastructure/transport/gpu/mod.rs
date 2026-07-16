@@ -16,7 +16,7 @@ pub mod verification;
 pub use application::plan::FwhtWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
-pub use infrastructure::device::{wgpu_available, FwhtWgpuBackend};
+pub use infrastructure::device::FwhtWgpuBackend;
 
 /// CPU transform marker proving dependency direction into the owning transform crate.
 pub type CpuTransformMarker = crate::FwhtPlan;

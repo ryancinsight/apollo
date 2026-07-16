@@ -17,4 +17,4 @@ pub use application::plan::ShtWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use domain::storage::ShtGpuStorage;
-pub use infrastructure::device::{wgpu_available, ShtWgpuBackend};
+pub use infrastructure::device::ShtWgpuBackend;

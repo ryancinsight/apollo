@@ -48,6 +48,19 @@
 - [x] Verify the 0.5.0 major SemVer classification, focused/workspace gates,
   provider audit, and source scan before publishing.
 
+## D8 provider-acquisition probe removal [major]
+
+- Target version: pre-1.0 breaking increments for every affected transform.
+- Phase: Closure
+- [x] Record ADR 0013: delete unused consumer boolean probes; retain typed
+  Hephaestus acquisition and transform-specific provider limit requirements.
+- [x] Remove all sixteen remaining unused `wgpu_available` definitions and
+  re-exports, with no compatibility aliases.
+- [x] Verify the sixteen major SemVer classifications plus locked format,
+  examples-check, warning-denied Clippy, all-feature Nextest, doctest,
+  rustdoc, metadata, and provider-audit gates. The direct raw-WGPU and probe
+  source scans are empty.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

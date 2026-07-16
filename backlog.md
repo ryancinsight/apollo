@@ -356,6 +356,14 @@ Remaining replacement work:
   seven-storage-buffer limit; all callers must observe the provider result.
   Focused and workspace gates, provider audit, and 0.5.0 major SemVer
   classification pass.
+  [x] [major] D8-provider-acquisition-probes (owner Codex, completed
+  2026-07-15; scope
+  sixteen `crates/apollo-*/src/infrastructure/transport/gpu/` boundaries, ADR
+  0013): delete each unused public `wgpu_available` boolean probe and its
+  re-export. Retain only typed Hephaestus acquisition; transform-specific
+  provider limits stay in their owning transform backend. All sixteen
+  pre-1.0 major SemVer classifications plus locked workspace gates, provider
+  audit, and empty direct raw-WGPU/probe source scans pass.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
