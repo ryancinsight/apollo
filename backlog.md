@@ -409,15 +409,17 @@ Remaining replacement work:
   format/examples/Clippy/Nextest (1,114/1,114), doctest, rustdoc, provider
   audit, and patch SemVer classification pass; no provider wrapper or GPU
   fallback was added.
-  [>] [arch] D8-Hilbert-verification-tree (owner Codex, in progress
-  2026-07-15; scope
+  [x] [arch] D8-Hilbert-verification-tree (owner Codex, completed
+  2026-07-16; scope
   `crates/apollo-hilbert/src/infrastructure/transport/gpu/verification/`, ADR
-  0018): replace the 410-line private GPU verification monolith with
-  concern-named leaves for metadata/rejection, analytic/quadrature execution,
+  0018): replace the 410-line private GPU verification monolith with a manifest
+  and seven concern-named leaves for metadata/rejection, analytic/quadrature execution,
   inverse projection, Leto host boundaries, typed storage, explicit precision
-  boundaries, and shared acquisition. Preserve every device-present fixture,
-  CPU oracle, and derived finite-precision bound; no provider wrapper,
-  fallback, or transform algorithm enters this structural slice.
+  boundaries, and shared support. All four static and twelve device-present
+  contracts retain their CPU oracle and existing finite-precision bound. The
+  focused all-feature suite passes 43/43; the coherent Leto/Moirai/Hephaestus
+  graph has one source identity per provider. No provider wrapper, fallback, or
+  transform algorithm enters this structural slice.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

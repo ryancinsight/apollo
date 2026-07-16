@@ -134,12 +134,14 @@
 - [x] Record ADR 0018: Hephaestus retains provider mechanics while Hilbert
   retains its frequency-mask numerical contracts. The double-Hilbert theorem
   applies only after DC and Nyquist removal; the inverse remains a projection.
-- [ ] Partition the 410-line private verification module into metadata,
+- [x] Partition the 410-line private verification module into metadata,
   forward, inverse, Leto host-boundary, typed-storage, precision-boundary, and
   shared acquisition leaves.
-- [ ] Retain all twelve device-present contract blocks, their fixtures, CPU
-  differentials, rejection values, and existing finite-precision bounds; run
-  focused and locked workspace gates plus patch SemVer classification.
+- [x] Retain all four static and twelve device-present contract blocks, their
+  fixtures, CPU differentials, rejection values, and existing finite-precision
+  bounds. Evidence: 43/43 focused all-feature Nextest cases, doctest, rustdoc,
+  provider audit, one source identity per provider, and patch SemVer
+  classification (223 pass, 30 skip).
 
 ## D8 NTT verification-tree normalization [arch]
 

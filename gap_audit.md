@@ -34,6 +34,26 @@
   value-semantic GPU tests. This does not prove driver correctness; it prevents
   uncoordinated concurrent device acquisition within the test run.
 
+## Hilbert GPU verification-tree normalization [arch]
+
+- Finding: the 410-line private Hilbert verification module mixed metadata,
+  analytic/quadrature execution, inverse projection, Leto boundaries, typed
+  storage, precision boundaries, and shared backend setup.
+- Resolution: `gpu/verification/` now has one manifest and seven
+  concern-named leaves. `support.rs` is the sole home for repeated device
+  acquisition; it owns no transform execution or provider implementation.
+- Mathematical contract: for the documented DFT convention, the multiplier is
+  `-i sgn(k)`. Thus `H(H(x)) = -x` only after DC and even-length Nyquist modes
+  are removed; inverse execution reconstructs that projection and compares it
+  with an independent CPU frequency-domain reference. ADR 0018 contains the
+  proof sketch.
+- Evidence tier: 16 private verification contracts (four static, twelve
+  device-present) and 43/43 all-feature package Nextest cases, plus Clippy,
+  doctest, rustdoc, provider audit, and patch SemVer classification. This is
+  finite-precision empirical evidence, not a machine-checked proof.
+- Residual risk: cross-transform backend/acquisition consolidation remains a
+  Hephaestus-owned provider concern; this split adds no Apollo wrapper.
+
 ## DCT/DST GPU verification-tree normalization [arch]
 
 - Finding: the DCT/DST transport had a 796-line verification monolith mixing

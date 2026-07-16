@@ -64,12 +64,12 @@ mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", rev = "bb07447f6c71978c6fed47114ba9ecfda965ddc9", default-features = false, features = ["alloc"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "1423e41d01f4f7787472ddc91961f0771f9728fe" }
 half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
-leto = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
-leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "7f216f1df4b820e6f1e8c160b40e120fa4c22b43" }
+leto = { git = "https://github.com/ryancinsight/leto.git", rev = "30de5b797087ad92e21211dae7d22906b6ae2b83" }
+leto-ops = { git = "https://github.com/ryancinsight/leto.git", rev = "30de5b797087ad92e21211dae7d22906b6ae2b83" }
 # Hephaestus is Apollo's shared Atlas accelerator substrate (atlas ADR 0001).
 # Transform crates depend on its typed device and kernel contracts directly.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "1e9a442efb473594eb50c57f21ff4ebfcacc7d39" }
+hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git", rev = "1e9a442efb473594eb50c57f21ff4ebfcacc7d39" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"
@@ -78,7 +78,7 @@ quote = "1.0.46"
 pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
 rand = "0.10.2"
 # moirai: data-parallel runtime replacing direct scheduler usage.
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", features = ["melinoe"] }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "33d4211fb64a81f76943762366ef1225806b7b44", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 syn = { version = "2.0.118", features = ["full"] }
@@ -145,9 +145,6 @@ uninlined_format_args = "allow"
 
 [patch."https://github.com/ryancinsight/eunomia"]
 eunomia = { path = "../eunomia/crates/eunomia" }
-
-[patch."https://github.com/ryancinsight/hermes.git"]
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
