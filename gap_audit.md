@@ -223,6 +223,14 @@
 - Acceptance: every moved test retains its fixture, oracle, and existing
   derived bound; each private leaf is concern-named and bounded. No provider
   wrapper, fallback, or transform algorithm enters this structural slice.
+- Resolution: the manifest plus `metadata`, `forward`, `inverse`, `leto`,
+  `typed`, and shared `support` leaves are 7–150 lines. The former suite's
+  three static tests and fourteen device-present contracts now run
+  independently. Focused all-feature Nextest passes 38/38; locked workspace
+  format, examples check, warning-denied Clippy, Nextest (1,103/1,103),
+  doctest, rustdoc, provider audit, and patch SemVer classification pass. This
+  evidence is type-level tree structure plus empirical numerical verification,
+  not a machine-checked theorem proof.
 - Resolution: the manifest plus `metadata`, `forward`, `backprojection`,
   `leto`, `typed`, `filtered`, and shared `support` leaves are 7–123 lines.
   The former suite's five static tests and thirteen device-present contracts
@@ -231,6 +239,23 @@
   (1,090/1,090), doctest, rustdoc, provider audit, and patch SemVer
   classification pass. This evidence is type-level tree structure plus
   empirical numerical verification, not a machine-checked theorem proof.
+
+## Wavelet GPU verification-tree normalization [arch]
+
+- Finding: `apollo-wavelet` keeps 431 lines of private GPU verification in one
+  module, mixing metadata, rejection, analytical Haar, inverse-law, CPU,
+  Leto, and represented-storage contracts.
+- Decision: ADR 0016 partitions this test-only tree by those contracts.
+  Hephaestus remains the sole owner of generic acquisition and execution;
+  Wavelet owns the transform-specific values and errors.
+- Mathematical contract: one Haar pair uses
+  `H = (1 / sqrt(2)) [[1, 1], [1, -1]]`, so `H^T H = I`. Multilevel
+  reconstruction and Parseval conservation follow by composition. Existing
+  finite-precision tests are empirical evidence for those statements, not a
+  machine-checked proof.
+- Acceptance: every moved test retains its fixture, oracle, and existing
+  derived bound; each private leaf is concern-named and bounded. No provider
+  wrapper, fallback, or transform algorithm enters this structural slice.
 
 ## Shared Leto interop ownership [arch]
 
