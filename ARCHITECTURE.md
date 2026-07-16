@@ -85,12 +85,14 @@ When the `native-f16` feature is enabled, `GpuFft3dF16Native` requires
 `DeviceFeature::ShaderF16` from `hephaestus_wgpu::WgpuDevice` and executes all
 butterfly arithmetic in `f16` inside the shader. The host boundary converts
 `f32` input to half bit patterns before upload and half output to `f32` after
-readback. The sealed FFT storage contract reuses the f32 typed descriptor and
+readback. Callers acquire the feature-qualified device directly from
+Hephaestus and pass it to `GpuFft3dF16Native::try_from_device`. The sealed FFT
+storage contract reuses the f32 typed descriptor and
 command stream while selecting f16 WGSL and radix-two entries. Twiddle factors
 are computed in `f32` then narrowed to `f16`. Non-power-of-two sizes use the
 Bluestein chirp-Z shader (`chirp_native_f16.wgsl`); the 3×3×3 roundtrip test
 uses the derived `γ_265·‖input‖₁` bound with half unit roundoff `u = 2⁻¹¹`.
-No Apollo-owned WGPU API remains in this path.
+No Apollo-owned WGPU API or provider-acquisition wrapper remains in this path.
 
 ### Key: NTT precision contract
 

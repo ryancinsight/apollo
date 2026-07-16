@@ -15,6 +15,22 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## Native-f16 FFT provider-boundary cleanup [major]
+
+- Target version: `apollo-fft` 0.21.0 pre-1.0 breaking release.
+- Phase: Execution
+- [x] Record ADR 0029: direct Hephaestus acquisition, including
+  `ShaderF16`, stays outside the native-half FFT plan.
+- [x] Delete `GpuFft3dF16Native::try_new` without an alias; retain
+  `try_from_device` as the sole plan-construction boundary.
+- [x] Move the f16 value-semantic tests to direct feature-qualified provider
+  acquisition; only `AdapterUnavailable` may skip and every other provider
+  error must fail the test.
+- [x] Advance the pre-1.0 major version and synchronize the release records.
+- [x] Update to Hephaestus commit `369dff41` and verify focused native-f16
+  diagnostics/Nextest, doctest, rustdoc, provider audit, source scans, and
+  major SemVer; then commit, push, and merge.
+
 ## D8 FFT acquisition-forwarder removal [major]
 
 - Target version: `apollo-fft` 0.20.0 pre-1.0 breaking release.

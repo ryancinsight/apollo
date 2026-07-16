@@ -92,6 +92,7 @@ bound; real-device roundtrip remains empirical evidence.
   are value-semantic test targets.
 - `GpuFft3d::new` now accepts `WgpuDevice` rather than raw device/queue arcs;
   the pre-1.0 release advances to 0.16.0 after semver classification.
-- `GpuFft3dF16Native::{try_new,try_from_device}` now use the same typed device
-  boundary and require `DeviceFeature::ShaderF16`; the feature is mandatory,
-  not an optional fallback.
+- `GpuFft3dF16Native::try_from_device` is the native-half construction
+  boundary. Its caller acquires a typed Hephaestus device with
+  `DeviceFeature::ShaderF16`; the feature is mandatory, not an optional
+  fallback.
