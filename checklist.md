@@ -160,6 +160,25 @@
   check/Clippy/Nextest, doctest, rustdoc, provider audit, direct dependency
   scans, and patch SemVer classification (223 pass, 30 skip).
 
+## D8 GFT GPU verification-tree normalization [arch]
+
+- Target version: `apollo-gft` 0.5.0 pre-1.0 breaking integration.
+- Phase: Closure
+- [x] Record ADR 0020: an orthonormal graph basis obeys `U^T U = I`, so the
+  graph-Fourier inverse reconstructs the input; the path-four CPU plan remains
+  the independent oracle and the existing `2^-17` bound remains unchanged.
+- [x] Partition the private 381-line verification module into metadata,
+  forward, inverse/reconstruction, Leto host-boundary, represented-storage,
+  precision rejection, and shared-support leaves.
+- [x] Retain all static and device-present contracts, fixtures, CPU
+  differentials, caller-owned output equivalence, rejection values, and the
+  existing bound; run focused and locked workspace gates plus patch SemVer
+  classification. Evidence: 28/28 focused all-feature Nextest cases, locked
+  workspace check/Clippy/Nextest, doctest, rustdoc, provider audit, direct
+  dependency scans, and major SemVer classification. Delete the public
+  test-only verification module and `wgpu_backend` re-export rather than keep
+  a production compatibility shell.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.

@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] GFT GPU verification is partitioned into metadata, forward, inverse
+  reconstruction, Leto host-boundary, represented-storage, precision-rejection,
+  and shared-support leaves. ADR 0020 records the orthonormal graph-Fourier
+  pair `x_hat = U^T x`, `x = U x_hat`; its path-four CPU differential and
+  existing finite-precision bound remain unchanged. No public, mathematical, or
+  Hephaestus-provider contract changes.
 - [arch] CZT GPU verification is partitioned into metadata, forward/impulse,
   inverse, Leto host-boundary, represented-storage, precision-rejection,
   pre-dispatch-rejection, and shared-support leaves. ADR 0019 records the CZT
@@ -96,6 +102,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   dispatcher. `ShaderF16` remains a required provider capability.
 ### Breaking
 
+- [major] `apollo-gft` 0.5.0 removes its public GPU verification module and
+  `wgpu_backend` re-export. The contracts are crate-private test evidence, not
+  runtime API. Migration: no runtime replacement exists; import only the typed
+  GFT accelerator API from `apollo_gft`.
 - [major] `apollo-czt` 0.5.0, `apollo-dctdst` 0.4.0, `apollo-dht` 0.4.0,
   `apollo-frft` 0.4.0, `apollo-fwht` 0.4.0, `apollo-gft` 0.4.0,
   `apollo-hilbert` 0.6.0, `apollo-mellin` 0.5.0, `apollo-ntt` 0.4.0,

@@ -74,6 +74,27 @@
 - Residual risk: cross-transform backend/acquisition consolidation remains a
   Hephaestus-owned provider concern; this split adds no Apollo wrapper.
 
+## GFT GPU verification-tree normalization [arch]
+
+- Finding: the 381-line private GFT GPU verification module mixed static
+  metadata, CPU differentials, reconstruction, caller-owned output, Leto
+  boundaries, represented storage, and precision rejection.
+- Resolution: `gpu/verification/` now has one manifest and seven
+  concern-named leaves. `support.rs` is the sole home for test device
+  acquisition, the path-four fixture, and the derived numerical bound; it owns
+  no provider implementation. The prior public test-only module and its
+  `wgpu_backend` re-export are removed in `apollo-gft` 0.5.0.
+- Mathematical contract: for an orthonormal graph basis, `x_hat = U^T x` and
+  `x = U x_hat`, because `U^T U = I`. The path-four CPU plan supplies the
+  independent oracle. ADR 0020 records the proof sketch and existing `2^-17`
+  finite-precision bound.
+- Evidence tier: 13 private contracts (three static, ten device-present),
+  28/28 focused all-feature Nextest cases, locked workspace gates, provider
+  audit, and patch SemVer classification. This is finite-precision empirical
+  evidence, not a machine-checked proof.
+- Residual risk: cross-transform backend/acquisition consolidation remains a
+  Hephaestus-owned provider concern; this split adds no Apollo wrapper.
+
 ## DCT/DST GPU verification-tree normalization [arch]
 
 - Finding: the DCT/DST transport had a 796-line verification monolith mixing
