@@ -24,6 +24,9 @@
 - [x] Move the benchmark and private device-present regressions to direct
   Hephaestus acquisition; only `AdapterUnavailable` skips and every other
   provider failure surfaces.
+- [x] Cache the benchmark's directly acquired Hephaestus device once, cloning
+  its shared provider handle for each fixed-dimension plan without timing
+  driver initialization.
 - [x] Migrate the PyO3 capability probe and validation GPU suite to direct
   typed Hephaestus acquisition; stale consumer factory calls are absent.
 - [x] Update the lockfile and verify all-target diagnostics, focused Nextest,

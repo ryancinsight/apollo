@@ -9,6 +9,7 @@ use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
 use leto::Array3;
 use std::hint::black_box;
+use std::sync::OnceLock;
 
 fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
     Array3::from_shape_fn([nx, ny, nz], |[i, j, k]| {
@@ -17,12 +18,22 @@ fn real_field(nx: usize, ny: usize, nz: usize) -> Array3<f64> {
     })
 }
 
+fn benchmark_device() -> Option<hephaestus_wgpu::WgpuDevice> {
+    static DEVICE: OnceLock<Option<hephaestus_wgpu::WgpuDevice>> = OnceLock::new();
+
+    DEVICE
+        .get_or_init(
+            || match hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench") {
+                Ok(device) => Some(device),
+                Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+                Err(error) => panic!("FFT GPU benchmark requires a working provider: {error}"),
+            },
+        )
+        .clone()
+}
+
 fn try_fft_plan(nx: usize, ny: usize, nz: usize) -> Option<GpuFft3d> {
-    let device = match hephaestus_wgpu::WgpuDevice::try_default("apollo-fft-wgpu-bench") {
-        Ok(device) => device,
-        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => return None,
-        Err(error) => panic!("FFT GPU benchmark requires a working provider: {error}"),
-    };
+    let device = benchmark_device()?;
     Some(
         GpuFft3d::new(device, nx, ny, nz)
             .expect("invariant: fixed benchmark dimensions form a valid FFT plan"),
