@@ -196,6 +196,22 @@
   locked workspace check/Clippy/Nextest, doctest, rustdoc, provider audit,
   direct dependency scans, and major SemVer classification.
 
+## D8 SHT GPU verification-tree normalization [major]
+
+- Target version: `apollo-sht` pre-1.0 breaking verification-boundary cleanup.
+- Phase: Execution
+- [x] Record ADR 0022: Gauss-Legendre exactness and spherical-harmonic
+  orthonormality yield `inverse(forward(f)) = f` for the documented
+  band-limited grid; preserve the CPU representation differential as empirical
+  finite-precision evidence.
+- [ ] Partition the 343-line GPU verification monolith into test-private
+  metadata, rejection, forward, inverse, Leto host-boundary, typed-storage,
+  and shared-support leaves.
+- [ ] Preserve all original fixtures, rejection values, CPU oracles, and
+  tolerances; remove the public test-only transport path without a release
+  wrapper; then run SemVer, focused/workspace gates, provider audit, and source
+  residue scans.
+
 ## D8 NTT verification-tree normalization [arch]
 
 - Target version: internal verification structure; no transform API change.
