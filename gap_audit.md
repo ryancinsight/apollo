@@ -105,8 +105,9 @@
 - Resolution: `gpu/verification/` now has one test-only manifest and seven
   concern-named leaves. `support.rs` is the sole home for test acquisition,
   shared fixtures, CPU comparison, and the existing bounds. The public
-  verification module and `wgpu_backend::verification` path are removed in
-  `apollo-qft` 0.5.0 rather than retained as empty compatibility modules.
+  verification module and obsolete `wgpu_backend` forwarding module are
+  removed in `apollo-qft` 0.5.0 rather than retained as empty compatibility
+  modules.
 - Mathematical contract: `U[k, j] = exp(2 pi i k j / N) / sqrt(N)`. Discrete
   Fourier orthogonality gives `U^dagger U = I`, so inverse execution
   reconstructs the input and forward execution preserves the L2 norm. ADR 0021
@@ -117,6 +118,10 @@
   workspace check/Clippy/Nextest (1,155/1,155), doctest, rustdoc, provider
   audit, direct raw-WGPU/probe scans, and major SemVer classification. This is
   finite-precision empirical evidence, not a machine-checked proof.
+- Review: an independent post-partition diff review found a duplicated CPU
+  conversion and the obsolete `wgpu_backend` forwarding module. The conversion
+  now has one support-leaf home; the forwarding module is deleted. No P0 or P1
+  finding remains in the changed scope.
 - Residual risk: cross-transform backend/acquisition consolidation remains a
   Hephaestus-owned provider concern; this split adds no Apollo wrapper.
 

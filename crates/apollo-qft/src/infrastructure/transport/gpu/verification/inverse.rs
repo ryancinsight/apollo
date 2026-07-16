@@ -1,9 +1,7 @@
 use crate::{QftPlan, QuantumStateDimension};
-use eunomia::Complex64;
-use leto::Array1;
 
 use super::support::{
-    assert_matches_cpu, backend, inverse_input, roundtrip_input, ROUNDTRIP_TOLERANCE,
+    assert_matches_cpu, backend, cpu_input, inverse_input, roundtrip_input, ROUNDTRIP_TOLERANCE,
 };
 
 #[test]
@@ -18,12 +16,7 @@ fn inverse_matches_cpu_reference_when_device_exists() {
         .expect("wgpu inverse execution");
 
     let cpu_plan = QftPlan::new(QuantumStateDimension::new(input.len()).expect("dimension"));
-    let cpu_input = Array1::from(
-        input
-            .iter()
-            .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
-            .collect::<Vec<_>>(),
-    );
+    let cpu_input = cpu_input(&input);
     let cpu = cpu_plan.inverse(&cpu_input).expect("cpu inverse");
 
     assert_matches_cpu(&gpu, &cpu, "inverse");

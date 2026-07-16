@@ -36,6 +36,15 @@ pub(super) fn roundtrip_input() -> Vec<Complex32> {
     ]
 }
 
+pub(super) fn cpu_input(input: &[Complex32]) -> Array1<Complex64> {
+    Array1::from(
+        input
+            .iter()
+            .map(|value| Complex64::new(f64::from(value.re), f64::from(value.im)))
+            .collect::<Vec<_>>(),
+    )
+}
+
 pub(super) fn assert_matches_cpu(
     actual: &[Complex32],
     expected: &Array1<Complex64>,

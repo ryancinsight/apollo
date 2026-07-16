@@ -448,11 +448,12 @@ Remaining replacement work:
   represented-storage, precision-rejection, pre-dispatch rejection, and shared
   support leaves. Preserve each fixture, CPU differential, QFT unitarity law,
   and derived finite-precision bound. Remove the public test-only transport
-  verification path rather than preserve an empty release wrapper; classify the
-  resulting `apollo-qft` 0.5.0 API removal with `cargo-semver-checks`. Focused
-  all-feature Nextest passes 37/37; locked workspace gates, provider audit, and
-  major SemVer classification pass. No provider wrapper, fallback, or transform
-  algorithm belongs in this structural slice.
+  verification path and obsolete `wgpu_backend` forwarding module rather than
+  preserve release wrappers; classify the resulting `apollo-qft` 0.5.0 API
+  removal with `cargo-semver-checks`. Focused all-feature Nextest passes 37/37;
+  locked workspace gates, provider audit, and major SemVer classification pass.
+  No provider wrapper, fallback, or transform algorithm belongs in this
+  structural slice.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

@@ -14,9 +14,10 @@ public transport path even though its contents exist only under `cfg(test)`.
 ## Decision
 
 Replace the monolith with a test-only manifest and concern-named leaves.
-`support` owns only device acquisition and the established finite-precision
-bounds; it does not wrap or implement a provider API. Hephaestus retains device
-mechanics; Apollo retains QFT mathematics; Leto owns host-array/view boundaries.
+`support` owns test device acquisition, shared fixtures, CPU-oracle conversion
+and comparison, and the established finite-precision bounds; it does not wrap
+or implement a provider API. Hephaestus retains device mechanics; Apollo retains
+QFT mathematics; Leto owns host-array/view boundaries.
 
 For the QFT matrix `U`, `U[k, j] = exp(2 pi i k j / N) / sqrt(N)`. Discrete
 Fourier orthogonality gives
@@ -27,10 +28,10 @@ The existing direct CPU-differential and two-launch round-trip bounds remain
 `2.0e-4` and `5.0e-4`; this structural change only moves them into named test
 support constants.
 
-The public test-only transport verification path and
-`wgpu_backend::verification` re-export path are removed rather than kept as
-empty release wrappers. `cargo-semver-checks` identifies both paths as a
-pre-1.0 major removal, so `apollo-qft` advances to 0.5.0.
+The public test-only transport verification path and obsolete `wgpu_backend`
+forwarding module are removed rather than kept as empty release wrappers.
+`cargo-semver-checks` identifies the affected public paths as a pre-1.0 major
+removal, so `apollo-qft` advances to 0.5.0.
 
 ## Consequences
 

@@ -191,8 +191,8 @@
   rejection, and shared device-acquisition contracts into test-private leaves.
 - [x] Preserve every fixture and value-semantic assertion; verify focused and
   locked workspace gates, provider audit, residue scans, doctest, rustdoc, and
-  the correct pre-1.0 SemVer classification without retaining a release
-  compatibility module. Evidence: 37/37 focused all-feature Nextest cases,
+  the correct pre-1.0 SemVer classification without retaining test-only or
+  forwarding release compatibility modules. Evidence: 37/37 focused all-feature Nextest cases,
   locked workspace check/Clippy/Nextest, doctest, rustdoc, provider audit,
   direct dependency scans, and major SemVer classification.
 

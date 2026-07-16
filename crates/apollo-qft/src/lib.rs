@@ -19,10 +19,5 @@ pub use application::execution::plan::qft::{
 pub use domain::contracts::error::{QftError, QftResult};
 pub use domain::state::dimension::{is_valid_length, QuantumStateDimension};
 
-/// GPU-accelerated backend using WGPU.
-#[cfg(feature = "wgpu")]
-pub mod wgpu_backend {
-    pub use crate::infrastructure::transport::gpu::*;
-}
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;
