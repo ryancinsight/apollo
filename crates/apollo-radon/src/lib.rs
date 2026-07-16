@@ -19,8 +19,8 @@ pub mod application;
 pub mod domain;
 /// Infrastructure kernel namespace.
 pub mod infrastructure;
-/// Value-semantic verification.
-pub mod verification;
+#[cfg(test)]
+mod verification;
 
 pub use application::execution::plan::radon::{RadonPlan, RadonStorage};
 pub use domain::contracts::error::{RadonError, RadonResult};

@@ -1,5 +1,22 @@
 # Apollo Gap Audit
 
+## Root verification-boundary removal [major]
+
+- Finding: ten transform crates publish root `verification` modules whose
+  content is entirely test-gated. The paths are empty in release artifacts, and
+  DCT/DST combines four test concerns in a 672-line root module.
+- Resolution: ADR 0025 removes every root release path and partitions DCT/DST
+  into transform-local private leaves. No theorem, CPU oracle, fixture, derived
+  tolerance, Leto boundary, or Hephaestus contract changes.
+- Evidence: the root public-path scan is empty, all DCT/DST leaves are at most
+  209 lines, and the original and restructured trees expose the same 42 test
+  function names. Focused and workspace all-feature value-semantic Nextest,
+  warning-denied Clippy, affected doctests, workspace rustdoc, example
+  compilation, and `xtask provider-audit` pass. All ten pre-1.0 major SemVer
+  comparisons against `origin/main` pass; each reports no required update under
+  the explicit major-change assumption. This is API-surface and empirical test
+  evidence, not a machine-checked proof of accelerator behavior.
+
 ## Transport verification-boundary removal [major]
 
 - Finding: thirteen transport `verification` modules are public despite

@@ -10,8 +10,8 @@ pub mod application;
 pub mod domain;
 /// Infrastructure kernels.
 pub mod infrastructure;
-/// Value-semantic verification.
-pub mod verification;
+#[cfg(test)]
+mod verification;
 
 pub use application::execution::plan::qft::{
     iqft, iqft_leto, qft, qft_leto, QftGpuStorage, QftPlan, QftStorage,

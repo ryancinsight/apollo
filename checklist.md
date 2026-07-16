@@ -15,6 +15,22 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## D8 root verification-boundary removal [major]
+
+- Target version: pre-1.0 breaking increments for ten transform crates.
+- Phase: Closure
+- [x] Record ADR 0025: root verification is private test evidence, and the
+  DCT/DST root is split by operation concern without changing its laws.
+- [x] Inventory the ten root paths and verify every body is gated by
+  `cfg(test)`; identify the DCT/DST 672-line multi-concern monolith.
+- [x] Make every root verification declaration private and test-gated with no
+  compatibility alias.
+- [x] Partition DCT/DST verification into plan, multidimensional, direct-law,
+  and property-law leaves below 500 lines without changing assertions.
+- [x] Update versions, lockfile, changelog, and PM records.
+- [x] Verify focused/workspace value-semantic Nextest, diagnostics, doctest,
+  rustdoc, provider audit, residue scans, and major SemVer classification.
+
 ## D8 root accelerator-forwarder removal [major]
 
 - Target version: pre-1.0 breaking increments for thirteen transform crates.
