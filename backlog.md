@@ -372,6 +372,18 @@ Remaining replacement work:
   geometry/value contracts. Locked workspace gates, provider audit, and patch
   SemVer classification pass; no provider wrapper or transform implementation
   was added.
+  [x] [arch] D8-Radon-verification-tree (owner Codex, completed 2026-07-15;
+  scope `crates/apollo-radon/src/infrastructure/transport/gpu/verification/`,
+  ADR 0015): partition the 536-line private GPU verification monolith into
+  seven 7–123-line concern-named leaves for
+  metadata, projection, backprojection, Leto host-boundary, typed-storage, and
+  filtered-backprojection contracts. All five static tests and thirteen
+  device-present contract blocks now run independently. Their fixtures, CPU
+  oracles, and existing derived bounds, including ADR 0007's discrete-adjoint
+  and Ram-Lak FBP contracts, remain unchanged. Focused all-feature Nextest
+  (35/35), locked workspace format/examples/Clippy/Nextest (1,090/1,090),
+  doctest, rustdoc, provider audit, and patch SemVer classification pass; no
+  provider wrapper or GPU fallback was added.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

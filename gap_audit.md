@@ -207,6 +207,31 @@
   or allocated geometry and zero-value contracts. Focused and locked
   all-feature gates, provider audit, and patch SemVer classification pass.
 
+## Radon GPU verification-tree normalization [arch]
+
+- Finding: `apollo-radon` keeps 536 lines of private GPU verification in one
+  module, mixing metadata, CPU projection/backprojection differentials, Leto
+  boundaries, represented-storage values, rejection paths, and theorem checks.
+- Decision: ADR 0015 partitions the test-only tree by those contracts.
+  Hephaestus remains the sole owner of generic acquisition and execution;
+  Radon owns the transform-specific values and errors.
+- Mathematical contract: ADR 0007's paired interpolation establishes the
+  discrete adjoint identity `<R f, p> = <f, R* p>` in exact arithmetic, while
+  filtered backprojection is `(pi / A) R*(h * p)`. Existing finite-precision
+  tests are empirical evidence for those statements, not a machine-checked
+  proof.
+- Acceptance: every moved test retains its fixture, oracle, and existing
+  derived bound; each private leaf is concern-named and bounded. No provider
+  wrapper, fallback, or transform algorithm enters this structural slice.
+- Resolution: the manifest plus `metadata`, `forward`, `backprojection`,
+  `leto`, `typed`, `filtered`, and shared `support` leaves are 7–123 lines.
+  The former suite's five static tests and thirteen device-present contracts
+  now run independently. Focused all-feature Nextest passes 35/35; locked
+  workspace format, examples check, warning-denied Clippy, Nextest
+  (1,090/1,090), doctest, rustdoc, provider audit, and patch SemVer
+  classification pass. This evidence is type-level tree structure plus
+  empirical numerical verification, not a machine-checked theorem proof.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and
