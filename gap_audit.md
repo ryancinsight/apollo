@@ -189,6 +189,24 @@
   boundary. This is API/type-level and empirical test evidence, not a
   machine-checked theorem or GPU-performance proof.
 
+## STFT GPU verification-tree normalization [arch]
+
+- Finding: `apollo-stft` holds 961 lines of private GPU tests in one module,
+  mixing independent metadata, CPU-differential, reconstruction, typed-host,
+  and reusable-storage contracts.
+- Decision: ADR 0014 partitions this test-only tree by contract. The existing
+  weighted-overlap-add theorem and finite-precision evidence from ADR 0008
+  remain unchanged. Hephaestus retains generic acquisition; STFT capability
+  and error types remain local domain contracts.
+- Acceptance: each leaf is concern-named and bounded; every relocated test
+  retains its existing value oracle and tolerance; focused and locked
+  workspace gates pass. This is not a new GPU-correctness proof.
+- Resolution: the manifest plus `metadata`, `forward`, `inverse`, `typed`,
+  `reusable`, and shared `support` leaves are 7–297 lines. All 44 tests run.
+  The four former existence-only Chirp-Z/buffer checks now assert CPU values
+  or allocated geometry and zero-value contracts. Focused and locked
+  all-feature gates, provider audit, and patch SemVer classification pass.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and

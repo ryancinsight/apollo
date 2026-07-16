@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] STFT GPU verification is partitioned into metadata, forward,
+  inverse/weighted-overlap-add, typed Leto-boundary, reusable-storage, and
+  shared-support leaves. The existing WOLA theorem and 44 value-semantic tests
+  remain; four former existence-only Chirp-Z and buffer checks now assert CPU
+  differentials or explicit storage values. This changes no public or runtime
+  contract.
 - [arch] NUFFT GPU verification is partitioned into metadata, reusable-buffer,
   direct/fast Type-1/Type-2 dimensional, and shared-support leaves. Existing
   CPU differentials, Leto host boundaries, finite-precision tolerances, and
