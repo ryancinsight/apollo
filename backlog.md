@@ -108,6 +108,15 @@ Remaining replacement work:
   Hephaestus boundaries; the obsolete wrapper crate is deleted without a
   compatibility substrate. Native-half FFT transport now shares the same typed
   provider core, completing the stage.
+  - [x] [major] D8 limit-bearing acquisition-forwarder removal (owner Codex,
+    completed 2026-07-16; scope `apollo-nufft`, `apollo-stft`, ADR 0027, and
+    D8 PM records): delete both remaining public `try_default` factories.
+    Each backend owns only its resource-limit requirement (seven NUFFT or six
+    Bluestein storage buffers); test and benchmark callers acquire a typed
+    Hephaestus device directly and construct the transform backend with it.
+    Acceptance: no old factory residue, resource values pinned without
+    hardware, direct provider acquisition, and focused/workspace/provider/
+    SemVer gates.
   - [x] D6-helper-delete [arch] (owner Codex; scope `Cargo.toml`, `Cargo.lock`,
     `crates/apollo-wgpu-helpers/`, active D6 documentation, and PM entries):
     locked metadata, provider audit, `xtask` contract tests, focused NUFFT

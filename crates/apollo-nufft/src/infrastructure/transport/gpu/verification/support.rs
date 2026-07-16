@@ -9,7 +9,16 @@ use crate::{
 };
 
 pub(super) fn backend() -> Option<NufftWgpuBackend> {
-    NufftWgpuBackend::try_default().ok()
+    match hephaestus_wgpu::WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+        "apollo-nufft-wgpu",
+        hephaestus_core::DevicePreference::HighPerformance,
+        &[],
+        NufftWgpuBackend::required_device_limits(),
+    ) {
+        Ok(device) => Some(NufftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("NUFFT GPU verification requires a working provider: {error}"),
+    }
 }
 
 pub(super) fn assert_complex64_close(actual: Complex64, expected: Complex64, tolerance: f64) {

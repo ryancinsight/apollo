@@ -15,6 +15,24 @@
   provider audit, focused all-feature value-semantic gate, warning-denied
   Clippy, rustdoc, and the minor SemVer comparison before publication.
 
+## D8 limit-bearing acquisition-forwarder removal [major]
+
+- Target version: `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 pre-1.0
+  breaking releases.
+- Phase: Closure
+- [x] Record ADR 0027: static transform resource limits remain local while
+  Hephaestus owns all device acquisition.
+- [x] Delete both public limit-bearing `try_default` factories without an
+  alias; retain one backend-local `required_device_limits` source per kernel
+  family.
+- [x] Move test and benchmark acquisition to direct Hephaestus calls using the
+  canonical limit metadata; adapter absence alone skips device-present tests.
+- [x] Pin the seven-buffer NUFFT and six-buffer Bluestein preconditions with
+  hardware-free value-semantic tests and document the resource theorem.
+- [x] Regenerate the lockfile and verify the 119-case focused all-feature
+  Nextest gate, all-target warning-denied diagnostics, doctest, rustdoc,
+  provider audit, source scan, and both major SemVer classifications.
+
 ## D8 provider acquisition-forwarder removal [major]
 
 - Target version: pre-1.0 breaking increments for fifteen transform crates.

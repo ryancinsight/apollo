@@ -10,12 +10,18 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-nufft` 0.7.0 and `apollo-stft` 0.8.0 no longer expose
+  limit-bearing `try_default` acquisition wrappers. Callers acquire a typed
+  Hephaestus device using the backend's canonical
+  `required_device_limits`, then construct the backend with `new(device)`.
+  Fast NUFFT requests seven storage buffers and STFT Bluestein requests six;
+  ADR 0027 records the resource-precondition theorem and its evidence scope.
 - [major] Fifteen transform GPU backends no longer expose zero-behavior
   `try_default` acquisition wrappers. Callers acquire the typed device from
   Hephaestus and construct the transform backend with it; device-present tests
-  skip only a missing adapter and surface every other provider fault. NUFFT,
-  STFT, and the shared FFT adapter retain their nontrivial acquisition
-  contracts. ADR 0026 records the boundary.
+  skip only a missing adapter and surface every other provider fault. ADR 0027
+  removes the former NUFFT/STFT limit-bearing factories; the shared FFT adapter
+  retains its nontrivial acquisition contract. ADR 0026 records the boundary.
 - [major] Ten transform crate-root `verification` paths are now private,
   test-gated modules rather than release API. DCT/DST further partitions its
   672-line test monolith into private one-dimensional, multidimensional,

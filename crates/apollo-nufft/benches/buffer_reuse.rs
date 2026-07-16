@@ -72,8 +72,21 @@ fn plan_3d(n: usize, oversampling: usize, kernel_width: usize) -> Option<NufftWg
     Some(NufftWgpuPlan3D::new(grid, oversampling, kernel_width))
 }
 
+fn try_backend() -> Option<NufftWgpuBackend> {
+    match hephaestus_wgpu::WgpuDevice::try_with_device_preference_and_optional_device_features_and_limits(
+        "apollo-nufft-wgpu-bench",
+        hephaestus_core::DevicePreference::HighPerformance,
+        &[],
+        NufftWgpuBackend::required_device_limits(),
+    ) {
+        Ok(device) => Some(NufftWgpuBackend::new(device)),
+        Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
+        Err(error) => panic!("NUFFT GPU benchmark requires a working provider: {error}"),
+    }
+}
+
 fn bench_fast_type1_1d(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = NufftWgpuBackend::try_default() else {
+    let Some(backend) = try_backend() else {
         eprintln!("No WGPU device available; skipping fast_type1_1d buffer_reuse benchmarks");
         return;
     };
@@ -118,7 +131,7 @@ fn bench_fast_type1_1d(suite: &mut BenchmarkSuite) {
 }
 
 fn bench_fast_type2_1d(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = NufftWgpuBackend::try_default() else {
+    let Some(backend) = try_backend() else {
         eprintln!("No WGPU device available; skipping fast_type2_1d buffer_reuse benchmarks");
         return;
     };
@@ -163,7 +176,7 @@ fn bench_fast_type2_1d(suite: &mut BenchmarkSuite) {
 }
 
 fn bench_fast_type1_3d(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = NufftWgpuBackend::try_default() else {
+    let Some(backend) = try_backend() else {
         eprintln!("No WGPU device available; skipping fast_type1_3d buffer_reuse benchmarks");
         return;
     };
@@ -214,7 +227,7 @@ fn bench_fast_type1_3d(suite: &mut BenchmarkSuite) {
 }
 
 fn bench_fast_type2_3d(suite: &mut BenchmarkSuite) {
-    let Ok(backend) = NufftWgpuBackend::try_default() else {
+    let Some(backend) = try_backend() else {
         eprintln!("No WGPU device available; skipping fast_type2_3d buffer_reuse benchmarks");
         return;
     };

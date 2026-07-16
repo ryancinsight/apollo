@@ -1,6 +1,6 @@
 //! NUFFT WGPU infrastructure.
 
-/// WGPU device acquisition.
+/// Provider-built device backend descriptor.
 pub mod device;
 /// NUFFT compute kernel orchestration.
 pub mod kernel;

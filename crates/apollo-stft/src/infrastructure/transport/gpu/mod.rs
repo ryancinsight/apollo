@@ -8,7 +8,7 @@
 pub mod application;
 /// Domain contracts for WGPU execution.
 pub mod domain;
-/// Infrastructure boundary for WGPU device acquisition and kernel execution.
+/// Infrastructure boundary for provider-built device kernel execution.
 pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
