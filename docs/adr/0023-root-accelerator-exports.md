@@ -20,7 +20,7 @@ accelerator path. Consumers import typed accelerator items directly from their
 transform crate; they never import a raw WGPU surface from Apollo.
 
 No transform theorem or numerical contract changes: the same Leto host
-boundary and Hephaestus typed execution remain in force. The claim is verified
+boundary and Hephaestus-typed execution remain in force. The claim is verified
 by source inspection and value-semantic transform tests; it is not a
 machine-checked proof of GPU behavior.
 
