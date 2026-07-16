@@ -199,7 +199,7 @@
 ## D8 SHT GPU verification-tree normalization [major]
 
 - Target version: `apollo-sht` pre-1.0 breaking verification-boundary cleanup.
-- Phase: Execution
+- Phase: Closure
 - [x] Record ADR 0022: Gauss-Legendre exactness and spherical-harmonic
   orthonormality yield `inverse(forward(f)) = f` for the documented
   band-limited grid; preserve the CPU representation differential as empirical
