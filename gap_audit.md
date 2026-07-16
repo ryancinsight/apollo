@@ -283,6 +283,25 @@
   evidence is type-level tree structure plus empirical numerical verification,
   not a machine-checked theorem proof.
 
+## Hilbert GPU verification-tree normalization [arch]
+
+- Finding: `apollo-hilbert` keeps 410 lines of private GPU verification in one
+  module, mixing metadata, rejection, CPU analytic/quadrature differentials,
+  inverse projection, Leto boundaries, represented storage, and explicit
+  precision conversion.
+- Decision: ADR 0018 partitions the test-only tree by those contracts.
+  Hephaestus remains the sole owner of generic acquisition and execution;
+  Hilbert owns transform-specific frequency-mask values and errors.
+- Mathematical contract: on the subspace without DC or Nyquist coefficients,
+  the multiplier `-i sgn(k)` satisfies `H(H(x)) = -x`. The inverse GPU mask
+  applies `-H`, so it reconstructs that projection rather than unrecoverable
+  DC/Nyquist components. Existing finite-precision tests are empirical
+  evidence, not a machine-checked proof.
+- Acceptance: every moved test retains its fixture, oracle, error value, and
+  existing derived bound; each private leaf is concern-named and bounded. No
+  provider wrapper, fallback, or transform algorithm enters this structural
+  slice.
+
 ## Shared Leto interop ownership [arch]
 
 - Finding: a transform-private FFT utility owned cross-transform Leto view and
