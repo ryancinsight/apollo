@@ -1,5 +1,19 @@
 # Apollo Gap Audit
 
+## Root accelerator-forwarder removal [major]
+
+- Finding: thirteen transform crates publish `wgpu_backend` modules that only
+  forward their existing typed Hephaestus crate-root exports. They retain an
+  obsolete hierarchy without owning provider behavior.
+- Resolution: ADR 0023 removes every forwarding module and retains one
+  feature-gated root accelerator path. The cleanup changes no transform
+  formula, theorem, Leto host boundary, or Hephaestus contract.
+- Evidence: the empty definition/caller residue scan; focused and workspace
+  all-feature value-semantic Nextest; warning-denied Clippy; doctest; rustdoc;
+  provider audit; and thirteen pre-1.0 major SemVer classifications. This is
+  API-surface and empirical test evidence, not a machine-checked proof of GPU
+  behavior.
+
 ## Provider default-source convergence [minor]
 
 - Finding: the root manifest combined direct revision pins with local patches,

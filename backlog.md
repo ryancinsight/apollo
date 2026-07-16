@@ -475,6 +475,15 @@ Remaining replacement work:
   locked workspace gates, provider audit, and major SemVer classification pass.
   No provider wrapper, fallback, or transform algorithm belongs in this
   structural slice.
+  [x] [major] D8-root-accelerator-forwarders (owner Codex, completed
+  2026-07-16; scope thirteen `crates/apollo-*/src/lib.rs` files and ADR 0023):
+  delete each zero-behavior public `wgpu_backend` re-export module. The
+  feature-gated typed Hephaestus root exports remain the single migration path;
+  no raw WGPU API, wrapper, or fallback is added. Acceptance: no in-repository
+  caller or source definition remains, every affected pre-1.0 package takes a
+  breaking increment, and focused/workspace value-semantic Nextest,
+  warning-denied Clippy, doctest, rustdoc, provider audit, residue scan, and
+  thirteen major SemVer classifications pass.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
