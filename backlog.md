@@ -484,6 +484,15 @@ Remaining replacement work:
   breaking increment, and focused/workspace value-semantic Nextest,
   warning-denied Clippy, doctest, rustdoc, provider audit, residue scan, and
   thirteen major SemVer classifications pass.
+  [x] [major] D8-transport-verification-boundaries (owner Codex, completed
+  2026-07-16; scope thirteen `crates/apollo-*/src/infrastructure/transport/gpu/mod.rs`
+  files and ADR 0024): remove the release-visible, test-only `verification`
+  module paths. Existing concern trees and cohesive sub-500-line leaves remain
+  transform-local; every theorem, CPU oracle, fixture, and derived tolerance
+  stays unchanged. Acceptance: no public transport verification path remains,
+  affected pre-1.0 packages advance, and focused/workspace value-semantic
+  Nextest, diagnostics, rustdoc, provider audit, residue scans, and SemVer
+  classification pass without an Apollo test or device wrapper.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)

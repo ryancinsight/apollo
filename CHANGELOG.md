@@ -8,6 +8,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Breaking
+
+- [major] The thirteen transform-local
+  `infrastructure::transport::gpu::verification` modules are now test-gated
+  crate-private evidence rather than release API. Their theorem contracts,
+  CPU oracles, fixtures, and derived finite-precision tolerances are
+  unchanged; the feature-gated crate-root Hephaestus-typed accelerator exports
+  remain the sole public provider boundary. ADR 0024 records the cleanup.
+
 ### Changed
 
 - [arch] SHT GPU verification is partitioned into metadata, rejection, forward,

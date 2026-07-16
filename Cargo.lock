@@ -55,7 +55,7 @@ version = "0.16.0"
 
 [[package]]
 name = "apollo-czt"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dctdst"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -150,7 +150,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-frft"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fwht"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -238,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-mellin"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-leto-interop",
  "bytemuck",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-radon"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sdft"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sft"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -412,7 +412,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wavelet"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",

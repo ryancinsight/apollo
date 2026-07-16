@@ -9,8 +9,8 @@
 //! butterfly recurrence implements the factorization of
 //! `X[k] = sum_j x[j] omega^(j k)`, and the inverse scale gives
 //! `INTT(NTT(x)) = x` by finite-field character orthogonality.  Exact CPU and
-//! GPU equality tests in `gpu::verification` are empirical evidence for this
-//! theorem on the supported field and plan domain.
+//! The private GPU equality test suite is empirical evidence for this theorem
+//! on the supported field and plan domain.
 
 use std::borrow::Cow;
 
