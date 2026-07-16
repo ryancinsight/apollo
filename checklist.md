@@ -1,5 +1,12 @@
 # Apollo Checklist
 
+## Raw-WGPU audit boundary [patch]
+
+- Phase: Closure
+- [x] Count only raw `wgpu::` crate paths in `xtask provider-audit`; do not
+  classify `hephaestus_wgpu` provider imports as consumer-owned WGPU.
+- [x] Add value-semantic audit regressions and verify the xtask package gate.
+
 ## Provider default-source convergence [minor]
 
 - Target version: pre-1.0 minor releases; Rust 1.95 provider contract.

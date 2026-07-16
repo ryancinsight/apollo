@@ -49,7 +49,6 @@ const SOURCE_PATTERNS: &[(&str, &str)] = &[
     ("to_vec", ".to_vec("),
     ("collect_vec", "collect::<Vec"),
     ("cow", "Cow<"),
-    ("wgpu", "wgpu"),
 ];
 
 pub(crate) fn run(args: impl Iterator<Item = String>) -> Result<()> {
@@ -185,7 +184,7 @@ impl ProviderAudit {
 
         output.push_str("## Crate Usage\n");
         output.push_str(
-            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Hephaestus | Rayon | Arc | Mutex | dyn | Vec clones | Cow | WGPU |\n",
+            "| Crate | Manifest | Moirai | Mnemosyne | Melinoe | Hermes | Leto | Hephaestus | Rayon | Arc | Mutex | dyn | Vec clones | Cow | Raw WGPU |\n",
         );
         output.push_str(
             "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
@@ -233,7 +232,7 @@ impl ProviderAudit {
                 dyn_count,
                 vec_clone_count,
                 count(&crate_audit.source_usage, "cow"),
-                count(&crate_audit.source_usage, "wgpu"),
+                count(&crate_audit.source_usage, "raw_wgpu"),
             )
             .expect("writing to String cannot fail");
         }
@@ -482,9 +481,25 @@ fn collect_source_usage(path: &Path, usage: &mut BTreeMap<&'static str, usize>) 
                         *usage.entry(key).or_default() += count;
                     }
                 }
+                let raw_wgpu_count = raw_wgpu_reference_count(&uncommented);
+                if raw_wgpu_count > 0 {
+                    *usage.entry("raw_wgpu").or_default() += raw_wgpu_count;
+                }
             }
         }
     }
+}
+
+/// Count direct `wgpu::` paths without treating `hephaestus_wgpu::` as raw use.
+fn raw_wgpu_reference_count(text: &str) -> usize {
+    text.match_indices("wgpu::")
+        .filter(|(index, _)| {
+            text[..*index]
+                .chars()
+                .next_back()
+                .is_none_or(|previous| !previous.is_ascii_alphanumeric() && previous != '_')
+        })
+        .count()
 }
 
 fn should_skip_path(path: &Path) -> bool {
@@ -673,6 +688,19 @@ moirai = {{ workspace = true }}
 
         fs::remove_dir_all(root)?;
         Ok(())
+    }
+
+    #[test]
+    fn raw_wgpu_reference_count_excludes_hephaestus_provider_paths() {
+        assert_eq!(
+            raw_wgpu_reference_count("use hephaestus_wgpu::WgpuDevice;"),
+            0
+        );
+        assert_eq!(
+            raw_wgpu_reference_count("let _ = wgpu::BufferUsages::COPY_SRC;"),
+            1
+        );
+        assert_eq!(raw_wgpu_reference_count("use crate_wgpu::Device;"), 0);
     }
 
     fn forbidden_array_crate_name() -> &'static str {
