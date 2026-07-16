@@ -23,10 +23,14 @@ Fourier orthogonality gives
 `(U^dagger U)[j, j'] = (1 / N) sum_k exp(2 pi i (j - j') k / N) = delta[j, j']`.
 Thus `U^dagger U = I`, so inverse execution reconstructs the input and forward
 execution preserves the L2 norm. The CPU plan provides the independent oracle.
+The existing direct CPU-differential and two-launch round-trip bounds remain
+`2.0e-4` and `5.0e-4`; this structural change only moves them into named test
+support constants.
 
-The public test-only transport verification path is removed rather than kept as
-an empty release wrapper. The package version is selected only after
-`cargo-semver-checks` reports the affected public paths.
+The public test-only transport verification path and
+`wgpu_backend::verification` re-export path are removed rather than kept as
+empty release wrappers. `cargo-semver-checks` identifies both paths as a
+pre-1.0 major removal, so `apollo-qft` advances to 0.5.0.
 
 ## Consequences
 
