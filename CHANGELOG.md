@@ -16,6 +16,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   the direct adjoint proof sketch remain intact. The tree is test-only and its
   fast-operation leaves are flat; this changes no transform execution or
   Apollo-owned GPU mechanics.
+- [arch] The private NUFFT root theorem suite is partitioned into direct-
+  identity, adjoint, kernel-width, in-place-consistency, and dimension-specific
+  typed-storage leaves. All published reference values and finite-precision
+  tolerances are retained; this changes no public or runtime contract.
 - [arch] NTT GPU verification is partitioned into metadata, exact-residue,
   quantized-storage, reusable-buffer, and theorem-property leaves. The exact
   CPU/GPU differential, Leto boundary, inverse-pair, and convolution-law
