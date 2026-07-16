@@ -35,12 +35,12 @@
   releases. The lockfile is the sole reproducibility pin; acceptance requires
   the provider audit, one-identity Cargo graph, focused value-semantic Nextest,
   Clippy, rustdoc, and MSRV acceptance/rejection.
-- [ ] [patch] AUDIT-RAW-WGPU-1 (owner Codex, in-progress 2026-07-16; scope
+- [x] [patch] AUDIT-RAW-WGPU-1 (owner Codex, completed 2026-07-16; scope
   `xtask/src/provider_audit.rs`, audit tests, and PM records): distinguish raw
   `wgpu::` ownership from `hephaestus_wgpu` provider use so the provider audit
   cannot report a false Apollo-owned WGPU residual. Acceptance: provider-prefix
-  references count zero, raw paths count value-semantically, and the xtask gate
-  passes.
+  references count zero, raw paths count value-semantically, and the xtask
+  package gate passes.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 

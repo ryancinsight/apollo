@@ -2,10 +2,10 @@
 
 ## Raw-WGPU audit boundary [patch]
 
-- Phase: Execution
-- [ ] Count only raw `wgpu::` crate paths in `xtask provider-audit`; do not
+- Phase: Closure
+- [x] Count only raw `wgpu::` crate paths in `xtask provider-audit`; do not
   classify `hephaestus_wgpu` provider imports as consumer-owned WGPU.
-- [ ] Add value-semantic audit regressions and verify the xtask package gate.
+- [x] Add value-semantic audit regressions and verify the xtask package gate.
 
 ## Provider default-source convergence [minor]
 

@@ -6,7 +6,11 @@
   Hephaestus provider imports as if they were raw Apollo WGPU mechanics.
 - Risk: the migration audit cannot distinguish a compliant provider boundary
   from a direct raw-WGPU residual.
-- Status: implementation in progress under `AUDIT-RAW-WGPU-1`.
+- Resolution: the audit now counts only lexical `wgpu::` paths whose prefix is
+  not part of a larger identifier. `hephaestus_wgpu` remains a provider import,
+  not a raw-WGPU residual.
+- Evidence tier: value-semantic scanner tests cover direct and provider-prefixed
+  paths; the workspace audit reports zero raw WGPU paths for `apollo-fft`.
 
 ## Native-f16 FFT provider-boundary cleanup (2026-07-16)
 
