@@ -17,6 +17,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   remain. Device-present tests skip only a missing Hephaestus adapter; all
   other acquisition failures are test failures. No mathematical or
   Hephaestus-provider contract changes.
+- [minor] Apollo's direct Atlas providers now follow their merged default
+  branches. The root manifest deletes revision quarantine and local patch
+  overrides for Eunomia, Mnemosyne, Melinoe, Hermes, Leto, Moirai, and
+  Hephaestus; `Cargo.lock` is the sole reproducibility pin. Every published
+  Apollo crate declares Rust 1.95 and takes the corresponding pre-1.0 minor
+  release.
 - [arch] GFT GPU verification is partitioned into metadata, forward, inverse
   reconstruction, Leto host-boundary, represented-storage, precision-rejection,
   and shared-support leaves. ADR 0020 records the orthonormal graph-Fourier
@@ -119,6 +125,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   contracts are crate-private test evidence, not runtime API. Migration: no
   runtime replacement exists; import only the typed SHT accelerator API from
   `apollo_sht`.
+- Rust 1.95 is the minimum supported toolchain for every Apollo crate.
 - [major] `apollo-gft` 0.5.0 removes its public GPU verification module and
   `wgpu_backend::verification` path. The contracts are crate-private test
   evidence, not runtime API. Migration: no runtime replacement exists; import
@@ -143,12 +150,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   verification paths. Migration: import typed accelerator items directly from
   `apollo_nufft`; verification has no runtime replacement.
 
+### Migration
+
+- Upgrade consumers to Rust 1.95 before updating Apollo.
+
 ### Fixed
 
-- [patch] Apollo pins Leto `30de5b7`, Moirai `33d4211`, and Hephaestus
-  `1e9a442` to the coherent provider graph and removes the obsolete workspace
-  Hermes path override. The established Eunomia and Melinoe development patches
-  remain while their upstream consumer line advances independently.
+- [patch] Replace five release-only FFT `inline(always)` directives with
+  compiler-selected `#[inline]` hints so the Rust 1.95 warning-denied release
+  gate remains clean without a lint suppression.
 - [patch] Restrict Cargo Deny's first-party Git allowlist to the
   `ryancinsight` GitHub organization. Other Git sources remain denied, while
   the locked Atlas provider graph remains reproducibly verifiable.

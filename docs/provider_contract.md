@@ -1,9 +1,13 @@
 # Apollo Provider Contract
 
-Apollo consumes provider crates through Git dependencies. Provider changes in
-Moirai, Mnemosyne, Melinoe, Hermes, Leto, or Hephaestus must be committed and
-pushed before Apollo updates its dependency revision. Committed Apollo
-manifests must not use local path overrides for provider work.
+Apollo consumes provider crates through their Git default branches. Provider
+changes in Eunomia, Moirai, Mnemosyne, Melinoe, Hermes, Leto, or Hephaestus
+must be merged before Apollo refreshes its lockfile. `Cargo.lock` is the sole
+reproducibility pin; committed Apollo manifests must not carry provider
+revisions or local path overrides.
+
+The resolved provider graph requires Rust 1.95. Every Apollo member inherits
+that minimum version from the workspace package contract.
 
 ## Current Surface
 

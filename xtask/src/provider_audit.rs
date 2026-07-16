@@ -246,10 +246,10 @@ impl ProviderAudit {
         }
         output.push_str("\n## Dependency Order\n");
         output.push_str(
-            "- Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git dependencies; provider changes must be committed and pushed before Apollo can update dependency revisions.\n",
+            "- Eunomia, Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git default sources; provider changes must merge before Apollo refreshes Cargo.lock.\n",
         );
         output.push_str(
-            "- Apollo must not add a local path override for provider work in committed manifests.\n",
+            "- Cargo.lock is the sole reproducibility pin; committed manifests must not add provider revisions or local path overrides.\n",
         );
         output
     }
@@ -568,7 +568,7 @@ hephaestus-core = { workspace = true }
             "| apollo-demo | crates/apollo-demo/Cargo.toml | yes | no | yes | yes | yes | yes | no |"
         ));
         assert!(rendered.contains(
-            "Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git dependencies"
+            "Eunomia, Moirai, Mnemosyne, Melinoe, Hermes, Leto, and Hephaestus are consumed from Git default sources"
         ));
 
         fs::remove_dir_all(root)?;
