@@ -30,6 +30,20 @@
   diagnostics, doctest, rustdoc, provider audit, residue scan, and thirteen
   major SemVer classifications before publication.
 
+## D8 transport verification-boundary removal [major]
+
+- Target version: pre-1.0 breaking increments for thirteen transform crates.
+- Phase: Closure
+- [x] Record ADR 0024: transport verification is crate-private test evidence;
+  the transform root remains the sole public accelerator boundary.
+- [x] Inventory the thirteen paths and verify every content module is gated by
+  `cfg(test)`; retain the existing concern trees and sub-500-line leaves.
+- [x] Gate every transport verification module by `cfg(test)` and reduce its
+  visibility to `pub(crate)` without a compatibility alias.
+- [x] Update versions, lockfile, changelog, and PM records.
+- [x] Verify focused/workspace value-semantic Nextest, diagnostics, doctest,
+  rustdoc, provider audit, residue scans, and major SemVer classification.
+
 ## D8 NUFFT verification-tree normalization [major]
 
 - Target version: `apollo-nufft` 0.4.0 pre-1.0 breaking integration.

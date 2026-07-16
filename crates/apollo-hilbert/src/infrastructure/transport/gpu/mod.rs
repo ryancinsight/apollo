@@ -10,8 +10,8 @@ pub mod application;
 pub mod domain;
 /// Infrastructure boundary for WGPU device acquisition.
 pub mod infrastructure;
-/// Value-semantic verification.
-pub mod verification;
+#[cfg(test)]
+pub(crate) mod verification;
 
 pub use application::plan::HilbertWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;

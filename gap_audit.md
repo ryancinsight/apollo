@@ -1,5 +1,21 @@
 # Apollo Gap Audit
 
+## Transport verification-boundary removal [major]
+
+- Finding: thirteen transport `verification` modules are public despite
+  containing only `cfg(test)` contracts. They expose test fixtures and CPU
+  oracles as release paths without a runtime responsibility.
+- Resolution: ADR 0024 makes each module crate-private and test-gated. Existing
+  operation-specific trees and cohesive sub-500-line leaves remain in their
+  transform-local homes; no provider wrapper changes.
+- Evidence: the public-path scan is empty; focused and workspace all-feature
+  value-semantic Nextest, warning-denied Clippy, affected doctests, workspace
+  rustdoc, example compilation, and `xtask provider-audit` pass. All thirteen
+  pre-1.0 major SemVer comparisons against `origin/main` pass; each reports no
+  required update under the explicit major-change assumption. This is
+  API-surface and empirical test evidence, not a machine-checked proof of
+  accelerator behavior.
+
 ## Root accelerator-forwarder removal [major]
 
 - Finding: thirteen transform crates publish `wgpu_backend` modules that only
