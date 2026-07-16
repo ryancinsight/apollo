@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] Ten transform crate-root `verification` paths are now private,
+  test-gated modules rather than release API. DCT/DST further partitions its
+  672-line test monolith into private one-dimensional, multidimensional,
+  direct-law, and property-law leaves. The transform theorems, CPU oracles,
+  fixtures, and derived finite-precision tolerances are unchanged; typed
+  Hephaestus exports remain the public accelerator boundary. ADR 0025 records
+  the cleanup.
 - [major] The thirteen transform-local
   `infrastructure::transport::gpu::verification` modules are now test-gated
   crate-private evidence rather than release API. Their theorem contracts,

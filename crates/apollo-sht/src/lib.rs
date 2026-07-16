@@ -11,8 +11,8 @@ pub mod application;
 pub mod domain;
 /// Infrastructure kernel namespace.
 pub mod infrastructure;
-/// Value-semantic verification.
-pub mod verification;
+#[cfg(test)]
+mod verification;
 
 pub use application::execution::plan::sht::{ShtComplexStorage, ShtPlan, ShtRealStorage};
 pub use domain::contracts::error::{ShtError, ShtResult};

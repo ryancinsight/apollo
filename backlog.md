@@ -493,6 +493,15 @@ Remaining replacement work:
   affected pre-1.0 packages advance, and focused/workspace value-semantic
   Nextest, diagnostics, rustdoc, provider audit, residue scans, and SemVer
   classification pass without an Apollo test or device wrapper.
+  [x] [major] D8-root-verification-boundaries (owner Codex, completed
+  2026-07-16; scope ten `crates/apollo-*/src/lib.rs` declarations, their root
+  verification modules, and ADR 0025): remove the release-visible, test-only
+  root `verification` paths without an alias. Preserve every test contract and
+  split the 672-line DCT/DST root verification monolith into private
+  concern-named leaves. Acceptance: no public root verification path remains,
+  every leaf is at most 500 lines, affected pre-1.0 packages advance, and
+  focused/workspace value-semantic Nextest, diagnostics, rustdoc, provider
+  audit, residue scans, and major SemVer classifications pass.
   Assessment of "are the transform crates fluff removable via monomorphization
   with apollo-fft": **NO for whole crates** — the 16 transforms are 2000–5400 LOC
   of genuinely distinct algorithms (DCT/DST 5005, STFT 5357, FrFT 3700, SHT 3577…)
