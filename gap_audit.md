@@ -1,5 +1,21 @@
 # Apollo Gap Audit
 
+## Provider default-source convergence [minor]
+
+- Finding: the root manifest combined direct revision pins with local patches,
+  which forked the provider graph even though Hermes, Leto, Hephaestus, and
+  Moirai had already merged their required contracts.
+- Resolution: direct first-party dependencies follow their provider default
+  branches and the root patches are deleted. Every member declares Rust 1.95,
+  matching the resolved provider graph. `Cargo.lock` is the one reproducibility
+  pin; Apollo has no adapter or fallback path for this graph.
+- Evidence: `xtask provider-audit`, a one-identity lockfile scan, Rust 1.95
+  acceptance and Rust 1.94.1 rejection, 43 focused all-feature Nextest cases,
+  the 1,155-case all-feature workspace Nextest gate, warning-denied workspace
+  Clippy, workspace rustdoc, and 22 passing 196-check minor SemVer
+  comparisons. This is dependency-graph and API-surface evidence, not a
+  machine-checked proof of provider behavior.
+
 ## Native benchmark runtime ownership [arch]
 
 - Finding: Criterion introduced Apollo's last resolved Rayon edge even though

@@ -276,8 +276,7 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
 ///
 /// `INVERSE` selects twiddle table direction and algorithm variant.
 /// `NORMALIZE` gates the 1/N scale pass, eliminated at compile time when false.
-#[cfg_attr(not(debug_assertions), inline(always))]
-#[cfg_attr(debug_assertions, inline)]
+#[inline]
 pub(crate) fn dispatch_inplace<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
@@ -360,8 +359,7 @@ pub(crate) fn dispatch_inplace<
     }
 }
 
-#[cfg_attr(not(debug_assertions), inline(always))]
-#[cfg_attr(debug_assertions, inline)]
+#[inline]
 fn try_power_of_two_fast_path<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
@@ -476,8 +474,7 @@ fn try_power_of_two_fast_path<
 // ── Forward ───────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
-#[cfg_attr(not(debug_assertions), inline(always))]
-#[cfg_attr(debug_assertions, inline)]
+#[inline]
 pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
@@ -487,8 +484,7 @@ pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>
 // ── Inverse (unnormalized) ────────────────────────────────────────────────────
 
 /// In-place inverse FFT, unnormalized (no 1/N division).
-#[cfg_attr(not(debug_assertions), inline(always))]
-#[cfg_attr(debug_assertions, inline)]
+#[inline]
 pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
@@ -498,8 +494,7 @@ pub(crate) fn inverse_inplace_unnorm<F: MixedRadixScalar<Complex = eunomia::Comp
 // ── Inverse (normalized 1/N) ──────────────────────────────────────────────────
 
 /// In-place inverse FFT, normalized by 1/N.
-#[cfg_attr(not(debug_assertions), inline(always))]
-#[cfg_attr(debug_assertions, inline)]
+#[inline]
 pub(crate) fn inverse_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {

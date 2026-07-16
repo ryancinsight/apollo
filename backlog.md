@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## Release 0.14.0 eligibility [arch]
+## Release 0.16.0 eligibility [arch]
 
 - [x] Pin the toolchain, current compatible third-party versions, and exact
   Atlas provider revisions in one reproducible lock graph.
@@ -27,6 +27,14 @@
   scope `deny.toml` and release PM artifacts): admit only the `ryancinsight`
   GitHub organization so the locked Atlas provider graph passes `sources`
   validation while all other Git sources and unknown registries remain denied.
+- [x] [minor] Provider default-source convergence (owner Codex, 2026-07-16;
+  scope root manifest, lockfile, provider contract, and release records):
+  remove direct Atlas `rev` pins and local patches for Eunomia, Mnemosyne,
+  Melinoe, Hermes, Leto, Moirai, and Hephaestus after their provider PRs merge.
+  Publish Rust 1.95 through each member and take the matching pre-1.0 minor
+  releases. The lockfile is the sole reproducibility pin; acceptance requires
+  the provider audit, one-identity Cargo graph, focused value-semantic Nextest,
+  Clippy, rustdoc, and MSRV acceptance/rejection.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
