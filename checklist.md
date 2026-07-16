@@ -130,7 +130,7 @@
 ## D8 Hilbert GPU verification-tree normalization [arch]
 
 - Target version: private verification structure; no transform API change.
-- Phase: Execution
+- Phase: Closure
 - [x] Record ADR 0018: Hephaestus retains provider mechanics while Hilbert
   retains its frequency-mask numerical contracts. The double-Hilbert theorem
   applies only after DC and Nyquist removal; the inverse remains a projection.
@@ -142,6 +142,23 @@
   bounds. Evidence: 43/43 focused all-feature Nextest cases, doctest, rustdoc,
   provider audit, one source identity per provider, and patch SemVer
   classification (223 pass, 30 skip).
+
+## D8 CZT GPU verification-tree normalization [arch]
+
+- Target version: private verification structure; no transform API change.
+- Phase: Closure
+- [x] Record ADR 0019: the CZT definition specializes to the DFT only for
+  `A = 1`, `W = exp(-2 pi i / N)`, and equal input/output lengths; the inverse
+  contract verifies that case with the established finite-precision bound.
+- [x] Partition the private 395-line verification module into metadata,
+  forward/impulse, inverse, Leto host-boundary, represented-storage, precision
+  rejection, pre-dispatch rejection, and shared-support leaves.
+- [x] Retain all static and device-present contracts, fixtures, CPU
+  differentials, exact impulse oracle, rejection values, and existing bounds;
+  run focused and locked workspace gates plus patch SemVer classification.
+  Evidence: 55/55 focused all-feature Nextest cases, locked workspace
+  check/Clippy/Nextest, doctest, rustdoc, provider audit, direct dependency
+  scans, and patch SemVer classification (223 pass, 30 skip).
 
 ## D8 NTT verification-tree normalization [arch]
 

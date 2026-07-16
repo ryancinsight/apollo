@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] CZT GPU verification is partitioned into metadata, forward/impulse,
+  inverse, Leto host-boundary, represented-storage, precision-rejection,
+  pre-dispatch-rejection, and shared-support leaves. ADR 0019 records the CZT
+  definition and its DFT specialization; the inverse round-trip remains scoped
+  to `A = 1`, `W = exp(-2 pi i / N)`, and equal input/output lengths. No
+  public, mathematical, or Hephaestus-provider contract changes.
 - [arch] Hilbert GPU verification is partitioned into metadata/rejection,
   analytic/quadrature forward, inverse projection, Leto host-boundary,
   represented-storage, precision-boundary, and shared-support leaves. The DFT
