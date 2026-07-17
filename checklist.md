@@ -1,5 +1,15 @@
 # Apollo Checklist
 
+## Moirai forwarding-wrapper removal [major]
+
+- Target version: `apollo-fft` 0.24.0 pre-1.0 breaking cleanup.
+- Phase: Closure
+- [x] Delete the unused Apollo-owned `for_each_chunk_mut_enumerated` forwarding
+  helper and call Moirai's canonical operation directly from the radix-composite
+  kernel; retain the ZST `RadixCompositePolicy` threshold strategy.
+- [x] Advance the package and lockfile versions, run formatting and diff checks,
+  and pass the configured `apollo-fft` Nextest suite (393/393).
+
 ## Unused CPU marker aliases [major]
 
 - Target versions: fourteen pre-1.0 GPU transport API surfaces advance to

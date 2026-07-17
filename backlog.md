@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+## Moirai forwarding-wrapper removal [major]
+
+- [x] [major] D10-remove-moirai-forwarder (owner Codex, completed 2026-07-17;
+  scope `apollo-fft` radix-composite execution policy and version metadata):
+  remove the unreferenced Apollo forwarding helper, route the kernel directly
+  to Moirai's `for_each_chunk_mut_enumerated_with`, preserve the ZST threshold
+  policy, and advance `apollo-fft` 0.23.0 → 0.24.0. Acceptance is zero source
+  references to the Apollo wrapper path, clean formatting, and value-semantic package tests;
+  Nextest passes 393/393.
+
 ## Unused CPU marker aliases [major]
 
 - [x] [major] D9-remove-cpu-marker-aliases (owner Codex, completed
