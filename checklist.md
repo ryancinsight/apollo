@@ -17,12 +17,12 @@
   0.21.0 to 0.22.0 pre-1.0 major SemVer comparison. The device-present lane
   runs with the installed RTX 5080 CUDA driver; the GNU target links its
   generated `libcuda.dll.a` import archive from the shared ignored target tree.
-- [ ] Provision CUDA 13.3 plus its driver-development stubs on the pinned
+- [x] Provision CUDA 13.3 plus its driver-development stubs on the pinned
   Ubuntu 24.04 Rust CI runner, export the discovered CUDA 13.3 `CUDA_LIB_PATH`,
-  and rerun the required workspace `--all-features` gate. `cuda-bindings`
-  requires CUDA 13.2+ headers, while `cuda-oxide` 0.4 otherwise searches its
-  obsolete CUDA 11.3 default link directory; no-GPU CI remains a
-  provider-unavailable test environment, not a fallback path.
+  and pass the required workspace `--all-features` gate in GitHub Actions run
+  29544786401. `cuda-bindings` requires CUDA 13.2+ headers, while `cuda-oxide`
+  0.4 otherwise searches its obsolete CUDA 11.3 default link directory; no-GPU
+  CI remains a provider-unavailable test environment, not a fallback path.
 - [x] Retain typed CUDA prepared kernels at plan construction, use
   power-of-two CUDA intrinsics/indexing, and let the synchronous typed download
   serve as the provider completion boundary without a consumer-owned stream

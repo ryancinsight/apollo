@@ -28,8 +28,11 @@
   directory, producing `rust-lld: unable to find library -lcuda`. The workflow
   now installs CUDA 13.3 driver-development stubs, discovers their exact
   directory beneath the pinned toolkit, exports it as `CUDA_LIB_PATH`, and
-  stages `libcuda.so.1` for the no-GPU test process. The pending rerun remains
-  compile-time provider evidence because hosted CI has no CUDA device.
+  stages `libcuda.so.1` for the no-GPU test process. GitHub Actions run
+  29544786401 passes its Rust workspace and Python-binding jobs. The hosted
+  result is compile-time and provider-unavailable-path evidence because it has
+  no CUDA device; the local RTX 5080 Nextest contracts remain the GPU arithmetic
+  evidence.
 - Review decision: retain the three typed prepared kernels in `CudaFft1d` so
   repeated execution does not rebuild the borrowed source/hash cache lookup;
   CUDA bit reversal and power-of-two index decomposition use intrinsic and
