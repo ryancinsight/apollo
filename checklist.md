@@ -48,9 +48,11 @@
 - [x] Pass focused formatting, warning-denied Clippy, configured default-feature
   Nextest (402 tests), and source-residue scan. The all-feature Nextest lane
   remains blocked by the host MinGW linker (`x86_64-w64-mingw32-ld.exe` cannot
-  find `-lcuda`); doctest, rustdoc, and SemVer classification were attempted
-  but could not acquire the shared artifact lock and remain unverified until
-  that contention clears. The provider audit passed after the lock cleared.
+  find `-lcuda`); `cargo doc --no-deps` passed, while the doctest harness
+  stalled after compiling `apollo_fft` and the package SemVer sweep stalled in
+  its rustdoc child. The provider audit passed after the lock cleared, and the
+  direct `apollo-leto-interop` SemVer check classified the wrapper removal as
+  one major `function_missing` break.
 
 ## CUDA FFT provider path [major]
 

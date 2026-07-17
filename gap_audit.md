@@ -48,11 +48,17 @@
   an environment/toolchain dependency failure, not a source diagnostic; the
   CUDA provider lane requires the installed driver-development import archive.
 - Verification contention: `cargo test --locked --doc` and `cargo semver-checks
-  check-release` were started with the sanctioned commands but could not
-  acquire the shared `target` artifact lock while unrelated peer Cargo jobs
-  held the queue; the waiting processes were stopped without changing their
-  source trees. These two lanes have no result and remain explicit follow-up
-  work. The provider audit later passed after the lock cleared.
+  check-release` were started with the sanctioned commands. Rustdoc generation
+  (`cargo doc --locked -p apollo-leto-interop -p apollo-fft --no-deps`) passed,
+  but the doctest harness stalled after compiling `apollo_fft` and was stopped
+  without changing the source tree. The direct
+  `cargo semver-checks check-release -p apollo-leto-interop --baseline-rev
+  b14b221` check reported exactly one major `function_missing` break for the
+  deleted wrapper. A package-wide alias SemVer sweep then stalled in the first
+  `apollo-czt` rustdoc child and was stopped; package-level classification is
+  therefore an explicit tooling residual, while D9's structural evidence and
+  all-targets/Nextest gates are green. The provider audit passed after the
+  shared lock cleared.
 
 ## Validation suite tree (2026-07-16)
 
