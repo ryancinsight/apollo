@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## Validation suite tree [arch]
+
+- Target version: internal topology refactor; no public API change.
+- Phase: Execution
+- [x] Record ADR 0031: the suite manifest owns declarations and curated
+  re-exports; concern leaves own computation.
+- [ ] Move orchestration, FFT, NUFFT, external/reference, benchmark,
+  environment, and test concerns into private leaves below 500 lines while
+  retaining each existing public suite path.
+- [ ] Pass focused value-semantic Nextest, warning-denied diagnostics, doctest,
+  rustdoc, provider audit, and a source-tree size scan.
+
 ## CUDA FFT provider path [major]
 
 - Target version: `apollo-fft` 0.22.0 pre-1.0 breaking release.

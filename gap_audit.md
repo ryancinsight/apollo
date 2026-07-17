@@ -1,5 +1,17 @@
 # Apollo Gap Audit
 
+## Validation suite tree (2026-07-16)
+
+- Finding: `apollo-validation` places 974 lines of orchestration and seven
+  unrelated validation concerns in `application::suite::mod`.
+- Risk: the module manifest becomes a second implementation home, violating
+  the vertical concern tree and allowing report behavior to drift across an
+  unpartitioned file.
+- Decision: ADR 0031 partitions existing code by concern while retaining the
+  public module path. The refactor preserves every mathematical assertion and
+  derived tolerance; no new computation, fallback, or provider abstraction is
+  authorized.
+
 ## CUDA FFT provider path (2026-07-16)
 
 - Finding: Apollo had no CUDA FFT provider although Hephaestus now owns a
