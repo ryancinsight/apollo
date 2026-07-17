@@ -42,7 +42,7 @@ pub mod domain;
 /// Infrastructure adapters.
 pub mod infrastructure;
 
-/// API wrappers.
+/// Canonical public API functions.
 pub mod api;
 
 #[cfg(test)]
@@ -67,7 +67,7 @@ pub use infrastructure::transport::cpu::CpuBackend;
 pub use eunomia::Complex32;
 pub use eunomia::Complex64;
 
-// Re-export all API functions directly from crate root for backwards compatibility.
+// Re-export the canonical API functions at the crate root.
 pub use api::cfft::*;
 pub use api::icfft::*;
 pub use api::irfft::*;
