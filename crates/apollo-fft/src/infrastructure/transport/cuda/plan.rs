@@ -1,7 +1,7 @@
 //! One-dimensional CUDA FFT plan over Leto complex storage.
 
 use hephaestus_core::{Binding, CommandStream, ComputeDevice, DispatchGrid, KernelDevice};
-use hephaestus_cuda::{CudaBuffer, CudaDevice};
+use hephaestus_cuda::{CudaBuffer, CudaDevice, CudaPrepared};
 use leto::Array1;
 
 use crate::infrastructure::transport::fft::{
@@ -20,6 +20,9 @@ pub struct CudaFft1d {
     length: u32,
     real: CudaBuffer<f32>,
     imaginary: CudaBuffer<f32>,
+    bit_reverse: CudaPrepared<FftKernel<f32, BitReverse>>,
+    butterfly: CudaPrepared<FftKernel<f32, Butterfly>>,
+    scale: CudaPrepared<FftKernel<f32, Scale>>,
     forward: RadixStages,
     inverse: RadixStages,
     host_real: Vec<f32>,
@@ -72,11 +75,23 @@ impl CudaFft1d {
         let length_u32 = validate_length(length)?;
         let real = device.alloc_zeroed(length).map_err(cuda_error)?;
         let imaginary = device.alloc_zeroed(length).map_err(cuda_error)?;
+        let bit_reverse = device
+            .prepare(&FftKernel::<f32, BitReverse>::new())
+            .map_err(cuda_error)?;
+        let butterfly = device
+            .prepare(&FftKernel::<f32, Butterfly>::new())
+            .map_err(cuda_error)?;
+        let scale = device
+            .prepare(&FftKernel::<f32, Scale>::new())
+            .map_err(cuda_error)?;
         Ok(Self {
             device,
             length: length_u32,
             real,
             imaginary,
+            bit_reverse,
+            butterfly,
+            scale,
             forward: RadixStages::radix_two(length_u32, 1, false),
             inverse: RadixStages::radix_two(length_u32, 1, true),
             host_real: vec![0.0; length],
@@ -171,18 +186,6 @@ impl CudaFft1d {
     }
 
     fn execute_radix(&self, stages: &RadixStages) -> ApolloResult<()> {
-        let bit_reverse = self
-            .device
-            .prepare(&FftKernel::<f32, BitReverse>::new())
-            .map_err(cuda_error)?;
-        let butterfly = self
-            .device
-            .prepare(&FftKernel::<f32, Butterfly>::new())
-            .map_err(cuda_error)?;
-        let scale = self
-            .device
-            .prepare(&FftKernel::<f32, Scale>::new())
-            .map_err(cuda_error)?;
         let bindings = [
             Binding::read_write(&self.real),
             Binding::read_write(&self.imaginary),
@@ -190,7 +193,7 @@ impl CudaFft1d {
         let mut stream = self.device.stream().map_err(cuda_error)?;
         stream
             .encode(
-                &bit_reverse,
+                &self.bit_reverse,
                 &bindings,
                 &stages.bit_reverse,
                 grid(stages.fft_len)?,
@@ -202,16 +205,22 @@ impl CudaFft1d {
             .expect("invariant: validated CUDA radix length is non-zero");
         for params in stages.butterflies.iter() {
             stream
-                .encode(&butterfly, &bindings, params, grid(butterfly_elements)?)
+                .encode(
+                    &self.butterfly,
+                    &bindings,
+                    params,
+                    grid(butterfly_elements)?,
+                )
                 .map_err(cuda_error)?;
         }
         if let Some(params) = stages.inverse_scale {
             stream
-                .encode(&scale, &bindings, &params, grid(stages.fft_len)?)
+                .encode(&self.scale, &bindings, &params, grid(stages.fft_len)?)
                 .map_err(cuda_error)?;
         }
-        stream.submit().map_err(cuda_error)?;
-        self.device.synchronize().map_err(cuda_error)
+        // The synchronizing typed downloads in `execute_in_place` observe this
+        // stream's ordered work; do not add a redundant device-wide wait here.
+        stream.submit().map_err(cuda_error)
     }
 }
 

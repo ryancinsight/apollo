@@ -103,7 +103,7 @@ Remaining replacement work:
       `apollo-sft`, `apollo-sdft`, `apollo-sht`, `apollo-radon`, `apollo-stft`,
       and `apollo-nufft` are complete; FFT completes the eighteenth transform
       scope. Apollo owns no raw WGPU API or dependency edge.
-  - [x] [major] CUDA FFT provider path (owner Codex, completed 2026-07-16;
+  - [ ] [major] CUDA FFT provider path (owner Codex, last-update 2026-07-16;
     scope `apollo-fft` CUDA transport, typed provider dependency, ADR 0030,
     and CUDA PM records): consume `hephaestus-cuda` directly through its typed
     `CudaDevice`/kernel/stream contracts. Start with one-dimensional f32 FFT;
@@ -111,7 +111,8 @@ Remaining replacement work:
     Hephaestus WGPU when their respective adapters are present. No Apollo
     raw-CUDA driver, raw-WGPU, acquisition, or compatibility wrapper is
     permitted. The CUDA+WGPU Nextest, diagnostics, docs, provider audit, and
-    major SemVer gate pass against Hephaestus `87d47879`.
+    major SemVer gate pass locally against Hephaestus `87d47879`; completion
+    awaits the CI rerun with the CUDA 13.3 driver-stub link path.
 - [x] [arch] Stage D5: remove the dead `apollo-ghostcell` crate — orphaned
   (not a workspace member, zero consumers, never built); branded interior
   mutability belongs in leto, not a per-app reimplementation. (apollo `e8f9861`)

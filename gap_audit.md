@@ -22,12 +22,22 @@
   ignored target tree and does not alter the Apollo dependency graph. ADR 0030
   records the derived bounds and that this is empirical, not machine-checked,
   GPU evidence.
-- CI finding: PR #42's Rust workspace gate initially failed before compilation
-  because its Ubuntu runner had no CUDA 13.2+ toolkit for the generated
-  `cuda-bindings` headers. The CI workflow now pins Ubuntu 24.04, installs
-  NVIDIA's CUDA 13.3 toolkit, and exports `CUDA_TOOLKIT_PATH`; the pending
-  rerun is compile-time provider evidence only because hosted CI has no CUDA
-  device.
+- CI finding: PR #42's Rust workspace gate first lacked the CUDA 13.2+ toolkit
+  needed for generated `cuda-bindings` headers. Its provisioned rerun then
+  reached linking but `cuda-oxide` 0.4 selected its obsolete CUDA 11.3 default
+  directory, producing `rust-lld: unable to find library -lcuda`. The workflow
+  now installs CUDA 13.3 driver-development stubs, discovers their exact
+  directory beneath the pinned toolkit, exports it as `CUDA_LIB_PATH`, and
+  stages `libcuda.so.1` for the no-GPU test process. The pending rerun remains
+  compile-time provider evidence because hosted CI has no CUDA device.
+- Review decision: retain the three typed prepared kernels in `CudaFft1d` so
+  repeated execution does not rebuild the borrowed source/hash cache lookup;
+  CUDA bit reversal and power-of-two index decomposition use intrinsic and
+  bitwise forms. A proposed consumer-local stream completion wrapper is
+  rejected: the current provider has one legacy default stream and its
+  `ComputeDevice::download` contract is the authoritative synchronous transfer
+  boundary. Apollo submits then downloads without an additional
+  context-wide synchronization.
 
 ## Raw-WGPU audit boundary (2026-07-16)
 

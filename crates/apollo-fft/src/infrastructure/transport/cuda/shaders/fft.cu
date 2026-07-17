@@ -6,20 +6,11 @@ struct FftParams {
 };
 
 __device__ unsigned int fft_bit_reverse(unsigned int value, unsigned int bits) {
-    unsigned int reversed = 0U;
-    for (unsigned int remaining = bits; remaining != 0U; --remaining) {
-        reversed = (reversed << 1U) | (value & 1U);
-        value >>= 1U;
-    }
-    return reversed;
+    return bits == 0U ? value : __brev(value) >> (32U - bits);
 }
 
 __device__ unsigned int fft_log2(unsigned int value) {
-    unsigned int bits = 0U;
-    for (value >>= 1U; value != 0U; value >>= 1U) {
-        ++bits;
-    }
-    return bits;
+    return 31U - __clz(value);
 }
 
 extern "C" __global__ void fft_bitrev(
@@ -33,9 +24,10 @@ extern "C" __global__ void fft_bitrev(
         return;
     }
 
-    const unsigned int row = index / params.n;
-    const unsigned int local_index = index % params.n;
-    const unsigned int reversed = fft_bit_reverse(local_index, fft_log2(params.n));
+    const unsigned int log2_n = fft_log2(params.n);
+    const unsigned int row = index >> log2_n;
+    const unsigned int local_index = index & (params.n - 1U);
+    const unsigned int reversed = fft_bit_reverse(local_index, log2_n);
     if (reversed > local_index) {
         const unsigned int base = row * params.n;
         const unsigned int left = base + local_index;
@@ -61,12 +53,13 @@ extern "C" __global__ void fft_forward(
         return;
     }
 
-    const unsigned int row = index / half_n;
-    const unsigned int local_index = index % half_n;
+    const unsigned int log2_half_n = fft_log2(half_n);
+    const unsigned int row = index >> log2_half_n;
+    const unsigned int local_index = index & (half_n - 1U);
     const unsigned int half_group = 1U << params.stage;
     const unsigned int group_size = half_group << 1U;
-    const unsigned int group = local_index / half_group;
-    const unsigned int offset = local_index % half_group;
+    const unsigned int group = local_index >> params.stage;
+    const unsigned int offset = local_index & (half_group - 1U);
     const unsigned int base = row * params.n;
     const unsigned int even = base + group * group_size + offset;
     const unsigned int odd = even + half_group;

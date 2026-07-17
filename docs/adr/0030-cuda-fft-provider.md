@@ -19,7 +19,10 @@ Add a CUDA feature to `apollo-fft` and expose `CudaBackend` plus a
 one-dimensional `CudaFft1d` plan. The public construction boundary accepts an
 already-acquired `hephaestus_cuda::CudaDevice`; Apollo does not acquire CUDA
 devices or import CUDA-driver APIs. The plan accepts a Leto `Array1<Complex32>`
-and reuses its typed split-complex CUDA buffers and host staging on every call.
+and reuses its typed split-complex CUDA buffers, prepared kernel handles, and
+host staging on every call. Submission has no extra device-wide synchronization:
+the typed device-to-host transfer is the provider's synchronous completion
+boundary before output mutation.
 
 Move the dialect-neutral `FftParams`, zero-sized kernel descriptors, and radix
 stage values into one transport leaf. WGSL and CUDA C implement their

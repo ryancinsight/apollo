@@ -51,10 +51,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
-- [patch] The Rust workspace CI runner pins Ubuntu 24.04 and installs NVIDIA
-  CUDA 13.3 before the all-feature gate. This supplies the CUDA 13.2+ headers
-  required by Hephaestus's generated CUDA bindings without adding a consumer
-  driver wrapper or a no-CUDA compatibility path.
+- [patch] The Rust workspace CI runner pins Ubuntu 24.04, installs NVIDIA CUDA
+  13.3 with driver-development stubs, and exports the generated bindings'
+  toolkit path plus `cuda-oxide`'s driver-stub link directory. This validates
+  the all-feature provider graph without adding a consumer driver wrapper or a
+  no-CUDA compatibility path.
 
 - [arch] SHT GPU verification is partitioned into metadata, rejection, forward,
   inverse, Leto host-boundary, typed-storage, and shared-support leaves. ADR
