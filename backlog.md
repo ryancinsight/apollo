@@ -1,5 +1,20 @@
 # Apollo Backlog
 
+## D11-remove-policy-wrapper [major] — done
+
+- Owner: Codex; scope: `apollo-fft` radix-composite execution policy module,
+  package version metadata, ADR 0035, and synchronized PM records.
+- Acceptance: delete the Apollo-owned `RadixCompositePolicy` forwarding ZST and
+  its public policy module; instantiate Moirai's canonical
+  `AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>` directly at the
+  radix-composite boundary; preserve the threshold contract and all FFT value
+  semantics; advance `apollo-fft` 0.24.0 → 0.25.0 with no compatibility export.
+- Evidence: source scan finds no `RadixCompositePolicy`, `execution::policy`,
+  or `mod policy` references under `apollo-fft/src`; the threshold boundary
+  regression and locked package Nextest pass 393/393, warning-denied Clippy,
+  doctests, rustdoc, and provider audit pass. The verified branch commit is
+  the merge candidate for the next Atlas provider-pin increment.
+
 ## D8-FFT-dispatch-verification-tree [arch] — done
 
 - Owner: Codex; scope: `apollo-fft` GPU dispatch verification module, ADR 0034,
