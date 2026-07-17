@@ -1,9 +1,10 @@
 # Apollo Backlog
 
-## D8-FFT-dispatch-verification-tree [arch] — in progress
+## D8-FFT-dispatch-verification-tree [arch] — done
 
 - Owner: Codex; scope: `apollo-fft` GPU dispatch verification module, ADR 0034,
-  and synchronized PM records.
+  and synchronized PM records. Closed 2026-07-17 in Apollo PR #46
+  (`11fd1d0`).
 - Acceptance: provider execution remains in `dispatch.rs`, device-present
   contracts live in a private concern leaf below 500 lines, all existing
   value-semantic assertions and derived tolerances remain unchanged, and

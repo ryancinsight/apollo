@@ -9,6 +9,8 @@
   the single provider-owned execution path. ADR 0034 records the inverse law
   and the existing \(\gamma_{256}\) / \(13\gamma_{256}\) finite-precision
   bounds.
+- Closure: Apollo PR #46 merged at `11fd1d0`; the parent Atlas integration
+  records the provider head.
 - Evidence tier: source topology and nightly rustfmt are clean; locked Nextest
   passes 393/393, warning-denied Clippy and warning-clean rustdoc pass, and the
   provider audit passes 5/5. The refactor has no known residual.
