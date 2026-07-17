@@ -1,5 +1,61 @@
 # Apollo Checklist
 
+## Unused CPU marker aliases [major]
+
+- Target version: fourteen pre-1.0 GPU transport API surfaces.
+- Phase: Execution
+- [x] Record ADR 0033: aliases have no references or type-level invariant and
+  dependency direction is already expressed by the owning plan edge.
+- [x] Delete all fourteen aliases without compatibility exports.
+- [x] Pass formatting, warning-denied diagnostics, all-targets package checks,
+  default-feature Nextest (382 tests), provider audit, and source-residue scan.
+  The CUDA lane remains documented as an environment residual.
+
+## GPU availability probe cleanup [major]
+
+- Target version: `apollo-fft` pre-1.0 breaking provider-boundary cleanup.
+- Phase: Execution
+- [x] Confirm ADR 0013 covers `gpu_fft_available` as the same failure-erasing
+  consumer probe class; Hephaestus remains the sole typed acquisition owner.
+- [x] Delete the probe and both re-exports without a compatibility alias.
+- [x] Pass focused formatting, warning-denied diagnostics, default-feature
+  Nextest (394 tests), source-residue scan, and the provider audit. The
+  all-feature CUDA linker blocker is recorded in `gap_audit.md`.
+
+## Validation suite tree [arch]
+
+- Target version: internal topology refactor; no public API change.
+- Phase: Execution
+- [x] Record ADR 0031: the suite manifest owns declarations and curated
+  re-exports; concern leaves own computation.
+- [x] Move orchestration, FFT, NUFFT, external/reference, benchmark,
+  environment, and test concerns into private leaves below 500 lines while
+  retaining each existing public suite path.
+- [x] Pass focused value-semantic Nextest (10 tests), warning-denied
+  diagnostics, rustdoc, provider audit, and a source-tree size scan (all nine
+  leaves below 500 lines). Doctest execution is covered by the validation
+  package's test target; no standalone validation doctests are defined.
+
+## Direct Leto output construction [major]
+
+- Target version: `apollo-leto-interop` 0.17.0 pre-1.0 breaking cleanup.
+- Phase: Execution
+- [x] Record ADR 0032: direct Leto/Mnemosyne construction is the sole
+  contiguous FFT output boundary; no consumer-owned forwarding wrapper is
+  retained.
+- [x] Delete `try_dense_from_contiguous` and migrate the four FFT 2D/3D
+  forward/inverse call sites directly to `leto::Array::from_mnemosyne_slice`.
+- [x] Add value-semantic 2D/3D Leto forward/inverse parity tests and preserve
+  the output-shape theorem in Rustdoc/ADR 0032.
+- [x] Pass focused formatting, warning-denied Clippy, configured default-feature
+  Nextest (402 tests), and source-residue scan. The all-feature Nextest lane
+  remains blocked by the host MinGW linker (`x86_64-w64-mingw32-ld.exe` cannot
+  find `-lcuda`); `cargo doc --no-deps` passed, while the doctest harness
+  stalled after compiling `apollo_fft` and the package SemVer sweep stalled in
+  its rustdoc child. The provider audit passed after the lock cleared, and the
+  direct `apollo-leto-interop` SemVer check classified the wrapper removal as
+  one major `function_missing` break.
+
 ## CUDA FFT provider path [major]
 
 - Target version: `apollo-fft` 0.22.0 pre-1.0 breaking release.

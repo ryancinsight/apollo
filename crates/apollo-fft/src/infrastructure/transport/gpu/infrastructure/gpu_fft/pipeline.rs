@@ -12,12 +12,6 @@ use super::{
     strategy::{Axis, AxisStrategy, ChirpData},
 };
 
-/// Returns true when this crate is linked with its Hephaestus device backend.
-#[must_use]
-pub fn gpu_fft_available() -> bool {
-    true
-}
-
 /// GPU-backed three-dimensional dense FFT plan.
 ///
 /// The plan owns provider-native scratch and volume storage.  External typed

@@ -17,6 +17,3 @@ pub use application::plan::QftWgpuPlan;
 pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use infrastructure::device::QftWgpuBackend;
-
-/// CPU transform marker proving dependency direction into the owning transform crate.
-pub type CpuTransformMarker = crate::QftPlan;

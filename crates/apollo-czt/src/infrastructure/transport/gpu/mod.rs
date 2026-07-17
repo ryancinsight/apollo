@@ -18,6 +18,3 @@ pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use eunomia::Complex32;
 pub use infrastructure::device::CztWgpuBackend;
-
-/// CPU transform marker proving dependency direction into the owning transform crate.
-pub type CpuTransformMarker = crate::CztPlan;

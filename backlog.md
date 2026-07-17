@@ -1,5 +1,27 @@
 # Apollo Backlog
 
+## Unused CPU marker aliases [major]
+
+- [x] [major] D9-remove-cpu-marker-aliases (owner Codex, completed
+  2026-07-16; scope fourteen GPU transport manifests, ADR 0033, tests, and PM
+  records): delete definition-only `CpuTransformMarker` aliases. Acceptance:
+  zero workspace references, no compatibility exports, dependency direction
+  remains provider-first, package checks and default Nextest pass, and the
+  pre-1.0 surface deletion is documented. All-targets checks, warning-denied
+  Clippy, provider audit, and 382 default-feature tests pass.
+
+## GPU availability probe cleanup [major]
+
+- [x] [major] D8-gpu-availability-probe (owner Codex, completed 2026-07-16;
+  scope `apollo-fft` GPU transport manifests/pipeline, ADR 0013, tests, and PM
+  records): delete the hardcoded `gpu_fft_available() -> bool` probe and its
+  re-exports. Acceptance: no Apollo-owned availability boolean or source
+  residue, typed Hephaestus acquisition remains the only capability evidence,
+  focused value-semantic gates and provider audit pass, and the pre-1.0 API
+  break is documented. Default-feature checks (394 Nextest tests), source
+  scans, and provider audit pass; the all-feature CUDA linker residual is
+  recorded in `gap_audit.md`.
+
 ## Release 0.16.0 eligibility [arch]
 
 - [x] Pin the toolchain, current compatible third-party versions, and exact
@@ -41,6 +63,16 @@
   cannot report a false Apollo-owned WGPU residual. Acceptance: provider-prefix
   references count zero, raw paths count value-semantically, and the xtask
   package gate passes.
+- [x] [major] D7-direct-leto-output (owner Codex, completed 2026-07-16;
+  scope `apollo-leto-interop`, `apollo-fft` 2D/3D real FFT API boundaries,
+  tests, ADR 0032, and PM records): remove the obsolete
+  `try_dense_from_contiguous` forwarding wrapper and construct contiguous
+  Mnemosyne-backed outputs directly through Leto. Acceptance: no source or
+  manifest residue, value-semantic 2D/3D forward/inverse parity, theorem and
+  Rustdoc synchronization, warning-denied focused gates, provider audit, and
+  pre-1.0 major SemVer classification. Default-feature Nextest passes all 402
+  tests; the all-feature linker blocker and remaining docs/audit gates are
+  recorded in `gap_audit.md`.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 
@@ -387,6 +419,16 @@ Remaining replacement work:
   doctest, warning-clean rustdoc, provider audit, source-residue scans, and
   0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
+  - [x] [arch] D8-validation-suite-tree (owner Codex, completed
+    2026-07-16; scope `crates/apollo-validation/src/application/suite/`, ADR
+    0031, and PM records): partition the 974-line suite manifest into private
+    concern leaves while preserving all public suite paths, analytical
+    assertions, and typed provider boundaries. Acceptance: the manifest is
+    declaration-only, each leaf stays below 500 lines, focused value-semantic
+    evidence stays green, and no new fallback/wrapper appears. The stale
+    `gpu_fft_available` report field/call was removed under ADR 0013 during
+    takeover; all nine leaves are below 500 lines, validation Nextest passes
+    10/10, and warning-denied checks plus rustdoc are green.
   In progress — owner Codex; first bounded DCT/DST scope completed 2026-07-15:
   `apollo-dctdst` GPU verification tree, D8 ADR, and active PM records.
   Completed acceptance: split the 796-line verification monolith by its distinct

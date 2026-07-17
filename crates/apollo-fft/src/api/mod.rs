@@ -1,4 +1,12 @@
-//! API wrapper functions for Apollo FFT.
+//! Public API functions for Apollo FFT.
+//!
+//! The multidimensional real-FFT Leto boundaries materialize the kernel output
+//! directly through `leto::Array::from_mnemosyne_slice`. For a contiguous
+//! output `O` with shape `s` and logical sequence `o_i`, the provider contract
+//! gives the returned array `M` the same shape and `M[i] = o_i` for every valid
+//! index. This is a provider-contract proof sketch; the 2D/3D forward and
+//! inverse parity tests in `tests/slice_api.rs` are the executable differential
+//! evidence (see ADR 0032).
 
 pub mod cfft;
 pub mod icfft;

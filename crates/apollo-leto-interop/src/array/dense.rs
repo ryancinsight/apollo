@@ -1,21 +1,5 @@
 //! Rank-polymorphic dense Leto array construction.
 
-/// Build a dense, Mnemosyne-backed Leto array from a C-contiguous source.
-///
-/// Returns [`None`] when `source` is not C-contiguous or its shape is rejected
-/// by Leto. The source rank is a const generic, so every caller receives the
-/// same monomorphized conversion without per-rank forwarding helpers.
-#[must_use]
-pub fn try_dense_from_contiguous<T, S, const N: usize>(
-    source: &leto::Array<T, S, N>,
-) -> Option<leto::Array<T, leto::MnemosyneStorage<T>, N>>
-where
-    T: Copy,
-    S: leto::Storage<T>,
-{
-    try_dense_from_parts(source.shape(), source.as_slice(), source.iter().copied())
-}
-
 /// Build a dense Mnemosyne-backed array from a shape and contiguous values.
 ///
 /// This is the canonical fallible output boundary for algorithms that own a
@@ -84,30 +68,8 @@ fn try_dense_from_parts<T: Copy, const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use super::{try_dense_from_contiguous, try_dense_from_slice, try_dense_from_view};
+    use super::{try_dense_from_slice, try_dense_from_view};
     use leto::SliceArg;
-
-    #[test]
-    fn copies_a_contiguous_rank_two_array_with_its_shape() {
-        let source = leto::Array2::from_shape_vec([2, 3], vec![1_u32, 2, 3, 4, 5, 6])
-            .expect("source shape must be valid");
-
-        let dense = try_dense_from_contiguous(&source).expect("source is contiguous");
-
-        assert_eq!(dense.shape(), [2, 3]);
-        assert_eq!(dense.as_slice(), Some(&[1, 2, 3, 4, 5, 6][..]));
-    }
-
-    #[test]
-    fn materializes_a_contiguous_array_with_its_shape() {
-        let source = leto::Array2::from_shape_vec([2, 3], vec![1_u32, 2, 3, 4, 5, 6])
-            .expect("source shape must be valid");
-
-        let dense = try_dense_from_contiguous(&source).expect("source is contiguous");
-
-        assert_eq!(dense.shape(), [2, 3]);
-        assert_eq!(dense.as_slice(), Some(&[1, 2, 3, 4, 5, 6][..]));
-    }
 
     #[test]
     fn materializes_a_strided_array_in_logical_order() {

@@ -1,5 +1,93 @@
 # Apollo Gap Audit
 
+## Validation suite concern tree (2026-07-16)
+
+- Finding: `apollo-validation::application::suite::mod` was a 974-line
+  implementation file spanning orchestration, FFT, NUFFT, external references,
+  benchmarks, environment reporting, fixtures, metrics, and tests.
+- Resolution: the stale claim was taken over after more than one hour without a
+  scope commit. The manifest is now declaration-only; nine private concern
+  leaves retain the public suite paths and every leaf is below 500 lines. The
+  validation caller's obsolete `gpu_fft_available` field/call was removed under
+  ADR 0013 instead of preserving a failure-erasing wrapper.
+- Evidence tier: value-semantic Nextest passes 10/10, all-targets warning-denied
+  Clippy and check pass, rustdoc passes, the provider audit reports zero raw
+  WGPU paths, and the source-tree size scan reports a 26-line manifest with
+  leaves of 62–230 lines. Existing analytical FFT/NUFFT/reference assertions
+  remain unchanged.
+
+## Unused CPU marker aliases (2026-07-16)
+
+- Finding: fourteen GPU transport manifests exported definition-only public
+  `CpuTransformMarker` aliases; a workspace reference scan found no consumer.
+- Resolution: all aliases and their comments are deleted. The owning transform
+  plan and the existing crate dependency edge remain the SSOT for dependency
+  direction; no compatibility export is retained.
+- Evidence tier: ADR 0033's structural proof sketch, zero source references,
+  all-targets package checks, warning-denied all-features Clippy, provider audit,
+  and default-feature Nextest (382/382 tests passed). No transform arithmetic or
+  provider ownership changed.
+
+## GPU availability probe cleanup (2026-07-16)
+
+- Finding: `apollo-fft` exported `gpu_fft_available() -> bool`, whose body was
+  the hardcoded value `true`; the function and its two re-exports duplicated
+  provider capability ownership and erased typed Hephaestus acquisition state.
+- Resolution: the function and both exports are deleted. Consumers must acquire
+  `hephaestus_wgpu::WgpuDevice` and handle its typed result at the boundary.
+  The validation-suite caller and report schema now remove the stale
+  `surface_reported_available` field as part of the stale-claim takeover.
+- Evidence tier: committed-branch source scans find no `gpu_fft_available`
+  references; the existing default-feature Apollo test lane and warning-denied
+  checks are green, and the provider audit reports zero raw WGPU paths. No
+  transform arithmetic changes.
+- Residual: the all-feature lane still cannot link CUDA on this host
+  (`x86_64-w64-mingw32-ld.exe: cannot find -lcuda`). The first provider-audit
+  attempt waited on the shared target lock; a retry after the lock cleared
+  passed.
+
+## Direct Leto output construction (2026-07-16)
+
+- Finding: `try_dense_from_contiguous` was a consumer-owned forwarding wrapper
+  used only by the four FFT 2D/3D real forward/inverse boundaries.
+- Resolution: the wrapper and all exports are deleted. Each boundary now
+  constructs the typed `leto::Array` directly from the contiguous Mnemosyne
+  slice; the 2D/3D tests compare shape and every output value against the
+  authoritative array API.
+- Theorem/evidence: ADR 0032 proves shape and logical-order preservation from
+  Leto's contiguous storage contract. The direct-array parity tests provide
+  value-semantic differential evidence for both forward and inverse paths.
+  The focused default-feature Nextest run passed 402/402 tests, and warning-
+  denied Clippy plus all-targets type checking passed.
+- Residual: the all-feature Nextest lane is unverified locally because the host
+  MinGW linker reports `x86_64-w64-mingw32-ld.exe: cannot find -lcuda`. This is
+  an environment/toolchain dependency failure, not a source diagnostic; the
+  CUDA provider lane requires the installed driver-development import archive.
+- Verification contention: `cargo test --locked --doc` and `cargo semver-checks
+  check-release` were started with the sanctioned commands. Rustdoc generation
+  (`cargo doc --locked -p apollo-leto-interop -p apollo-fft --no-deps`) passed,
+  but the doctest harness stalled after compiling `apollo_fft` and was stopped
+  without changing the source tree. The direct
+  `cargo semver-checks check-release -p apollo-leto-interop --baseline-rev
+  b14b221` check reported exactly one major `function_missing` break for the
+  deleted wrapper. A package-wide alias SemVer sweep then stalled in the first
+  `apollo-czt` rustdoc child and was stopped; package-level classification is
+  therefore an explicit tooling residual, while D9's structural evidence and
+  all-targets/Nextest gates are green. The provider audit passed after the
+  shared lock cleared.
+
+## Validation suite tree (2026-07-16)
+
+- Finding: `apollo-validation` places 974 lines of orchestration and seven
+  unrelated validation concerns in `application::suite::mod`.
+- Risk: the module manifest becomes a second implementation home, violating
+  the vertical concern tree and allowing report behavior to drift across an
+  unpartitioned file.
+- Decision: ADR 0031 partitions existing code by concern while retaining the
+  public module path. The refactor preserves every mathematical assertion and
+  derived tolerance; no new computation, fallback, or provider abstraction is
+  authorized.
+
 ## CUDA FFT provider path (2026-07-16)
 
 - Finding: Apollo had no CUDA FFT provider although Hephaestus now owns a

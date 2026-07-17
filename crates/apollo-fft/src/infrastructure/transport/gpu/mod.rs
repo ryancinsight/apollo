@@ -12,7 +12,7 @@ pub mod infrastructure;
 use crate::domain::contracts::backend::BackendCapabilities;
 use crate::{ApolloError, ApolloResult, BackendKind, FftBackend, Shape1D, Shape2D, Shape3D};
 use hephaestus_wgpu::WgpuDevice;
-pub use infrastructure::gpu_fft::{gpu_fft_available, GpuFft3d, GpuFft3dBuffers};
+pub use infrastructure::gpu_fft::{GpuFft3d, GpuFft3dBuffers};
 
 #[cfg(feature = "native-f16")]
 pub use infrastructure::gpu_fft::GpuFft3dF16Native;
