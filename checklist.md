@@ -19,13 +19,16 @@
 - [x] Record ADR 0032: direct Leto/Mnemosyne construction is the sole
   contiguous FFT output boundary; no consumer-owned forwarding wrapper is
   retained.
-- [ ] Delete `try_dense_from_contiguous` and migrate the four FFT 2D/3D
+- [x] Delete `try_dense_from_contiguous` and migrate the four FFT 2D/3D
   forward/inverse call sites directly to `leto::Array::from_mnemosyne_slice`.
-- [ ] Add value-semantic 2D/3D Leto forward/inverse parity tests and preserve
+- [x] Add value-semantic 2D/3D Leto forward/inverse parity tests and preserve
   the output-shape theorem in Rustdoc/ADR 0032.
-- [ ] Pass focused formatting, warning-denied Clippy, configured Nextest,
-  doctest, rustdoc, provider audit, source-residue scan, and major SemVer
-  classification.
+- [x] Pass focused formatting, warning-denied Clippy, configured default-feature
+  Nextest (402 tests), and source-residue scan. The all-feature Nextest lane
+  remains blocked by the host MinGW linker (`x86_64-w64-mingw32-ld.exe` cannot
+  find `-lcuda`); doctest, rustdoc, provider audit, and SemVer classification
+  were attempted but could not acquire the shared artifact lock and remain
+  unverified until that contention clears.
 
 ## CUDA FFT provider path [major]
 

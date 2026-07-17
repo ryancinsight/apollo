@@ -1,5 +1,29 @@
 # Apollo Gap Audit
 
+## Direct Leto output construction (2026-07-16)
+
+- Finding: `try_dense_from_contiguous` was a consumer-owned forwarding wrapper
+  used only by the four FFT 2D/3D real forward/inverse boundaries.
+- Resolution: the wrapper and all exports are deleted. Each boundary now
+  constructs the typed `leto::Array` directly from the contiguous Mnemosyne
+  slice; the 2D/3D tests compare shape and every output value against the
+  authoritative array API.
+- Theorem/evidence: ADR 0032 proves shape and logical-order preservation from
+  Leto's contiguous storage contract. The direct-array parity tests provide
+  value-semantic differential evidence for both forward and inverse paths.
+  The focused default-feature Nextest run passed 402/402 tests, and warning-
+  denied Clippy plus all-targets type checking passed.
+- Residual: the all-feature Nextest lane is unverified locally because the host
+  MinGW linker reports `x86_64-w64-mingw32-ld.exe: cannot find -lcuda`. This is
+  an environment/toolchain dependency failure, not a source diagnostic; the
+  CUDA provider lane requires the installed driver-development import archive.
+- Verification contention: `cargo test --locked --doc`, `cargo run --locked -p
+  xtask -- provider-audit`, and `cargo semver-checks check-release` were each
+  started with the sanctioned commands. They remained blocked by the shared
+  `target` artifact lock while unrelated peer Cargo jobs held the queue; the
+  waiting processes were stopped without changing their source trees. These
+  lanes therefore have no result and remain explicit follow-up work.
+
 ## Validation suite tree (2026-07-16)
 
 - Finding: `apollo-validation` places 974 lines of orchestration and seven

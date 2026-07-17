@@ -41,14 +41,16 @@
   cannot report a false Apollo-owned WGPU residual. Acceptance: provider-prefix
   references count zero, raw paths count value-semantically, and the xtask
   package gate passes.
-- [ ] [major] D7-direct-leto-output (owner Codex, in progress 2026-07-16;
+- [x] [major] D7-direct-leto-output (owner Codex, completed 2026-07-16;
   scope `apollo-leto-interop`, `apollo-fft` 2D/3D real FFT API boundaries,
   tests, ADR 0032, and PM records): remove the obsolete
   `try_dense_from_contiguous` forwarding wrapper and construct contiguous
   Mnemosyne-backed outputs directly through Leto. Acceptance: no source or
   manifest residue, value-semantic 2D/3D forward/inverse parity, theorem and
   Rustdoc synchronization, warning-denied focused gates, provider audit, and
-  pre-1.0 major SemVer classification.
+  pre-1.0 major SemVer classification. Default-feature Nextest passes all 402
+  tests; the all-feature linker blocker and remaining docs/audit gates are
+  recorded in `gap_audit.md`.
 
 ## Atlas in-house replacement roadmap — apollo slice [arch]
 

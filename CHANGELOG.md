@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-leto-interop` removes the redundant
+  `try_dense_from_contiguous` output wrapper. Two- and three-dimensional FFT
+  Leto boundaries now call `leto::Array::from_mnemosyne_slice` directly after
+  the owning kernel returns a contiguous result; ADR 0032 records the output
+  shape/sequence theorem and migration contract.
+
 - [major] `apollo-fft` 0.22.0 adds `BackendKind::Cuda` and the feature-gated
   `CudaBackend`/`CudaFft1d` path over an existing typed Hephaestus CUDA device.
   Downstream exhaustive matches must handle `Cuda`; the initial provider

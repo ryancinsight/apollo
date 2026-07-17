@@ -4,7 +4,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::Pl
 use crate::application::execution::plan::fft::real_storage::RealFftData;
 use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
-use apollo_leto_interop::{try_dense_from_contiguous, view_cow};
+use apollo_leto_interop::view_cow;
 use eunomia::Complex;
 use eunomia::Complex64;
 use leto::{Array1, Array2, Array3};
@@ -503,7 +503,13 @@ where
 {
     let dense_array = field_hat.to_contiguous();
     let output = ifft_2d_array_typed::<T>(&dense_array);
-    try_dense_from_contiguous(&output).expect("IFFT signal shape must match Leto output shape")
+    leto::Array::<T, leto::MnemosyneStorage<T>, 2>::from_mnemosyne_slice(
+        output.shape(),
+        output
+            .as_slice()
+            .expect("IFFT output from Leto is contiguous"),
+    )
+    .expect("IFFT signal shape must match Leto output shape")
 }
 
 /// Inverse 3D FFT of a Leto spectrum view, returning Mnemosyne-backed Leto storage.
@@ -526,5 +532,11 @@ where
 {
     let dense_array = field_hat.to_contiguous();
     let output = ifft_3d_array_typed::<T>(&dense_array);
-    try_dense_from_contiguous(&output).expect("IFFT signal shape must match Leto output shape")
+    leto::Array::<T, leto::MnemosyneStorage<T>, 3>::from_mnemosyne_slice(
+        output.shape(),
+        output
+            .as_slice()
+            .expect("IFFT output from Leto is contiguous"),
+    )
+    .expect("IFFT signal shape must match Leto output shape")
 }
