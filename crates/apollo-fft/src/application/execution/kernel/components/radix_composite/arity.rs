@@ -1,6 +1,6 @@
 use super::cache::CompositeCache;
 use crate::application::execution::kernel::components::winograd::apply_twiddle_impl;
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use eunomia::Complex;
 
 pub(super) trait FusedStage {

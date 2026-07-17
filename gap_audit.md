@@ -1,5 +1,18 @@
 # Apollo Gap Audit
 
+## Winograd trait re-export (2026-07-17)
+
+- Finding: `mixed_radix::traits` re-exported `ShortWinogradScalar`, creating a
+  second apparent ownership path for a trait whose implementation belongs in
+  the vertical `components::winograd` tree.
+- Resolution: remove the internal re-export and rewrite every Apollo FFT and
+  macro caller to the canonical module. The theorem is direct: the caller
+  graph contains exactly one `ShortWinogradScalar` definition path, therefore
+  the trait/codelet contract has one SSOT and cannot drift through a forwarding
+  alias.
+- Evidence tier: source-residue scan, 402/402 locked Nextest tests,
+  warning-denied Clippy, doctests, warning-clean rustdoc, and provider audit.
+
 ## Radix execution-policy wrapper (2026-07-17)
 
 - Finding: `RadixCompositePolicy` duplicated Moirai's threshold policy and

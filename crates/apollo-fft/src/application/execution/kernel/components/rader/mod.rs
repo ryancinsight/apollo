@@ -6,7 +6,7 @@ pub(crate) mod generator;
 pub(crate) mod ordered;
 pub(crate) mod static_rader;
 
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use convolution::rader_convolve_inplace;
 use convolution::rader_negacyclic_convolve_inplace;

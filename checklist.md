@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## D12-remove-winograd-reexport [patch]
+
+- [x] Remove the `mixed_radix::traits::ShortWinogradScalar` re-export and
+      update all Apollo FFT and macro callers to the canonical Winograd module.
+- [x] Preserve the trait's theorem and value semantics through the existing
+      generic kernel suites; prove no compatibility path remains.
+- [x] Run locked package tests, warning-denied diagnostics, doctests, rustdoc,
+      provider audit, and synchronize `gap_audit.md`/`CHANGELOG.md`.
+
+**Evidence:** source residue scan is clean; locked Nextest is 402/402;
+warning-denied Clippy, doctests, warning-clean rustdoc, and provider audit pass.
+The source theorem is SSOT: all callers name
+`components::winograd::ShortWinogradScalar`, with no alias or forwarding path.
+
 ## D11-remove-policy-wrapper [major]
 
 - [x] Record ADR 0035: the threshold policy is already provided by Moirai, so

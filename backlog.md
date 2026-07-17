@@ -1,5 +1,21 @@
 # Apollo Backlog
 
+## D12-remove-winograd-reexport [patch] — done
+
+- Owner: Codex; scope: `apollo-fft`/macro internal trait paths,
+  `ShortWinogradScalar` canonical module, and synchronized PM records.
+- Acceptance: delete the `mixed_radix::traits::ShortWinogradScalar` backward-
+  compatibility re-export and update every in-repo caller to the canonical
+  `components::winograd` home; preserve all FFT kernels, tests, and generated
+  macro bounds with no alias or forwarding path.
+- Evidence: the re-export and all old caller paths are absent from the source
+  scan; locked Nextest passes 402/402, warning-denied Clippy and rustdoc pass,
+  doctests pass (one existing macro doctest remains intentionally ignored),
+  and the provider audit reports zero raw WGPU ownership. The theorem is the
+  module invariant: every `ShortWinogradScalar` reference resolves to the
+  single `components::winograd` definition, so no compatibility path can
+  diverge from the codelet implementation.
+
 ## D11-remove-policy-wrapper [major] — done
 
 - Owner: Codex; scope: `apollo-fft` radix-composite execution policy module,

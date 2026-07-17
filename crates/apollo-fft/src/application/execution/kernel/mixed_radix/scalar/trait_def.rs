@@ -1,6 +1,6 @@
-use super::super::traits::ShortWinogradScalar;
 use super::transpose::transpose_tiled_scalar;
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
 use std::sync::Arc;
 

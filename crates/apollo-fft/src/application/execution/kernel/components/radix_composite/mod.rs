@@ -7,7 +7,7 @@ mod avx2;
 mod cache;
 mod core;
 
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
 use crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
 pub use cache::CompositeCache;

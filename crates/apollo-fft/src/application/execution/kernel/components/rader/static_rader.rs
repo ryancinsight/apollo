@@ -26,7 +26,7 @@ pub(crate) fn try_static_rader<F, const INVERSE: bool>(data: &mut [F::Complex], 
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
             Complex = eunomia::Complex<F>,
-        > + crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar
+        > + crate::application::execution::kernel::components::winograd::ShortWinogradScalar
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<4>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<6>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<10>

@@ -1,6 +1,6 @@
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::components::winograd::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use eunomia::{Complex32, Complex64};
 
 fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {

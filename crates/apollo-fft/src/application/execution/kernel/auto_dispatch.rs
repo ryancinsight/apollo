@@ -231,7 +231,7 @@ macro_rules! fft_precision_impl {
 /// fits the `fn_sizes` convention used by `fft_precision_impl!`.
 #[inline]
 fn dispatch_dft11<
-    F: crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar,
+    F: crate::application::execution::kernel::components::winograd::ShortWinogradScalar,
     const INVERSE: bool,
 >(
     data: &mut [eunomia::Complex<F>; 11],

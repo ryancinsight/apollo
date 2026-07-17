@@ -26,7 +26,7 @@ use crate::application::execution::kernel::components::butterflies::{
     dft3_impl, dft4_array_impl, dft5_array_impl, dft7_impl,
 };
 use crate::application::execution::kernel::components::winograd::traits::WinogradScalar;
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// In-place Cook-Toom-GT DFT-84.
 ///

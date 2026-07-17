@@ -12,8 +12,8 @@ use super::components::rader::{
     rader_fft, rader_fft_with_convolution_backend, Bluestein, FullCyclic, HalfCyclicWinograd,
 };
 use super::components::winograd::radix::odd_prime_pair::{dft_pair_impl, PrimePairTable};
+use super::components::winograd::ShortWinogradScalar;
 use super::components::winograd::WinogradScalar;
-use super::mixed_radix::traits::ShortWinogradScalar;
 use super::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 
