@@ -39,8 +39,6 @@ pub struct CpuFftReport {
 /// GPU FFT validation results.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GpuFftReport {
-    /// Whether the GPU surface crate is linked.
-    pub surface_reported_available: bool,
     /// Whether an adapter/device-backed validation run was attempted.
     pub attempted: bool,
     /// Whether the attempted validation run succeeded.

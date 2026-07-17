@@ -18,14 +18,18 @@ concerns.
 Partition the existing implementations into one private leaf per concern while
 retaining `application::suite` as the only public API path. The module manifest
 owns declarations, shared private limits, and curated re-exports; it contains no
-suite computation. This is a file-topology change only: formulas, fixtures,
-tolerances, provider acquisition, and result construction remain unchanged.
+suite computation. The stale hardcoded GPU availability field/call is removed
+under ADR 0013 during the same takeover so the validation report records only
+typed acquisition outcomes. Numerical formulas, fixtures, tolerances, and
+result construction remain unchanged.
 
 ## Invariants and verification
 
-For each public suite function `f`, the refactor preserves its value contract:
-`f_before(input) = f_after(input)`, including report fields and propagated
-errors. The existing validation contracts provide the empirical oracle: FFT
+For each public suite function `f`, the refactor preserves its numerical value
+contract: `f_before(input) = f_after(input)` for transform outputs, analytical
+errors, and propagated provider failures. The obsolete availability report field
+is intentionally absent; Hephaestus acquisition is the sole capability
+evidence. The existing validation contracts provide the empirical oracle: FFT
 round-trip and Parseval checks, CPU/GPU differentials, NUFFT adjoint and
 relative-error bounds, published-reference values, and benchmark report schema.
 No new tolerance, fallback, or provider wrapper is introduced.
@@ -34,4 +38,6 @@ No new tolerance, fallback, or provider wrapper is introduced.
 
 - Each concern has one canonical leaf below `application::suite`.
 - Existing public callers retain `apollo_validation::application::suite::*`.
-- The refactor must preserve value-semantic tests and warning-clean API docs.
+- The refactor preserves value-semantic tests and warning-clean API docs; the
+  validation package passes 10/10 Nextest tests, all-targets Clippy, and
+  rustdoc.

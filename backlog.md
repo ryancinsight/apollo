@@ -419,13 +419,16 @@ Remaining replacement work:
   doctest, warning-clean rustdoc, provider audit, source-residue scans, and
   0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
-  - [ ] [arch] D8-validation-suite-tree (owner Codex, in progress
+  - [x] [arch] D8-validation-suite-tree (owner Codex, completed
     2026-07-16; scope `crates/apollo-validation/src/application/suite/`, ADR
     0031, and PM records): partition the 974-line suite manifest into private
     concern leaves while preserving all public suite paths, analytical
     assertions, and typed provider boundaries. Acceptance: the manifest is
     declaration-only, each leaf stays below 500 lines, focused value-semantic
-    evidence stays green, and no new fallback/wrapper appears.
+    evidence stays green, and no new fallback/wrapper appears. The stale
+    `gpu_fft_available` report field/call was removed under ADR 0013 during
+    takeover; all nine leaves are below 500 lines, validation Nextest passes
+    10/10, and warning-denied checks plus rustdoc are green.
   In progress — owner Codex; first bounded DCT/DST scope completed 2026-07-15:
   `apollo-dctdst` GPU verification tree, D8 ADR, and active PM records.
   Completed acceptance: split the 796-line verification monolith by its distinct

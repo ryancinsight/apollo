@@ -1,5 +1,21 @@
 # Apollo Gap Audit
 
+## Validation suite concern tree (2026-07-16)
+
+- Finding: `apollo-validation::application::suite::mod` was a 974-line
+  implementation file spanning orchestration, FFT, NUFFT, external references,
+  benchmarks, environment reporting, fixtures, metrics, and tests.
+- Resolution: the stale claim was taken over after more than one hour without a
+  scope commit. The manifest is now declaration-only; nine private concern
+  leaves retain the public suite paths and every leaf is below 500 lines. The
+  validation caller's obsolete `gpu_fft_available` field/call was removed under
+  ADR 0013 instead of preserving a failure-erasing wrapper.
+- Evidence tier: value-semantic Nextest passes 10/10, all-targets warning-denied
+  Clippy and check pass, rustdoc passes, the provider audit reports zero raw
+  WGPU paths, and the source-tree size scan reports a 26-line manifest with
+  leaves of 62–230 lines. Existing analytical FFT/NUFFT/reference assertions
+  remain unchanged.
+
 ## Unused CPU marker aliases (2026-07-16)
 
 - Finding: fourteen GPU transport manifests exported definition-only public
@@ -19,8 +35,8 @@
   provider capability ownership and erased typed Hephaestus acquisition state.
 - Resolution: the function and both exports are deleted. Consumers must acquire
   `hephaestus_wgpu::WgpuDevice` and handle its typed result at the boundary.
-  The untracked validation-suite caller is peer-owned and was not edited; it
-  must remove its stale `surface_reported_available` field before landing.
+  The validation-suite caller and report schema now remove the stale
+  `surface_reported_available` field as part of the stale-claim takeover.
 - Evidence tier: committed-branch source scans find no `gpu_fft_available`
   references; the existing default-feature Apollo test lane and warning-denied
   checks are green, and the provider audit reports zero raw WGPU paths. No

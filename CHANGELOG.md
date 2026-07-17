@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-validation` removes the obsolete `GpuFftReport::surface_reported_available`
+  field. GPU validation now reports typed Hephaestus acquisition and execution
+  outcomes only; the validation suite is partitioned into private concern
+  leaves under ADR 0031.
+
 - [major] `apollo-fft` removes the hardcoded `gpu_fft_available` capability
   probe and its re-exports. GPU availability now comes only from the typed
   Hephaestus acquisition boundary described by ADR 0013.

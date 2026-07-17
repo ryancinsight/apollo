@@ -28,11 +28,13 @@
 - Phase: Execution
 - [x] Record ADR 0031: the suite manifest owns declarations and curated
   re-exports; concern leaves own computation.
-- [ ] Move orchestration, FFT, NUFFT, external/reference, benchmark,
+- [x] Move orchestration, FFT, NUFFT, external/reference, benchmark,
   environment, and test concerns into private leaves below 500 lines while
   retaining each existing public suite path.
-- [ ] Pass focused value-semantic Nextest, warning-denied diagnostics, doctest,
-  rustdoc, provider audit, and a source-tree size scan.
+- [x] Pass focused value-semantic Nextest (10 tests), warning-denied
+  diagnostics, rustdoc, provider audit, and a source-tree size scan (all nine
+  leaves below 500 lines). Doctest execution is covered by the validation
+  package's test target; no standalone validation doctests are defined.
 
 ## Direct Leto output construction [major]
 

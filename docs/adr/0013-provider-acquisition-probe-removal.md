@@ -39,4 +39,5 @@ The public surface becomes smaller and failure modes remain typed. The change
 does not alter transform mathematics, GPU dispatch, Leto host boundaries, or
 Hephaestus ownership. SemVer classification and value-semantic transform tests
 provide API and execution evidence; neither is a machine-checked proof of GPU
-correctness.
+correctness. `apollo-validation` reports only typed acquisition outcomes and
+does not retain a boolean that claims GPU-surface availability.
