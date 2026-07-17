@@ -1,5 +1,18 @@
 # Apollo Gap Audit
 
+## Dense FFT dispatch verification tree (2026-07-17)
+
+- Finding: `gpu_fft/dispatch.rs` mixed typed Hephaestus execution with two
+  device-present verification contracts in a 589-line file.
+- Resolution: the verification contracts now live in the private
+  `gpu_fft/verification/dispatch.rs` leaf; the dispatch implementation remains
+  the single provider-owned execution path. ADR 0034 records the inverse law
+  and the existing \(\gamma_{256}\) / \(13\gamma_{256}\) finite-precision
+  bounds.
+- Evidence tier: source topology and nightly rustfmt are clean; locked Nextest
+  passes 393/393, warning-denied Clippy and warning-clean rustdoc pass, and the
+  provider audit passes 5/5. The refactor has no known residual.
+
 ## Moirai execution ownership (2026-07-17)
 
 - Finding: the radix-composite kernel routed chunk dispatch through an

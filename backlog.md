@@ -1,5 +1,20 @@
 # Apollo Backlog
 
+## D8-FFT-dispatch-verification-tree [arch] — in progress
+
+- Owner: Codex; scope: `apollo-fft` GPU dispatch verification module, ADR 0034,
+  and synchronized PM records.
+- Acceptance: provider execution remains in `dispatch.rs`, device-present
+  contracts live in a private concern leaf below 500 lines, all existing
+  value-semantic assertions and derived tolerances remain unchanged, and
+  locked package gates plus provider audit pass.
+- Evidence: dispatch is 454 lines, the verification leaf is 137 lines, nightly
+  rustfmt and `git diff --check` pass, locked Nextest passes 393/393,
+  warning-denied Clippy passes, rustdoc is warning-clean, and the provider
+  audit passes 5/5.
+- Re-open trigger: a later dispatch or verification edit changes the module
+  boundary or invalidates the recorded inverse/Bluestein contracts.
+
 ## Moirai forwarding-wrapper removal [major]
 
 - [x] [major] D10-remove-moirai-forwarder (owner Codex, completed 2026-07-17;

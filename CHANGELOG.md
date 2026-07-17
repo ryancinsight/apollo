@@ -77,6 +77,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] Dense FFT GPU dispatch verification now lives in a private vertical
+  leaf under `gpu_fft/verification/dispatch.rs`; the Hephaestus execution
+  path and its inverse/Bluestein theorem contracts are unchanged.
+
 - [patch] The Rust workspace CI runner pins Ubuntu 24.04, installs NVIDIA CUDA
   13.3 with driver-development stubs, and exports the generated bindings'
   toolkit path plus `cuda-oxide`'s driver-stub link directory. This validates
