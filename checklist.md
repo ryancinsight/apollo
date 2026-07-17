@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## D11-remove-policy-wrapper [major]
+
+- [x] Record ADR 0035: the threshold policy is already provided by Moirai, so
+      Apollo owns no duplicate execution-policy ZST or public module.
+- [x] Replace all radix-composite policy call sites with Moirai's canonical
+      `AdaptiveWithThreshold` and delete the obsolete Apollo policy module.
+- [x] Advance `apollo-fft` to 0.25.0, preserve the threshold value contract,
+      and pass locked Nextest 393/393, warning-denied diagnostics, doctests,
+      rustdoc, and the provider audit. PR #49 merge is the integration
+      watchpoint before the Atlas gitlink advances.
+
 ## Dense FFT dispatch verification tree [arch]
 
 - [x] Record ADR 0034 with the inverse identity and the derived Bluestein

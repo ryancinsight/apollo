@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",

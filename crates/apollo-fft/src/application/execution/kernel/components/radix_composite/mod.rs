@@ -9,6 +9,7 @@ mod core;
 
 use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use crate::application::execution::kernel::radix_stage::normalize_scalar;
+use crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD;
 pub use cache::CompositeCache;
 
 /// Execute a fused multi-stage Stockham composite pass over all output groups.
@@ -45,7 +46,7 @@ pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     radices: &[usize],
 ) {
     core::composite_core_with_radices::<
-        crate::application::execution::policy::RadixCompositePolicy,
+        moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         false,
     >(data, radices, None);
@@ -58,7 +59,7 @@ pub fn forward_inplace_with_pointwise<F: CompositeCache + ShortWinogradScalar + 
     pointwise_spectrum: &[Complex<F>],
 ) {
     core::composite_core_with_radices::<
-        crate::application::execution::policy::RadixCompositePolicy,
+        moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         false,
     >(data, radices, Some(pointwise_spectrum));
@@ -70,7 +71,7 @@ pub fn inverse_inplace_unnorm_with_radices<F: CompositeCache + ShortWinogradScal
     radices: &[usize],
 ) {
     core::composite_core_with_radices::<
-        crate::application::execution::policy::RadixCompositePolicy,
+        moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         true,
     >(data, radices, None);
@@ -82,7 +83,7 @@ pub fn inverse_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 's
     radices: &[usize],
 ) {
     core::composite_core_with_radices::<
-        crate::application::execution::policy::RadixCompositePolicy,
+        moirai::AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>,
         F,
         true,
     >(data, radices, None);

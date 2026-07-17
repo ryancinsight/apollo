@@ -18,6 +18,18 @@ mod factorize;
 mod large_prime;
 mod prime_radix;
 
+#[test]
+fn moirai_threshold_policy_preserves_radix_dispatch_boundary() {
+    use moirai::ExecutionPolicy;
+
+    assert!(<moirai::AdaptiveWithThreshold<
+        { crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD },
+    > as ExecutionPolicy>::parallelize(32_768));
+    assert!(!<moirai::AdaptiveWithThreshold<
+        { crate::application::execution::kernel::tuning::RADIX_PARALLEL_CHUNK_THRESHOLD },
+    > as ExecutionPolicy>::parallelize(32_767));
+}
+
 pub(super) fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
     a.iter()
         .zip(b)

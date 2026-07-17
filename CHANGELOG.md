@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` 0.25.0 removes the redundant public
+  `application::execution::policy::RadixCompositePolicy` module. Radix
+  execution now instantiates Moirai's canonical
+  `AdaptiveWithThreshold<RADIX_PARALLEL_CHUNK_THRESHOLD>` directly; the
+  threshold contract and FFT value semantics are unchanged.
+
 - [major] `apollo-fft` 0.24.0 removes the unused public
   `application::execution::policy::for_each_chunk_mut_enumerated` forwarding
   helper. Radix-composite execution now calls Moirai's canonical chunk

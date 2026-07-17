@@ -1,5 +1,18 @@
 # Apollo Gap Audit
 
+## Radix execution-policy wrapper (2026-07-17)
+
+- Finding: `RadixCompositePolicy` duplicated Moirai's threshold policy and
+  exposed a public Apollo module without owning execution semantics.
+- Resolution: the wrapper and module are deleted; radix-composite dispatch now
+  instantiates `moirai::AdaptiveWithThreshold` directly with Apollo's tuning
+  threshold. This preserves the threshold contract while restoring Moirai as
+  the execution-policy SSOT.
+- Evidence tier: source-residue scan, threshold boundary regression, locked
+  package tests, warning-denied diagnostics, doctests, rustdoc, and provider
+  audit. The `apollo-fft` package advances to 0.25.0 with no compatibility
+  export.
+
 ## Dense FFT dispatch verification tree (2026-07-17)
 
 - Finding: `gpu_fft/dispatch.rs` mixed typed Hephaestus execution with two
