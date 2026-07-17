@@ -1,5 +1,47 @@
 # Apollo Gap Audit
 
+## CUDA FFT provider path (2026-07-16)
+
+- Finding: Apollo had no CUDA FFT provider although Hephaestus now owns a
+  typed CUDA device, buffer, kernel, command-stream, and synchronization
+  substrate.
+- Risk: a consumer-local CUDA wrapper or a duplicated WGPU/CUDA FFT descriptor
+  would reintroduce provider ownership and create two drifting recurrence
+  contracts.
+- Implementation: `apollo-fft` now carries a feature-gated `CudaBackend` and
+  a one-dimensional f32 `CudaFft1d` plan over `CudaDevice`. The common
+  transport leaf owns `FftParams`, zero-sized entries, and radix stages;
+  provider dialects implement `KernelSource` on that single descriptor. The
+  Leto complex boundary reuses typed split-complex device buffers and host
+  staging. No Apollo source imports a CUDA driver or a raw WGPU path.
+- Evidence tier: compile-time feature/all-target validation, warning-denied
+  Clippy, rustdoc, SemVer classification, and value-semantic CUDA/CPU/WGPU
+  Nextest pass. `nvidia-smi -L` identifies the RTX 5080 used by the
+  device-present lane. The GNU linker requires an import archive for its
+  installed `nvcuda.dll`; the generated archive lives only in the shared
+  ignored target tree and does not alter the Apollo dependency graph. ADR 0030
+  records the derived bounds and that this is empirical, not machine-checked,
+  GPU evidence.
+- CI finding: PR #42's Rust workspace gate first lacked the CUDA 13.2+ toolkit
+  needed for generated `cuda-bindings` headers. Its provisioned rerun then
+  reached linking but `cuda-oxide` 0.4 selected its obsolete CUDA 11.3 default
+  directory, producing `rust-lld: unable to find library -lcuda`. The workflow
+  now installs CUDA 13.3 driver-development stubs, discovers their exact
+  directory beneath the pinned toolkit, exports it as `CUDA_LIB_PATH`, and
+  stages `libcuda.so.1` for the no-GPU test process. GitHub Actions run
+  29544786401 passes its Rust workspace and Python-binding jobs. The hosted
+  result is compile-time and provider-unavailable-path evidence because it has
+  no CUDA device; the local RTX 5080 Nextest contracts remain the GPU arithmetic
+  evidence.
+- Review decision: retain the three typed prepared kernels in `CudaFft1d` so
+  repeated execution does not rebuild the borrowed source/hash cache lookup;
+  CUDA bit reversal and power-of-two index decomposition use intrinsic and
+  bitwise forms. A proposed consumer-local stream completion wrapper is
+  rejected: the current provider has one legacy default stream and its
+  `ComputeDevice::download` contract is the authoritative synchronous transfer
+  boundary. Apollo submits then downloads without an additional
+  context-wide synchronization.
+
 ## Raw-WGPU audit boundary (2026-07-16)
 
 - Finding: `xtask provider-audit` counts the substring `wgpu`, which reports

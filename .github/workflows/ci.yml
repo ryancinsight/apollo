@@ -12,7 +12,7 @@ concurrency:
 jobs:
   rust:
     name: rust workspace
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -32,6 +32,30 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
           components: clippy, rustfmt
+      # `hephaestus-cuda` uses NVIDIA's generated CUDA bindings, which require
+      # a CUDA 13.2+ header/toolkit at build time even when no device is
+      # present. Pin the image and toolkit together so the all-feature gate
+      # validates the typed CUDA provider instead of silently excluding it.
+      - name: Install CUDA toolkit
+        run: |
+          wget --no-verbose -O /tmp/cuda-keyring.deb \
+            https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i /tmp/cuda-keyring.deb
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            cuda-toolkit-13-3 cuda-driver-dev-13-3
+          test -f /usr/local/cuda-13.3/include/cuda.h
+          cuda_stub="$(find /usr/local/cuda-13.3 -path '*/stubs/libcuda.so' -print -quit)"
+          test -n "$cuda_stub"
+          cuda_lib_path="$(dirname "$cuda_stub")"
+          cuda_runtime_path="$RUNNER_TEMP/cuda-driver-stubs"
+          mkdir -p "$cuda_runtime_path"
+          ln -sf "$cuda_stub" "$cuda_runtime_path/libcuda.so.1"
+          {
+            echo "CUDA_TOOLKIT_PATH=/usr/local/cuda-13.3"
+            echo "CUDA_LIB_PATH=$cuda_lib_path"
+            echo "LD_LIBRARY_PATH=$cuda_runtime_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          } >> "$GITHUB_ENV"
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2

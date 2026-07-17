@@ -9,6 +9,8 @@ pub enum BackendKind {
     Cpu,
     /// WGPU backend.
     Wgpu,
+    /// CUDA backend through the typed Hephaestus provider boundary.
+    Cuda,
 }
 
 /// Apollo's normalization convention.

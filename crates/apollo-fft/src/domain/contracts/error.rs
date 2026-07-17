@@ -44,6 +44,12 @@ pub enum ApolloError {
         /// Error message propagated from the backend.
         message: String,
     },
+    /// A CUDA-specific provider failure occurred.
+    #[error("cuda backend error: {message}")]
+    Cuda {
+        /// Error message propagated from the backend.
+        message: String,
+    },
 }
 
 impl ApolloError {

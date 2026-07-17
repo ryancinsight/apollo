@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.21.0"
+version = "0.22.0"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -11,6 +11,7 @@ description = "Reusable FFT planning, execution, and cache abstractions for Apol
 [dependencies]
 hephaestus-wgpu = { workspace = true, optional = true }
 hephaestus-core = { workspace = true, optional = true }
+hephaestus-cuda = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { path = "../apollo-fft-macros" }
 apollo-leto-interop = { path = "../apollo-leto-interop" }
@@ -34,6 +35,10 @@ proptest.workspace = true
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",
+    "dep:hephaestus-core",
+]
+cuda = [
+    "dep:hephaestus-cuda",
     "dep:hephaestus-core",
 ]
 native-f16 = ["wgpu"]

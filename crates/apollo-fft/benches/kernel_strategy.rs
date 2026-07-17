@@ -2,7 +2,9 @@
 
 #![allow(missing_docs)]
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+#[cfg(feature = "kernel-strategy-bench")]
+use apollo_bench::BenchmarkConfig;
+use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 use apollo_fft::application::execution::kernel::{direct, fft_forward};

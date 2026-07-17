@@ -1,5 +1,33 @@
 # Apollo Checklist
 
+## CUDA FFT provider path [major]
+
+- Target version: `apollo-fft` 0.22.0 pre-1.0 breaking release.
+- Phase: Closure
+- [x] Record ADR 0030 with the radix-two DFT/inverse theorem and the derived
+  finite-precision differential bounds.
+- [x] Add the `cuda` feature, typed `CudaBackend`, one-dimensional f32
+  `CudaFft1d`, and `BackendKind::Cuda` without a consumer-owned CUDA driver or
+  device-acquisition wrapper.
+- [x] Move the typed FFT descriptor and radix-stage values into their common
+  transport leaf; WGSL and CUDA C now implement dialect sources on one
+  interface.
+- [x] Pass focused CUDA/CPU/WGPU value-semantic Nextest, warning-denied
+  diagnostics, doctest, rustdoc, provider audit, source-residue scan, and the
+  0.21.0 to 0.22.0 pre-1.0 major SemVer comparison. The device-present lane
+  runs with the installed RTX 5080 CUDA driver; the GNU target links its
+  generated `libcuda.dll.a` import archive from the shared ignored target tree.
+- [x] Provision CUDA 13.3 plus its driver-development stubs on the pinned
+  Ubuntu 24.04 Rust CI runner, export the discovered CUDA 13.3 `CUDA_LIB_PATH`,
+  and pass the required workspace `--all-features` gate in GitHub Actions run
+  29544786401. `cuda-bindings` requires CUDA 13.2+ headers, while `cuda-oxide`
+  0.4 otherwise searches its obsolete CUDA 11.3 default link directory; no-GPU
+  CI remains a provider-unavailable test environment, not a fallback path.
+- [x] Retain typed CUDA prepared kernels at plan construction, use
+  power-of-two CUDA intrinsics/indexing, and let the synchronous typed download
+  serve as the provider completion boundary without a consumer-owned stream
+  wrapper.
+
 ## Raw-WGPU audit boundary [patch]
 
 - Phase: Closure
