@@ -1,5 +1,18 @@
 # Apollo Gap Audit
 
+## Provider-cleanup release metadata (2026-07-16)
+
+- The breaking provider-boundary removals are versioned without a compatibility
+  layer: `apollo-fft` 0.23.0, `apollo-leto-interop` 0.17.0,
+  `apollo-validation` 0.3.0, and each of the fourteen marker-alias packages at
+  its next pre-1.0 minor release.
+- `cargo metadata --locked --no-deps` resolves the updated lock graph. Current
+  SemVer comparisons for `apollo-leto-interop`, `apollo-fft`, and
+  `apollo-validation` pass with no required update against their pre-removal
+  baselines. The remaining verification residuals are unchanged: host MinGW
+  CUDA linking, the stalled doctest harness, and the package-wide
+  fourteen-package SemVer sweep that requires a rustdoc child to complete.
+
 ## Validation suite concern tree (2026-07-16)
 
 - Finding: `apollo-validation::application::suite::mod` was a 974-line
@@ -67,10 +80,12 @@
   check-release` were started with the sanctioned commands. Rustdoc generation
   (`cargo doc --locked -p apollo-leto-interop -p apollo-fft --no-deps`) passed,
   but the doctest harness stalled after compiling `apollo_fft` and was stopped
-  without changing the source tree. The direct
-  `cargo semver-checks check-release -p apollo-leto-interop --baseline-rev
-  b14b221` check reported exactly one major `function_missing` break for the
-  deleted wrapper. A package-wide alias SemVer sweep then stalled in the first
+  without changing the source tree. The initial same-version Leto comparison
+  reported the expected `function_missing` break; after the package advanced
+  to 0.17.0, the comparison against `b14b221` passed with no required update.
+  The current FFT 0.22.0→0.23.0 comparison against `cd2973b` and validation
+  0.2.0→0.3.0 comparison against `2335b29` likewise pass with no required
+  update. A package-wide alias SemVer sweep then stalled in the first
   `apollo-czt` rustdoc child and was stopped; package-level classification is
   therefore an explicit tooling residual, while D9's structural evidence and
   all-targets/Nextest gates are green. The provider audit passed after the

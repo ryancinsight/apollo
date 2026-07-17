@@ -8,7 +8,8 @@
   zero workspace references, no compatibility exports, dependency direction
   remains provider-first, package checks and default Nextest pass, and the
   pre-1.0 surface deletion is documented. All-targets checks, warning-denied
-  Clippy, provider audit, and 382 default-feature tests pass.
+  Clippy, provider audit, and 382 default-feature tests pass. Each affected
+  package advances to its next pre-1.0 minor release.
 
 ## GPU availability probe cleanup [major]
 
@@ -20,7 +21,7 @@
   focused value-semantic gates and provider audit pass, and the pre-1.0 API
   break is documented. Default-feature checks (394 Nextest tests), source
   scans, and provider audit pass; the all-feature CUDA linker residual is
-  recorded in `gap_audit.md`.
+  recorded in `gap_audit.md`. `apollo-fft` advances to 0.23.0.
 
 ## Release 0.16.0 eligibility [arch]
 
@@ -429,6 +430,7 @@ Remaining replacement work:
     `gpu_fft_available` report field/call was removed under ADR 0013 during
     takeover; all nine leaves are below 500 lines, validation Nextest passes
     10/10, and warning-denied checks plus rustdoc are green.
+    `apollo-validation` advances to 0.3.0 for the public report-field removal.
   In progress — owner Codex; first bounded DCT/DST scope completed 2026-07-15:
   `apollo-dctdst` GPU verification tree, D8 ADR, and active PM records.
   Completed acceptance: split the 796-line verification monolith by its distinct
