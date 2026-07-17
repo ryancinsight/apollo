@@ -2,18 +2,21 @@
 
 ## Unused CPU marker aliases [major]
 
-- Target version: fourteen pre-1.0 GPU transport API surfaces.
+- Target versions: fourteen pre-1.0 GPU transport API surfaces advance to
+  their next minor releases.
 - Phase: Execution
 - [x] Record ADR 0033: aliases have no references or type-level invariant and
   dependency direction is already expressed by the owning plan edge.
 - [x] Delete all fourteen aliases without compatibility exports.
 - [x] Pass formatting, warning-denied diagnostics, all-targets package checks,
   default-feature Nextest (382 tests), provider audit, and source-residue scan.
-  The CUDA lane remains documented as an environment residual.
+  The CUDA lane remains documented as an environment residual. Version bumps
+  are staged with the closure increment.
 
 ## GPU availability probe cleanup [major]
 
-- Target version: `apollo-fft` pre-1.0 breaking provider-boundary cleanup.
+- Target version: `apollo-fft` 0.23.0 pre-1.0 breaking provider-boundary
+  cleanup.
 - Phase: Execution
 - [x] Confirm ADR 0013 covers `gpu_fft_available` as the same failure-erasing
   consumer probe class; Hephaestus remains the sole typed acquisition owner.
@@ -24,7 +27,8 @@
 
 ## Validation suite tree [arch]
 
-- Target version: internal topology refactor; no public API change.
+- Target version: `apollo-validation` 0.3.0 pre-1.0 breaking cleanup plus the
+  internal topology refactor.
 - Phase: Execution
 - [x] Record ADR 0031: the suite manifest owns declarations and curated
   re-exports; concern leaves own computation.
@@ -34,7 +38,8 @@
 - [x] Pass focused value-semantic Nextest (10 tests), warning-denied
   diagnostics, rustdoc, provider audit, and a source-tree size scan (all nine
   leaves below 500 lines). Doctest execution is covered by the validation
-  package's test target; no standalone validation doctests are defined.
+  package's test target; no standalone validation doctests are defined. The
+  manifest and report-field deletion are versioned in the closure increment.
 
 ## Direct Leto output construction [major]
 
@@ -52,9 +57,10 @@
   remains blocked by the host MinGW linker (`x86_64-w64-mingw32-ld.exe` cannot
   find `-lcuda`); `cargo doc --no-deps` passed, while the doctest harness
   stalled after compiling `apollo_fft` and the package SemVer sweep stalled in
-  its rustdoc child. The provider audit passed after the lock cleared, and the
-  direct `apollo-leto-interop` SemVer check classified the wrapper removal as
-  one major `function_missing` break.
+  its rustdoc child. The provider audit passed after the lock cleared. The
+  current `apollo-leto-interop` comparison against `b14b221` passes with no
+  required update after the 0.17.0 bump; the fourteen-package alias sweep
+  remains a tooling residual.
 
 ## CUDA FFT provider path [major]
 

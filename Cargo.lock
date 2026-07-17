@@ -64,7 +64,7 @@ version = "0.16.0"
 
 [[package]]
 name = "apollo-czt"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dctdst"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-dht"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fft"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft-macros",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-frft"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-fwht"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-gft"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-hilbert"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -241,14 +241,14 @@ dependencies = [
 
 [[package]]
 name = "apollo-leto-interop"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "leto",
 ]
 
 [[package]]
 name = "apollo-mellin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-ntt"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-leto-interop",
  "bytemuck",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-qft"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-radon"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-sft"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-stft"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "apollo-bench",
  "apollo-fft",
@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-validation"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "apollo-czt",
  "apollo-dctdst",
@@ -477,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "apollo-wavelet"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "apollo-fft",
  "apollo-leto-interop",

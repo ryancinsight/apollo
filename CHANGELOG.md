@@ -13,17 +13,22 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [major] `apollo-validation` removes the obsolete `GpuFftReport::surface_reported_available`
   field. GPU validation now reports typed Hephaestus acquisition and execution
   outcomes only; the validation suite is partitioned into private concern
-  leaves under ADR 0031.
+  leaves under ADR 0031. The package advances to 0.3.0.
 
 - [major] `apollo-fft` removes the hardcoded `gpu_fft_available` capability
   probe and its re-exports. GPU availability now comes only from the typed
-  Hephaestus acquisition boundary described by ADR 0013.
+  Hephaestus acquisition boundary described by ADR 0013. The package advances
+  to 0.23.0.
 
 - [major] `apollo-leto-interop` removes the redundant
   `try_dense_from_contiguous` output wrapper. Two- and three-dimensional FFT
   Leto boundaries now call `leto::Array::from_mnemosyne_slice` directly after
   the owning kernel returns a contiguous result; ADR 0032 records the output
-  shape/sequence theorem and migration contract.
+  shape/sequence theorem and migration contract. The package advances to
+  0.17.0.
+
+- [major] Fourteen transform packages remove unused `CpuTransformMarker`
+  aliases; each advances to its next pre-1.0 minor release under ADR 0033.
 
 - [major] `apollo-fft` 0.22.0 adds `BackendKind::Cuda` and the feature-gated
   `CudaBackend`/`CudaFft1d` path over an existing typed Hephaestus CUDA device.
