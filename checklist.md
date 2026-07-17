@@ -1,5 +1,15 @@
 # Apollo Checklist
 
+## Unused CPU marker aliases [major]
+
+- Target version: fourteen pre-1.0 GPU transport API surfaces.
+- Phase: Execution
+- [x] Record ADR 0033: aliases have no references or type-level invariant and
+  dependency direction is already expressed by the owning plan edge.
+- [ ] Delete all fourteen aliases without compatibility exports.
+- [ ] Pass formatting, warning-denied diagnostics, package checks, default
+  Nextest, provider audit, source-residue scan, and document the CUDA lane.
+
 ## GPU availability probe cleanup [major]
 
 - Target version: `apollo-fft` pre-1.0 breaking provider-boundary cleanup.
