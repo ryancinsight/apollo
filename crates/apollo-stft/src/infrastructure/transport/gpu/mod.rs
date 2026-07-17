@@ -20,6 +20,3 @@ pub use eunomia::Complex32;
 pub use infrastructure::buffers::StftGpuBuffers;
 pub use infrastructure::device::StftWgpuBackend;
 pub use infrastructure::kernel::StftGpuKernel;
-
-/// CPU transform marker proving dependency direction into the owning transform crate.
-pub type CpuTransformMarker = crate::StftPlan;

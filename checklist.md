@@ -6,9 +6,10 @@
 - Phase: Execution
 - [x] Record ADR 0033: aliases have no references or type-level invariant and
   dependency direction is already expressed by the owning plan edge.
-- [ ] Delete all fourteen aliases without compatibility exports.
-- [ ] Pass formatting, warning-denied diagnostics, package checks, default
-  Nextest, provider audit, source-residue scan, and document the CUDA lane.
+- [x] Delete all fourteen aliases without compatibility exports.
+- [x] Pass formatting, warning-denied diagnostics, all-targets package checks,
+  default-feature Nextest (382 tests), provider audit, and source-residue scan.
+  The CUDA lane remains documented as an environment residual.
 
 ## GPU availability probe cleanup [major]
 

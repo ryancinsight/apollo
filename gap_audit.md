@@ -1,5 +1,17 @@
 # Apollo Gap Audit
 
+## Unused CPU marker aliases (2026-07-16)
+
+- Finding: fourteen GPU transport manifests exported definition-only public
+  `CpuTransformMarker` aliases; a workspace reference scan found no consumer.
+- Resolution: all aliases and their comments are deleted. The owning transform
+  plan and the existing crate dependency edge remain the SSOT for dependency
+  direction; no compatibility export is retained.
+- Evidence tier: ADR 0033's structural proof sketch, zero source references,
+  all-targets package checks, warning-denied all-features Clippy, provider audit,
+  and default-feature Nextest (382/382 tests passed). No transform arithmetic or
+  provider ownership changed.
+
 ## GPU availability probe cleanup (2026-07-16)
 
 - Finding: `apollo-fft` exported `gpu_fft_available() -> bool`, whose body was

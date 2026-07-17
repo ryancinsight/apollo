@@ -2,12 +2,13 @@
 
 ## Unused CPU marker aliases [major]
 
-- [ ] [major] D9-remove-cpu-marker-aliases (owner Codex, in progress
+- [x] [major] D9-remove-cpu-marker-aliases (owner Codex, completed
   2026-07-16; scope fourteen GPU transport manifests, ADR 0033, tests, and PM
   records): delete definition-only `CpuTransformMarker` aliases. Acceptance:
   zero workspace references, no compatibility exports, dependency direction
   remains provider-first, package checks and default Nextest pass, and the
-  pre-1.0 surface deletion is documented.
+  pre-1.0 surface deletion is documented. All-targets checks, warning-denied
+  Clippy, provider audit, and 382 default-feature tests pass.
 
 ## GPU availability probe cleanup [major]
 

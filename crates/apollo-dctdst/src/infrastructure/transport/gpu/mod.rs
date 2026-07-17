@@ -19,6 +19,3 @@ pub use domain::capabilities::WgpuCapabilities;
 pub use domain::error::{WgpuError, WgpuResult};
 pub use infrastructure::device::DctDstWgpuBackend;
 pub use leto::{Array2, Array3};
-
-/// CPU transform marker proving dependency direction into the owning transform crate.
-pub type CpuTransformMarker = crate::DctDstPlan;
