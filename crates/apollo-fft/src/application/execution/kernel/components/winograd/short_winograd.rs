@@ -6,8 +6,6 @@
 //! Canonical definition lives here in the `components::winograd` hierarchy
 //! next to its parent trait `WinogradScalar`, following deep-vertical SSOT.
 //!
-//! Re-exported from `mixed_radix::traits` for backward compatibility.
-
 use super::radix::odd_prime_pair::{dft_pair_impl, dft_pair_impl_reduced, PrimePairTable};
 use super::WinogradScalar;
 use eunomia::{Complex32, Complex64};

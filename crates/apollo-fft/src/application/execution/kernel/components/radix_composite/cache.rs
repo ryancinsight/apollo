@@ -1,7 +1,7 @@
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::components::winograd::{
     apply_twiddle_impl, WinogradScalar,
 };
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
 use eunomia::Complex;
 use std::cell::RefCell;
 use std::sync::Arc;

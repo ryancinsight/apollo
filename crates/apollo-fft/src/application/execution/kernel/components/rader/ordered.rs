@@ -7,7 +7,7 @@
 //! fused stages can produce and consume that order directly, eliminating the
 //! leaf-local permutation and scratch copy.
 
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 /// Rader transform over an ordered nonzero domain.

@@ -2,11 +2,11 @@
 //!
 //! `ShortWinogradScalar` is canonically defined in
 //! `components::winograd::short_winograd` (deep-vertical SSOT next to parent
-//! `WinogradScalar`). This module re-exports it for backward compatibility.
+//! `WinogradScalar`).
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
-pub use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 /// Canonical catalog of sizes with dedicated Winograd short-DFT codelets.
 /// Each entry corresponds to a `ShortDft<N>` impl and a `short_winograd`

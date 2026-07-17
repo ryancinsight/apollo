@@ -2,7 +2,7 @@ use eunomia::Complex;
 
 use super::arity::dispatch_single_radix;
 use super::cache::CompositeCache;
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 
 struct ComposeArena {
     buf: Vec<u8>,

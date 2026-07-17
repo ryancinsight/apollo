@@ -3,7 +3,7 @@ use eunomia::Complex;
 use super::arity::dispatch_radix_stage;
 use super::cache::CompositeCache;
 use super::stockham_stage_fused_adaptive;
-use crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar;
+use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::tuning::FUSE_THRESHOLD;
 
 /// Maximum number of stages that may be folded into one adaptive fused pass.

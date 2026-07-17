@@ -8,6 +8,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Changed
+
+- [patch] Removes the internal `mixed_radix::traits::ShortWinogradScalar`
+  re-export. All callers now use the canonical
+  `components::winograd::ShortWinogradScalar` definition, eliminating the
+  obsolete compatibility path without changing the external API or FFT value
+  semantics.
+
 ### Breaking
 
 - [major] `apollo-fft` 0.25.0 removes the redundant public

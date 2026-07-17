@@ -139,7 +139,7 @@ pub fn generate_rader_fft(input: CompilerTokenStream) -> CompilerTokenStream {
             F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
                     Complex = eunomia::Complex<F>,
                 >
-                + crate::application::execution::kernel::mixed_radix::traits::ShortWinogradScalar,
+                + crate::application::execution::kernel::components::winograd::ShortWinogradScalar,
             const INVERSE: bool,
         >(data: &mut [F::Complex])
         where
