@@ -6,10 +6,10 @@
 - Phase: Execution
 - [x] Confirm ADR 0013 covers `gpu_fft_available` as the same failure-erasing
   consumer probe class; Hephaestus remains the sole typed acquisition owner.
-- [ ] Delete the probe and both re-exports without a compatibility alias.
-- [ ] Pass focused formatting, warning-denied diagnostics, default-feature
-  Nextest, source-residue scan, and provider-audit checks; record any external
-  CUDA or shared-lock blockers.
+- [x] Delete the probe and both re-exports without a compatibility alias.
+- [x] Pass focused formatting, warning-denied diagnostics, default-feature
+  Nextest (394 tests), source-residue scan, and the provider audit. The
+  all-feature CUDA linker blocker is recorded in `gap_audit.md`.
 
 ## Validation suite tree [arch]
 
@@ -37,9 +37,9 @@
 - [x] Pass focused formatting, warning-denied Clippy, configured default-feature
   Nextest (402 tests), and source-residue scan. The all-feature Nextest lane
   remains blocked by the host MinGW linker (`x86_64-w64-mingw32-ld.exe` cannot
-  find `-lcuda`); doctest, rustdoc, provider audit, and SemVer classification
-  were attempted but could not acquire the shared artifact lock and remain
-  unverified until that contention clears.
+  find `-lcuda`); doctest, rustdoc, and SemVer classification were attempted
+  but could not acquire the shared artifact lock and remain unverified until
+  that contention clears. The provider audit passed after the lock cleared.
 
 ## CUDA FFT provider path [major]
 

@@ -1,5 +1,23 @@
 # Apollo Gap Audit
 
+## GPU availability probe cleanup (2026-07-16)
+
+- Finding: `apollo-fft` exported `gpu_fft_available() -> bool`, whose body was
+  the hardcoded value `true`; the function and its two re-exports duplicated
+  provider capability ownership and erased typed Hephaestus acquisition state.
+- Resolution: the function and both exports are deleted. Consumers must acquire
+  `hephaestus_wgpu::WgpuDevice` and handle its typed result at the boundary.
+  The untracked validation-suite caller is peer-owned and was not edited; it
+  must remove its stale `surface_reported_available` field before landing.
+- Evidence tier: committed-branch source scans find no `gpu_fft_available`
+  references; the existing default-feature Apollo test lane and warning-denied
+  checks are green, and the provider audit reports zero raw WGPU paths. No
+  transform arithmetic changes.
+- Residual: the all-feature lane still cannot link CUDA on this host
+  (`x86_64-w64-mingw32-ld.exe: cannot find -lcuda`). The first provider-audit
+  attempt waited on the shared target lock; a retry after the lock cleared
+  passed.
+
 ## Direct Leto output construction (2026-07-16)
 
 - Finding: `try_dense_from_contiguous` was a consumer-owned forwarding wrapper
@@ -17,12 +35,12 @@
   MinGW linker reports `x86_64-w64-mingw32-ld.exe: cannot find -lcuda`. This is
   an environment/toolchain dependency failure, not a source diagnostic; the
   CUDA provider lane requires the installed driver-development import archive.
-- Verification contention: `cargo test --locked --doc`, `cargo run --locked -p
-  xtask -- provider-audit`, and `cargo semver-checks check-release` were each
-  started with the sanctioned commands. They remained blocked by the shared
-  `target` artifact lock while unrelated peer Cargo jobs held the queue; the
-  waiting processes were stopped without changing their source trees. These
-  lanes therefore have no result and remain explicit follow-up work.
+- Verification contention: `cargo test --locked --doc` and `cargo semver-checks
+  check-release` were started with the sanctioned commands but could not
+  acquire the shared `target` artifact lock while unrelated peer Cargo jobs
+  held the queue; the waiting processes were stopped without changing their
+  source trees. These two lanes have no result and remain explicit follow-up
+  work. The provider audit later passed after the lock cleared.
 
 ## Validation suite tree (2026-07-16)
 

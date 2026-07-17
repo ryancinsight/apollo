@@ -2,13 +2,15 @@
 
 ## GPU availability probe cleanup [major]
 
-- [ ] [major] D8-gpu-availability-probe (owner Codex, in progress 2026-07-16;
+- [x] [major] D8-gpu-availability-probe (owner Codex, completed 2026-07-16;
   scope `apollo-fft` GPU transport manifests/pipeline, ADR 0013, tests, and PM
   records): delete the hardcoded `gpu_fft_available() -> bool` probe and its
   re-exports. Acceptance: no Apollo-owned availability boolean or source
   residue, typed Hephaestus acquisition remains the only capability evidence,
   focused value-semantic gates and provider audit pass, and the pre-1.0 API
-  break is documented.
+  break is documented. Default-feature checks (394 Nextest tests), source
+  scans, and provider audit pass; the all-feature CUDA linker residual is
+  recorded in `gap_audit.md`.
 
 ## Release 0.16.0 eligibility [arch]
 
