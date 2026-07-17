@@ -32,16 +32,12 @@ pub(super) fn stockham_stage_fused_adaptive<P, F, const INVERSE: bool>(
     let r_total: usize = radices.iter().product();
     let stage_len = prev_len * r_total;
     let groups = src.len() / stage_len;
-    crate::application::execution::policy::for_each_chunk_mut_enumerated::<P, _, _>(
-        dst,
-        stage_len,
-        |b, dst_block| {
-            let pw = pointwise_spectrum.map(|ps| &ps[b * stage_len..(b + 1) * stage_len]);
-            adaptive::composite_fused_adaptive::<F, INVERSE>(
-                src, dst_block, prev_len, b, groups, radices, twiddles, pw,
-            );
-        },
-    );
+    moirai::for_each_chunk_mut_enumerated_with::<P, _, _>(dst, stage_len, |b, dst_block| {
+        let pw = pointwise_spectrum.map(|ps| &ps[b * stage_len..(b + 1) * stage_len]);
+        adaptive::composite_fused_adaptive::<F, INVERSE>(
+            src, dst_block, prev_len, b, groups, radices, twiddles, pw,
+        );
+    });
 }
 
 pub fn forward_inplace_with_radices<F: CompositeCache + ShortWinogradScalar + 'static>(

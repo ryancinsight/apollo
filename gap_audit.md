@@ -1,5 +1,17 @@
 # Apollo Gap Audit
 
+## Moirai execution ownership (2026-07-17)
+
+- Finding: the radix-composite kernel routed chunk dispatch through an
+  Apollo-owned forwarding function that only called Moirai and had no external
+  callers.
+- Resolution: the helper is deleted; the kernel calls Moirai's canonical
+  `for_each_chunk_mut_enumerated_with` directly. `RadixCompositePolicy` remains
+  as the domain-specific ZST threshold strategy, not a duplicate execution
+  abstraction. Evidence tier: source-residue scan, formatting, and 393/393
+  `cargo nextest` tests. The `apollo-fft` package advances to 0.24.0 because
+  the removed `pub` helper was part of the pre-1.0 public surface.
+
 ## Provider-cleanup release metadata (2026-07-16)
 
 - The breaking provider-boundary removals are versioned without a compatibility
