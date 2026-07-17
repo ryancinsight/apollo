@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## Dense FFT dispatch verification tree [arch]
+
+- [x] Record ADR 0034 with the inverse identity and the derived Bluestein
+  finite-precision bound retained by the tests.
+- [x] Move the two device-present dispatch tests to the private
+  `gpu_fft/verification/dispatch.rs` leaf without changing execution code.
+- [x] Run the locked `apollo-fft` Nextest, warning-denied checks, rustdoc, and
+  provider audit after the shared target lock clears.
+
+**Current evidence:** dispatch implementation is 454 lines and the verification
+  leaf is 137 lines. Locked Nextest passes 393/393, warning-denied Clippy and
+  `RUSTDOCFLAGS=-D warnings cargo doc --locked -p apollo-fft --no-deps` pass,
+  and the provider-audit contract passes 5/5. Evidence tier: compiler,
+  documentation, source-structure, and value-semantic regression checks.
+
 ## Moirai forwarding-wrapper removal [major]
 
 - Target version: `apollo-fft` 0.24.0 pre-1.0 breaking cleanup.
