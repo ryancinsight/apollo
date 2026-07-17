@@ -22,6 +22,12 @@
   ignored target tree and does not alter the Apollo dependency graph. ADR 0030
   records the derived bounds and that this is empirical, not machine-checked,
   GPU evidence.
+- CI finding: PR #42's Rust workspace gate initially failed before compilation
+  because its Ubuntu runner had no CUDA 13.2+ toolkit for the generated
+  `cuda-bindings` headers. The CI workflow now pins Ubuntu 24.04, installs
+  NVIDIA's CUDA 13.3 toolkit, and exports `CUDA_TOOLKIT_PATH`; the pending
+  rerun is compile-time provider evidence only because hosted CI has no CUDA
+  device.
 
 ## Raw-WGPU audit boundary (2026-07-16)
 

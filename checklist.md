@@ -17,6 +17,10 @@
   0.21.0 to 0.22.0 pre-1.0 major SemVer comparison. The device-present lane
   runs with the installed RTX 5080 CUDA driver; the GNU target links its
   generated `libcuda.dll.a` import archive from the shared ignored target tree.
+- [ ] Provision CUDA 13.3 on the pinned Ubuntu 24.04 Rust CI runner, then
+  rerun the required workspace `--all-features` gate. `cuda-bindings` requires
+  CUDA 13.2+ headers at compile time; no-GPU CI remains a provider-unavailable
+  test environment, not a fallback path.
 
 ## Raw-WGPU audit boundary [patch]
 

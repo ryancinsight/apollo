@@ -15,6 +15,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   Downstream exhaustive matches must handle `Cuda`; the initial provider
   truthfully supports only one-dimensional f32 radix-two transforms. ADR 0030
   records the DFT theorem, inverse law, and finite-precision evidence scope.
+
 - [major] `apollo-fft` 0.21.0 removes
   `GpuFft3dF16Native::try_new`. Acquire a `ShaderF16`-qualified typed
   Hephaestus device and construct the plan with `try_from_device(device, nx,
@@ -49,6 +50,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   remain the sole public provider boundary. ADR 0024 records the cleanup.
 
 ### Changed
+
+- [patch] The Rust workspace CI runner pins Ubuntu 24.04 and installs NVIDIA
+  CUDA 13.3 before the all-feature gate. This supplies the CUDA 13.2+ headers
+  required by Hephaestus's generated CUDA bindings without adding a consumer
+  driver wrapper or a no-CUDA compatibility path.
 
 - [arch] SHT GPU verification is partitioned into metadata, rejection, forward,
   inverse, Leto host-boundary, typed-storage, and shared-support leaves. ADR
