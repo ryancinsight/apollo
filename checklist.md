@@ -12,6 +12,21 @@
 - [ ] Pass focused value-semantic Nextest, warning-denied diagnostics, doctest,
   rustdoc, provider audit, and a source-tree size scan.
 
+## Direct Leto output construction [major]
+
+- Target version: `apollo-leto-interop` 0.17.0 pre-1.0 breaking cleanup.
+- Phase: Execution
+- [x] Record ADR 0032: direct Leto/Mnemosyne construction is the sole
+  contiguous FFT output boundary; no consumer-owned forwarding wrapper is
+  retained.
+- [ ] Delete `try_dense_from_contiguous` and migrate the four FFT 2D/3D
+  forward/inverse call sites directly to `leto::Array::from_mnemosyne_slice`.
+- [ ] Add value-semantic 2D/3D Leto forward/inverse parity tests and preserve
+  the output-shape theorem in Rustdoc/ADR 0032.
+- [ ] Pass focused formatting, warning-denied Clippy, configured Nextest,
+  doctest, rustdoc, provider audit, source-residue scan, and major SemVer
+  classification.
+
 ## CUDA FFT provider path [major]
 
 - Target version: `apollo-fft` 0.22.0 pre-1.0 breaking release.
