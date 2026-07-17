@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## GPU availability probe cleanup [major]
+
+- Target version: `apollo-fft` pre-1.0 breaking provider-boundary cleanup.
+- Phase: Execution
+- [x] Confirm ADR 0013 covers `gpu_fft_available` as the same failure-erasing
+  consumer probe class; Hephaestus remains the sole typed acquisition owner.
+- [ ] Delete the probe and both re-exports without a compatibility alias.
+- [ ] Pass focused formatting, warning-denied diagnostics, default-feature
+  Nextest, source-residue scan, and provider-audit checks; record any external
+  CUDA or shared-lock blockers.
+
 ## Validation suite tree [arch]
 
 - Target version: internal topology refactor; no public API change.

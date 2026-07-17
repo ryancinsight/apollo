@@ -10,6 +10,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] `apollo-fft` removes the hardcoded `gpu_fft_available` capability
+  probe and its re-exports. GPU availability now comes only from the typed
+  Hephaestus acquisition boundary described by ADR 0013.
+
 - [major] `apollo-leto-interop` removes the redundant
   `try_dense_from_contiguous` output wrapper. Two- and three-dimensional FFT
   Leto boundaries now call `leto::Array::from_mnemosyne_slice` directly after
