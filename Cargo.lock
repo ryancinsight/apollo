@@ -1415,7 +1415,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "leto"
 version = "0.38.0"
-source = "git+https://github.com/ryancinsight/leto.git#6a0e2971d699a6ca7b6ea05d242e98149f783e04"
+source = "git+https://github.com/ryancinsight/leto.git#3ac0d2036395cceffdb791cee0f8f0a20aea4254"
 dependencies = [
  "bytemuck",
  "eunomia",
@@ -1428,7 +1428,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.38.0"
-source = "git+https://github.com/ryancinsight/leto.git#6a0e2971d699a6ca7b6ea05d242e98149f783e04"
+source = "git+https://github.com/ryancinsight/leto.git#3ac0d2036395cceffdb791cee0f8f0a20aea4254"
 dependencies = [
  "bytemuck",
  "eunomia",

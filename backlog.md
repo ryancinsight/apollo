@@ -1,5 +1,19 @@
 # Apollo Backlog
 
+## D14-align-leto-merge-pin [patch] — done
+
+- Owner: Codex; scope: `Cargo.lock` Leto source revisions and synchronized PM
+  records.
+- Acceptance: both `leto` and `leto-ops` resolve the current Atlas Leto
+  default merge `3ac0d203` rather than its parent `6a0e297`; no source or
+  manifest compatibility path changes.
+- Evidence: the provider-tree diff between the two revisions contains only
+  PM artifacts, so compiled code is identical. The preceding lock-refresh
+  sweep passes locked compile, 402/402 Nextest, warning-denied Clippy,
+  doctests, rustdoc, and provider audit. A local rerun is blocked by stale
+  peer test executables holding shared-target files; hosted CI is the fresh
+  compile gate.
+
 ## D13-refresh-provider-lock [patch] — done
 
 - Owner: Codex; scope: workspace `Cargo.lock` provider revisions and Apollo PM

@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## D14-align-leto-merge-pin [patch]
+
+- [x] Refresh `leto` and `leto-ops` lock entries from parent `6a0e297` to
+      merged default `3ac0d203`.
+- [x] Verify the provider revision changes only PM files in Leto; no Apollo
+      source or manifest changes occur.
+- [x] Carry forward the preceding 402/402 and warning-clean provider sweep;
+      record the shared-target rerun blocker and rely on hosted CI for the
+      fresh lock-only compile.
+
+**Residual:** local rerun is blocked by five stale peer test executables
+holding shared target files; no code changed between the two Leto revisions.
+
 ## D13-refresh-provider-lock [patch]
 
 - [x] Refresh `Cargo.lock` from stale Hephaestus/Eunomia/Leto/Moirai commits to
