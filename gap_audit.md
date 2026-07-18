@@ -1,5 +1,19 @@
 # Apollo Gap Audit
 
+## Hephaestus legacy-math lock convergence (2026-07-17)
+
+- Finding: the lockfile selected Hephaestus parent `93bc38e` after provider
+  PR #47 removed its direct legacy math baselines.
+- Resolution: update `hephaestus-core`, `hephaestus-wgpu`, and
+  `hephaestus-cuda` to merged provider `cec0e33`; no Apollo source or manifest
+  compatibility path changes.
+- Theorem: because Cargo.lock is the sole provider revision selector, resolving
+  every Hephaestus package to the same merged default-source commit makes the
+  Apollo consumer graph reproducible and imports the provider's Leto-owned
+  numerical baselines without a downstream wrapper.
+- Evidence tier: Cargo resolution, locked compile, 402/402 Nextest,
+  warning-denied Clippy, doctests, warning-clean rustdoc, and provider audit.
+
 ## Leto merge pin (2026-07-17)
 
 - Finding: the provider lock selected Leto parent `6a0e297` while Atlas pinned
