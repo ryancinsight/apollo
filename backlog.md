@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+## D13-refresh-provider-lock [patch] — done
+
+- Owner: Codex; scope: workspace `Cargo.lock` provider revisions and Apollo PM
+  records.
+- Acceptance: refresh the lockfile to the current default-source Hephaestus,
+  Leto, Moirai, and Eunomia heads without adding path/revision overrides; all
+  Apollo FFT and macro gates remain green and the provider audit remains clean.
+- Evidence: locked check, 402/402 Nextest, warning-denied Clippy, doctests,
+  warning-clean rustdoc, and provider audit pass. The merged provider heads
+  are the sole lockfile selectors; no compatibility or path override remains.
+
 ## D12-remove-winograd-reexport [patch] — done
 
 - Owner: Codex; scope: `apollo-fft`/macro internal trait paths,

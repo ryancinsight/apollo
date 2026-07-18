@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## D13-refresh-provider-lock [patch]
+
+- [x] Refresh `Cargo.lock` from stale Hephaestus/Eunomia/Leto/Moirai commits to
+      the current default-source provider heads.
+- [x] Prove Apollo FFT value semantics remain unchanged with the locked
+      compile, Nextest, warning-denied diagnostics, doctests, and rustdoc.
+- [x] Run the provider audit, record the dependency theorem/evidence in
+      `gap_audit.md` and `CHANGELOG.md`, then publish the consumer pin.
+
+**Evidence:** `cargo check --locked`, 402/402 Nextest, warning-denied Clippy,
+doctests, warning-clean rustdoc, and provider audit all pass.
+
 ## D12-remove-winograd-reexport [patch]
 
 - [x] Remove the `mixed_radix::traits::ShortWinogradScalar` re-export and

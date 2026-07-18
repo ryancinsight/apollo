@@ -1,5 +1,20 @@
 # Apollo Gap Audit
 
+## Provider lock refresh (2026-07-17)
+
+- Finding: Apollo's lockfile resolved Hephaestus at `87d478…`, behind the Atlas
+  provider graph's merged `93bc38e` head; Eunomia, Leto, and Moirai were also
+  stale relative to their default sources.
+- Resolution: `cargo update -p hephaestus-core -p hephaestus-wgpu
+  -p hephaestus-cuda` refreshed the reproducibility pin to Hephaestus `93bc38e`,
+  Eunomia `a2e4f390`, Leto `6a0e2971`, and Moirai `8a51b2a7`, with no manifest
+  path or revision overrides.
+- Theorem: the lockfile is the sole provider revision selector; when every
+  first-party provider entry resolves to a merged default-source commit, the
+  consumer graph is reproducible and cannot silently select the former heads.
+- Evidence tier: Cargo resolution, locked compile, 402/402 Nextest,
+  warning-denied Clippy, doctests, warning-clean rustdoc, and provider audit.
+
 ## Winograd trait re-export (2026-07-17)
 
 - Finding: `mixed_radix::traits` re-exported `ShortWinogradScalar`, creating a

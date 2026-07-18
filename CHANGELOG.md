@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Refreshes `Cargo.lock` to Hephaestus `93bc38e`, Eunomia `a2e4f390`,
+  Leto `6a0e2971`, and Moirai `8a51b2a7`, removing stale provider revisions
+  without adding path overrides. Locked check, 402/402 Nextest,
+  warning-denied Clippy, doctests, rustdoc, and provider audit pass.
+
 - [patch] Removes the internal `mixed_radix::traits::ShortWinogradScalar`
   re-export. All callers now use the canonical
   `components::winograd::ShortWinogradScalar` definition, eliminating the
