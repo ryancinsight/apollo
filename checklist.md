@@ -1,5 +1,13 @@
 # Apollo Checklist
 
+## D15-align-hephaestus-legacy-math-pin [patch]
+
+- [ ] Refresh all three Hephaestus lock entries to merged provider `cec0e33`.
+- [ ] Preserve Apollo source/manifest ownership and run the locked package
+      gates, provider audit, and hosted checks on the new lock head.
+- [ ] Publish the consumer pin and synchronize the parent Atlas graph only
+      after the provider merge is verified.
+
 ## D14-align-leto-merge-pin [patch]
 
 - [x] Refresh `leto` and `leto-ops` lock entries from parent `6a0e297` to

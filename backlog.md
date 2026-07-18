@@ -1,5 +1,16 @@
 # Apollo Backlog
 
+## D15-align-hephaestus-legacy-math-pin [patch] — in-progress
+
+- Owner: Codex `/root`; scope: `Cargo.lock` Hephaestus package revisions and
+  synchronized Apollo PM records. No Apollo source or manifest compatibility
+  path changes.
+- Acceptance: `hephaestus-core`, `hephaestus-wgpu`, and `hephaestus-cuda`
+  resolve merged Hephaestus PR #47 (`cec0e33`); locked Apollo tests and the
+  provider audit remain green.
+- Last update: 2026-07-17; branch
+  `codex/apollo-hephaestus-legacy-math-pin` is claimed before lock edits.
+
 ## D14-align-leto-merge-pin [patch] — done
 
 - Owner: Codex; scope: `Cargo.lock` Leto source revisions and synchronized PM
