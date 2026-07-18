@@ -1,5 +1,17 @@
 # Apollo Gap Audit
 
+## Leto merge pin (2026-07-17)
+
+- Finding: the provider lock selected Leto parent `6a0e297` while Atlas pinned
+  merged default `3ac0d203`.
+- Resolution: update both `leto` and `leto-ops` lock entries to `3ac0d203`.
+  `git diff 6a0e297..3ac0d203` contains only backlog/checklist/gap-audit
+  documentation, so the provider code and ABI are identical.
+- Evidence tier: exact Git tree comparison plus the preceding provider-lock
+  compile/402-test/diagnostic/doc/provider-audit sweep. The fresh local rerun
+  is blocked by stale peer test executables holding shared target files; hosted
+  CI is the independent compile gate.
+
 ## Provider lock refresh (2026-07-17)
 
 - Finding: Apollo's lockfile resolved Hephaestus at `87d478…`, behind the Atlas

@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Aligns the Leto and Leto Ops lock entries with merged Atlas default
+  `3ac0d203` instead of its parent `6a0e297`. The provider tree is docs-only
+  between those commits; no Apollo source or manifest compatibility path
+  changes.
+
 - [patch] Refreshes `Cargo.lock` to Hephaestus `93bc38e`, Eunomia `a2e4f390`,
   Leto `6a0e2971`, and Moirai `8a51b2a7`, removing stale provider revisions
   without adding path overrides. Locked check, 402/402 Nextest,
