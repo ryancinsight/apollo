@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Aligns `hephaestus-core`, `hephaestus-wgpu`, and `hephaestus-cuda`
+  with merged provider PR #47 (`cec0e33`) after the provider removed its direct
+  legacy math baselines. Locked compile, 402/402 Nextest, warning-denied
+  Clippy, doctests, rustdoc, and provider audit pass.
+
 - [patch] Aligns the Leto and Leto Ops lock entries with merged Atlas default
   `3ac0d203` instead of its parent `6a0e297`. The provider tree is docs-only
   between those commits; no Apollo source or manifest compatibility path
