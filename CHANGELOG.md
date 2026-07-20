@@ -10,6 +10,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Python Releases tagged `pyapollofft-v<version>` build, install,
+  import, attest, and attach locked Linux, Windows, and universal macOS wheels,
+  then publish the same artifacts to PyPI through OIDC Trusted Publishing.
+  Python package metadata now reads the `apollo-python` Cargo version as its
+  single version source.
+
 - [minor] [arch] `apollo-bench` reports exact distribution-free median
   confidence intervals plus their ordered observations and provides a native
   recursive base/head report comparator. The comparator derives simultaneous

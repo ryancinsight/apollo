@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pyapollofft"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python bindings for Apollo FFT"
 authors = [
     {name = "Ryan Clanton PhD", email = "ryanclanton@outlook.com"}
