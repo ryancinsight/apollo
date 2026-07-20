@@ -33,9 +33,10 @@ jobs:
         with:
           components: clippy, rustfmt
       # `hephaestus-cuda` uses NVIDIA's generated CUDA bindings, which require
-      # a CUDA 13.2+ header/toolkit at build time even when no device is
-      # present. Pin the image and toolkit together so the all-feature gate
-      # validates the typed CUDA provider instead of silently excluding it.
+      # the driver and cuRAND headers from CUDA 13.2+ even when no device is
+      # present. Install only those development packages: the full toolkit
+      # exhausts the hosted runner without adding coverage to this compile and
+      # test gate.
       - name: Install CUDA toolkit
         run: |
           wget --no-verbose -O /tmp/cuda-keyring.deb \
@@ -43,7 +44,7 @@ jobs:
           sudo dpkg -i /tmp/cuda-keyring.deb
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes \
-            cuda-toolkit-13-3 cuda-driver-dev-13-3
+            cuda-cudart-dev-13-3 cuda-driver-dev-13-3 libcurand-dev-13-3
           test -f /usr/local/cuda-13.3/include/cuda.h
           cuda_stub="$(find /usr/local/cuda-13.3 -path '*/stubs/libcuda.so' -print -quit)"
           test -n "$cuda_stub"
@@ -62,6 +63,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apollo
+          cache-targets: false
       # `cargo fmt --all` treats every path-sourced package reachable in the
       # resolved graph as "local" and formats it — including the fleet
       # siblings pulled in only via the [patch] table above. Scope to
@@ -136,7 +138,6 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ${{ github.workspace }}/target
           key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate/Cargo.lock') }}
 
       - name: Measure counterbalanced revisions
@@ -195,6 +196,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apollo
+          cache-targets: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
