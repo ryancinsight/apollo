@@ -1,5 +1,19 @@
 # Apollo Backlog
 
+## D16-native-benchmark-regression-oracle [minor] [arch] — in-progress
+
+- Owner: Codex `/root`; scope: `apollo-bench` statistical report contract,
+  native comparison boundary, benchmark CI, ADR 0036, and synchronized PM
+  records. Transform kernels and provider implementations are non-goals.
+- Acceptance: every standard 100-sample report carries an exact
+  distribution-free median interval with at least 95% coverage; recursive
+  base/head comparison rejects malformed or unpaired evidence and classifies
+  only disjoint slower intervals as regressions; the copied Python same-run
+  check is absent.
+- Current increment: native report/comparator implementation and the removal
+  of the invalid same-run job. Independent base/head CI execution follows
+  after this report schema is present on the default branch.
+
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 
 - Owner: Codex `/root`; scope: `Cargo.lock` Hephaestus package revisions and

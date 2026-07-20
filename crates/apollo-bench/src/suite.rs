@@ -85,9 +85,12 @@ mod tests {
         assert_eq!(
             suite.report(),
             format!(
-                "case,min_ns,median_ns,samples,iterations_per_sample\nsuite/increment/1,{},{},100,1\n",
+                "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,samples,iterations_per_sample\nsuite/increment/1,{},{},{},{},{},100,1\n",
                 record.minimum_nanoseconds(),
-                record.median_nanoseconds()
+                record.median_nanoseconds(),
+                record.median_lower_nanoseconds(),
+                record.median_upper_nanoseconds(),
+                record.median_confidence_parts_per_million()
             )
         );
     }

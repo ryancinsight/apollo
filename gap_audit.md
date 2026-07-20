@@ -1,5 +1,28 @@
 # Apollo Gap Audit
 
+## Native benchmark regression evidence (2026-07-20)
+
+- Finding: the benchmark CI ran one all-feature workspace benchmark, copied
+  that output as a baseline, then compared the same output to itself with a
+  copied Python script. The check could not detect a regression, and the
+  all-feature command also imported CUDA toolchain requirements unrelated to
+  Apollo's CPU benchmark reports.
+- Resolution: `apollo-bench` now emits exact symmetric median intervals and
+  owns recursive report comparison. Report and case sets must match, both
+  intervals must provide at least 95% coverage, and a regression exists only
+  when the candidate lower bound exceeds the baseline upper bound. The
+  invalid job and Python duplicate are removed; independent base/head CI
+  orchestration is the remaining increment after the schema reaches default.
+- Mathematical oracle: for ordered samples `X_(1), …, X_(n)`, NIST Technical
+  Note 2119 section 5.3 equations 30–31 gives
+  `[X_(k), X_(n-k+1)]` with coverage
+  `1 - 2 P(Bin(n, 0.5) <= k - 1)`. At Apollo's fixed `n = 100`, the narrowest
+  symmetric interval meeting 95% is `[X_(40), X_(61)]` with exact floored
+  coverage 964799 parts per million.
+- Evidence tier: analytical order-statistic oracle, exact integer
+  implementation, value-semantic unit/integration tests, and typed malformed
+  evidence rejection. Hosted base/head execution remains pending.
+
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 
 - Finding: the lockfile selected Hephaestus parent `93bc38e` after provider

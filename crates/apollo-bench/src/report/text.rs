@@ -2,14 +2,19 @@ use super::BenchmarkRecord;
 use core::fmt::Write;
 
 pub(super) fn render(records: &[BenchmarkRecord]) -> String {
-    let mut output = String::from("case,min_ns,median_ns,samples,iterations_per_sample\n");
+    let mut output = String::from(
+        "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,samples,iterations_per_sample\n",
+    );
     for record in records {
         write_csv_field(&record.case.to_string(), &mut output);
         writeln!(
             output,
-            ",{},{},{},{}",
+            ",{},{},{},{},{},{},{}",
             record.minimum_nanoseconds,
             record.median_nanoseconds,
+            record.median_lower_nanoseconds,
+            record.median_upper_nanoseconds,
+            record.median_confidence_parts_per_million,
             record.sample_count,
             record.iterations_per_sample
         )
@@ -52,7 +57,7 @@ mod tests {
 
         assert_eq!(
             render(&[record]),
-            "case,min_ns,median_ns,samples,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,1,1\n"
+            "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,samples,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,7,7,0,1,1\n"
         );
     }
 }

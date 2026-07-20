@@ -1,3 +1,6 @@
+#![deny(missing_docs)]
+#![forbid(unsafe_code)]
+
 //! Native benchmark measurement for Apollo's CPU and provider-backed kernels.
 //!
 //! # Estimator theorem
@@ -18,12 +21,16 @@
 //! remains the provider for transform runtime parallelism.
 
 mod case;
+mod comparison;
 mod config;
 mod measurement;
 mod report;
 mod suite;
 
 pub use case::BenchmarkCase;
+pub use comparison::{
+    compare_report_directories, BenchmarkRegression, ComparisonError, ComparisonSummary,
+};
 pub use config::{BenchmarkConfig, BenchmarkConfigError};
 pub use report::BenchmarkRecord;
 pub use suite::BenchmarkSuite;
