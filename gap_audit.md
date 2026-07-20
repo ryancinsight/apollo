@@ -63,8 +63,12 @@
 - Provider checkout cleanup: Apollo manifests contain no external path
   dependencies; Git revisions in `Cargo.lock` are authoritative. The stale
   copied checkout action and all workflow calls are removed rather than
-  migrated to another redundant checkout layer. Hosted exact-head execution of
-  the phase-reversed design remains pending.
+  migrated to another redundant checkout layer.
+- Operational evidence: exact-head hosted run `29766127266` completed the
+  eight-pass source-identical canary and replicated comparison in 31 minutes
+  without a reported regression. The Rust workspace, Python bindings, and
+  review checks also passed at `c9a0156`. This is controlled same-runner
+  evidence for the CI protocol, not a cross-machine performance claim.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

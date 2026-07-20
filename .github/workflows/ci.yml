@@ -169,8 +169,8 @@ jobs:
           }
 
           # ABBA followed by its phase reversal BAAB assigns each revision to
-          # period positions with equal sums and equal squared sums. Requiring
-          # a slowdown in both blocks rejects linear and quadratic runner drift.
+          # period positions with equal sums and equal squared sums. Agreement
+          # across both blocks guards against a slowdown confined to one phase.
           measure apollo-baseline reports/first/baseline-first/baseline
           measure apollo-candidate reports/first/baseline-first/candidate
           measure apollo-candidate reports/first/candidate-first/candidate

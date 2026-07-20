@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## D16-native-benchmark-regression-oracle [minor] [arch] — in-progress
+## D16-native-benchmark-regression-oracle [minor] [arch] — done
 
 - Owner: Codex `/root`; scope: `apollo-bench` statistical report contract,
   native comparison boundary, benchmark CI, ADR 0036, and synchronized PM
@@ -12,14 +12,14 @@
   disjoint slower intervals reproduced in both execution orders as
   regressions; the copied Python check and obsolete provider checkout are
   absent.
-- Current increment: hosted runs falsified fixed-order comparison,
-  revision-dependent measurement instruments, and uncorrected per-case
-  intervals. The first corrected ABBA block then reported 12 slowdowns despite
-  identical transform source, exposing residual period confounding. PR-only CI
-  now runs ABBA followed by BAAB over the same three CPU benchmark binaries,
-  holds the candidate `apollo-bench` instrument constant, and requires every
-  slowdown to reproduce across all four family-wise comparisons. Hosted
-  execution is the remaining acceptance gate.
+- Closure: hosted runs falsified fixed-order comparison, revision-dependent
+  measurement instruments, uncorrected per-case intervals, and one ABBA block.
+  Exact-head run `29766127266` then passed the phase-reversed ABBA/BAAB canary
+  over the same three CPU benchmark binaries in 31 minutes. The candidate
+  `apollo-bench` instrument remained constant, production transform source was
+  identical, and no slowdown reproduced across all four family-wise
+  comparisons. Rust workspace, Python binding, and CodeRabbit checks also
+  passed at `c9a0156`.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

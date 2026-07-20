@@ -77,8 +77,9 @@ impl ReplicatedCounterbalancedComparisonSummary {
 ///
 /// The caller executes the first set as ABBA and the second as BAAB. This
 /// assigns baseline and candidate to equal sums of the eight period indices
-/// and their squares, cancelling constant, linear, and quadratic period drift.
-/// A case regresses only when all four base/head comparisons support it.
+/// and their squares, balancing exposure to constant, linear, and quadratic
+/// period terms. A case regresses only when all four base/head comparisons
+/// support it.
 ///
 /// # Errors
 ///

@@ -22,7 +22,7 @@
       still reported 12 source-identical slowdowns under one ABBA block.
 - [x] Remove the obsolete provider checkout action after confirming Apollo's
       manifests contain no external path dependencies.
-- [ ] Verify the PR-only job executes both phase-reversed blocks for the exact
+- [x] Verify the PR-only job executes both phase-reversed blocks for the exact
       base and candidate revisions on one runner, requires agreement across
       all four comparisons and all three native report files, and closes the
       item in hosted execution.
@@ -31,8 +31,9 @@
 `[X_(39), X_(62)]`, and multi-case interval tests; a regression test rejects a
 separation that disappears under family-wise correction; counterbalanced
 agreement/order-drift, phase-replication, malformed and incomplete evidence,
-and CLI contracts pass in focused Nextest. Hosted exact-head execution remains
-pending.
+and CLI contracts pass in focused Nextest. Hosted run `29766127266` passes the
+exact `c9a0156` head: all eight benchmark passes and replicated comparison
+complete in 31 minutes, alongside green Rust, Python, and review checks.
 
 ## D15-align-hephaestus-legacy-math-pin [patch]
 

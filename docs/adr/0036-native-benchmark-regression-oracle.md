@@ -98,7 +98,8 @@ between base `66e37ab` and candidate `65dd9ad`. ABBA alone assigns the two
 revisions to different periods of one runner timeline. Appending BAAB yields
 baseline period positions `{1, 4, 6, 7}` and candidate positions
 `{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so the
-assignment cancels constant, linear, and quadratic period terms. The final
+complete schedule balances revision exposure to constant, linear, and
+quadratic period terms. The final
 regression event is the intersection of the four family-wise comparison
 events; it therefore remains bounded by 5% without assuming that the blocks
 are independent.
@@ -117,3 +118,8 @@ double the empirical lane from 17 to 34 minutes while remaining inside its
 60-minute purpose-specific bound. The base/head CI increment cannot precede
 this schema on the default branch because legacy baseline reports do not
 contain the ordered observations.
+
+Exact-head hosted run `29766127266` passed the eight-run source-identical
+canary and replicated comparison in 31 minutes. This validates the operational
+orchestration on one hosted runner; it does not establish immunity to arbitrary
+non-polynomial runner noise.
