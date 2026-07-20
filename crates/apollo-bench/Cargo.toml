@@ -8,5 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "Apollo benchmark measurement runtime"
 
+[dependencies]
+csv.workspace = true
+thiserror.workspace = true
+
 [lints]
 workspace = true

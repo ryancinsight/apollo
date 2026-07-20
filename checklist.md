@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## D16-native-benchmark-regression-oracle [minor] [arch]
+
+- [x] Derive and encode the symmetric distribution-free median interval from
+      NIST Technical Note 2119 section 5.3.
+- [x] Extend the canonical Apollo CSV schema and implement one recursive,
+      fail-closed native comparator with value-semantic regression tests.
+- [x] Delete the copied Python same-run comparator and its invalid
+      all-feature benchmark job.
+- [ ] Run independently checked-out base and candidate benchmark binaries in
+      CI, compare their native reports, and close the item after hosted
+      verification.
+
+**Current evidence:** exact `[X_(40), X_(61)]` coverage regression, disjoint
+and overlapping interval tests, malformed/incomplete evidence tests, and the
+CLI contract pass in 16/16 Nextest cases; the comparator doctest,
+warning-denied Clippy, warning-clean rustdoc, three Apollo FFT CPU benchmark
+targets, dependency policy, and 196/196 semver checks pass.
+
 ## D15-align-hephaestus-legacy-math-pin [patch]
 
 - [x] Refresh all three Hephaestus lock entries to merged provider `cec0e33`.

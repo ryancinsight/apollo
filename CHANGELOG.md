@@ -8,7 +8,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
+### Added
+
+- [minor] [arch] `apollo-bench` reports exact distribution-free median
+  confidence intervals and provides a native recursive base/head report
+  comparator. Missing reports, missing cases, malformed records, and
+  sub-95% intervals fail closed; only a candidate interval wholly above the
+  baseline interval is classified as a regression.
+
 ### Changed
+
+- [patch] Removes the copied Python same-run benchmark check and its invalid
+  all-feature CI job. Apollo owns a native benchmark report rather than
+  Criterion output; ADR 0036 records the provider boundary and the independent
+  base/head execution contract.
 
 - [patch] Aligns `hephaestus-core`, `hephaestus-wgpu`, and `hephaestus-cuda`
   with merged provider PR #47 (`cec0e33`) after the provider removed its direct

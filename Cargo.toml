@@ -60,6 +60,7 @@ repository = "https://github.com/ryancinsight/apollo"
 anyhow = "1.0.103"
 approx = "0.5.1"
 bytemuck = { version = "1.25.1", features = ["derive"] }
+csv = "1.4.0"
 eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
