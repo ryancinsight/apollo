@@ -22,7 +22,7 @@ fn visit(
     let mut entries = entries
         .collect::<Result<Vec<_>, _>>()
         .map_err(|source| ComparisonError::read_entry(directory, source))?;
-    entries.sort_unstable_by_key(std::fs::DirEntry::path);
+    entries.sort_by_cached_key(std::fs::DirEntry::path);
 
     for entry in entries {
         let path = entry.path();
