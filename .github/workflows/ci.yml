@@ -107,6 +107,82 @@ jobs:
       - name: Dependency policy
         run: cargo deny check
 
+  benchmark-regression:
+    name: benchmark regression check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - name: Checkout baseline
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: apollo-baseline
+
+      - name: Checkout candidate
+        uses: actions/checkout@v6
+        with:
+          path: apollo-candidate
+
+      - name: Checkout Atlas providers
+        uses: ./apollo-candidate/.github/actions/checkout-atlas
+
+      - uses: dtolnay/rust-toolchain@1.97.0
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ github.workspace }}/target
+          key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate/Cargo.lock') }}
+
+      - name: Measure baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/baseline
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            cargo bench \
+              --manifest-path apollo-baseline/Cargo.toml \
+              --locked \
+              -p apollo-fft \
+              --bench "$benchmark" \
+              --features kernel-strategy-bench \
+              --quiet \
+              > "reports/baseline/$benchmark.csv"
+          done
+
+      - name: Measure candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/candidate
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            cargo bench \
+              --manifest-path apollo-candidate/Cargo.toml \
+              --locked \
+              -p apollo-fft \
+              --bench "$benchmark" \
+              --features kernel-strategy-bench \
+              --quiet \
+              > "reports/candidate/$benchmark.csv"
+          done
+
+      - name: Compare reports
+        run: >-
+          cargo run
+          --manifest-path apollo-candidate/Cargo.toml
+          --locked
+          -p apollo-bench
+          --bin apollo-bench-compare
+          --
+          compare
+          --baseline-directory reports/baseline
+          --candidate-directory reports/candidate
+
   python:
     name: python bindings
     runs-on: ubuntu-latest

@@ -10,9 +10,10 @@
   base/head comparison rejects malformed or unpaired evidence and classifies
   only disjoint slower intervals as regressions; the copied Python same-run
   check is absent.
-- Current increment: native report/comparator implementation and the removal
-  of the invalid same-run job. Independent base/head CI execution follows
-  after this report schema is present on the default branch.
+- Current increment: PR-only CI checks out the exact pull-request base and
+  candidate revisions, reuses one provider graph and target directory on one
+  runner, measures the same three CPU benchmark binaries, and invokes the
+  native comparator. Hosted execution is the remaining acceptance gate.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

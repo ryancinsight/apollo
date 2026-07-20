@@ -21,7 +21,9 @@
   coverage 964799 parts per million.
 - Evidence tier: analytical order-statistic oracle, exact integer
   implementation, value-semantic unit/integration tests, and typed malformed
-  evidence rejection. Hosted base/head execution remains pending.
+  evidence rejection. The PR-only workflow now measures the exact base and
+  candidate revisions on one runner with one provider graph and shared target;
+  hosted execution remains pending.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

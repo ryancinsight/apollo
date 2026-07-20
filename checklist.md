@@ -8,9 +8,9 @@
       fail-closed native comparator with value-semantic regression tests.
 - [x] Delete the copied Python same-run comparator and its invalid
       all-feature benchmark job.
-- [ ] Run independently checked-out base and candidate benchmark binaries in
-      CI, compare their native reports, and close the item after hosted
-      verification.
+- [ ] Verify the implemented PR-only job independently checks out and measures
+      the exact base and candidate revisions on one runner, compares all three
+      native report files, and closes the item in hosted execution.
 
 **Current evidence:** exact `[X_(40), X_(61)]` coverage regression, disjoint
 and overlapping interval tests, malformed/incomplete evidence tests, and the
