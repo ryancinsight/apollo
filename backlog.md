@@ -5,17 +5,19 @@
 - Owner: Codex `/root`; scope: `apollo-bench` statistical report contract,
   native comparison boundary, benchmark CI, ADR 0036, and synchronized PM
   records. Transform kernels and provider implementations are non-goals.
-- Acceptance: every standard 100-sample report carries an exact
-  distribution-free median interval with at least 95% coverage; recursive
-  base/head comparison rejects malformed or unpaired evidence and classifies
-  only disjoint slower intervals reproduced in both execution orders as
-  regressions; the copied Python same-run check is absent.
-- Current increment: hosted runs falsified both fixed-order comparison and
-  revision-dependent measurement instruments. PR-only CI now performs
-  counterbalanced baseline/candidate and candidate/baseline measurements over
-  the same three CPU benchmark binaries, compiles both revisions against the
-  candidate `apollo-bench` instrument, and requires agreement across both
-  orders. Hosted execution is the remaining acceptance gate.
+- Acceptance: every standard 100-sample report retains its ordered
+  observations and exact distribution-free median summary; recursive base/head
+  comparison controls family-wise error at 5% across both intervals for every
+  compared case, rejects malformed or unpaired evidence, and classifies only
+  disjoint slower intervals reproduced in both execution orders as
+  regressions; the copied Python check and obsolete provider checkout are
+  absent.
+- Current increment: hosted runs falsified fixed-order comparison,
+  revision-dependent measurement instruments, and uncorrected per-case
+  intervals. PR-only CI counterbalances the same three CPU benchmark binaries,
+  holds the candidate `apollo-bench` instrument constant, and derives exact
+  Bonferroni intervals from all ordered observations. Hosted execution is the
+  remaining acceptance gate.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

@@ -119,10 +119,14 @@ impl CounterbalancedComparisonSummary {
 ///     .as_nanos();
 /// let root = std::env::temp_dir()
 ///     .join(format!("apollo-bench-doc-counterbalanced-{sequence}"));
-/// let report = concat!(
-///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,",
-///     "median_confidence_ppm,samples,iterations_per_sample\n",
-///     "fft/forward/256,80,100,90,110,964799,100,4\n"
+/// let samples = (1..=100)
+///     .map(|sample| sample.to_string())
+///     .collect::<Vec<_>>()
+///     .join(";");
+/// let report = format!(
+///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,\
+///      median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\
+///      fft/forward/256,1,50,40,61,964799,{samples},4\n"
 /// );
 /// for directory in [
 ///     "baseline-first/baseline",
@@ -132,7 +136,7 @@ impl CounterbalancedComparisonSummary {
 /// ] {
 ///     let directory = root.join(directory);
 ///     fs::create_dir_all(&directory)?;
-///     fs::write(directory.join("fft.csv"), report)?;
+///     fs::write(directory.join("fft.csv"), &report)?;
 /// }
 ///
 /// let summary = compare_counterbalanced_report_directories(

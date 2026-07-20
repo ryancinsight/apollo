@@ -12,7 +12,7 @@ pub struct BenchmarkRecord {
     median_lower_nanoseconds: u128,
     median_upper_nanoseconds: u128,
     median_confidence_parts_per_million: u32,
-    sample_count: usize,
+    ordered_samples_nanoseconds: Box<[u128]>,
     iterations_per_sample: u64,
 }
 
@@ -25,7 +25,7 @@ impl BenchmarkRecord {
             median_lower_nanoseconds: summary.median_lower_nanoseconds,
             median_upper_nanoseconds: summary.median_upper_nanoseconds,
             median_confidence_parts_per_million: summary.median_confidence_parts_per_million,
-            sample_count: summary.sample_count,
+            ordered_samples_nanoseconds: summary.ordered_samples_nanoseconds,
             iterations_per_sample: summary.iterations_per_sample,
         }
     }
@@ -63,7 +63,13 @@ impl BenchmarkRecord {
     /// Returns the number of timing samples.
     #[must_use]
     pub const fn sample_count(&self) -> usize {
-        self.sample_count
+        self.ordered_samples_nanoseconds.len()
+    }
+
+    /// Returns the normalized timing samples in nondecreasing order.
+    #[must_use]
+    pub fn ordered_samples_nanoseconds(&self) -> &[u128] {
+        &self.ordered_samples_nanoseconds
     }
 
     /// Returns production-closure iterations in each timing sample.

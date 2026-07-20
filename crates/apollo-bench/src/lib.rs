@@ -16,6 +16,12 @@
 //! summary property, not a claim that wall-clock measurements are noise-free
 //! or comparable across machines.
 //!
+//! For a comparison containing `m` cases, the native comparator selects each
+//! baseline and candidate interval with miscoverage at most `0.05 / (2m)`.
+//! Bonferroni's inequality then bounds the probability that any of the `2m`
+//! intervals misses its population median by 5%, without an independence
+//! assumption.
+//!
 //! Benchmark closures execute sequentially. Parallel execution would overlap
 //! the measured work and destroy the per-operation timing contract; Moirai
 //! remains the provider for transform runtime parallelism.
@@ -25,6 +31,7 @@ mod comparison;
 mod config;
 mod measurement;
 mod report;
+mod statistics;
 mod suite;
 
 pub use case::BenchmarkCase;

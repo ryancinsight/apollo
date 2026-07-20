@@ -7,12 +7,12 @@
   copied Python script. The check could not detect a regression, and the
   all-feature command also imported CUDA toolchain requirements unrelated to
   Apollo's CPU benchmark reports.
-- Resolution: `apollo-bench` now emits exact symmetric median intervals and
-  owns recursive report comparison. Report and case sets must match, both
-  intervals must provide at least 95% coverage, and a regression exists only
-  when the candidate lower bound exceeds the baseline upper bound. The
-  invalid job and Python duplicate are removed; independent base/head CI
-  orchestration is the remaining increment after the schema reaches default.
+- Resolution: `apollo-bench` now emits ordered observations with exact
+  symmetric median summaries and owns recursive report comparison. Report and
+  case sets must match. For `m` cases, each of the `2m` baseline/candidate
+  intervals has miscoverage at most `0.05 / (2m)`, so Bonferroni's inequality
+  bounds family-wise interval miscoverage by 5%. A regression exists only when
+  the candidate lower bound exceeds the baseline upper bound.
 - Mathematical oracle: for ordered samples `X_(1), …, X_(n)`, NIST Technical
   Note 2119 section 5.3 equations 30–31 gives
   `[X_(k), X_(n-k+1)]` with coverage
@@ -39,7 +39,19 @@
 - Instrument control: CI now overlays the candidate `apollo-bench` source onto
   the baseline checkout before either build, then verifies the three benchmark
   entry points are byte-identical across checkouts. The transform
-  implementations remain revision-specific. Hosted execution remains pending.
+  implementations remain revision-specific.
+- Third falsification: instrument-controlled hosted run `29761551514` still
+  produced 25 apparent regressions. Each case used an individual 95% interval,
+  so the probability of at least one false separation grew with the case
+  family. The report now retains all ordered observations, and the comparator
+  derives exact Bonferroni intervals over both revisions and every compared
+  case. A value-semantic regression proves a separation under a smaller family
+  disappears when the full family requires wider simultaneous intervals.
+- Provider checkout cleanup: Apollo manifests contain no external path
+  dependencies; Git revisions in `Cargo.lock` are authoritative. The stale
+  copied checkout action and all workflow calls are removed rather than
+  migrated to another redundant checkout layer. Hosted exact-head execution
+  remains pending.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

@@ -14,17 +14,22 @@
 - [x] Hold `apollo-bench` constant across revisions after hosted
       counterbalancing showed that a pull request changing the measurement
       harness otherwise compares different instruments.
+- [x] Retain the ordered observations and derive comparison-time intervals
+      with per-interval miscoverage at most `0.05 / (2m)` for `m` cases after
+      the instrument-controlled hosted run still produced 25 apparent
+      regressions from uncorrected simultaneous comparisons.
+- [x] Remove the obsolete provider checkout action after confirming Apollo's
+      manifests contain no external path dependencies.
 - [ ] Verify the PR-only job counterbalances both execution orders for the
       exact base and candidate revisions on one runner, requires agreement
       across all three native report files, and closes the item in hosted
       execution.
 
-**Current evidence:** exact `[X_(40), X_(61)]` coverage, disjoint/overlapping
-interval tests, counterbalanced agreement/order-drift tests, malformed and
-incomplete evidence tests, and both CLI contracts pass in 20/20 Nextest cases;
-two comparator doctests, warning-denied Clippy, warning-clean rustdoc, three
-Apollo FFT CPU benchmark targets, dependency policy, and 196/196 semver checks
-pass.
+**Current evidence:** exact individual `[X_(40), X_(61)]`, paired
+`[X_(39), X_(62)]`, and multi-case interval tests; a regression test rejects a
+separation that disappears under family-wise correction; counterbalanced
+agreement/order-drift, malformed and incomplete evidence, and CLI contracts
+pass in focused Nextest. Hosted exact-head execution remains pending.
 
 ## D15-align-hephaestus-legacy-math-pin [patch]
 
