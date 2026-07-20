@@ -33,10 +33,10 @@ jobs:
         with:
           components: clippy, rustfmt
       # `hephaestus-cuda` uses NVIDIA's generated CUDA bindings, which require
-      # the driver and cuRAND headers from CUDA 13.2+ even when no device is
-      # present. Install only those development packages: the full toolkit
-      # exhausts the hosted runner without adding coverage to this compile and
-      # test gate.
+      # the driver, runtime/compiler, and cuRAND headers from CUDA 13.2+ even
+      # when no device is present. Install only that header closure: the full
+      # toolkit exhausts the hosted runner without adding coverage to this
+      # compile and test gate.
       - name: Install CUDA toolkit
         run: |
           wget --no-verbose -O /tmp/cuda-keyring.deb \
@@ -44,7 +44,8 @@ jobs:
           sudo dpkg -i /tmp/cuda-keyring.deb
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes \
-            cuda-cudart-dev-13-3 cuda-driver-dev-13-3 libcurand-dev-13-3
+            cuda-cudart-dev-13-3 cuda-driver-dev-13-3 cuda-nvcc-13-3 \
+            libcurand-dev-13-3
           test -f /usr/local/cuda-13.3/include/cuda.h
           cuda_stub="$(find /usr/local/cuda-13.3 -path '*/stubs/libcuda.so' -print -quit)"
           test -n "$cuda_stub"
