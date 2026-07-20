@@ -22,7 +22,8 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] Removes the copied Python same-run benchmark check and its invalid
   all-feature CI job. Apollo owns a native benchmark report rather than
   Criterion output; ADR 0036 records the provider boundary and the independent
-  base/head execution contract.
+  base/head execution contract. CI counterbalances execution order and holds
+  the candidate benchmark instrument constant across both revision builds.
 
 - [patch] Aligns `hephaestus-core`, `hephaestus-wgpu`, and `hephaestus-cuda`
   with merged provider PR #47 (`cec0e33`) after the provider removed its direct

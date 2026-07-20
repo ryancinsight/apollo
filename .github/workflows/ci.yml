@@ -129,6 +129,23 @@ jobs:
         with:
           path: apollo-candidate
 
+      # The benchmark harness is the measurement instrument. When a pull
+      # request changes apollo-bench itself, compiling each revision against
+      # its own harness changes both the instrument and the code under test.
+      # Hold the candidate instrument constant across both revisions while
+      # leaving the baseline transform implementation unchanged.
+      - name: Pin candidate benchmark instrument
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C apollo-candidate archive HEAD crates/apollo-bench \
+            | tar -x -C apollo-baseline
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            diff --unified \
+              "apollo-baseline/crates/apollo-fft/benches/$benchmark.rs" \
+              "apollo-candidate/crates/apollo-fft/benches/$benchmark.rs"
+          done
+
       - name: Checkout Atlas providers
         uses: ./apollo-candidate/.github/actions/checkout-atlas
 

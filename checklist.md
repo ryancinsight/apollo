@@ -11,6 +11,9 @@
 - [x] Falsify the naive base-then-candidate design in hosted execution: 31
       source-identical cases produced disjoint intervals because of systematic
       execution-order drift.
+- [x] Hold `apollo-bench` constant across revisions after hosted
+      counterbalancing showed that a pull request changing the measurement
+      harness otherwise compares different instruments.
 - [ ] Verify the PR-only job counterbalances both execution orders for the
       exact base and candidate revisions on one runner, requires agreement
       across all three native report files, and closes the item in hosted

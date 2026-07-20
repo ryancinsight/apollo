@@ -10,12 +10,12 @@
   base/head comparison rejects malformed or unpaired evidence and classifies
   only disjoint slower intervals reproduced in both execution orders as
   regressions; the copied Python same-run check is absent.
-- Current increment: the first hosted base-then-candidate run produced 31
-  false regressions between source-identical revisions, proving systematic
-  order drift. PR-only CI now performs counterbalanced baseline/candidate and
-  candidate/baseline measurements over the same three CPU benchmark binaries
-  and requires agreement across both orders. Hosted execution is the remaining
-  acceptance gate.
+- Current increment: hosted runs falsified both fixed-order comparison and
+  revision-dependent measurement instruments. PR-only CI now performs
+  counterbalanced baseline/candidate and candidate/baseline measurements over
+  the same three CPU benchmark binaries, compiles both revisions against the
+  candidate `apollo-bench` instrument, and requires agreement across both
+  orders. Hosted execution is the remaining acceptance gate.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

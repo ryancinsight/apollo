@@ -30,7 +30,16 @@
 - Correction: the workflow now runs ABBA-style counterbalanced pairs
   (baseline→candidate, candidate→baseline) on one runner and requires the same
   case to be slower in both orders. The native comparator validates identical
-  evidence universes across both pairs. Hosted execution remains pending.
+  evidence universes across both pairs.
+- Second falsification: hosted run `29759735814` counterbalanced execution but
+  compiled the base and candidate revisions against their respective
+  `apollo-bench` sources. Because this pull request changes that measurement
+  harness, the run changed both the instrument and the transform code under
+  test and produced 22 apparent regressions.
+- Instrument control: CI now overlays the candidate `apollo-bench` source onto
+  the baseline checkout before either build, then verifies the three benchmark
+  entry points are byte-identical across checkouts. The transform
+  implementations remain revision-specific. Hosted execution remains pending.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

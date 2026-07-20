@@ -29,7 +29,10 @@ Keep report generation and interpretation in `apollo-bench`.
 4. Counterbalance execution as baseline→candidate then candidate→baseline.
 5. Classify a regression only when the candidate lower bound exceeds the
    baseline upper bound in both execution orders.
-6. Delete the copied Python comparator. CI orchestration checks out and runs
+6. Compile both revisions against the candidate `apollo-bench` source so the
+   measurement instrument remains constant while the transform implementation
+   varies.
+7. Delete the copied Python comparator. CI orchestration checks out and runs
    base and candidate revisions separately after the new schema reaches the
    default branch.
 
@@ -67,10 +70,20 @@ the order supplies the control for systematic thermal, frequency, and runner
 drift. A slowdown must reproduce in both orders; otherwise it is order-sensitive
 evidence, not a code-regression claim.
 
+Hosted run `29759735814` falsified counterbalancing alone for a pull request
+that changes `apollo-bench`: compiling each revision against its own harness
+changed the measurement instrument as well as the code under test and produced
+22 apparent regressions. CI therefore holds the candidate harness constant
+across both revision builds and verifies that all benchmark entry points are
+identical. Only the revision-specific transform implementation varies.
+
 ## Consequences
 
 The CSV schema is additive and `apollo-bench` exposes an additive public
 comparison API and CLI. Missing, malformed, low-confidence, or unpaired
 evidence fails closed, including mismatched case universes across execution
-orders. The base/head CI increment cannot precede this schema on the default
-branch because legacy baseline reports do not contain the required intervals.
+orders. A pull request that changes `apollo-bench` measures the base transform
+with the candidate instrument; this intentionally evaluates transform
+regression rather than benchmark-harness performance. The base/head CI
+increment cannot precede this schema on the default branch because legacy
+baseline reports do not contain the required intervals.
