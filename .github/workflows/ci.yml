@@ -107,6 +107,36 @@ jobs:
       - name: Dependency policy
         run: cargo deny check
 
+  benchmark-regression:
+    name: benchmark regression check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apollo
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: apollo
+      - uses: ./apollo/.github/actions/checkout-atlas
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apollo
+      - name: Run Criterion benchmarks
+        run: cargo bench --workspace --all-features
+      - name: Save benchmark baseline
+        run: |
+          python3 .github/scripts/check_regressions.py save \
+            --workspace . \
+            --output .benchmarks/baseline.json
+      - name: Check benchmark regressions
+        run: |
+          python3 .github/scripts/check_regressions.py check \
+            --workspace . \
+            --baseline .benchmarks/baseline.json \
+            --threshold-pct 15
+
   python:
     name: python bindings
     runs-on: ubuntu-latest
