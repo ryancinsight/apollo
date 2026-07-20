@@ -15,16 +15,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   recursive base/head report comparator. The comparator derives simultaneous
   intervals with 5% family-wise error over both baseline and candidate
   intervals; missing reports, missing cases, malformed records, and
-  insufficient sample evidence fail closed. Its counterbalanced API classifies
-  a regression only when the candidate interval is wholly above the baseline
-  interval in both execution orders.
+  insufficient sample evidence fail closed. Its replicated counterbalanced API
+  classifies a regression only when the candidate interval is wholly above the
+  baseline interval in all four comparisons across phase-reversed ABBA and
+  BAAB blocks.
 
 ### Changed
 
 - [patch] Removes the copied Python same-run benchmark check and its invalid
   all-feature CI job. Apollo owns a native benchmark report rather than
   Criterion output; ADR 0036 records the provider boundary and the independent
-  base/head execution contract. CI counterbalances execution order, holds the
+  base/head execution contract. CI phase-balances execution order, holds the
   candidate benchmark instrument constant across both revision builds, and no
   longer reconstructs obsolete local provider paths for Git-sourced
   dependencies.

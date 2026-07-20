@@ -168,10 +168,17 @@ jobs:
             done
           }
 
-          measure apollo-baseline reports/baseline-first/baseline
-          measure apollo-candidate reports/baseline-first/candidate
-          measure apollo-candidate reports/candidate-first/candidate
-          measure apollo-baseline reports/candidate-first/baseline
+          # ABBA followed by its phase reversal BAAB assigns each revision to
+          # period positions with equal sums and equal squared sums. Requiring
+          # a slowdown in both blocks rejects linear and quadratic runner drift.
+          measure apollo-baseline reports/first/baseline-first/baseline
+          measure apollo-candidate reports/first/baseline-first/candidate
+          measure apollo-candidate reports/first/candidate-first/candidate
+          measure apollo-baseline reports/first/candidate-first/baseline
+          measure apollo-candidate reports/second/candidate-first/candidate
+          measure apollo-baseline reports/second/candidate-first/baseline
+          measure apollo-baseline reports/second/baseline-first/baseline
+          measure apollo-candidate reports/second/baseline-first/candidate
 
       - name: Compare reports
         run: >-
@@ -181,11 +188,15 @@ jobs:
           -p apollo-bench
           --bin apollo-bench-compare
           --
-          compare-counterbalanced
-          --baseline-first-baseline-directory reports/baseline-first/baseline
-          --baseline-first-candidate-directory reports/baseline-first/candidate
-          --candidate-first-baseline-directory reports/candidate-first/baseline
-          --candidate-first-candidate-directory reports/candidate-first/candidate
+          compare-replicated-counterbalanced
+          --first-baseline-first-baseline-directory reports/first/baseline-first/baseline
+          --first-baseline-first-candidate-directory reports/first/baseline-first/candidate
+          --first-candidate-first-baseline-directory reports/first/candidate-first/baseline
+          --first-candidate-first-candidate-directory reports/first/candidate-first/candidate
+          --second-baseline-first-baseline-directory reports/second/baseline-first/baseline
+          --second-baseline-first-candidate-directory reports/second/baseline-first/candidate
+          --second-candidate-first-baseline-directory reports/second/candidate-first/baseline
+          --second-candidate-first-candidate-directory reports/second/candidate-first/candidate
 
   python:
     name: python bindings

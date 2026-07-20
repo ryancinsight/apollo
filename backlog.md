@@ -14,10 +14,12 @@
   absent.
 - Current increment: hosted runs falsified fixed-order comparison,
   revision-dependent measurement instruments, and uncorrected per-case
-  intervals. PR-only CI counterbalances the same three CPU benchmark binaries,
-  holds the candidate `apollo-bench` instrument constant, and derives exact
-  Bonferroni intervals from all ordered observations. Hosted execution is the
-  remaining acceptance gate.
+  intervals. The first corrected ABBA block then reported 12 slowdowns despite
+  identical transform source, exposing residual period confounding. PR-only CI
+  now runs ABBA followed by BAAB over the same three CPU benchmark binaries,
+  holds the candidate `apollo-bench` instrument constant, and requires every
+  slowdown to reproduce across all four family-wise comparisons. Hosted
+  execution is the remaining acceptance gate.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

@@ -171,6 +171,22 @@ impl ComparisonError {
         }
         .into()
     }
+
+    pub(super) fn missing_second_replication_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingSecondReplicationCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
+
+    pub(super) fn missing_first_replication_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingFirstReplicationCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
 }
 
 impl From<ErrorKind> for ComparisonError {
@@ -254,6 +270,10 @@ enum ErrorKind {
     MissingCandidateFirstCase { report: String, case: String },
     #[error("baseline-first evidence omits candidate-first report {report} case `{case}`")]
     MissingBaselineFirstCase { report: String, case: String },
+    #[error("second counterbalanced replication omits report {report} case `{case}`")]
+    MissingSecondReplicationCase { report: String, case: String },
+    #[error("first counterbalanced replication omits report {report} case `{case}`")]
+    MissingFirstReplicationCase { report: String, case: String },
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -1,85 +1,15 @@
 //! Value-semantic integration coverage for Apollo benchmark report comparison.
 
-use apollo_bench::{compare_counterbalanced_report_directories, compare_report_directories};
-use std::fs;
-use std::path::{Path, PathBuf};
+#[path = "comparison/support.rs"]
+mod support;
+
+use apollo_bench::{
+    compare_counterbalanced_report_directories,
+    compare_replicated_counterbalanced_report_directories, compare_report_directories,
+};
+use std::path::Path;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-const HEADER: &str = "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n";
-static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-
-struct Fixture {
-    root: PathBuf,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let sequence = FIXTURE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "apollo-bench-comparison-{}-{sequence}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&root).expect("fixture root creation must succeed");
-        Self { root }
-    }
-
-    fn write(&self, relative: &str, rows: &[String]) {
-        let path = self.root.join(relative);
-        fs::create_dir_all(
-            path.parent()
-                .expect("invariant: every fixture report has a parent"),
-        )
-        .expect("fixture report parent creation must succeed");
-        fs::write(path, format!("{HEADER}{}", rows.concat()))
-            .expect("fixture report write must succeed");
-    }
-
-    fn directory(&self, relative: &str) -> PathBuf {
-        self.root.join(relative)
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        if self.root.exists() {
-            fs::remove_dir_all(&self.root).expect("fixture cleanup must succeed");
-        }
-    }
-}
-
-fn standard_row(case: &str, start: u128) -> String {
-    report_row(case, &(start..start + 100).collect::<Vec<_>>())
-}
-
-fn report_row(case: &str, samples: &[u128]) -> String {
-    let (interval_rank, confidence) = match samples.len() {
-        6 => (1, 968_750),
-        100 => (40, 964_799),
-        count => panic!("fixture does not define the one-case interval for {count} samples"),
-    };
-    let minimum = samples[0];
-    let median = samples[(samples.len() - 1) / 2]
-        + (samples[samples.len() / 2] - samples[(samples.len() - 1) / 2]) / 2;
-    let lower = samples[interval_rank - 1];
-    let upper = samples[samples.len() - interval_rank];
-    let samples = samples
-        .iter()
-        .map(u128::to_string)
-        .collect::<Vec<_>>()
-        .join(";");
-    format!(
-        "{},{minimum},{median},{lower},{upper},{confidence},{samples},4\n",
-        csv_field(case)
-    )
-}
-
-fn csv_field(value: &str) -> String {
-    if !value.contains([',', '"', '\n', '\r']) {
-        return value.to_owned();
-    }
-    format!("\"{}\"", value.replace('"', "\"\""))
-}
+use support::{report_row, report_set, standard_row, write_counterbalanced_case, Fixture};
 
 #[test]
 fn disjoint_slower_interval_is_a_regression() {
@@ -383,4 +313,105 @@ fn counterbalanced_case_universes_must_match() {
     assert!(error
         .to_string()
         .contains("candidate-first evidence omits baseline-first"));
+}
+
+#[test]
+fn phase_reversed_replication_rejects_one_block_slowdown() {
+    let fixture = Fixture::new();
+    write_counterbalanced_case(&fixture, "first", "n256", 1, 1_000);
+    write_counterbalanced_case(&fixture, "second", "n256", 1_000, 1);
+
+    let summary = compare_replicated_counterbalanced_report_directories([
+        report_set(&fixture, "first"),
+        report_set(&fixture, "second"),
+    ])
+    .expect("both replicated evidence blocks must compare");
+
+    assert!(summary.passed());
+    assert_eq!(summary.compared_cases(), 1);
+}
+
+#[test]
+fn slowdown_must_reproduce_across_both_counterbalanced_blocks() {
+    let fixture = Fixture::new();
+    for replication in ["first", "second"] {
+        write_counterbalanced_case(&fixture, replication, "n256", 1, 1_000);
+    }
+
+    let summary = compare_replicated_counterbalanced_report_directories([
+        report_set(&fixture, "first"),
+        report_set(&fixture, "second"),
+    ])
+    .expect("both replicated evidence blocks must compare");
+
+    assert_eq!(summary.regressions().len(), 1);
+    let regression = &summary.regressions()[0];
+    assert_eq!(regression.case(), "n256");
+    assert_eq!(
+        regression
+            .first_replication()
+            .baseline_first()
+            .baseline_upper_nanoseconds(),
+        62
+    );
+    assert_eq!(
+        regression
+            .second_replication()
+            .candidate_first()
+            .candidate_lower_nanoseconds(),
+        1_038
+    );
+}
+
+#[test]
+fn replicated_case_universes_must_match() {
+    let fixture = Fixture::new();
+    write_counterbalanced_case(&fixture, "first", "n256", 1, 1);
+    write_counterbalanced_case(&fixture, "second", "n512", 1, 1);
+
+    let error = compare_replicated_counterbalanced_report_directories([
+        report_set(&fixture, "first"),
+        report_set(&fixture, "second"),
+    ])
+    .expect_err("replications must contain identical case identities");
+
+    assert!(error
+        .to_string()
+        .contains("second counterbalanced replication omits"));
+}
+
+#[test]
+fn replicated_command_reports_unique_evidence_count() {
+    let fixture = Fixture::new();
+    for replication in ["first", "second"] {
+        write_counterbalanced_case(&fixture, replication, "n256", 1, 1);
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_apollo-bench-compare"))
+        .arg("compare-replicated-counterbalanced")
+        .arg("--first-baseline-first-baseline-directory")
+        .arg(fixture.directory("first/baseline-first/baseline"))
+        .arg("--first-baseline-first-candidate-directory")
+        .arg(fixture.directory("first/baseline-first/candidate"))
+        .arg("--first-candidate-first-baseline-directory")
+        .arg(fixture.directory("first/candidate-first/baseline"))
+        .arg("--first-candidate-first-candidate-directory")
+        .arg(fixture.directory("first/candidate-first/candidate"))
+        .arg("--second-baseline-first-baseline-directory")
+        .arg(fixture.directory("second/baseline-first/baseline"))
+        .arg("--second-baseline-first-candidate-directory")
+        .arg(fixture.directory("second/baseline-first/candidate"))
+        .arg("--second-candidate-first-baseline-directory")
+        .arg(fixture.directory("second/candidate-first/baseline"))
+        .arg("--second-candidate-first-candidate-directory")
+        .arg(fixture.directory("second/candidate-first/candidate"))
+        .output()
+        .expect("replicated counterbalanced command must execute");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("command output must be UTF-8"),
+        "replicated counterbalanced 1 cases across 1 reports; no supported regression\n"
+    );
+    assert!(output.stderr.is_empty());
 }

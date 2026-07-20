@@ -37,6 +37,8 @@ Keep report generation and interpretation in `apollo-bench`.
 7. Delete the copied Python comparator. CI orchestration checks out and runs
    base and candidate revisions separately after the new schema reaches the
    default branch.
+8. Replicate ABBA with the phase-reversed BAAB schedule and require the same
+   slowdown in all four comparisons.
 
 The strongest rejected alternative is converting Apollo to Criterion solely
 to reuse the Atlas Criterion comparator. Apollo already owns a cohesive native
@@ -90,15 +92,28 @@ therefore retains all ordered observations so the comparator can select the
 exact family-size-dependent interval after it validates the full evidence
 universe.
 
+Hosted run `29764170548` applied the family-wise intervals but reported 12
+slowdowns under one ABBA block despite an empty production transform diff
+between base `66e37ab` and candidate `65dd9ad`. ABBA alone assigns the two
+revisions to different periods of one runner timeline. Appending BAAB yields
+baseline period positions `{1, 4, 6, 7}` and candidate positions
+`{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so the
+assignment cancels constant, linear, and quadratic period terms. The final
+regression event is the intersection of the four family-wise comparison
+events; it therefore remains bounded by 5% without assuming that the blocks
+are independent.
+
 ## Consequences
 
 The CSV schema carries the ordered observations as the statistical source of
 truth, while the summary columns remain validated descriptive output.
 `apollo-bench` exposes an additive public comparison API and CLI. Missing,
 malformed, insufficient, or unpaired evidence fails closed, including
-mismatched case universes across execution orders. A pull request that changes
-`apollo-bench` measures the base transform with the candidate instrument; this
-intentionally evaluates transform regression rather than benchmark-harness
-performance. The base/head CI increment cannot precede this schema on the
-default branch because legacy baseline reports do not contain the ordered
-observations.
+mismatched case universes across execution orders or replications. A pull
+request that changes `apollo-bench` measures the base transform with the
+candidate instrument; this intentionally evaluates transform regression
+rather than benchmark-harness performance. The eight measurements roughly
+double the empirical lane from 17 to 34 minutes while remaining inside its
+60-minute purpose-specific bound. The base/head CI increment cannot precede
+this schema on the default branch because legacy baseline reports do not
+contain the ordered observations.

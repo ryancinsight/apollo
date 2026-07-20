@@ -1,8 +1,10 @@
 //! Command-line comparison of independently generated Apollo benchmark reports.
 
 use apollo_bench::{
-    compare_counterbalanced_report_directories, compare_report_directories, ComparisonSummary,
-    CounterbalancedComparisonSummary,
+    compare_counterbalanced_report_directories,
+    compare_replicated_counterbalanced_report_directories, compare_report_directories,
+    ComparisonSummary, CounterbalancedComparisonSummary, CounterbalancedReportSet,
+    ReplicatedCounterbalancedComparisonSummary,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -14,10 +16,13 @@ fn main() -> ExitCode {
     match parse_command().and_then(execute) {
         Ok(CommandSummary::Single(summary)) => report_single(&summary),
         Ok(CommandSummary::Counterbalanced(summary)) => report_counterbalanced(&summary),
+        Ok(CommandSummary::ReplicatedCounterbalanced(summary)) => {
+            report_replicated_counterbalanced(&summary)
+        }
         Err(error) => {
             eprintln!("{error}");
             eprintln!(
-                "usage: apollo-bench-compare <compare|compare-counterbalanced> [directory options]"
+                "usage: apollo-bench-compare <compare|compare-counterbalanced|compare-replicated-counterbalanced> [directory options]"
             );
             ExitCode::FAILURE
         }
@@ -35,11 +40,16 @@ enum Command {
         candidate_first_baseline: PathBuf,
         candidate_first_candidate: PathBuf,
     },
+    CompareReplicatedCounterbalanced {
+        first: CounterbalancedReportSet,
+        second: CounterbalancedReportSet,
+    },
 }
 
 enum CommandSummary {
     Single(ComparisonSummary),
     Counterbalanced(CounterbalancedComparisonSummary),
+    ReplicatedCounterbalanced(ReplicatedCounterbalancedComparisonSummary),
 }
 
 fn execute(command: Command) -> Result<CommandSummary, String> {
@@ -63,6 +73,11 @@ fn execute(command: Command) -> Result<CommandSummary, String> {
         )
         .map(CommandSummary::Counterbalanced)
         .map_err(|error| error.to_string()),
+        Command::CompareReplicatedCounterbalanced { first, second } => {
+            compare_replicated_counterbalanced_report_directories([first, second])
+                .map(CommandSummary::ReplicatedCounterbalanced)
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -114,6 +129,38 @@ fn report_counterbalanced(summary: &CounterbalancedComparisonSummary) -> ExitCod
     ExitCode::FAILURE
 }
 
+fn report_replicated_counterbalanced(
+    summary: &ReplicatedCounterbalancedComparisonSummary,
+) -> ExitCode {
+    if summary.passed() {
+        println!(
+            "replicated counterbalanced {} cases across {} reports; no supported regression",
+            summary.compared_cases(),
+            summary.compared_reports()
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    for regression in summary.regressions() {
+        let first = regression.first_replication();
+        let second = regression.second_replication();
+        eprintln!(
+            "{}: {} candidate is slower in all four comparisons: first baseline-first {} ns > {} ns; first candidate-first {} ns > {} ns; second baseline-first {} ns > {} ns; second candidate-first {} ns > {} ns",
+            regression.report().display(),
+            regression.case(),
+            first.baseline_first().candidate_lower_nanoseconds(),
+            first.baseline_first().baseline_upper_nanoseconds(),
+            first.candidate_first().candidate_lower_nanoseconds(),
+            first.candidate_first().baseline_upper_nanoseconds(),
+            second.baseline_first().candidate_lower_nanoseconds(),
+            second.baseline_first().baseline_upper_nanoseconds(),
+            second.candidate_first().candidate_lower_nanoseconds(),
+            second.candidate_first().baseline_upper_nanoseconds()
+        );
+    }
+    ExitCode::FAILURE
+}
+
 fn parse_command() -> Result<Command, String> {
     let mut arguments = env::args_os();
     let _program = arguments.next();
@@ -148,10 +195,40 @@ fn parse_command() -> Result<Command, String> {
             candidate_first_candidate,
         });
     }
+    if command == "compare-replicated-counterbalanced" {
+        let first = take_counterbalanced_set(&mut options, "first")?;
+        let second = take_counterbalanced_set(&mut options, "second")?;
+        reject_remaining(options)?;
+        return Ok(Command::CompareReplicatedCounterbalanced { first, second });
+    }
 
     Err(format!(
         "unsupported command `{}`",
         command.to_string_lossy()
+    ))
+}
+
+fn take_counterbalanced_set(
+    options: &mut BTreeMap<OsString, PathBuf>,
+    replication: &str,
+) -> Result<CounterbalancedReportSet, String> {
+    Ok(CounterbalancedReportSet::new(
+        take_required_owned(
+            options,
+            format!("--{replication}-baseline-first-baseline-directory"),
+        )?,
+        take_required_owned(
+            options,
+            format!("--{replication}-baseline-first-candidate-directory"),
+        )?,
+        take_required_owned(
+            options,
+            format!("--{replication}-candidate-first-baseline-directory"),
+        )?,
+        take_required_owned(
+            options,
+            format!("--{replication}-candidate-first-candidate-directory"),
+        )?,
     ))
 }
 
@@ -176,6 +253,15 @@ fn take_required(
 ) -> Result<PathBuf, String> {
     options
         .remove(OsStr::new(flag))
+        .ok_or_else(|| format!("`{flag}` is required"))
+}
+
+fn take_required_owned(
+    options: &mut BTreeMap<OsString, PathBuf>,
+    flag: String,
+) -> Result<PathBuf, String> {
+    options
+        .remove(OsStr::new(&flag))
         .ok_or_else(|| format!("`{flag}` is required"))
 }
 

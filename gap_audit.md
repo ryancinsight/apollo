@@ -47,11 +47,24 @@
   derives exact Bonferroni intervals over both revisions and every compared
   case. A value-semantic regression proves a separation under a smaller family
   disappears when the full family requires wider simultaneous intervals.
+- Fourth falsification: family-wise hosted run `29764170548` still reported 12
+  slowdowns under one ABBA block even though
+  `git diff 66e37ab..65dd9ad -- crates/apollo-fft/src
+  crates/apollo-fft/Cargo.toml Cargo.lock` was empty. The smallest separations
+  were one nanosecond, while one order of another case separated by 2,657 ns,
+  proving that a single runner timeline still confounded source identity with
+  period effects.
+- Phase control: CI now follows ABBA with its phase reversal BAAB. Across the
+  resulting eight periods, baseline occupies positions `{1, 4, 6, 7}` and
+  candidate `{2, 3, 5, 8}`; both position sums equal 18 and both squared
+  position sums equal 102. The replicated comparator requires the same case to
+  regress in all four base/head comparisons and rejects mismatched case
+  universes between blocks.
 - Provider checkout cleanup: Apollo manifests contain no external path
   dependencies; Git revisions in `Cargo.lock` are authoritative. The stale
   copied checkout action and all workflow calls are removed rather than
-  migrated to another redundant checkout layer. Hosted exact-head execution
-  remains pending.
+  migrated to another redundant checkout layer. Hosted exact-head execution of
+  the phase-reversed design remains pending.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

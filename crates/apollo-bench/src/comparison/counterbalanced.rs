@@ -2,8 +2,35 @@ use super::{
     compare_report_directories, BenchmarkKey, BenchmarkRegression, ComparisonError,
     ComparisonSummary,
 };
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+/// Owns the four report trees in one ABBA counterbalanced measurement block.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CounterbalancedReportSet {
+    pub(super) baseline_first_baseline: PathBuf,
+    pub(super) baseline_first_candidate: PathBuf,
+    pub(super) candidate_first_baseline: PathBuf,
+    pub(super) candidate_first_candidate: PathBuf,
+}
+
+impl CounterbalancedReportSet {
+    /// Creates a report-set descriptor without reading its directories.
+    #[must_use]
+    pub fn new(
+        baseline_first_baseline: impl Into<PathBuf>,
+        baseline_first_candidate: impl Into<PathBuf>,
+        candidate_first_baseline: impl Into<PathBuf>,
+        candidate_first_candidate: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            baseline_first_baseline: baseline_first_baseline.into(),
+            baseline_first_candidate: baseline_first_candidate.into(),
+            candidate_first_baseline: candidate_first_baseline.into(),
+            candidate_first_candidate: candidate_first_candidate.into(),
+        }
+    }
+}
 
 /// Records one execution order's disjoint median interval bounds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -67,6 +94,7 @@ pub struct CounterbalancedComparisonSummary {
     compared_reports: usize,
     compared_cases: usize,
     regressions: Vec<CounterbalancedBenchmarkRegression>,
+    pub(super) compared_keys: BTreeSet<BenchmarkKey>,
 }
 
 impl CounterbalancedComparisonSummary {
@@ -156,10 +184,25 @@ pub fn compare_counterbalanced_report_directories(
     candidate_first_baseline: impl AsRef<Path>,
     candidate_first_candidate: impl AsRef<Path>,
 ) -> Result<CounterbalancedComparisonSummary, ComparisonError> {
-    let baseline_first =
-        compare_report_directories(baseline_first_baseline, baseline_first_candidate)?;
-    let candidate_first =
-        compare_report_directories(candidate_first_baseline, candidate_first_candidate)?;
+    compare_report_set(&CounterbalancedReportSet::new(
+        baseline_first_baseline.as_ref(),
+        baseline_first_candidate.as_ref(),
+        candidate_first_baseline.as_ref(),
+        candidate_first_candidate.as_ref(),
+    ))
+}
+
+pub(super) fn compare_report_set(
+    reports: &CounterbalancedReportSet,
+) -> Result<CounterbalancedComparisonSummary, ComparisonError> {
+    let baseline_first = compare_report_directories(
+        &reports.baseline_first_baseline,
+        &reports.baseline_first_candidate,
+    )?;
+    let candidate_first = compare_report_directories(
+        &reports.candidate_first_baseline,
+        &reports.candidate_first_candidate,
+    )?;
     validate_case_universe(&baseline_first, &candidate_first)?;
 
     let candidate_first_regressions = candidate_first
@@ -187,6 +230,7 @@ pub fn compare_counterbalanced_report_directories(
         compared_reports: baseline_first.compared_reports,
         compared_cases: baseline_first.compared_cases,
         regressions,
+        compared_keys: baseline_first.compared_keys,
     })
 }
 

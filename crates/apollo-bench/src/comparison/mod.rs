@@ -1,13 +1,18 @@
 mod counterbalanced;
 mod discovery;
 mod error;
+mod replicated;
 mod report;
 
 pub use counterbalanced::{
     compare_counterbalanced_report_directories, CounterbalancedBenchmarkRegression,
-    CounterbalancedComparisonSummary, IntervalSeparation,
+    CounterbalancedComparisonSummary, CounterbalancedReportSet, IntervalSeparation,
 };
 pub use error::ComparisonError;
+pub use replicated::{
+    compare_replicated_counterbalanced_report_directories,
+    ReplicatedCounterbalancedBenchmarkRegression, ReplicatedCounterbalancedComparisonSummary,
+};
 
 use report::ReportRecord;
 use std::collections::BTreeSet;
