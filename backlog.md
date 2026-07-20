@@ -1,18 +1,25 @@
 # Apollo Backlog
 
-## D16-native-benchmark-regression-oracle [minor] [arch] — in-progress
+## D16-native-benchmark-regression-oracle [minor] [arch] — done
 
 - Owner: Codex `/root`; scope: `apollo-bench` statistical report contract,
   native comparison boundary, benchmark CI, ADR 0036, and synchronized PM
   records. Transform kernels and provider implementations are non-goals.
-- Acceptance: every standard 100-sample report carries an exact
-  distribution-free median interval with at least 95% coverage; recursive
-  base/head comparison rejects malformed or unpaired evidence and classifies
-  only disjoint slower intervals as regressions; the copied Python same-run
-  check is absent.
-- Current increment: native report/comparator implementation and the removal
-  of the invalid same-run job. Independent base/head CI execution follows
-  after this report schema is present on the default branch.
+- Acceptance: every standard 100-sample report retains its ordered
+  observations and exact distribution-free median summary; recursive base/head
+  comparison controls family-wise error at 5% across both intervals for every
+  compared case, rejects malformed or unpaired evidence, and classifies only
+  disjoint slower intervals reproduced in both execution orders as
+  regressions; the copied Python check and obsolete provider checkout are
+  absent.
+- Closure: hosted runs falsified fixed-order comparison, revision-dependent
+  measurement instruments, uncorrected per-case intervals, and one ABBA block.
+  Exact-head run `29766127266` then passed the phase-reversed ABBA/BAAB canary
+  over the same three CPU benchmark binaries in 31 minutes. The candidate
+  `apollo-bench` instrument remained constant, production transform source was
+  identical, and no slowdown reproduced across all four family-wise
+  comparisons. Rust workspace, Python binding, and CodeRabbit checks also
+  passed at `c9a0156`.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

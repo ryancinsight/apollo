@@ -1,5 +1,6 @@
 use super::error::RecordInvariant;
 use super::ComparisonError;
+use crate::statistics::median::MedianInterval;
 use csv::StringRecord;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,15 +12,27 @@ const HEADER: [&str; 8] = [
     "median_lower_ns",
     "median_upper_ns",
     "median_confidence_ppm",
-    "samples",
+    "ordered_samples_ns",
     "iterations_per_sample",
 ];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ReportRecord {
-    pub(super) lower_nanoseconds: u128,
-    pub(super) upper_nanoseconds: u128,
-    pub(super) confidence_parts_per_million: u32,
+    ordered_samples_nanoseconds: Box<[u128]>,
+}
+
+impl ReportRecord {
+    pub(super) fn interval(&self, compared_cases: usize) -> Option<MedianInterval> {
+        let simultaneous_intervals = compared_cases.checked_mul(2)?;
+        MedianInterval::from_ordered_samples(
+            &self.ordered_samples_nanoseconds,
+            simultaneous_intervals,
+        )
+    }
+
+    pub(super) fn sample_count(&self) -> usize {
+        self.ordered_samples_nanoseconds.len()
+    }
 }
 
 pub(super) fn read_report(path: &Path) -> Result<BTreeMap<String, ReportRecord>, ComparisonError> {
@@ -39,38 +52,37 @@ pub(super) fn read_report(path: &Path) -> Result<BTreeMap<String, ReportRecord>,
     for (index, result) in reader.records().enumerate() {
         let row = u64::try_from(index + 2).expect("invariant: report row index fits in u64");
         let record = result.map_err(|source| ComparisonError::read_report(path, source))?;
-        let case = field(path, row, &record, 0, "case")?.to_owned();
-        let minimum_nanoseconds = parse_u128(path, row, &record, 1, "min_ns")?;
-        let median_nanoseconds = parse_u128(path, row, &record, 2, "median_ns")?;
-        let median_lower_nanoseconds = parse_u128(path, row, &record, 3, "median_lower_ns")?;
-        let median_upper_nanoseconds = parse_u128(path, row, &record, 4, "median_upper_ns")?;
-        let median_confidence_parts_per_million =
-            parse_u32(path, row, &record, 5, "median_confidence_ppm")?;
-        let samples = parse_u128(path, row, &record, 6, "samples")?;
-        let iterations = parse_u128(path, row, &record, 7, "iterations_per_sample")?;
-
-        validate_record(
-            path,
-            row,
-            &case,
-            minimum_nanoseconds,
-            median_nanoseconds,
-            median_lower_nanoseconds,
-            median_upper_nanoseconds,
-            median_confidence_parts_per_million,
-            samples,
-            iterations,
-        )?;
+        let parsed = ParsedRecord {
+            case: field(path, row, &record, 0, "case")?.to_owned(),
+            minimum_nanoseconds: parse_u128(path, row, &record, 1, "min_ns")?,
+            median_nanoseconds: parse_u128(path, row, &record, 2, "median_ns")?,
+            median_lower_nanoseconds: parse_u128(path, row, &record, 3, "median_lower_ns")?,
+            median_upper_nanoseconds: parse_u128(path, row, &record, 4, "median_upper_ns")?,
+            median_confidence_parts_per_million: parse_u32(
+                path,
+                row,
+                &record,
+                5,
+                "median_confidence_ppm",
+            )?,
+            ordered_samples_nanoseconds: parse_samples(
+                path,
+                row,
+                &record,
+                6,
+                "ordered_samples_ns",
+            )?,
+            iterations: parse_u128(path, row, &record, 7, "iterations_per_sample")?,
+        };
+        parsed.validate(path, row)?;
         let prior = records.insert(
-            case.clone(),
+            parsed.case.clone(),
             ReportRecord {
-                lower_nanoseconds: median_lower_nanoseconds,
-                upper_nanoseconds: median_upper_nanoseconds,
-                confidence_parts_per_million: median_confidence_parts_per_million,
+                ordered_samples_nanoseconds: parsed.ordered_samples_nanoseconds,
             },
         );
         if prior.is_some() {
-            return Err(ComparisonError::duplicate_case(path, row, &case));
+            return Err(ComparisonError::duplicate_case(path, row, &parsed.case));
         }
     }
 
@@ -80,39 +92,79 @@ pub(super) fn read_report(path: &Path) -> Result<BTreeMap<String, ReportRecord>,
     Ok(records)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn validate_record(
-    path: &Path,
-    row: u64,
-    case: &str,
+struct ParsedRecord {
+    case: String,
     minimum_nanoseconds: u128,
     median_nanoseconds: u128,
     median_lower_nanoseconds: u128,
     median_upper_nanoseconds: u128,
     median_confidence_parts_per_million: u32,
-    samples: u128,
+    ordered_samples_nanoseconds: Box<[u128]>,
     iterations: u128,
-) -> Result<(), ComparisonError> {
-    let invariant = if case.is_empty() {
-        Some(RecordInvariant::EmptyCase)
-    } else if minimum_nanoseconds > median_lower_nanoseconds {
-        Some(RecordInvariant::MinimumExceedsLowerBound)
-    } else if !(median_lower_nanoseconds..=median_upper_nanoseconds).contains(&median_nanoseconds) {
-        Some(RecordInvariant::MedianOutsideBounds)
-    } else if median_confidence_parts_per_million > 1_000_000 {
-        Some(RecordInvariant::ConfidenceExceedsOne)
-    } else if samples == 0 {
-        Some(RecordInvariant::ZeroSamples)
-    } else if iterations == 0 {
-        Some(RecordInvariant::ZeroIterations)
-    } else {
-        None
-    };
+}
 
-    if let Some(invariant) = invariant {
-        return Err(ComparisonError::invalid_record(path, row, case, invariant));
+impl ParsedRecord {
+    fn validate(&self, path: &Path, row: u64) -> Result<(), ComparisonError> {
+        let samples = &self.ordered_samples_nanoseconds;
+        let interval = MedianInterval::from_ordered_samples(samples, 1);
+        let central = samples
+            .get((samples.len().saturating_sub(1)) / 2)
+            .zip(samples.get(samples.len() / 2))
+            .map(|(lower, upper)| lower + (upper - lower) / 2);
+
+        let invariant = if self.case.is_empty() {
+            Some(RecordInvariant::EmptyCase)
+        } else if samples.is_empty() {
+            Some(RecordInvariant::ZeroSamples)
+        } else if !samples.windows(2).all(|pair| pair[0] <= pair[1]) {
+            Some(RecordInvariant::SamplesNotOrdered)
+        } else if samples.first().copied() != Some(self.minimum_nanoseconds) {
+            Some(RecordInvariant::MinimumMismatch)
+        } else if central != Some(self.median_nanoseconds) {
+            Some(RecordInvariant::MedianMismatch)
+        } else if interval.is_none() {
+            Some(RecordInvariant::UnsupportedSampleCount)
+        } else if interval.is_some_and(|interval| {
+            interval.lower_nanoseconds != self.median_lower_nanoseconds
+                || interval.upper_nanoseconds != self.median_upper_nanoseconds
+                || interval.confidence_parts_per_million != self.median_confidence_parts_per_million
+        }) {
+            Some(RecordInvariant::MedianIntervalMismatch)
+        } else if self.iterations == 0 {
+            Some(RecordInvariant::ZeroIterations)
+        } else {
+            None
+        };
+
+        if let Some(invariant) = invariant {
+            return Err(ComparisonError::invalid_record(
+                path, row, &self.case, invariant,
+            ));
+        }
+        Ok(())
     }
-    Ok(())
+}
+
+fn parse_samples(
+    path: &Path,
+    row: u64,
+    record: &StringRecord,
+    index: usize,
+    column: &'static str,
+) -> Result<Box<[u128]>, ComparisonError> {
+    let value = field(path, row, record, index, column)?;
+    if value.is_empty() {
+        return Ok(Box::new([]));
+    }
+    value
+        .split(';')
+        .map(|sample| {
+            sample.parse().map_err(|source| {
+                ComparisonError::invalid_integer(path, row, column, sample, source)
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Vec::into_boxed_slice)
 }
 
 fn field<'record>(

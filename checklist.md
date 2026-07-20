@@ -8,15 +8,32 @@
       fail-closed native comparator with value-semantic regression tests.
 - [x] Delete the copied Python same-run comparator and its invalid
       all-feature benchmark job.
-- [ ] Run independently checked-out base and candidate benchmark binaries in
-      CI, compare their native reports, and close the item after hosted
-      verification.
+- [x] Falsify the naive base-then-candidate design in hosted execution: 31
+      source-identical cases produced disjoint intervals because of systematic
+      execution-order drift.
+- [x] Hold `apollo-bench` constant across revisions after hosted
+      counterbalancing showed that a pull request changing the measurement
+      harness otherwise compares different instruments.
+- [x] Retain the ordered observations and derive comparison-time intervals
+      with per-interval miscoverage at most `0.05 / (2m)` for `m` cases after
+      the instrument-controlled hosted run still produced 25 apparent
+      regressions from uncorrected simultaneous comparisons.
+- [x] Add a phase-reversed BAAB replication after the first family-wise run
+      still reported 12 source-identical slowdowns under one ABBA block.
+- [x] Remove the obsolete provider checkout action after confirming Apollo's
+      manifests contain no external path dependencies.
+- [x] Verify the PR-only job executes both phase-reversed blocks for the exact
+      base and candidate revisions on one runner, requires agreement across
+      all four comparisons and all three native report files, and closes the
+      item in hosted execution.
 
-**Current evidence:** exact `[X_(40), X_(61)]` coverage regression, disjoint
-and overlapping interval tests, malformed/incomplete evidence tests, and the
-CLI contract pass in 16/16 Nextest cases; the comparator doctest,
-warning-denied Clippy, warning-clean rustdoc, three Apollo FFT CPU benchmark
-targets, dependency policy, and 196/196 semver checks pass.
+**Current evidence:** exact individual `[X_(40), X_(61)]`, paired
+`[X_(39), X_(62)]`, and multi-case interval tests; a regression test rejects a
+separation that disappears under family-wise correction; counterbalanced
+agreement/order-drift, phase-replication, malformed and incomplete evidence,
+and CLI contracts pass in focused Nextest. Hosted run `29766127266` passes the
+exact `c9a0156` head: all eight benchmark passes and replicated comparison
+complete in 31 minutes, alongside green Rust, Python, and review checks.
 
 ## D15-align-hephaestus-legacy-math-pin [patch]
 

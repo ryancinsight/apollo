@@ -17,10 +17,12 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
   contract; transform crates do not depend on FFT implementation modules for
   view materialization or Mnemosyne-backed output construction.
 - `apollo-bench` owns the native sequential measurement contract used by every
-  benchmark binary. Its stable CSV reports include exact distribution-free
-  95% median intervals, and its native comparator fails closed on unpaired
-  reports or cases. A slowdown is reported only when independently generated
-  base/head intervals are disjoint.
+  benchmark binary. Its stable CSV reports retain the ordered observations and
+  exact distribution-free median summary. The native comparator derives
+  Bonferroni-corrected intervals over the complete base/head case family and
+  fails closed on malformed or unpaired evidence. CI executes phase-reversed
+  ABBA and BAAB blocks; a slowdown is reported only when the family-wise
+  intervals are disjoint in all four base/head comparisons.
 - `apollo-dctdst` owns DCT/DST real-to-real transform plan metadata,
   verified direct kernels, inverse scaling, and caller-owned output execution.
 - `apollo-dht` owns real-to-real Discrete Hartley Transform plans, coefficient storage, and self-inverse kernels.

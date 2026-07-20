@@ -3,24 +3,35 @@ use core::fmt::Write;
 
 pub(super) fn render(records: &[BenchmarkRecord]) -> String {
     let mut output = String::from(
-        "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,samples,iterations_per_sample\n",
+        "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n",
     );
     for record in records {
         write_csv_field(&record.case.to_string(), &mut output);
-        writeln!(
+        write!(
             output,
-            ",{},{},{},{},{},{},{}",
+            ",{},{},{},{},{},",
             record.minimum_nanoseconds,
             record.median_nanoseconds,
             record.median_lower_nanoseconds,
             record.median_upper_nanoseconds,
             record.median_confidence_parts_per_million,
-            record.sample_count,
-            record.iterations_per_sample
         )
         .expect("invariant: formatting a String cannot fail");
+        write_ordered_samples(&record.ordered_samples_nanoseconds, &mut output);
+        writeln!(output, ",{}", record.iterations_per_sample)
+            .expect("invariant: formatting a String cannot fail");
     }
     output
+}
+
+fn write_ordered_samples(samples: &[u128], output: &mut String) {
+    let mut samples = samples.iter();
+    if let Some(first) = samples.next() {
+        write!(output, "{first}").expect("invariant: formatting a String cannot fail");
+    }
+    for sample in samples {
+        write!(output, ";{sample}").expect("invariant: formatting a String cannot fail");
+    }
 }
 
 fn write_csv_field(field: &str, output: &mut String) {
@@ -48,8 +59,8 @@ mod tests {
 
     #[test]
     fn csv_quotes_separator_quote_and_newline_labels() {
-        let summary = SampleSummary::from_samples(vec![7], 1)
-            .expect("invariant: literal sample set is non-empty");
+        let summary = SampleSummary::from_samples(vec![7; 6], 1)
+            .expect("invariant: six samples support the one-case interval");
         let record = BenchmarkRecord::new(
             BenchmarkCase::new("group,with", "quoted\"label", "line\nbreak"),
             summary,
@@ -57,7 +68,7 @@ mod tests {
 
         assert_eq!(
             render(&[record]),
-            "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,samples,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,7,7,0,1,1\n"
+            "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,7,7,968750,7;7;7;7;7;7,1\n"
         );
     }
 }

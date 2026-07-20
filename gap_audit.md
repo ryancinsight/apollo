@@ -7,12 +7,12 @@
   copied Python script. The check could not detect a regression, and the
   all-feature command also imported CUDA toolchain requirements unrelated to
   Apollo's CPU benchmark reports.
-- Resolution: `apollo-bench` now emits exact symmetric median intervals and
-  owns recursive report comparison. Report and case sets must match, both
-  intervals must provide at least 95% coverage, and a regression exists only
-  when the candidate lower bound exceeds the baseline upper bound. The
-  invalid job and Python duplicate are removed; independent base/head CI
-  orchestration is the remaining increment after the schema reaches default.
+- Resolution: `apollo-bench` now emits ordered observations with exact
+  symmetric median summaries and owns recursive report comparison. Report and
+  case sets must match. For `m` cases, each of the `2m` baseline/candidate
+  intervals has miscoverage at most `0.05 / (2m)`, so Bonferroni's inequality
+  bounds family-wise interval miscoverage by 5%. A regression exists only when
+  the candidate lower bound exceeds the baseline upper bound.
 - Mathematical oracle: for ordered samples `X_(1), …, X_(n)`, NIST Technical
   Note 2119 section 5.3 equations 30–31 gives
   `[X_(k), X_(n-k+1)]` with coverage
@@ -21,7 +21,54 @@
   coverage 964799 parts per million.
 - Evidence tier: analytical order-statistic oracle, exact integer
   implementation, value-semantic unit/integration tests, and typed malformed
-  evidence rejection. Hosted base/head execution remains pending.
+  evidence rejection.
+- Falsification: hosted run `29757554816` measured source-identical revisions
+  in a fixed base-then-candidate order and reported 31 disjoint slowdowns,
+  including one-nanosecond separations. The fixed ordering—not code—was the
+  only systematic variation, so one sequential pair is not a valid operational
+  oracle.
+- Correction: the workflow now runs ABBA-style counterbalanced pairs
+  (baseline→candidate, candidate→baseline) on one runner and requires the same
+  case to be slower in both orders. The native comparator validates identical
+  evidence universes across both pairs.
+- Second falsification: hosted run `29759735814` counterbalanced execution but
+  compiled the base and candidate revisions against their respective
+  `apollo-bench` sources. Because this pull request changes that measurement
+  harness, the run changed both the instrument and the transform code under
+  test and produced 22 apparent regressions.
+- Instrument control: CI now overlays the candidate `apollo-bench` source onto
+  the baseline checkout before either build, then verifies the three benchmark
+  entry points are byte-identical across checkouts. The transform
+  implementations remain revision-specific.
+- Third falsification: instrument-controlled hosted run `29761551514` still
+  produced 25 apparent regressions. Each case used an individual 95% interval,
+  so the probability of at least one false separation grew with the case
+  family. The report now retains all ordered observations, and the comparator
+  derives exact Bonferroni intervals over both revisions and every compared
+  case. A value-semantic regression proves a separation under a smaller family
+  disappears when the full family requires wider simultaneous intervals.
+- Fourth falsification: family-wise hosted run `29764170548` still reported 12
+  slowdowns under one ABBA block even though
+  `git diff 66e37ab..65dd9ad -- crates/apollo-fft/src
+  crates/apollo-fft/Cargo.toml Cargo.lock` was empty. The smallest separations
+  were one nanosecond, while one order of another case separated by 2,657 ns,
+  proving that a single runner timeline still confounded source identity with
+  period effects.
+- Phase control: CI now follows ABBA with its phase reversal BAAB. Across the
+  resulting eight periods, baseline occupies positions `{1, 4, 6, 7}` and
+  candidate `{2, 3, 5, 8}`; both position sums equal 18 and both squared
+  position sums equal 102. The replicated comparator requires the same case to
+  regress in all four base/head comparisons and rejects mismatched case
+  universes between blocks.
+- Provider checkout cleanup: Apollo manifests contain no external path
+  dependencies; Git revisions in `Cargo.lock` are authoritative. The stale
+  copied checkout action and all workflow calls are removed rather than
+  migrated to another redundant checkout layer.
+- Operational evidence: exact-head hosted run `29766127266` completed the
+  eight-pass source-identical canary and replicated comparison in 31 minutes
+  without a reported regression. The Rust workspace, Python bindings, and
+  review checks also passed at `c9a0156`. This is controlled same-runner
+  evidence for the CI protocol, not a cross-machine performance claim.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

@@ -1,13 +1,22 @@
+mod counterbalanced;
 mod discovery;
 mod error;
+mod replicated;
 mod report;
 
+pub use counterbalanced::{
+    compare_counterbalanced_report_directories, CounterbalancedBenchmarkRegression,
+    CounterbalancedComparisonSummary, CounterbalancedReportSet, IntervalSeparation,
+};
 pub use error::ComparisonError;
+pub use replicated::{
+    compare_replicated_counterbalanced_report_directories,
+    ReplicatedCounterbalancedBenchmarkRegression, ReplicatedCounterbalancedComparisonSummary,
+};
 
 use report::ReportRecord;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-const REQUIRED_CONFIDENCE_PARTS_PER_MILLION: u32 = 950_000;
 
 /// Identifies one benchmark whose candidate median interval is wholly slower
 /// than its baseline interval.
@@ -51,6 +60,7 @@ pub struct ComparisonSummary {
     compared_reports: usize,
     compared_cases: usize,
     regressions: Vec<BenchmarkRegression>,
+    compared_keys: BTreeSet<BenchmarkKey>,
 }
 
 impl ComparisonSummary {
@@ -66,7 +76,7 @@ impl ComparisonSummary {
         self.compared_cases
     }
 
-    /// Returns cases whose 95% median intervals prove a slowdown.
+    /// Returns cases whose family-wise median intervals prove a slowdown.
     #[must_use]
     pub fn regressions(&self) -> &[BenchmarkRegression] {
         &self.regressions
@@ -82,10 +92,11 @@ impl ComparisonSummary {
 /// Compares recursively discovered Apollo CSV reports from independent base
 /// and candidate benchmark runs.
 ///
-/// Report paths and case labels must match exactly. Each report must carry at
-/// least a 95% distribution-free median interval. A case regresses only when
-/// the candidate interval's lower bound exceeds the baseline interval's upper
-/// bound.
+/// Report paths and case labels must match exactly. Reported samples derive
+/// distribution-free median intervals whose individual miscoverage is at
+/// most `0.05 / (2m)` for `m` compared cases and two intervals per case.
+/// A case regresses only when the candidate interval's lower bound exceeds
+/// the baseline interval's upper bound.
 ///
 /// # Errors
 ///
@@ -108,13 +119,17 @@ impl ComparisonSummary {
 /// let candidate = root.join("candidate");
 /// fs::create_dir_all(&baseline)?;
 /// fs::create_dir_all(&candidate)?;
-/// let report = concat!(
-///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,",
-///     "median_confidence_ppm,samples,iterations_per_sample\n",
-///     "fft/forward/256,80,100,90,110,964799,100,4\n"
+/// let samples = (1..=100)
+///     .map(|sample| sample.to_string())
+///     .collect::<Vec<_>>()
+///     .join(";");
+/// let report = format!(
+///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,\
+///      median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\
+///      fft/forward/256,1,50,40,61,964799,{samples},4\n"
 /// );
-/// fs::write(baseline.join("fft.csv"), report)?;
-/// fs::write(candidate.join("fft.csv"), report)?;
+/// fs::write(baseline.join("fft.csv"), &report)?;
+/// fs::write(candidate.join("fft.csv"), &report)?;
 ///
 /// let summary = compare_report_directories(&baseline, &candidate)?;
 /// assert!(summary.passed());
@@ -141,8 +156,8 @@ pub fn compare_report_directories(
         }
     }
 
+    let mut paired_reports = Vec::with_capacity(baseline_reports.len());
     let mut compared_cases = 0_usize;
-    let mut regressions = Vec::new();
     for (relative_path, baseline_path) in &baseline_reports {
         let candidate_path = candidate_reports
             .get(relative_path)
@@ -150,21 +165,45 @@ pub fn compare_report_directories(
         let baseline = report::read_report(baseline_path)?;
         let candidate = report::read_report(candidate_path)?;
         validate_case_sets(relative_path, &baseline, &candidate)?;
+        compared_cases += baseline.len();
+        paired_reports.push((relative_path, baseline, candidate));
+    }
 
+    let mut regressions = Vec::new();
+    let mut compared_keys = BTreeSet::new();
+    for (relative_path, baseline, candidate) in paired_reports {
         for (case, baseline_record) in baseline {
             let candidate_record = candidate
                 .get(&case)
                 .expect("invariant: paired case sets were validated");
-            validate_confidence(relative_path, &case, &baseline_record)?;
-            validate_confidence(relative_path, &case, candidate_record)?;
-            compared_cases += 1;
+            let baseline_interval = baseline_record.interval(compared_cases).ok_or_else(|| {
+                ComparisonError::insufficient_familywise_evidence(
+                    relative_path,
+                    &case,
+                    baseline_record.sample_count(),
+                    compared_cases,
+                )
+            })?;
+            let candidate_interval =
+                candidate_record.interval(compared_cases).ok_or_else(|| {
+                    ComparisonError::insufficient_familywise_evidence(
+                        relative_path,
+                        &case,
+                        candidate_record.sample_count(),
+                        compared_cases,
+                    )
+                })?;
+            compared_keys.insert(BenchmarkKey {
+                report: relative_path.clone(),
+                case: case.clone(),
+            });
 
-            if candidate_record.lower_nanoseconds > baseline_record.upper_nanoseconds {
+            if candidate_interval.lower_nanoseconds > baseline_interval.upper_nanoseconds {
                 regressions.push(BenchmarkRegression {
                     report: relative_path.clone(),
                     case,
-                    baseline_upper_nanoseconds: baseline_record.upper_nanoseconds,
-                    candidate_lower_nanoseconds: candidate_record.lower_nanoseconds,
+                    baseline_upper_nanoseconds: baseline_interval.upper_nanoseconds,
+                    candidate_lower_nanoseconds: candidate_interval.lower_nanoseconds,
                 });
             }
         }
@@ -174,7 +213,14 @@ pub fn compare_report_directories(
         compared_reports: baseline_reports.len(),
         compared_cases,
         regressions,
+        compared_keys,
     })
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct BenchmarkKey {
+    report: PathBuf,
+    case: String,
 }
 
 fn validate_case_sets(
@@ -191,21 +237,6 @@ fn validate_case_sets(
         if !baseline.contains_key(case) {
             return Err(ComparisonError::missing_baseline_case(report, case));
         }
-    }
-    Ok(())
-}
-
-fn validate_confidence(
-    report: &Path,
-    case: &str,
-    record: &ReportRecord,
-) -> Result<(), ComparisonError> {
-    if record.confidence_parts_per_million < REQUIRED_CONFIDENCE_PARTS_PER_MILLION {
-        return Err(ComparisonError::insufficient_confidence(
-            report,
-            case,
-            record.confidence_parts_per_million,
-        ));
     }
     Ok(())
 }

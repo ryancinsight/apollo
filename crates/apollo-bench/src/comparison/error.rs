@@ -141,15 +141,49 @@ impl ComparisonError {
         .into()
     }
 
-    pub(super) fn insufficient_confidence(
+    pub(super) fn insufficient_familywise_evidence(
         report: &Path,
         case: &str,
-        confidence_parts_per_million: u32,
+        sample_count: usize,
+        family_size: usize,
     ) -> Self {
-        ErrorKind::InsufficientConfidence {
+        ErrorKind::InsufficientFamilywiseEvidence {
             report: report.display().to_string(),
             case: case.to_owned(),
-            confidence_parts_per_million,
+            sample_count,
+            family_size,
+        }
+        .into()
+    }
+
+    pub(super) fn missing_candidate_first_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingCandidateFirstCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
+
+    pub(super) fn missing_baseline_first_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingBaselineFirstCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
+
+    pub(super) fn missing_second_replication_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingSecondReplicationCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
+
+    pub(super) fn missing_first_replication_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingFirstReplicationCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
         }
         .into()
     }
@@ -224,22 +258,33 @@ enum ErrorKind {
     #[error("baseline report {report} omits candidate case `{case}`")]
     MissingBaselineCase { report: String, case: String },
     #[error(
-        "report {report} case `{case}` has median confidence {confidence_parts_per_million} ppm below the required 950000 ppm"
+        "report {report} case `{case}` has {sample_count} samples, insufficient for 5% family-wise error across {family_size} cases"
     )]
-    InsufficientConfidence {
+    InsufficientFamilywiseEvidence {
         report: String,
         case: String,
-        confidence_parts_per_million: u32,
+        sample_count: usize,
+        family_size: usize,
     },
+    #[error("candidate-first evidence omits baseline-first report {report} case `{case}`")]
+    MissingCandidateFirstCase { report: String, case: String },
+    #[error("baseline-first evidence omits candidate-first report {report} case `{case}`")]
+    MissingBaselineFirstCase { report: String, case: String },
+    #[error("second counterbalanced replication omits report {report} case `{case}`")]
+    MissingSecondReplicationCase { report: String, case: String },
+    #[error("first counterbalanced replication omits report {report} case `{case}`")]
+    MissingFirstReplicationCase { report: String, case: String },
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum RecordInvariant {
     EmptyCase,
-    MinimumExceedsLowerBound,
-    MedianOutsideBounds,
-    ConfidenceExceedsOne,
     ZeroSamples,
+    SamplesNotOrdered,
+    MinimumMismatch,
+    MedianMismatch,
+    UnsupportedSampleCount,
+    MedianIntervalMismatch,
     ZeroIterations,
 }
 
@@ -247,10 +292,14 @@ impl Display for RecordInvariant {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::EmptyCase => "a non-empty case label",
-            Self::MinimumExceedsLowerBound => "minimum_ns <= median_lower_ns",
-            Self::MedianOutsideBounds => "median_lower_ns <= median_ns <= median_upper_ns",
-            Self::ConfidenceExceedsOne => "median_confidence_ppm <= 1000000",
-            Self::ZeroSamples => "samples > 0",
+            Self::ZeroSamples => "non-empty ordered_samples_ns",
+            Self::SamplesNotOrdered => "nondecreasing ordered_samples_ns",
+            Self::MinimumMismatch => "min_ns == first ordered sample",
+            Self::MedianMismatch => "median_ns == the ordered-sample median",
+            Self::UnsupportedSampleCount => "1..=100 ordered samples",
+            Self::MedianIntervalMismatch => {
+                "median interval columns derived from ordered_samples_ns"
+            }
             Self::ZeroIterations => "iterations_per_sample > 0",
         })
     }
