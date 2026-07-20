@@ -21,9 +21,16 @@
   coverage 964799 parts per million.
 - Evidence tier: analytical order-statistic oracle, exact integer
   implementation, value-semantic unit/integration tests, and typed malformed
-  evidence rejection. The PR-only workflow now measures the exact base and
-  candidate revisions on one runner with one provider graph and shared target;
-  hosted execution remains pending.
+  evidence rejection.
+- Falsification: hosted run `29757554816` measured source-identical revisions
+  in a fixed base-then-candidate order and reported 31 disjoint slowdowns,
+  including one-nanosecond separations. The fixed ordering—not code—was the
+  only systematic variation, so one sequential pair is not a valid operational
+  oracle.
+- Correction: the workflow now runs ABBA-style counterbalanced pairs
+  (baseline→candidate, candidate→baseline) on one runner and requires the same
+  case to be slower in both orders. The native comparator validates identical
+  evidence universes across both pairs. Hosted execution remains pending.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

@@ -13,8 +13,9 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [minor] [arch] `apollo-bench` reports exact distribution-free median
   confidence intervals and provides a native recursive base/head report
   comparator. Missing reports, missing cases, malformed records, and
-  sub-95% intervals fail closed; only a candidate interval wholly above the
-  baseline interval is classified as a regression.
+  sub-95% intervals fail closed. Its counterbalanced API classifies a
+  regression only when the candidate interval is wholly above the baseline
+  interval in both execution orders.
 
 ### Changed
 

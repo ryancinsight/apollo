@@ -153,6 +153,22 @@ impl ComparisonError {
         }
         .into()
     }
+
+    pub(super) fn missing_candidate_first_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingCandidateFirstCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
+
+    pub(super) fn missing_baseline_first_case(report: &Path, case: &str) -> Self {
+        ErrorKind::MissingBaselineFirstCase {
+            report: report.display().to_string(),
+            case: case.to_owned(),
+        }
+        .into()
+    }
 }
 
 impl From<ErrorKind> for ComparisonError {
@@ -231,6 +247,10 @@ enum ErrorKind {
         case: String,
         confidence_parts_per_million: u32,
     },
+    #[error("candidate-first evidence omits baseline-first report {report} case `{case}`")]
+    MissingCandidateFirstCase { report: String, case: String },
+    #[error("baseline-first evidence omits candidate-first report {report} case `{case}`")]
+    MissingBaselineFirstCase { report: String, case: String },
 }
 
 #[derive(Clone, Copy, Debug)]

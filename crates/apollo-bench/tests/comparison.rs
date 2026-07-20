@@ -1,6 +1,6 @@
 //! Value-semantic integration coverage for Apollo benchmark report comparison.
 
-use apollo_bench::compare_report_directories;
+use apollo_bench::{compare_counterbalanced_report_directories, compare_report_directories};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -172,4 +172,139 @@ fn empty_reports_fail_closed() {
             .expect_err("a header-only report supplies no evidence");
 
     assert!(error.to_string().contains("contains no benchmark cases"));
+}
+
+#[test]
+fn one_order_only_slowdown_is_rejected_as_order_drift() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "baseline-first/baseline/kernel.csv",
+        "n256,80,100,90,110,964799,100,4\n",
+    );
+    fixture.write(
+        "baseline-first/candidate/kernel.csv",
+        "n256,100,120,111,130,964799,100,4\n",
+    );
+    fixture.write(
+        "candidate-first/baseline/kernel.csv",
+        "n256,100,120,110,130,964799,100,4\n",
+    );
+    fixture.write(
+        "candidate-first/candidate/kernel.csv",
+        "n256,80,105,95,115,964799,100,4\n",
+    );
+
+    let summary = compare_counterbalanced_report_directories(
+        fixture.directory("baseline-first/baseline"),
+        fixture.directory("baseline-first/candidate"),
+        fixture.directory("candidate-first/baseline"),
+        fixture.directory("candidate-first/candidate"),
+    )
+    .expect("counterbalanced report sets must compare");
+
+    assert!(summary.passed());
+    assert_eq!(summary.compared_cases(), 1);
+}
+
+#[test]
+fn slowdown_in_both_orders_is_a_counterbalanced_regression() {
+    let fixture = Fixture::new();
+    for order in ["baseline-first", "candidate-first"] {
+        fixture.write(
+            &format!("{order}/baseline/kernel.csv"),
+            "n256,80,100,90,110,964799,100,4\n",
+        );
+        fixture.write(
+            &format!("{order}/candidate/kernel.csv"),
+            "n256,100,120,111,130,964799,100,4\n",
+        );
+    }
+
+    let summary = compare_counterbalanced_report_directories(
+        fixture.directory("baseline-first/baseline"),
+        fixture.directory("baseline-first/candidate"),
+        fixture.directory("candidate-first/baseline"),
+        fixture.directory("candidate-first/candidate"),
+    )
+    .expect("counterbalanced report sets must compare");
+
+    assert_eq!(summary.regressions().len(), 1);
+    let regression = &summary.regressions()[0];
+    assert_eq!(regression.case(), "n256");
+    assert_eq!(
+        regression.baseline_first().baseline_upper_nanoseconds(),
+        110
+    );
+    assert_eq!(
+        regression.candidate_first().candidate_lower_nanoseconds(),
+        111
+    );
+}
+
+#[test]
+fn counterbalanced_command_reports_unique_evidence_count() {
+    let fixture = Fixture::new();
+    for order in ["baseline-first", "candidate-first"] {
+        fixture.write(
+            &format!("{order}/baseline/kernel.csv"),
+            "n256,80,100,90,110,964799,100,4\n",
+        );
+        fixture.write(
+            &format!("{order}/candidate/kernel.csv"),
+            "n256,80,100,90,110,964799,100,4\n",
+        );
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_apollo-bench-compare"))
+        .arg("compare-counterbalanced")
+        .arg("--baseline-first-baseline-directory")
+        .arg(fixture.directory("baseline-first/baseline"))
+        .arg("--baseline-first-candidate-directory")
+        .arg(fixture.directory("baseline-first/candidate"))
+        .arg("--candidate-first-baseline-directory")
+        .arg(fixture.directory("candidate-first/baseline"))
+        .arg("--candidate-first-candidate-directory")
+        .arg(fixture.directory("candidate-first/candidate"))
+        .output()
+        .expect("counterbalanced comparison command must execute");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("command output must be UTF-8"),
+        "counterbalanced 1 cases across 1 reports; no supported regression\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn counterbalanced_case_universes_must_match() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "baseline-first/baseline/kernel.csv",
+        "n256,80,100,90,110,964799,100,4\n",
+    );
+    fixture.write(
+        "baseline-first/candidate/kernel.csv",
+        "n256,80,100,90,110,964799,100,4\n",
+    );
+    fixture.write(
+        "candidate-first/baseline/kernel.csv",
+        "n512,80,100,90,110,964799,100,4\n",
+    );
+    fixture.write(
+        "candidate-first/candidate/kernel.csv",
+        "n512,80,100,90,110,964799,100,4\n",
+    );
+
+    let error = compare_counterbalanced_report_directories(
+        fixture.directory("baseline-first/baseline"),
+        fixture.directory("baseline-first/candidate"),
+        fixture.directory("candidate-first/baseline"),
+        fixture.directory("candidate-first/candidate"),
+    )
+    .expect_err("counterbalanced case identities must match");
+
+    assert!(error
+        .to_string()
+        .contains("candidate-first evidence omits baseline-first"));
 }

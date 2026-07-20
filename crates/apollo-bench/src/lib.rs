@@ -29,7 +29,9 @@ mod suite;
 
 pub use case::BenchmarkCase;
 pub use comparison::{
-    compare_report_directories, BenchmarkRegression, ComparisonError, ComparisonSummary,
+    compare_counterbalanced_report_directories, compare_report_directories, BenchmarkRegression,
+    ComparisonError, ComparisonSummary, CounterbalancedBenchmarkRegression,
+    CounterbalancedComparisonSummary, IntervalSeparation,
 };
 pub use config::{BenchmarkConfig, BenchmarkConfigError};
 pub use report::BenchmarkRecord;

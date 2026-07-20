@@ -19,8 +19,9 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
 - `apollo-bench` owns the native sequential measurement contract used by every
   benchmark binary. Its stable CSV reports include exact distribution-free
   95% median intervals, and its native comparator fails closed on unpaired
-  reports or cases. A slowdown is reported only when independently generated
-  base/head intervals are disjoint.
+  reports or cases. CI counterbalances base/head execution order; a slowdown
+  is reported only when independently generated intervals are disjoint in
+  both orders.
 - `apollo-dctdst` owns DCT/DST real-to-real transform plan metadata,
   verified direct kernels, inverse scaling, and caller-owned output execution.
 - `apollo-dht` owns real-to-real Discrete Hartley Transform plans, coefficient storage, and self-inverse kernels.

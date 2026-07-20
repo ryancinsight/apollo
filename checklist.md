@@ -8,15 +8,20 @@
       fail-closed native comparator with value-semantic regression tests.
 - [x] Delete the copied Python same-run comparator and its invalid
       all-feature benchmark job.
-- [ ] Verify the implemented PR-only job independently checks out and measures
-      the exact base and candidate revisions on one runner, compares all three
-      native report files, and closes the item in hosted execution.
+- [x] Falsify the naive base-then-candidate design in hosted execution: 31
+      source-identical cases produced disjoint intervals because of systematic
+      execution-order drift.
+- [ ] Verify the PR-only job counterbalances both execution orders for the
+      exact base and candidate revisions on one runner, requires agreement
+      across all three native report files, and closes the item in hosted
+      execution.
 
-**Current evidence:** exact `[X_(40), X_(61)]` coverage regression, disjoint
-and overlapping interval tests, malformed/incomplete evidence tests, and the
-CLI contract pass in 16/16 Nextest cases; the comparator doctest,
-warning-denied Clippy, warning-clean rustdoc, three Apollo FFT CPU benchmark
-targets, dependency policy, and 196/196 semver checks pass.
+**Current evidence:** exact `[X_(40), X_(61)]` coverage, disjoint/overlapping
+interval tests, counterbalanced agreement/order-drift tests, malformed and
+incomplete evidence tests, and both CLI contracts pass in 20/20 Nextest cases;
+two comparator doctests, warning-denied Clippy, warning-clean rustdoc, three
+Apollo FFT CPU benchmark targets, dependency policy, and 196/196 semver checks
+pass.
 
 ## D15-align-hephaestus-legacy-math-pin [patch]
 

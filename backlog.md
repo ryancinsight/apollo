@@ -8,12 +8,14 @@
 - Acceptance: every standard 100-sample report carries an exact
   distribution-free median interval with at least 95% coverage; recursive
   base/head comparison rejects malformed or unpaired evidence and classifies
-  only disjoint slower intervals as regressions; the copied Python same-run
-  check is absent.
-- Current increment: PR-only CI checks out the exact pull-request base and
-  candidate revisions, reuses one provider graph and target directory on one
-  runner, measures the same three CPU benchmark binaries, and invokes the
-  native comparator. Hosted execution is the remaining acceptance gate.
+  only disjoint slower intervals reproduced in both execution orders as
+  regressions; the copied Python same-run check is absent.
+- Current increment: the first hosted base-then-candidate run produced 31
+  false regressions between source-identical revisions, proving systematic
+  order drift. PR-only CI now performs counterbalanced baseline/candidate and
+  candidate/baseline measurements over the same three CPU benchmark binaries
+  and requires agreement across both orders. Hosted execution is the remaining
+  acceptance gate.
 
 ## D15-align-hephaestus-legacy-math-pin [patch] — done
 

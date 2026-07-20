@@ -1,10 +1,16 @@
+mod counterbalanced;
 mod discovery;
 mod error;
 mod report;
 
+pub use counterbalanced::{
+    compare_counterbalanced_report_directories, CounterbalancedBenchmarkRegression,
+    CounterbalancedComparisonSummary, IntervalSeparation,
+};
 pub use error::ComparisonError;
 
 use report::ReportRecord;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const REQUIRED_CONFIDENCE_PARTS_PER_MILLION: u32 = 950_000;
@@ -51,6 +57,7 @@ pub struct ComparisonSummary {
     compared_reports: usize,
     compared_cases: usize,
     regressions: Vec<BenchmarkRegression>,
+    compared_keys: BTreeSet<BenchmarkKey>,
 }
 
 impl ComparisonSummary {
@@ -143,6 +150,7 @@ pub fn compare_report_directories(
 
     let mut compared_cases = 0_usize;
     let mut regressions = Vec::new();
+    let mut compared_keys = BTreeSet::new();
     for (relative_path, baseline_path) in &baseline_reports {
         let candidate_path = candidate_reports
             .get(relative_path)
@@ -158,6 +166,10 @@ pub fn compare_report_directories(
             validate_confidence(relative_path, &case, &baseline_record)?;
             validate_confidence(relative_path, &case, candidate_record)?;
             compared_cases += 1;
+            compared_keys.insert(BenchmarkKey {
+                report: relative_path.clone(),
+                case: case.clone(),
+            });
 
             if candidate_record.lower_nanoseconds > baseline_record.upper_nanoseconds {
                 regressions.push(BenchmarkRegression {
@@ -174,7 +186,14 @@ pub fn compare_report_directories(
         compared_reports: baseline_reports.len(),
         compared_cases,
         regressions,
+        compared_keys,
     })
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct BenchmarkKey {
+    report: PathBuf,
+    case: String,
 }
 
 fn validate_case_sets(

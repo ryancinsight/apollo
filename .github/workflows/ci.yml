@@ -139,37 +139,31 @@ jobs:
             ${{ github.workspace }}/target
           key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate/Cargo.lock') }}
 
-      - name: Measure baseline
+      - name: Measure counterbalanced revisions
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p reports/baseline
-          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-            cargo bench \
-              --manifest-path apollo-baseline/Cargo.toml \
-              --locked \
-              -p apollo-fft \
-              --bench "$benchmark" \
-              --features kernel-strategy-bench \
-              --quiet \
-              > "reports/baseline/$benchmark.csv"
-          done
+          measure() {
+            local source_directory="$1"
+            local report_directory="$2"
+            mkdir -p "$report_directory"
+            echo "measuring $source_directory -> $report_directory" >&2
+            for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+              cargo bench \
+                --manifest-path "$source_directory/Cargo.toml" \
+                --locked \
+                -p apollo-fft \
+                --bench "$benchmark" \
+                --features kernel-strategy-bench \
+                --quiet \
+                > "$report_directory/$benchmark.csv"
+            done
+          }
 
-      - name: Measure candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p reports/candidate
-          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-            cargo bench \
-              --manifest-path apollo-candidate/Cargo.toml \
-              --locked \
-              -p apollo-fft \
-              --bench "$benchmark" \
-              --features kernel-strategy-bench \
-              --quiet \
-              > "reports/candidate/$benchmark.csv"
-          done
+          measure apollo-baseline reports/baseline-first/baseline
+          measure apollo-candidate reports/baseline-first/candidate
+          measure apollo-candidate reports/candidate-first/candidate
+          measure apollo-baseline reports/candidate-first/baseline
 
       - name: Compare reports
         run: >-
@@ -179,9 +173,11 @@ jobs:
           -p apollo-bench
           --bin apollo-bench-compare
           --
-          compare
-          --baseline-directory reports/baseline
-          --candidate-directory reports/candidate
+          compare-counterbalanced
+          --baseline-first-baseline-directory reports/baseline-first/baseline
+          --baseline-first-candidate-directory reports/baseline-first/candidate
+          --candidate-first-baseline-directory reports/candidate-first/baseline
+          --candidate-first-candidate-directory reports/candidate-first/candidate
 
   python:
     name: python bindings

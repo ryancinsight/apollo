@@ -26,9 +26,10 @@ Keep report generation and interpretation in `apollo-bench`.
 2. Discover CSV reports recursively and require identical report and case
    sets between independently executed base and candidate trees.
 3. Require each interval to carry at least 95% coverage.
-4. Classify a regression only when the candidate lower bound exceeds the
-   baseline upper bound.
-5. Delete the copied Python comparator. CI orchestration checks out and runs
+4. Counterbalance execution as baseline→candidate then candidate→baseline.
+5. Classify a regression only when the candidate lower bound exceeds the
+   baseline upper bound in both execution orders.
+6. Delete the copied Python comparator. CI orchestration checks out and runs
    base and candidate revisions separately after the new schema reaches the
    default branch.
 
@@ -59,14 +60,17 @@ million. Integer binomial counts encode this contract without floating-point
 rounding.
 
 The comparison makes no cross-machine performance claim. Base and candidate
-must execute on the same hosted runner in one job; disjoint intervals are
-sampling evidence for that controlled run, not a permanent machine-independent
-performance theorem.
+must execute on the same hosted runner in one job. Hosted run `29757554816`
+falsified a single fixed-order pair: source-identical revisions produced 31
+disjoint candidate slowdowns, including one-nanosecond separations. Reversing
+the order supplies the control for systematic thermal, frequency, and runner
+drift. A slowdown must reproduce in both orders; otherwise it is order-sensitive
+evidence, not a code-regression claim.
 
 ## Consequences
 
 The CSV schema is additive and `apollo-bench` exposes an additive public
 comparison API and CLI. Missing, malformed, low-confidence, or unpaired
-evidence fails closed. The base/head CI increment cannot precede this schema on
-the default branch because legacy baseline reports do not contain the required
-intervals.
+evidence fails closed, including mismatched case universes across execution
+orders. The base/head CI increment cannot precede this schema on the default
+branch because legacy baseline reports do not contain the required intervals.
