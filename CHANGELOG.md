@@ -10,7 +10,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
-- [patch] Python Releases tagged `pyapollofft-v<version>` build, install,
+- [patch] Python Releases tagged `apollo-fft-v<version>` build, install,
   import, attest, and attach locked Linux, Windows, and universal macOS wheels,
   then publish the same artifacts to PyPI through OIDC Trusted Publishing.
   Python package metadata now reads the `apollo-python` Cargo version as its
