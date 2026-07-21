@@ -18,10 +18,12 @@
   `ndarray` package; 13 focused default-stack regressions and all 964 default
   workspace tests pass. Warning-denied all-feature Clippy, doctests, rustdoc,
   provider audit, and supply-chain gates pass. Hosted all-feature runtime and
-  Python binding gates pass without the stack override. The first hosted
-  benchmark falsified a boxed-slice representation because its dynamic length
-  regressed hot cache lookups; the corrected heap-initialized boxed-array type
-  retains compile-time bounds and awaits the exact-head benchmark rerun.
+  Python binding gates pass without the stack override. Hosted benchmarks
+  falsified both boxed representations: a slice erased compile-time bounds and
+  a fixed-size box retained measurable pointer overhead. The corrected
+  `const`-initialized fixed TLS arrays eliminate runtime stack construction
+  without changing the original hot lookup representation; exact-head
+  benchmarking remains open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

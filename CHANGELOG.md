@@ -28,12 +28,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
-- [patch] Stores bounded thread-local FFT flat caches in boxed fixed-size
-  arrays initialized through heap-backed vectors. First access no longer
-  constructs a 262,216-byte negacyclic-cache frame on an active
+- [patch] Stores bounded thread-local FFT flat caches in `const`-initialized
+  fixed-size TLS arrays. First access no longer constructs a 262,216-byte
+  negacyclic-cache frame on an active
   Rader/Good-Thomas execution stack, and the Rader tests no longer require
-  test-specific 8 MiB threads or a CI-wide 16 MiB stack override. The
-  fixed-size type preserves compile-time bounds on hot indexed lookups.
+  test-specific 8 MiB threads or a CI-wide 16 MiB stack override. Direct TLS
+  storage preserves the original allocation-free hot indexed lookup.
 
 - [patch] Retires Apollo's last historical `ndarray-compat` documentation and
   aligns the Leto/Hephaestus lock closure so all units resolve through one

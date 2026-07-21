@@ -8,17 +8,18 @@
   initializing the 8,192-entry precise negacyclic TLS table: the generated
   frame is 262,216 bytes on an already-active FFT execution stack.
 - Resolution: retain each flat cache's fixed capacity and O(1) index contract,
-  but initialize a boxed fixed-size array through `Vec`. The array type retains
-  compile-time bounds for hot indexed lookups without constructing its storage
-  on the stack. Remove the
+  but make the fixed-size TLS arrays `const`-initialized. Their storage is part
+  of the TLS image, so first access has no runtime array-construction frame and
+  hot lookup retains the original direct array representation. Remove the
   four 8 MiB test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK`
   override that masked the production stack requirement.
-- Rejected design: a boxed slice also removed the stack frame, but erased the
-  compile-time length from hot indexed lookups. The hosted counterbalanced
-  benchmark rejected that representation with systematic regressions across
-  composite and prime transforms, including 9.6 us versus 7.0-7.2 us for the
-  N=521 full-cyclic case. The boxed array keeps the heap allocation while
-  restoring the fixed-size type; the exact-head benchmark rerun is required.
+- Rejected designs: a boxed slice removed the stack frame but erased the
+  compile-time length from hot indexed lookups, producing systematic
+  regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
+  case. A boxed fixed-size array restored most performance but retained
+  measurable pointer overhead, including 188 ns versus 164-165 ns for Rader
+  f32 N=29. The allocation-free const TLS representation requires exact-head
+  benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 13 focused default-stack regressions and the complete 964-test
   default workspace establish retained value semantics. Warning-denied
