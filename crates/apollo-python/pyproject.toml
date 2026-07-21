@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "pyapollofft"
+name = "apollo-fft"
 dynamic = ["version"]
 description = "Python bindings for Apollo FFT"
 authors = [

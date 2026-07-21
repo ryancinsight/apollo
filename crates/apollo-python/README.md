@@ -4,10 +4,10 @@ PyO3 bindings for the Apollo workspace.
 
 ## Distribution
 
-GitHub Releases tagged `pyapollofft-v<version>` build locked Linux, Windows,
+GitHub Releases tagged `apollo-fft-v<version>` build locked Linux, Windows,
 and universal macOS wheels, install and import each artifact, attach the
 validated wheel set and SHA-256 checksums to the release, and publish the same
-wheels to `pyapollofft` on PyPI through OIDC Trusted Publishing. The tag
+wheels to `apollo-fft` on PyPI through OIDC Trusted Publishing. The tag
 version must equal the `apollo-python` Cargo package version; Python metadata
 reads that Cargo version rather than maintaining a second version field.
 
