@@ -1,5 +1,28 @@
 # Apollo Checklist
 
+## D17-scope-benchmark-regression-gate [patch]
+
+- [x] Prove the release PR did not change the measured transform,
+      measurement runtime, benchmark entry points, Cargo resolution, or
+      toolchain configuration.
+- [x] Move the unchanged benchmark job into one dedicated workflow whose path
+      filter names the complete measured local dependency and instrument
+      closure.
+- [x] Preserve the native comparator, family-wise intervals, all three
+      workloads, the candidate-instrument overlay, and the phase-reversed
+      ABBA/BAAB execution schedule without threshold or workload changes.
+- [x] Pass actionlint, exact path-selection regressions, warning-denied Clippy,
+      and all 30 focused `apollo-bench` Nextest cases.
+- [ ] Pass the hosted workflow-change canary on the exact pull-request head.
+
+**Current evidence:** PR run `29788350487` reports source-identical apparent
+slowdowns in `half_cyclic_rader` and `kernel_strategy`; the candidate diff
+contains only Python release workflow, metadata, and documentation. This
+falsifies unconditional application of the hosted oracle, not its analytical
+interval contract. Hosted validation of the dedicated workflow remains
+pending; local actionlint, release-only exclusion, known-benchmark-change
+inclusion, check, warning-denied Clippy, and 30/30 Nextest pass.
+
 ## D16-native-benchmark-regression-oracle [minor] [arch]
 
 - [x] Derive and encode the symmetric distribution-free median interval from

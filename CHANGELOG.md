@@ -28,6 +28,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Runs the hosted FFT regression experiment only for changes to its
+  measured local dependency closure, native benchmark instrument, Cargo
+  resolution, toolchain configuration, or dedicated workflow. Release-only,
+  documentation-only, and unrelated package changes no longer invoke a
+  31-minute source-identical performance attribution; the workloads,
+  counterbalanced schedule, samples, and statistical oracle are unchanged.
+
 - [patch] Removes the copied Python same-run benchmark check and its invalid
   all-feature CI job. Apollo owns a native benchmark report rather than
   Criterion output; ADR 0036 records the provider boundary and the independent

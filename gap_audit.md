@@ -69,6 +69,21 @@
   without a reported regression. The Rust workspace, Python bindings, and
   review checks also passed at `c9a0156`. This is controlled same-runner
   evidence for the CI protocol, not a cross-machine performance claim.
+- Fifth falsification: run `29788350487` reported source-identical apparent
+  regressions for `half_cyclic_rader/half_cyclic_f32/1031` and
+  `fft_kernel_strategy/generic_selector/128`. Its base-to-candidate diff changes
+  only Python release workflow, metadata, and documentation; the measured FFT
+  source, local dependency closure, benchmark instrument, Cargo resolution,
+  and toolchain configuration are identical. The one-to-nine-nanosecond
+  smallest separations demonstrate residual hosted-runner variation that the
+  phase-balanced schedule cannot attribute to candidate code.
+- Applicability correction: benchmark regression now owns a dedicated
+  path-filtered workflow. It retains the full native ABBA/BAAB experiment for
+  changes to `apollo-fft`, its local macro and Leto-interop dependencies,
+  `apollo-bench`, Cargo resolution, toolchain configuration, or the workflow
+  itself. Release-only, documentation-only, and unrelated package-only diffs
+  do not run a performance attribution experiment whose measured closure is
+  identical.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 
