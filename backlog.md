@@ -4,7 +4,7 @@
 
 - Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
   removal of the retired `ndarray-compat` boundary, and Apollo FFT bounded
-  thread-local cache initialization. FFT algorithms, cache capacity, and
+  flat-cache initialization. FFT algorithms, cache capacity, and
   benchmark workloads are non-goals.
 - Acceptance: one Aequitas revision and no Rust `ndarray` package resolve;
   Leto and Hephaestus select their merged default heads; every previously
@@ -13,17 +13,19 @@
   gates pass.
 - Current evidence: the unchanged Apollo `2a22319` source and lock reproduce a
   262,216-byte TLS initialization frame and deterministic Windows stack
-  overflow under GDB. Heap-backed boxed flat tables preserve fixed capacity and
-  O(1) indexing. The locked graph resolves one Aequitas revision and no Rust
-  `ndarray` package; 13 focused default-stack regressions and all 964 default
-  workspace tests pass. Warning-denied all-feature Clippy, doctests, rustdoc,
-  provider audit, and supply-chain gates pass. Hosted all-feature runtime and
-  Python binding gates pass without the stack override. Hosted benchmarks
-  falsified both boxed representations: a slice erased compile-time bounds and
-  a fixed-size box retained measurable pointer overhead. The corrected
-  `const`-initialized fixed TLS arrays eliminate runtime stack construction
-  without changing the original hot lookup representation; exact-head
-  benchmarking remains open.
+  overflow under GDB. The locked graph resolves one Aequitas revision and no
+  Rust `ndarray` package; 40 focused default-stack regressions and all 965
+  default workspace tests pass. Warning-denied all-feature Clippy, doctests,
+  rustdoc, provider audit, and supply-chain gates pass. Hosted all-feature
+  runtime and Python binding gates passed without the stack override for the
+  boxed candidates, but hosted benchmarks falsified both: a slice erased
+  compile-time bounds and a fixed-size box retained measurable pointer
+  overhead. A `const` TLS candidate retained the original hot representation
+  but still overflowed nine Linux test stacks in hosted run `29870196908`.
+  Process-wide fixed `OnceLock` slots now remove runtime array construction and
+  per-worker table duplication; the explicit two-MiB stack regression, all 40
+  focused Rader cases, and all 965 default workspace tests pass locally.
+  Exact-head hosted runtime and benchmark verification remain open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

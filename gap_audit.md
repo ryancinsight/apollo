@@ -7,26 +7,32 @@
   excluding the Leto refresh as its cause. GDB stops in `___chkstk_ms` while
   initializing the 8,192-entry precise negacyclic TLS table: the generated
   frame is 262,216 bytes on an already-active FFT execution stack.
-- Resolution: retain each flat cache's fixed capacity and O(1) index contract,
-  but make the fixed-size TLS arrays `const`-initialized. Their storage is part
-  of the TLS image, so first access has no runtime array-construction frame and
-  hot lookup retains the original direct array representation. Remove the
-  four 8 MiB test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK`
-  override that masked the production stack requirement.
+- Resolution: retain each affected Rader/Bluestein flat cache's fixed capacity
+  and O(1) index contract, but store its entries in process-wide,
+  `const`-initialized `OnceLock` slot arrays. First access initializes one slot
+  without constructing a full table on an active execution stack, and worker
+  count no longer multiplies these fixed tables. Remove the four 8 MiB
+  test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
+  masked the production stack requirement.
 - Rejected designs: a boxed slice removed the stack frame but erased the
   compile-time length from hot indexed lookups, producing systematic
   regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
   case. A boxed fixed-size array restored most performance but retained
   measurable pointer overhead, including 188 ns versus 164-165 ns for Rader
-  f32 N=29. The allocation-free const TLS representation requires exact-head
-  benchmark verification.
+  f32 N=29. A `const`-initialized TLS array retained direct lookup but Linux
+  still constructed enough inlined initialization state to overflow nine
+  default test stacks. The fixed global-slot representation requires
+  exact-head benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
-  mechanism; 13 focused default-stack regressions and the complete 964-test
+  mechanism; 40 focused default-stack regressions and the complete 965-test
   default workspace establish retained value semantics. Warning-denied
   all-feature Clippy verifies feature compilation, but local all-feature test
   linking cannot supply CUDA coverage because this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
-  change makes no throughput claim.
+  change makes no throughput claim. A two-MiB-stack regression exercises fresh
+  Bluestein and half-cyclic cache initialization at the standard Rust
+  test-thread budget, detecting renewed table-sized stack construction without
+  increasing any production or test-runner stack.
 
 ## Leto public compatibility retirement (2026-07-21)
 

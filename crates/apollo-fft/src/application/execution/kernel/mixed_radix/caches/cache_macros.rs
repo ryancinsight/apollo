@@ -3,8 +3,8 @@
 //!
 //! Every complex-type cache follows the same structure:
 //! 1. Two `static LazyLock<RwLock<FxHashMap<K, V>>>` globals (one per precision)
-//! 2. Two thread-local stores per precision: a sparse `FxHashMap` and, where
-//!    the key domain is bounded, a heap-backed flat table
+//! 2. A sparse thread-local `FxHashMap` per precision and, where the key domain
+//!    is bounded, a process-wide flat `OnceLock` table
 //! 3. A sealed marker trait + a Store trait with `tl_get`/`tl_insert`/`global`
 //! 4. Identical `impl` blocks for `Complex64` and `Complex32`
 //! 5. A `cached_*` function with TL-then-global-then-build logic
@@ -13,9 +13,9 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
-//! Flat tables use `const`-initialized fixed-size TLS arrays, so first access
-//! has no runtime initializer stack frame while hot lookup retains direct TLS
-//! storage and compile-time lengths for bounds-check elimination.
+//! Flat tables use `const`-initialized `OnceLock` slots. This keeps hot lookup
+//! direct and fixed-size without constructing a large array on each thread's
+//! bounded stack or duplicating the table for every worker.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 
@@ -120,8 +120,8 @@ macro_rules! declare_cache_store {
         tl_reduced: $tl_reduced:ident,
         global_precise: $global_precise:ident,
         global_reduced: $global_reduced:ident,
-        tl_precise_flat: $tl_precise_flat:ident,
-        tl_reduced_flat: $tl_reduced_flat:ident,
+        flat_precise: $flat_precise:ident,
+        flat_reduced: $flat_reduced:ident,
         flat_check: $flat_check:expr,
         flat_idx: $flat_idx:expr,
     ) => {
@@ -141,7 +141,7 @@ macro_rules! declare_cache_store {
             fn $tl_get(key: $key_ty) -> Option<$val_precise> {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $tl_precise_flat.with(|c| c.borrow()[idx].clone())
+                    $flat_precise[idx].get().cloned()
                 } else {
                     $tl_precise.with(|c| c.borrow().get(&key).cloned())
                 }
@@ -150,7 +150,7 @@ macro_rules! declare_cache_store {
             fn $tl_insert(key: $key_ty, v: $val_precise) {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $tl_precise_flat.with(|c| c.borrow_mut()[idx] = Some(v));
+                    $flat_precise[idx].get_or_init(|| v);
                 } else {
                     $tl_precise.with(|c| {
                         c.borrow_mut().insert(key, v);
@@ -169,7 +169,7 @@ macro_rules! declare_cache_store {
             fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $tl_reduced_flat.with(|c| c.borrow()[idx].clone())
+                    $flat_reduced[idx].get().cloned()
                 } else {
                     $tl_reduced.with(|c| c.borrow().get(&key).cloned())
                 }
@@ -178,7 +178,7 @@ macro_rules! declare_cache_store {
             fn $tl_insert(key: $key_ty, v: $val_reduced) {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $tl_reduced_flat.with(|c| c.borrow_mut()[idx] = Some(v));
+                    $flat_reduced[idx].get_or_init(|| v);
                 } else {
                     $tl_reduced.with(|c| {
                         c.borrow_mut().insert(key, v);

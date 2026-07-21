@@ -171,6 +171,21 @@ fn runtime_rader_zst_backends_forward_match_direct() {
 }
 
 #[test]
+fn cache_initialization_fits_standard_stack() {
+    const STACK_BUDGET_BYTES: usize = 2 * 1024 * 1024;
+
+    std::thread::Builder::new()
+        .stack_size(STACK_BUDGET_BYTES)
+        .spawn(|| {
+            assert_rader_backend_forward_matches_direct::<super::Bluestein>(67, 1.0e-10);
+            assert_rader_backend_forward_matches_direct::<super::HalfCyclicWinograd>(521, 1.0e-8);
+        })
+        .expect("regression thread must spawn")
+        .join()
+        .expect("cache initialization must fit the bounded stack");
+}
+
+#[test]
 fn rader_bluestein_policy_is_scalar_trait_driven() {
     assert!(super::prefers_bluestein_for_rader::<f32>(67));
     assert!(super::prefers_bluestein_for_rader::<f32>(193));
