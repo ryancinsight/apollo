@@ -39,6 +39,10 @@ Keep report generation and interpretation in `apollo-bench`.
    default branch.
 8. Replicate ABBA with the phase-reversed BAAB schedule and require the same
    slowdown in all four comparisons.
+9. Execute the hosted experiment only when a pull request changes the measured
+   `apollo-fft` local dependency closure, the `apollo-bench` instrument, Cargo
+   resolution, toolchain configuration, or the benchmark workflow itself.
+   Keep this applicability boundary in a dedicated path-filtered workflow.
 
 The strongest rejected alternative is converting Apollo to Criterion solely
 to reuse the Atlas Criterion comparator. Apollo already owns a cohesive native
@@ -123,3 +127,13 @@ Exact-head hosted run `29766127266` passed the eight-run source-identical
 canary and replicated comparison in 31 minutes. This validates the operational
 orchestration on one hosted runner; it does not establish immunity to arbitrary
 non-polynomial runner noise.
+
+Later run `29788350487` supplied that overturning evidence: base `07462c0` and
+candidate `b825fcb` had an empty diff over the complete measured source,
+instrument, Cargo-resolution, and toolchain closure, but the hosted job still
+reported two candidate slowdowns in all four comparisons. The smallest
+separations were one to nine nanoseconds. A statistical gate cannot attribute
+that source-identical variation to the release-only candidate. The experiment
+therefore runs only for changes capable of altering its measured binary or
+instrument. This changes the gate's applicability, not its workloads,
+thresholds, sample count, or regression classifier.

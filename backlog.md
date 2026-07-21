@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## D17-scope-benchmark-regression-gate [patch] — in-progress
+
+- Owner: Codex `/root`; scope: benchmark workflow triggering, ADR 0036, and
+  synchronized PM records. The native measurement runtime, statistical
+  thresholds, transform kernels, and benchmark workloads are non-goals.
+- Acceptance: the 31-minute hosted regression experiment runs when a pull
+  request changes the measured FFT dependency closure, measurement instrument,
+  Cargo resolution, toolchain configuration, or its own workflow; release,
+  documentation, and unrelated package-only changes cannot create a
+  source-identical hosted false positive. The exact workflow-change head must
+  pass the full canary before closure.
+- Current increment: run `29788350487` reported two regressions even though
+  `git diff 07462c0..b825fcb` changed only Python release workflow, metadata,
+  and documentation. The dedicated path-filtered workflow preserves the
+  complete ABBA/BAAB experiment for benchmark-relevant changes and removes it
+  from the unconditional repository CI workflow. Hosted canary validation is
+  pending.
+
 ## D16-native-benchmark-regression-oracle [minor] [arch] — done
 
 - Owner: Codex `/root`; scope: `apollo-bench` statistical report contract,
