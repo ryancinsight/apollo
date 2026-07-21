@@ -28,6 +28,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Stores bounded thread-local FFT flat caches in boxed slices instead
+  of fixed TLS arrays. First access no longer constructs a 262,216-byte
+  negacyclic-cache frame on an active Rader/Good-Thomas execution stack, and
+  the Rader tests no longer require test-specific 8 MiB threads or a CI-wide
+  16 MiB stack override.
+
+- [patch] Retires Apollo's last historical `ndarray-compat` documentation and
+  aligns the Leto/Hephaestus lock closure so all units resolve through one
+  Aequitas source. Apollo's native `apollo-leto-interop` remains the sole Rust
+  host-array boundary.
+
 - [patch] Runs the hosted FFT regression experiment only for changes to its
   measured local dependency closure, native benchmark instrument, Cargo
   resolution, toolchain configuration, or dedicated workflow. Release-only,

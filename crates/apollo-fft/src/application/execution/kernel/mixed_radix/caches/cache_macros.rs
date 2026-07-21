@@ -3,7 +3,8 @@
 //!
 //! Every complex-type cache follows the same structure:
 //! 1. Two `static LazyLock<RwLock<FxHashMap<K, V>>>` globals (one per precision)
-//! 2. Two `thread_local! RefCell<FxHashMap<K, V>>` statics (one per precision)
+//! 2. Two thread-local stores per precision: a sparse `FxHashMap` and, where
+//!    the key domain is bounded, a heap-backed flat table
 //! 3. A sealed marker trait + a Store trait with `tl_get`/`tl_insert`/`global`
 //! 4. Identical `impl` blocks for `Complex64` and `Complex32`
 //! 5. A `cached_*` function with TL-then-global-then-build logic
@@ -12,6 +13,8 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
+//! Flat tables are boxed slices so first access does not construct a large
+//! fixed array on the caller's stack.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 

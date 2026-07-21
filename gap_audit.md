@@ -1,5 +1,45 @@
 # Apollo Gap Audit
 
+## FFT bounded-cache stack initialization (2026-07-21)
+
+- Finding: the full locked gate aborted seven Rader/Good-Thomas tests on
+  Windows. The exact `2a22319` revision and original lock reproduce the fault,
+  excluding the Leto refresh as its cause. GDB stops in `___chkstk_ms` while
+  initializing the 8,192-entry precise negacyclic TLS table: the generated
+  frame is 262,216 bytes on an already-active FFT execution stack.
+- Resolution: retain each flat cache's fixed capacity and O(1) index contract,
+  but store it in a boxed slice initialized directly through `Vec`. Remove the
+  four 8 MiB test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK`
+  override that masked the production stack requirement.
+- Evidence limit: debugger stack-frame evidence identifies the failure
+  mechanism; 13 focused default-stack regressions and the complete 964-test
+  default workspace establish retained value semantics. Warning-denied
+  all-feature Clippy verifies feature compilation, but local all-feature test
+  linking cannot supply CUDA coverage because this Windows host has no CUDA
+  linker library; the hosted pull-request matrix owns that evidence. This
+  change makes no throughput claim.
+
+## Leto public compatibility retirement (2026-07-21)
+
+- Finding: Apollo's source and manifests already consumed native Leto arrays,
+  but its lock selected provider commit `bdb5fce4` and two historical PM entries
+  still described `ndarray-compat` as current. Refreshing Leto alone also exposed
+  a second Aequitas source because locked Hephaestus `8b27c9d` retained an older
+  units revision.
+- Resolution: refresh the complete Cargo-selected provider closure to Leto
+  default head `b95f1aa` (which contains compatibility-retirement merge
+  `446d248`) and Hephaestus default head `804d751`. The latter uses
+  the same Aequitas `be3a1ac` revision and removes the duplicate units crate.
+  Correct the historical PM entries without adding a consumer adapter or
+  restoring a Rust `ndarray` edge.
+- Contract: `apollo-leto-interop` remains Apollo's single host-array boundary;
+  contiguous views borrow and non-contiguous views materialize logical order
+  once. Third-party language conversion remains at the Python ownership edge,
+  and all Aequitas quantities resolve from one source revision.
+- Evidence limit: locked compilation, value-semantic Nextest, provider audit,
+  and dependency/source scans verify integration and retained behavior. They do
+  not establish a runtime performance change.
+
 ## Native benchmark regression evidence (2026-07-20)
 
 - Finding: the benchmark CI ran one all-feature workspace benchmark, copied

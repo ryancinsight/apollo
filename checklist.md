@@ -1,5 +1,30 @@
 # Apollo Checklist
 
+## D18-close-leto-boundary-and-fft-stack [patch]
+
+- [x] Reproduce the FFT abort against the exact original Apollo revision and
+      lockfile, then obtain a native debugger backtrace.
+- [x] Replace fixed-array TLS initialization with bounded boxed slices while
+      preserving flat O(1) cache lookup and capacity.
+- [x] Remove every source-level 8 MiB Rader stack override and the CI-wide
+      16 MiB `RUST_MIN_STACK` bypass.
+- [x] Converge Leto, Hephaestus, and Aequitas lock entries on current merged
+      provider heads and prove `ndarray` absence.
+- [x] Pass all seven prior stack-overflow regressions and the N=10,007 direct
+      default-stack round trip, then pass every locally executable locked
+      workspace gate.
+- [ ] Pass the hosted all-feature pull-request matrix, which supplies the CUDA
+      linker coverage unavailable on this Windows host.
+- [ ] Publish, merge, and advance the Atlas Apollo gitlink.
+
+**Current evidence:** exact `origin/main` baseline aborts in
+`TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
+`___chkstk_ms` frame. After boxed-slice initialization, 13 focused regressions
+pass on the default stack, the complete default workspace passes 964/964 tests
+in 27.665 seconds, and warning-denied all-feature Clippy, doctests, rustdoc,
+provider audit, and supply-chain gates pass. The locked graph contains one
+Aequitas revision and no Rust `ndarray` package.
+
 ## D17-scope-benchmark-regression-gate [patch]
 
 - [x] Prove the release PR did not change the measured transform,
@@ -2082,12 +2107,12 @@ The source theorem is SSOT: all callers name
 - Evidence: type-level/compile-time branch separation plus value-semantic FFT tests. Verified timing ratios.
 
 ## Leto ndarray-validated provider integration [minor]
-- [x] Added Leto to the Apollo workspace dependency surface with `std` and `ndarray-compat` enabled.
-- [x] Added `leto` to `apollo-validation` and a validation-boundary test that compares contiguous Leto ownership/conversion against `ndarray`.
+- [x] Initially added Leto with `std` and `ndarray-compat`; the current workspace consumes native Leto arrays from merged provider commit `446d248` without that retired feature.
+- [x] Replaced the historical conversion boundary with Apollo's native `apollo-leto-interop` ownership and borrowed-view contracts; the resolved Rust graph contains no `ndarray` package.
 - [x] Extended `xtask provider-audit` to report Leto workspace and crate usage alongside Moirai, Mnemosyne, Melinoe, and Hermes.
-- [x] Updated `docs/provider_contract.md` with Apollo requirements for Leto and `ndarray`'s role as validation oracle.
-- [x] Verification: `cargo test -p xtask provider_audit -- --nocapture`; `cargo test -p apollo-validation test_leto_ndarray_validation_boundary --lib`.
-- Residual: Apollo currently locks Leto Git commit `5c1fd250`; the broader local Leto Apollo slice/stride contract must be committed and pushed before Apollo can update to that revision.
+- [x] Updated `docs/provider_contract.md` with Apollo's native Leto ownership contract.
+- [x] Verification: configured locked Nextest for `apollo-leto-interop` and `xtask`; warning-denied Clippy; provider audit; dependency and removed-surface scans.
+- Residual: none. Leto ADR 0017 owns the public compatibility-boundary retirement and migration contract.
 
 ## 1D slice-owned real-storage execution [minor]
 - [x] Added `RealFftData::forward_1d_slice_owned` and `RealFftData::inverse_1d_slice_owned` as the storage-owned slice boundary for real-to-spectrum and spectrum-to-real 1D transforms.

@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## D18-close-leto-boundary-and-fft-stack [patch] — in progress
+
+- Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
+  removal of the retired `ndarray-compat` boundary, and Apollo FFT bounded
+  thread-local cache initialization. FFT algorithms, cache capacity, and
+  benchmark workloads are non-goals.
+- Acceptance: one Aequitas revision and no Rust `ndarray` package resolve;
+  Leto and Hephaestus select their merged default heads; every previously
+  aborting Rader/Good-Thomas regression passes on Nextest's standard stack;
+  no source-level or workflow-level test stack override remains; full locked
+  gates pass.
+- Current evidence: the unchanged Apollo `2a22319` source and lock reproduce a
+  262,216-byte TLS initialization frame and deterministic Windows stack
+  overflow under GDB. Heap-backed boxed flat tables preserve fixed capacity and
+  O(1) indexing. The locked graph resolves one Aequitas revision and no Rust
+  `ndarray` package; 13 focused default-stack regressions and all 964 default
+  workspace tests pass. Warning-denied all-feature Clippy, doctests, rustdoc,
+  provider audit, and supply-chain gates pass. Local all-feature test linking
+  remains unavailable because this Windows host has no CUDA linker library;
+  the hosted pull-request matrix is the remaining verification boundary.
+
 ## D17-scope-benchmark-regression-gate [patch] — done
 
 - Owner: Codex `/root`; scope: benchmark workflow triggering, ADR 0036, and
@@ -857,7 +878,7 @@ Remaining replacement work:
 - [x] [patch] Promote Apollo FFT pointwise fallback to the provider-owned Hermes interleaved complex kernel. Hermes commit `55efd380` adds `interleaved_complex_mul_assign<T, A, const CONJ_B: bool>`; Apollo now updates its lockfile to that revision and delegates the non-FMA mixed-radix pointwise path to Hermes while preserving its runtime-gated AVX/FMA specialization. Verification: Hermes workspace tests/examples/clippy/doc; Apollo check, clippy, Rader tests, slice API tests, doc, provider audit, and touched-file rustfmt check. `cargo fmt -p apollo-fft -- --check` remains blocked by pre-existing unrelated formatting drift in Winograd/bridge files.
 - [x] [patch] Move Apollo FFT's runtime-selected pointwise AVX/FMA hot path into Hermes. Hermes commit `b7f1a907` adds `interleaved_complex_mul_assign_runtime<T, const CONJ_B: bool>` with `f32`/`f64` AVX/FMA provider specializations and the prior monomorphized portable fallback. Apollo updates to that revision and removes its local x86 intrinsics and feature detection from the mixed-radix pointwise leaf. Verification: Hermes workspace tests/examples/clippy/doc; Apollo check, clippy, Rader tests, slice API tests, doc, provider audit, and touched-file rustfmt check.
 - [x] [patch] Wire `apollo-fft` pointwise mixed-radix fallback through Hermes `PreferredArch` vectors. The x86 AVX/FMA complex kernel remains runtime-gated for the current hot path; non-FMA and non-x86 execution now uses Hermes monomorphized vector load/store chunks with one shared precise/reduced complex pair formula. Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft --lib rader`; `cargo test -p apollo-fft --test slice_api`; `cargo run -p xtask -- provider-audit`.
-- [x] [minor] Add Apollo Leto provider surface and validation-boundary use. The workspace now declares `leto` with `std` and `ndarray-compat`, `apollo-validation` depends on it, and `xtask provider-audit` reports Leto usage. `ndarray` remains the validation oracle. Verification: focused xtask provider-audit tests and the Apollo validation Leto/ndarray boundary test. Residual: Apollo locks pushed Leto commit `5c1fd250`; the local Leto Apollo slice/stride contract requires a later pushed revision update.
+- [x] [minor] Add Apollo Leto provider surface and validation-boundary use. The initial boundary enabled `std` and `ndarray-compat`; Apollo now consumes native Leto arrays from merged provider commit `446d248` without the retired compatibility feature or a Rust `ndarray` dependency. `xtask provider-audit` reports Leto usage. Verification: locked native Leto interop tests and the provider audit.
 - [x] [minor] Add `apollo-fft` 1D slice-owned real-storage execution. `RealFftData` now owns additive slice methods for forward and inverse 1D allocation boundaries, and the `f64`/`f32`/`f16` implementations route public slice wrappers through one owned vector plus in-place `FftPlan1D` slice execution instead of the previous `Array1` bridge plus result copy. Version bumped to `apollo-fft` `0.13.0`. Verification: fmt, slice API integration tests, check, clippy, doc. SemVer check attempted but blocked because `apollo-fft` is not published in the registry.
 - [x] [patch] Consolidate tiny direct FFT plan dispatch for N=2/3/4 and route runtime/static N=3 plans directly to the canonical `butterflies::dft3_impl` codelet. This removes duplicated runtime match blocks, avoids the generic short-Winograd dispatcher for N=3, preserves zero-sized static plan behavior, and verifies runtime/static f64/f32 N=3 value semantics. Verification: fmt, check, clippy, focused N=3 test, planned tests, full `apollo-fft` library tests, docs, and full canonical quick benchmark refresh. Current quick `benchmark_results.md`: 514 rows regenerated; f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows; N=3 f64 `1.001x`, f32 `0.444x`.
 - [x] [patch] Add Apollo-local provider utilization audit and contract for Moirai/Mnemosyne/Melinoe/Hermes. Delivered `xtask provider-audit`, static crate-level signals for Moirai/Mnemosyne/Melinoe/Hermes/Rayon/WGPU and memory/dispatch patterns, provider contract docs, and artifact sync. Apollo consumes providers from Git, so provider changes must be committed and pushed before Apollo can update revisions.

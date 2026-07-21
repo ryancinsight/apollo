@@ -7,14 +7,8 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-const NONE_ARC_USIZE: Option<Arc<[usize]>> = None;
-const NONE_NONE_ARC_USIZE: Option<Option<Arc<[usize]>>> = None;
-const NONE_ARC_C64: Option<Arc<[Complex64]>> = None;
-const NONE_ARC_C32: Option<Arc<[Complex32]>> = None;
-const NONE_NEGACYCLIC_C64: Option<NegacyclicEntry<Complex64>> = None;
-const NONE_NEGACYCLIC_C32: Option<NegacyclicEntry<Complex32>> = None;
-
 const FLAT_CACHE_LIMIT: usize = 4096;
+const DIRECTIONAL_FLAT_CACHE_LIMIT: usize = 2 * FLAT_CACHE_LIMIT;
 
 static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
@@ -75,26 +69,26 @@ thread_local! {
     pub(super) static TL_RADER_NEG_TWIDDLES_REDUCED: RefCell<FxHashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 
-    static TL_COPRIME_FACTORS_FLAT: RefCell<[Option<Option<(usize, usize)>>; 4096]> =
-        RefCell::new([None; 4096]);
-    static TL_IS_PRIME_FLAT: RefCell<[Option<bool>; 4096]> =
-        RefCell::new([None; 4096]);
-    static TL_PRIME23_RADIX_FLAT: RefCell<[Option<Option<Arc<[usize]>>>; 4096]> =
-        RefCell::new([NONE_NONE_ARC_USIZE; 4096]);
-    static TL_RADER_ORDER_FLAT: RefCell<[Option<Arc<[usize]>>; 4096]> =
-        RefCell::new([NONE_ARC_USIZE; 4096]);
-    static TL_RADER_NEG_TWIDDLES_PRECISE_FLAT: RefCell<[Option<Arc<[Complex64]>>; 4096]> =
-        RefCell::new([NONE_ARC_C64; 4096]);
-    static TL_RADER_NEG_TWIDDLES_REDUCED_FLAT: RefCell<[Option<Arc<[Complex32]>>; 4096]> =
-        RefCell::new([NONE_ARC_C32; 4096]);
-    static TL_RADER_SPECTRUM_PRECISE_FLAT: RefCell<[Option<Arc<[Complex64]>>; 8192]> =
-        RefCell::new([NONE_ARC_C64; 8192]);
-    static TL_RADER_SPECTRUM_REDUCED_FLAT: RefCell<[Option<Arc<[Complex32]>>; 8192]> =
-        RefCell::new([NONE_ARC_C32; 8192]);
-    static TL_RADER_NEGACYCLIC_PRECISE_FLAT: RefCell<[Option<NegacyclicEntry<Complex64>>; 8192]> =
-        RefCell::new([NONE_NEGACYCLIC_C64; 8192]);
-    static TL_RADER_NEGACYCLIC_REDUCED_FLAT: RefCell<[Option<NegacyclicEntry<Complex32>>; 8192]> =
-        RefCell::new([NONE_NEGACYCLIC_C32; 8192]);
+    static TL_COPRIME_FACTORS_FLAT: RefCell<Box<[Option<Option<(usize, usize)>>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_IS_PRIME_FLAT: RefCell<Box<[Option<bool>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_PRIME23_RADIX_FLAT: RefCell<Box<[Option<Option<Arc<[usize]>>>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_ORDER_FLAT: RefCell<Box<[Option<Arc<[usize]>>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_NEG_TWIDDLES_PRECISE_FLAT: RefCell<Box<[Option<Arc<[Complex64]>>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_NEG_TWIDDLES_REDUCED_FLAT: RefCell<Box<[Option<Arc<[Complex32]>>]>> =
+        RefCell::new(vec![None; FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_SPECTRUM_PRECISE_FLAT: RefCell<Box<[Option<Arc<[Complex64]>>]>> =
+        RefCell::new(vec![None; DIRECTIONAL_FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_SPECTRUM_REDUCED_FLAT: RefCell<Box<[Option<Arc<[Complex32]>>]>> =
+        RefCell::new(vec![None; DIRECTIONAL_FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_NEGACYCLIC_PRECISE_FLAT: RefCell<Box<[Option<NegacyclicEntry<Complex64>>]>> =
+        RefCell::new(vec![None; DIRECTIONAL_FLAT_CACHE_LIMIT].into_boxed_slice());
+    static TL_RADER_NEGACYCLIC_REDUCED_FLAT: RefCell<Box<[Option<NegacyclicEntry<Complex32>>]>> =
+        RefCell::new(vec![None; DIRECTIONAL_FLAT_CACHE_LIMIT].into_boxed_slice());
 }
 
 declare_cache_store! {
