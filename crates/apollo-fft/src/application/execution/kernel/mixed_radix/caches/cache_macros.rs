@@ -13,8 +13,9 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
-//! Flat tables are boxed slices so first access does not construct a large
-//! fixed array on the caller's stack.
+//! Flat tables are boxed fixed-size arrays initialized through a heap-backed
+//! vector, so first access avoids a large caller stack frame while retaining
+//! compile-time lengths for bounds-check elimination.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 

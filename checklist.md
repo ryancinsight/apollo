@@ -4,8 +4,8 @@
 
 - [x] Reproduce the FFT abort against the exact original Apollo revision and
       lockfile, then obtain a native debugger backtrace.
-- [x] Replace fixed-array TLS initialization with bounded boxed slices while
-      preserving flat O(1) cache lookup and capacity.
+- [x] Replace fixed-array TLS initialization with heap-initialized boxed arrays
+      while preserving flat O(1) cache lookup, compile-time bounds, and capacity.
 - [x] Remove every source-level 8 MiB Rader stack override and the CI-wide
       16 MiB `RUST_MIN_STACK` bypass.
 - [x] Converge Leto, Hephaestus, and Aequitas lock entries on current merged
@@ -19,11 +19,14 @@
 
 **Current evidence:** exact `origin/main` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
-`___chkstk_ms` frame. After boxed-slice initialization, 13 focused regressions
-pass on the default stack, the complete default workspace passes 964/964 tests
-in 27.665 seconds, and warning-denied all-feature Clippy, doctests, rustdoc,
-provider audit, and supply-chain gates pass. The locked graph contains one
-Aequitas revision and no Rust `ndarray` package.
+`___chkstk_ms` frame. After heap-backed fixed-array initialization, 13 focused
+regressions pass on the default stack, the complete default workspace passes
+964/964 tests in 27.665 seconds, and warning-denied all-feature Clippy,
+doctests, rustdoc, provider audit, and supply-chain gates pass. The locked graph
+contains one Aequitas revision and no Rust `ndarray` package. Hosted all-feature
+runtime and Python binding gates pass. The first hosted benchmark rejected a
+dynamically sized boxed slice; the fixed-size boxed-array correction is pending
+rerun.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

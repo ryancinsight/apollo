@@ -17,9 +17,11 @@
   O(1) indexing. The locked graph resolves one Aequitas revision and no Rust
   `ndarray` package; 13 focused default-stack regressions and all 964 default
   workspace tests pass. Warning-denied all-feature Clippy, doctests, rustdoc,
-  provider audit, and supply-chain gates pass. Local all-feature test linking
-  remains unavailable because this Windows host has no CUDA linker library;
-  the hosted pull-request matrix is the remaining verification boundary.
+  provider audit, and supply-chain gates pass. Hosted all-feature runtime and
+  Python binding gates pass without the stack override. The first hosted
+  benchmark falsified a boxed-slice representation because its dynamic length
+  regressed hot cache lookups; the corrected heap-initialized boxed-array type
+  retains compile-time bounds and awaits the exact-head benchmark rerun.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 
