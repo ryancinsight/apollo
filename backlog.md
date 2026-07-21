@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## D17-scope-benchmark-regression-gate [patch] — in-progress
+## D17-scope-benchmark-regression-gate [patch] — done
 
 - Owner: Codex `/root`; scope: benchmark workflow triggering, ADR 0036, and
   synchronized PM records. The native measurement runtime, statistical
@@ -11,12 +11,13 @@
   documentation, and unrelated package-only changes cannot create a
   source-identical hosted false positive. The exact workflow-change head must
   pass the full canary before closure.
-- Current increment: run `29788350487` reported two regressions even though
+- Closure: run `29788350487` reported two regressions even though
   `git diff 07462c0..b825fcb` changed only Python release workflow, metadata,
   and documentation. The dedicated path-filtered workflow preserves the
   complete ABBA/BAAB experiment for benchmark-relevant changes and removes it
-  from the unconditional repository CI workflow. Hosted canary validation is
-  pending.
+  from the unconditional repository CI workflow. Exact-head hosted run
+  `29790606838` passed all eight measurements and the replicated comparison in
+  31 minutes 38 seconds.
 
 ## D16-native-benchmark-regression-oracle [minor] [arch] — done
 
