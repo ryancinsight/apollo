@@ -84,6 +84,10 @@
   itself. Release-only, documentation-only, and unrelated package-only diffs
   do not run a performance attribution experiment whose measured closure is
   identical.
+- Closure evidence: exact-head run `29790606838` exercised the dedicated
+  workflow and passed all eight measurements plus replicated comparison in 31
+  minutes 38 seconds. Path-selection regressions separately prove release-only
+  exclusion and benchmark-source inclusion.
 
 ## Hephaestus legacy-math lock convergence (2026-07-17)
 

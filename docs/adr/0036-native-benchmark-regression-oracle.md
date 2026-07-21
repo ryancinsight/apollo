@@ -137,3 +137,8 @@ that source-identical variation to the release-only candidate. The experiment
 therefore runs only for changes capable of altering its measured binary or
 instrument. This changes the gate's applicability, not its workloads,
 thresholds, sample count, or regression classifier.
+
+Exact-head run `29790606838` passed the dedicated workflow's eight
+measurements and replicated comparison in 31 minutes 38 seconds after the path
+split. This validates the benchmark-relevant workflow path; path-selection
+regressions establish release-only exclusion separately.
