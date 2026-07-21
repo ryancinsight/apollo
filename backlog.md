@@ -24,13 +24,16 @@
   but still overflowed nine Linux test stacks in hosted run `29870196908`.
   Process-wide keyed `OnceLock` slots now remove runtime array construction and
   per-worker table duplication. Review then exposed that the original flat
-  indices omitted the generator component; keyed direct-mapped slots now hash
-  and validate the complete semantic key and retain collisions in the sparse
-  cache. The non-alias proof, two distinct primitive-generator spectra, both
-  Bluestein generator keys, the explicit two-MiB stack regression, and all 44
-  focused cache/Rader cases pass locally. The complete default workspace passes
-  969/969 tests in 22.321 seconds. Exact-head hosted runtime and benchmark
-  verification remain open.
+  indices omitted the generator component. Hosted CI passed at `4e063f1`, but
+  benchmark run `29873660989` rejected its hashed tuple keys in 25 replicated
+  cases. The corrected direct coordinates encode length and direction in the
+  table index and validate only the omitted generator in the slot; unary tables
+  retain raw collision-free `OnceLock` access. Collisions remain in the sparse
+  cache. The coordinate-injectivity and slot non-alias proofs, two distinct
+  primitive-generator spectra, both Bluestein generator keys, the explicit
+  two-MiB stack regression, and all 45 focused cache/Rader cases pass locally.
+  The complete default workspace passes 970/970 tests in 22.841 seconds.
+  Exact-head hosted runtime and benchmark verification remain open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

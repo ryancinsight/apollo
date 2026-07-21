@@ -2,7 +2,7 @@
 
 use super::trait_def::{BluesteinEntry, BluesteinKey, BluesteinStore};
 use crate::application::execution::kernel::mixed_radix::caches::direct_mapped::{
-    flat_index, DirectMappedSlot,
+    bounded_directional_coordinates, DirectMappedSlot, DIRECTIONAL_FLAT_CACHE_LIMIT,
 };
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
@@ -10,13 +10,10 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::LazyLock;
 
-const FLAT_CACHE_LIMIT: usize = 4096;
-const DIRECTIONAL_FLAT_CACHE_LIMIT: usize = 2 * FLAT_CACHE_LIMIT;
 const SPARSE_INITIAL_CAPACITY: usize = 8;
 
 type Cache<C> = RwLock<FxHashMap<BluesteinKey, BluesteinEntry<C>>>;
-type FlatCache<C> =
-    [DirectMappedSlot<BluesteinKey, BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
+type FlatCache<C> = [DirectMappedSlot<usize, BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 static REDUCED_CACHE: LazyLock<Cache<Complex32>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
@@ -109,13 +106,11 @@ impl CacheSpec for f64 {
 #[inline]
 fn get<T: CacheSpec>(key: BluesteinKey) -> Option<BluesteinEntry<T::Complex>> {
     let (length, inverse, generator_inverse) = key;
-    if length < FLAT_CACHE_LIMIT {
-        let index = flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([
-            length,
-            usize::from(inverse),
-            generator_inverse,
-        ]);
-        if let Some(value) = T::flat()[index].get(key) {
+    let direction = usize::from(inverse);
+    if let Some((index, tag)) =
+        bounded_directional_coordinates(length, direction, generator_inverse)
+    {
+        if let Some(value) = T::flat()[index].get(tag) {
             return Some(value);
         }
     }
@@ -130,13 +125,11 @@ fn get<T: CacheSpec>(key: BluesteinKey) -> Option<BluesteinEntry<T::Complex>> {
 #[inline]
 fn insert<T: CacheSpec>(key: BluesteinKey, value: BluesteinEntry<T::Complex>) {
     let (length, inverse, generator_inverse) = key;
-    if length < FLAT_CACHE_LIMIT {
-        let index = flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([
-            length,
-            usize::from(inverse),
-            generator_inverse,
-        ]);
-        let Err(value) = T::flat()[index].insert(key, value) else {
+    let direction = usize::from(inverse);
+    if let Some((index, tag)) =
+        bounded_directional_coordinates(length, direction, generator_inverse)
+    {
+        let Err(value) = T::flat()[index].insert(tag, value) else {
             return;
         };
         T::sparse_insert(key, value);
@@ -191,8 +184,8 @@ mod tests {
 
     #[test]
     fn flat_cache_distinguishes_generator_inverse() {
-        let first_key = (4000, false, usize::MAX - 1);
-        let second_key = (4000, false, usize::MAX);
+        let first_key = (4000, false, 1);
+        let second_key = (4000, false, 2);
         let first = Arc::<[Complex64]>::from([Complex64::new(1.0, 2.0)]);
         let second = Arc::<[Complex64]>::from([Complex64::new(3.0, 4.0)]);
 

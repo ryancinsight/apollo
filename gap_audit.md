@@ -13,10 +13,12 @@
   slot without constructing a full table on an active execution stack, and
   worker count no longer multiplies these fixed tables. Remove the four 8 MiB
   test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
-  masked the production stack requirement. Every key component participates in
-  direct-map indexing, and each slot retains its complete key. A lookup returns
-  a value only after key equality; a collision falls through to the sparse
-  cache. Therefore distinct Rader generators cannot alias spectra or orders.
+  masked the production stack requirement. Direct coordinates jointly preserve
+  every key component: table position encodes length and direction, while each
+  collision-capable slot retains and validates the omitted generator. A tag
+  mismatch falls through to the sparse cache; collision-free unary tables use
+  their unique index without storing a redundant tag. Therefore distinct Rader
+  generators cannot alias spectra or orders.
 - Rejected designs: a boxed slice removed the stack frame but erased the
   compile-time length from hot indexed lookups, producing systematic
   regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
@@ -24,13 +26,16 @@
   measurable pointer overhead, including 188 ns versus 164-165 ns for Rader
   f32 N=29. A `const`-initialized TLS array retained direct lookup but Linux
   still constructed enough inlined initialization state to overflow nine
-  default test stacks. The fixed global-slot representation requires
-  exact-head benchmark verification.
+  default test stacks. Hashed complete-tuple slots preserved correctness but
+  benchmark run `29873660989` rejected them in 25 replicated cases. The direct
+  coordinate representation removes tuple hashing, redundant key fields, and
+  keyed comparison from collision-free unary access. It requires exact-head
+  benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
-  mechanism; 44 focused default-stack regressions cover the keyed-slot
+  mechanism; 45 focused default-stack regressions cover the direct-coordinate
   non-alias theorem, independent direct-DFT spectra for two primitive
   generators, distinct Bluestein generator keys, and the original Rader value
-  oracles. The complete 969-test default workspace provides the broad
+  oracles. The complete 970-test default workspace provides the broad
   regression baseline. Warning-denied
   all-feature Clippy verifies feature compilation, but local all-feature test
   linking cannot supply CUDA coverage because this Windows host has no CUDA

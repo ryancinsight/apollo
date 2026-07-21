@@ -13,10 +13,11 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
-//! Flat tables use `const`-initialized keyed slots. This keeps hot lookup direct
-//! and fixed-size without constructing a large array on each thread's bounded
-//! stack or duplicating the table for every worker. Each hit validates the full
-//! semantic key; collisions fall through to the sparse thread-local cache.
+//! Flat tables use `const`-initialized slots. This keeps hot lookup direct and
+//! fixed-size without constructing a large array on each thread's bounded stack
+//! or duplicating the table for every worker. The table index and optional slot
+//! tag jointly validate the full semantic key; collisions fall through to the
+//! sparse thread-local cache.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 
@@ -31,12 +32,14 @@
 /// * `extra_bounds` — additional supertrait bounds as token trees
 ///   (e.g. `[Clone, 'static]` since `'static` is a lifetime, not a path).
 /// * `key` — the key type (e.g. `usize`, `(usize, usize)`).
-/// * `val64` / `val32` — concrete value types for each precision.
+/// * `val_precise` / `val_reduced` — concrete value types for each precision.
 /// * `val_self` — the value type using `Self` (for the trait definition).
 /// * `tl_get` / `tl_insert` / `global` — method names.
 /// * `global_ret_self` — return type of `global()` using `Self`.
-/// * `tl64` / `tl32` — thread-local static names.
-/// * `global64` / `global32` — global static names.
+/// * `tl_precise` / `tl_reduced` — thread-local static names.
+/// * `global_precise` / `global_reduced` — global static names.
+/// * `flat_precise` / `flat_reduced` — bounded flat-table static names.
+/// * `flat_coordinates` — maps a bounded key to its table index and tag.
 #[macro_export]
 macro_rules! declare_cache_store {
     (
@@ -123,8 +126,7 @@ macro_rules! declare_cache_store {
         global_reduced: $global_reduced:ident,
         flat_precise: $flat_precise:ident,
         flat_reduced: $flat_reduced:ident,
-        flat_check: $flat_check:expr,
-        flat_idx: $flat_idx:expr,
+        flat_coordinates: $flat_coordinates:expr,
     ) => {
         mod $sealed_mod {
             pub(crate) trait $sealed_trait {}
@@ -140,9 +142,8 @@ macro_rules! declare_cache_store {
         impl $store_trait for eunomia::Complex64 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_precise> {
-                if ($flat_check)(key) {
-                    let idx = ($flat_idx)(key);
-                    if let Some(value) = $flat_precise[idx].get(key) {
+                if let Some((idx, tag)) = ($flat_coordinates)(key) {
+                    if let Some(value) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::get_cached(&$flat_precise[idx], tag) {
                         return Some(value);
                     }
                 }
@@ -150,9 +151,8 @@ macro_rules! declare_cache_store {
             }
             #[inline]
             fn $tl_insert(key: $key_ty, v: $val_precise) {
-                if ($flat_check)(key) {
-                    let idx = ($flat_idx)(key);
-                    let Err(v) = $flat_precise[idx].insert(key, v) else {
+                if let Some((idx, tag)) = ($flat_coordinates)(key) {
+                    let Err(v) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::insert_cached(&$flat_precise[idx], tag, v) else {
                         return;
                     };
                     $tl_precise.with(|c| {
@@ -174,9 +174,8 @@ macro_rules! declare_cache_store {
         impl $store_trait for eunomia::Complex32 {
             #[inline]
             fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
-                if ($flat_check)(key) {
-                    let idx = ($flat_idx)(key);
-                    if let Some(value) = $flat_reduced[idx].get(key) {
+                if let Some((idx, tag)) = ($flat_coordinates)(key) {
+                    if let Some(value) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::get_cached(&$flat_reduced[idx], tag) {
                         return Some(value);
                     }
                 }
@@ -184,9 +183,8 @@ macro_rules! declare_cache_store {
             }
             #[inline]
             fn $tl_insert(key: $key_ty, v: $val_reduced) {
-                if ($flat_check)(key) {
-                    let idx = ($flat_idx)(key);
-                    let Err(v) = $flat_reduced[idx].insert(key, v) else {
+                if let Some((idx, tag)) = ($flat_coordinates)(key) {
+                    let Err(v) = $crate::application::execution::kernel::mixed_radix::caches::direct_mapped::FlatCacheSlot::insert_cached(&$flat_reduced[idx], tag, v) else {
                         return;
                     };
                     $tl_reduced.with(|c| {

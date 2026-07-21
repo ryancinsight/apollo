@@ -23,19 +23,21 @@
 
 **Current evidence:** exact `origin/main` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
-`___chkstk_ms` frame. Forty-four focused regressions, including distinct
+`___chkstk_ms` frame. Forty-five focused regressions, including distinct
 primitive-generator spectra, a Bluestein generator-key regression, the
 non-alias theorem, and an explicit two-MiB stack contract, pass; the complete
-default workspace passes 969/969 tests in 22.321 seconds. Warning-denied
+default workspace passes 970/970 tests in 22.841 seconds. Warning-denied
 all-feature Clippy, doctests, rustdoc, provider
 audit, and supply-chain gates
 pass. The locked graph contains one Aequitas revision and no Rust `ndarray`
 package. Hosted benchmarks rejected both boxed representations: a slice lost
 compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
-`29870196908`. The current process-wide keyed `OnceLock` table retains fixed
-direct slots without per-thread initialization or table replication, validates
-the complete semantic key on every hit, and is pending exact-head gates.
+`29870196908`. Hosted CI passed at `4e063f1`, but benchmark run `29873660989`
+rejected its hashed tuple keys in 25 replicated cases. The corrected
+process-wide table restores direct length/direction indices, validates only the
+generator component omitted from those indices, retains raw `OnceLock` access
+for collision-free unary tables, and is pending exact-head gates.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

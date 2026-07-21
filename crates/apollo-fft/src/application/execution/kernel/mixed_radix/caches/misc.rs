@@ -1,15 +1,15 @@
 use super::super::super::radix_shape::{
     coprime_factors, factorize_composite as factorize_prime23, is_prime,
 };
-use super::direct_mapped::{flat_index, DirectMappedSlot};
+use super::direct_mapped::{
+    bounded_directional_coordinates, bounded_pair_coordinates, DirectMappedSlot,
+    DIRECTIONAL_FLAT_CACHE_LIMIT, FLAT_CACHE_LIMIT,
+};
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
-
-const FLAT_CACHE_LIMIT: usize = 4096;
-const DIRECTIONAL_FLAT_CACHE_LIMIT: usize = 2 * FLAT_CACHE_LIMIT;
 
 static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<Arc<[usize]>>>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
@@ -52,27 +52,23 @@ static IS_PRIME_FLAT: [OnceLock<bool>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
 static PRIME23_RADIX_FLAT: [OnceLock<Option<Arc<[usize]>>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
-static RADER_ORDER_FLAT: [DirectMappedSlot<(usize, usize), Arc<[usize]>>; FLAT_CACHE_LIMIT] =
+static RADER_ORDER_FLAT: [DirectMappedSlot<usize, Arc<[usize]>>; FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; FLAT_CACHE_LIMIT];
-static RADER_NEG_TWIDDLES_PRECISE_FLAT: [DirectMappedSlot<usize, Arc<[Complex64]>>;
-    FLAT_CACHE_LIMIT] = [const { DirectMappedSlot::new() }; FLAT_CACHE_LIMIT];
-static RADER_NEG_TWIDDLES_REDUCED_FLAT: [DirectMappedSlot<usize, Arc<[Complex32]>>;
-    FLAT_CACHE_LIMIT] = [const { DirectMappedSlot::new() }; FLAT_CACHE_LIMIT];
-static RADER_SPECTRUM_PRECISE_FLAT: [DirectMappedSlot<(usize, usize, usize), Arc<[Complex64]>>;
+static RADER_NEG_TWIDDLES_PRECISE_FLAT: [OnceLock<Arc<[Complex64]>>; FLAT_CACHE_LIMIT] =
+    [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
+static RADER_NEG_TWIDDLES_REDUCED_FLAT: [OnceLock<Arc<[Complex32]>>; FLAT_CACHE_LIMIT] =
+    [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
+static RADER_SPECTRUM_PRECISE_FLAT: [DirectMappedSlot<usize, Arc<[Complex64]>>;
     DIRECTIONAL_FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_SPECTRUM_REDUCED_FLAT: [DirectMappedSlot<(usize, usize, usize), Arc<[Complex32]>>;
+static RADER_SPECTRUM_REDUCED_FLAT: [DirectMappedSlot<usize, Arc<[Complex32]>>;
     DIRECTIONAL_FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_NEGACYCLIC_PRECISE_FLAT: [DirectMappedSlot<
-    (usize, usize, usize),
-    NegacyclicEntry<Complex64>,
->; DIRECTIONAL_FLAT_CACHE_LIMIT] =
+static RADER_NEGACYCLIC_PRECISE_FLAT: [DirectMappedSlot<usize, NegacyclicEntry<Complex64>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_NEGACYCLIC_REDUCED_FLAT: [DirectMappedSlot<
-    (usize, usize, usize),
-    NegacyclicEntry<Complex32>,
->; DIRECTIONAL_FLAT_CACHE_LIMIT] =
+static RADER_NEGACYCLIC_REDUCED_FLAT: [DirectMappedSlot<usize, NegacyclicEntry<Complex32>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
     [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 thread_local! {
@@ -119,8 +115,7 @@ declare_cache_store! {
     global_reduced: RADER_SPECTRUM_REDUCED_CACHE,
     flat_precise: RADER_SPECTRUM_PRECISE_FLAT,
     flat_reduced: RADER_SPECTRUM_REDUCED_FLAT,
-    flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
-    flat_idx: |key: (usize, usize, usize)| flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([key.0, key.1, key.2]),
+    flat_coordinates: |key: (usize, usize, usize)| bounded_directional_coordinates(key.0, key.1, key.2),
 }
 
 #[inline]
@@ -316,10 +311,9 @@ pub(crate) fn cached_rader_order(
     key: (usize, usize),
     build_fn: impl FnOnce((usize, usize)) -> Vec<usize>,
 ) -> Arc<[usize]> {
-    let n = key.0;
-    let index = flat_index::<FLAT_CACHE_LIMIT, 2>([key.0, key.1]);
-    if n < FLAT_CACHE_LIMIT {
-        if let Some(v) = RADER_ORDER_FLAT[index].get(key) {
+    let coordinates = bounded_pair_coordinates(key.0, key.1);
+    if let Some((index, tag)) = coordinates {
+        if let Some(v) = RADER_ORDER_FLAT[index].get(tag) {
             return v;
         }
     }
@@ -345,8 +339,10 @@ pub(crate) fn cached_rader_order(
                 .clone()
         }
     };
-    if n < FLAT_CACHE_LIMIT && RADER_ORDER_FLAT[index].insert(key, Arc::clone(&v)).is_ok() {
-        return v;
+    if let Some((index, tag)) = coordinates {
+        if RADER_ORDER_FLAT[index].insert(tag, Arc::clone(&v)).is_ok() {
+            return v;
+        }
     }
     TL_RADER_ORDER.with(|c| c.borrow_mut().insert(key, Arc::clone(&v)));
     v
@@ -373,8 +369,7 @@ declare_cache_store! {
     global_reduced: RADER_NEGACYCLIC_REDUCED_CACHE,
     flat_precise: RADER_NEGACYCLIC_PRECISE_FLAT,
     flat_reduced: RADER_NEGACYCLIC_REDUCED_FLAT,
-    flat_check: |key: (usize, usize, usize)| key.0 < FLAT_CACHE_LIMIT,
-    flat_idx: |key: (usize, usize, usize)| flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([key.0, key.1, key.2]),
+    flat_coordinates: |key: (usize, usize, usize)| bounded_directional_coordinates(key.0, key.1, key.2),
 }
 
 /// Generic negacyclic spectrum cache: dispatches to the correct concrete
@@ -432,8 +427,7 @@ declare_cache_store! {
     global_reduced: RADER_NEG_TWIDDLES_REDUCED_CACHE,
     flat_precise: RADER_NEG_TWIDDLES_PRECISE_FLAT,
     flat_reduced: RADER_NEG_TWIDDLES_REDUCED_FLAT,
-    flat_check: |key: usize| key < FLAT_CACHE_LIMIT,
-    flat_idx: |key: usize| key,
+    flat_coordinates: |key: usize| (key < FLAT_CACHE_LIMIT).then_some((key, 0)),
 }
 
 // Negacyclic twiddle cache: dispatches via the sealed `NegTwiddleStore` trait.
