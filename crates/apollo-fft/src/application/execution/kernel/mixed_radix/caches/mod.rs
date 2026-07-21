@@ -1,5 +1,6 @@
 #[macro_use]
 pub(crate) mod cache_macros;
+pub(crate) mod direct_mapped;
 pub(crate) mod four_step;
 pub(crate) mod misc;
 #[cfg(feature = "cache-profiling")]

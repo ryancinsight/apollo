@@ -1,27 +1,31 @@
 //! Precision-generic storage for Bluestein kernel spectra.
 
 use super::trait_def::{BluesteinEntry, BluesteinKey, BluesteinStore};
+use crate::application::execution::kernel::mixed_radix::caches::direct_mapped::{
+    flat_index, DirectMappedSlot,
+};
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::sync::{LazyLock, OnceLock};
+use std::sync::LazyLock;
 
 const FLAT_CACHE_LIMIT: usize = 4096;
 const DIRECTIONAL_FLAT_CACHE_LIMIT: usize = 2 * FLAT_CACHE_LIMIT;
 const SPARSE_INITIAL_CAPACITY: usize = 8;
 
 type Cache<C> = RwLock<FxHashMap<BluesteinKey, BluesteinEntry<C>>>;
-type FlatCache<C> = [OnceLock<BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
+type FlatCache<C> =
+    [DirectMappedSlot<BluesteinKey, BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 static REDUCED_CACHE: LazyLock<Cache<Complex32>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static PRECISE_CACHE: LazyLock<Cache<Complex64>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static REDUCED_FLAT: FlatCache<Complex32> =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 static PRECISE_FLAT: FlatCache<Complex64> =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 thread_local! {
     static REDUCED_SPARSE: RefCell<FxHashMap<BluesteinKey, BluesteinEntry<Complex32>>> =
@@ -104,29 +108,41 @@ impl CacheSpec for f64 {
 
 #[inline]
 fn get<T: CacheSpec>(key: BluesteinKey) -> Option<BluesteinEntry<T::Complex>> {
-    let (length, inverse, _) = key;
+    let (length, inverse, generator_inverse) = key;
     if length < FLAT_CACHE_LIMIT {
-        let index = (length << 1) | usize::from(inverse);
-        T::flat()[index].get().cloned()
-    } else {
-        let result = T::sparse_get(key);
-        #[cfg(feature = "cache-profiling")]
-        if result.is_some() {
-            T::record_sparse_hit();
+        let index = flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([
+            length,
+            usize::from(inverse),
+            generator_inverse,
+        ]);
+        if let Some(value) = T::flat()[index].get(key) {
+            return Some(value);
         }
-        result
     }
+    let result = T::sparse_get(key);
+    #[cfg(feature = "cache-profiling")]
+    if result.is_some() {
+        T::record_sparse_hit();
+    }
+    result
 }
 
 #[inline]
 fn insert<T: CacheSpec>(key: BluesteinKey, value: BluesteinEntry<T::Complex>) {
-    let (length, inverse, _) = key;
+    let (length, inverse, generator_inverse) = key;
     if length < FLAT_CACHE_LIMIT {
-        let index = (length << 1) | usize::from(inverse);
-        T::flat()[index].get_or_init(|| value);
-    } else {
+        let index = flat_index::<DIRECTIONAL_FLAT_CACHE_LIMIT, 3>([
+            length,
+            usize::from(inverse),
+            generator_inverse,
+        ]);
+        let Err(value) = T::flat()[index].insert(key, value) else {
+            return;
+        };
         T::sparse_insert(key, value);
+        return;
     }
+    T::sparse_insert(key, value);
 }
 
 impl BluesteinStore for f32 {
@@ -164,5 +180,26 @@ impl BluesteinStore for f64 {
     #[inline]
     fn global() -> &'static Cache<Self::Cpx> {
         Self::cache()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get, insert};
+    use eunomia::Complex64;
+    use std::sync::Arc;
+
+    #[test]
+    fn flat_cache_distinguishes_generator_inverse() {
+        let first_key = (4000, false, usize::MAX - 1);
+        let second_key = (4000, false, usize::MAX);
+        let first = Arc::<[Complex64]>::from([Complex64::new(1.0, 2.0)]);
+        let second = Arc::<[Complex64]>::from([Complex64::new(3.0, 4.0)]);
+
+        insert::<f64>(first_key, Arc::clone(&first));
+        insert::<f64>(second_key, Arc::clone(&second));
+
+        assert_eq!(get::<f64>(first_key), Some(first));
+        assert_eq!(get::<f64>(second_key), Some(second));
     }
 }

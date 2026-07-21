@@ -1,5 +1,6 @@
 use super::generator::PRIMITIVE_ROOTS;
 use crate::application::execution::kernel::direct::dft_forward;
+use crate::application::execution::kernel::mixed_radix::scalar::MixedRadixScalar;
 use crate::application::execution::kernel::test_utils::max_abs_err_64;
 use eunomia::Complex64;
 
@@ -151,6 +152,35 @@ fn runtime_rader_29_roundtrip() {
 #[test]
 fn runtime_rader_37_roundtrip() {
     assert_rader_roundtrip(37);
+}
+
+#[test]
+fn runtime_rader_caches_distinguish_primitive_generators() {
+    const PRIME: usize = 43;
+    const GENERATORS: [(usize, usize); 2] = [(3, 29), (28, 20)];
+
+    for (generator, generator_inverse) in GENERATORS {
+        let expected_order = super::build_generator_order(PRIME, generator);
+        let cached_order = super::cached_generator_order(PRIME, generator);
+        assert_eq!(cached_order.as_ref(), expected_order.as_slice());
+
+        let mut inverse_power = 1usize;
+        let kernel: Vec<_> = (0..PRIME - 1)
+            .map(|_| {
+                let angle = -std::f64::consts::TAU * (inverse_power as f64) / (PRIME as f64);
+                inverse_power = (inverse_power * generator_inverse) % PRIME;
+                Complex64::new(angle.cos(), angle.sin())
+            })
+            .collect();
+        let expected_spectrum = dft_forward(&kernel);
+        let cached_spectrum =
+            <f64 as MixedRadixScalar>::cached_rader_spectrum::<false>(PRIME, generator_inverse);
+        let error = max_abs_err_64(cached_spectrum.as_ref(), &expected_spectrum);
+        assert!(
+            error < 1.0e-10,
+            "Rader spectrum key alias for generator={generator}, error={error:.2e}"
+        );
+    }
 }
 
 #[test]

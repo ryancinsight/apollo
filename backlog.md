@@ -22,10 +22,15 @@
   compile-time bounds and a fixed-size box retained measurable pointer
   overhead. A `const` TLS candidate retained the original hot representation
   but still overflowed nine Linux test stacks in hosted run `29870196908`.
-  Process-wide fixed `OnceLock` slots now remove runtime array construction and
-  per-worker table duplication; the explicit two-MiB stack regression, all 40
-  focused Rader cases, and all 965 default workspace tests pass locally.
-  Exact-head hosted runtime and benchmark verification remain open.
+  Process-wide keyed `OnceLock` slots now remove runtime array construction and
+  per-worker table duplication. Review then exposed that the original flat
+  indices omitted the generator component; keyed direct-mapped slots now hash
+  and validate the complete semantic key and retain collisions in the sparse
+  cache. The non-alias proof, two distinct primitive-generator spectra, both
+  Bluestein generator keys, the explicit two-MiB stack regression, and all 44
+  focused cache/Rader cases pass locally. The complete default workspace passes
+  969/969 tests in 22.321 seconds. Exact-head hosted runtime and benchmark
+  verification remain open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

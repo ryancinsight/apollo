@@ -4,7 +4,7 @@
 //! Every complex-type cache follows the same structure:
 //! 1. Two `static LazyLock<RwLock<FxHashMap<K, V>>>` globals (one per precision)
 //! 2. A sparse thread-local `FxHashMap` per precision and, where the key domain
-//!    is bounded, a process-wide flat `OnceLock` table
+//!    is bounded, a process-wide collision-safe direct-mapped table
 //! 3. A sealed marker trait + a Store trait with `tl_get`/`tl_insert`/`global`
 //! 4. Identical `impl` blocks for `Complex64` and `Complex32`
 //! 5. A `cached_*` function with TL-then-global-then-build logic
@@ -13,9 +13,10 @@
 //! and both impl blocks). Each cache file keeps its own statics (step 1–2)
 //! and its own cached function (step 5), which may use the companion
 //! `cached_fetch_arc!` macro for the common `Arc<[C]>` + closure pattern.
-//! Flat tables use `const`-initialized `OnceLock` slots. This keeps hot lookup
-//! direct and fixed-size without constructing a large array on each thread's
-//! bounded stack or duplicating the table for every worker.
+//! Flat tables use `const`-initialized keyed slots. This keeps hot lookup direct
+//! and fixed-size without constructing a large array on each thread's bounded
+//! stack or duplicating the table for every worker. Each hit validates the full
+//! semantic key; collisions fall through to the sparse thread-local cache.
 //!
 //! Uses `FxHashMap` (from rustc_hash) for faster hashing of integer keys.
 
@@ -141,21 +142,27 @@ macro_rules! declare_cache_store {
             fn $tl_get(key: $key_ty) -> Option<$val_precise> {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $flat_precise[idx].get().cloned()
-                } else {
-                    $tl_precise.with(|c| c.borrow().get(&key).cloned())
+                    if let Some(value) = $flat_precise[idx].get(key) {
+                        return Some(value);
+                    }
                 }
+                $tl_precise.with(|c| c.borrow().get(&key).cloned())
             }
             #[inline]
             fn $tl_insert(key: $key_ty, v: $val_precise) {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $flat_precise[idx].get_or_init(|| v);
-                } else {
+                    let Err(v) = $flat_precise[idx].insert(key, v) else {
+                        return;
+                    };
                     $tl_precise.with(|c| {
                         c.borrow_mut().insert(key, v);
                     });
+                    return;
                 }
+                $tl_precise.with(|c| {
+                    c.borrow_mut().insert(key, v);
+                });
             }
             #[inline]
             fn $global() -> &'static $global_ret_self {
@@ -169,21 +176,27 @@ macro_rules! declare_cache_store {
             fn $tl_get(key: $key_ty) -> Option<$val_reduced> {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $flat_reduced[idx].get().cloned()
-                } else {
-                    $tl_reduced.with(|c| c.borrow().get(&key).cloned())
+                    if let Some(value) = $flat_reduced[idx].get(key) {
+                        return Some(value);
+                    }
                 }
+                $tl_reduced.with(|c| c.borrow().get(&key).cloned())
             }
             #[inline]
             fn $tl_insert(key: $key_ty, v: $val_reduced) {
                 if ($flat_check)(key) {
                     let idx = ($flat_idx)(key);
-                    $flat_reduced[idx].get_or_init(|| v);
-                } else {
+                    let Err(v) = $flat_reduced[idx].insert(key, v) else {
+                        return;
+                    };
                     $tl_reduced.with(|c| {
                         c.borrow_mut().insert(key, v);
                     });
+                    return;
                 }
+                $tl_reduced.with(|c| {
+                    c.borrow_mut().insert(key, v);
+                });
             }
             #[inline]
             fn $global() -> &'static $global_ret_self {

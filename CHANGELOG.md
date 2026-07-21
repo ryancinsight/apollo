@@ -29,11 +29,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Changed
 
 - [patch] Stores the large bounded Rader and Bluestein flat caches in
-  process-wide, `const`-initialized `OnceLock` slot arrays. First access no
-  longer constructs a 262,216-byte negacyclic-cache frame on an active
-  Rader/Good-Thomas execution stack, and workers no longer duplicate these
-  fixed tables. Rader tests require neither test-specific 8 MiB threads nor a
-  CI-wide 16 MiB stack override.
+  process-wide, `const`-initialized keyed `OnceLock` slot arrays. Every direct
+  lookup indexes and validates the complete semantic key, including the Rader
+  generator inverse; collisions fall through to the sparse cache instead of
+  aliasing another transform. First access no longer constructs a 262,216-byte
+  negacyclic-cache frame on an active Rader/Good-Thomas execution stack, and
+  workers no longer duplicate these fixed tables. Rader tests require neither
+  test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.
 
 - [patch] Retires Apollo's last historical `ndarray-compat` documentation and
   aligns the Leto/Hephaestus lock closure so all units resolve through one

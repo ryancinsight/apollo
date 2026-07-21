@@ -5,8 +5,11 @@
 - [x] Reproduce the FFT abort against the exact original Apollo revision and
       lockfile, then obtain a native debugger backtrace.
 - [x] Replace fixed TLS arrays with `const`-initialized process-wide
-      `OnceLock` slots, eliminating runtime stack construction while
+      keyed `OnceLock` slots, eliminating runtime stack construction while
       preserving direct O(1) lookup and capacity.
+- [x] Include and validate every bounded-cache semantic key component; retain
+      direct-map collisions in the sparse cache and prove that keys cannot
+      alias values.
 - [x] Remove every source-level 8 MiB Rader stack override and the CI-wide
       16 MiB `RUST_MIN_STACK` bypass.
 - [x] Converge Leto, Hephaestus, and Aequitas lock entries on current merged
@@ -20,17 +23,19 @@
 
 **Current evidence:** exact `origin/main` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
-`___chkstk_ms` frame. Forty focused regressions, including an explicit two-MiB
-stack contract, pass; the complete default workspace passes 965/965 tests in
-30.324 seconds. Warning-denied all-feature Clippy, doctests, rustdoc, provider
+`___chkstk_ms` frame. Forty-four focused regressions, including distinct
+primitive-generator spectra, a Bluestein generator-key regression, the
+non-alias theorem, and an explicit two-MiB stack contract, pass; the complete
+default workspace passes 969/969 tests in 22.321 seconds. Warning-denied
+all-feature Clippy, doctests, rustdoc, provider
 audit, and supply-chain gates
 pass. The locked graph contains one Aequitas revision and no Rust `ndarray`
 package. Hosted benchmarks rejected both boxed representations: a slice lost
 compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
-`29870196908`. The current process-wide `OnceLock` table retains fixed direct
-slots without per-thread
-initialization or table replication and is pending exact-head gates.
+`29870196908`. The current process-wide keyed `OnceLock` table retains fixed
+direct slots without per-thread initialization or table replication, validates
+the complete semantic key on every hit, and is pending exact-head gates.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

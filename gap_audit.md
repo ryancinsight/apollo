@@ -9,11 +9,14 @@
   frame is 262,216 bytes on an already-active FFT execution stack.
 - Resolution: retain each affected Rader/Bluestein flat cache's fixed capacity
   and O(1) index contract, but store its entries in process-wide,
-  `const`-initialized `OnceLock` slot arrays. First access initializes one slot
-  without constructing a full table on an active execution stack, and worker
-  count no longer multiplies these fixed tables. Remove the four 8 MiB
+  `const`-initialized keyed `OnceLock` slot arrays. First access initializes one
+  slot without constructing a full table on an active execution stack, and
+  worker count no longer multiplies these fixed tables. Remove the four 8 MiB
   test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
-  masked the production stack requirement.
+  masked the production stack requirement. Every key component participates in
+  direct-map indexing, and each slot retains its complete key. A lookup returns
+  a value only after key equality; a collision falls through to the sparse
+  cache. Therefore distinct Rader generators cannot alias spectra or orders.
 - Rejected designs: a boxed slice removed the stack frame but erased the
   compile-time length from hot indexed lookups, producing systematic
   regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
@@ -24,8 +27,11 @@
   default test stacks. The fixed global-slot representation requires
   exact-head benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
-  mechanism; 40 focused default-stack regressions and the complete 965-test
-  default workspace establish retained value semantics. Warning-denied
+  mechanism; 44 focused default-stack regressions cover the keyed-slot
+  non-alias theorem, independent direct-DFT spectra for two primitive
+  generators, distinct Bluestein generator keys, and the original Rader value
+  oracles. The complete 969-test default workspace provides the broad
+  regression baseline. Warning-denied
   all-feature Clippy verifies feature compilation, but local all-feature test
   linking cannot supply CUDA coverage because this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
