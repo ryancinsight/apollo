@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## D19-close-eunomia-migration-regressions [minor] [arch] — in progress
+## D19-close-eunomia-migration-regressions [minor] [arch] — done
 
 - Owner: Codex `/root/athena_backend_audit`; scope: Apollo's native benchmark
   build and execution instrument, representative FFT workload regimes, and
@@ -43,6 +43,11 @@
   four-order separation for one arbitrarily candidate-labeled composite case.
   The oracle now accepts exact executable identity as conclusive causal evidence
   and retains replicated measurement whenever any executable differs.
+  Exact-head benchmark run `29956621276` then compiled both revisions at the
+  canonical path, passed all three bounded smoke executions, proved all three
+  executable pairs byte-identical, and accepted that identity in 4 minutes.
+  Exact-head CI run `29956621235` passed the Rust workspace and Python binding
+  jobs. No transform production code changed.
 
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 

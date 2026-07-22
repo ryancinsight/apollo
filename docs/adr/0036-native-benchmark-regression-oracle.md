@@ -184,3 +184,11 @@ candidate: `composite_radix_order/r4_2_5_5_f64/200` separated by 1-7 ns in all
 four comparisons. Binary identity is stronger causal evidence than sampled
 timing for this boundary; the identity exit prevents arbitrary labels from
 turning runner noise into a production-regression claim.
+
+Exact-head hosted run `29956621276` validated the final decision path. It
+compiled both revisions at the canonical path, passed all three smoke
+executions, proved all three executable pairs byte-identical, and accepted the
+identity evidence in 4 minutes. Exact-head CI run `29956621235` independently
+passed the Rust workspace and Python binding jobs. This is static causal
+evidence for the unchanged artifacts, not empirical performance evidence; any
+differing executable pair still enters the complete ABBA/BAAB experiment.

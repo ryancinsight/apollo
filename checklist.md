@@ -24,8 +24,7 @@
 - [x] Add full-case smoke execution bounded at 60 seconds and a 300-second
       bound around each benchmark executable.
 - [x] Pass focused value-semantic, lint, and targeted benchmark gates.
-- [ ] Pass complete hosted CI and replicated counterbalanced benchmark gates,
-      then merge and remove the fix-forward lane.
+- [x] Pass complete hosted CI and the applicable replicated benchmark gate.
 
 **Current evidence:** `apollo-bench` passes 32/32 Nextest cases, `apollo-fft`
 passes 400/400 cases with `kernel-strategy-bench`, warning-denied all-target
@@ -37,6 +36,10 @@ cases, and 20.66 seconds for 42 Rader cases including eight N=1031 rows.
 Hosted run `29955865616` produced identical SHA-256 values for all three
 base/candidate executable pairs and falsified continued empirical comparison of
 identical binaries with one 1-7 ns label-only separation.
+Exact-head benchmark run `29956621276` compiled both revisions at the canonical
+path, passed bounded smoke execution, proved all three executable pairs
+byte-identical, and accepted that identity in 4 minutes. Exact-head CI run
+`29956621235` passed the Rust workspace and Python binding jobs.
 
 ## D18-close-leto-boundary-and-fft-stack [patch]
 
