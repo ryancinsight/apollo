@@ -33,14 +33,22 @@
   type but threaded it through monomorphized convolution and Good-Thomas call
   boundaries. Benchmark run `29880881359` rejected 23 cases, including
   unrelated power-of-two and composite rows, falsifying that expanded hot ABI.
-  The current correction constructs the canonical pair only inside cache-miss
-  builders, removing generator state from every cache-hit and convolution call
-  while retaining raw direct `OnceLock` slots. All 44 focused regressions and the
-  complete 969-test default workspace pass. Warning-denied all-target,
-  all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
-  provider audit, RustSec audit, dependency policy, and all 196 applicable
-  SemVer checks against `origin/main` pass. Exact-head hosted runtime and
-  benchmark verification remain open for the new head.
+  Restricting the canonical pair to cache misses still changed enough code
+  layout for run `29884289655` to reject 41 cases, including unrelated prime,
+  composite, and power-of-two rows, so it is not the delivery candidate. The
+  current source restores the measured direct-coordinate head `df01f35`
+  exactly, then applies the inner-function pattern only to `f32` Winograd-pair
+  half-lengths through H=15. On an Intel Core Ultra 9 285K with Rust 1.97.0,
+  the isolated H=15 release median fell from 154 ns to 106 ns; H=20 regressed
+  under the compact prototype and therefore retains const specialization.
+  Focused differential tests pass across both precisions and every generated
+  prime. The exact source passes all 970 default workspace tests, warning-denied
+  all-target/all-feature Clippy, no-default compilation, doctests,
+  warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
+  all 196 applicable SemVer checks against `origin/main`. Targeted Miri also
+  passes the `f32` Winograd-pair differential route that exercises the new
+  bounded unchecked indexing. Hosted CUDA runtime and benchmark verification
+  remain open for the new candidate.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

@@ -29,16 +29,18 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Changed
 
 - [patch] Stores the large bounded Rader and Bluestein flat caches in
-  process-wide, `const`-initialized `OnceLock` slot arrays. A private
-  canonical-generator type is constructed only inside cache-miss builders,
-  making the selected primitive-root pair unique for each prime length without
-  widening cache-hit or convolution call boundaries. The complete spectrum key
-  is length plus direction, and every bounded cache retains raw direct-slot
-  access without a redundant tag.
+  process-wide, `const`-initialized `OnceLock` slot arrays. Direct coordinates
+  preserve O(1) lookup, while stored generator tags validate the complete
+  semantic key before a cached value is reused.
   First access no longer constructs a 262,216-byte
   negacyclic-cache frame on an active Rader/Good-Thomas execution stack, and
   workers no longer duplicate these fixed tables. Rader tests require neither
   test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.
+
+- [patch] Routes measured profitable `f32` Winograd-pair half-lengths through
+  one compact non-const inner accumulator, retaining const-specialized kernels
+  for `f64` and larger pairs. This bounds small-prime instruction and stack
+  footprints without changing transform arithmetic order or public API.
 
 - [patch] Retires Apollo's last historical `ndarray-compat` documentation and
   aligns the Leto/Hephaestus lock closure so all units resolve through one

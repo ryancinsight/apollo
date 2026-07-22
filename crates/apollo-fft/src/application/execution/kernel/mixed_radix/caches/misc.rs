@@ -2,7 +2,8 @@ use super::super::super::radix_shape::{
     coprime_factors, factorize_composite as factorize_prime23, is_prime,
 };
 use super::direct_mapped::{
-    bounded_directional_index, bounded_index, DIRECTIONAL_FLAT_CACHE_LIMIT, FLAT_CACHE_LIMIT,
+    bounded_directional_coordinates, bounded_pair_coordinates, DirectMappedSlot,
+    DIRECTIONAL_FLAT_CACHE_LIMIT, FLAT_CACHE_LIMIT,
 };
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
@@ -14,12 +15,12 @@ static PRIME23_RADIX_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Option<A
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 static RADER_SPECTRUM_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize), Arc<[Complex64]>>>,
+    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_SPECTRUM_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize), Arc<[Complex32]>>>,
+    RwLock<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
-static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<FxHashMap<usize, Arc<[usize]>>>> =
+static RADER_ORDER_CACHE: std::sync::LazyLock<RwLock<FxHashMap<(usize, usize), Arc<[usize]>>>> =
     std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static COPRIME_FACTORS_CACHE: std::sync::LazyLock<
     RwLock<FxHashMap<usize, Option<(usize, usize)>>>,
@@ -33,10 +34,10 @@ static PFA_PERM_CACHE: std::sync::LazyLock<
 type NegacyclicEntry<C> = (Arc<[C]>, Arc<[C]>);
 
 static RADER_NEGACYCLIC_PRECISE_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize), NegacyclicEntry<Complex64>>>,
+    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_NEGACYCLIC_REDUCED_CACHE: std::sync::LazyLock<
-    RwLock<FxHashMap<(usize, usize), NegacyclicEntry<Complex32>>>,
+    RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>>,
 > = std::sync::LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static RADER_NEG_TWIDDLES_PRECISE_CACHE: std::sync::LazyLock<
     RwLock<FxHashMap<usize, Arc<[Complex64]>>>,
@@ -51,29 +52,33 @@ static IS_PRIME_FLAT: [OnceLock<bool>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
 static PRIME23_RADIX_FLAT: [OnceLock<Option<Arc<[usize]>>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
-static RADER_ORDER_FLAT: [OnceLock<Arc<[usize]>>; FLAT_CACHE_LIMIT] =
-    [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
+static RADER_ORDER_FLAT: [DirectMappedSlot<usize, Arc<[usize]>>; FLAT_CACHE_LIMIT] =
+    [const { DirectMappedSlot::new() }; FLAT_CACHE_LIMIT];
 static RADER_NEG_TWIDDLES_PRECISE_FLAT: [OnceLock<Arc<[Complex64]>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
 static RADER_NEG_TWIDDLES_REDUCED_FLAT: [OnceLock<Arc<[Complex32]>>; FLAT_CACHE_LIMIT] =
     [const { OnceLock::new() }; FLAT_CACHE_LIMIT];
-static RADER_SPECTRUM_PRECISE_FLAT: [OnceLock<Arc<[Complex64]>>; DIRECTIONAL_FLAT_CACHE_LIMIT] =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_SPECTRUM_REDUCED_FLAT: [OnceLock<Arc<[Complex32]>>; DIRECTIONAL_FLAT_CACHE_LIMIT] =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_NEGACYCLIC_PRECISE_FLAT: [OnceLock<NegacyclicEntry<Complex64>>;
-    DIRECTIONAL_FLAT_CACHE_LIMIT] = [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
-static RADER_NEGACYCLIC_REDUCED_FLAT: [OnceLock<NegacyclicEntry<Complex32>>;
-    DIRECTIONAL_FLAT_CACHE_LIMIT] = [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+static RADER_SPECTRUM_PRECISE_FLAT: [DirectMappedSlot<usize, Arc<[Complex64]>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+static RADER_SPECTRUM_REDUCED_FLAT: [DirectMappedSlot<usize, Arc<[Complex32]>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+static RADER_NEGACYCLIC_PRECISE_FLAT: [DirectMappedSlot<usize, NegacyclicEntry<Complex64>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+static RADER_NEGACYCLIC_REDUCED_FLAT: [DirectMappedSlot<usize, NegacyclicEntry<Complex32>>;
+    DIRECTIONAL_FLAT_CACHE_LIMIT] =
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 thread_local! {
     pub(super) static TL_PRIME23_RADIX: RefCell<FxHashMap<usize, Option<Arc<[usize]>>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<FxHashMap<(usize, usize), Arc<[Complex64]>>> =
+    pub(super) static TL_RADER_SPECTRUM_PRECISE: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex64]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<FxHashMap<(usize, usize), Arc<[Complex32]>>> =
+    pub(super) static TL_RADER_SPECTRUM_REDUCED: RefCell<FxHashMap<(usize, usize, usize), Arc<[Complex32]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_ORDER: RefCell<FxHashMap<usize, Arc<[usize]>>> =
+    pub(super) static TL_RADER_ORDER: RefCell<FxHashMap<(usize, usize), Arc<[usize]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
     pub(super) static TL_COPRIME_FACTORS: RefCell<FxHashMap<usize, Option<(usize, usize)>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
@@ -81,9 +86,9 @@ thread_local! {
         RefCell::new(FxHashMap::with_capacity_and_hasher(16, Default::default()));
     pub(super) static TL_PFA_PERM: RefCell<FxHashMap<(usize, usize), (Arc<[usize]>, Arc<[usize]>)>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<FxHashMap<(usize, usize), NegacyclicEntry<Complex64>>> =
+    pub(super) static TL_RADER_NEGACYCLIC_PRECISE: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex64>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
-    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<FxHashMap<(usize, usize), NegacyclicEntry<Complex32>>> =
+    pub(super) static TL_RADER_NEGACYCLIC_REDUCED: RefCell<FxHashMap<(usize, usize, usize), NegacyclicEntry<Complex32>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
     pub(super) static TL_RADER_NEG_TWIDDLES_PRECISE: RefCell<FxHashMap<usize, Arc<[Complex64]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
@@ -96,21 +101,21 @@ declare_cache_store! {
     sealed_trait: RaderSpectrumStoreSealed,
     store_trait: RaderSpectrumStore,
     extra_bounds: [Clone, 'static],
-    key: (usize, usize),
+    key: (usize, usize, usize),
     val_precise: Arc<[Complex64]>,
     val_reduced: Arc<[Complex32]>,
     val_self: Arc<[Self]>,
     tl_get: rader_tl_get,
     tl_insert: rader_tl_insert,
     global: rader_global,
-    global_ret_self: RwLock<FxHashMap<(usize, usize), Arc<[Self]>>>,
+    global_ret_self: RwLock<FxHashMap<(usize, usize, usize), Arc<[Self]>>>,
     tl_precise: TL_RADER_SPECTRUM_PRECISE,
     tl_reduced: TL_RADER_SPECTRUM_REDUCED,
     global_precise: RADER_SPECTRUM_PRECISE_CACHE,
     global_reduced: RADER_SPECTRUM_REDUCED_CACHE,
     flat_precise: RADER_SPECTRUM_PRECISE_FLAT,
     flat_reduced: RADER_SPECTRUM_REDUCED_FLAT,
-    flat_index: |key: (usize, usize)| bounded_directional_index(key.0, key.1),
+    flat_coordinates: |key: (usize, usize, usize)| bounded_directional_coordinates(key.0, key.1, key.2),
 }
 
 #[inline]
@@ -295,7 +300,7 @@ fn build_pfa_perm(n1: usize, n2: usize) -> (Arc<[usize]>, Arc<[usize]>) {
 // Rader spectrum cache: dispatches via the sealed `RaderSpectrumStore` trait.
 cached_fetch_arc! {
     fn pub(crate) cached_rader_spectrum<RaderSpectrumStore>(
-        key: (usize, usize),
+        key: (usize, usize, usize),
         build_fn: build_fn,
     ) -> Arc<[F]>
     using tl_get = rader_tl_get, tl_insert = rader_tl_insert, global = rader_global,
@@ -303,15 +308,16 @@ cached_fetch_arc! {
 
 #[inline]
 pub(crate) fn cached_rader_order(
-    n: usize,
-    build_fn: impl FnOnce(usize) -> Vec<usize>,
+    key: (usize, usize),
+    build_fn: impl FnOnce((usize, usize)) -> Vec<usize>,
 ) -> Arc<[usize]> {
-    if let Some(index) = bounded_index(n) {
-        if let Some(v) = RADER_ORDER_FLAT[index].get() {
-            return Arc::clone(v);
+    let coordinates = bounded_pair_coordinates(key.0, key.1);
+    if let Some((index, tag)) = coordinates {
+        if let Some(v) = RADER_ORDER_FLAT[index].get(tag) {
+            return v;
         }
     }
-    if let Some(v) = TL_RADER_ORDER.with(|c| c.borrow().get(&n).cloned()) {
+    if let Some(v) = TL_RADER_ORDER.with(|c| c.borrow().get(&key).cloned()) {
         #[cfg(feature = "cache-profiling")]
         super::profiler::get().rader_order.tl_hit();
         return v;
@@ -319,25 +325,26 @@ pub(crate) fn cached_rader_order(
     #[cfg(feature = "cache-profiling")]
     super::profiler::get().rader_order.global_hit();
     let v = {
-        let maybe_cached = RADER_ORDER_CACHE.read().get(&n).cloned();
+        let maybe_cached = RADER_ORDER_CACHE.read().get(&key).cloned();
         if let Some(v) = maybe_cached {
             v
         } else {
             #[cfg(feature = "cache-profiling")]
             super::profiler::get().rader_order.miss();
-            let order: Arc<[usize]> = Arc::from(build_fn(n));
+            let order: Arc<[usize]> = Arc::from(build_fn(key));
             RADER_ORDER_CACHE
                 .write()
-                .entry(n)
+                .entry(key)
                 .or_insert_with(|| Arc::clone(&order))
                 .clone()
         }
     };
-    if let Some(index) = bounded_index(n) {
-        drop(RADER_ORDER_FLAT[index].set(Arc::clone(&v)));
-        return v;
+    if let Some((index, tag)) = coordinates {
+        if RADER_ORDER_FLAT[index].insert(tag, Arc::clone(&v)).is_ok() {
+            return v;
+        }
     }
-    TL_RADER_ORDER.with(|c| c.borrow_mut().insert(n, Arc::clone(&v)));
+    TL_RADER_ORDER.with(|c| c.borrow_mut().insert(key, Arc::clone(&v)));
     v
 }
 
@@ -348,29 +355,29 @@ declare_cache_store! {
     sealed_trait: NegacyclicSpectrumStoreSealed,
     store_trait: NegacyclicSpectrumStore,
     extra_bounds: [Clone, 'static],
-    key: (usize, usize),
+    key: (usize, usize, usize),
     val_precise: NegacyclicEntry<Complex64>,
     val_reduced: NegacyclicEntry<Complex32>,
     val_self: NegacyclicEntry<Self>,
     tl_get: neg_tl_get,
     tl_insert: neg_tl_insert,
     global: neg_global,
-    global_ret_self: RwLock<FxHashMap<(usize, usize), NegacyclicEntry<Self>>>,
+    global_ret_self: RwLock<FxHashMap<(usize, usize, usize), NegacyclicEntry<Self>>>,
     tl_precise: TL_RADER_NEGACYCLIC_PRECISE,
     tl_reduced: TL_RADER_NEGACYCLIC_REDUCED,
     global_precise: RADER_NEGACYCLIC_PRECISE_CACHE,
     global_reduced: RADER_NEGACYCLIC_REDUCED_CACHE,
     flat_precise: RADER_NEGACYCLIC_PRECISE_FLAT,
     flat_reduced: RADER_NEGACYCLIC_REDUCED_FLAT,
-    flat_index: |key: (usize, usize)| bounded_directional_index(key.0, key.1),
+    flat_coordinates: |key: (usize, usize, usize)| bounded_directional_coordinates(key.0, key.1, key.2),
 }
 
 /// Generic negacyclic spectrum cache: dispatches to the correct concrete
 /// thread-local and global RwLock cache via the sealed `NegacyclicSpectrumStore` trait.
 #[inline]
 pub(crate) fn cached_rader_negacyclic_spectra<F: NegacyclicSpectrumStore>(
-    key: (usize, usize),
-    build_fn: impl FnOnce((usize, usize)) -> (Vec<F>, Vec<F>),
+    key: (usize, usize, usize),
+    build_fn: impl FnOnce((usize, usize, usize)) -> (Vec<F>, Vec<F>),
 ) -> NegacyclicEntry<F> {
     if let Some(v) = F::neg_tl_get(key) {
         #[cfg(feature = "cache-profiling")]
@@ -420,7 +427,7 @@ declare_cache_store! {
     global_reduced: RADER_NEG_TWIDDLES_REDUCED_CACHE,
     flat_precise: RADER_NEG_TWIDDLES_PRECISE_FLAT,
     flat_reduced: RADER_NEG_TWIDDLES_REDUCED_FLAT,
-    flat_index: bounded_index,
+    flat_coordinates: |key: usize| (key < FLAT_CACHE_LIMIT).then_some((key, 0)),
 }
 
 // Negacyclic twiddle cache: dispatches via the sealed `NegTwiddleStore` trait.

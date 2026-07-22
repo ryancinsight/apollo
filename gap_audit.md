@@ -13,12 +13,10 @@
   slot without constructing a full table on an active execution stack, and
   worker count no longer multiplies these fixed tables. Remove the four 8 MiB
   test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
-  masked the production stack requirement. Cache-miss builders obtain a private
-  `CanonicalRaderGenerator`; no other constructor exists, so one prime length
-  admits exactly one primitive-root pair without widening hot call boundaries.
-  Spectrum and Bluestein cache identities can therefore consist of length and direction,
-  while generator-order identity consists of length. Their raw direct indices
-  encode every admitted semantic component without hashing or tag comparison.
+  masked the production stack requirement. Each direct coordinate preserves
+  the complete semantic key in its stored tag, including the primitive-root
+  component where applicable, and validates that tag before reuse. This keeps
+  raw O(1) slot selection without hashing or an unchecked cache alias.
 - Rejected designs: a boxed slice removed the stack frame but erased the
   compile-time length from hot indexed lookups, producing systematic
   regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
@@ -34,19 +32,30 @@
   three. Threading the canonical-generator type through the convolution and
   Good-Thomas call graph then broadened the failure to 23 cases in run
   `29880881359`, including power-of-two and composite rows that do not consume
-  Rader cache keys. The current design confines canonical-generator
-  construction to cache-miss builders: cache hits and convolution boundaries
-  carry only length and direction, and raw direct slots remain authoritative.
-  It requires exact-head benchmark verification.
+  Rader cache keys. Confining the canonical type to cache-miss builders still
+  changed enough layout for run `29884289655` to reject 41 cases across prime,
+  composite, and power-of-two families. The delivery candidate therefore
+  restores the three-residual `df01f35` direct-coordinate source exactly. Its
+  remaining H=15 `f32` Winograd-pair specialization is moved into one compact
+  non-const inner accumulator; H=20, larger `f32` pairs, and all `f64` pairs
+  retain their existing const-specialized kernels. This cutoff follows isolated
+  release measurements on an Intel Core Ultra 9 285K with Rust 1.97.0: H=15
+  improved from a 154 ns median to 106 ns, while the compact H=20 prototype
+  regressed and was rejected. Exact-head hosted benchmark verification remains
+  required.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
-  direction-separated Bluestein entries, and the original Rader value oracles.
-  The complete 969-test default workspace provides the broad regression
-  baseline. Warning-denied all-feature Clippy verifies feature compilation,
-  and all 196 applicable SemVer checks against `origin/main` pass without a
-  required version update. Local all-feature test linking cannot supply CUDA
-  coverage because this Windows host has no CUDA
+  direction-separated Bluestein entries, complete generator-tag validation,
+  and the original Rader value oracles.
+  The complete 970-test default workspace provides the broad regression
+  baseline. Warning-denied all-feature Clippy verifies feature compilation;
+  no-default compilation, doctests, warning-denied rustdoc, provider audit,
+  RustSec audit, dependency policy, and all 196 applicable SemVer checks against
+  `origin/main` also pass. Targeted Miri passes the `f32` Winograd-pair
+  differential route, covering the compact accumulator's bounded unchecked
+  indexing. Local all-feature test linking cannot supply CUDA coverage because
+  this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
   change makes no throughput claim. A two-MiB-stack regression exercises fresh
   Bluestein and half-cyclic cache initialization at the standard Rust

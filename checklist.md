@@ -7,9 +7,9 @@
 - [x] Replace fixed TLS arrays with `const`-initialized process-wide
       keyed `OnceLock` slots, eliminating runtime stack construction while
       preserving direct O(1) lookup and capacity.
-- [x] Encode the single production primitive-root pair as a private canonical
-      type, then prove length/direction direct indices are injective over the
-      complete admitted cache key.
+- [x] Preserve complete cache identities with direct length/direction
+      coordinates plus generator tags, and prove the bounded coordinate maps
+      are injective over every admitted key.
 - [x] Remove every source-level 8 MiB Rader stack override and the CI-wide
       16 MiB `RUST_MIN_STACK` bypass.
 - [x] Converge Leto, Hephaestus, and Aequitas lock entries on current merged
@@ -21,14 +21,15 @@
       linker coverage unavailable on this Windows host.
 - [ ] Publish, merge, and advance the Atlas Apollo gitlink.
 
-**Current evidence:** exact `origin/main` baseline aborts in
+**Current evidence:** exact `2a22319` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
-`___chkstk_ms` frame. The canonical-generator candidate passes 44/44 focused
-regressions and all 969 default workspace tests, warning-denied all-target,
+`___chkstk_ms` frame. The bounded direct-slot source passes 44/44 focused
+regressions and all 970 default workspace tests, warning-denied all-target,
 all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
 provider audit, RustSec audit, dependency policy, and all 196 applicable SemVer
-checks against `origin/main`. The locked graph contains one Aequitas revision
-and no Rust `ndarray` package.
+checks against `origin/main`. Targeted Miri passes the `f32` Winograd-pair
+differential route that exercises the new bounded unchecked indexing. The
+locked graph contains one Aequitas revision and no Rust `ndarray` package.
 Hosted benchmarks rejected both boxed representations: a slice lost
 compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
@@ -37,10 +38,17 @@ still rejected three cases after direct coordinates reduced the prior 25-case
 hashed-key failure. The first canonical-type head threaded generator state
 through monomorphized convolution and Good-Thomas boundaries; benchmark run
 `29880881359` rejected 23 cases, including unrelated power-of-two and composite
-rows. The current candidate constructs the canonical pair only inside
-cache-miss builders, so cache hits and convolution calls carry only length and
-direction while retaining raw `OnceLock` access. Exact-head hosted gates remain
-pending.
+rows. Restricting that canonical pair to cache misses still changed enough code
+layout for run `29884289655` to reject 41 cases, including unrelated prime,
+composite, and power-of-two rows. The current candidate restores the measured
+three-residual direct-coordinate source shape exactly, then routes only the
+measured profitable `f32` Winograd-pair half-lengths through one compact
+non-const inner kernel. Isolated release measurements on an Intel Core Ultra 9
+285K with Rust 1.97.0 reduced H=15 from a 154 ns median to 106 ns; H=20 was
+slower under the compact kernel and therefore retains the existing
+const-specialized body. Focused differential tests pass across both precisions
+and every generated prime. Exact-head hosted CUDA, review, and benchmark gates
+remain pending.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

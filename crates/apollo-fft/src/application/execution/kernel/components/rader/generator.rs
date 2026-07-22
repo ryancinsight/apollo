@@ -123,54 +123,22 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 static RADER_GENERATOR_CACHE: [AtomicU32; 4096] = [const { AtomicU32::new(0) }; 4096];
 
-/// The single primitive-root pair selected for one Rader transform length.
-///
-/// Construction remains private to [`primitive_root_and_inverse`], so cache
-/// identities may omit the generator: every admitted value for a fixed prime
-/// is the same canonical pair.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct CanonicalRaderGenerator {
-    root: usize,
-    inverse: usize,
-}
-
-impl CanonicalRaderGenerator {
-    #[inline]
-    pub(crate) const fn root(self) -> usize {
-        self.root
-    }
-
-    #[inline]
-    pub(crate) const fn inverse(self) -> usize {
-        self.inverse
-    }
-}
-
-pub(crate) fn primitive_root_and_inverse(p: usize) -> CanonicalRaderGenerator {
+pub(crate) fn primitive_root_and_inverse(p: usize) -> (usize, usize) {
     if p < 4096 {
         let val = RADER_GENERATOR_CACHE[p].load(Ordering::Relaxed);
         if val != 0 {
             let g = (val >> 16) as usize;
             let g_inv = (val & 0xFFFF) as usize;
-            return CanonicalRaderGenerator {
-                root: g,
-                inverse: g_inv,
-            };
+            return (g, g_inv);
         }
         let g = primitive_root(p);
         let g_inv = inverse_mod(g, p);
         let packed = ((g as u32) << 16) | (g_inv as u32);
         RADER_GENERATOR_CACHE[p].store(packed, Ordering::Relaxed);
-        CanonicalRaderGenerator {
-            root: g,
-            inverse: g_inv,
-        }
+        (g, g_inv)
     } else {
         let g = primitive_root(p);
         let g_inv = inverse_mod(g, p);
-        CanonicalRaderGenerator {
-            root: g,
-            inverse: g_inv,
-        }
+        (g, g_inv)
     }
 }

@@ -25,6 +25,7 @@ pub(crate) fn rader_ordered_impl<
 >(
     data: &mut [F::Complex],
     n: usize,
+    generator_inverse: usize,
 ) {
     debug_assert!(data.len() >= n);
     debug_assert!(n > 2);
@@ -36,11 +37,15 @@ pub(crate) fn rader_ordered_impl<
     let sum_x = sum_ordered::<F>(nonzero);
 
     if super::prefers_bluestein_for_rader::<F>(n) {
-        rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n);
+        rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n, generator_inverse);
     } else if super::prefers_half_cyclic_for_rader::<F>(n) {
-        rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(nonzero, n);
+        rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(
+            nonzero,
+            n,
+            generator_inverse,
+        );
     } else {
-        rader_ordered_convolve::<F, INVERSE, super::FullCyclic>(nonzero, n);
+        rader_ordered_convolve::<F, INVERSE, super::FullCyclic>(nonzero, n, generator_inverse);
     }
 
     head[0] = x0 + sum_x;
@@ -55,8 +60,9 @@ fn rader_ordered_convolve<
 >(
     nonzero: &mut [F::Complex],
     n: usize,
+    generator_inverse: usize,
 ) {
-    B::convolve::<F, INVERSE>(nonzero, n);
+    B::convolve::<F, INVERSE>(nonzero, n, generator_inverse);
 }
 
 #[inline]
@@ -98,7 +104,7 @@ mod tests {
 
     /// Look up the primitive root and its modular inverse for a prime N
     /// from the canonical [`super::super::generator::PRIMITIVE_ROOTS`] table.
-    fn rader_generator_pair(n: usize) -> super::super::generator::CanonicalRaderGenerator {
+    fn rader_generator_pair(n: usize) -> (usize, usize) {
         super::super::generator::primitive_root_and_inverse(n)
     }
 
@@ -126,42 +132,42 @@ mod tests {
 
     #[test]
     fn ordered_static_forward_matches_direct_for_n29() {
-        let generator = rader_generator_pair(29);
+        let (g, g_inv) = rader_generator_pair(29);
         let input = signal(29);
         let expected = dft_forward(&input);
-        let mut ordered = to_ordered_input(&input, 29, generator.root());
+        let mut ordered = to_ordered_input(&input, 29, g);
 
-        rader_ordered_impl::<f64, false>(&mut ordered, 29);
+        rader_ordered_impl::<f64, false>(&mut ordered, 29, g_inv);
 
-        let got = to_natural_output(&ordered, 29, generator.inverse());
+        let got = to_natural_output(&ordered, 29, g_inv);
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=29 forward max_err={err:.2e}");
     }
 
     #[test]
     fn ordered_static_inverse_matches_direct_for_n31() {
-        let generator = rader_generator_pair(31);
+        let (g, g_inv) = rader_generator_pair(31);
         let input = signal(31);
         let expected: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 31.0).collect();
-        let mut ordered = to_ordered_input(&input, 31, generator.root());
+        let mut ordered = to_ordered_input(&input, 31, g);
 
-        rader_ordered_impl::<f64, true>(&mut ordered, 31);
+        rader_ordered_impl::<f64, true>(&mut ordered, 31, g_inv);
 
-        let got = to_natural_output(&ordered, 31, generator.inverse());
+        let got = to_natural_output(&ordered, 31, g_inv);
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=31 inverse max_err={err:.2e}");
     }
 
     #[test]
     fn ordered_runtime_forward_matches_direct_for_n37() {
-        let generator = rader_generator_pair(37);
+        let (g, g_inv) = rader_generator_pair(37);
         let input = signal(37);
         let expected = dft_forward(&input);
-        let mut ordered = to_ordered_input(&input, 37, generator.root());
+        let mut ordered = to_ordered_input(&input, 37, g);
 
-        rader_ordered_impl::<f64, false>(&mut ordered, 37);
+        rader_ordered_impl::<f64, false>(&mut ordered, 37, g_inv);
 
-        let got = to_natural_output(&ordered, 37, generator.inverse());
+        let got = to_natural_output(&ordered, 37, g_inv);
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=37 forward max_err={err:.2e}");
     }

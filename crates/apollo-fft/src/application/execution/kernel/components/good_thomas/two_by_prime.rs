@@ -24,7 +24,10 @@ apollo_fft_macros::generate_two_by_prime_natural_dispatch! {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TwoByPrimeConfig {
-    OrderedRader,
+    OrderedRader {
+        generator: usize,
+        generator_inverse: usize,
+    },
     NaturalPrime,
 }
 
@@ -38,8 +41,11 @@ pub(super) fn try_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
     };
 
     match config {
-        TwoByPrimeConfig::OrderedRader => {
-            two_by_prime_ordered_rader::<F, INVERSE>(data, n1);
+        TwoByPrimeConfig::OrderedRader {
+            generator,
+            generator_inverse,
+        } => {
+            two_by_prime_ordered_rader::<F, INVERSE>(data, n1, generator, generator_inverse);
         }
         TwoByPrimeConfig::NaturalPrime => {
             two_by_prime_natural_prime::<F, INVERSE>(data, n1);
@@ -57,8 +63,11 @@ fn two_by_prime_n1_config(n1: usize, n2: usize) -> Option<TwoByPrimeConfig> {
         return Some(TwoByPrimeConfig::NaturalPrime);
     }
 
-    if super::supports_ordered_rader_n1(n1) {
-        return Some(TwoByPrimeConfig::OrderedRader);
+    if let Some((generator, generator_inverse)) = super::ordered_rader_n1_config(n1) {
+        return Some(TwoByPrimeConfig::OrderedRader {
+            generator,
+            generator_inverse,
+        });
     }
 
     Some(TwoByPrimeConfig::NaturalPrime)
@@ -75,13 +84,17 @@ fn two_by_prime_ordered_rader<
 >(
     data: &mut [F::Complex],
     prime: usize,
+    generator: usize,
+    generator_inverse: usize,
 ) {
     let n = prime * 2;
     debug_assert!(data.len() >= n);
 
     let twiddles = F::cached_four_step_twiddles::<INVERSE>(n, prime, 2);
     let input_order =
-        crate::application::execution::kernel::components::rader::cached_generator_order(prime);
+        crate::application::execution::kernel::components::rader::cached_generator_order(
+            prime, generator,
+        );
 
     F::with_pfa_scratch(n, |scratch| {
         let (even, odd) = scratch[..n].split_at_mut(prime);
@@ -90,11 +103,11 @@ fn two_by_prime_ordered_rader<
         crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
             F,
             INVERSE,
-        >(even, prime);
+        >(even, prime, generator_inverse);
         crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
             F,
             INVERSE,
-        >(odd, prime);
+        >(odd, prime, generator_inverse);
 
         combine_two_prime_ordered::<F>(
             data,

@@ -1,7 +1,18 @@
-mod private {
-    pub trait Sealed {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
+pub(crate) mod private {
+    pub trait Sealed {
+        const COMPACT_PAIR_MAX_HALF_LENGTH: usize;
+    }
+
+    impl Sealed for f32 {
+        // Local release measurements show the compact kernel wins through
+        // H=15; H=20 regresses, so larger transforms retain const
+        // specialization.
+        const COMPACT_PAIR_MAX_HALF_LENGTH: usize = 15;
+    }
+
+    impl Sealed for f64 {
+        const COMPACT_PAIR_MAX_HALF_LENGTH: usize = 0;
+    }
 }
 
 /// Scalar operations required by generic Winograd DFT helpers.

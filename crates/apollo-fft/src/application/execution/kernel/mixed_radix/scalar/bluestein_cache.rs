@@ -2,27 +2,27 @@
 
 use super::trait_def::{BluesteinEntry, BluesteinKey, BluesteinStore};
 use crate::application::execution::kernel::mixed_radix::caches::direct_mapped::{
-    bounded_directional_index, DIRECTIONAL_FLAT_CACHE_LIMIT,
+    bounded_directional_coordinates, DirectMappedSlot, DIRECTIONAL_FLAT_CACHE_LIMIT,
 };
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::LazyLock;
 
 const SPARSE_INITIAL_CAPACITY: usize = 8;
 
 type Cache<C> = RwLock<FxHashMap<BluesteinKey, BluesteinEntry<C>>>;
-type FlatCache<C> = [OnceLock<BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
+type FlatCache<C> = [DirectMappedSlot<usize, BluesteinEntry<C>>; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 static REDUCED_CACHE: LazyLock<Cache<Complex32>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static PRECISE_CACHE: LazyLock<Cache<Complex64>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 static REDUCED_FLAT: FlatCache<Complex32> =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 static PRECISE_FLAT: FlatCache<Complex64> =
-    [const { OnceLock::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
+    [const { DirectMappedSlot::new() }; DIRECTIONAL_FLAT_CACHE_LIMIT];
 
 thread_local! {
     static REDUCED_SPARSE: RefCell<FxHashMap<BluesteinKey, BluesteinEntry<Complex32>>> =
@@ -105,11 +105,13 @@ impl CacheSpec for f64 {
 
 #[inline]
 fn get<T: CacheSpec>(key: BluesteinKey) -> Option<BluesteinEntry<T::Complex>> {
-    let (length, inverse) = key;
+    let (length, inverse, generator_inverse) = key;
     let direction = usize::from(inverse);
-    if let Some(index) = bounded_directional_index(length, direction) {
-        if let Some(value) = T::flat()[index].get() {
-            return Some(Arc::clone(value));
+    if let Some((index, tag)) =
+        bounded_directional_coordinates(length, direction, generator_inverse)
+    {
+        if let Some(value) = T::flat()[index].get(tag) {
+            return Some(value);
         }
     }
     let result = T::sparse_get(key);
@@ -122,10 +124,15 @@ fn get<T: CacheSpec>(key: BluesteinKey) -> Option<BluesteinEntry<T::Complex>> {
 
 #[inline]
 fn insert<T: CacheSpec>(key: BluesteinKey, value: BluesteinEntry<T::Complex>) {
-    let (length, inverse) = key;
+    let (length, inverse, generator_inverse) = key;
     let direction = usize::from(inverse);
-    if let Some(index) = bounded_directional_index(length, direction) {
-        drop(T::flat()[index].set(value));
+    if let Some((index, tag)) =
+        bounded_directional_coordinates(length, direction, generator_inverse)
+    {
+        let Err(value) = T::flat()[index].insert(tag, value) else {
+            return;
+        };
+        T::sparse_insert(key, value);
         return;
     }
     T::sparse_insert(key, value);
@@ -176,9 +183,9 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn flat_cache_distinguishes_direction() {
-        let first_key = (4000, false);
-        let second_key = (4000, true);
+    fn flat_cache_distinguishes_generator_inverse() {
+        let first_key = (4000, false, 1);
+        let second_key = (4000, false, 2);
         let first = Arc::<[Complex64]>::from([Complex64::new(1.0, 2.0)]);
         let second = Arc::<[Complex64]>::from([Complex64::new(3.0, 4.0)]);
 

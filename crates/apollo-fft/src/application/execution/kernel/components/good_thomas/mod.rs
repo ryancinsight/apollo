@@ -54,8 +54,8 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
         return;
     }
 
-    if supports_ordered_rader_n1(n1) {
-        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2);
+    if let Some((generator, generator_inverse)) = ordered_rader_n1_config(n1) {
+        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator, generator_inverse);
         return;
     }
 
@@ -216,6 +216,8 @@ fn pfa_fft_ordered_rader_n1<
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
+    generator: usize,
+    generator_inverse: usize,
 ) {
     let n = n1 * n2;
     debug_assert!(data.len() >= n);
@@ -223,7 +225,9 @@ fn pfa_fft_ordered_rader_n1<
     let (input_perm, output_perm) =
         crate::application::execution::kernel::mixed_radix::caches::cached_pfa_perm(n1, n2);
     let input_order =
-        crate::application::execution::kernel::components::rader::cached_generator_order(n1);
+        crate::application::execution::kernel::components::rader::cached_generator_order(
+            n1, generator,
+        );
 
     F::with_pfa_scratch(n + n1, |scratch| {
         let (matrix, col_buf) = scratch.split_at_mut(n);
@@ -244,7 +248,7 @@ fn pfa_fft_ordered_rader_n1<
             crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
                 F,
                 INVERSE,
-            >(col_buf, n1);
+            >(col_buf, n1, generator_inverse);
 
             // Scatter column directly to final positions in `data`
             unsafe {
@@ -275,14 +279,14 @@ fn pfa_fft_ordered_rader_n1<
 // the current stable toolchain, so the length is hardcoded here.
 pub(super) const ORDERED_RADER_SKIP_PRIMES: [usize; 2] = [2, 3];
 
-fn supports_ordered_rader_n1(n1: usize) -> bool {
+fn ordered_rader_n1_config(n1: usize) -> Option<(usize, usize)> {
     if ORDERED_RADER_SKIP_PRIMES.contains(&n1) {
-        return false;
+        return None;
     }
     if !crate::application::execution::kernel::radix_shape::is_prime(n1) {
-        return false;
+        return None;
     }
-    true
+    Some(crate::application::execution::kernel::components::rader::generator::primitive_root_and_inverse(n1))
 }
 
 #[cfg(test)]
