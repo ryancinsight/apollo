@@ -6,17 +6,26 @@
   the f64 Rader and mixed-radix production paths measured by Apollo's native
   benchmark oracle, and synchronized verification/release records. Benchmark
   workloads, comparator thresholds, and unrelated provider APIs are non-goals.
-- Acceptance: targeted profiling identifies the production bottleneck; a
-  value-semantic correction preserves every affected transform contract; the
-  eight regressions recorded by hosted run `29938829409` are absent from the
-  complete replicated counterbalanced workflow without changing its
-  instrument; warning-denied focused gates and full pull-request CI pass.
+- Acceptance: controlled profiling and code-generation evidence either
+  identifies a production bottleneck or falsifies the regression against the
+  exact pre-migration baseline. Any measured correction preserves every
+  affected transform contract. The eight regressions recorded by hosted run
+  `29938829409` are absent from the complete replicated counterbalanced
+  workflow without changing its instrument; warning-denied focused gates and
+  full pull-request CI pass.
 - Current evidence: the assertion migration landed directly on main as
   `9f3b9f0`. Its equivalent PR closure passed Rust and Python CI, but hosted
   benchmark run `29938829409` measured five f64 Rader and three mixed-radix
   slowdowns in all four comparisons. The largest changed length 49 from
   188-190 ns to 242-243 ns. Provider rollback is invalid: old Aequitas requires
-  Eunomia `^0.6`, while current Leto requires Hermes `^0.4.1`.
+  Eunomia `^0.6`, while current Leto requires Hermes `^0.4.1`. Exact Rust 1.97.0
+  same-CPU, high-priority A/B measurements against `05170b8` falsify the three
+  mixed-radix regressions: current/baseline medians are 104/104 ns at N=45,
+  119/118 ns at N=49, and 108/109 ns at N=50. The corresponding `dft100<f64>`
+  body is byte-identical; f64 Rader runtime, closure, full-convolution, and
+  negacyclic-convolution bodies have identical instruction counts and mnemonic
+  sequences. No production change is justified without a repeatable
+  production delta. A pinned Rader A/B and exact-main hosted rerun remain.
 
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 
