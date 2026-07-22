@@ -246,22 +246,14 @@ fn reduced_short_odd_prime_f32_inverse_route_matches_direct() {
 /// Direct DFT reference is O(N²) and too expensive, so we verify via roundtrip:
 /// forward ∘ inverse (unnormalized) ∘ (1/N) = identity.
 ///
-/// Spawns on a dedicated thread with 8MB stack because the Rader runtime path
-/// allocates two stack arrays of size (N-1) × Complex64 ≈ 2 × 160 KB.
 #[test]
 fn rader_fft_n10007_roundtrip() {
-    let handle = std::thread::Builder::new()
-        .stack_size(8 * 1024 * 1024)
-        .spawn(|| {
-            let n = 10007usize;
-            let input = signal(n);
-            let mut buf = input.clone();
-            rader::rader_fft::<f64, false>(&mut buf);
-            rader::rader_fft::<f64, true>(&mut buf);
-            let recovered: Vec<_> = buf.iter().map(|x| *x / n as f64).collect();
-            let err = max_err(&recovered, &input);
-            assert!(err < 1e-8, "Rader N=10007 roundtrip max_err={err:.2e}");
-        })
-        .expect("failed to spawn test thread");
-    handle.join().expect("test thread panicked");
+    let n = 10007usize;
+    let input = signal(n);
+    let mut buf = input.clone();
+    rader::rader_fft::<f64, false>(&mut buf);
+    rader::rader_fft::<f64, true>(&mut buf);
+    let recovered: Vec<_> = buf.iter().map(|x| *x / n as f64).collect();
+    let err = max_err(&recovered, &input);
+    assert!(err < 1e-8, "Rader N=10007 roundtrip max_err={err:.2e}");
 }

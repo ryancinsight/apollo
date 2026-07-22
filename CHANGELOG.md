@@ -28,6 +28,26 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Stores the large bounded Rader and Bluestein flat caches in
+  process-wide, `const`-initialized `OnceLock` slot arrays. Direct coordinates
+  preserve O(1) lookup, while stored generator tags validate the complete
+  semantic key before a cached value is reused.
+  First access no longer constructs a 262,216-byte
+  negacyclic-cache frame on an active Rader/Good-Thomas execution stack, and
+  workers no longer duplicate these fixed tables. Rader tests require neither
+  test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.
+
+- [patch] Keeps direct-cache hits inline while isolating write-once slot
+  initialization and collision recovery in one cold routine. The retained
+  `OnceLock::get_or_init` path preserves rejected values for the sparse cache
+  and reduces the affected release closure by 402 LLVM IR lines and six
+  emitted copies without changing cache keys or public API.
+
+- [patch] Retires Apollo's last historical `ndarray-compat` documentation and
+  aligns the Leto/Hephaestus lock closure so all units resolve through one
+  Aequitas source. Apollo's native `apollo-leto-interop` remains the sole Rust
+  host-array boundary.
+
 - [patch] Runs the hosted FFT regression experiment only for changes to its
   measured local dependency closure, native benchmark instrument, Cargo
   resolution, toolchain configuration, or dedicated workflow. Release-only,

@@ -1,5 +1,94 @@
 # Apollo Gap Audit
 
+## FFT bounded-cache stack initialization (2026-07-21)
+
+- Finding: the full locked gate aborted seven Rader/Good-Thomas tests on
+  Windows. The exact `2a22319` revision and original lock reproduce the fault,
+  excluding the Leto refresh as its cause. GDB stops in `___chkstk_ms` while
+  initializing the 8,192-entry precise negacyclic TLS table: the generated
+  frame is 262,216 bytes on an already-active FFT execution stack.
+- Resolution: retain each affected Rader/Bluestein flat cache's fixed capacity
+  and O(1) index contract, but store its entries in process-wide,
+  `const`-initialized keyed `OnceLock` slot arrays. First access initializes one
+  slot without constructing a full table on an active execution stack, and
+  worker count no longer multiplies these fixed tables. Remove the four 8 MiB
+  test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
+  masked the production stack requirement. Each direct coordinate preserves
+  the complete semantic key in its stored tag, including the primitive-root
+  component where applicable, and validates that tag before reuse. This keeps
+  raw O(1) slot selection without hashing or an unchecked cache alias.
+- Rejected designs: a boxed slice removed the stack frame but erased the
+  compile-time length from hot indexed lookups, producing systematic
+  regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
+  case. A boxed fixed-size array restored most performance but retained
+  measurable pointer overhead, including 188 ns versus 164-165 ns for Rader
+  f32 N=29. A `const`-initialized TLS array retained direct lookup but Linux
+  still constructed enough inlined initialization state to overflow nine
+  default test stacks. Hashed complete-tuple slots preserved correctness but
+  benchmark run `29873660989` rejected them in 25 replicated cases. Direct
+  coordinates removed hashing but benchmark run `29877345159` still rejected
+  Rader f64 N=29 and Winograd-pair f32 N=31/N=41. This falsified per-hit
+  generator validation even after the residual set fell from 25 cases to
+  three. Threading the canonical-generator type through the convolution and
+  Good-Thomas call graph then broadened the failure to 23 cases in run
+  `29880881359`, including power-of-two and composite rows that do not consume
+  Rader cache keys. Confining the canonical type to cache-miss builders still
+  changed enough layout for run `29884289655` to reject 41 cases across prime,
+  composite, and power-of-two families. A compact Winograd inner-function
+  candidate passed hosted CI but benchmark run `29889965363` rejected 25 cases
+  across all three workloads; the cross-family result falsifies that isolated
+  kernel measurement, and the candidate is removed. The delivery candidate
+  instead retains validated direct-slot hits inline and isolates only
+  write-once initialization and collision recovery in a cold
+  `OnceLock::get_or_init` routine. The initializing caller consumes its pending
+  value; a waiter retains its pending value and either drops it for an equal key
+  or returns it unchanged for a distinct key. This reduces the affected
+  release closure from 439,191 to 438,789 LLVM IR lines and from 6,469 to 6,463
+  emitted copies. A full local kernel-strategy screen records the prior three
+  residual rows at 87/150/149 ns versus 89/155/149 ns for the unchanged source.
+  The unchanged hosted counterbalanced workflow owns merge acceptance.
+- Evidence limit: debugger stack-frame evidence identifies the failure
+  mechanism; 44 focused default-stack regressions cover directional-index
+  injectivity, the canonical primitive-root/spectrum oracle,
+  direction-separated Bluestein entries, complete generator-tag validation,
+  and the original Rader value oracles.
+  The complete 970-test default workspace provides the broad regression
+  baseline. The exact candidate passes all 972 default workspace tests,
+  warning-denied all-target/all-feature Clippy, no-default compilation,
+  doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
+  policy, and all 196 applicable SemVer checks against `origin/main`; all three
+  benchmark executables complete locally. A deterministic concurrent regression
+  covers distinct-key initialization races and exact rejected-value recovery in
+  the retained safe-code slot abstraction. Local all-feature test linking cannot
+  supply CUDA coverage because
+  this Windows host has no CUDA
+  linker library; the hosted pull-request matrix owns that evidence. This
+  change makes no throughput claim. A two-MiB-stack regression exercises fresh
+  Bluestein and half-cyclic cache initialization at the standard Rust
+  test-thread budget, detecting renewed table-sized stack construction without
+  increasing any production or test-runner stack.
+
+## Leto public compatibility retirement (2026-07-21)
+
+- Finding: Apollo's source and manifests already consumed native Leto arrays,
+  but its lock selected provider commit `bdb5fce4` and two historical PM entries
+  still described `ndarray-compat` as current. Refreshing Leto alone also exposed
+  a second Aequitas source because locked Hephaestus `8b27c9d` retained an older
+  units revision.
+- Resolution: refresh the complete Cargo-selected provider closure to Leto
+  default head `b95f1aa` (which contains compatibility-retirement merge
+  `446d248`) and Hephaestus default head `804d751`. The latter uses
+  the same Aequitas `be3a1ac` revision and removes the duplicate units crate.
+  Correct the historical PM entries without adding a consumer adapter or
+  restoring a Rust `ndarray` edge.
+- Contract: `apollo-leto-interop` remains Apollo's single host-array boundary;
+  contiguous views borrow and non-contiguous views materialize logical order
+  once. Third-party language conversion remains at the Python ownership edge,
+  and all Aequitas quantities resolve from one source revision.
+- Evidence limit: locked compilation, value-semantic Nextest, provider audit,
+  and dependency/source scans verify integration and retained behavior. They do
+  not establish a runtime performance change.
+
 ## Native benchmark regression evidence (2026-07-20)
 
 - Finding: the benchmark CI ran one all-feature workspace benchmark, copied

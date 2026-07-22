@@ -77,19 +77,7 @@ jobs:
       # cannot link — apollo-python is exercised by the separate "python
       # bindings" job instead (maturin develop + pytest).
       #
-      # RUST_MIN_STACK: apollo-fft's forced-Bluestein const-generic dispatch
-      # (crates/apollo-fft/.../rader/bluestein.rs, exercised by
-      # bluestein_matches_direct_for_n17/bluestein_roundtrip_n17) is a
-      # deep, heap-scratch-backed (thread_local, not stack arrays — see
-      # mixed_radix/caches/scratch.rs) but monomorphization-heavy call
-      # chain. It passes deterministically and computes the correct value
-      # (err < 1e-8) locally on Windows at the libtest default 2MiB test-
-      # thread stack; Linux's larger per-frame ABI cost in unoptimized
-      # debug builds pushes the identical, bounded call chain past that
-      # default. Raise the budget rather than alter the algorithm.
       - name: Tests
-        env:
-          RUST_MIN_STACK: "16777216"
         run: cargo nextest run --locked --workspace --all-features --exclude apollo-python --no-fail-fast
       - name: Doctests
         run: cargo test --locked --doc --workspace --exclude apollo-python

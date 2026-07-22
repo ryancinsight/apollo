@@ -1,5 +1,60 @@
 # Apollo Backlog
 
+## D18-close-leto-boundary-and-fft-stack [patch] — in progress
+
+- Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
+  removal of the retired `ndarray-compat` boundary, and Apollo FFT bounded
+  flat-cache initialization. FFT algorithms, cache capacity, and
+  benchmark workloads are non-goals.
+- Acceptance: one Aequitas revision and no Rust `ndarray` package resolve;
+  Leto and Hephaestus select their merged default heads; every previously
+  aborting Rader/Good-Thomas regression passes on Nextest's standard stack;
+  no source-level or workflow-level test stack override remains; full locked
+  gates pass.
+- Current evidence: the unchanged Apollo `2a22319` source and lock reproduce a
+  262,216-byte TLS initialization frame and deterministic Windows stack
+  overflow under GDB. The locked graph resolves one Aequitas revision and no
+  Rust `ndarray` package; 40 focused default-stack regressions and all 965
+  default workspace tests pass. Warning-denied all-feature Clippy, doctests,
+  rustdoc, provider audit, and supply-chain gates pass. Hosted all-feature
+  runtime and Python binding gates passed without the stack override for the
+  boxed candidates, but hosted benchmarks falsified both: a slice erased
+  compile-time bounds and a fixed-size box retained measurable pointer
+  overhead. A `const` TLS candidate retained the original hot representation
+  but still overflowed nine Linux test stacks in hosted run `29870196908`.
+  Process-wide keyed `OnceLock` slots now remove runtime array construction and
+  per-worker table duplication. Review then exposed that the original flat
+  indices admitted an unchecked generator component. Hosted CI passed at
+  `4e063f1`, but benchmark run `29873660989` rejected hashed tuple keys in 25
+  replicated cases. Direct length/direction indices reduced that set to three
+  in run `29877345159`, but per-hit generator tags still regressed Rader f64
+  N=29 and shifted two independent Winograd-pair cases. The first correction
+  represented the one production primitive-root pair as a private canonical
+  type but threaded it through monomorphized convolution and Good-Thomas call
+  boundaries. Benchmark run `29880881359` rejected 23 cases, including
+  unrelated power-of-two and composite rows, falsifying that expanded hot ABI.
+  Restricting the canonical pair to cache misses still changed enough code
+  layout for run `29884289655` to reject 41 cases, including unrelated prime,
+  composite, and power-of-two rows, so it is not the delivery candidate. The
+  compact Winograd inner-function candidate then passed hosted CI but benchmark
+  run `29889965363` rejected 25 cases across all three benchmark families,
+  falsifying the isolated small-prime result as a crate-wide code-layout
+  regression. That kernel is removed. The current candidate retains the
+  collision-safe direct-coordinate representation, keeps validated hits
+  inline, and moves only write-once initialization and collision recovery into
+  one cold `get_or_init` routine. `cargo llvm-lines` decreases from 439,191 to
+  438,789 lines and from 6,469 to 6,463 copies. The full local kernel-strategy
+  screen records Rader f64 N=29 at 87 ns and Winograd-pair f32 N=31/N=41 at
+  150/149 ns versus the unchanged 89/155/149 ns screen. A concurrent
+  regression proves that racing distinct keys retain exactly one stored value
+  and return the rejected value unchanged. The exact candidate passes all 972
+  default workspace tests, warning-denied all-target/all-feature Clippy,
+  no-default compilation, doctests, warning-denied rustdoc, provider audit,
+  RustSec audit, dependency policy, and all 196 applicable SemVer checks against
+  `origin/main`; all three benchmark executables also complete locally. The
+  pull-request workflow owns CUDA, review, and replicated benchmark acceptance
+  at merge.
+
 ## D17-scope-benchmark-regression-gate [patch] — done
 
 - Owner: Codex `/root`; scope: benchmark workflow triggering, ADR 0036, and
@@ -857,7 +912,7 @@ Remaining replacement work:
 - [x] [patch] Promote Apollo FFT pointwise fallback to the provider-owned Hermes interleaved complex kernel. Hermes commit `55efd380` adds `interleaved_complex_mul_assign<T, A, const CONJ_B: bool>`; Apollo now updates its lockfile to that revision and delegates the non-FMA mixed-radix pointwise path to Hermes while preserving its runtime-gated AVX/FMA specialization. Verification: Hermes workspace tests/examples/clippy/doc; Apollo check, clippy, Rader tests, slice API tests, doc, provider audit, and touched-file rustfmt check. `cargo fmt -p apollo-fft -- --check` remains blocked by pre-existing unrelated formatting drift in Winograd/bridge files.
 - [x] [patch] Move Apollo FFT's runtime-selected pointwise AVX/FMA hot path into Hermes. Hermes commit `b7f1a907` adds `interleaved_complex_mul_assign_runtime<T, const CONJ_B: bool>` with `f32`/`f64` AVX/FMA provider specializations and the prior monomorphized portable fallback. Apollo updates to that revision and removes its local x86 intrinsics and feature detection from the mixed-radix pointwise leaf. Verification: Hermes workspace tests/examples/clippy/doc; Apollo check, clippy, Rader tests, slice API tests, doc, provider audit, and touched-file rustfmt check.
 - [x] [patch] Wire `apollo-fft` pointwise mixed-radix fallback through Hermes `PreferredArch` vectors. The x86 AVX/FMA complex kernel remains runtime-gated for the current hot path; non-FMA and non-x86 execution now uses Hermes monomorphized vector load/store chunks with one shared precise/reduced complex pair formula. Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft --lib rader`; `cargo test -p apollo-fft --test slice_api`; `cargo run -p xtask -- provider-audit`.
-- [x] [minor] Add Apollo Leto provider surface and validation-boundary use. The workspace now declares `leto` with `std` and `ndarray-compat`, `apollo-validation` depends on it, and `xtask provider-audit` reports Leto usage. `ndarray` remains the validation oracle. Verification: focused xtask provider-audit tests and the Apollo validation Leto/ndarray boundary test. Residual: Apollo locks pushed Leto commit `5c1fd250`; the local Leto Apollo slice/stride contract requires a later pushed revision update.
+- [x] [minor] Add Apollo Leto provider surface and validation-boundary use. The initial boundary enabled `std` and `ndarray-compat`; Apollo now consumes native Leto arrays from merged provider commit `446d248` without the retired compatibility feature or a Rust `ndarray` dependency. `xtask provider-audit` reports Leto usage. Verification: locked native Leto interop tests and the provider audit.
 - [x] [minor] Add `apollo-fft` 1D slice-owned real-storage execution. `RealFftData` now owns additive slice methods for forward and inverse 1D allocation boundaries, and the `f64`/`f32`/`f16` implementations route public slice wrappers through one owned vector plus in-place `FftPlan1D` slice execution instead of the previous `Array1` bridge plus result copy. Version bumped to `apollo-fft` `0.13.0`. Verification: fmt, slice API integration tests, check, clippy, doc. SemVer check attempted but blocked because `apollo-fft` is not published in the registry.
 - [x] [patch] Consolidate tiny direct FFT plan dispatch for N=2/3/4 and route runtime/static N=3 plans directly to the canonical `butterflies::dft3_impl` codelet. This removes duplicated runtime match blocks, avoids the generic short-Winograd dispatcher for N=3, preserves zero-sized static plan behavior, and verifies runtime/static f64/f32 N=3 value semantics. Verification: fmt, check, clippy, focused N=3 test, planned tests, full `apollo-fft` library tests, docs, and full canonical quick benchmark refresh. Current quick `benchmark_results.md`: 514 rows regenerated; f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows; N=3 f64 `1.001x`, f32 `0.444x`.
 - [x] [patch] Add Apollo-local provider utilization audit and contract for Moirai/Mnemosyne/Melinoe/Hermes. Delivered `xtask provider-audit`, static crate-level signals for Moirai/Mnemosyne/Melinoe/Hermes/Rayon/WGPU and memory/dispatch patterns, provider contract docs, and artifact sync. Apollo consumes providers from Git, so provider changes must be committed and pushed before Apollo can update revisions.
