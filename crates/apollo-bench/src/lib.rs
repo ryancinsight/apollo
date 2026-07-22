@@ -44,6 +44,6 @@ pub use comparison::{
     CounterbalancedComparisonSummary, CounterbalancedReportSet, IntervalSeparation,
     ReplicatedCounterbalancedBenchmarkRegression, ReplicatedCounterbalancedComparisonSummary,
 };
-pub use config::{BenchmarkConfig, BenchmarkConfigError};
+pub use config::{BenchmarkConfig, BenchmarkConfigError, BenchmarkMode, BenchmarkModeError};
 pub use report::BenchmarkRecord;
 pub use suite::BenchmarkSuite;

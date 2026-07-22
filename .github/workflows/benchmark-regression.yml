@@ -12,6 +12,17 @@ on:
       - crates/apollo-fft-macros/**
       - crates/apollo-leto-interop/**
       - .github/workflows/benchmark-regression.yml
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Git revision used as the performance baseline
+        required: true
+        default: main
+        type: string
+      candidate_ref:
+        description: Git revision compared with the baseline
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,36 +35,35 @@ jobs:
   benchmark-regression:
     name: benchmark regression check
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout baseline
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: apollo-baseline
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
+          path: apollo-measurement
 
       - name: Checkout candidate
         uses: actions/checkout@v6
         with:
-          path: apollo-candidate
+          ref: ${{ github.event_name == 'pull_request' && github.ref || inputs.candidate_ref }}
+          path: apollo-candidate-source
 
-      # The benchmark harness is the measurement instrument. When a pull
-      # request changes apollo-bench itself, compiling each revision against
-      # its own harness changes both the instrument and the code under test.
-      # Hold the candidate instrument constant across both revisions while
-      # leaving the baseline transform implementation unchanged.
+      # Hold the candidate instrument and representative workloads constant
+      # across both revisions while leaving baseline production code unchanged.
       - name: Pin candidate benchmark instrument
         shell: bash
         run: |
           set -euo pipefail
-          git -C apollo-candidate archive HEAD crates/apollo-bench \
-            | tar -x -C apollo-baseline
+          git -C apollo-candidate-source archive HEAD \
+            crates/apollo-bench crates/apollo-fft/benches \
+            | tar -x -C apollo-measurement
           for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
             diff --unified \
-              "apollo-baseline/crates/apollo-fft/benches/$benchmark.rs" \
-              "apollo-candidate/crates/apollo-fft/benches/$benchmark.rs"
+              "apollo-measurement/crates/apollo-fft/benches/$benchmark.rs" \
+              "apollo-candidate-source/crates/apollo-fft/benches/$benchmark.rs"
           done
 
       - uses: dtolnay/rust-toolchain@1.97.0
@@ -63,25 +73,90 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate/Cargo.lock') }}
+          key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate-source/Cargo.lock') }}
+
+      # Both revisions compile at the same absolute path. This removes source
+      # path and code-layout variation from the measurement boundary. Each
+      # executable is preserved before the second revision occupies that path.
+      - name: Compile fixed benchmark executables
+        id: benchmark_artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          compile() {
+            local revision="$1"
+            local destination="benchmark-executables/$revision"
+            local messages="benchmark-executables/$revision.json"
+            mkdir -p "$destination"
+
+            cargo bench \
+              --manifest-path apollo-measurement/Cargo.toml \
+              --locked \
+              -p apollo-fft \
+              --features kernel-strategy-bench \
+              --no-run \
+              --message-format=json \
+              > "$messages"
+
+            for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+              executable="$(
+                jq -r \
+                  --arg benchmark "$benchmark" \
+                  'select(.reason == "compiler-artifact" and .target.name == $benchmark) | .executable // empty' \
+                  "$messages" \
+                  | tail -n 1
+              )"
+              test -n "$executable"
+              install -m 755 "$executable" "$destination/$benchmark"
+            done
+          }
+
+          compile baseline
+          mv apollo-measurement apollo-baseline-source
+          mv apollo-candidate-source apollo-measurement
+          compile candidate
+
+          identical=true
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            sha256sum \
+              "benchmark-executables/baseline/$benchmark" \
+              "benchmark-executables/candidate/$benchmark"
+            if ! cmp --silent \
+              "benchmark-executables/baseline/$benchmark" \
+              "benchmark-executables/candidate/$benchmark"; then
+              identical=false
+            fi
+          done
+          echo "identical=$identical" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke benchmark executables
+        shell: bash
+        env:
+          APOLLO_BENCH_MODE: smoke
+        run: |
+          set -euo pipefail
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            timeout 60s "benchmark-executables/candidate/$benchmark" > /dev/null
+          done
+
+      - name: Accept executable identity proof
+        if: steps.benchmark_artifacts.outputs.identical == 'true'
+        run: >-
+          echo "baseline and candidate benchmark executables are byte-identical;
+          no candidate-caused performance regression exists"
 
       - name: Measure counterbalanced revisions
+        if: steps.benchmark_artifacts.outputs.identical != 'true'
         shell: bash
         run: |
           set -euo pipefail
           measure() {
-            local source_directory="$1"
+            local revision="$1"
             local report_directory="$2"
             mkdir -p "$report_directory"
-            echo "measuring $source_directory -> $report_directory" >&2
+            echo "measuring $revision -> $report_directory" >&2
             for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-              cargo bench \
-                --manifest-path "$source_directory/Cargo.toml" \
-                --locked \
-                -p apollo-fft \
-                --bench "$benchmark" \
-                --features kernel-strategy-bench \
-                --quiet \
+              timeout 300s "benchmark-executables/$revision/$benchmark" \
                 > "$report_directory/$benchmark.csv"
             done
           }
@@ -89,19 +164,20 @@ jobs:
           # ABBA followed by its phase reversal BAAB assigns each revision to
           # period positions with equal sums and equal squared sums. Agreement
           # across both blocks guards against a slowdown confined to one phase.
-          measure apollo-baseline reports/first/baseline-first/baseline
-          measure apollo-candidate reports/first/baseline-first/candidate
-          measure apollo-candidate reports/first/candidate-first/candidate
-          measure apollo-baseline reports/first/candidate-first/baseline
-          measure apollo-candidate reports/second/candidate-first/candidate
-          measure apollo-baseline reports/second/candidate-first/baseline
-          measure apollo-baseline reports/second/baseline-first/baseline
-          measure apollo-candidate reports/second/baseline-first/candidate
+          measure baseline reports/first/baseline-first/baseline
+          measure candidate reports/first/baseline-first/candidate
+          measure candidate reports/first/candidate-first/candidate
+          measure baseline reports/first/candidate-first/baseline
+          measure candidate reports/second/candidate-first/candidate
+          measure baseline reports/second/candidate-first/baseline
+          measure baseline reports/second/baseline-first/baseline
+          measure candidate reports/second/baseline-first/candidate
 
       - name: Compare reports
+        if: steps.benchmark_artifacts.outputs.identical != 'true'
         run: >-
           cargo run
-          --manifest-path apollo-candidate/Cargo.toml
+          --manifest-path apollo-measurement/Cargo.toml
           --locked
           -p apollo-bench
           --bin apollo-bench-compare

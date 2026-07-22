@@ -142,3 +142,53 @@ Exact-head run `29790606838` passed the dedicated workflow's eight
 measurements and replicated comparison in 31 minutes 38 seconds after the path
 split. This validates the benchmark-relevant workflow path; path-selection
 regressions establish release-only exclusion separately.
+
+Hosted PR #64 run `29946182469` supplied a second source-identical
+falsification. The base and merge candidate had identical production source,
+manifest, lock, and toolchain inputs, but compiling them in separate absolute
+checkout paths produced persistent f32 N=1031 automatic and forced-Bluestein
+separations in all four comparisons. The experiment cannot attribute that
+binary-level variation to production code.
+
+The workflow therefore compiles baseline and candidate sequentially at one
+canonical absolute path, copies each resulting executable before the next
+revision occupies that path, and measures those immutable artifacts directly.
+The candidate `apollo-bench` source and benchmark entry points remain pinned
+into the baseline before compilation. SHA-256 identities are emitted as build
+evidence; source-identical revisions can now reuse or reproduce the same
+artifact rather than differing because their checkout paths differ. When all
+three executable pairs are byte-identical, binary identity is conclusive that
+the candidate cannot cause a performance regression, so the empirical
+comparison is inapplicable. Differing executable pairs retain the complete
+replicated measurement and comparison path.
+
+The measurement workload uses geometric representatives for each distinct
+dispatch regime instead of dense linear size sweeps. Every retained case still
+records 100 ordered observations, and the family-wise interval and
+phase-reversed ABBA/BAAB classifier are unchanged. The suite retains both f32
+and f64 strategy comparisons and the f32 N=1031 Bluestein case that exposed
+the false attribution. A 100 ms warm-up plus 400 ms measurement budget yields
+approximately 21 seconds for `half_cyclic_rader`, 10 seconds for
+`prime_compose`, and 11 seconds for `kernel_strategy` before process overhead.
+Each binary has a 300-second hard bound. A full-case smoke mode uses minimum
+timing budgets while retaining 100 samples per case under a 60-second bound.
+These are instrument-design changes; no comparator threshold is widened and no
+production transform path changes. On the reference Windows host the three
+smoke runs complete in 0.75-0.81 seconds each; full measurement runs complete
+in 9.44 seconds, 7.53 seconds, and 20.66 seconds respectively.
+
+Hosted run `29955865616` confirmed that canonical-path compilation produced
+byte-identical SHA-256 values for every base/candidate executable. It then
+falsified empirical comparison of identical binaries by labeling one side
+candidate: `composite_radix_order/r4_2_5_5_f64/200` separated by 1-7 ns in all
+four comparisons. Binary identity is stronger causal evidence than sampled
+timing for this boundary; the identity exit prevents arbitrary labels from
+turning runner noise into a production-regression claim.
+
+Exact-head hosted run `29956621276` validated the final decision path. It
+compiled both revisions at the canonical path, passed all three smoke
+executions, proved all three executable pairs byte-identical, and accepted the
+identity evidence in 4 minutes. Exact-head CI run `29956621235` independently
+passed the Rust workspace and Python binding jobs. This is static causal
+evidence for the unchanged artifacts, not empirical performance evidence; any
+differing executable pair still enters the complete ABBA/BAAB experiment.

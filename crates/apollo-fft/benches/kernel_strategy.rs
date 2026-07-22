@@ -2,9 +2,7 @@
 
 #![allow(missing_docs)]
 
-#[cfg(feature = "kernel-strategy-bench")]
-use apollo_bench::BenchmarkConfig;
-use apollo_bench::{BenchmarkCase, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 use apollo_fft::application::execution::kernel::{direct, fft_forward};
@@ -13,8 +11,6 @@ use eunomia::Complex32;
 use eunomia::{Complex, Complex64};
 use half::f16;
 use std::hint::black_box;
-#[cfg(feature = "kernel-strategy-bench")]
-use std::time::Duration;
 
 fn signal(len: usize) -> Vec<Complex64> {
     (0..len)
@@ -46,7 +42,8 @@ fn signal32(len: usize) -> Vec<Complex32> {
 }
 
 fn bench_fft_kernels(suite: &mut BenchmarkSuite) {
-    for len in [16_usize, 32, 64, 128, 256] {
+    // Geometric representatives retain direct, selector, and cache-scale regimes.
+    for len in [16_usize, 64, 256] {
         let input = signal(len);
         if len <= 128 {
             suite.run(
@@ -68,7 +65,7 @@ fn bench_fft_kernels(suite: &mut BenchmarkSuite) {
         );
     }
 
-    for len in [31_usize, 63, 127] {
+    for len in [31_usize, 127] {
         let input = signal(len);
         suite.run(
             BenchmarkCase::new("fft_kernel_strategy", "generic_prime_inplace", len),
@@ -95,7 +92,7 @@ fn bench_fft_kernels(suite: &mut BenchmarkSuite) {
 
 #[cfg(feature = "kernel-strategy-bench")]
 fn bench_prime_strategy(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
-    for len in [19_usize, 29, 31, 37, 41, 43, 47, 53] {
+    for len in [19_usize, 31, 53] {
         let input64 = signal(len);
         let mut rader64 = input64.clone();
         suite.run_with_config(
@@ -158,17 +155,15 @@ fn bench_prime_strategy(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
     }
 }
 
-fn main() {
-    let mut suite = BenchmarkSuite::default();
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    let mode = BenchmarkMode::from_environment()?;
+    let config = mode.apply(BenchmarkConfig::regression());
+    let mut suite = BenchmarkSuite::new(config);
     bench_fft_kernels(&mut suite);
     #[cfg(feature = "kernel-strategy-bench")]
     {
-        let config = BenchmarkConfig::try_with_budgets(
-            Duration::from_millis(100),
-            Duration::from_millis(400),
-        )
-        .expect("invariant: literal benchmark budgets are non-zero");
         bench_prime_strategy(&mut suite, config);
     }
     suite.emit();
+    Ok(())
 }

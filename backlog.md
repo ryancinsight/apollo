@@ -1,5 +1,54 @@
 # Apollo Backlog
 
+## D19-close-eunomia-migration-regressions [minor] [arch] — done
+
+- Owner: Codex `/root/athena_backend_audit`; scope: Apollo's native benchmark
+  build and execution instrument, representative FFT workload regimes, and
+  synchronized verification records. Comparator thresholds, transform
+  production code, and unrelated provider APIs are non-goals.
+- Acceptance: both revisions compile sequentially at one canonical absolute
+  path against the candidate instrument; immutable executables run the complete
+  phase-reversed ABBA/BAAB schedule. Each executable retains 100 ordered samples,
+  geometric representative regimes, both scalar precisions where applicable,
+  and f32 N=1031 Bluestein coverage. Smoke execution finishes within 60 seconds,
+  every measurement execution has a 300-second bound, and exact-head hosted CI
+  plus replicated comparison pass.
+- Current evidence: the assertion migration landed directly on main as
+  `9f3b9f0`. Its equivalent PR closure passed Rust and Python CI, but hosted
+  benchmark run `29938829409` measured five f64 Rader and three mixed-radix
+  slowdowns in all four comparisons. The largest changed length 49 from
+  188-190 ns to 242-243 ns. Provider rollback is invalid: old Aequitas requires
+  Eunomia `^0.6`, while current Leto requires Hermes `^0.4.1`. Exact Rust 1.97.0
+  same-CPU, high-priority A/B measurements against `05170b8` falsify all eight
+  regressions. Current/baseline medians are 104/104 ns at N=45, 118/118 ns at
+  N=49, and 108/108 ns at N=50. The five Rader pairs are 676/684 ns at automatic
+  N=101, 2498/2497 ns at half-cyclic N=257, 2498/2503 ns at automatic N=257,
+  2114/2137 ns at half-cyclic N=271, and 2367/2370 ns at automatic N=337. The
+  corresponding `dft100<f64>` body is byte-identical; f64 Rader runtime,
+  closure, full-convolution, and negacyclic-convolution bodies have identical
+  instruction counts and mnemonic sequences. Hosted PR #64 run `29946182469`
+  then compared source-identical base and merge-candidate production trees yet
+  reported f32 N=1031 automatic and forced-Bluestein separations in all four
+  orderings. Its three binaries ran eight times for 31 minutes 38 seconds. This
+  falsifies attribution by the two-checkout build instrument, not the unchanged
+  transform. The corrective design compiles both revisions at the same path,
+  preserves the resulting executables, and reduces dense size sweeps to
+  geometric dispatch representatives under explicit runtime bounds. Local
+  release smoke runs complete in 0.75-0.81 seconds per binary; full executions
+  complete in 9.44, 7.53, and 20.66 seconds. The affected 32-case benchmark
+  runtime suite, 400-case FFT suite, warning-denied Clippy, doctests, Rustdoc,
+  and all 196 applicable SemVer checks pass. Exact-head hosted execution remains
+  the final acceptance oracle. Hosted run `29955865616` proved all three
+  baseline/candidate executables byte-identical, then produced a 1-7 ns
+  four-order separation for one arbitrarily candidate-labeled composite case.
+  The oracle now accepts exact executable identity as conclusive causal evidence
+  and retains replicated measurement whenever any executable differs.
+  Exact-head benchmark run `29956621276` then compiled both revisions at the
+  canonical path, passed all three bounded smoke executions, proved all three
+  executable pairs byte-identical, and accepted that identity in 4 minutes.
+  Exact-head CI run `29956621235` passed the Rust workspace and Python binding
+  jobs. No transform production code changed.
+
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 
 - Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
