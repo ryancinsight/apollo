@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## D19-close-eunomia-migration-regressions [patch]
+
+- [x] Preserve failed hosted run `29938829409` and close superseded PR #63.
+- [x] Prove the prior provider graph cannot satisfy Eunomia 0.7 and current
+      first-party dependency constraints independently.
+- [ ] Profile the exact f64 Rader and mixed-radix production paths against
+      `9f3b9f0`; implement only the measured fix.
+- [ ] Pass focused value-semantic, lint, and targeted benchmark gates.
+- [ ] Pass complete hosted CI and replicated counterbalanced benchmark gates,
+      then merge and remove the fix-forward lane.
+
 ## D18-close-leto-boundary-and-fft-stack [patch]
 
 - [x] Reproduce the FFT abort against the exact original Apollo revision and

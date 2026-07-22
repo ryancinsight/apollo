@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## D19-close-eunomia-migration-regressions [patch] — in progress
+
+- Owner: Codex `/root/athena_backend_audit`; scope: exact `9f3b9f0` main,
+  the f64 Rader and mixed-radix production paths measured by Apollo's native
+  benchmark oracle, and synchronized verification/release records. Benchmark
+  workloads, comparator thresholds, and unrelated provider APIs are non-goals.
+- Acceptance: targeted profiling identifies the production bottleneck; a
+  value-semantic correction preserves every affected transform contract; the
+  eight regressions recorded by hosted run `29938829409` are absent from the
+  complete replicated counterbalanced workflow without changing its
+  instrument; warning-denied focused gates and full pull-request CI pass.
+- Current evidence: the assertion migration landed directly on main as
+  `9f3b9f0`. Its equivalent PR closure passed Rust and Python CI, but hosted
+  benchmark run `29938829409` measured five f64 Rader and three mixed-radix
+  slowdowns in all four comparisons. The largest changed length 49 from
+  188-190 ns to 242-243 ns. Provider rollback is invalid: old Aequitas requires
+  Eunomia `^0.6`, while current Leto requires Hermes `^0.4.1`.
+
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 
 - Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
