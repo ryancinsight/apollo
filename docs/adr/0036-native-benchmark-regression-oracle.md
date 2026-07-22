@@ -156,7 +156,11 @@ revision occupies that path, and measures those immutable artifacts directly.
 The candidate `apollo-bench` source and benchmark entry points remain pinned
 into the baseline before compilation. SHA-256 identities are emitted as build
 evidence; source-identical revisions can now reuse or reproduce the same
-artifact rather than differing because their checkout paths differ.
+artifact rather than differing because their checkout paths differ. When all
+three executable pairs are byte-identical, binary identity is conclusive that
+the candidate cannot cause a performance regression, so the empirical
+comparison is inapplicable. Differing executable pairs retain the complete
+replicated measurement and comparison path.
 
 The measurement workload uses geometric representatives for each distinct
 dispatch regime instead of dense linear size sweeps. Every retained case still
@@ -172,3 +176,11 @@ These are instrument-design changes; no comparator threshold is widened and no
 production transform path changes. On the reference Windows host the three
 smoke runs complete in 0.75-0.81 seconds each; full measurement runs complete
 in 9.44 seconds, 7.53 seconds, and 20.66 seconds respectively.
+
+Hosted run `29955865616` confirmed that canonical-path compilation produced
+byte-identical SHA-256 values for every base/candidate executable. It then
+falsified empirical comparison of identical binaries by labeling one side
+candidate: `composite_radix_order/r4_2_5_5_f64/200` separated by 1-7 ns in all
+four comparisons. Binary identity is stronger causal evidence than sampled
+timing for this boundary; the identity exit prevents arbitrary labels from
+turning runner noise into a production-regression claim.

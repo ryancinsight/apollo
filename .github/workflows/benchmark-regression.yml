@@ -79,6 +79,7 @@ jobs:
       # path and code-layout variation from the measurement boundary. Each
       # executable is preserved before the second revision occupies that path.
       - name: Compile fixed benchmark executables
+        id: benchmark_artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -115,11 +116,18 @@ jobs:
           mv apollo-candidate-source apollo-measurement
           compile candidate
 
+          identical=true
           for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
             sha256sum \
               "benchmark-executables/baseline/$benchmark" \
               "benchmark-executables/candidate/$benchmark"
+            if ! cmp --silent \
+              "benchmark-executables/baseline/$benchmark" \
+              "benchmark-executables/candidate/$benchmark"; then
+              identical=false
+            fi
           done
+          echo "identical=$identical" >> "$GITHUB_OUTPUT"
 
       - name: Smoke benchmark executables
         shell: bash
@@ -131,7 +139,14 @@ jobs:
             timeout 60s "benchmark-executables/candidate/$benchmark" > /dev/null
           done
 
+      - name: Accept executable identity proof
+        if: steps.benchmark_artifacts.outputs.identical == 'true'
+        run: >-
+          echo "baseline and candidate benchmark executables are byte-identical;
+          no candidate-caused performance regression exists"
+
       - name: Measure counterbalanced revisions
+        if: steps.benchmark_artifacts.outputs.identical != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -159,6 +174,7 @@ jobs:
           measure candidate reports/second/baseline-first/candidate
 
       - name: Compare reports
+        if: steps.benchmark_artifacts.outputs.identical != 'true'
         run: >-
           cargo run
           --manifest-path apollo-measurement/Cargo.toml

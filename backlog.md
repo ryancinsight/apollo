@@ -38,7 +38,11 @@
   complete in 9.44, 7.53, and 20.66 seconds. The affected 32-case benchmark
   runtime suite, 400-case FFT suite, warning-denied Clippy, doctests, Rustdoc,
   and all 196 applicable SemVer checks pass. Exact-head hosted execution remains
-  the final acceptance oracle.
+  the final acceptance oracle. Hosted run `29955865616` proved all three
+  baseline/candidate executables byte-identical, then produced a 1-7 ns
+  four-order separation for one arbitrarily candidate-labeled composite case.
+  The oracle now accepts exact executable identity as conclusive causal evidence
+  and retains replicated measurement whenever any executable differs.
 
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 

@@ -16,6 +16,9 @@
       so hosted f32 N=1031 separation cannot justify a transform change.
 - [x] Compile both revisions at one canonical absolute path and preserve fixed
       executables before measurement.
+- [x] Treat byte-identical executable pairs as conclusive evidence that no
+      candidate-caused regression exists; retain empirical comparison whenever
+      any executable differs.
 - [x] Replace dense benchmark sweeps with geometric dispatch representatives
       while retaining 100 samples, both precisions, and f32 N=1031 coverage.
 - [x] Add full-case smoke execution bounded at 60 seconds and a 300-second
@@ -31,6 +34,9 @@ pass, and all 196 applicable SemVer checks pass. Release benchmark smoke runs
 complete in 0.75-0.81 seconds per binary. Full release runs complete in 9.44
 seconds for 21 kernel-strategy cases, 7.53 seconds for 20 prime-composition
 cases, and 20.66 seconds for 42 Rader cases including eight N=1031 rows.
+Hosted run `29955865616` produced identical SHA-256 values for all three
+base/candidate executable pairs and falsified continued empirical comparison of
+identical binaries with one 1-7 ns label-only separation.
 
 ## D18-close-leto-boundary-and-fft-stack [patch]
 
