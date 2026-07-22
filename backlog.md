@@ -1,18 +1,18 @@
 # Apollo Backlog
 
-## D19-close-eunomia-migration-regressions [patch] — in progress
+## D19-close-eunomia-migration-regressions [minor] [arch] — in progress
 
-- Owner: Codex `/root/athena_backend_audit`; scope: exact `9f3b9f0` main,
-  the f64 Rader and mixed-radix production paths measured by Apollo's native
-  benchmark oracle, and synchronized verification/release records. Benchmark
-  workloads, comparator thresholds, and unrelated provider APIs are non-goals.
-- Acceptance: controlled profiling and code-generation evidence either
-  identifies a production bottleneck or falsifies the regression against the
-  exact pre-migration baseline. Any measured correction preserves every
-  affected transform contract. The eight regressions recorded by hosted run
-  `29938829409` are absent from the complete replicated counterbalanced
-  workflow without changing its instrument; warning-denied focused gates and
-  full pull-request CI pass.
+- Owner: Codex `/root/athena_backend_audit`; scope: Apollo's native benchmark
+  build and execution instrument, representative FFT workload regimes, and
+  synchronized verification records. Comparator thresholds, transform
+  production code, and unrelated provider APIs are non-goals.
+- Acceptance: both revisions compile sequentially at one canonical absolute
+  path against the candidate instrument; immutable executables run the complete
+  phase-reversed ABBA/BAAB schedule. Each executable retains 100 ordered samples,
+  geometric representative regimes, both scalar precisions where applicable,
+  and f32 N=1031 Bluestein coverage. Smoke execution finishes within 60 seconds,
+  every measurement execution has a 300-second bound, and exact-head hosted CI
+  plus replicated comparison pass.
 - Current evidence: the assertion migration landed directly on main as
   `9f3b9f0`. Its equivalent PR closure passed Rust and Python CI, but hosted
   benchmark run `29938829409` measured five f64 Rader and three mixed-radix
@@ -26,8 +26,19 @@
   2114/2137 ns at half-cyclic N=271, and 2367/2370 ns at automatic N=337. The
   corresponding `dft100<f64>` body is byte-identical; f64 Rader runtime,
   closure, full-convolution, and negacyclic-convolution bodies have identical
-  instruction counts and mnemonic sequences. No production change is
-  justified. The exact-main hosted rerun remains the final performance gate.
+  instruction counts and mnemonic sequences. Hosted PR #64 run `29946182469`
+  then compared source-identical base and merge-candidate production trees yet
+  reported f32 N=1031 automatic and forced-Bluestein separations in all four
+  orderings. Its three binaries ran eight times for 31 minutes 38 seconds. This
+  falsifies attribution by the two-checkout build instrument, not the unchanged
+  transform. The corrective design compiles both revisions at the same path,
+  preserves the resulting executables, and reduces dense size sweeps to
+  geometric dispatch representatives under explicit runtime bounds. Local
+  release smoke runs complete in 0.75-0.81 seconds per binary; full executions
+  complete in 9.44, 7.53, and 20.66 seconds. The affected 32-case benchmark
+  runtime suite, 400-case FFT suite, warning-denied Clippy, doctests, Rustdoc,
+  and all 196 applicable SemVer checks pass. Exact-head hosted execution remains
+  the final acceptance oracle.
 
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 

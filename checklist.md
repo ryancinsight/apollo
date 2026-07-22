@@ -1,6 +1,6 @@
 # Apollo Checklist
 
-## D19-close-eunomia-migration-regressions [patch]
+## D19-close-eunomia-migration-regressions [minor] [arch]
 
 - [x] Preserve failed hosted run `29938829409` and close superseded PR #63.
 - [x] Prove the prior provider graph cannot satisfy Eunomia 0.7 and current
@@ -12,9 +12,25 @@
       cases.
 - [x] Add explicit baseline and candidate inputs so a failed hosted benchmark
       can be rerun without changing production code or the benchmark instrument.
-- [ ] Pass focused value-semantic, lint, and targeted benchmark gates.
+- [x] Prove PR #64's base and merge candidate have identical production inputs,
+      so hosted f32 N=1031 separation cannot justify a transform change.
+- [x] Compile both revisions at one canonical absolute path and preserve fixed
+      executables before measurement.
+- [x] Replace dense benchmark sweeps with geometric dispatch representatives
+      while retaining 100 samples, both precisions, and f32 N=1031 coverage.
+- [x] Add full-case smoke execution bounded at 60 seconds and a 300-second
+      bound around each benchmark executable.
+- [x] Pass focused value-semantic, lint, and targeted benchmark gates.
 - [ ] Pass complete hosted CI and replicated counterbalanced benchmark gates,
       then merge and remove the fix-forward lane.
+
+**Current evidence:** `apollo-bench` passes 32/32 Nextest cases, `apollo-fft`
+passes 400/400 cases with `kernel-strategy-bench`, warning-denied all-target
+Clippy passes for both crates, Apollo Bench doctests and warning-denied Rustdoc
+pass, and all 196 applicable SemVer checks pass. Release benchmark smoke runs
+complete in 0.75-0.81 seconds per binary. Full release runs complete in 9.44
+seconds for 21 kernel-strategy cases, 7.53 seconds for 20 prime-composition
+cases, and 20.66 seconds for 42 Rader cases including eight N=1031 rows.
 
 ## D18-close-leto-boundary-and-fft-stack [patch]
 

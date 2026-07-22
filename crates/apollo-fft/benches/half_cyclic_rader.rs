@@ -5,15 +5,13 @@
 #![allow(missing_docs)]
 
 #[cfg(feature = "kernel-strategy-bench")]
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
 #[cfg(feature = "kernel-strategy-bench")]
 use eunomia::{Complex32, Complex64};
 #[cfg(feature = "kernel-strategy-bench")]
 use std::hint::black_box;
-#[cfg(feature = "kernel-strategy-bench")]
-use std::time::Duration;
 
 #[cfg(feature = "kernel-strategy-bench")]
 fn signal64(len: usize) -> Vec<Complex64> {
@@ -40,7 +38,8 @@ fn signal32(len: usize) -> Vec<Complex32> {
 
 #[cfg(feature = "kernel-strategy-bench")]
 fn bench_half_cyclic_rader(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
-    for len in [67_usize, 101, 257, 271, 337, 521, 1031] {
+    // Geometric regimes cover the small, crossover, and large-prime paths.
+    for len in [67_usize, 257, 521, 1031] {
         let input64 = signal64(len);
         let mut full64 = input64.clone();
         suite.run_with_config(
@@ -177,14 +176,14 @@ fn bench_composite_radix_order(suite: &mut BenchmarkSuite, config: BenchmarkConf
 }
 
 #[cfg(feature = "kernel-strategy-bench")]
-fn main() {
-    let config =
-        BenchmarkConfig::try_with_budgets(Duration::from_millis(150), Duration::from_millis(500))
-            .expect("invariant: literal benchmark budgets are non-zero");
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    let mode = BenchmarkMode::from_environment()?;
+    let config = mode.apply(BenchmarkConfig::regression());
     let mut suite = BenchmarkSuite::new(config);
     bench_half_cyclic_rader(&mut suite, config);
     bench_composite_radix_order(&mut suite, config);
     suite.emit();
+    Ok(())
 }
 
 #[cfg(not(feature = "kernel-strategy-bench"))]

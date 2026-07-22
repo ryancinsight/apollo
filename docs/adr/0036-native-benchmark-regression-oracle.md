@@ -142,3 +142,33 @@ Exact-head run `29790606838` passed the dedicated workflow's eight
 measurements and replicated comparison in 31 minutes 38 seconds after the path
 split. This validates the benchmark-relevant workflow path; path-selection
 regressions establish release-only exclusion separately.
+
+Hosted PR #64 run `29946182469` supplied a second source-identical
+falsification. The base and merge candidate had identical production source,
+manifest, lock, and toolchain inputs, but compiling them in separate absolute
+checkout paths produced persistent f32 N=1031 automatic and forced-Bluestein
+separations in all four comparisons. The experiment cannot attribute that
+binary-level variation to production code.
+
+The workflow therefore compiles baseline and candidate sequentially at one
+canonical absolute path, copies each resulting executable before the next
+revision occupies that path, and measures those immutable artifacts directly.
+The candidate `apollo-bench` source and benchmark entry points remain pinned
+into the baseline before compilation. SHA-256 identities are emitted as build
+evidence; source-identical revisions can now reuse or reproduce the same
+artifact rather than differing because their checkout paths differ.
+
+The measurement workload uses geometric representatives for each distinct
+dispatch regime instead of dense linear size sweeps. Every retained case still
+records 100 ordered observations, and the family-wise interval and
+phase-reversed ABBA/BAAB classifier are unchanged. The suite retains both f32
+and f64 strategy comparisons and the f32 N=1031 Bluestein case that exposed
+the false attribution. A 100 ms warm-up plus 400 ms measurement budget yields
+approximately 21 seconds for `half_cyclic_rader`, 10 seconds for
+`prime_compose`, and 11 seconds for `kernel_strategy` before process overhead.
+Each binary has a 300-second hard bound. A full-case smoke mode uses minimum
+timing budgets while retaining 100 samples per case under a 60-second bound.
+These are instrument-design changes; no comparator threshold is widened and no
+production transform path changes. On the reference Windows host the three
+smoke runs complete in 0.75-0.81 seconds each; full measurement runs complete
+in 9.44 seconds, 7.53 seconds, and 20.66 seconds respectively.
