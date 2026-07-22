@@ -52,7 +52,9 @@
   4499 ns; Rader f64 N=29 and Winograd-pair f32 N=31/N=41 record 86/148/145 ns
   versus the unchanged 89/155/149 ns screen. Exact hosted CI run `29903126882`
   passes, and the unchanged counterbalanced workflow passes every replicated
-  comparison in run `29903126902` after 31 minutes 9 seconds.
+  comparison in run `29903126902` after 31 minutes 9 seconds. The unchanged
+  delivered source also passes final-head CI run `29905243268` and benchmark
+  run `29905243211`; Apollo PR #61 merged as `225b620`.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
