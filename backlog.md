@@ -51,8 +51,9 @@
   default workspace tests, warning-denied all-target/all-feature Clippy,
   no-default compilation, doctests, warning-denied rustdoc, provider audit,
   RustSec audit, dependency policy, and all 196 applicable SemVer checks against
-  `origin/main`; all three benchmark executables also complete locally. Hosted
-  CUDA, review, and replicated benchmark gates remain open.
+  `origin/main`; all three benchmark executables also complete locally. The
+  pull-request workflow owns CUDA, review, and replicated benchmark acceptance
+  at merge.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

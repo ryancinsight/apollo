@@ -46,7 +46,7 @@
   release closure from 439,191 to 438,789 LLVM IR lines and from 6,469 to 6,463
   emitted copies. A full local kernel-strategy screen records the prior three
   residual rows at 87/150/149 ns versus 89/155/149 ns for the unchanged source.
-  Exact-head hosted benchmark verification remains required.
+  The unchanged hosted counterbalanced workflow owns merge acceptance.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
