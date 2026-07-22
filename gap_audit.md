@@ -5856,3 +5856,36 @@ Open items from the parallel duplication/allocation/dispatch audit; each is a ca
 - [patch] Remaining >500-line files: `stockham/avx/generic/triple.rs` (3260), `mixed_radix/scalar/impls.rs` (2226), `apollo-fft/src/lib.rs` (1624), `fft/dimension_1d.rs` (1435), `apollo-python/src/lib.rs` (1383), others per line audit; split where operation families separate cleanly.
 - [info] TypeId-based typed dispatch in WGPU device methods is const-folded by LLVM (statically-known T); not a runtime defect. The real cost in those paths is the per-call conversion Vec for non-native storage types.
 - [info] `apollo-ntt-wgpu` retains local leto helpers (no apollo-fft dependency by design — integer transform domain).
+
+---
+<a id="audit-2026-07-22-bench-resolution"></a>
+## Half-cyclic Rader Bluestein benchmark cannot resolve its own gate threshold (2026-07-22)
+Evidence tier: controlled local measurement (same-binary repeatability), quiet host (0 concurrent rustc/cargo).
+
+The `benchmark regression check` gate on PR #64 fails on exactly two cases,
+`rader_half_cyclic_vs_full_cyclic/{auto_f32,bluestein_f32}/1031`, reporting the candidate
+slower in all four counterbalanced comparisons (+6% to +17%).
+
+- [major] The two flagged cases are not resolvable by the instrument. Re-running the **identical**
+  release binary on a quiet host moves `bluestein_f32/1031` from 12507 ns to 17822 ns (+42%) and
+  `auto_f32/1031` from 11660 ns to 17915 ns (+54%). Same-binary noise therefore exceeds the
+  effect the gate rejects on, so "slower in all four" cannot distinguish a regression from noise
+  at these cases. The hosted run corroborates: its own baseline group spans 26343-30836 ns (17%).
+- [info] Instability is specific to the Bluestein route. `auto_f32/1031` (30707 ns hosted) tracks
+  `bluestein_f32/1031` (30681 ns), i.e. `auto` selects Bluestein at N=1031, while
+  `half_cyclic_f32/1031` and `full_cyclic_f32/1031` do not regress and hold a ~1% median CI.
+  Locally `bluestein_f32/1031` carries a median CI of [11727, 14727] (±25%) and
+  `bluestein_f64/1031` is openly bimodal (sample clusters near 60-70k and 135-142k ns).
+- [info] The assertion-provider migration cannot explain a production delta: `approx` was a
+  `[dev-dependencies]` entry only, so no production path changed. This corroborates the PR's
+  byte-identical `dft100<f64>` and identical f64 Rader mnemonic sequences, and extends that
+  evidence to the f32 cases the gate actually fails on, which the PR did not cover.
+- [open] Root cause of the Bluestein bimodality is unidentified. `FLAT_CACHE_LIMIT` is 4096, so
+  every benched length (67..1031) is inside the direct-mapped tier; the bound is not the trigger.
+  Next probes: build with the existing `cache-profiling` feature to confirm hit/miss behaviour at
+  N=1031, and check for per-call allocation in the Bluestein padded-transform buffer.
+- [open] Gate design. The harness already emits `median_lower_ns`/`median_upper_ns`, which
+  `apollo-bench-compare` ignores when deciding regressions. Requiring the candidate/baseline
+  median intervals to be disjoint would use measurement uncertainty the harness already produces.
+  This is a statistical-validity fix, not a threshold relaxation, but it changes a merge gate and
+  is therefore deliberately left for maintainer sign-off rather than applied here.
