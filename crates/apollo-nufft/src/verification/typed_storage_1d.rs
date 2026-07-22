@@ -49,8 +49,8 @@ fn typed_type1_1d_supports_complex64_complex32_and_f16_storage() {
     )
     .expect("typed complex64 type1");
     for (actual, expected) in output64.iter().zip(expected64.iter()) {
-        approx::assert_abs_diff_eq!(actual.re, expected.re);
-        approx::assert_abs_diff_eq!(actual.im, expected.im);
+        eunomia::assert_abs_diff_eq!(actual.re, expected.re);
+        eunomia::assert_abs_diff_eq!(actual.im, expected.im);
     }
 
     // ── f32 path ──────────────────────────────────────────────────────
@@ -183,8 +183,8 @@ fn typed_type2_1d_supports_complex64_complex32_and_f16_storage() {
     )
     .expect("typed complex64 type2");
     for (actual, expected) in output64.iter().zip(expected64.iter()) {
-        approx::assert_abs_diff_eq!(actual.re, expected.re);
-        approx::assert_abs_diff_eq!(actual.im, expected.im);
+        eunomia::assert_abs_diff_eq!(actual.re, expected.re);
+        eunomia::assert_abs_diff_eq!(actual.im, expected.im);
     }
 
     // ── f32 path ──────────────────────────────────────────────────────

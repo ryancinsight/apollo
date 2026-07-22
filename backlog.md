@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+## D19-retire-approx-verification-dependency [patch] — in progress
+
+- Owner: Codex `/root/athena_backend_audit`; scope: replace direct `approx`
+  verification macros with Eunomia's canonical exports, remove the superseded
+  workspace development dependency, and resolve the compatible merged
+  Aequitas/Eunomia/Hermes/Leto/Hephaestus/Moirai closure. Numerical
+  tolerances, test behavior, and production transform code are non-goals.
+- Acceptance: source and manifests contain no `approx` references; every
+  affected transform suite compiles and passes through the committed Nextest
+  budget; warning-denied lint, doctest, Rustdoc, provider, security, dependency,
+  and hosted all-feature gates pass.
+- Current evidence: warning-denied all-target/all-feature Clippy passes; the
+  default-feature workspace passes 971/971 Nextest cases, 11 doctests, and
+  warning-denied Rustdoc; provider audit, RustSec, and dependency policy pass.
+  Local all-feature Nextest reaches linking but this Windows host lacks
+  `-lcuda`; hosted CI owns that linkage. Workspace SemVer analysis timed out
+  after ten minutes without output; no public Apollo source signature changed,
+  so the public-surface gate is not applicable to this dependency/test-only
+  patch. Hosted pull-request verification is pending.
+
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 
 - Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,

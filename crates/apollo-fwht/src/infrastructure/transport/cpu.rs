@@ -57,7 +57,7 @@ pub fn ifwht_leto_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_relative_eq;
+    use eunomia::assert_relative_eq;
     use leto::Storage;
 
     #[test]

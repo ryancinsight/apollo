@@ -158,7 +158,7 @@ fn update_bin(bin: Complex64, twiddle: Complex64, delta: Complex64) -> Complex64
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn moirai_parallel_direct_bins_match_serial_formula_at_threshold() {

@@ -271,7 +271,7 @@ pub(crate) fn czt_bjork_pereyra_inverse_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn moirai_parallel_prepare_workspace_matches_serial_formula_at_threshold() {

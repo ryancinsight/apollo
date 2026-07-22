@@ -110,7 +110,7 @@ fn shift_left<T: Copy>(input: &[T], shift: usize) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     /// fftshift([0,1,2,3,-4,-3,-2,-1]) = [-4,-3,-2,-1,0,1,2,3].
     /// Reference: numpy.fft.fftshift([0,1,2,3,-4,-3,-2,-1]).

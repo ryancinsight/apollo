@@ -6,7 +6,7 @@ use super::{
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::StftError;
 use apollo_fft::{f16, PrecisionProfile};
-use approx::assert_relative_eq;
+use eunomia::assert_relative_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use proptest::prelude::*;

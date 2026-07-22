@@ -199,7 +199,7 @@ fn fill_fractional_weight_lanes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     fn signal(n: usize) -> Vec<Complex64> {
         (0..n)

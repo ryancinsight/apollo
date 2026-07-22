@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## D19-retire-approx-verification-dependency [patch]
+
+- [x] Rebase the rescued work onto current `origin/main` and retain only the
+      direct `approx` to Eunomia assertion-macro migration.
+- [x] Remove checkout-local Eunomia patches and every direct `approx`
+      dependency or source reference.
+- [x] Pass workspace formatting, warning-denied all-target/all-feature Clippy,
+      971/971 default-feature Nextest cases, 11 doctests, warning-denied
+      Rustdoc, provider audit, RustSec, and dependency policy. Local
+      all-feature Nextest is environment-blocked at `-lcuda`; hosted CI owns
+      that link target.
+- [ ] Pass hosted all-feature pull-request verification.
+- [ ] Publish, merge, and remove the recovery branch and worktree.
+
 ## D18-close-leto-boundary-and-fft-stack [patch]
 
 - [x] Reproduce the FFT abort against the exact original Apollo revision and

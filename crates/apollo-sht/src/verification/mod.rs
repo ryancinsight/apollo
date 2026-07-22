@@ -7,7 +7,7 @@ mod tests {
         associated_legendre, gauss_legendre_nodes_weights, spherical_harmonic,
     };
     use crate::{ShtError, ShtPlan};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use eunomia::Complex64;
     use leto::Array2;
     use proptest::prelude::*;

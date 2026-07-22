@@ -177,7 +177,7 @@ pub(crate) fn instantaneous_frequency_values_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     fn analytic_fixture() -> AnalyticSignal {
         AnalyticSignal::new(vec![

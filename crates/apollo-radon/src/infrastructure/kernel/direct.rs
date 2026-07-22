@@ -224,7 +224,7 @@ fn fill_linear_sample_weight(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn hermes_backproject_pixel_matches_scalar_formula_at_threshold() {

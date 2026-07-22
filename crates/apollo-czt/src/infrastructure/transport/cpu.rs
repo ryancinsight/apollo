@@ -46,7 +46,7 @@ pub fn czt_direct(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_relative_eq;
+    use eunomia::assert_relative_eq;
     use leto::Storage;
 
     #[test]

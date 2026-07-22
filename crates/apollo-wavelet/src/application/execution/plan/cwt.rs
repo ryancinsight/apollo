@@ -127,7 +127,7 @@ impl CwtPlan {
 mod tests {
     use super::*;
     use apollo_fft::f16;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn typed_cwt_paths_support_f64_f32_and_mixed_f16_storage() {

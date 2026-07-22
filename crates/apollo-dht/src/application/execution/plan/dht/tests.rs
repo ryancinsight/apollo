@@ -3,7 +3,7 @@
 use super::plan::DhtPlan;
 use crate::domain::contracts::error::DhtError;
 use apollo_fft::{f16, PrecisionProfile};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};
 use leto::{SliceArg, Storage};
 

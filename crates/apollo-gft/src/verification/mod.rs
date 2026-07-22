@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{GftError, GftPlan, GraphAdjacency};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use leto::Array1;
     use leto::Array2;
     use proptest::prelude::*;

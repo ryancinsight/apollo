@@ -610,7 +610,7 @@ fn write_storage_from_owner_values<T: SparseComplexStorage>(
 mod tests {
     use super::*;
     use apollo_fft::fft_1d_complex_inplace;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use leto::Array1;
     use proptest::prelude::*;
 

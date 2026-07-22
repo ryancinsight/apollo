@@ -1,6 +1,6 @@
 use super::*;
 use apollo_fft::f16;
-use approx::assert_relative_eq;
+use eunomia::assert_relative_eq;
 use proptest::prelude::*;
 
 #[test]

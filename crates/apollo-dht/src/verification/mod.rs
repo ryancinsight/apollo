@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{DhtError, DhtPlan, HartleySpectrum};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use proptest::prelude::*;
     use proptest::proptest;
 

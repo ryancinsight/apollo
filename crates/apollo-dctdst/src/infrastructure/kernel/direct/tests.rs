@@ -1,5 +1,5 @@
 use super::*;
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 
 fn signal(n: usize) -> Vec<f64> {
     (0..n)

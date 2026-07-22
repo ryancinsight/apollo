@@ -557,7 +557,7 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Mel
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn typed_paths_support_f64_f32_and_mixed_f16_storage() {

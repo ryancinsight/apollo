@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{ramp_filter_projection, ramp_filter_projection_into, RadonError, RadonPlan};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use leto::Array2;
     use proptest::prelude::*;
     use proptest::proptest;

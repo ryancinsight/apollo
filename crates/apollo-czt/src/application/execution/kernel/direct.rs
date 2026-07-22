@@ -104,7 +104,7 @@ fn fill_power_lanes(lanes: &mut [f64], z_inv: Complex64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn moirai_parallel_direct_rows_match_bin_formula_at_threshold() {

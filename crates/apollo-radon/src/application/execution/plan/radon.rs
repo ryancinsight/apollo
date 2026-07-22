@@ -399,7 +399,7 @@ fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     fn plan() -> RadonPlan {
         RadonPlan::new(3, 3, vec![0.0, std::f64::consts::FRAC_PI_2], 3, 1.0).expect("valid plan")

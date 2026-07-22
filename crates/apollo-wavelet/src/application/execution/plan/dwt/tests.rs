@@ -2,7 +2,7 @@ use super::DwtPlan;
 use crate::domain::contracts::error::WaveletError;
 use crate::domain::metadata::wavelet::DiscreteWavelet;
 use apollo_fft::{f16, PrecisionProfile};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 
 fn detail_buffers<T: Copy>(plan: &DwtPlan, fill: T) -> Vec<Vec<T>> {
     plan.coefficient_shapes()

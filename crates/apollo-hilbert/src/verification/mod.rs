@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{HilbertError, HilbertPlan};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use proptest::prelude::*;
     use proptest::proptest;
 
@@ -98,7 +98,7 @@ mod tests {
 #[cfg(test)]
 mod extended_tests {
     use crate::HilbertPlan;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn instantaneous_frequency_constant_tone() {

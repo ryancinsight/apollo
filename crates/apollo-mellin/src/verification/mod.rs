@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{calculate_log_resample, mellin_moment, MellinError, MellinPlan};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use proptest::prelude::*;
 
     #[test]

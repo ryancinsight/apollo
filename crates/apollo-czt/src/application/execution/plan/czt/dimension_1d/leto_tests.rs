@@ -1,6 +1,6 @@
 use super::*;
 use apollo_fft::PrecisionProfile;
-use approx::{assert_abs_diff_eq, assert_relative_eq};
+use eunomia::{assert_abs_diff_eq, assert_relative_eq};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use leto::{SliceArg, Storage};

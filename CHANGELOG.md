@@ -28,6 +28,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Consolidates floating-point comparison macros on Eunomia across all
+  transform verification suites and removes Apollo's direct `approx`
+  development dependency. The lock advances the compatible merged
+  Aequitas/Eunomia/Hermes/Leto/Hephaestus/Moirai provider closure.
+
 - [patch] Stores the large bounded Rader and Bluestein flat caches in
   process-wide, `const`-initialized `OnceLock` slot arrays. Direct coordinates
   preserve O(1) lookup, while stored generator tags validate the complete

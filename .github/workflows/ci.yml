@@ -58,11 +58,8 @@ jobs:
           workspaces: apollo
           cache-targets: false
       # `cargo fmt --all` treats every path-sourced package reachable in the
-      # resolved graph as "local" and formats it — including the fleet
-      # siblings pulled in only via the [patch] table above. Scope to
-      # apollo's own workspace members (cargo metadata --no-deps correctly
-      # excludes patched externals) so CI never lints/formats another repo's
-      # source.
+      # resolved graph as local. Scope formatting to Apollo's own workspace
+      # members so CI never formats another repository's source.
       - name: Format
         run: |
           cargo metadata --locked --no-deps --format-version=1 \
