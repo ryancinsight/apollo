@@ -12,6 +12,18 @@ on:
       - crates/apollo-fft-macros/**
       - crates/apollo-leto-interop/**
       - .github/workflows/benchmark-regression.yml
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Git revision used as the performance baseline
+        required: true
+        default: main
+        type: string
+      candidate_ref:
+        description: Git revision compared with the baseline
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -31,12 +43,13 @@ jobs:
       - name: Checkout baseline
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
           path: apollo-baseline
 
       - name: Checkout candidate
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.ref || inputs.candidate_ref }}
           path: apollo-candidate
 
       # The benchmark harness is the measurement instrument. When a pull

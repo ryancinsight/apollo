@@ -10,6 +10,8 @@
       reported regressions are not repeatable.
 - [ ] Complete the same pinned A/B measurement for the five reported Rader
       cases.
+- [x] Add explicit baseline and candidate inputs so a failed hosted benchmark
+      can be rerun without changing production code or the benchmark instrument.
 - [ ] Pass focused value-semantic, lint, and targeted benchmark gates.
 - [ ] Pass complete hosted CI and replicated counterbalanced benchmark gates,
       then merge and remove the fix-forward lane.
