@@ -5859,7 +5859,7 @@ Open items from the parallel duplication/allocation/dispatch audit; each is a ca
 
 ---
 <a id="audit-2026-07-22-bench-resolution"></a>
-## Half-cyclic Rader Bluestein benchmark cannot resolve its own gate threshold (2026-07-22)
+## Half-cyclic Rader Bluestein: load-duration regime split, and gate resolution limit (2026-07-22)
 Evidence tier: controlled local measurement (same-binary repeatability), quiet host (0 concurrent rustc/cargo).
 
 The `benchmark regression check` gate on PR #64 fails on exactly two cases,
@@ -5880,10 +5880,29 @@ slower in all four counterbalanced comparisons (+6% to +17%).
   `[dev-dependencies]` entry only, so no production path changed. This corroborates the PR's
   byte-identical `dft100<f64>` and identical f64 Rader mnemonic sequences, and extends that
   evidence to the f32 cases the gate actually fails on, which the PR did not cover.
-- [open] Root cause of the Bluestein bimodality is unidentified. `FLAT_CACHE_LIMIT` is 4096, so
-  every benched length (67..1031) is inside the direct-mapped tier; the bound is not the trigger.
-  Next probes: build with the existing `cache-profiling` feature to confirm hit/miss behaviour at
-  N=1031, and check for per-call allocation in the Bluestein padded-transform buffer.
+- [resolved] Root cause of the Bluestein bimodality: it is a load-duration effect, not a
+  code, cache, or allocation defect. Measured on a quiet host at N=1031 with a direct
+  time-ordered probe: the per-call floor is ~60 us and is reproducible across every batch
+  size (1, 8, 37, 62, 200) and across separate processes, while sustained execution settles
+  at ~134 us. Eight fresh processes each running 600 consecutive calls all reported medians
+  in 133.6-135.5 us (+/-1%), and a 120 s idle beforehand did not restore the fast regime once
+  a sustained loop began. Ruled out by experiment: allocation address (8 fresh processes
+  agree to +/-1%), sibling-case cache context (preceding full-cyclic and half-cyclic at the
+  same length gave 138.8 us vs 132.2 us, i.e. slightly slower, not 2x faster), and harness
+  normalisation (`elapsed / iterations_per_sample` is correct, and a batch=1 reproduction
+  shows the same 2x split as the harness). The evidence is consistent with AVX
+  power/frequency licence downclocking under sustained heavy f64 work; CPU frequency was not
+  sampled directly, so that mechanism is inferred from the timing signature rather than
+  measured. Consequence for the gate: a 650 ms per-case budget straddles the burst/sustained
+  boundary, so the same binary lands in either regime run to run, which is what produces both
+  the sorted-sample bimodality and the 42-54% same-binary median swings.
+- [info] Correctness is unaffected. The N=1031 Bluestein result is bitwise identical whether
+  computed in isolation or after the full 67..521 sweep (max abs delta 0e0), ruling out a
+  cache-key collision across lengths, and it agrees with the independent full-cyclic Rader
+  route to 4.4e-9 absolute at f64.
+- [minor] Production implication: sustained Bluestein f64 throughput at this size is about
+  half its burst figure. Any published per-call number for this path should state which
+  regime it describes.
 - [open] Gate design. The harness already emits `median_lower_ns`/`median_upper_ns`, which
   `apollo-bench-compare` ignores when deciding regressions. Requiring the candidate/baseline
   median intervals to be disjoint would use measurement uncertainty the harness already produces.
