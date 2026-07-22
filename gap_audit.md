@@ -13,12 +13,12 @@
   slot without constructing a full table on an active execution stack, and
   worker count no longer multiplies these fixed tables. Remove the four 8 MiB
   test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
-  masked the production stack requirement. Direct coordinates jointly preserve
-  every key component: table position encodes length and direction, while each
-  collision-capable slot retains and validates the omitted generator. A tag
-  mismatch falls through to the sparse cache; collision-free unary tables use
-  their unique index without storing a redundant tag. Therefore distinct Rader
-  generators cannot alias spectra or orders.
+  masked the production stack requirement. The Rader operation boundary now
+  returns a private `CanonicalRaderGenerator`; no other constructor exists, so
+  one prime length admits exactly one primitive-root pair. Spectrum and
+  Bluestein cache identities can therefore consist of length and direction,
+  while generator-order identity consists of length. Their raw direct indices
+  encode every admitted semantic component without hashing or tag comparison.
 - Rejected designs: a boxed slice removed the stack frame but erased the
   compile-time length from hot indexed lookups, producing systematic
   regressions including 9.6 us versus 7.0-7.2 us for the N=521 full-cyclic
@@ -27,18 +27,22 @@
   f32 N=29. A `const`-initialized TLS array retained direct lookup but Linux
   still constructed enough inlined initialization state to overflow nine
   default test stacks. Hashed complete-tuple slots preserved correctness but
-  benchmark run `29873660989` rejected them in 25 replicated cases. The direct
-  coordinate representation removes tuple hashing, redundant key fields, and
-  keyed comparison from collision-free unary access. It requires exact-head
-  benchmark verification.
+  benchmark run `29873660989` rejected them in 25 replicated cases. Direct
+  coordinates removed hashing but benchmark run `29877345159` still rejected
+  Rader f64 N=29 and Winograd-pair f32 N=31/N=41. This falsified per-hit
+  generator validation even after the residual set fell from 25 cases to
+  three. Canonical-generator construction removes that unsupported runtime
+  variation dimension before lookup and restores raw direct slots. It requires
+  exact-head benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
-  mechanism; 45 focused default-stack regressions cover the direct-coordinate
-  non-alias theorem, independent direct-DFT spectra for two primitive
-  generators, distinct Bluestein generator keys, and the original Rader value
-  oracles. The complete 970-test default workspace provides the broad
-  regression baseline. Warning-denied
-  all-feature Clippy verifies feature compilation, but local all-feature test
-  linking cannot supply CUDA coverage because this Windows host has no CUDA
+  mechanism; 44 focused default-stack regressions cover directional-index
+  injectivity, the canonical primitive-root/spectrum oracle,
+  direction-separated Bluestein entries, and the original Rader value oracles.
+  The complete 969-test default workspace provides the broad regression
+  baseline. Warning-denied all-feature Clippy verifies feature compilation,
+  and all 196 applicable SemVer checks against `origin/main` pass without a
+  required version update. Local all-feature test linking cannot supply CUDA
+  coverage because this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
   change makes no throughput claim. A two-MiB-stack regression exercises fresh
   Bluestein and half-cyclic cache initialization at the standard Rust

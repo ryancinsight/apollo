@@ -29,11 +29,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 ### Changed
 
 - [patch] Stores the large bounded Rader and Bluestein flat caches in
-  process-wide, `const`-initialized `OnceLock` slot arrays. Direct coordinates
-  encode length and direction in the table index and validate the omitted Rader
-  generator in collision-capable slots; collisions fall through to the sparse
-  cache instead of aliasing another transform. Collision-free unary tables keep
-  raw direct slots. First access no longer constructs a 262,216-byte
+  process-wide, `const`-initialized `OnceLock` slot arrays. A private
+  canonical-generator type makes the selected primitive-root pair unique for
+  each prime length, so the complete spectrum key is length plus direction and
+  every bounded cache retains raw direct-slot access without a redundant tag.
+  First access no longer constructs a 262,216-byte
   negacyclic-cache frame on an active Rader/Good-Thomas execution stack, and
   workers no longer duplicate these fixed tables. Rader tests require neither
   test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.

@@ -10,13 +10,14 @@ use crate::application::execution::kernel::components::winograd::ShortWinogradSc
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use convolution::rader_convolve_inplace;
 use convolution::rader_negacyclic_convolve_inplace;
+use generator::{CanonicalRaderGenerator, CanonicalRaderGeneratorInverse};
 use std::sync::Arc;
 
 pub(crate) trait RaderConvolutionBackend {
     fn convolve<F, const INVERSE: bool>(
         data: &mut [F::Complex],
         n: usize,
-        generator_inverse: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
     ) where
         F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar;
 }
@@ -32,8 +33,11 @@ pub(crate) struct Bluestein;
 
 impl RaderConvolutionBackend for FullCyclic {
     #[inline]
-    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
-    where
+    fn convolve<F, const INVERSE: bool>(
+        data: &mut [F::Complex],
+        n: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
+    ) where
         F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         let kernel_spectrum = F::cached_rader_spectrum::<INVERSE>(n, generator_inverse);
@@ -43,8 +47,11 @@ impl RaderConvolutionBackend for FullCyclic {
 
 impl RaderConvolutionBackend for HalfCyclicWinograd {
     #[inline]
-    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
-    where
+    fn convolve<F, const INVERSE: bool>(
+        data: &mut [F::Complex],
+        n: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
+    ) where
         F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         debug_assert_eq!(data.len() % 2, 0);
@@ -64,8 +71,11 @@ impl RaderConvolutionBackend for HalfCyclicWinograd {
 
 impl RaderConvolutionBackend for Bluestein {
     #[inline]
-    fn convolve<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize, generator_inverse: usize)
-    where
+    fn convolve<F, const INVERSE: bool>(
+        data: &mut [F::Complex],
+        n: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
+    ) where
         F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     {
         bluestein::rader_bluestein_convolve_inplace::<F, INVERSE>(data, n, generator_inverse);
@@ -151,16 +161,16 @@ fn rader_runtime_impl_with_backend<
     data: &mut [F::Complex],
     n: usize,
 ) {
-    let (g, g_inv) = generator::primitive_root_and_inverse(n);
+    let generator = generator::primitive_root_and_inverse(n);
 
-    let gather = cached_generator_order(n, g);
+    let gather = cached_generator_order(n, generator);
 
     let x0 = data[0];
     let l = n - 1;
 
     F::with_rader_padded_scratch(l, |padded| {
         let sum_x = gather_sum_slice::<F>(data, padded, &gather);
-        B::convolve::<F, INVERSE>(padded, n, g_inv);
+        B::convolve::<F, INVERSE>(padded, n, generator.inverse());
         data[0] = x0 + sum_x;
         scatter_slice::<F>(data, padded, x0, &gather);
     });
@@ -275,10 +285,11 @@ pub(crate) fn inverse_generator_order_at(generator_order: &[usize], q: usize) ->
     }
 }
 
-pub(crate) fn cached_generator_order(n: usize, g: usize) -> Arc<[usize]> {
+pub(crate) fn cached_generator_order(n: usize, generator: CanonicalRaderGenerator) -> Arc<[usize]> {
     crate::application::execution::kernel::mixed_radix::caches::cached_rader_order(
-        (n, g),
-        |(n, g)| build_generator_order(n, g),
+        n,
+        generator,
+        build_generator_order,
     )
 }
 

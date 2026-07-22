@@ -16,6 +16,7 @@
 //! factors using Rader-ordered column transforms. Layer 6 is the
 //! fully generic fallback with cached CRT permutation cycles.
 
+use crate::application::execution::kernel::components::rader::generator::CanonicalRaderGenerator;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 
 mod fixed;
@@ -54,8 +55,8 @@ pub(crate) fn pfa_fft<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const 
         return;
     }
 
-    if let Some((generator, generator_inverse)) = ordered_rader_n1_config(n1) {
-        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator, generator_inverse);
+    if let Some(generator) = ordered_rader_n1_config(n1) {
+        pfa_fft_ordered_rader_n1::<F, INVERSE>(data, n1, n2, generator);
         return;
     }
 
@@ -216,8 +217,7 @@ fn pfa_fft_ordered_rader_n1<
     data: &mut [F::Complex],
     n1: usize,
     n2: usize,
-    generator: usize,
-    generator_inverse: usize,
+    generator: CanonicalRaderGenerator,
 ) {
     let n = n1 * n2;
     debug_assert!(data.len() >= n);
@@ -248,7 +248,7 @@ fn pfa_fft_ordered_rader_n1<
             crate::application::execution::kernel::components::rader::ordered::rader_ordered_impl::<
                 F,
                 INVERSE,
-            >(col_buf, n1, generator_inverse);
+            >(col_buf, n1, generator.inverse());
 
             // Scatter column directly to final positions in `data`
             unsafe {
@@ -279,7 +279,7 @@ fn pfa_fft_ordered_rader_n1<
 // the current stable toolchain, so the length is hardcoded here.
 pub(super) const ORDERED_RADER_SKIP_PRIMES: [usize; 2] = [2, 3];
 
-fn ordered_rader_n1_config(n1: usize) -> Option<(usize, usize)> {
+fn ordered_rader_n1_config(n1: usize) -> Option<CanonicalRaderGenerator> {
     if ORDERED_RADER_SKIP_PRIMES.contains(&n1) {
         return None;
     }

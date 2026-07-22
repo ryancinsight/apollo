@@ -24,16 +24,19 @@
   but still overflowed nine Linux test stacks in hosted run `29870196908`.
   Process-wide keyed `OnceLock` slots now remove runtime array construction and
   per-worker table duplication. Review then exposed that the original flat
-  indices omitted the generator component. Hosted CI passed at `4e063f1`, but
-  benchmark run `29873660989` rejected its hashed tuple keys in 25 replicated
-  cases. The corrected direct coordinates encode length and direction in the
-  table index and validate only the omitted generator in the slot; unary tables
-  retain raw collision-free `OnceLock` access. Collisions remain in the sparse
-  cache. The coordinate-injectivity and slot non-alias proofs, two distinct
-  primitive-generator spectra, both Bluestein generator keys, the explicit
-  two-MiB stack regression, and all 45 focused cache/Rader cases pass locally.
-  The complete default workspace passes 970/970 tests in 22.841 seconds.
-  Exact-head hosted runtime and benchmark verification remain open.
+  indices admitted an unchecked generator component. Hosted CI passed at
+  `4e063f1`, but benchmark run `29873660989` rejected hashed tuple keys in 25
+  replicated cases. Direct length/direction indices reduced that set to three
+  in run `29877345159`, but per-hit generator tags still regressed Rader f64
+  N=29 and shifted two independent Winograd-pair cases. The current correction
+  represents the one production primitive-root pair as a private canonical
+  type, removing the unsupported generator dimension before cache lookup and
+  restoring raw direct `OnceLock` slots. All 44 focused regressions and the
+  complete 969-test default workspace pass. Warning-denied all-target,
+  all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
+  provider audit, RustSec audit, dependency policy, and all 196 applicable
+  SemVer checks against `origin/main` pass. Exact-head hosted runtime and
+  benchmark verification remain open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

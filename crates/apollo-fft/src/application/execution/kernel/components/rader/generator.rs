@@ -123,22 +123,66 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 static RADER_GENERATOR_CACHE: [AtomicU32; 4096] = [const { AtomicU32::new(0) }; 4096];
 
-pub(crate) fn primitive_root_and_inverse(p: usize) -> (usize, usize) {
+/// The single primitive-root pair selected for one Rader transform length.
+///
+/// Construction remains private to [`primitive_root_and_inverse`], so cache
+/// identities may omit the generator: every admitted value for a fixed prime
+/// is the same canonical pair.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanonicalRaderGenerator {
+    root: usize,
+    inverse: CanonicalRaderGeneratorInverse,
+}
+
+/// The canonical inverse carried across a Rader convolution boundary.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanonicalRaderGeneratorInverse(usize);
+
+impl CanonicalRaderGeneratorInverse {
+    #[inline]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+}
+
+impl CanonicalRaderGenerator {
+    #[inline]
+    pub(crate) const fn root(self) -> usize {
+        self.root
+    }
+
+    #[inline]
+    pub(crate) const fn inverse(self) -> CanonicalRaderGeneratorInverse {
+        self.inverse
+    }
+}
+
+pub(crate) fn primitive_root_and_inverse(p: usize) -> CanonicalRaderGenerator {
     if p < 4096 {
         let val = RADER_GENERATOR_CACHE[p].load(Ordering::Relaxed);
         if val != 0 {
             let g = (val >> 16) as usize;
             let g_inv = (val & 0xFFFF) as usize;
-            return (g, g_inv);
+            return CanonicalRaderGenerator {
+                root: g,
+                inverse: CanonicalRaderGeneratorInverse(g_inv),
+            };
         }
         let g = primitive_root(p);
         let g_inv = inverse_mod(g, p);
         let packed = ((g as u32) << 16) | (g_inv as u32);
         RADER_GENERATOR_CACHE[p].store(packed, Ordering::Relaxed);
-        (g, g_inv)
+        CanonicalRaderGenerator {
+            root: g,
+            inverse: CanonicalRaderGeneratorInverse(g_inv),
+        }
     } else {
         let g = primitive_root(p);
         let g_inv = inverse_mod(g, p);
-        (g, g_inv)
+        CanonicalRaderGenerator {
+            root: g,
+            inverse: CanonicalRaderGeneratorInverse(g_inv),
+        }
     }
 }

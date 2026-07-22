@@ -7,9 +7,9 @@
 - [x] Replace fixed TLS arrays with `const`-initialized process-wide
       keyed `OnceLock` slots, eliminating runtime stack construction while
       preserving direct O(1) lookup and capacity.
-- [x] Include and validate every bounded-cache semantic key component; retain
-      direct-map collisions in the sparse cache and prove that keys cannot
-      alias values.
+- [x] Encode the single production primitive-root pair as a private canonical
+      type, then prove length/direction direct indices are injective over the
+      complete admitted cache key.
 - [x] Remove every source-level 8 MiB Rader stack override and the CI-wide
       16 MiB `RUST_MIN_STACK` bypass.
 - [x] Converge Leto, Hephaestus, and Aequitas lock entries on current merged
@@ -23,21 +23,21 @@
 
 **Current evidence:** exact `origin/main` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
-`___chkstk_ms` frame. Forty-five focused regressions, including distinct
-primitive-generator spectra, a Bluestein generator-key regression, the
-non-alias theorem, and an explicit two-MiB stack contract, pass; the complete
-default workspace passes 970/970 tests in 22.841 seconds. Warning-denied
-all-feature Clippy, doctests, rustdoc, provider
-audit, and supply-chain gates
-pass. The locked graph contains one Aequitas revision and no Rust `ndarray`
-package. Hosted benchmarks rejected both boxed representations: a slice lost
+`___chkstk_ms` frame. The canonical-generator candidate passes 44/44 focused
+regressions and all 969 default workspace tests, warning-denied all-target,
+all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
+provider audit, RustSec audit, dependency policy, and all 196 applicable SemVer
+checks against `origin/main`. The locked graph contains one Aequitas revision
+and no Rust `ndarray` package.
+Hosted benchmarks rejected both boxed representations: a slice lost
 compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
-`29870196908`. Hosted CI passed at `4e063f1`, but benchmark run `29873660989`
-rejected its hashed tuple keys in 25 replicated cases. The corrected
-process-wide table restores direct length/direction indices, validates only the
-generator component omitted from those indices, retains raw `OnceLock` access
-for collision-free unary tables, and is pending exact-head gates.
+`29870196908`. Hosted CI passed at `df01f35`, but benchmark run `29877345159`
+still rejected three cases after direct coordinates reduced the prior 25-case
+hashed-key failure. The current process-wide table admits only the canonical
+generator selected at the operation boundary, making length and direction the
+complete cache key and restoring raw `OnceLock` access throughout. Exact-head
+hosted gates remain pending.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

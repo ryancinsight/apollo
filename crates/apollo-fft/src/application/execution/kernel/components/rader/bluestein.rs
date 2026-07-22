@@ -18,10 +18,9 @@
 //!
 //! # Cache ownership
 //!
-//! `BluesteinStore for f32` and `BluesteinStore for f64` impls live in
-//! `mixed_radix/scalar/impls.rs` alongside `MixedRadixScalar` impls.
-//! All global statics and thread-locals reside there; this file holds no
-//! precision-specific cache state.
+//! `BluesteinStore for f32` and `BluesteinStore for f64` impls and their
+//! storage live in `mixed_radix/scalar/bluestein_cache.rs`; this file owns only
+//! the Rader-domain cache orchestration and kernel construction.
 //!
 //! # Performance rationale
 //!
@@ -31,6 +30,7 @@
 //! Apollo's Stockham kernel at N=32768 is heavily optimized (pair+3×triple+quad
 //! fused stages), making this a large net win.
 
+use super::generator::CanonicalRaderGeneratorInverse;
 use crate::application::execution::kernel::mixed_radix::scalar::{
     BluesteinEntry, BluesteinKey, BluesteinStore,
 };
@@ -48,13 +48,13 @@ use std::sync::Arc;
 /// preventing self-deadlock.
 fn cached_bluestein_entry<F, const INVERSE: bool>(
     n: usize,
-    generator_inverse: usize,
+    generator_inverse: CanonicalRaderGeneratorInverse,
 ) -> BluesteinEntry<F::Complex>
 where
     F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
 {
     let m = n - 1;
-    let key: BluesteinKey = (m, INVERSE, generator_inverse);
+    let key: BluesteinKey = (m, INVERSE);
 
     if let Some(v) = F::tl_get(key) {
         return v;
@@ -66,7 +66,7 @@ where
         return v;
     }
 
-    let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse);
+    let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse.get());
     let v = {
         let mut write_guard = F::global().write();
         write_guard.entry(key).or_insert(entry).clone()
@@ -205,7 +205,8 @@ fn next_7_smooth(min_val: usize) -> usize {
 ///
 /// `padded` holds the permuted Rader input sequence on entry and the
 /// convolution result on exit. The Rader kernel FFT is accessed from the
-/// precomputed cache entry keyed by `(m, inverse, generator_inverse)`.
+/// precomputed cache entry keyed by `(m, inverse)`. The canonical-generator
+/// type guarantees one generator for each prime length.
 ///
 /// # Normalization
 ///
@@ -223,7 +224,7 @@ pub(super) fn rader_bluestein_convolve_inplace<
 >(
     padded: &mut [F::Complex],
     n: usize,
-    generator_inverse: usize,
+    generator_inverse: CanonicalRaderGeneratorInverse,
 ) {
     let m = padded.len();
     debug_assert_eq!(m, n - 1);

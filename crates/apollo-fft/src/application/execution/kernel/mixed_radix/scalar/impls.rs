@@ -22,6 +22,7 @@ use super::twiddle_constants::{
 use super::twiddle_constants::{
     TWIDDLES_FWD_PRECISE, TWIDDLES_FWD_REDUCED, TWIDDLES_INV_PRECISE, TWIDDLES_INV_REDUCED,
 };
+use crate::application::execution::kernel::components::rader::generator::CanonicalRaderGeneratorInverse;
 use crate::application::execution::kernel::components::{radix_composite, stockham};
 use crate::application::execution::kernel::mixed_radix::caches::{
     cached_four_step_twiddles, cached_rader_neg_twiddles, cached_rader_negacyclic_spectra,
@@ -366,9 +367,10 @@ impl MixedRadixScalar for f32 {
     #[inline]
     fn cached_rader_spectrum<const INVERSE: bool>(
         n: usize,
-        generator_inverse: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
     ) -> Arc<[Complex32]> {
-        let key = (n, INVERSE as usize, generator_inverse);
+        let generator_inverse = generator_inverse.get();
+        let key = (n, INVERSE as usize);
         cached_rader_spectrum(key, |_| {
             build_rader_spectrum_vec::<f32, INVERSE>(n, generator_inverse)
         })
@@ -377,9 +379,10 @@ impl MixedRadixScalar for f32 {
     #[inline]
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
-        generator_inverse: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
     ) -> (Arc<[Complex32]>, Arc<[Complex32]>) {
-        let key = (n, INVERSE as usize, generator_inverse);
+        let generator_inverse = generator_inverse.get();
+        let key = (n, INVERSE as usize);
         cached_rader_negacyclic_spectra(key, |_| {
             build_rader_negacyclic_spectra::<f32, INVERSE>(n, generator_inverse)
         })
@@ -1212,9 +1215,10 @@ impl MixedRadixScalar for f64 {
     #[inline]
     fn cached_rader_spectrum<const INVERSE: bool>(
         n: usize,
-        generator_inverse: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
     ) -> Arc<[Complex64]> {
-        let key = (n, INVERSE as usize, generator_inverse);
+        let generator_inverse = generator_inverse.get();
+        let key = (n, INVERSE as usize);
         cached_rader_spectrum(key, |_| {
             build_rader_spectrum_vec::<f64, INVERSE>(n, generator_inverse)
         })
@@ -1223,9 +1227,10 @@ impl MixedRadixScalar for f64 {
     #[inline]
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
-        generator_inverse: usize,
+        generator_inverse: CanonicalRaderGeneratorInverse,
     ) -> (Arc<[Complex64]>, Arc<[Complex64]>) {
-        let key = (n, INVERSE as usize, generator_inverse);
+        let generator_inverse = generator_inverse.get();
+        let key = (n, INVERSE as usize);
         cached_rader_negacyclic_spectra(key, |_| {
             build_rader_negacyclic_spectra::<f64, INVERSE>(n, generator_inverse)
         })
