@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## D18-close-leto-boundary-and-fft-stack [patch] — in progress
+## D18-close-leto-boundary-and-fft-stack [patch] — done
 
 - Owner: Codex `/root`; scope: current Leto/Hephaestus lock convergence,
   removal of the retired `ndarray-compat` boundary, and Apollo FFT bounded
@@ -34,8 +34,9 @@
   warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
   workspace SemVer checks. Exact hosted CI run `29903126882` passes, and
   counterbalanced benchmark run `29903126902` passes all replicated comparisons
-  in 31 minutes 9 seconds. Apollo PR #61 is ready to merge; Atlas integration
-  remains blocked until that merge commit exists.
+  in 31 minutes 9 seconds. The unchanged delivered source also passes final-head
+  CI run `29905243268` and benchmark run `29905243211`. Apollo PR #61 merged as
+  `225b620`; Atlas owns parent gitlink integration.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

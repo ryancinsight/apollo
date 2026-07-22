@@ -22,7 +22,7 @@
 - [x] Pass the updated forward corrective head through hosted all-feature CI
       and the exact replicated benchmark after run `29900029361` isolated one
       large-prime static-dispatch regression.
-- [ ] Publish, merge, and advance the Atlas Apollo gitlink.
+- [x] Publish and merge Apollo PR #61. Atlas owns its parent gitlink.
 
 **Current evidence:** exact `2a22319` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
@@ -50,8 +50,9 @@ all-target/all-feature Clippy, no-default compilation, doctests,
 warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
 workspace SemVer checks. Exact hosted CI run `29903126882` and counterbalanced
 benchmark run `29903126902` pass; the benchmark completes every replicated
-comparison in 31 minutes 9 seconds. Atlas integration cannot advance before
-Apollo PR #61 merges.
+comparison in 31 minutes 9 seconds. The unchanged delivered source also passes
+final-head CI run `29905243268` and benchmark run `29905243211`. Apollo PR #61
+merged as `225b620`; Atlas owns parent gitlink integration.
 
 ## D17-scope-benchmark-regression-gate [patch]
 
