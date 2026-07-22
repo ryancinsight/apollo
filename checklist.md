@@ -19,7 +19,7 @@
       workspace gate.
 - [x] Pass hosted all-feature pull-request run `29894838150`, which supplies the
       CUDA linker coverage unavailable on this Windows host.
-- [ ] Pass the updated forward corrective head through hosted all-feature CI
+- [x] Pass the updated forward corrective head through hosted all-feature CI
       and the exact replicated benchmark after run `29900029361` isolated one
       large-prime static-dispatch regression.
 - [ ] Publish, merge, and advance the Atlas Apollo gitlink.
@@ -48,8 +48,10 @@ record 86/148/145 ns versus the unchanged 89/155/149 ns screen. The exact
 correction passes all 972 workspace Nextest cases, warning-denied
 all-target/all-feature Clippy, no-default compilation, doctests,
 warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
-workspace SemVer checks. Exact hosted corrective-head gates remain pending;
-Atlas integration cannot advance before both hosted workflows pass.
+workspace SemVer checks. Exact hosted CI run `29903126882` and counterbalanced
+benchmark run `29903126902` pass; the benchmark completes every replicated
+comparison in 31 minutes 9 seconds. Atlas integration cannot advance before
+Apollo PR #61 merges.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

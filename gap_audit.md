@@ -50,8 +50,9 @@
   large-prime fallback O(1) without charging in-range codelets for a linear
   scan. The same-host N=521 median improves from 4556 ns on the rejected head to
   4499 ns; Rader f64 N=29 and Winograd-pair f32 N=31/N=41 record 86/148/145 ns
-  versus the unchanged 89/155/149 ns screen. The unchanged hosted
-  counterbalanced workflow owns final performance acceptance.
+  versus the unchanged 89/155/149 ns screen. Exact hosted CI run `29903126882`
+  passes, and the unchanged counterbalanced workflow passes every replicated
+  comparison in run `29903126902` after 31 minutes 9 seconds.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
@@ -61,8 +62,8 @@
   forward correction passes all 972 workspace Nextest cases,
   warning-denied all-target/all-feature Clippy, no-default compilation,
   doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
-  policy, and workspace SemVer checks. Hosted corrective-head gates remain
-  pending.
+  policy, and workspace SemVer checks. Hosted corrective-head CI and benchmark
+  gates pass on the exact source head.
   Local all-feature test linking cannot supply CUDA coverage because
   this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This

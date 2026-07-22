@@ -32,9 +32,10 @@
   The exact correction passes all 972 workspace Nextest cases, warning-denied
   all-target/all-feature Clippy, no-default compilation, doctests,
   warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
-  workspace SemVer checks. Exact hosted corrective-head gates remain the merge
-  oracle; Atlas integration is blocked until both hosted CI and the replicated
-  benchmark pass.
+  workspace SemVer checks. Exact hosted CI run `29903126882` passes, and
+  counterbalanced benchmark run `29903126902` passes all replicated comparisons
+  in 31 minutes 9 seconds. Apollo PR #61 is ready to merge; Atlas integration
+  remains blocked until that merge commit exists.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 
