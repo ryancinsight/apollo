@@ -19,10 +19,7 @@ const KEY_COMPONENT_BITS: u32 = 12;
 /// the requested key with the stored key before cloning the value, and returns
 /// `None` when they differ. Therefore two keys mapped to the same slot cannot
 /// observe each other's values. `insert` returns the rejected value on such a
-/// collision so the caller can retain it in its sparse cache. `get_or_init`
-/// serializes initialization: the winning initializer consumes its pending
-/// value, while a waiter retains its pending value and either drops the
-/// redundant equal-key value or returns the distinct-key value. ∎
+/// collision so the caller can retain it in its sparse cache. ∎
 #[repr(transparent)]
 pub(crate) struct DirectMappedSlot<K, V>(OnceLock<(K, V)>);
 
@@ -37,30 +34,28 @@ impl<K: Copy + Eq, V: Clone> DirectMappedSlot<K, V> {
     /// Clone the stored value when its key matches `key`.
     #[inline]
     pub(crate) fn get(&self, key: K) -> Option<V> {
-        let (stored_key, value) = self.0.get()?;
-        if *stored_key != key {
-            return None;
-        }
-        Some(value.clone())
+        self.0
+            .get()
+            .and_then(|(stored_key, value)| (*stored_key == key).then(|| value.clone()))
     }
 
     /// Retain `value`, or return it when another key already owns the slot.
-    #[cold]
-    #[inline(never)]
+    #[inline]
     pub(crate) fn insert(&self, key: K, value: V) -> Result<(), V> {
-        let mut pending = Some(value);
-        let (stored_key, _) = self.0.get_or_init(|| {
-            (
-                key,
-                pending
-                    .take()
-                    .expect("invariant: slot initializer owns the pending value"),
-            )
-        });
-        if *stored_key == key {
-            Ok(())
-        } else {
-            Err(pending.expect("invariant: a colliding key leaves the pending value unconsumed"))
+        if let Some((stored_key, _)) = self.0.get() {
+            return if *stored_key == key {
+                Ok(())
+            } else {
+                Err(value)
+            };
+        }
+
+        match self.0.set((key, value)) {
+            Ok(()) => Ok(()),
+            Err((rejected_key, rejected_value)) => match self.0.get() {
+                Some((stored_key, _)) if *stored_key == rejected_key => Ok(()),
+                _ => Err(rejected_value),
+            },
         }
     }
 }

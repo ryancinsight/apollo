@@ -75,6 +75,8 @@ pub(crate) fn dft_pair_impl<
     let x0 = data[0];
     let mut sums = [eunomia::Complex::new(zero, zero); H];
     let mut idiffs = [eunomia::Complex::new(zero, zero); H];
+    let mut y0_re = x0.re;
+    let mut y0_im = x0.im;
 
     let sign = if INVERSE {
         <F as eunomia::NumericElement>::ONE
@@ -85,20 +87,18 @@ pub(crate) fn dft_pair_impl<
     for m in 0..H {
         let a = unsafe { *data.get_unchecked(m + 1) };
         let b = unsafe { *data.get_unchecked(N - 1 - m) };
+        let sum_re = a.re + b.re;
+        let sum_im = a.im + b.im;
+        y0_re += sum_re;
+        y0_im += sum_im;
         unsafe {
-            *sums.get_unchecked_mut(m) = eunomia::Complex::new(a.re + b.re, a.im + b.im);
+            *sums.get_unchecked_mut(m) = eunomia::Complex::new(sum_re, sum_im);
             let diff_re = a.re - b.re;
             let diff_im = a.im - b.im;
             *idiffs.get_unchecked_mut(m) = eunomia::Complex::new(-diff_im * sign, diff_re * sign);
         }
     }
 
-    let mut y0_re = x0.re;
-    let mut y0_im = x0.im;
-    for s in &sums {
-        y0_re += s.re;
-        y0_im += s.im;
-    }
     data[0] = eunomia::Complex::new(y0_re, y0_im);
 
     for k in 0..H {

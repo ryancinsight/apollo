@@ -13,47 +13,29 @@
   gates pass.
 - Current evidence: the unchanged Apollo `2a22319` source and lock reproduce a
   262,216-byte TLS initialization frame and deterministic Windows stack
-  overflow under GDB. The locked graph resolves one Aequitas revision and no
-  Rust `ndarray` package; 40 focused default-stack regressions and all 965
-  default workspace tests pass. Warning-denied all-feature Clippy, doctests,
-  rustdoc, provider audit, and supply-chain gates pass. Hosted all-feature
-  runtime and Python binding gates passed without the stack override for the
-  boxed candidates, but hosted benchmarks falsified both: a slice erased
-  compile-time bounds and a fixed-size box retained measurable pointer
-  overhead. A `const` TLS candidate retained the original hot representation
-  but still overflowed nine Linux test stacks in hosted run `29870196908`.
-  Process-wide keyed `OnceLock` slots now remove runtime array construction and
-  per-worker table duplication. Review then exposed that the original flat
-  indices admitted an unchecked generator component. Hosted CI passed at
-  `4e063f1`, but benchmark run `29873660989` rejected hashed tuple keys in 25
-  replicated cases. Direct length/direction indices reduced that set to three
-  in run `29877345159`, but per-hit generator tags still regressed Rader f64
-  N=29 and shifted two independent Winograd-pair cases. The first correction
-  represented the one production primitive-root pair as a private canonical
-  type but threaded it through monomorphized convolution and Good-Thomas call
-  boundaries. Benchmark run `29880881359` rejected 23 cases, including
-  unrelated power-of-two and composite rows, falsifying that expanded hot ABI.
-  Restricting the canonical pair to cache misses still changed enough code
-  layout for run `29884289655` to reject 41 cases, including unrelated prime,
-  composite, and power-of-two rows, so it is not the delivery candidate. The
-  compact Winograd inner-function candidate then passed hosted CI but benchmark
-  run `29889965363` rejected 25 cases across all three benchmark families,
-  falsifying the isolated small-prime result as a crate-wide code-layout
-  regression. That kernel is removed. The current candidate retains the
-  collision-safe direct-coordinate representation, keeps validated hits
-  inline, and moves only write-once initialization and collision recovery into
-  one cold `get_or_init` routine. `cargo llvm-lines` decreases from 439,191 to
-  438,789 lines and from 6,469 to 6,463 copies. The full local kernel-strategy
-  screen records Rader f64 N=29 at 87 ns and Winograd-pair f32 N=31/N=41 at
-  150/149 ns versus the unchanged 89/155/149 ns screen. A concurrent
-  regression proves that racing distinct keys retain exactly one stored value
-  and return the rejected value unchanged. The exact candidate passes all 972
-  default workspace tests, warning-denied all-target/all-feature Clippy,
-  no-default compilation, doctests, warning-denied rustdoc, provider audit,
-  RustSec audit, dependency policy, and all 196 applicable SemVer checks against
-  `origin/main`; all three benchmark executables also complete locally. The
-  pull-request workflow owns CUDA, review, and replicated benchmark acceptance
-  at merge.
+  overflow under GDB. Process-wide keyed `OnceLock` slots remove runtime table
+  construction and per-worker duplication while complete stored tags validate
+  direct O(1) coordinates. Hosted experiments rejected boxed, `const` TLS,
+  hashed-key, canonical-generator, and compact-Winograd candidates. PR #59
+  merged the cold `get_or_init` candidate after exact CI run `29894838150`
+  passed, but exact benchmark run `29894838141` then rejected ten replicated
+  cases. The first forward correction restored the previously verified inline
+  `OnceLock::set` slot path, removed the static-Rader membership scan, and
+  folded odd-prime Winograd DC accumulation into the existing pair pass. Exact
+  CI run `29900029465` passed, but benchmark run `29900029361` rejected one
+  half-cyclic f32 N=521 row because large primes now entered the generated
+  static-codelet match. The current correction gates that match with one
+  maximum-codelet comparison, preserving O(1) large-prime fallback without
+  restoring the linear scan for N=29. The same-host N=521 median improves from
+  4556 ns on the rejected head to 4499 ns; Rader f64 N=29 and Winograd-pair f32
+  N=31/N=41 record 86/148/145 ns versus the unchanged 89/155/149 ns screen.
+  The exact correction passes all 972 workspace Nextest cases, warning-denied
+  all-target/all-feature Clippy, no-default compilation, doctests,
+  warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
+  workspace SemVer checks. Exact hosted CI run `29903126882` passes, and
+  counterbalanced benchmark run `29903126902` passes all replicated comparisons
+  in 31 minutes 9 seconds. Apollo PR #61 is ready to merge; Atlas integration
+  remains blocked until that merge commit exists.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

@@ -37,11 +37,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   workers no longer duplicate these fixed tables. Rader tests require neither
   test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.
 
-- [patch] Keeps direct-cache hits inline while isolating write-once slot
-  initialization and collision recovery in one cold routine. The retained
-  `OnceLock::get_or_init` path preserves rejected values for the sparse cache
-  and reduces the affected release closure by 402 LLVM IR lines and six
-  emitted copies without changing cache keys or public API.
+- [patch] Replaces the static-Rader linear membership prefilter with one
+  maximum-codelet bound, keeping large-prime fallback O(1) without charging
+  static codelets for the scan, and accumulates the Winograd odd-prime DC term
+  during the existing pair decomposition. The direct cache retains its proven
+  inline `OnceLock::set` insertion path after the hosted benchmark rejected a
+  cold `get_or_init` candidate in ten replicated cases. Cache keys and public
+  APIs are unchanged.
 
 - [patch] Retires Apollo's last historical `ndarray-compat` documentation and
   aligns the Leto/Hephaestus lock closure so all units resolve through one

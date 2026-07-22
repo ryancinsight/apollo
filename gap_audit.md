@@ -37,30 +37,34 @@
   composite, and power-of-two families. A compact Winograd inner-function
   candidate passed hosted CI but benchmark run `29889965363` rejected 25 cases
   across all three workloads; the cross-family result falsifies that isolated
-  kernel measurement, and the candidate is removed. The delivery candidate
-  instead retains validated direct-slot hits inline and isolates only
-  write-once initialization and collision recovery in a cold
-  `OnceLock::get_or_init` routine. The initializing caller consumes its pending
-  value; a waiter retains its pending value and either drops it for an equal key
-  or returns it unchanged for a distinct key. This reduces the affected
-  release closure from 439,191 to 438,789 LLVM IR lines and from 6,469 to 6,463
-  emitted copies. A full local kernel-strategy screen records the prior three
-  residual rows at 87/150/149 ns versus 89/155/149 ns for the unchanged source.
-  The unchanged hosted counterbalanced workflow owns merge acceptance.
+  kernel measurement, and the candidate is removed. PR #59 merged a subsequent
+  cold `OnceLock::get_or_init` candidate after exact CI run `29894838150`
+  passed. Exact benchmark run `29894838141` then rejected ten replicated cases,
+  so that candidate is also falsified. The first forward correction restored
+  the previously verified inline `OnceLock::set` path, removed the static-Rader
+  membership scan, and accumulated the odd-prime Winograd DC term during the
+  existing pair-decomposition pass. Exact CI run `29900029465` passed, but
+  benchmark run `29900029361` rejected one half-cyclic f32 N=521 row because
+  large primes now entered the generated codelet match. The current correction
+  rejects values above the maximum static codelet with one comparison, keeping
+  large-prime fallback O(1) without charging in-range codelets for a linear
+  scan. The same-host N=521 median improves from 4556 ns on the rejected head to
+  4499 ns; Rader f64 N=29 and Winograd-pair f32 N=31/N=41 record 86/148/145 ns
+  versus the unchanged 89/155/149 ns screen. Exact hosted CI run `29903126882`
+  passes, and the unchanged counterbalanced workflow passes every replicated
+  comparison in run `29903126902` after 31 minutes 9 seconds.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
   direction-separated Bluestein entries, complete generator-tag validation,
   and the original Rader value oracles.
-  The complete 970-test default workspace provides the broad regression
-  baseline. The exact candidate passes all 972 default workspace tests,
+  Prior full-workspace executions provide the broad regression baseline. The
+  forward correction passes all 972 workspace Nextest cases,
   warning-denied all-target/all-feature Clippy, no-default compilation,
   doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
-  policy, and all 196 applicable SemVer checks against `origin/main`; all three
-  benchmark executables complete locally. A deterministic concurrent regression
-  covers distinct-key initialization races and exact rejected-value recovery in
-  the retained safe-code slot abstraction. Local all-feature test linking cannot
-  supply CUDA coverage because
+  policy, and workspace SemVer checks. Hosted corrective-head CI and benchmark
+  gates pass on the exact source head.
+  Local all-feature test linking cannot supply CUDA coverage because
   this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
   change makes no throughput claim. A two-MiB-stack regression exercises fresh
