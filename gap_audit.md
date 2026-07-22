@@ -34,27 +34,33 @@
   `29880881359`, including power-of-two and composite rows that do not consume
   Rader cache keys. Confining the canonical type to cache-miss builders still
   changed enough layout for run `29884289655` to reject 41 cases across prime,
-  composite, and power-of-two families. The delivery candidate therefore
-  restores the three-residual `df01f35` direct-coordinate source exactly. Its
-  remaining H=15 `f32` Winograd-pair specialization is moved into one compact
-  non-const inner accumulator; H=20, larger `f32` pairs, and all `f64` pairs
-  retain their existing const-specialized kernels. This cutoff follows isolated
-  release measurements on an Intel Core Ultra 9 285K with Rust 1.97.0: H=15
-  improved from a 154 ns median to 106 ns, while the compact H=20 prototype
-  regressed and was rejected. Exact-head hosted benchmark verification remains
-  required.
+  composite, and power-of-two families. A compact Winograd inner-function
+  candidate passed hosted CI but benchmark run `29889965363` rejected 25 cases
+  across all three workloads; the cross-family result falsifies that isolated
+  kernel measurement, and the candidate is removed. The delivery candidate
+  instead retains validated direct-slot hits inline and isolates only
+  write-once initialization and collision recovery in a cold
+  `OnceLock::get_or_init` routine. The initializing caller consumes its pending
+  value; a waiter retains its pending value and either drops it for an equal key
+  or returns it unchanged for a distinct key. This reduces the affected
+  release closure from 439,191 to 438,789 LLVM IR lines and from 6,469 to 6,463
+  emitted copies. A full local kernel-strategy screen records the prior three
+  residual rows at 87/150/149 ns versus 89/155/149 ns for the unchanged source.
+  Exact-head hosted benchmark verification remains required.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
   direction-separated Bluestein entries, complete generator-tag validation,
   and the original Rader value oracles.
   The complete 970-test default workspace provides the broad regression
-  baseline. Warning-denied all-feature Clippy verifies feature compilation;
-  no-default compilation, doctests, warning-denied rustdoc, provider audit,
-  RustSec audit, dependency policy, and all 196 applicable SemVer checks against
-  `origin/main` also pass. Targeted Miri passes the `f32` Winograd-pair
-  differential route, covering the compact accumulator's bounded unchecked
-  indexing. Local all-feature test linking cannot supply CUDA coverage because
+  baseline. The exact candidate passes all 972 default workspace tests,
+  warning-denied all-target/all-feature Clippy, no-default compilation,
+  doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
+  policy, and all 196 applicable SemVer checks against `origin/main`; all three
+  benchmark executables complete locally. A deterministic concurrent regression
+  covers distinct-key initialization races and exact rejected-value recovery in
+  the retained safe-code slot abstraction. Local all-feature test linking cannot
+  supply CUDA coverage because
   this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
   change makes no throughput claim. A two-MiB-stack regression exercises fresh

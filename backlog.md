@@ -36,19 +36,23 @@
   Restricting the canonical pair to cache misses still changed enough code
   layout for run `29884289655` to reject 41 cases, including unrelated prime,
   composite, and power-of-two rows, so it is not the delivery candidate. The
-  current source restores the measured direct-coordinate head `df01f35`
-  exactly, then applies the inner-function pattern only to `f32` Winograd-pair
-  half-lengths through H=15. On an Intel Core Ultra 9 285K with Rust 1.97.0,
-  the isolated H=15 release median fell from 154 ns to 106 ns; H=20 regressed
-  under the compact prototype and therefore retains const specialization.
-  Focused differential tests pass across both precisions and every generated
-  prime. The exact source passes all 970 default workspace tests, warning-denied
-  all-target/all-feature Clippy, no-default compilation, doctests,
-  warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
-  all 196 applicable SemVer checks against `origin/main`. Targeted Miri also
-  passes the `f32` Winograd-pair differential route that exercises the new
-  bounded unchecked indexing. Hosted CUDA runtime and benchmark verification
-  remain open for the new candidate.
+  compact Winograd inner-function candidate then passed hosted CI but benchmark
+  run `29889965363` rejected 25 cases across all three benchmark families,
+  falsifying the isolated small-prime result as a crate-wide code-layout
+  regression. That kernel is removed. The current candidate retains the
+  collision-safe direct-coordinate representation, keeps validated hits
+  inline, and moves only write-once initialization and collision recovery into
+  one cold `get_or_init` routine. `cargo llvm-lines` decreases from 439,191 to
+  438,789 lines and from 6,469 to 6,463 copies. The full local kernel-strategy
+  screen records Rader f64 N=29 at 87 ns and Winograd-pair f32 N=31/N=41 at
+  150/149 ns versus the unchanged 89/155/149 ns screen. A concurrent
+  regression proves that racing distinct keys retain exactly one stored value
+  and return the rejected value unchanged. The exact candidate passes all 972
+  default workspace tests, warning-denied all-target/all-feature Clippy,
+  no-default compilation, doctests, warning-denied rustdoc, provider audit,
+  RustSec audit, dependency policy, and all 196 applicable SemVer checks against
+  `origin/main`; all three benchmark executables also complete locally. Hosted
+  CUDA, review, and replicated benchmark gates remain open.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

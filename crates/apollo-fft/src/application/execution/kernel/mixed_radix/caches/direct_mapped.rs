@@ -19,7 +19,10 @@ const KEY_COMPONENT_BITS: u32 = 12;
 /// the requested key with the stored key before cloning the value, and returns
 /// `None` when they differ. Therefore two keys mapped to the same slot cannot
 /// observe each other's values. `insert` returns the rejected value on such a
-/// collision so the caller can retain it in its sparse cache. ∎
+/// collision so the caller can retain it in its sparse cache. `get_or_init`
+/// serializes initialization: the winning initializer consumes its pending
+/// value, while a waiter retains its pending value and either drops the
+/// redundant equal-key value or returns the distinct-key value. ∎
 #[repr(transparent)]
 pub(crate) struct DirectMappedSlot<K, V>(OnceLock<(K, V)>);
 
@@ -34,28 +37,30 @@ impl<K: Copy + Eq, V: Clone> DirectMappedSlot<K, V> {
     /// Clone the stored value when its key matches `key`.
     #[inline]
     pub(crate) fn get(&self, key: K) -> Option<V> {
-        self.0
-            .get()
-            .and_then(|(stored_key, value)| (*stored_key == key).then(|| value.clone()))
+        let (stored_key, value) = self.0.get()?;
+        if *stored_key != key {
+            return None;
+        }
+        Some(value.clone())
     }
 
     /// Retain `value`, or return it when another key already owns the slot.
-    #[inline]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn insert(&self, key: K, value: V) -> Result<(), V> {
-        if let Some((stored_key, _)) = self.0.get() {
-            return if *stored_key == key {
-                Ok(())
-            } else {
-                Err(value)
-            };
-        }
-
-        match self.0.set((key, value)) {
-            Ok(()) => Ok(()),
-            Err((rejected_key, rejected_value)) => match self.0.get() {
-                Some((stored_key, _)) if *stored_key == rejected_key => Ok(()),
-                _ => Err(rejected_value),
-            },
+        let mut pending = Some(value);
+        let (stored_key, _) = self.0.get_or_init(|| {
+            (
+                key,
+                pending
+                    .take()
+                    .expect("invariant: slot initializer owns the pending value"),
+            )
+        });
+        if *stored_key == key {
+            Ok(())
+        } else {
+            Err(pending.expect("invariant: a colliding key leaves the pending value unconsumed"))
         }
     }
 }
@@ -148,6 +153,7 @@ mod tests {
         bounded_directional_coordinates, bounded_pair_coordinates, DirectMappedSlot,
         FLAT_CACHE_LIMIT,
     };
+    use std::sync::{Arc, Barrier};
 
     #[test]
     fn colliding_keys_never_alias_values() {
@@ -161,6 +167,37 @@ mod tests {
         assert_eq!(slot.insert(second, 13), Err(13));
         assert_eq!(slot.get(first), Some(11));
         assert_eq!(slot.get(second), None);
+    }
+
+    #[test]
+    fn racing_colliding_inserts_preserve_the_rejected_value() {
+        let slot = Arc::new(DirectMappedSlot::new());
+        let barrier = Arc::new(Barrier::new(3));
+        let handles = [(11, 101), (13, 103)].map(|(key, value)| {
+            let slot = Arc::clone(&slot);
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                (key, value, slot.insert(key, value))
+            })
+        });
+
+        barrier.wait();
+        let results =
+            handles.map(|handle| handle.join().expect("invariant: worker does not panic"));
+        let accepted = results
+            .iter()
+            .find(|(_, _, result)| result.is_ok())
+            .expect("invariant: one initializer wins");
+        let rejected = results
+            .iter()
+            .find_map(|(_, value, result)| result.as_ref().err().map(|rejected| (value, rejected)))
+            .expect("invariant: the colliding initializer retains its value");
+
+        assert_eq!(rejected.0, rejected.1);
+        assert_eq!(slot.get(accepted.0), Some(accepted.1));
+        assert_eq!(slot.get(results[0].0).is_some(), results[0].2.is_ok());
+        assert_eq!(slot.get(results[1].0).is_some(), results[1].2.is_ok());
     }
 
     #[test]

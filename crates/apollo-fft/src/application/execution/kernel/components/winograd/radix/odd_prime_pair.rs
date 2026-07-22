@@ -101,44 +101,29 @@ pub(crate) fn dft_pair_impl<
     }
     data[0] = eunomia::Complex::new(y0_re, y0_im);
 
-    if H
-        <= <F as crate::application::execution::kernel::components::winograd::traits::private::Sealed>::COMPACT_PAIR_MAX_HALF_LENGTH
-    {
-        // SAFETY: `sums` and `idiffs` have length H, both coefficient tables
-        // have shape H x H, and `data` has length N + 1 = 2 * H + 1.
-        unsafe {
-            accumulate_pair_outputs(
-                data,
-                x0,
-                &sums,
-                &idiffs,
-                cos.as_flattened(),
-                sin.as_flattened(),
-            );
-        }
-        return;
-    }
-
     for k in 0..H {
         let cos_row = unsafe { cos.get_unchecked(k) };
         let sin_row = unsafe { sin.get_unchecked(k) };
 
+        // Two-pass accumulation: compute base and delta contributions separately.
+        // This improves instruction-level parallelism and CPU pipelining,
+        // enabling better utilization of dual FMA units on modern out-of-order CPUs.
         let mut base_re = x0.re;
         let mut base_im = x0.im;
         let mut delta_re = zero;
         let mut delta_im = zero;
 
         for m in 0..H {
-            let sum = unsafe { *sums.get_unchecked(m) };
-            let cosine = unsafe { *cos_row.get_unchecked(m) };
-            base_re += sum.re * cosine;
-            base_im += sum.im * cosine;
+            let s_m = unsafe { *sums.get_unchecked(m) };
+            let c = unsafe { *cos_row.get_unchecked(m) };
+            base_re += s_m.re * c;
+            base_im += s_m.im * c;
         }
         for m in 0..H {
-            let idiff = unsafe { *idiffs.get_unchecked(m) };
-            let sine = unsafe { *sin_row.get_unchecked(m) };
-            delta_re += idiff.re * sine;
-            delta_im += idiff.im * sine;
+            let id_m = unsafe { *idiffs.get_unchecked(m) };
+            let s = unsafe { *sin_row.get_unchecked(m) };
+            delta_re += id_m.re * s;
+            delta_im += id_m.im * s;
         }
 
         unsafe {
@@ -147,137 +132,6 @@ pub(crate) fn dft_pair_impl<
             *data.get_unchecked_mut(N - 1 - k) =
                 eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
         }
-    }
-}
-
-/// Accumulates paired outputs without specializing the quadratic loop for each
-/// prime length.
-///
-/// The const-generic boundary validates the matrix shapes before this call.
-/// Keeping the quadratic body in a non-const inner function prevents LLVM from
-/// fully unrolling the measured profitable small-prime specializations into
-/// multi-kilobyte kernels. Four output rows remain the fixed SIMD/ILP unit,
-/// while `h` stays a runtime loop bound to keep instruction and stack footprints
-/// independent of `N`.
-///
-/// # Safety
-///
-/// `idiffs` must have the same length `h` as `sums`; `cos` and `sin` must each
-/// have length `h * h`; and `data` must have length `2 * h + 1`.
-#[inline(never)]
-unsafe fn accumulate_pair_outputs<F: WinogradScalar>(
-    data: &mut [eunomia::Complex<F>],
-    x0: eunomia::Complex<F>,
-    sums: &[eunomia::Complex<F>],
-    idiffs: &[eunomia::Complex<F>],
-    cos: &[F],
-    sin: &[F],
-) {
-    const LANES: usize = 4;
-
-    let h = sums.len();
-    debug_assert_eq!(idiffs.len(), h);
-    debug_assert_eq!(cos.len(), h * h);
-    debug_assert_eq!(sin.len(), h * h);
-    debug_assert_eq!(data.len(), 2 * h + 1);
-
-    let zero = <F as eunomia::NumericElement>::ZERO;
-    let mut k = 0;
-    while k + LANES <= h {
-        let mut base_re = [x0.re; LANES];
-        let mut base_im = [x0.im; LANES];
-        let mut delta_re = [zero; LANES];
-        let mut delta_im = [zero; LANES];
-
-        let unrolled = h - h % LANES;
-        let mut m = 0;
-        while m < unrolled {
-            // SAFETY: `m < h`; all four rows start below `h`; the shape
-            // assertions establish `cos.len() == sin.len() == h * h`.
-            unsafe {
-                for element in 0..LANES {
-                    let input = m + element;
-                    let sum = *sums.get_unchecked(input);
-                    let idiff = *idiffs.get_unchecked(input);
-                    for lane in 0..LANES {
-                        let offset = (k + lane) * h + input;
-                        let cosine = *cos.get_unchecked(offset);
-                        let sine = *sin.get_unchecked(offset);
-                        *base_re.get_unchecked_mut(lane) += sum.re * cosine;
-                        *base_im.get_unchecked_mut(lane) += sum.im * cosine;
-                        *delta_re.get_unchecked_mut(lane) += idiff.re * sine;
-                        *delta_im.get_unchecked_mut(lane) += idiff.im * sine;
-                    }
-                }
-            }
-            m += LANES;
-        }
-        while m < h {
-            // SAFETY: `m < h`; all four rows start below `h`; the shape
-            // assertions establish `cos.len() == sin.len() == h * h`.
-            unsafe {
-                let sum = *sums.get_unchecked(m);
-                let idiff = *idiffs.get_unchecked(m);
-                for lane in 0..LANES {
-                    let offset = (k + lane) * h + m;
-                    let cosine = *cos.get_unchecked(offset);
-                    let sine = *sin.get_unchecked(offset);
-                    *base_re.get_unchecked_mut(lane) += sum.re * cosine;
-                    *base_im.get_unchecked_mut(lane) += sum.im * cosine;
-                    *delta_re.get_unchecked_mut(lane) += idiff.re * sine;
-                    *delta_im.get_unchecked_mut(lane) += idiff.im * sine;
-                }
-            }
-            m += 1;
-        }
-
-        for lane in 0..LANES {
-            let output = k + lane;
-            // SAFETY: `output < h` and `data.len() == 2 * h + 1`, so both
-            // paired output indices are distinct and in bounds.
-            unsafe {
-                let base_re = *base_re.get_unchecked(lane);
-                let base_im = *base_im.get_unchecked(lane);
-                let delta_re = *delta_re.get_unchecked(lane);
-                let delta_im = *delta_im.get_unchecked(lane);
-                *data.get_unchecked_mut(output + 1) =
-                    eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
-                *data.get_unchecked_mut(2 * h - output) =
-                    eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
-            }
-        }
-        k += LANES;
-    }
-
-    while k < h {
-        let mut base_re = x0.re;
-        let mut base_im = x0.im;
-        let mut delta_re = zero;
-        let mut delta_im = zero;
-        for m in 0..h {
-            // SAFETY: `k < h`, `m < h`, and the shape assertions establish
-            // every indexed slice bound.
-            unsafe {
-                let sum = *sums.get_unchecked(m);
-                let idiff = *idiffs.get_unchecked(m);
-                let offset = k * h + m;
-                let cosine = *cos.get_unchecked(offset);
-                let sine = *sin.get_unchecked(offset);
-                base_re += sum.re * cosine;
-                base_im += sum.im * cosine;
-                delta_re += idiff.re * sine;
-                delta_im += idiff.im * sine;
-            }
-        }
-        // SAFETY: `k < h` and `data.len() == 2 * h + 1` establish both
-        // paired output indices.
-        unsafe {
-            *data.get_unchecked_mut(k + 1) =
-                eunomia::Complex::new(base_re + delta_re, base_im + delta_im);
-            *data.get_unchecked_mut(2 * h - k) =
-                eunomia::Complex::new(base_re - delta_re, base_im - delta_im);
-        }
-        k += 1;
     }
 }
 

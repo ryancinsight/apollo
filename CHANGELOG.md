@@ -37,10 +37,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   workers no longer duplicate these fixed tables. Rader tests require neither
   test-specific 8 MiB threads nor a CI-wide 16 MiB stack override.
 
-- [patch] Routes measured profitable `f32` Winograd-pair half-lengths through
-  one compact non-const inner accumulator, retaining const-specialized kernels
-  for `f64` and larger pairs. This bounds small-prime instruction and stack
-  footprints without changing transform arithmetic order or public API.
+- [patch] Keeps direct-cache hits inline while isolating write-once slot
+  initialization and collision recovery in one cold routine. The retained
+  `OnceLock::get_or_init` path preserves rejected values for the sparse cache
+  and reduces the affected release closure by 402 LLVM IR lines and six
+  emitted copies without changing cache keys or public API.
 
 - [patch] Retires Apollo's last historical `ndarray-compat` documentation and
   aligns the Leto/Hephaestus lock closure so all units resolve through one

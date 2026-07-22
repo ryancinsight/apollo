@@ -24,12 +24,11 @@
 **Current evidence:** exact `2a22319` baseline aborts in
 `TL_RADER_NEGACYCLIC_PRECISE_FLAT` initialization with a 262,216-byte
 `___chkstk_ms` frame. The bounded direct-slot source passes 44/44 focused
-regressions and all 970 default workspace tests, warning-denied all-target,
+regressions and all 972 default workspace tests, warning-denied all-target,
 all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
 provider audit, RustSec audit, dependency policy, and all 196 applicable SemVer
-checks against `origin/main`. Targeted Miri passes the `f32` Winograd-pair
-differential route that exercises the new bounded unchecked indexing. The
-locked graph contains one Aequitas revision and no Rust `ndarray` package.
+checks against `origin/main`. The locked graph contains one Aequitas revision
+and no Rust `ndarray` package.
 Hosted benchmarks rejected both boxed representations: a slice lost
 compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
@@ -40,15 +39,20 @@ through monomorphized convolution and Good-Thomas boundaries; benchmark run
 `29880881359` rejected 23 cases, including unrelated power-of-two and composite
 rows. Restricting that canonical pair to cache misses still changed enough code
 layout for run `29884289655` to reject 41 cases, including unrelated prime,
-composite, and power-of-two rows. The current candidate restores the measured
-three-residual direct-coordinate source shape exactly, then routes only the
-measured profitable `f32` Winograd-pair half-lengths through one compact
-non-const inner kernel. Isolated release measurements on an Intel Core Ultra 9
-285K with Rust 1.97.0 reduced H=15 from a 154 ns median to 106 ns; H=20 was
-slower under the compact kernel and therefore retains the existing
-const-specialized body. Focused differential tests pass across both precisions
-and every generated prime. Exact-head hosted CUDA, review, and benchmark gates
-remain pending.
+composite, and power-of-two rows. The compact Winograd candidate passed hosted
+CI but benchmark run `29889965363` rejected 25 cross-family cases, so that
+kernel is removed. The current candidate retains the direct-coordinate source,
+keeps validated hits inline, and isolates only write-once initialization and
+collision recovery in a cold `get_or_init` routine. `cargo llvm-lines` drops
+from 439,191 to 438,789 lines and from 6,469 to 6,463 copies. The full local
+kernel-strategy screen records the three prior residuals at 87/150/149 ns
+versus the unchanged 89/155/149 ns screen. A concurrent value-semantic
+regression covers racing distinct-key initialization. The exact candidate
+passes all 972 default workspace tests, warning-denied all-target/all-feature
+Clippy, no-default compilation, doctests, warning-denied rustdoc, provider
+audit, RustSec audit, dependency policy, and all 196 applicable SemVer checks
+against `origin/main`; all three benchmark executables complete locally.
+Hosted CUDA, review, and replicated benchmark gates remain pending.
 
 ## D17-scope-benchmark-regression-gate [patch]
 
