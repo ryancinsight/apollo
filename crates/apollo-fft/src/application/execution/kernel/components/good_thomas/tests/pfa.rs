@@ -1,4 +1,4 @@
-use super::super::{ordered_rader_n1_config, pfa_fft_natural_inplace, ORDERED_RADER_SKIP_PRIMES};
+use super::super::{pfa_fft_natural_inplace, supports_ordered_rader_n1, ORDERED_RADER_SKIP_PRIMES};
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
 use crate::application::execution::kernel::test_utils::max_abs_err_64;
 use eunomia::Complex64;
@@ -10,20 +10,20 @@ fn ordered_rader_pfa_config_selects_rader_primes_only() {
     // Primes in ORDERED_RADER_SKIP_PRIMES must be rejected.
     for &n1 in &ORDERED_RADER_SKIP_PRIMES {
         assert!(
-            ordered_rader_n1_config(n1).is_none(),
+            !supports_ordered_rader_n1(n1),
             "n1={n1} (in ORDERED_RADER_SKIP_PRIMES) must be rejected"
         );
     }
     // Non-prime must be rejected.
     assert!(
-        ordered_rader_n1_config(49).is_none(),
+        !supports_ordered_rader_n1(49),
         "non-prime n1=49 must be rejected"
     );
 
     // Sample of primes NOT in the skip set that should use ordered Rader.
     for n1 in [59usize, 61, 67, 71] {
         assert!(
-            ordered_rader_n1_config(n1).is_some(),
+            supports_ordered_rader_n1(n1),
             "n1={n1} should use ordered Rader inside PFA"
         );
     }

@@ -28,15 +28,19 @@
   `4e063f1`, but benchmark run `29873660989` rejected hashed tuple keys in 25
   replicated cases. Direct length/direction indices reduced that set to three
   in run `29877345159`, but per-hit generator tags still regressed Rader f64
-  N=29 and shifted two independent Winograd-pair cases. The current correction
-  represents the one production primitive-root pair as a private canonical
-  type, removing the unsupported generator dimension before cache lookup and
-  restoring raw direct `OnceLock` slots. All 44 focused regressions and the
+  N=29 and shifted two independent Winograd-pair cases. The first correction
+  represented the one production primitive-root pair as a private canonical
+  type but threaded it through monomorphized convolution and Good-Thomas call
+  boundaries. Benchmark run `29880881359` rejected 23 cases, including
+  unrelated power-of-two and composite rows, falsifying that expanded hot ABI.
+  The current correction constructs the canonical pair only inside cache-miss
+  builders, removing generator state from every cache-hit and convolution call
+  while retaining raw direct `OnceLock` slots. All 44 focused regressions and the
   complete 969-test default workspace pass. Warning-denied all-target,
   all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
   provider audit, RustSec audit, dependency policy, and all 196 applicable
   SemVer checks against `origin/main` pass. Exact-head hosted runtime and
-  benchmark verification remain open.
+  benchmark verification remain open for the new head.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 

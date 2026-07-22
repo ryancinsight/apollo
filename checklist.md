@@ -34,10 +34,13 @@ compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
 `const` TLS candidate still overflowed nine hosted Linux tests in run
 `29870196908`. Hosted CI passed at `df01f35`, but benchmark run `29877345159`
 still rejected three cases after direct coordinates reduced the prior 25-case
-hashed-key failure. The current process-wide table admits only the canonical
-generator selected at the operation boundary, making length and direction the
-complete cache key and restoring raw `OnceLock` access throughout. Exact-head
-hosted gates remain pending.
+hashed-key failure. The first canonical-type head threaded generator state
+through monomorphized convolution and Good-Thomas boundaries; benchmark run
+`29880881359` rejected 23 cases, including unrelated power-of-two and composite
+rows. The current candidate constructs the canonical pair only inside
+cache-miss builders, so cache hits and convolution calls carry only length and
+direction while retaining raw `OnceLock` access. Exact-head hosted gates remain
+pending.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

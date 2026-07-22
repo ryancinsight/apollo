@@ -25,7 +25,6 @@ pub(crate) fn rader_ordered_impl<
 >(
     data: &mut [F::Complex],
     n: usize,
-    generator_inverse: super::generator::CanonicalRaderGeneratorInverse,
 ) {
     debug_assert!(data.len() >= n);
     debug_assert!(n > 2);
@@ -37,15 +36,11 @@ pub(crate) fn rader_ordered_impl<
     let sum_x = sum_ordered::<F>(nonzero);
 
     if super::prefers_bluestein_for_rader::<F>(n) {
-        rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n, generator_inverse);
+        rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n);
     } else if super::prefers_half_cyclic_for_rader::<F>(n) {
-        rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(
-            nonzero,
-            n,
-            generator_inverse,
-        );
+        rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(nonzero, n);
     } else {
-        rader_ordered_convolve::<F, INVERSE, super::FullCyclic>(nonzero, n, generator_inverse);
+        rader_ordered_convolve::<F, INVERSE, super::FullCyclic>(nonzero, n);
     }
 
     head[0] = x0 + sum_x;
@@ -60,9 +55,8 @@ fn rader_ordered_convolve<
 >(
     nonzero: &mut [F::Complex],
     n: usize,
-    generator_inverse: super::generator::CanonicalRaderGeneratorInverse,
 ) {
-    B::convolve::<F, INVERSE>(nonzero, n, generator_inverse);
+    B::convolve::<F, INVERSE>(nonzero, n);
 }
 
 #[inline]
@@ -137,9 +131,9 @@ mod tests {
         let expected = dft_forward(&input);
         let mut ordered = to_ordered_input(&input, 29, generator.root());
 
-        rader_ordered_impl::<f64, false>(&mut ordered, 29, generator.inverse());
+        rader_ordered_impl::<f64, false>(&mut ordered, 29);
 
-        let got = to_natural_output(&ordered, 29, generator.inverse().get());
+        let got = to_natural_output(&ordered, 29, generator.inverse());
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=29 forward max_err={err:.2e}");
     }
@@ -151,9 +145,9 @@ mod tests {
         let expected: Vec<_> = dft_inverse(&input).into_iter().map(|x| x * 31.0).collect();
         let mut ordered = to_ordered_input(&input, 31, generator.root());
 
-        rader_ordered_impl::<f64, true>(&mut ordered, 31, generator.inverse());
+        rader_ordered_impl::<f64, true>(&mut ordered, 31);
 
-        let got = to_natural_output(&ordered, 31, generator.inverse().get());
+        let got = to_natural_output(&ordered, 31, generator.inverse());
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=31 inverse max_err={err:.2e}");
     }
@@ -165,9 +159,9 @@ mod tests {
         let expected = dft_forward(&input);
         let mut ordered = to_ordered_input(&input, 37, generator.root());
 
-        rader_ordered_impl::<f64, false>(&mut ordered, 37, generator.inverse());
+        rader_ordered_impl::<f64, false>(&mut ordered, 37);
 
-        let got = to_natural_output(&ordered, 37, generator.inverse().get());
+        let got = to_natural_output(&ordered, 37, generator.inverse());
         let err = max_err(&got, &expected);
         assert!(err < 8e-12, "ordered Rader N=37 forward max_err={err:.2e}");
     }

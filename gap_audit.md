@@ -13,10 +13,10 @@
   slot without constructing a full table on an active execution stack, and
   worker count no longer multiplies these fixed tables. Remove the four 8 MiB
   test-thread wrappers and the CI-wide 16 MiB `RUST_MIN_STACK` override that
-  masked the production stack requirement. The Rader operation boundary now
-  returns a private `CanonicalRaderGenerator`; no other constructor exists, so
-  one prime length admits exactly one primitive-root pair. Spectrum and
-  Bluestein cache identities can therefore consist of length and direction,
+  masked the production stack requirement. Cache-miss builders obtain a private
+  `CanonicalRaderGenerator`; no other constructor exists, so one prime length
+  admits exactly one primitive-root pair without widening hot call boundaries.
+  Spectrum and Bluestein cache identities can therefore consist of length and direction,
   while generator-order identity consists of length. Their raw direct indices
   encode every admitted semantic component without hashing or tag comparison.
 - Rejected designs: a boxed slice removed the stack frame but erased the
@@ -31,9 +31,13 @@
   coordinates removed hashing but benchmark run `29877345159` still rejected
   Rader f64 N=29 and Winograd-pair f32 N=31/N=41. This falsified per-hit
   generator validation even after the residual set fell from 25 cases to
-  three. Canonical-generator construction removes that unsupported runtime
-  variation dimension before lookup and restores raw direct slots. It requires
-  exact-head benchmark verification.
+  three. Threading the canonical-generator type through the convolution and
+  Good-Thomas call graph then broadened the failure to 23 cases in run
+  `29880881359`, including power-of-two and composite rows that do not consume
+  Rader cache keys. The current design confines canonical-generator
+  construction to cache-miss builders: cache hits and convolution boundaries
+  carry only length and direction, and raw direct slots remain authoritative.
+  It requires exact-head benchmark verification.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,

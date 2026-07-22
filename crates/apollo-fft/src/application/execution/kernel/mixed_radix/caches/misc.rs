@@ -4,7 +4,6 @@ use super::super::super::radix_shape::{
 use super::direct_mapped::{
     bounded_directional_index, bounded_index, DIRECTIONAL_FLAT_CACHE_LIMIT, FLAT_CACHE_LIMIT,
 };
-use crate::application::execution::kernel::components::rader::generator::CanonicalRaderGenerator;
 use eunomia::{Complex32, Complex64};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -305,8 +304,7 @@ cached_fetch_arc! {
 #[inline]
 pub(crate) fn cached_rader_order(
     n: usize,
-    generator: CanonicalRaderGenerator,
-    build_fn: impl FnOnce(usize, usize) -> Vec<usize>,
+    build_fn: impl FnOnce(usize) -> Vec<usize>,
 ) -> Arc<[usize]> {
     if let Some(index) = bounded_index(n) {
         if let Some(v) = RADER_ORDER_FLAT[index].get() {
@@ -327,7 +325,7 @@ pub(crate) fn cached_rader_order(
         } else {
             #[cfg(feature = "cache-profiling")]
             super::profiler::get().rader_order.miss();
-            let order: Arc<[usize]> = Arc::from(build_fn(n, generator.root()));
+            let order: Arc<[usize]> = Arc::from(build_fn(n));
             RADER_ORDER_CACHE
                 .write()
                 .entry(n)

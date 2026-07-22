@@ -159,20 +159,19 @@ fn runtime_rader_caches_match_canonical_generator() {
     const PRIME: usize = 43;
     let generator = super::generator::primitive_root_and_inverse(PRIME);
     let expected_order = super::build_generator_order(PRIME, generator.root());
-    let cached_order = super::cached_generator_order(PRIME, generator);
+    let cached_order = super::cached_generator_order(PRIME);
     assert_eq!(cached_order.as_ref(), expected_order.as_slice());
 
     let mut inverse_power = 1usize;
     let kernel: Vec<_> = (0..PRIME - 1)
         .map(|_| {
             let angle = -std::f64::consts::TAU * (inverse_power as f64) / (PRIME as f64);
-            inverse_power = (inverse_power * generator.inverse().get()) % PRIME;
+            inverse_power = (inverse_power * generator.inverse()) % PRIME;
             Complex64::new(angle.cos(), angle.sin())
         })
         .collect();
     let expected_spectrum = dft_forward(&kernel);
-    let cached_spectrum =
-        <f64 as MixedRadixScalar>::cached_rader_spectrum::<false>(PRIME, generator.inverse());
+    let cached_spectrum = <f64 as MixedRadixScalar>::cached_rader_spectrum::<false>(PRIME);
     let error = max_abs_err_64(cached_spectrum.as_ref(), &expected_spectrum);
     assert!(
         error < 1.0e-10,

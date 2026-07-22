@@ -30,7 +30,6 @@
 //! Apollo's Stockham kernel at N=32768 is heavily optimized (pair+3×triple+quad
 //! fused stages), making this a large net win.
 
-use super::generator::CanonicalRaderGeneratorInverse;
 use crate::application::execution::kernel::mixed_radix::scalar::{
     BluesteinEntry, BluesteinKey, BluesteinStore,
 };
@@ -46,10 +45,7 @@ use std::sync::Arc;
 /// same pattern as all other Apollo FFT caches. The global write lock is
 /// acquired only on a miss after confirming the miss under the read lock,
 /// preventing self-deadlock.
-fn cached_bluestein_entry<F, const INVERSE: bool>(
-    n: usize,
-    generator_inverse: CanonicalRaderGeneratorInverse,
-) -> BluesteinEntry<F::Complex>
+fn cached_bluestein_entry<F, const INVERSE: bool>(n: usize) -> BluesteinEntry<F::Complex>
 where
     F: MixedRadixScalar<Complex = Complex<F>> + BluesteinStore<Cpx = Complex<F>>,
 {
@@ -66,7 +62,8 @@ where
         return v;
     }
 
-    let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse.get());
+    let generator_inverse = super::generator::primitive_root_and_inverse(n).inverse();
+    let entry = build_bluestein_entry::<F, INVERSE>(n, m, generator_inverse);
     let v = {
         let mut write_guard = F::global().write();
         write_guard.entry(key).or_insert(entry).clone()
@@ -224,12 +221,11 @@ pub(super) fn rader_bluestein_convolve_inplace<
 >(
     padded: &mut [F::Complex],
     n: usize,
-    generator_inverse: CanonicalRaderGeneratorInverse,
 ) {
     let m = padded.len();
     debug_assert_eq!(m, n - 1);
 
-    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n, generator_inverse);
+    let kernel_fft = cached_bluestein_entry::<F, INVERSE>(n);
     let p = kernel_fft.len();
     debug_assert!(is_7_smooth(p));
     debug_assert!(p >= 2 * m - 1);

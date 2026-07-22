@@ -1,5 +1,4 @@
 use super::transpose::transpose_tiled_scalar;
-use crate::application::execution::kernel::components::rader::generator::CanonicalRaderGeneratorInverse;
 use crate::application::execution::kernel::components::radix_composite::CompositeCache;
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
 use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
@@ -11,10 +10,10 @@ pub(crate) mod private {
     impl Sealed for f32 {}
 }
 
-/// Bluestein cache key: `(convolution_length, inverse_flag)`.
+/// Bluestein cache key: `(rader_nonzero_length, inverse_flag)`.
 ///
-/// The generator is excluded because callers must carry a
-/// `CanonicalRaderGenerator`, which admits one generator per prime length.
+/// The generator is excluded because cache-miss builders obtain the sole
+/// canonical generator admitted for each prime length.
 pub(crate) type BluesteinKey = (usize, bool);
 
 pub(crate) type BluesteinEntry<C> = Arc<[C]>;
@@ -86,17 +85,13 @@ pub trait MixedRadixScalar:
     fn with_twiddle_fwd<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
     fn with_twiddle_inv<R>(n: usize, f: impl FnOnce(&[Self::Complex]) -> R) -> R;
 
-    fn cached_rader_spectrum<const INVERSE: bool>(
-        n: usize,
-        generator_inverse: CanonicalRaderGeneratorInverse,
-    ) -> Arc<[Self::Complex]>;
+    fn cached_rader_spectrum<const INVERSE: bool>(n: usize) -> Arc<[Self::Complex]>;
 
     /// Return precomputed negacyclic Rader convolution spectra for prime length `n`.
     ///
     /// Returns `(cyclic_spectrum, negacyclic_spectrum)` each of length `(n-1)/2`.
     fn cached_rader_negacyclic_spectra<const INVERSE: bool>(
         n: usize,
-        generator_inverse: CanonicalRaderGeneratorInverse,
     ) -> (Arc<[Self::Complex]>, Arc<[Self::Complex]>);
 
     /// Return precomputed twist twiddles `e^{i*pi*j/m}` for negacyclic convolution.
