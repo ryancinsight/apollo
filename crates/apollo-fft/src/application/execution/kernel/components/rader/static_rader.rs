@@ -15,12 +15,28 @@ generate_rader_fft!(43);
 generate_rader_fft!(47);
 generate_rader_fft!(53);
 
+const STATIC_RADER_MAX_PRIME: usize = 53;
+
 /// Canonical list of primes that have a dedicated static (AST-generated)
 /// Rader codelet.  Must stay in sync with the `generate_rader_fft!`
 /// invocations above and with the match arms in [`try_static_rader`].
 #[cfg(test)]
-pub(crate) const STATIC_RADER_PRIMES: &[usize] =
-    &[5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
+pub(crate) const STATIC_RADER_PRIMES: &[usize] = &[
+    5,
+    7,
+    11,
+    13,
+    17,
+    19,
+    23,
+    29,
+    31,
+    37,
+    41,
+    43,
+    47,
+    STATIC_RADER_MAX_PRIME,
+];
 
 #[inline]
 pub(crate) fn try_static_rader<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize) -> bool
@@ -43,6 +59,12 @@ where
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<46>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<52>,
 {
+    // Larger primes always use the dynamic path. Reject them before the
+    // generated match so fallback cost does not scale with static codelet count.
+    if n > STATIC_RADER_MAX_PRIME {
+        return false;
+    }
+
     match n {
         5 => {
             rader_fft_5::<F, INVERSE>(data);

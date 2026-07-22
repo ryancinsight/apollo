@@ -40,14 +40,18 @@
   kernel measurement, and the candidate is removed. PR #59 merged a subsequent
   cold `OnceLock::get_or_init` candidate after exact CI run `29894838150`
   passed. Exact benchmark run `29894838141` then rejected ten replicated cases,
-  so that candidate is also falsified. The forward correction restores the
-  previously verified inline `OnceLock::set` path, removes the redundant linear
-  membership scan before exhaustive static-Rader dispatch, and accumulates the
-  odd-prime Winograd DC term during the existing pair-decomposition pass. A
-  focused local screen improves the three earlier residual medians from
-  89/155/149 ns to 73/149/144 ns for Rader f64 N=29 and Winograd-pair f32
-  N=31/N=41. The unchanged hosted counterbalanced workflow owns final
-  performance acceptance.
+  so that candidate is also falsified. The first forward correction restored
+  the previously verified inline `OnceLock::set` path, removed the static-Rader
+  membership scan, and accumulated the odd-prime Winograd DC term during the
+  existing pair-decomposition pass. Exact CI run `29900029465` passed, but
+  benchmark run `29900029361` rejected one half-cyclic f32 N=521 row because
+  large primes now entered the generated codelet match. The current correction
+  rejects values above the maximum static codelet with one comparison, keeping
+  large-prime fallback O(1) without charging in-range codelets for a linear
+  scan. The same-host N=521 median improves from 4556 ns on the rejected head to
+  4499 ns; Rader f64 N=29 and Winograd-pair f32 N=31/N=41 record 86/148/145 ns
+  versus the unchanged 89/155/149 ns screen. The unchanged hosted
+  counterbalanced workflow owns final performance acceptance.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,

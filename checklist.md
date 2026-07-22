@@ -19,9 +19,9 @@
       workspace gate.
 - [x] Pass hosted all-feature pull-request run `29894838150`, which supplies the
       CUDA linker coverage unavailable on this Windows host.
-- [ ] Pass the forward corrective head through hosted all-feature CI and the
-      exact replicated benchmark after run `29894838141` rejected the merged
-      cold-initialization candidate.
+- [ ] Pass the updated forward corrective head through hosted all-feature CI
+      and the exact replicated benchmark after run `29900029361` isolated one
+      large-prime static-dispatch regression.
 - [ ] Publish, merge, and advance the Atlas Apollo gitlink.
 
 **Current evidence:** exact `2a22319` baseline aborts in
@@ -36,16 +36,20 @@ Hosted experiments rejected boxed, `const` TLS, hashed-key,
 canonical-generator, and compact-Winograd candidates. PR #59 merged the cold
 `get_or_init` candidate after exact CI run `29894838150` passed, but exact
 benchmark run `29894838141` subsequently rejected ten replicated cases. The
-forward correction restores the previously verified inline `OnceLock::set`
-path, removes the redundant static-Rader membership scan, and folds odd-prime
-Winograd DC accumulation into the existing pair pass. The focused local screen
-improves the three earlier residual medians from 89/155/149 ns to 73/149/144 ns
-for Rader f64 N=29 and Winograd-pair f32 N=31/N=41. The exact correction passes
-all 972 workspace Nextest cases, warning-denied all-target/all-feature Clippy,
-no-default compilation, doctests, warning-denied rustdoc, provider audit,
-RustSec audit, dependency policy, and workspace SemVer checks. Exact hosted
-corrective-head gates remain pending; Atlas integration cannot advance before
-both hosted workflows pass.
+first forward correction restored the previously verified inline
+`OnceLock::set` path, removed the static-Rader membership scan, and folded
+odd-prime Winograd DC accumulation into the existing pair pass. Exact CI run
+`29900029465` passed, but benchmark run `29900029361` rejected one half-cyclic
+f32 N=521 row because large primes entered the generated codelet match. The
+current correction uses one maximum-codelet comparison for O(1) large-prime
+rejection without restoring the N=29 linear scan. The same-host N=521 median
+improves from 4556 ns to 4499 ns; Rader f64 N=29 and Winograd-pair f32 N=31/N=41
+record 86/148/145 ns versus the unchanged 89/155/149 ns screen. The exact
+correction passes all 972 workspace Nextest cases, warning-denied
+all-target/all-feature Clippy, no-default compilation, doctests,
+warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
+workspace SemVer checks. Exact hosted corrective-head gates remain pending;
+Atlas integration cannot advance before both hosted workflows pass.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

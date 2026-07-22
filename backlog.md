@@ -19,17 +19,22 @@
   hashed-key, canonical-generator, and compact-Winograd candidates. PR #59
   merged the cold `get_or_init` candidate after exact CI run `29894838150`
   passed, but exact benchmark run `29894838141` then rejected ten replicated
-  cases. The forward correction restores the previously verified inline
-  `OnceLock::set` slot path, removes the redundant static-Rader membership scan,
-  and folds odd-prime Winograd DC accumulation into the existing pair pass.
-  The focused local kernel screen improves the three earlier residual medians
-  from 89/155/149 ns to 73/149/144 ns for Rader f64 N=29 and Winograd-pair f32
-  N=31/N=41. The exact correction passes all 972 workspace Nextest cases,
-  warning-denied all-target/all-feature Clippy, no-default compilation,
-  doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
-  policy, and workspace SemVer checks. Exact hosted corrective-head gates
-  remain the merge oracle; Atlas integration is blocked until both hosted CI
-  and the replicated benchmark pass.
+  cases. The first forward correction restored the previously verified inline
+  `OnceLock::set` slot path, removed the static-Rader membership scan, and
+  folded odd-prime Winograd DC accumulation into the existing pair pass. Exact
+  CI run `29900029465` passed, but benchmark run `29900029361` rejected one
+  half-cyclic f32 N=521 row because large primes now entered the generated
+  static-codelet match. The current correction gates that match with one
+  maximum-codelet comparison, preserving O(1) large-prime fallback without
+  restoring the linear scan for N=29. The same-host N=521 median improves from
+  4556 ns on the rejected head to 4499 ns; Rader f64 N=29 and Winograd-pair f32
+  N=31/N=41 record 86/148/145 ns versus the unchanged 89/155/149 ns screen.
+  The exact correction passes all 972 workspace Nextest cases, warning-denied
+  all-target/all-feature Clippy, no-default compilation, doctests,
+  warning-denied rustdoc, provider audit, RustSec audit, dependency policy, and
+  workspace SemVer checks. Exact hosted corrective-head gates remain the merge
+  oracle; Atlas integration is blocked until both hosted CI and the replicated
+  benchmark pass.
 
 ## D17-scope-benchmark-regression-gate [patch] — done
 
