@@ -22,7 +22,6 @@ on:
       candidate_ref:
         description: Git revision compared with the baseline
         required: true
-        default: main
         type: string
 
 permissions:
