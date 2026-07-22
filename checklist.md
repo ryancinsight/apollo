@@ -8,7 +8,7 @@
 - [x] Compare exact `9f3b9f0` f64 Rader and mixed-radix code generation and
       same-CPU timings against `05170b8`; do not alter production code when the
       reported regressions are not repeatable.
-- [ ] Complete the same pinned A/B measurement for the five reported Rader
+- [x] Complete the same pinned A/B measurement for the five reported Rader
       cases.
 - [x] Add explicit baseline and candidate inputs so a failed hosted benchmark
       can be rerun without changing production code or the benchmark instrument.

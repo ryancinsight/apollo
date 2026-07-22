@@ -19,13 +19,15 @@
   slowdowns in all four comparisons. The largest changed length 49 from
   188-190 ns to 242-243 ns. Provider rollback is invalid: old Aequitas requires
   Eunomia `^0.6`, while current Leto requires Hermes `^0.4.1`. Exact Rust 1.97.0
-  same-CPU, high-priority A/B measurements against `05170b8` falsify the three
-  mixed-radix regressions: current/baseline medians are 104/104 ns at N=45,
-  119/118 ns at N=49, and 108/109 ns at N=50. The corresponding `dft100<f64>`
-  body is byte-identical; f64 Rader runtime, closure, full-convolution, and
-  negacyclic-convolution bodies have identical instruction counts and mnemonic
-  sequences. No production change is justified without a repeatable
-  production delta. A pinned Rader A/B and exact-main hosted rerun remain.
+  same-CPU, high-priority A/B measurements against `05170b8` falsify all eight
+  regressions. Current/baseline medians are 104/104 ns at N=45, 118/118 ns at
+  N=49, and 108/108 ns at N=50. The five Rader pairs are 676/684 ns at automatic
+  N=101, 2498/2497 ns at half-cyclic N=257, 2498/2503 ns at automatic N=257,
+  2114/2137 ns at half-cyclic N=271, and 2367/2370 ns at automatic N=337. The
+  corresponding `dft100<f64>` body is byte-identical; f64 Rader runtime,
+  closure, full-convolution, and negacyclic-convolution bodies have identical
+  instruction counts and mnemonic sequences. No production change is
+  justified. The exact-main hosted rerun remains the final performance gate.
 
 ## D18-close-leto-boundary-and-fft-stack [patch] — done
 
