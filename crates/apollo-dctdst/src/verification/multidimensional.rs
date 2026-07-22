@@ -1,5 +1,5 @@
 use crate::{DctDstError, DctDstPlan, RealTransformKind};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};
 
 #[test]

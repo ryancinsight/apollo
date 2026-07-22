@@ -1,6 +1,6 @@
 use crate::infrastructure::kernel::direct::{dct1, dct4, dst1, dst4};
 use crate::{DctDstError, DctDstPlan, RealTransformKind};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 
 // -------------------------------------------------------------------------
 // DCT-I

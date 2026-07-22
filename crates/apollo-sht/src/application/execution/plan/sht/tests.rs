@@ -8,7 +8,7 @@ use crate::domain::contracts::error::ShtError;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::{f16, PrecisionProfile};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
 

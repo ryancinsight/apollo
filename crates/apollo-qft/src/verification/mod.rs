@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{iqft, is_valid_length, qft, QftError, QftPlan, QuantumStateDimension};
-    use approx::assert_relative_eq;
+    use eunomia::assert_relative_eq;
     use eunomia::Complex64;
     use leto::Array1;
     use proptest::prelude::*;
@@ -147,7 +147,7 @@ mod tests {
         // QFT satisfies U†U = I for all n ≥ 1 (Shor 1994, Nielsen & Chuang 2010).
         // Proof: M[k,j] = exp(2πijk/n)/√n. Then (M†M)[j,j'] = (1/n) Σ_k exp(2πi(j-j')k/n)
         //   = δ(j,j') by DFT orthogonality, so M†M = I and ||QFT(x)||² = ||x||² for all x.
-        use approx::assert_abs_diff_eq;
+        use eunomia::assert_abs_diff_eq;
         use std::f64::consts::TAU;
         for n in [2usize, 3, 4, 5, 6, 8] {
             let dim = QuantumStateDimension::new(n).expect("valid dim");

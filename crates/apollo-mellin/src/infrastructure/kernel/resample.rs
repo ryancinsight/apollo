@@ -379,7 +379,7 @@ pub fn exp_resample(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn hermes_mellin_moment_matches_scalar_formula_at_threshold() {

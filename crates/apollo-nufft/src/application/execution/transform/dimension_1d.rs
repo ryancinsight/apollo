@@ -794,7 +794,7 @@ pub fn nufft_type2_1d_fast(
 mod tests {
     use super::*;
     use crate::DEFAULT_NUFFT_KERNEL_WIDTH;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     /// DC mode invariant: f_0 = sum(c_j) because exp(-2pi*i * 0 * x_j / L) = 1 for all j.
     ///
     /// With values [1.0, 0.5-0.25i, -0.5+0.75i, 0.25+0.1i]:

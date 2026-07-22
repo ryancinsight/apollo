@@ -135,11 +135,11 @@ fn fast_type2_1d_normalization_invariance() {
     );
     for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
         assert!(
-            approx::abs_diff_eq!(actual.re, expected.re, epsilon = 1e-4),
+            eunomia::abs_diff_eq!(actual.re, expected.re, epsilon = 1e-4),
             "real mismatch at position index {index}: actual={actual:?}, expected={expected:?}"
         );
         assert!(
-            approx::abs_diff_eq!(actual.im, expected.im, epsilon = 1e-4),
+            eunomia::abs_diff_eq!(actual.im, expected.im, epsilon = 1e-4),
             "imag mismatch at position index {index}: actual={actual:?}, expected={expected:?}"
         );
     }
@@ -147,11 +147,11 @@ fn fast_type2_1d_normalization_invariance() {
     let reference = actual[0];
     for (index, value) in actual.iter().enumerate() {
         assert!(
-            approx::abs_diff_eq!(value.re, reference.re, epsilon = 1e-4),
+            eunomia::abs_diff_eq!(value.re, reference.re, epsilon = 1e-4),
             "constancy regression at position index {index}: {value:?} vs reference {reference:?}"
         );
         assert!(
-            approx::abs_diff_eq!(value.im, reference.im, epsilon = 1e-4),
+            eunomia::abs_diff_eq!(value.im, reference.im, epsilon = 1e-4),
             "constancy regression at position index {index}: {value:?} vs reference {reference:?}"
         );
     }

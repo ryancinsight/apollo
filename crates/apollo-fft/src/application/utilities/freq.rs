@@ -64,7 +64,7 @@ pub fn rfftfreq(n: usize, d: f64) -> Vec<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     /// fftfreq(8, 1.0) = [0, 1/8, 2/8, 3/8, -4/8, -3/8, -2/8, -1/8].
     /// Reference: numpy.fft.fftfreq(8, 1.0).

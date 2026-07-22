@@ -225,7 +225,7 @@ impl FwhtPlan2D {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn plan_new_rejects_zero_and_non_power_of_two() {

@@ -81,7 +81,7 @@ fn coefficient(input: &[f64], factor: f64, k: usize) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
     use hermes_simd::PreferredArch;
 
     #[test]

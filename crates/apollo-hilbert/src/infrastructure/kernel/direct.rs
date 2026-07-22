@@ -222,7 +222,7 @@ fn write_quadrature_for_test(analytic: &[Complex64], output: &mut [f64]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     #[test]
     fn hilbert_transform_into_matches_owned_quadrature() {

@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{SdftError, SdftPlan};
-    use approx::assert_abs_diff_eq;
+    use eunomia::assert_abs_diff_eq;
 
     fn assert_bins_match(actual: &[eunomia::Complex64], expected: &[eunomia::Complex64]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {

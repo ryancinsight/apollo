@@ -1,7 +1,7 @@
 use crate::infrastructure::kernel::direct::{dct2, dst2};
 use crate::infrastructure::kernel::fast::{dct2_dst2_fast, dct2_fast, dst2_fast};
 use crate::{DctDstError, DctDstPlan, RealTransformKind};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 
 #[test]
 fn plan_preserves_validated_configuration() {

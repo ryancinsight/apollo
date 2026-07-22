@@ -2,7 +2,7 @@ use super::DctDstPlan;
 use crate::domain::contracts::error::DctDstError;
 use crate::domain::metadata::kind::RealTransformKind;
 use apollo_fft::{f16, PrecisionProfile};
-use approx::assert_abs_diff_eq;
+use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};
 use leto::{SliceArg, Storage};
 
