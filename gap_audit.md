@@ -37,30 +37,29 @@
   composite, and power-of-two families. A compact Winograd inner-function
   candidate passed hosted CI but benchmark run `29889965363` rejected 25 cases
   across all three workloads; the cross-family result falsifies that isolated
-  kernel measurement, and the candidate is removed. The delivery candidate
-  instead retains validated direct-slot hits inline and isolates only
-  write-once initialization and collision recovery in a cold
-  `OnceLock::get_or_init` routine. The initializing caller consumes its pending
-  value; a waiter retains its pending value and either drops it for an equal key
-  or returns it unchanged for a distinct key. This reduces the affected
-  release closure from 439,191 to 438,789 LLVM IR lines and from 6,469 to 6,463
-  emitted copies. A full local kernel-strategy screen records the prior three
-  residual rows at 87/150/149 ns versus 89/155/149 ns for the unchanged source.
-  The unchanged hosted counterbalanced workflow owns merge acceptance.
+  kernel measurement, and the candidate is removed. PR #59 merged a subsequent
+  cold `OnceLock::get_or_init` candidate after exact CI run `29894838150`
+  passed. Exact benchmark run `29894838141` then rejected ten replicated cases,
+  so that candidate is also falsified. The forward correction restores the
+  previously verified inline `OnceLock::set` path, removes the redundant linear
+  membership scan before exhaustive static-Rader dispatch, and accumulates the
+  odd-prime Winograd DC term during the existing pair-decomposition pass. A
+  focused local screen improves the three earlier residual medians from
+  89/155/149 ns to 73/149/144 ns for Rader f64 N=29 and Winograd-pair f32
+  N=31/N=41. The unchanged hosted counterbalanced workflow owns final
+  performance acceptance.
 - Evidence limit: debugger stack-frame evidence identifies the failure
   mechanism; 44 focused default-stack regressions cover directional-index
   injectivity, the canonical primitive-root/spectrum oracle,
   direction-separated Bluestein entries, complete generator-tag validation,
   and the original Rader value oracles.
-  The complete 970-test default workspace provides the broad regression
-  baseline. The exact candidate passes all 972 default workspace tests,
+  Prior full-workspace executions provide the broad regression baseline. The
+  forward correction passes all 972 workspace Nextest cases,
   warning-denied all-target/all-feature Clippy, no-default compilation,
   doctests, warning-denied rustdoc, provider audit, RustSec audit, dependency
-  policy, and all 196 applicable SemVer checks against `origin/main`; all three
-  benchmark executables complete locally. A deterministic concurrent regression
-  covers distinct-key initialization races and exact rejected-value recovery in
-  the retained safe-code slot abstraction. Local all-feature test linking cannot
-  supply CUDA coverage because
+  policy, and workspace SemVer checks. Hosted corrective-head gates remain
+  pending.
+  Local all-feature test linking cannot supply CUDA coverage because
   this Windows host has no CUDA
   linker library; the hosted pull-request matrix owns that evidence. This
   change makes no throughput claim. A two-MiB-stack regression exercises fresh

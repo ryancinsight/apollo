@@ -17,8 +17,11 @@
 - [x] Pass all seven prior stack-overflow regressions and the N=10,007 direct
       default-stack round trip, then pass every locally executable locked
       workspace gate.
-- [ ] Pass the hosted all-feature pull-request matrix, which supplies the CUDA
-      linker coverage unavailable on this Windows host.
+- [x] Pass hosted all-feature pull-request run `29894838150`, which supplies the
+      CUDA linker coverage unavailable on this Windows host.
+- [ ] Pass the forward corrective head through hosted all-feature CI and the
+      exact replicated benchmark after run `29894838141` rejected the merged
+      cold-initialization candidate.
 - [ ] Publish, merge, and advance the Atlas Apollo gitlink.
 
 **Current evidence:** exact `2a22319` baseline aborts in
@@ -29,31 +32,20 @@ all-feature Clippy, no-default compilation, doctests, warning-denied rustdoc,
 provider audit, RustSec audit, dependency policy, and all 196 applicable SemVer
 checks against `origin/main`. The locked graph contains one Aequitas revision
 and no Rust `ndarray` package.
-Hosted benchmarks rejected both boxed representations: a slice lost
-compile-time bounds, while a fixed-size box retained heap-pointer overhead. A
-`const` TLS candidate still overflowed nine hosted Linux tests in run
-`29870196908`. Hosted CI passed at `df01f35`, but benchmark run `29877345159`
-still rejected three cases after direct coordinates reduced the prior 25-case
-hashed-key failure. The first canonical-type head threaded generator state
-through monomorphized convolution and Good-Thomas boundaries; benchmark run
-`29880881359` rejected 23 cases, including unrelated power-of-two and composite
-rows. Restricting that canonical pair to cache misses still changed enough code
-layout for run `29884289655` to reject 41 cases, including unrelated prime,
-composite, and power-of-two rows. The compact Winograd candidate passed hosted
-CI but benchmark run `29889965363` rejected 25 cross-family cases, so that
-kernel is removed. The current candidate retains the direct-coordinate source,
-keeps validated hits inline, and isolates only write-once initialization and
-collision recovery in a cold `get_or_init` routine. `cargo llvm-lines` drops
-from 439,191 to 438,789 lines and from 6,469 to 6,463 copies. The full local
-kernel-strategy screen records the three prior residuals at 87/150/149 ns
-versus the unchanged 89/155/149 ns screen. A concurrent value-semantic
-regression covers racing distinct-key initialization. The exact candidate
-passes all 972 default workspace tests, warning-denied all-target/all-feature
-Clippy, no-default compilation, doctests, warning-denied rustdoc, provider
-audit, RustSec audit, dependency policy, and all 196 applicable SemVer checks
-against `origin/main`; all three benchmark executables complete locally. The
-pull-request workflow owns CUDA, review, and replicated benchmark acceptance at
-merge.
+Hosted experiments rejected boxed, `const` TLS, hashed-key,
+canonical-generator, and compact-Winograd candidates. PR #59 merged the cold
+`get_or_init` candidate after exact CI run `29894838150` passed, but exact
+benchmark run `29894838141` subsequently rejected ten replicated cases. The
+forward correction restores the previously verified inline `OnceLock::set`
+path, removes the redundant static-Rader membership scan, and folds odd-prime
+Winograd DC accumulation into the existing pair pass. The focused local screen
+improves the three earlier residual medians from 89/155/149 ns to 73/149/144 ns
+for Rader f64 N=29 and Winograd-pair f32 N=31/N=41. The exact correction passes
+all 972 workspace Nextest cases, warning-denied all-target/all-feature Clippy,
+no-default compilation, doctests, warning-denied rustdoc, provider audit,
+RustSec audit, dependency policy, and workspace SemVer checks. Exact hosted
+corrective-head gates remain pending; Atlas integration cannot advance before
+both hosted workflows pass.
 
 ## D17-scope-benchmark-regression-gate [patch]
 

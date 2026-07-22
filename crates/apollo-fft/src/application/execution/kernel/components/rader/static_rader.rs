@@ -18,6 +18,7 @@ generate_rader_fft!(53);
 /// Canonical list of primes that have a dedicated static (AST-generated)
 /// Rader codelet.  Must stay in sync with the `generate_rader_fft!`
 /// invocations above and with the match arms in [`try_static_rader`].
+#[cfg(test)]
 pub(crate) const STATIC_RADER_PRIMES: &[usize] =
     &[5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 
@@ -42,10 +43,6 @@ where
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<46>
         + crate::application::execution::kernel::mixed_radix::traits::ShortDft<52>,
 {
-    // Fast-reject: skip the match if the prime isn't in the canonical set.
-    if !STATIC_RADER_PRIMES.contains(&n) {
-        return false;
-    }
     match n {
         5 => {
             rader_fft_5::<F, INVERSE>(data);
