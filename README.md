@@ -16,7 +16,10 @@ manual dispatch validates one package with `cargo publish --dry-run`. After a
 package's required first release is published locally and its trusted
 publisher is registered, a GitHub Release tagged
 `crate-<package>-v<version>` publishes that exact Cargo version with a
-short-lived OIDC token. The workflow never stores a crates.io token.
+short-lived OIDC token. Validation runs in a separate read-only job. The
+publish job is bound to the GitHub `crates-io` environment; register each
+package's Trusted Publisher with that environment. The workflow never stores a
+crates.io token.
 
 Stage 2 moves Apollo beyond the initial compatibility cut:
 
