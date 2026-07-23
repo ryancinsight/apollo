@@ -5849,11 +5849,16 @@ Open gaps are listed at the top of this audit. Future increments should:
 <a id="audit-2026-06-10"></a>
 ## Residual findings from workspace performance/consolidation audit (2026-06-10)
 Open items from the parallel duplication/allocation/dispatch audit; each is a candidate micro-sprint. Evidence tier: source inspection only unless noted.
-- [minor] `apollo-fft` RealFftData impls triplicated across `real_storage/{precise,reduced,compact}.rs` (~700 duplicated lines) plus type-named fill helpers in `real_storage/fill.rs`; consolidate to one generic impl per the canonical-implementation rule.
-- [minor] Stockham AVX backend impls duplicated f32/f64 in `stockham/avx/{precise,reduced}/backend_impl.rs`; candidate for trait-level SIMD-lane abstraction.
-- [patch] `apollo-czt-wgpu` kernel converts input to `Vec<ComplexPod>` per dispatch (`kernel.rs:143`); bytemuck cast or plan-level buffer would remove it.
+
+**Re-verified 2026-07-22 against the tree; corrected below.**
+- [done] `apollo-fft` RealFftData impls are no longer triplicated. `real_storage/` now totals 434 lines (`mod.rs` 313, `fill.rs` 60, `compact.rs` 25, `reduced.rs` 18, `precise.rs` 18) with thin per-representation variants, and no type-named fill helpers remain.
+- [done] The three named god files were decomposed: `apollo-fft/src/lib.rs` 1624 -> 81, `apollo-python/src/lib.rs` 1383 -> 87, `plan/fft/dimension_1d.rs` 1435 -> 14. All three are manifests now.
+- [minor] Stockham AVX backend impls remain split f32/f64 across `stockham/avx/{reduced,precise}/backend_impl.rs` (224 + 161 lines). Small enough that a lane-abstraction trait is optional, not a size defect.
+- [patch] Remaining >500-line files, current sizes: `stockham/avx/generic/triple.rs` (3320, grew from 3260) and `mixed_radix/scalar/impls.rs` (2313, grew from 2226). Both are growing and are the only two significant offenders left in the crate.
+- [info] `mixed_radix/scalar/impls.rs` is NOT redundant duplication and must not be "consolidated" into one generic impl. It holds exactly two blocks, `MixedRadixScalar for f32` (845 lines) and `for f64` (1151 lines). Normalising the complex/scalar type tokens still leaves ~1089 differing lines, because the impls carry genuinely different per-precision tuning: `HALF_CYCLIC_RADER_PRIMES` (`[]` vs `[67]`), `COMPOSITE_RADICES_200` (`[4,2,5,5]` vs `[4,5,5,2]`), and opposite settings for `FORCE_COMPOSITE_63`, `FORCE_COMPOSITE_72`, `PREFER_BLUESTEIN_MID_RADER` and `BLUESTEIN_NATIVE_PHASE_TRIG`. Merging them would erase empirically chosen strategy selection. The legitimate size reduction is to lift the large inline bodies (`short_winograd` ~269 lines, the transpose block ~298 lines, per impl) into leaf modules and leave thin delegating impls.
+- [blocked] That extraction is deliberately not attempted yet: it edits hot FFT kernels, and the workspace benchmark for this area cannot currently resolve a 6-17% change (see the 2026-07-22 Bluestein entry, which measured 42-54% same-binary swings). Absence of a performance regression could not be demonstrated. Sequence the instrument fix first, then extract.
+- [patch] `apollo-czt-wgpu` per-dispatch `Vec<ComplexPod>` conversion: the cited `kernel.rs:143` site no longer matches; re-scope against the current tree before actioning.
 - [patch] WGPU kernels (incl. dctdst) create GPU input/output buffers per `execute` call; plan-level staging buffer reuse (pattern exists in apollo-stft-wgpu) not yet propagated.
-- [patch] Remaining >500-line files: `stockham/avx/generic/triple.rs` (3260), `mixed_radix/scalar/impls.rs` (2226), `apollo-fft/src/lib.rs` (1624), `fft/dimension_1d.rs` (1435), `apollo-python/src/lib.rs` (1383), others per line audit; split where operation families separate cleanly.
 - [info] TypeId-based typed dispatch in WGPU device methods is const-folded by LLVM (statically-known T); not a runtime defect. The real cost in those paths is the per-call conversion Vec for non-native storage types.
 - [info] `apollo-ntt-wgpu` retains local leto helpers (no apollo-fft dependency by design — integer transform domain).
 
