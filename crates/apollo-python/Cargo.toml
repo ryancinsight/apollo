@@ -7,6 +7,7 @@ license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository.workspace = true
 description = "Python bindings for Apollo FFT and NUFFT"
+publish = false
 
 [lib]
 name = "pyapollofft"

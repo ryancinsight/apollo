@@ -10,6 +10,14 @@ as independent crates.io packages because its first-party provider crates are
 not available from that registry. See
 [`docs/adr/0002-git-source-release-contract.md`](docs/adr/0002-git-source-release-contract.md).
 
+The repository contains a dormant crates.io Trusted Publishing workflow for
+the point when those provider dependencies become registry-resolvable. A
+manual dispatch validates one package with `cargo publish --dry-run`. After a
+package's required first release is published locally and its trusted
+publisher is registered, a GitHub Release tagged
+`crate-<package>-v<version>` publishes that exact Cargo version with a
+short-lived OIDC token. The workflow never stores a crates.io token.
+
 Stage 2 moves Apollo beyond the initial compatibility cut:
 
 - `apollo-fft` owns reusable dense CPU FFT plans, cache orchestration, shared contracts, and backend abstractions.
