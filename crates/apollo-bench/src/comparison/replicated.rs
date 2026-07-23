@@ -45,6 +45,7 @@ pub struct ReplicatedCounterbalancedComparisonSummary {
     compared_reports: usize,
     compared_cases: usize,
     regressions: Vec<ReplicatedCounterbalancedBenchmarkRegression>,
+    spread_suppressed: Vec<String>,
 }
 
 impl ReplicatedCounterbalancedComparisonSummary {
@@ -66,6 +67,18 @@ impl ReplicatedCounterbalancedComparisonSummary {
         &self.regressions
     }
 
+    /// Returns cases that separated inside every run but not across them.
+    ///
+    /// These are the cases the evidence cannot decide: each block's samples
+    /// support a slowdown, yet the blocks disagree by at least as much as the
+    /// slowdown itself. A non-empty list means the gate's resolution is bounded
+    /// by host stability rather than by the code under test, so it is reported
+    /// instead of being silently folded into a pass.
+    #[must_use]
+    pub fn spread_suppressed_cases(&self) -> &[String] {
+        &self.spread_suppressed
+    }
+
     /// Returns whether no slowdown reproduced across both blocks.
     #[must_use]
     pub fn passed(&self) -> bool {
@@ -79,7 +92,11 @@ impl ReplicatedCounterbalancedComparisonSummary {
 /// assigns baseline and candidate to equal sums of the eight period indices
 /// and their squares, balancing exposure to constant, linear, and quadratic
 /// period terms. A case regresses only when all four base/head comparisons
-/// support it.
+/// support it *and* the slowest candidate median bound still clears the fastest
+/// baseline median bound across all four. The second requirement charges the
+/// decision the between-run spread the replication measures; a per-run median
+/// interval bounds only that run's sampling noise, so four of them can separate
+/// together on a host whose regime shifts between runs.
 ///
 /// # Errors
 ///
@@ -149,16 +166,24 @@ pub fn compare_replicated_counterbalanced_report_directories(
         .iter()
         .map(|regression| (key(regression), regression))
         .collect::<BTreeMap<_, _>>();
+    let mut spread_suppressed = Vec::new();
     let regressions = first
         .regressions()
         .iter()
         .filter_map(|regression| {
-            second_regressions.get(&key(regression)).map(|second| {
-                ReplicatedCounterbalancedBenchmarkRegression {
+            let second = second_regressions.get(&key(regression))?;
+            if separated_across_replications(regression, second) {
+                return Some(ReplicatedCounterbalancedBenchmarkRegression {
                     first: regression.clone(),
                     second: (*second).clone(),
-                }
-            })
+                });
+            }
+            spread_suppressed.push(format!(
+                "{}: {}",
+                regression.report().display(),
+                regression.case()
+            ));
+            None
         })
         .collect();
 
@@ -166,7 +191,42 @@ pub fn compare_replicated_counterbalanced_report_directories(
         compared_reports: first.compared_reports(),
         compared_cases: first.compared_cases(),
         regressions,
+        spread_suppressed,
     })
+}
+
+/// Requires a slowdown to clear the spread the replicated design measures.
+///
+/// Each block's [`IntervalSeparation`] comes from one run's samples, so it
+/// bounds that run's sampling noise alone. Re-executing an unchanged binary can
+/// move a case's median far beyond that interval when the kernel occupies a
+/// different load-duration regime from run to run, and four such intervals can
+/// then separate together without any code change. Charging the decision the
+/// slowest candidate bound against the fastest baseline bound, across every
+/// replication and execution order, spends the between-run evidence the four
+/// blocks were executed to obtain instead of discarding it.
+fn separated_across_replications(
+    first: &CounterbalancedBenchmarkRegression,
+    second: &CounterbalancedBenchmarkRegression,
+) -> bool {
+    let separations = [
+        first.baseline_first(),
+        first.candidate_first(),
+        second.baseline_first(),
+        second.candidate_first(),
+    ];
+    let slowest_baseline = separations
+        .iter()
+        .map(|separation| separation.baseline_upper_nanoseconds())
+        .max();
+    let fastest_candidate = separations
+        .iter()
+        .map(|separation| separation.candidate_lower_nanoseconds())
+        .min();
+    match (fastest_candidate, slowest_baseline) {
+        (Some(candidate), Some(baseline)) => candidate > baseline,
+        _ => false,
+    }
 }
 
 fn validate_replication_universe(

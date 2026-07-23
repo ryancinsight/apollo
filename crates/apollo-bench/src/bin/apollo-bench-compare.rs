@@ -129,6 +129,27 @@ fn report_counterbalanced(summary: &CounterbalancedComparisonSummary) -> ExitCod
     ExitCode::FAILURE
 }
 
+/// Reports cases the evidence could not decide.
+///
+/// Suppressed cases separated inside every run yet disagreed between runs by at
+/// least the size of the slowdown. Printing them keeps a host whose spread
+/// exceeds the effect visible, rather than letting it read as a clean pass.
+fn report_spread_suppressed(summary: &ReplicatedCounterbalancedComparisonSummary) {
+    let suppressed = summary.spread_suppressed_cases();
+    if suppressed.is_empty() {
+        return;
+    }
+    println!(
+        "note: {} case(s) separated within runs but not across replications; \
+         the between-run spread equals or exceeds the effect, so this run cannot \
+         decide them:",
+        suppressed.len()
+    );
+    for case in suppressed {
+        println!("  {case}");
+    }
+}
+
 fn report_replicated_counterbalanced(
     summary: &ReplicatedCounterbalancedComparisonSummary,
 ) -> ExitCode {
@@ -138,6 +159,7 @@ fn report_replicated_counterbalanced(
             summary.compared_cases(),
             summary.compared_reports()
         );
+        report_spread_suppressed(summary);
         return ExitCode::SUCCESS;
     }
 

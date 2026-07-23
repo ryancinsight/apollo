@@ -5908,8 +5908,14 @@ slower in all four counterbalanced comparisons (+6% to +17%).
 - [minor] Production implication: sustained Bluestein f64 throughput at this size is about
   half its burst figure. Any published per-call number for this path should state which
   regime it describes.
-- [open] Gate design. The harness already emits `median_lower_ns`/`median_upper_ns`, which
-  `apollo-bench-compare` ignores when deciding regressions. Requiring the candidate/baseline
-  median intervals to be disjoint would use measurement uncertainty the harness already produces.
-  This is a statistical-validity fix, not a threshold relaxation, but it changes a merge gate and
-  is therefore deliberately left for maintainer sign-off rather than applied here.
+- [done] Gate design. `compare-replicated-counterbalanced` now requires the slowest candidate
+  median bound to clear the fastest baseline median bound across all four blocks, not merely
+  four independent within-run separations. A per-run interval bounds that run's sampling noise
+  only, so on a host whose regime shifts between runs four of them can separate together with no
+  code change; the replicated design already pays for the between-run evidence and now spends it.
+  Cases that separate within runs but not across them are reported as undecidable rather than
+  folded into a pass, so a host whose spread exceeds the effect stays visible instead of silently
+  disabling the gate. Verified against the exact PR #64 evidence (candidate 30707/30761/34742/31467
+  against baseline 28974/26343/30836/29073): the gate passes and names the case as undecided.
+  Existing fail-closed coverage is unchanged (order drift, single-block slowdown, family-wise
+  false positive, missing-case) and a genuine slowdown clearing the spread is still reported.

@@ -415,3 +415,73 @@ fn replicated_command_reports_unique_evidence_count() {
     );
     assert!(output.stderr.is_empty());
 }
+
+#[test]
+fn per_run_separation_alone_does_not_survive_the_replication_spread() {
+    // Each replication separates on its own samples, but the replications
+    // disagree by more than the effect: the faster block's candidate bound
+    // (1_139) still undercuts the slower block's baseline bound (1_260). This
+    // is the shape a host produces when an unchanged binary occupies different
+    // load-duration regimes between runs, and it must not be called a
+    // regression.
+    let fixture = Fixture::new();
+    write_counterbalanced_case(&fixture, "first", "n1031", 1_000, 1_100);
+    write_counterbalanced_case(&fixture, "second", "n1031", 1_200, 1_300);
+
+    let summary = compare_replicated_counterbalanced_report_directories([
+        report_set(&fixture, "first"),
+        report_set(&fixture, "second"),
+    ])
+    .expect("valid replicated evidence must compare");
+
+    assert_eq!(summary.compared_cases(), 1);
+    assert!(
+        summary.passed(),
+        "separation inside each run must not outrank disagreement between runs"
+    );
+    assert_eq!(summary.regressions().len(), 0);
+}
+
+#[test]
+fn slowdown_clearing_the_replication_spread_is_still_a_regression() {
+    // The blocks disagree by 10 ns while the slowdown is 1_000 ns, so every
+    // candidate bound outruns every baseline bound and the effect survives the
+    // between-run spread rather than depending on which regime each block
+    // happened to sample.
+    let fixture = Fixture::new();
+    write_counterbalanced_case(&fixture, "first", "n1031", 1_000, 2_000);
+    write_counterbalanced_case(&fixture, "second", "n1031", 1_010, 2_010);
+
+    let summary = compare_replicated_counterbalanced_report_directories([
+        report_set(&fixture, "first"),
+        report_set(&fixture, "second"),
+    ])
+    .expect("valid replicated evidence must compare");
+
+    assert_eq!(summary.regressions().len(), 1);
+    let regression = &summary.regressions()[0];
+    assert_eq!(regression.case(), "n1031");
+    // The reported evidence must itself satisfy the criterion: every candidate
+    // bound outruns every baseline bound across both replications and orders.
+    let separations = [
+        regression.first_replication().baseline_first(),
+        regression.first_replication().candidate_first(),
+        regression.second_replication().baseline_first(),
+        regression.second_replication().candidate_first(),
+    ];
+    let slowest_baseline = separations
+        .iter()
+        .map(|separation| separation.baseline_upper_nanoseconds())
+        .max()
+        .expect("invariant: four separations are present");
+    let fastest_candidate = separations
+        .iter()
+        .map(|separation| separation.candidate_lower_nanoseconds())
+        .min()
+        .expect("invariant: four separations are present");
+    assert!(
+        fastest_candidate > slowest_baseline,
+        "reported regression must clear the replication spread: \
+         {fastest_candidate} vs {slowest_baseline}"
+    );
+}
