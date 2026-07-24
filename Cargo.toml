@@ -60,18 +60,18 @@ repository = "https://github.com/ryancinsight/apollo"
 anyhow = "1.0.103"
 bytemuck = { version = "1.25.1", features = ["derive"] }
 csv = "1.4.0"
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false, features = ["std"] }
+eunomia = { path = "../eunomia/crates/eunomia", default-features = false, features = ["std"] }
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne", features = ["eunomia"] }
-melinoe = { git = "https://github.com/ryancinsight/melinoe.git", default-features = false, features = ["alloc"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
+melinoe = { path = "../melinoe", default-features = false, features = ["alloc"] }
+hermes-simd = { path = "../hermes/crates/hermes-simd" }
 half = { version = "2.7.1", features = ["serde", "use-intrinsics"] }
 leto = { path = "../leto/crates/leto" }
 leto-ops = { path = "../leto/crates/leto-ops" }
 # Hephaestus is Apollo's shared Atlas accelerator substrate (atlas ADR 0001).
 # Transform crates depend on its typed device and kernel contracts directly.
-hephaestus-wgpu = { git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-core = { git = "https://github.com/ryancinsight/hephaestus.git" }
-hephaestus-cuda = { git = "https://github.com/ryancinsight/hephaestus.git" }
+hephaestus-wgpu = { path = "../hephaestus/crates/hephaestus-wgpu" }
+hephaestus-core = { path = "../hephaestus/crates/hephaestus-core" }
+hephaestus-cuda = { path = "../hephaestus/crates/hephaestus-cuda" }
 proc-macro2 = "1.0.106"
 once_cell = "1.21.4"
 parking_lot = "0.12.5"
