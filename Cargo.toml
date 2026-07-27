@@ -144,3 +144,5 @@ unneeded_field_pattern = "allow"
 explicit_write = "allow"
 manual_range_contains = "allow"
 uninlined_format_args = "allow"
+
+# ATLAS-PATH-DEP-AUDIT-2 round-4 closure
