@@ -9,10 +9,11 @@
 //! evidence (see ADR 0032).
 
 pub mod cfft;
+pub mod freq;
 pub mod icfft;
 pub mod irfft;
 pub mod rfft;
-pub mod utils;
+pub mod shift;
 
 pub use rfft::{
     fft_1d_array, fft_1d_array_into, fft_1d_array_static_into, fft_1d_array_static_typed_into,
@@ -71,4 +72,5 @@ pub use icfft::{
     ifft_3d_complex_typed_into, ifft_3d_complex_typed_owned,
 };
 
-pub use utils::{fftfreq, fftshift, fftshift_inplace, ifftshift, ifftshift_inplace, rfftfreq};
+pub use freq::{fftfreq, rfftfreq};
+pub use shift::{fftshift, fftshift_inplace, ifftshift, ifftshift_inplace};

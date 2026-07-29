@@ -69,10 +69,11 @@ pub use eunomia::Complex64;
 
 // Re-export the canonical API functions at the crate root.
 pub use api::cfft::*;
+pub use api::freq::*;
 pub use api::icfft::*;
 pub use api::irfft::*;
 pub use api::rfft::*;
-pub use api::utils::*;
+pub use api::shift::*;
 
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;
