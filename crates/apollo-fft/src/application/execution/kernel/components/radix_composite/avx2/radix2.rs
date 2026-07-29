@@ -5,7 +5,7 @@
 //! Butterfly: `b0 = a0 + tw·a1`, `b1 = a0 − tw·a1`;
 //! direction is carried by the precomputed twiddle table.
 
-use super::helpers::{apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32};
+use super::primitives::{apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32};
 use eunomia::Complex;
 use std::arch::x86_64::{
     _mm256_add_pd, _mm256_add_ps, _mm256_loadu_pd, _mm256_loadu_ps, _mm256_storeu_pd,
@@ -131,3 +131,4 @@ pub(in crate::application::execution::kernel::components::radix_composite) unsaf
         apply_pointwise_f32(dst_ptr, pw.as_ptr(), dst.len());
     }
 }
+

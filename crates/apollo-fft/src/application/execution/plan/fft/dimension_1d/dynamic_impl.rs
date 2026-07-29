@@ -21,7 +21,7 @@ use super::executors::{
     exec_rader_forward, exec_rader_inverse, exec_rader_inverse_unnorm, exec_winograd_forward,
     exec_winograd_inverse, exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
 };
-use super::helpers::{arc_to_cow, PlanStrategy};
+use super::strategy::{arc_to_cow, PlanStrategy};
 
 /// Reusable 1D FFT plan generic over `MixedRadixScalar`.
 pub struct FftPlan1D<F: MixedRadixScalar> {

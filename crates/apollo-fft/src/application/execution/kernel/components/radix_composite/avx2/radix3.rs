@@ -11,7 +11,7 @@
 //!
 //! Cost: 4 real multiplies, 6 complex adds — minimal for radix-3.
 
-use super::helpers::{
+use super::primitives::{
     apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32, cmul_f32_128, rot_neg_i,
     rot_neg_i_f32, rot_pos_i, rot_pos_i_f32,
 };
@@ -586,3 +586,4 @@ pub(in crate::application::execution::kernel::components::radix_composite) unsaf
         apply_pointwise_f32(dst_ptr, pw.as_ptr(), dst.len());
     }
 }
+

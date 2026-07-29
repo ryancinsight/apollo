@@ -14,7 +14,7 @@
 //! All `flat_pass_rN_*` functions are visible within `radix_composite` and
 //! called from `cache.rs`.
 
-mod helpers;
+mod primitives;
 mod radix2;
 mod radix3;
 mod radix4;
@@ -27,3 +27,4 @@ pub(super) use radix3::{flat_pass_r3_f32, flat_pass_r3_f64};
 pub(super) use radix4::{flat_pass_r4_f32, flat_pass_r4_f64};
 pub(super) use radix5::{flat_pass_r5_f32, flat_pass_r5_f64};
 pub(super) use radix7::{flat_pass_r7_f32, flat_pass_r7_f64};
+
