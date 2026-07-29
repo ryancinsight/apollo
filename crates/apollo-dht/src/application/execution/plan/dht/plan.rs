@@ -1,6 +1,6 @@
 //! Reusable Discrete Hartley Transform plan.
 
-use super::helpers::{LANE_IN_SCRATCH, LANE_OUT_SCRATCH};
+use super::scratch::{LANE_IN_SCRATCH, LANE_OUT_SCRATCH};
 use super::typed::HartleyStorage;
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use crate::domain::metadata::length::HartleyLength;
@@ -358,3 +358,4 @@ impl DhtPlan {
         T::inverse_into(self, spectrum, output, profile)
     }
 }
+

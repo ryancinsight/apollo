@@ -6,7 +6,7 @@ use crate::domain::metadata::kind::{RealTransformConfig, RealTransformKind};
 /// Forward transform implementations.
 pub mod forward;
 /// Internal conversion and validation helpers.
-pub mod helpers;
+pub mod profile;
 /// Inverse transform implementations.
 pub mod inverse;
 /// Typed storage transform implementations.

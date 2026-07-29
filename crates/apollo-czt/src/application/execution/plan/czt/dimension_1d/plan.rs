@@ -1,6 +1,6 @@
 //! Reusable Chirp Z-Transform Plan
 
-use super::helpers::with_forward_workspace;
+use super::scratch::with_forward_workspace;
 use super::typed::CztStorage;
 use crate::application::execution::kernel::bluestein::{
     czt_bjork_pereyra_inverse_into, czt_bluestein_forward_into_with_workspace, czt_inverse_nodes,
@@ -389,3 +389,4 @@ impl CztPlan {
         Ok(output)
     }
 }
+

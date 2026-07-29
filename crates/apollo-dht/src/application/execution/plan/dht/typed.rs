@@ -1,6 +1,6 @@
 //! Typed storage implementations for Discrete Hartley Transform.
 
-use super::helpers::{validate_profile, TYPED_INPUT64_SCRATCH, TYPED_OUTPUT64_SCRATCH};
+use super::scratch::{validate_profile, TYPED_INPUT64_SCRATCH, TYPED_OUTPUT64_SCRATCH};
 use super::plan::DhtPlan;
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use apollo_fft::{f16, PrecisionProfile};
@@ -202,3 +202,4 @@ impl HartleyGpuStorage for f16 {
         f16::from_f32(value)
     }
 }
+

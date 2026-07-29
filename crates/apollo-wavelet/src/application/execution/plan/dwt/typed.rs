@@ -1,4 +1,4 @@
-use super::helpers::{
+use super::coeff_convert::{
     dwt_typed_coefficients_to_leto, validate_cwt_output_shape, validate_dwt_output_shapes,
     validate_profile,
 };
@@ -279,3 +279,4 @@ impl WaveletStorage for f16 {
         f16::from_f32(value as f32)
     }
 }
+

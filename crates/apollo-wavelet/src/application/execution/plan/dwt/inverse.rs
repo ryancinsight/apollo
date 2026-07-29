@@ -1,4 +1,4 @@
-use super::helpers::dwt_coefficients_from_leto;
+use super::coeff_convert::dwt_coefficients_from_leto;
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;
@@ -31,3 +31,4 @@ impl DwtPlan {
             .ok_or(WaveletError::CoefficientShapeMismatch)
     }
 }
+

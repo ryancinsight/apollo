@@ -1,4 +1,4 @@
-use super::helpers::validate_profile;
+use super::profile::validate_profile;
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, PrecisionProfile};
@@ -255,3 +255,4 @@ impl RealTransformGpuStorage for f16 {
         f16::from_f32(value)
     }
 }
+

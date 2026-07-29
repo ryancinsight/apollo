@@ -1,6 +1,6 @@
 //! Typed storage traits and implementations for Spherical Harmonic Transforms.
 
-use super::helpers::{
+use super::scratch::{
     validate_coefficient_array_shape, validate_profile, validate_sample_array_shape,
     write_complex_array,
 };
@@ -319,3 +319,4 @@ impl ShtComplexStorage for [f16; 2] {
         ]
     }
 }
+

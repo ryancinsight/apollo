@@ -5,7 +5,7 @@ pub mod fast_type1;
 /// Fast Type-2 execution implementations.
 pub mod fast_type2;
 /// Helper functions for device execution.
-pub mod helpers;
+pub mod metadata;
 /// Direct Type-1 execution implementations.
 pub mod type1;
 /// Direct Type-2 execution implementations.
@@ -90,3 +90,4 @@ mod tests {
         assert_eq!(limits.max_storage_buffers_per_shader_stage, Some(7));
     }
 }
+

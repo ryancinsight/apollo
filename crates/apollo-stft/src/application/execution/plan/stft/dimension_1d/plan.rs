@@ -4,7 +4,7 @@ use super::super::storage::{
     validate_profile, StftRealOutputStorage, StftRealStorage, StftSpectrumInput,
     StftSpectrumStorage,
 };
-use super::helpers::{
+use super::scratch::{
     window_complex_real_frame_into, window_signal_frame_into, with_forward_typed_workspaces,
     with_inverse_typed_workspaces, with_inverse_wola_workspaces,
 };
@@ -446,3 +446,4 @@ impl StftPlan {
         .ok_or(StftError::LengthMismatch)
     }
 }
+

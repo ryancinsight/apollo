@@ -1,6 +1,6 @@
 //! Reusable Discrete Hartley Transform plan.
 
-pub mod helpers;
+pub mod scratch;
 pub mod plan;
 pub mod typed;
 

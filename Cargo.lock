@@ -1265,6 +1265,7 @@ dependencies = [
  "mnemosyne-core",
  "moirai-gpu",
  "moirai-sync",
+ "smallvec",
  "themis",
 ]
 
@@ -1282,6 +1283,7 @@ dependencies = [
  "moirai",
  "moirai-gpu",
  "moirai-sync",
+ "smallvec",
  "themis",
  "wgpu",
  "windows 0.62.2",
@@ -3355,36 +3357,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
-name = "consus-core"
+name = "horae"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "consus-io"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "consus-zarr"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "coeus-autograd"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-core"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-optim"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "coeus-tensor"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.1.0"
+name = "gaia"
+version = "0.3.0"
 
 [[patch.unused]]
 name = "consus-compression"
@@ -3415,10 +3393,6 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "athena-core"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "coeus-autograd"
 version = "0.9.0"
 
@@ -3435,28 +3409,24 @@ name = "coeus-tensor"
 version = "0.9.0"
 
 [[patch.unused]]
-name = "hyperion"
+name = "athena-core"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "asclepius-coeus"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "iris"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "horae"
+name = "tyche-core"
 version = "0.1.0"
 
 [[patch.unused]]
 name = "proteus"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "hephaestus-metal"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-rocm"
+version = "0.18.0"
 
 [[patch.unused]]
 name = "ritk-core"
@@ -3475,5 +3445,17 @@ name = "ritk-registration"
 version = "0.53.0"
 
 [[patch.unused]]
-name = "gaia"
-version = "0.3.0"
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "moirai-http"
+version = "0.4.0"
+
+[[patch.unused]]
+name = "hyperion"
+version = "0.1.0"

@@ -7,7 +7,7 @@ use apollo_fft::f16;
 /// Forward transform implementations.
 pub mod forward;
 /// Internal conversion and validation helpers.
-pub mod helpers;
+pub mod coeff_convert;
 /// Inverse transform implementations.
 pub mod inverse;
 /// Typed storage transform implementations.
