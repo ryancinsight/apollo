@@ -50,15 +50,15 @@ fn real_components_match_complex_basis() {
 }
 
 #[test]
-fn negative_odd_order_matches_mrtrix_closed_form() {
+fn negative_odd_order_matches_mrtrix_even_degree_closed_form() {
     // MRtrix defines R_l^m = sqrt(2) Im(Y_l^{-m}) for m < 0. Therefore
-    // R_1^-1(pi/2, pi/2) = -sqrt(3 / (4 pi)); this independent value catches
-    // an erroneous (-1)^m factor that an even negative-order case cannot.
-    let expected = -(3.0 / (4.0 * std::f64::consts::PI)).sqrt();
+    // R_2^-1(pi/4, pi/2) = -sqrt(15 / (16 pi)); this independent even-degree,
+    // odd-order value catches an erroneous (-1)^m factor.
+    let expected = -(15.0 / (16.0 * std::f64::consts::PI)).sqrt();
     let actual = real_spherical_harmonic(
-        1,
+        2,
         -1,
-        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::FRAC_PI_4,
         std::f64::consts::FRAC_PI_2,
     )
     .expect("valid MRtrix reference direction");
