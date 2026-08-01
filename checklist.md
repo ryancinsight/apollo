@@ -13,9 +13,12 @@
       gates.
 - [x] Attempt default and all-feature SemVer analysis; record dependency
       rustdoc process failures before API comparison as unavailable evidence.
-- [x] Resolve independent review with an odd negative-order MRtrix oracle,
+- [x] Resolve independent review with an even-degree, odd-negative-order
+      MRtrix oracle,
       exact Gauss-Legendre/Fourier orthonormality quadrature, derived roundoff
       bounds, and removal of an unrelated lint suppression.
+- [x] Repair standalone `--locked` resolution with a workspace-scoped lock
+      refresh that removes the obsolete Cutile/CUDA dependency closure.
 - [ ] Pass exact-head hosted CI, merge, and verify the downstream consumer pin.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch]

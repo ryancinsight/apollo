@@ -17,7 +17,10 @@
   excluded; doctests and warning-denied Rustdoc pass. Independent review's
   sign-oracle, tolerance, and scope findings are resolved. SemVer analysis is
   blocked before API comparison by dependency rustdoc process failures in
-  `naga`, `apollo-fft-macros`, and `hermes-simd-intrinsics`; hosted CI and
+  `naga`, `apollo-fft-macros`, and `hermes-simd-intrinsics`. Hosted run
+  `30684880039` exposed a stale committed dependency closure under `--locked`;
+  a workspace-scoped standalone refresh now passes locked metadata resolution
+  and removes the obsolete Cutile/CUDA graph. Exact-head hosted CI and the
   downstream pin verification remain open.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch] — done

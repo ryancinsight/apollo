@@ -15,7 +15,8 @@
   equivalence, sampled orthonormality, antipodal parity, checked index/domain
   behavior, stable-degree boundary, and direct/matrix differential tests pass
   in the 35-case focused Nextest suite under default and no-default features.
-  An independent odd-negative-order MRtrix closed form catches sign drift, and
+  An independent even-degree, odd-negative-order MRtrix closed form catches
+  sign drift, and
   Gauss-Legendre times Fourier quadrature replaces the coarse sampled-grid
   tolerance with an exactness argument plus a floating-point summation bound.
   Warning-denied Clippy passes with the existing Rust 1.97 Windows
@@ -26,6 +27,11 @@
   controlled benchmark comparison was run; the memory claim follows directly
   from the single reserved output vector and absence of per-row allocation in
   the matrix implementation.
+- Reproducibility correction: hosted run `30684880039` rejected the stale
+  committed lock under `--locked`. A standalone workspace-scoped refresh adds
+  the current first-party Git sources and removes 658 lines of obsolete
+  Cutile/CUDA transitive closure; locked metadata resolution passes outside the
+  Atlas overlay.
 
 ## FFT bounded-cache stack initialization (2026-07-21)
 
