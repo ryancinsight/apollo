@@ -1,5 +1,43 @@
 # Apollo Gap Audit
 
+## Real spherical-harmonic diffusion provider (2026-07-31)
+
+- Finding: RITK's diffusion book branch used a real spherical-harmonic API that
+  existed only as uncommitted Apollo source. Atlas's local dependency overlay
+  masked the missing provider revision; standalone hosted builds failed to
+  import the API.
+- Resolution: own the real orthonormal basis in `apollo-sht`; bound its stable
+  binary64 degree from the normalization product, return typed errors for every
+  public input domain, use checked allocation arithmetic, and fill the Leto
+  design matrix through one row-major vector rather than allocating one vector
+  per direction.
+- Evidence: analytical `R_0^0` and `R_2^0` values, complex-basis component
+  equivalence, sampled orthonormality, antipodal parity, checked index/domain
+  behavior, stable-degree boundary, and direct/matrix differential tests pass
+  in the 35-case focused Nextest suite under default and no-default features.
+  An independent even-degree, odd-negative-order MRtrix closed form catches
+  sign drift, and
+  Gauss-Legendre times Fourier quadrature replaces the coarse sampled-grid
+  tolerance with an exactness argument plus a floating-point summation bound.
+  Warning-denied Clippy passes with the existing Rust 1.97 Windows
+  `missing_const_for_thread_local` false positive excluded; doctests and
+  Rustdoc pass locally. Default and all-feature SemVer attempts fail while
+  building dependency rustdoc before API comparison, so they provide no
+  compatibility evidence. No runtime speedup claim is made because no
+  controlled benchmark comparison was run; the memory claim follows directly
+  from the single reserved output vector and absence of per-row allocation in
+  the matrix implementation.
+- Reproducibility correction: hosted run `30684880039` rejected the stale
+  committed lock under `--locked`. A standalone workspace-scoped refresh adds
+  the current first-party Git sources and removes 658 lines of obsolete
+  Cutile/CUDA transitive closure; locked metadata resolution passes outside the
+  Atlas overlay.
+- Benchmark-instrument correction: run `30685105852` failed because the A/B
+  job pinned candidate benchmark sources but compiled the baseline with its
+  stale lock. The fixed instrument now includes the candidate lock, holding
+  provider resolution constant while leaving baseline production source
+  unchanged.
+
 ## FFT bounded-cache stack initialization (2026-07-21)
 
 - Finding: the full locked gate aborted seven Rader/Good-Thomas tests on

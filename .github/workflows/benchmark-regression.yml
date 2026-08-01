@@ -53,10 +53,13 @@ jobs:
 
       # Hold the candidate instrument and representative workloads constant
       # across both revisions while leaving baseline production code unchanged.
+      # The lock is part of that instrument: using the baseline lock would
+      # compare different provider graphs and can fail after provider releases.
       - name: Pin candidate benchmark instrument
         shell: bash
         run: |
           set -euo pipefail
+          cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock
           git -C apollo-candidate-source archive HEAD \
             crates/apollo-bench crates/apollo-fft/benches \
             | tar -x -C apollo-measurement

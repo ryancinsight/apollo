@@ -1,5 +1,31 @@
 # Apollo Backlog
 
+## D20-real-spherical-harmonic-provider [minor] — in progress
+
+- Owner: Codex `codex/real-spherical-harmonics`; scope: `apollo-sht` real,
+  even-order spherical-harmonic evaluation and scattered-direction design
+  matrices required by a downstream diffusion-MRI consumer. Complex SHT plans,
+  GPU kernels, and diffusion reconstruction remain non-goals.
+- Acceptance: public input-dependent paths return typed errors; degree and
+  allocation arithmetic are bounded; matrix construction performs one output
+  allocation with no per-row vectors; analytical values, orthonormality,
+  antipodal parity, invalid inputs, and direct/matrix equivalence pass; focused
+  Clippy, Nextest, doctest, Rustdoc, SemVer, and exact-head hosted CI pass.
+- Current evidence: 35/35 `apollo-sht` Nextest cases pass under default and
+  no-default feature sets. Warning-denied all-target Clippy passes with the
+  existing Rust 1.97 Windows `missing_const_for_thread_local` false positive
+  excluded; doctests and warning-denied Rustdoc pass. Independent review's
+  sign-oracle, tolerance, and scope findings are resolved. SemVer analysis is
+  blocked before API comparison by dependency rustdoc process failures in
+  `naga`, `apollo-fft-macros`, and `hermes-simd-intrinsics`. Hosted run
+  `30684880039` exposed a stale committed dependency closure under `--locked`;
+  a workspace-scoped standalone refresh now passes locked metadata resolution
+  and removes the obsolete Cutile/CUDA graph. Benchmark run `30685105852`
+  then exposed that its fixed-instrument A/B job retained the baseline lock;
+  the job now pins the candidate lock alongside the candidate benchmark source
+  so both revisions use one provider graph. Exact-head hosted CI and the
+  downstream pin verification remain open.
+
 ## D19-close-eunomia-migration-regressions [minor] [arch] — done
 
 - Owner: Codex `/root/athena_backend_audit`; scope: Apollo's native benchmark
