@@ -10,6 +10,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-sht` adds a checked, orthonormal real spherical-harmonic
+  basis for antipodally symmetric diffusion signals. The API validates degree,
+  order, angle, and unit-direction domains and constructs scattered-direction
+  design matrices in one allocation without temporary row vectors.
+
 - [patch] Python Releases tagged `apollo-fft-v<version>` build, install,
   import, attest, and attach locked Linux, Windows, and universal macOS wheels,
   then publish the same artifacts to PyPI through OIDC Trusted Publishing.

@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## D20-real-spherical-harmonic-provider [minor]
+
+- [x] Ground the real, orthonormal convention in the MRtrix3 formulation.
+- [x] Add checked even-degree metadata, evaluation, and coefficient ordering.
+- [x] Reject invalid degrees, orders, angles, non-finite directions, and
+      non-unit directions without input-dependent panics.
+- [x] Construct design matrices in one checked row-major allocation.
+- [x] Cover analytical values, orthonormality, parity, invalid domains, and
+      direct/matrix equivalence with value-semantic tests.
+- [x] Pass focused default/no-default Nextest, Clippy, doctest, and Rustdoc
+      gates.
+- [x] Attempt default and all-feature SemVer analysis; record dependency
+      rustdoc process failures before API comparison as unavailable evidence.
+- [x] Resolve independent review with an odd negative-order MRtrix oracle,
+      exact Gauss-Legendre/Fourier orthonormality quadrature, derived roundoff
+      bounds, and removal of an unrelated lint suppression.
+- [ ] Pass exact-head hosted CI, merge, and verify the downstream consumer pin.
+
 ## D19-close-eunomia-migration-regressions [minor] [arch]
 
 - [x] Preserve failed hosted run `29938829409` and close superseded PR #63.
