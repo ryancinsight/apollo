@@ -19,6 +19,8 @@
       bounds, and removal of an unrelated lint suppression.
 - [x] Repair standalone `--locked` resolution with a workspace-scoped lock
       refresh that removes the obsolete Cutile/CUDA dependency closure.
+- [x] Pin the candidate lock as part of the fixed A/B benchmark instrument so
+      the baseline and candidate compile against one provider graph.
 - [ ] Pass exact-head hosted CI, merge, and verify the downstream consumer pin.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch]

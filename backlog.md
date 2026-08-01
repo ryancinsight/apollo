@@ -20,7 +20,10 @@
   `naga`, `apollo-fft-macros`, and `hermes-simd-intrinsics`. Hosted run
   `30684880039` exposed a stale committed dependency closure under `--locked`;
   a workspace-scoped standalone refresh now passes locked metadata resolution
-  and removes the obsolete Cutile/CUDA graph. Exact-head hosted CI and the
+  and removes the obsolete Cutile/CUDA graph. Benchmark run `30685105852`
+  then exposed that its fixed-instrument A/B job retained the baseline lock;
+  the job now pins the candidate lock alongside the candidate benchmark source
+  so both revisions use one provider graph. Exact-head hosted CI and the
   downstream pin verification remain open.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch] — done

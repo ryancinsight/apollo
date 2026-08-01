@@ -32,6 +32,11 @@
   the current first-party Git sources and removes 658 lines of obsolete
   Cutile/CUDA transitive closure; locked metadata resolution passes outside the
   Atlas overlay.
+- Benchmark-instrument correction: run `30685105852` failed because the A/B
+  job pinned candidate benchmark sources but compiled the baseline with its
+  stale lock. The fixed instrument now includes the candidate lock, holding
+  provider resolution constant while leaving baseline production source
+  unchanged.
 
 ## FFT bounded-cache stack initialization (2026-07-21)
 
