@@ -18,6 +18,7 @@ pub use application::execution::plan::sht::{ShtComplexStorage, ShtPlan, ShtRealS
 pub use domain::contracts::error::{ShtError, ShtResult};
 pub use domain::metadata::grid::SphericalGridSpec;
 pub use domain::spectrum::coefficients::SphericalHarmonicCoefficients;
+pub use infrastructure::kernel::laplace_beltrami::laplace_beltrami_eigenvalue;
 pub use infrastructure::kernel::real_spherical_harmonic::{
     real_spherical_harmonic, RealShError, RealSphericalHarmonicBasis, MAX_REAL_SH_DEGREE,
 };
