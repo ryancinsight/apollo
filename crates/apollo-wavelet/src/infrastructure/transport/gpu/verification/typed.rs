@@ -84,7 +84,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         .expect("typed slice forward");
     let input_leto = leto::Array1::from_shape_vec([input.len()], input).expect("input");
     let actual_forward = backend
-        .execute_forward_leto_typed(
+        .execute_forward_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             input_leto.view(),
@@ -115,7 +115,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     let coeffs_leto = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("coefficients");
     let actual_inverse = backend
-        .execute_inverse_leto_typed(
+        .execute_inverse_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             coeffs_leto.view(),

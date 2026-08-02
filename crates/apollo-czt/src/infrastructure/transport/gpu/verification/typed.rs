@@ -64,7 +64,7 @@ fn typed_leto_forward_matches_typed_slice_when_device_exists() {
         .expect("typed slice forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto input");
     let actual = backend
-        .execute_forward_leto_typed::<[f16; 2]>(
+        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),

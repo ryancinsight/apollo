@@ -67,7 +67,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         )
         .expect("typed slice forward");
     let actual_forward = backend
-        .execute_forward_leto_typed(
+        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -90,7 +90,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         )
         .expect("typed slice inverse");
     let actual_inverse = backend
-        .execute_inverse_leto_typed(
+        .execute_inverse_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),
