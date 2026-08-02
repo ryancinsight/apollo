@@ -48,24 +48,24 @@ mnemosyne-memory = [
 ]
 
 [dependencies]
-apollo-fft = { path = "../apollo-fft", features = ["wgpu"] }
-apollo-nufft = { path = "../apollo-nufft", features = ["wgpu"] }
-apollo-dctdst = { path = "../apollo-dctdst" }
-apollo-dht = { path = "../apollo-dht" }
-apollo-ntt = { path = "../apollo-ntt" }
-apollo-czt = { path = "../apollo-czt" }
-apollo-frft = { path = "../apollo-frft" }
-apollo-sdft = { path = "../apollo-sdft" }
-apollo-wavelet = { path = "../apollo-wavelet" }
-apollo-fwht = { path = "../apollo-fwht" }
-apollo-qft = { path = "../apollo-qft" }
-apollo-gft = { path = "../apollo-gft" }
-apollo-hilbert = { path = "../apollo-hilbert" }
-apollo-mellin = { path = "../apollo-mellin" }
-apollo-radon = { path = "../apollo-radon" }
-apollo-sft = { path = "../apollo-sft" }
-apollo-sht = { path = "../apollo-sht" }
-apollo-stft = { path = "../apollo-stft" }
+apollo-fft = { version = "0.25.0", path = "../apollo-fft", features = ["wgpu"] }
+apollo-nufft = { version = "0.7.0", path = "../apollo-nufft", features = ["wgpu"] }
+apollo-dctdst = { version = "0.10.0", path = "../apollo-dctdst" }
+apollo-dht = { version = "0.10.0", path = "../apollo-dht" }
+apollo-ntt = { version = "0.9.0", path = "../apollo-ntt" }
+apollo-czt = { version = "0.10.0", path = "../apollo-czt" }
+apollo-frft = { version = "0.9.0", path = "../apollo-frft" }
+apollo-sdft = { version = "0.8.0", path = "../apollo-sdft" }
+apollo-wavelet = { version = "0.10.0", path = "../apollo-wavelet" }
+apollo-fwht = { version = "0.9.0", path = "../apollo-fwht" }
+apollo-qft = { version = "0.9.0", path = "../apollo-qft" }
+apollo-gft = { version = "0.10.0", path = "../apollo-gft" }
+apollo-hilbert = { version = "0.12.0", path = "../apollo-hilbert" }
+apollo-mellin = { version = "0.11.0", path = "../apollo-mellin" }
+apollo-radon = { version = "0.10.0", path = "../apollo-radon" }
+apollo-sft = { version = "0.9.0", path = "../apollo-sft" }
+apollo-sht = { version = "0.7.0", path = "../apollo-sht" }
+apollo-stft = { version = "0.9.0", path = "../apollo-stft" }
 serde = { workspace = true }
 serde_json.workspace = true
 melinoe = { workspace = true }
