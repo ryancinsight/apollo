@@ -1,6 +1,9 @@
 # 0037 — Generic transform execution scaffold in apollo-fft
 
-- Status: Proposed
+- Status: Accepted
+- Revision 2026-08-02: Accepted on delivery of the shared layer with
+  apollo-dht and apollo-fwht as the proving adopters (479/479 including
+  both GPU verification suites on hardware).
 - Date: 2026-08-02
 - Refs: atlas backlog `ATLAS-SUBSTRATE-004`; atlas
   [ADR 0039 §4](../../../../docs/adr/0039-compute-substrate-topology.md)
