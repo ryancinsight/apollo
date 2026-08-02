@@ -40,26 +40,35 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout baseline
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
           path: apollo-measurement
 
       - name: Checkout candidate
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'pull_request' && github.ref || inputs.candidate_ref }}
           path: apollo-candidate-source
 
       # Hold the candidate instrument and representative workloads constant
       # across both revisions while leaving baseline production code unchanged.
-      # The lock is part of that instrument: using the baseline lock would
-      # compare different provider graphs and can fail after provider releases.
+      # The lock and provider identities are part of that instrument: using
+      # baseline identities would compare different provider graphs and fail
+      # when an upstream package is renamed without changing its Rust import.
       - name: Pin candidate benchmark instrument
         shell: bash
         run: |
           set -euo pipefail
           cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock
+          for dependency in mnemosyne moirai; do
+            candidate_spec="$(grep -m1 "^${dependency} = " apollo-candidate-source/Cargo.toml)"
+            test -n "$candidate_spec"
+            sed -i "s|^${dependency} = .*$|${candidate_spec}|" \
+              apollo-measurement/Cargo.toml
+            test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
+              "$candidate_spec"
+          done
           git -C apollo-candidate-source archive HEAD \
             crates/apollo-bench crates/apollo-fft/benches \
             | tar -x -C apollo-measurement
@@ -69,9 +78,13 @@ jobs:
               "apollo-candidate-source/crates/apollo-fft/benches/$benchmark.rs"
           done
 
-      - uses: dtolnay/rust-toolchain@1.97.0
+      - name: Install the benchmark toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: 1.97.0
 
-      - uses: actions/cache@v6
+      - name: Restore the benchmark build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
