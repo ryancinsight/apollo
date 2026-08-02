@@ -5,7 +5,7 @@
 
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/application/execution/kernel/integer_math.rs"
+    "/src/application/numeric/integer_math.rs"
 ));
 
 apollo_fft_macros::declare_primitive_roots!();

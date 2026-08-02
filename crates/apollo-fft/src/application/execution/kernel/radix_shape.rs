@@ -22,7 +22,7 @@
 
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/application/execution/kernel/integer_math.rs"
+    "/src/application/numeric/integer_math.rs"
 ));
 
 /// Factorize `n` into a prime radix sequence for the mixed-radix Cooley-Tukey
