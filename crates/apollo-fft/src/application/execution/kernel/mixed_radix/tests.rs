@@ -20,6 +20,41 @@ fn mixed_forward_n32_matches_direct() {
 }
 
 #[test]
+fn mixed_forward_n63_matches_direct() {
+    let n = 63usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.29).sin(), (k as f64 * 0.17).cos()))
+        .collect();
+    let mut got = input.clone();
+    forward_inplace::<f64>(&mut got);
+    let expected = dft_forward(&input);
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1e-10,
+        "mixed-radix forward N=63 mismatch err={err:.2e}"
+    );
+}
+
+#[test]
+fn mixed_inverse_n63_matches_direct() {
+    let n = 63usize;
+    let input: Vec<Complex64> = (0..n)
+        .map(|k| Complex64::new((k as f64 * 0.19).cos(), (k as f64 * 0.07).sin()))
+        .collect();
+    let mut got = input.clone();
+    inverse_inplace_unnorm::<f64>(&mut got);
+    let expected = dft_inverse(&input)
+        .into_iter()
+        .map(|x| x * n as f64)
+        .collect::<Vec<_>>();
+    let err = max_abs_err_64(&got, &expected);
+    assert!(
+        err < 1e-10,
+        "mixed-radix inverse N=63 mismatch err={err:.2e}"
+    );
+}
+
+#[test]
 fn mixed_forward_n121_matches_direct() {
     let n = 121usize;
     let input: Vec<Complex64> = (0..n)

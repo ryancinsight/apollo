@@ -473,12 +473,23 @@ fn try_power_of_two_fast_path<
 
 // ── Forward ───────────────────────────────────────────────────────────────────
 
+#[inline(never)]
+fn forward_fallback<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(data: &mut [F::Complex]) {
+    dispatch_inplace::<F, false, false>(data, None);
+}
+
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
 #[inline]
 pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
-    dispatch_inplace::<F, false, false>(data, None);
+    if data.len() <= 1 || try_power_of_two_fast_path::<F, false, false>(data, None) {
+        return;
+    }
+    if F::short_winograd::<false, false>(data) {
+        return;
+    }
+    forward_fallback::<F>(data);
 }
 
 // ── Inverse (unnormalized) ────────────────────────────────────────────────────
