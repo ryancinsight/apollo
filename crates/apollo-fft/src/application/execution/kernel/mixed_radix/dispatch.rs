@@ -62,7 +62,7 @@ fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
         80 => Some((5, 16)),
         90 => Some((9, 10)),
         100 => Some((4, 25)),
-        106 => Some((2, 53)),
+        106 => Some((53, 2)),
         150 => Some((6, 25)),
         200 => Some((8, 25)),
         511 => Some((73, 7)),
