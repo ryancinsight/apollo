@@ -20,7 +20,10 @@
 
 #![allow(clippy::same_item_push)]
 
-use super::integer_math::prime_factors_all;
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/application/execution/kernel/integer_math.rs"
+));
 
 /// Factorize `n` into a prime radix sequence for the mixed-radix Cooley-Tukey
 /// DIT algorithm, or return `None` if `n` has a prime factor outside
