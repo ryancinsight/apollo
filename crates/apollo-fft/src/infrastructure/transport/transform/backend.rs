@@ -27,15 +27,9 @@ use crate::PrecisionProfile;
 /// same-length 1D transforms, a richer structure where the transform
 /// demands one. Forward maps `Sample` slices of `input_len` to `Bin`
 /// slices of `output_len`; inverse maps back.
-pub trait GpuTransformExecutor {
+pub trait GpuTransformPlanner {
     /// Plan payload carried by this transform's descriptors.
     type Plan: Copy + core::fmt::Debug + PartialEq + Send + Sync + 'static;
-
-    /// Time/space-domain element accepted by the forward direction.
-    type Sample: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
-
-    /// Transform-domain element produced by the forward direction.
-    type Bin: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
 
     /// Logical input length demanded by a plan payload.
     fn input_len(plan: &Self::Plan) -> usize;
@@ -61,6 +55,21 @@ pub trait GpuTransformExecutor {
         let _ = plan;
         Ok(())
     }
+}
+
+/// Kernel dispatch and element types for transforms whose whole
+/// execution surface fits the shared slice contract.
+///
+/// Transforms whose operations take extra operands (a graph Fourier
+/// basis, per-call signal bounds) implement only
+/// [`GpuTransformPlanner`] and carry their surface as an extension
+/// trait on the aliased backend.
+pub trait GpuTransformExecutor: GpuTransformPlanner {
+    /// Time/space-domain element accepted by the forward direction.
+    type Sample: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
+
+    /// Transform-domain element produced by the forward direction.
+    type Bin: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
 
     /// Execute the unnormalized forward transform into caller-owned
     /// storage.
@@ -96,7 +105,7 @@ pub struct WgpuTransformBackend<X> {
     transform: core::marker::PhantomData<X>,
 }
 
-impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
+impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
     /// Create a backend from an acquired Hephaestus WGPU device.
     #[must_use]
     pub const fn new(device: WgpuDevice) -> Self {
@@ -124,6 +133,30 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         WgpuTransformPlan::new(payload)
     }
 
+    pub(super) fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
+        let len = plan.len();
+        if len == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
+            });
+        }
+        X::validate(plan.payload())
+    }
+
+    pub(super) fn require_len(
+        role: &'static str,
+        actual: usize,
+        expected: usize,
+    ) -> WgpuResult<()> {
+        let _ = role;
+        if actual != expected {
+            return Err(WgpuError::LengthMismatch { expected, actual });
+        }
+        Ok(())
+    }
+}
+
+impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     /// Execute the unnormalized forward transform.
     ///
     /// # Errors
@@ -243,24 +276,6 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
                 .expect("inverse transform Mnemosyne output must be contiguous"),
         )?;
         Ok(output)
-    }
-
-    fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        X::validate(plan.payload())
-    }
-
-    fn require_len(role: &'static str, actual: usize, expected: usize) -> WgpuResult<()> {
-        let _ = role;
-        if actual != expected {
-            return Err(WgpuError::LengthMismatch { expected, actual });
-        }
-        Ok(())
     }
 }
 

@@ -14,7 +14,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
 use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::WgpuDevice;
 
@@ -71,10 +71,8 @@ impl KernelSource<Wgsl> for InverseScaleKernel {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FwhtGpuKernel;
 
-impl GpuTransformExecutor for FwhtGpuKernel {
+impl GpuTransformPlanner for FwhtGpuKernel {
     type Plan = usize;
-    type Sample = f32;
-    type Bin = f32;
 
     fn input_len(plan: &usize) -> usize {
         *plan
@@ -90,6 +88,11 @@ impl GpuTransformExecutor for FwhtGpuKernel {
         }
         Ok(())
     }
+}
+
+impl GpuTransformExecutor for FwhtGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
 
     fn forward_into(
         device: &WgpuDevice,

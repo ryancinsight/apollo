@@ -65,8 +65,8 @@ pub use half::f16;
 pub use infrastructure::transport::cpu::CpuBackend;
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::transform::{
-    GpuElement, GpuStorage, GpuTransformExecutor, WgpuCapabilities, WgpuError, WgpuResult,
-    WgpuTransformBackend, WgpuTransformPlan,
+    GpuElement, GpuStorage, GpuTransformExecutor, GpuTransformPlanner, WgpuCapabilities, WgpuError,
+    WgpuResult, WgpuTransformBackend, WgpuTransformPlan,
 };
 
 pub use eunomia::Complex32;

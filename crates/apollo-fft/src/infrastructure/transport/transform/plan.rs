@@ -1,27 +1,27 @@
 //! Shared WGPU plan descriptor, typed per transform (ADR 0037).
 
-use super::backend::GpuTransformExecutor;
+use super::backend::GpuTransformPlanner;
 
 /// Metadata-preserving WGPU plan descriptor typed by its transform.
 ///
 /// The type parameter is the transform's executor marker, so a plan built
 /// for one transform cannot feed another transform's backend. The
 /// descriptor carries the transform's plan payload
-/// ([`GpuTransformExecutor::Plan`]) — a bare length for same-length 1D
+/// ([`GpuTransformPlanner::Plan`]) — a bare length for same-length 1D
 /// transforms, a richer structure where the transform demands one.
-pub struct WgpuTransformPlan<X: GpuTransformExecutor> {
+pub struct WgpuTransformPlan<X: GpuTransformPlanner> {
     payload: X::Plan,
 }
 
-impl<X: GpuTransformExecutor> Clone for WgpuTransformPlan<X> {
+impl<X: GpuTransformPlanner> Clone for WgpuTransformPlan<X> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<X: GpuTransformExecutor> Copy for WgpuTransformPlan<X> {}
+impl<X: GpuTransformPlanner> Copy for WgpuTransformPlan<X> {}
 
-impl<X: GpuTransformExecutor> core::fmt::Debug for WgpuTransformPlan<X> {
+impl<X: GpuTransformPlanner> core::fmt::Debug for WgpuTransformPlan<X> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("WgpuTransformPlan")
             .field("payload", &self.payload)
@@ -29,15 +29,15 @@ impl<X: GpuTransformExecutor> core::fmt::Debug for WgpuTransformPlan<X> {
     }
 }
 
-impl<X: GpuTransformExecutor> PartialEq for WgpuTransformPlan<X> {
+impl<X: GpuTransformPlanner> PartialEq for WgpuTransformPlan<X> {
     fn eq(&self, other: &Self) -> bool {
         self.payload == other.payload
     }
 }
 
-impl<X: GpuTransformExecutor> Eq for WgpuTransformPlan<X> {}
+impl<X: GpuTransformPlanner> Eq for WgpuTransformPlan<X> {}
 
-impl<X: GpuTransformExecutor> WgpuTransformPlan<X> {
+impl<X: GpuTransformPlanner> WgpuTransformPlan<X> {
     /// Create a WGPU plan descriptor from the transform's plan payload.
     #[must_use]
     pub const fn new(payload: X::Plan) -> Self {

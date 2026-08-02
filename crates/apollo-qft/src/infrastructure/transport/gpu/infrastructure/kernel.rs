@@ -14,7 +14,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
 use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 64;
@@ -79,14 +79,17 @@ impl KernelSource<Wgsl> for QftKernel {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct QftGpuKernel;
 
-impl GpuTransformExecutor for QftGpuKernel {
+impl GpuTransformPlanner for QftGpuKernel {
     type Plan = usize;
-    type Sample = Complex32;
-    type Bin = Complex32;
 
     fn input_len(plan: &usize) -> usize {
         *plan
     }
+}
+
+impl GpuTransformExecutor for QftGpuKernel {
+    type Sample = Complex32;
+    type Bin = Complex32;
 
     fn forward_into(
         device: &WgpuDevice,

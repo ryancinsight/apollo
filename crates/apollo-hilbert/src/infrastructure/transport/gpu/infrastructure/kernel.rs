@@ -14,7 +14,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuElement, GpuTransformExecutor, WgpuError, WgpuResult};
+use apollo_fft::{GpuElement, GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
 use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 64;
@@ -107,14 +107,17 @@ impl HilbertPass for InverseMask {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HilbertGpuKernel;
 
-impl GpuTransformExecutor for HilbertGpuKernel {
+impl GpuTransformPlanner for HilbertGpuKernel {
     type Plan = usize;
-    type Sample = f32;
-    type Bin = f32;
 
     fn input_len(plan: &usize) -> usize {
         *plan
     }
+}
+
+impl GpuTransformExecutor for HilbertGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
 
     /// Forward Hilbert quadrature `H{x}`: promote the real signal to the
     /// complex analytic kernel and keep the imaginary component.

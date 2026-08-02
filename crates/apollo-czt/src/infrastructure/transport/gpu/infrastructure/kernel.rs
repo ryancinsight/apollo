@@ -15,7 +15,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
 use hephaestus_wgpu::WgpuDevice;
 /// Plan payload for the chirp-z transform: logical lengths and the
 /// spiral parameters stored as IEEE bit patterns so the payload stays
@@ -136,10 +136,8 @@ impl<M: CztDirection> KernelSource<Wgsl> for CztKernel<M> {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CztGpuKernel;
 
-impl GpuTransformExecutor for CztGpuKernel {
+impl GpuTransformPlanner for CztGpuKernel {
     type Plan = ChirpPlan;
-    type Sample = Complex32;
-    type Bin = Complex32;
 
     fn input_len(plan: &ChirpPlan) -> usize {
         plan.input_len()
@@ -168,6 +166,11 @@ impl GpuTransformExecutor for CztGpuKernel {
         }
         Ok(())
     }
+}
+
+impl GpuTransformExecutor for CztGpuKernel {
+    type Sample = Complex32;
+    type Bin = Complex32;
 
     fn forward_into(
         device: &WgpuDevice,

@@ -14,7 +14,7 @@ mod error;
 mod plan;
 mod storage;
 
-pub use backend::{GpuTransformExecutor, WgpuTransformBackend};
+pub use backend::{GpuTransformExecutor, GpuTransformPlanner, WgpuTransformBackend};
 pub use capabilities::WgpuCapabilities;
 pub use error::{WgpuError, WgpuResult};
 pub use plan::WgpuTransformPlan;

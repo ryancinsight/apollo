@@ -13,7 +13,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
 use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 256;
@@ -98,10 +98,8 @@ pub struct HaarDwtPlan {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WaveletGpuKernel;
 
-impl GpuTransformExecutor for WaveletGpuKernel {
+impl GpuTransformPlanner for WaveletGpuKernel {
     type Plan = HaarDwtPlan;
-    type Sample = f32;
-    type Bin = f32;
 
     fn input_len(plan: &HaarDwtPlan) -> usize {
         plan.len
@@ -121,6 +119,11 @@ impl GpuTransformExecutor for WaveletGpuKernel {
         }
         Ok(())
     }
+}
+
+impl GpuTransformExecutor for WaveletGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
 
     fn forward_into(
         device: &WgpuDevice,
