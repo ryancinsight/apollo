@@ -64,6 +64,7 @@ pub fn declare_primitive_roots(input: TokenStream) -> TokenStream {
     });
 
     quote! {
+        #[allow(dead_code)]
         pub(crate) const PRIMITIVE_ROOTS: &[(usize, usize)] = &[#(#entries),*];
     }
     .into()
