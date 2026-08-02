@@ -13,6 +13,13 @@
 //! transform of the log-resampled signal. calculate_log_resample performs the
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use eunomia::Complex64;
 use moirai::ParallelSliceMut;
 

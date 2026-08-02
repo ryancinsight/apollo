@@ -4,6 +4,13 @@
 //! update removes the oldest sample, appends the new sample, and updates all
 //! tracked bins through the sliding DFT recurrence.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use crate::domain::metadata::window::SlidingDftConfig;
 use crate::infrastructure::kernel::sliding::{

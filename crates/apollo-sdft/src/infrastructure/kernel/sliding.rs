@@ -5,6 +5,13 @@
 //! When x_old leaves and x_new enters at the end, the recurrence is
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
