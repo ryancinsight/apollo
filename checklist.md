@@ -5,6 +5,8 @@
 - [x] Bind Mnemosyne and Moirai to their collision-free registry packages.
 - [x] Regenerate and verify the clean standalone lockfile.
 - [x] Pass the clean-checkout focused package gates.
+- [x] Keep historical benchmark sources resolvable under the candidate provider
+      graph without changing their production code.
 - [ ] Publish reusable crates in dependency order and verify the sparse index.
 - [ ] Register crates.io Trusted Publishers for the release workflow.
 
