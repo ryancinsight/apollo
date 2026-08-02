@@ -1,13 +1,9 @@
-// ── SSOT shared math utilities ──────────────────────────────────────────────
-// This file is the single source of truth for small integer-arithmetic
-// helpers used by `apollo-fft` (runtime) via `include!`.
+// Integer-arithmetic definitions included by runtime FFT planning modules.
 //
-// NOTE: `apollo-fft-macros` keeps its own `math.rs` with proc-macro-specific
-// versions (e.g. `mod_pow` with `u64` params) and does NOT include this file.
-//
-// All functions are private (`fn`, not `pub(crate) fn`) so the compiler can
-// inline them aggressively within the including module.  Each module that
-// `include!`s this file gets its own monomorphized copy.
+// This file is the single source of truth for the package-local helpers. Each
+// including module receives private definitions, preserving the original
+// inlining and code-generation boundaries without reaching into a sibling
+// package's source tree.
 
 /// Greatest common divisor (Euclidean algorithm).
 #[inline]
