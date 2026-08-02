@@ -6,6 +6,7 @@ use leto::{Array2, Storage};
 use crate::infrastructure::transport::gpu::WgpuError;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};
 
 #[test]
 fn typed_flat_mixed_storage_matches_represented_f32_execution() {
@@ -13,7 +14,7 @@ fn typed_flat_mixed_storage_matches_represented_f32_execution() {
         return;
     };
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
-    let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
 
     let flat_f32: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
 
@@ -50,7 +51,7 @@ fn typed_leto_forward_and_inverse_match_typed_flat() {
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
     let angles_leto =
         leto::Array::from_mnemosyne_slice([angles.len()], &angles).expect("leto angles");
-    let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
     let flat_f16: Vec<f16> = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
         .into_iter()
         .map(f16::from_f32)
@@ -85,7 +86,10 @@ fn typed_leto_forward_and_inverse_match_typed_flat() {
         .map(f16::from_f32)
         .collect();
     let sinogram_leto = leto::Array::from_mnemosyne_slice(
-        [plan.angle_count(), plan.detector_count()],
+        [
+            plan.payload().angle_count(),
+            plan.payload().detector_count(),
+        ],
         &sinogram_f16,
     )
     .expect("typed leto sinogram");
@@ -117,8 +121,9 @@ fn typed_flat_path_rejects_profile_mismatch() {
         return;
     };
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
-    let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
-    let flat_f16: Vec<f16> = vec![f16::from_f32(1.0); plan.rows() * plan.cols()];
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
+    let flat_f16: Vec<f16> =
+        vec![f16::from_f32(1.0); plan.payload().rows() * plan.payload().cols()];
 
     let err = backend
         .execute_forward_flat_typed::<f16>(

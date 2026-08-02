@@ -4,6 +4,7 @@ use crate::{infrastructure::transport::gpu::WgpuError, RadonPlan};
 use leto::Array2;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};
 
 #[test]
 fn backproject_matches_cpu_reference() {
@@ -29,7 +30,7 @@ fn backproject_matches_cpu_reference() {
         .expect("cpu backproject");
     // GPU backproject using f32 sinogram derived from the f64 CPU result.
     let sinogram_f32 = sinogram_cpu.values().mapv(|v| v as f32);
-    let gpu_plan = backend.plan(3, 3, angles_f32.len(), 7, 1.0);
+    let gpu_plan = backend.plan(GeometryPlan::new(3, 3, angles_f32.len(), 7, 1.0));
     let gpu_bp = backend
         .execute_inverse(&gpu_plan, &sinogram_f32, &angles_f32)
         .expect("gpu backproject");
@@ -49,7 +50,7 @@ fn execute_inverse_rejects_sinogram_shape_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(3, 3, 2, 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, 2, 5, 1.0));
     let wrong_sinogram = Array2::<f32>::zeros([3, 5]);
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
     let err = backend
@@ -93,7 +94,7 @@ fn backproject_satisfies_adjoint_identity() {
         .map(|(a, b)| *a * f64::from(*b))
         .sum();
 
-    let gpu_plan = backend.plan(3, 3, 3, 5, 1.0);
+    let gpu_plan = backend.plan(GeometryPlan::new(3, 3, 3, 5, 1.0));
     let adj_g = backend
         .execute_inverse(&gpu_plan, &g, &angles_f32)
         .expect("gpu backproject");

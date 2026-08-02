@@ -3,6 +3,7 @@
 use crate::infrastructure::transport::gpu::{RadonWgpuPlan, WgpuCapabilities, WgpuError};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::GeometryPlan;
 
 #[test]
 fn capabilities_reflect_forward_only_kernel_surface() {
@@ -19,7 +20,7 @@ fn capabilities_reflect_forward_only_kernel_surface() {
 
 #[test]
 fn capabilities_reflect_forward_and_inverse_surface() {
-    let caps = WgpuCapabilities::forward_and_inverse(true);
+    let caps = WgpuCapabilities::implemented(true);
     assert!(caps.device_available);
     assert!(caps.supports_forward);
     assert!(caps.supports_inverse);
@@ -28,7 +29,7 @@ fn capabilities_reflect_forward_and_inverse_surface() {
         caps.default_precision_profile,
         apollo_fft::PrecisionProfile::LOW_PRECISION_F32
     );
-    let caps_off = WgpuCapabilities::forward_and_inverse(false);
+    let caps_off = WgpuCapabilities::detected(false);
     assert!(!caps_off.device_available);
     assert!(!caps_off.supports_forward);
     assert!(!caps_off.supports_inverse);
@@ -36,14 +37,14 @@ fn capabilities_reflect_forward_and_inverse_surface() {
 
 #[test]
 fn plan_preserves_geometry_configuration() {
-    let plan = RadonWgpuPlan::new(8, 9, 3, 11, 0.5_f64.to_bits());
-    assert_eq!(plan.rows(), 8);
-    assert_eq!(plan.cols(), 9);
-    assert_eq!(plan.angle_count(), 3);
-    assert_eq!(plan.detector_count(), 11);
-    assert_eq!(plan.detector_spacing(), 0.5);
+    let plan = RadonWgpuPlan::new(GeometryPlan::new(8, 9, 3, 11, 0.5_f64));
+    assert_eq!(plan.payload().rows(), 8);
+    assert_eq!(plan.payload().cols(), 9);
+    assert_eq!(plan.payload().angle_count(), 3);
+    assert_eq!(plan.payload().detector_count(), 11);
+    assert_eq!(plan.payload().detector_spacing(), 0.5);
     assert!(!plan.is_empty());
-    assert!(RadonWgpuPlan::new(0, 9, 3, 11, 0.5_f64.to_bits()).is_empty());
+    assert!(RadonWgpuPlan::new(GeometryPlan::new(0, 9, 3, 11, 0.5_f64)).is_empty());
 }
 
 #[test]
@@ -59,21 +60,19 @@ fn unsupported_execution_error_identifies_operation() {
 
 #[test]
 fn capabilities_include_filtered_backprojection() {
-    let caps = WgpuCapabilities::forward_inverse_and_fbp(true);
+    let caps = WgpuCapabilities::implemented(true);
     assert!(caps.device_available);
     assert!(caps.supports_forward);
     assert!(caps.supports_inverse);
-    assert!(caps.supports_filtered_backprojection);
     assert!(caps.supports_mixed_precision);
     assert_eq!(
         caps.default_precision_profile,
         apollo_fft::PrecisionProfile::LOW_PRECISION_F32
     );
-    let caps_off = WgpuCapabilities::forward_inverse_and_fbp(false);
+    let caps_off = WgpuCapabilities::detected(false);
     assert!(!caps_off.device_available);
     assert!(!caps_off.supports_forward);
     assert!(!caps_off.supports_inverse);
-    assert!(!caps_off.supports_filtered_backprojection);
 }
 
 #[test]

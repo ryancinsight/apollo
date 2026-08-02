@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for Radon WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// Radon compute kernel orchestration.
+/// Hephaestus kernel definitions for the Radon passes.
 pub mod kernel;

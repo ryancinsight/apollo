@@ -6,6 +6,7 @@ use crate::{
 };
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};
 
 #[test]
 fn forward_projection_matches_cpu_reference() {
@@ -18,7 +19,7 @@ fn forward_projection_matches_cpu_reference() {
     )
     .unwrap();
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
-    let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
     let gpu = backend
         .execute_forward(&plan, &image, &angles)
         .expect("wgpu forward execution");
@@ -54,7 +55,7 @@ fn rejects_invalid_plan_and_input_shape_before_dispatch() {
     };
     let empty_plan_err = backend
         .execute_forward(
-            &RadonWgpuPlan::new(0, 3, 1, 3, 1.0_f64.to_bits()),
+            &RadonWgpuPlan::new(GeometryPlan::new(0, 3, 1, 3, 1.0_f64)),
             &leto::Array2::from_shape_vec([1, 1], vec![1.0_f32]).unwrap(),
             &[0.0_f32],
         )
@@ -63,7 +64,7 @@ fn rejects_invalid_plan_and_input_shape_before_dispatch() {
 
     let shape_err = backend
         .execute_forward(
-            &RadonWgpuPlan::new(3, 3, 1, 3, 1.0_f64.to_bits()),
+            &RadonWgpuPlan::new(GeometryPlan::new(3, 3, 1, 3, 1.0_f64)),
             &leto::Array2::from_shape_vec([1, 2], vec![1.0_f32, 2.0]).unwrap(),
             &[0.0_f32],
         )
@@ -72,7 +73,7 @@ fn rejects_invalid_plan_and_input_shape_before_dispatch() {
 
     let angle_err = backend
         .execute_forward(
-            &RadonWgpuPlan::new(3, 3, 2, 3, 1.0_f64.to_bits()),
+            &RadonWgpuPlan::new(GeometryPlan::new(3, 3, 2, 3, 1.0_f64)),
             &leto::Array2::from_shape_vec(
                 [3, 3],
                 vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
