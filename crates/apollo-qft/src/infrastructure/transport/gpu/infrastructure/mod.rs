@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for QFT WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// QFT compute kernel orchestration.
+/// Hephaestus kernel definitions for the QFT pass.
 pub mod kernel;

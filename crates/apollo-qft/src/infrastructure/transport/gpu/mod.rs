@@ -1,19 +1,23 @@
 #![warn(missing_docs)]
 //! WGPU backend boundary for Apollo QFT.
 //!
-//! This crate owns GPU capability and plan descriptors for this transform domain.
-//! Mathematical contracts remain in `apollo-qft`.
+//! The execution scaffold is the shared `apollo-fft` transform transport
+//! (ADR 0037); this module owns only the QFT kernel and its domain
+//! names. The QFT is the first complex-element adopter: `Sample` and
+//! `Bin` are both [`apollo_fft::Complex32`], and typed reduced-precision
+//! dispatch runs over `[f16; 2]` storage through
+//! `apollo_fft::GpuStorage<Complex32>`.
 
-/// Application-layer WGPU plan descriptors.
-pub mod application;
-/// Domain contracts for WGPU execution.
-pub mod domain;
-/// Infrastructure boundary for WGPU device acquisition.
+/// Infrastructure boundary for the QFT kernel.
 pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use application::plan::QftWgpuPlan;
-pub use domain::capabilities::WgpuCapabilities;
-pub use domain::error::{WgpuError, WgpuResult};
-pub use infrastructure::device::QftWgpuBackend;
+pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
+pub use infrastructure::kernel::QftGpuKernel;
+
+/// Metadata-preserving WGPU plan descriptor.
+pub type QftWgpuPlan = apollo_fft::WgpuTransformPlan<QftGpuKernel>;
+
+/// WGPU backend descriptor.
+pub type QftWgpuBackend = apollo_fft::WgpuTransformBackend<QftGpuKernel>;

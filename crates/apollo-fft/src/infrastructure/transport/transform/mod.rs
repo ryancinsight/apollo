@@ -18,4 +18,4 @@ pub use backend::{GpuTransformExecutor, WgpuTransformBackend};
 pub use capabilities::WgpuCapabilities;
 pub use error::{WgpuError, WgpuResult};
 pub use plan::WgpuTransformPlan;
-pub use storage::GpuStorage;
+pub use storage::{GpuElement, GpuStorage};

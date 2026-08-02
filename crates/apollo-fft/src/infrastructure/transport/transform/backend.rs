@@ -11,18 +11,12 @@
 //! instead of forcing everything through `f32`.
 
 use hephaestus_wgpu::WgpuDevice;
-use mnemosyne::scratch::ScratchPool;
 
 use super::capabilities::WgpuCapabilities;
 use super::error::{WgpuError, WgpuResult};
 use super::plan::WgpuTransformPlan;
-use super::storage::GpuStorage;
+use super::storage::{GpuElement, GpuStorage};
 use crate::PrecisionProfile;
-
-thread_local! {
-    static GPU_INPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
-    static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
-}
 
 /// Kernel dispatch, plan payload, and element types supplied by a
 /// transform to the shared backend.
@@ -270,23 +264,25 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     }
 }
 
-impl<X> WgpuTransformBackend<X>
+impl<E, X> WgpuTransformBackend<X>
 where
-    X: GpuTransformExecutor<Sample = f32, Bin = f32>,
+    E: GpuElement,
+    X: GpuTransformExecutor<Sample = E, Bin = E>,
 {
     /// Execute the unnormalized forward transform with caller-owned typed
     /// storage.
     ///
-    /// WGPU arithmetic remains `f32`; mixed `f16` storage is promoted once
-    /// to represented `f32` before dispatch and quantized at the output
-    /// boundary. Available on real symmetric transforms, whose GPU
-    /// contract is natively `f32`.
+    /// WGPU arithmetic stays in the transform's native element; reduced
+    /// storage forms are promoted once to the represented element before
+    /// dispatch and quantized at the output boundary. Available on
+    /// symmetric transforms, whose forward and inverse directions share
+    /// one element.
     ///
     /// # Errors
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_forward_typed_into<T: GpuStorage>(
+    pub fn execute_forward_typed_into<T: GpuStorage<E>>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
@@ -306,7 +302,7 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_forward_leto_typed<T: GpuStorage + Default>(
+    pub fn execute_forward_leto_typed<T: GpuStorage<E> + Default>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
@@ -333,7 +329,7 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_inverse_typed_into<T: GpuStorage>(
+    pub fn execute_inverse_typed_into<T: GpuStorage<E>>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
@@ -350,7 +346,7 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_inverse_leto_typed<T: GpuStorage + Default>(
+    pub fn execute_inverse_leto_typed<T: GpuStorage<E> + Default>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
@@ -370,7 +366,7 @@ where
         Ok(output)
     }
 
-    fn validate_typed<T: GpuStorage>(
+    fn validate_typed<T: GpuStorage<E>>(
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
         input_len: usize,
@@ -386,38 +382,34 @@ where
         Ok(())
     }
 
-    fn execute_typed_into<T: GpuStorage>(
+    fn execute_typed_into<T: GpuStorage<E>>(
         &self,
         plan: &WgpuTransformPlan<X>,
         input: &[T],
         output: &mut [T],
         inverse: bool,
     ) -> WgpuResult<()> {
-        let run = |represented: &[f32], computed: &mut [f32]| {
+        let run = |represented: &[E], computed: &mut [E]| {
             if inverse {
                 X::inverse_into(&self.device, plan.payload(), represented, computed)
             } else {
                 X::forward_into(&self.device, plan.payload(), represented, computed)
             }
         };
-        if let (Some(input), Some(output)) = (T::as_f32_slice(input), T::as_f32_slice_mut(output)) {
+        if let (Some(input), Some(output)) =
+            (T::as_element_slice(input), T::as_element_slice_mut(output))
+        {
             return run(input, output);
         }
-        GPU_INPUT_SCRATCH.with(|input_pool| {
-            input_pool.with_scratch(input.len(), |represented| {
-                for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
-                    *slot = value.to_gpu();
-                }
-                GPU_OUTPUT_SCRATCH.with(|output_pool| {
-                    output_pool.with_scratch(output.len(), |computed| {
-                        run(represented, computed)?;
-                        for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                            *slot = T::from_gpu(value);
-                        }
-                        Ok(())
-                    })
-                })
-            })
+        E::with_scratch(input.len(), output.len(), |represented, computed| {
+            for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
+                *slot = value.to_gpu();
+            }
+            run(represented, computed)?;
+            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *slot = T::from_gpu(value);
+            }
+            Ok(())
         })
     }
 }

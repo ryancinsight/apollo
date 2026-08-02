@@ -14,7 +14,8 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 64;
 const QFT_SOURCE: &str = include_str!("shaders/qft.wgsl");
@@ -76,7 +77,35 @@ impl KernelSource<Wgsl> for QftKernel {
 
 /// Zero-sized QFT orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct QftGpuKernel;
+pub struct QftGpuKernel;
+
+impl GpuTransformExecutor for QftGpuKernel {
+    type Plan = usize;
+    type Sample = Complex32;
+    type Bin = Complex32;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+
+    fn forward_into(
+        device: &WgpuDevice,
+        _plan: &usize,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, QftMode::Forward)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        _plan: &usize,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, QftMode::Inverse)
+    }
+}
 
 impl QftGpuKernel {
     /// Execute one direct unitary transform into caller-owned host storage.

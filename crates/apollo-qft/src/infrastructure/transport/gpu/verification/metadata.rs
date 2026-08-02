@@ -4,7 +4,7 @@ use super::support::backend;
 
 #[test]
 fn capabilities_reflect_direct_unitary_kernel_surface() {
-    let capabilities = WgpuCapabilities::direct_unitary(true);
+    let capabilities = WgpuCapabilities::implemented(true);
     assert!(capabilities.device_available);
     assert!(capabilities.supports_forward);
     assert!(capabilities.supports_inverse);
