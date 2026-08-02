@@ -67,7 +67,7 @@ macro_rules! fft_precision_impl {
         fn_sizes: [$($fn_size:literal => $dft_fn:ident),* $(,)?],
     ) => {
         impl FftPrecision for $complex {
-            #[inline(always)]
+            #[inline]
             fn fft_forward(data: &mut [Self]) {
                 let n = data.len();
                 match n {

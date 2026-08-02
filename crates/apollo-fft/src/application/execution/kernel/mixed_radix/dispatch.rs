@@ -478,7 +478,10 @@ fn try_power_of_two_fast_path<
 // ── Forward ───────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
-#[inline]
+// Keep the general selector out of the small fixed-size `FftPrecision` entry.
+// Inlining this body expands that entry by an order of magnitude and charges
+// its register-save prologue to every direct 2/4/8/16/32/64-point transform.
+#[inline(never)]
 pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
