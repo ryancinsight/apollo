@@ -13,7 +13,9 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, WgpuError, WgpuResult};
+use hephaestus_core::ComputeDevice;
+use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 64;
 const DHT_SOURCE: &str = include_str!("shaders/dht.wgsl");
@@ -71,21 +73,16 @@ impl KernelSource<Wgsl> for InverseScaleKernel {
 
 /// Zero-sized DHT kernel orchestration over a Hephaestus kernel device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct DhtGpuKernel;
+pub struct DhtGpuKernel;
 
-impl DhtGpuKernel {
+impl GpuTransformExecutor for DhtGpuKernel {
     /// Execute the forward or inverse 1D DHT into caller-owned storage.
-    pub(super) fn execute_into<D>(
-        device: &D,
+    fn execute_into(
+        device: &WgpuDevice,
         input: &[f32],
         output: &mut [f32],
         inverse: bool,
-    ) -> WgpuResult<()>
-    where
-        D: KernelDevice,
-        TransformKernel: KernelSource<D::Dialect>,
-        InverseScaleKernel: KernelSource<D::Dialect>,
-    {
+    ) -> WgpuResult<()> {
         let len = input.len();
         let encoded_len = u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
             message: format!("length {len} exceeds the provider parameter range"),

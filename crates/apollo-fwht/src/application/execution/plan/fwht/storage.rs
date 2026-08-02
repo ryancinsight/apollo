@@ -7,8 +7,20 @@ use apollo_fft::{f16, PrecisionProfile};
 use leto::Array1;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_INPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_OUTPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_F32_SCRATCH: mnemosyne::scratch::ScratchPool<f32> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

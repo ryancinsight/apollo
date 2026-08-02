@@ -1,6 +1,6 @@
-//! WGPU capability contracts.
+//! Shared WGPU transform capability contract (ADR 0037).
 
-use apollo_fft::PrecisionProfile;
+use crate::PrecisionProfile;
 
 /// Truthful WGPU transform capability descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

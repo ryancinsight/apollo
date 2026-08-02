@@ -1,19 +1,19 @@
 #![warn(missing_docs)]
 //! WGPU backend boundary for Apollo DHT.
 //!
-//! This crate owns GPU capability and plan descriptors for this transform domain.
-//! Mathematical contracts remain in `apollo-dht`.
+//! The execution scaffold is the shared `apollo-fft` transform transport
+//! (ADR 0037); this module owns only the DHT kernel and its domain names.
 
-/// Application-layer WGPU plan descriptors.
-pub mod application;
-/// Domain contracts for WGPU execution.
-pub mod domain;
-/// Infrastructure boundary for WGPU device acquisition.
+/// Infrastructure boundary for the DHT kernel.
 pub mod infrastructure;
 #[cfg(test)]
 pub(crate) mod verification;
 
-pub use application::plan::DhtWgpuPlan;
-pub use domain::capabilities::WgpuCapabilities;
-pub use domain::error::{WgpuError, WgpuResult};
-pub use infrastructure::device::DhtWgpuBackend;
+pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
+pub use infrastructure::kernel::DhtGpuKernel;
+
+/// Metadata-preserving WGPU plan descriptor.
+pub type DhtWgpuPlan = apollo_fft::WgpuTransformPlan<DhtGpuKernel>;
+
+/// WGPU backend descriptor.
+pub type DhtWgpuBackend = apollo_fft::WgpuTransformBackend<DhtGpuKernel>;

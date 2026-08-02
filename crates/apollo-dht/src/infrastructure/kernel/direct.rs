@@ -11,6 +11,10 @@ const PAR_THRESHOLD: usize = 256;
 const HERMES_DOT_LEN_THRESHOLD: usize = 1_024;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static HARTLEY_ROW_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

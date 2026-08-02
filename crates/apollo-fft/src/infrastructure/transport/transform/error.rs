@@ -1,13 +1,14 @@
-//! DHT accelerator error contracts.
+//! Shared WGPU transform error contract (ADR 0037).
 
 use hephaestus_core::HephaestusError;
 use thiserror::Error;
 
-/// Result alias for DHT accelerator execution.
+/// Result alias for WGPU transform execution.
 pub type WgpuResult<T> = Result<T, WgpuError>;
 
-/// Failures produced by the concrete Hephaestus WGPU implementation of DHT.
+/// Failures produced by a Hephaestus-backed WGPU transform implementation.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum WgpuError {
     /// The selected Hephaestus device rejected acquisition, allocation,
     /// compilation, dispatch, synchronization, or transfer.
@@ -18,7 +19,7 @@ pub enum WgpuError {
     #[error("precision profile does not match typed GPU storage")]
     InvalidPrecisionProfile,
 
-    /// Plan parameters are invalid for the DHT kernel.
+    /// Plan parameters are invalid for the transform kernel.
     #[error("invalid plan: {message}")]
     InvalidPlan {
         /// Failure explanation including the offending plan value.
