@@ -33,7 +33,7 @@ mod gpu_roundtrip {
                 Err(error) => panic!("NTT GPU verification requires a working provider: {error}"),
             };
             let backend = NttWgpuBackend::new(device);
-            let plan = backend.plan(length);
+            let plan = backend.plan(ResiduePlan::new(length));
             let spectrum = backend
                 .execute_forward(&plan, &input)
                 .expect("GPU forward must succeed");

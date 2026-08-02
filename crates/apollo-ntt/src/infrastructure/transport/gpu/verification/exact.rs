@@ -3,6 +3,7 @@ use leto::{Array1, SliceArg, Storage};
 use crate::NttPlan;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{ModularExecution, ResiduePlan};
 
 #[test]
 fn forward_impulse_matches_exact_cpu_reference() {
@@ -10,7 +11,7 @@ fn forward_impulse_matches_exact_cpu_reference() {
         return;
     };
     let input = vec![1_u64, 0, 0, 0, 0, 0, 0, 0];
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let actual = backend
         .execute_forward(&plan, &input)
         .expect("GPU forward execution");
@@ -30,7 +31,7 @@ fn forward_fibonacci_matches_exact_cpu_reference() {
         return;
     };
     let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let actual = backend
         .execute_forward(&plan, &input)
         .expect("GPU forward execution");
@@ -48,7 +49,7 @@ fn inverse_recovers_fibonacci_residues_exactly() {
         return;
     };
     let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let spectrum = backend
         .execute_forward(&plan, &input)
         .expect("GPU forward execution");
@@ -64,7 +65,7 @@ fn leto_forward_and_inverse_match_allocating_slice() {
         return;
     };
     let input = vec![1_u64, 1, 2, 3, 5, 8, 13, 21];
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let expected_forward = backend
         .execute_forward(&plan, &input)
         .expect("slice forward");
@@ -102,7 +103,7 @@ fn strided_leto_forward_matches_logical_slice() {
         .copied()
         .flat_map(|value| [value, 99])
         .collect::<Vec<_>>();
-    let plan = backend.plan(logical.len());
+    let plan = backend.plan(ResiduePlan::new(logical.len()));
     let expected = backend
         .execute_forward(&plan, &logical)
         .expect("slice forward");

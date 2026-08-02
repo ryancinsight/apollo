@@ -31,6 +31,11 @@ pub trait GpuTransformPlanner {
     /// Plan payload carried by this transform's descriptors.
     type Plan: Copy + core::fmt::Debug + PartialEq + Send + Sync + 'static;
 
+    /// Whether reduced-precision typed dispatch exists for this
+    /// transform. Integer/exact transforms override to `false` so the
+    /// capability descriptor stays truthful.
+    const MIXED_PRECISION: bool = true;
+
     /// Logical input length demanded by a plan payload.
     fn input_len(plan: &Self::Plan) -> usize;
 
@@ -118,7 +123,13 @@ impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
     /// Return truthful current capabilities.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {
-        WgpuCapabilities::implemented(true)
+        WgpuCapabilities {
+            device_available: true,
+            supports_forward: true,
+            supports_inverse: true,
+            supports_mixed_precision: X::MIXED_PRECISION,
+            default_precision_profile: crate::PrecisionProfile::LOW_PRECISION_F32,
+        }
     }
 
     /// Return the acquired Hephaestus device implementation.

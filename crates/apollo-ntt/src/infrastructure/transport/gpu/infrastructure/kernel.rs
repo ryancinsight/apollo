@@ -20,7 +20,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: usize = 64;
 const NTT_SOURCE: &str = include_str!("shaders/ntt.wgsl");
@@ -116,7 +116,24 @@ impl KernelSource<Wgsl> for NttScaleKernel {
 
 /// Zero-sized NTT orchestration over a Hephaestus kernel device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct NttGpuKernel;
+pub struct NttGpuKernel;
+
+impl apollo_fft::GpuTransformPlanner for NttGpuKernel {
+    type Plan = crate::infrastructure::transport::gpu::ResiduePlan;
+
+    /// Exact modular arithmetic has no reduced-precision storage form.
+    const MIXED_PRECISION: bool = false;
+
+    fn input_len(plan: &crate::infrastructure::transport::gpu::ResiduePlan) -> usize {
+        plan.len()
+    }
+
+    fn validate(
+        plan: &crate::infrastructure::transport::gpu::ResiduePlan,
+    ) -> apollo_fft::WgpuResult<()> {
+        plan.validate_field().map(|_| ())
+    }
+}
 
 impl NttGpuKernel {
     /// Construct reusable host-side transform state for one validated plan.

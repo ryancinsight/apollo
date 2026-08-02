@@ -3,6 +3,7 @@ use leto::Storage;
 use crate::infrastructure::transport::gpu::WgpuError;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{ModularExecution, ResiduePlan};
 
 #[test]
 fn quantized_storage_matches_allocating_exact_execution() {
@@ -11,7 +12,7 @@ fn quantized_storage_matches_allocating_exact_execution() {
     };
     let input = vec![1_u32, 1, 2, 3, 5, 8, 13, 21];
     let represented = input.iter().copied().map(u64::from).collect::<Vec<_>>();
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let expected = backend
         .execute_forward(&plan, &represented)
         .expect("allocating forward");
@@ -37,7 +38,7 @@ fn quantized_leto_forward_and_inverse_match_quantized_slice() {
         return;
     };
     let input = vec![3_u32, 1, 4, 1, 5, 9, 2, 6];
-    let plan = backend.plan(input.len());
+    let plan = backend.plan(ResiduePlan::new(input.len()));
     let mut expected_forward = vec![0_u32; input.len()];
     backend
         .execute_forward_quantized_into(&plan, &input, &mut expected_forward)
@@ -71,7 +72,7 @@ fn quantized_storage_rejects_output_length_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(8);
+    let plan = backend.plan(ResiduePlan::new(8));
     let mut output = vec![0_u32; 4];
     let error = backend
         .execute_forward_quantized_into(&plan, &[0; 8], &mut output)
