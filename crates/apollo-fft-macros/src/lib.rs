@@ -43,6 +43,32 @@ pub fn generate_prime_pair_tables(input: TokenStream) -> TokenStream {
     prime_pair_tables::generate_prime_pair_tables(input)
 }
 
+/// Declare Apollo's canonical prime-to-generator table in the invoking crate.
+///
+/// The generated constant remains crate-private. This keeps the mathematical
+/// table owned by the proc-macro package while allowing `apollo-fft` package
+/// archives to compile without reaching into a sibling source directory.
+#[proc_macro]
+pub fn declare_primitive_roots(input: TokenStream) -> TokenStream {
+    if !input.is_empty() {
+        return quote! {
+            compile_error!("declare_primitive_roots! accepts no input");
+        }
+        .into();
+    }
+
+    let entries = math::PRIMITIVE_ROOTS.iter().map(|&(prime, generator)| {
+        let prime = LitInt::new(&prime.to_string(), proc_macro2::Span::call_site());
+        let generator = LitInt::new(&generator.to_string(), proc_macro2::Span::call_site());
+        quote! { (#prime, #generator) }
+    });
+
+    quote! {
+        pub(crate) const PRIMITIVE_ROOTS: &[(usize, usize)] = &[#(#entries),*];
+    }
+    .into()
+}
+
 struct ThreeByPrimeDispatchInput {
     primes: Vec<LitInt>,
     // Parsed for parse-API symmetry with `generate_good_thomas_dispatch`;

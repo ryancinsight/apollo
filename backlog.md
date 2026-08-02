@@ -10,10 +10,11 @@
   order through the OIDC release workflow.
 - Status: the exact external graph resolves the current Mnemosyne, Moirai,
   Hermes, Leto, and Hephaestus sources; format, locked `apollo-fft` check, and
-  400/400 focused Nextest cases pass. Hosted benchmarking exposed historical
-  baseline manifests using the retired provider package names; the instrument
-  now pins those dependency specs with the candidate graph. Exact-head hosted
-  verification and merge remain.
+  400/400 focused Nextest cases pass. The first archive dry run exposed
+  sibling-source includes in `apollo-fft`; the primitive table now crosses the
+  package boundary through `apollo-fft-macros` 0.2.0 code generation and
+  runtime-only integer math is package-owned. Exact package verification,
+  hosted verification, and merge remain.
 
 ## D20-real-spherical-harmonic-provider [minor] — in progress
 

@@ -20,11 +20,7 @@
 
 #![allow(clippy::same_item_push)]
 
-// ── Shared math helpers ────────────────────────────────────────────────────
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../apollo-fft-macros/src/shared_math.rs"
-));
+use super::integer_math::prime_factors_all;
 
 /// Factorize `n` into a prime radix sequence for the mixed-radix Cooley-Tukey
 /// DIT algorithm, or return `None` if `n` has a prime factor outside
