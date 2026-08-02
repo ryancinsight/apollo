@@ -1,3 +1,18 @@
+//! `clippy::missing_const_for_thread_local` fires on this module's scratch
+//! `thread_local!`s even though both initializers are already `const` blocks —
+//! a false positive on the pinned 1.97.0 toolchain, observed on Windows. The
+//! expectation is module-scoped because the diagnostic is attributed to the
+//! macro invocation, which no item-level attribute reaches, and there is no
+//! enclosing function to carry it. `expect` rather than `allow`, so it reports
+//! itself as unfulfilled once the lint is fixed and can be deleted.
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Rust 1.97 on Windows reports this lint for already-const initializers"
+    )
+)]
+
 //! Mathematical and data-structure helpers for Spherical Harmonic Transforms.
 
 use super::ShtPlan;
