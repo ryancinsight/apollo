@@ -16,7 +16,6 @@
 pub(crate) mod auto_dispatch;
 pub(crate) mod components;
 pub mod direct;
-pub(crate) mod integer_math;
 pub mod mixed_radix;
 pub(crate) mod pot;
 pub(crate) mod precision_bridge;
