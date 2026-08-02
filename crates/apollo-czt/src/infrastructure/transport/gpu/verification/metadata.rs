@@ -1,14 +1,14 @@
 //! Value-semantic CZT GPU metadata contracts.
 
-use crate::infrastructure::transport::gpu::{
-    Complex32 as GpuComplex32, CztWgpuPlan, WgpuCapabilities,
-};
+use apollo_fft::Complex32 as GpuComplex32;
+
+use crate::infrastructure::transport::gpu::{ChirpPlan, CztWgpuPlan, WgpuCapabilities};
 
 use super::support::backend;
 
 #[test]
 fn capabilities_reflect_forward_inverse_kernel_surface() {
-    let capabilities = WgpuCapabilities::forward_inverse(true);
+    let capabilities = WgpuCapabilities::implemented(true);
     assert!(capabilities.device_available);
     assert!(capabilities.supports_forward);
     assert!(capabilities.supports_inverse);
@@ -21,18 +21,24 @@ fn capabilities_reflect_forward_inverse_kernel_surface() {
 
 #[test]
 fn plan_preserves_logical_parameters() {
-    let plan = CztWgpuPlan::new(
+    let plan = CztWgpuPlan::new(ChirpPlan::new(
         64,
         96,
-        [1.0_f32.to_bits(), 0.5_f32.to_bits()],
-        [0.9_f32.to_bits(), (-0.25_f32).to_bits()],
-    );
-    assert_eq!(plan.input_len(), 64);
+        GpuComplex32::new(1.0, 0.5),
+        GpuComplex32::new(0.9, -0.25),
+    ));
+    assert_eq!(plan.len(), 64);
     assert_eq!(plan.output_len(), 96);
-    assert_eq!(plan.a(), GpuComplex32::new(1.0, 0.5));
-    assert_eq!(plan.w(), GpuComplex32::new(0.9, -0.25));
+    assert_eq!(plan.payload().a(), GpuComplex32::new(1.0, 0.5));
+    assert_eq!(plan.payload().w(), GpuComplex32::new(0.9, -0.25));
     assert!(!plan.is_empty());
-    assert!(CztWgpuPlan::new(0, 64, [0, 0], [0, 0]).is_empty());
+    assert!(CztWgpuPlan::new(ChirpPlan::new(
+        0,
+        64,
+        GpuComplex32::new(0.0, 0.0),
+        GpuComplex32::new(0.0, 0.0)
+    ))
+    .is_empty());
 }
 
 #[test]

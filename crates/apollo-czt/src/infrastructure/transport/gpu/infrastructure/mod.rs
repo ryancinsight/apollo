@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for chirp-z WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// CZT compute kernel orchestration.
+/// Hephaestus kernel definitions for the chirp-z passes.
 pub mod kernel;

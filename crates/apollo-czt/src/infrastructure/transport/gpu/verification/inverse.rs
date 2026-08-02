@@ -4,6 +4,7 @@ use crate::infrastructure::transport::gpu::WgpuError;
 use eunomia::Complex32;
 
 use super::support::{backend, dft_input, dft_parameters, DFT_ROUNDTRIP_BOUND};
+use crate::infrastructure::transport::gpu::ChirpPlan;
 
 #[test]
 fn inverse_roundtrip_recovers_dft_specialization_when_device_exists() {
@@ -13,7 +14,7 @@ fn inverse_roundtrip_recovers_dft_specialization_when_device_exists() {
     let len = 8;
     let (a, w) = dft_parameters(len);
     let input = dft_input(len);
-    let plan = backend.plan(len, len, a, w);
+    let plan = backend.plan(ChirpPlan::new(len, len, a, w));
     let spectrum = backend.execute_forward(&plan, &input).expect("GPU forward");
     let recovered = backend
         .execute_inverse(&plan, &spectrum)
@@ -38,7 +39,12 @@ fn inverse_rejects_non_square_plan_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(4, 6, Complex32::new(1.0, 0.0), Complex32::new(1.0, 0.0));
+    let plan = backend.plan(ChirpPlan::new(
+        4,
+        6,
+        Complex32::new(1.0, 0.0),
+        Complex32::new(1.0, 0.0),
+    ));
     let spectrum = vec![Complex32::new(0.0, 0.0); 6];
     assert!(matches!(
         backend.execute_inverse(&plan, &spectrum),

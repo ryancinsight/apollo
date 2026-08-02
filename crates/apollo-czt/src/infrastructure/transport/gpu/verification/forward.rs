@@ -5,6 +5,7 @@ use eunomia::Complex64;
 use leto::Array1;
 
 use super::support::{backend, reference_input, reference_parameters, DIRECT_DIFFERENTIAL_BOUND};
+use crate::infrastructure::transport::gpu::ChirpPlan;
 
 #[test]
 fn forward_matches_cpu_direct_reference_when_device_exists() {
@@ -13,7 +14,7 @@ fn forward_matches_cpu_direct_reference_when_device_exists() {
     };
     let (a, w) = reference_parameters();
     let input = reference_input();
-    let gpu_plan = backend.plan(input.len(), 6, a, w);
+    let gpu_plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
     let gpu = backend
         .execute_forward(&gpu_plan, &input)
         .expect("WGPU forward execution");
@@ -51,7 +52,7 @@ fn unit_impulse_is_constant_on_the_spiral_when_device_exists() {
         eunomia::Complex32::new(0.0, 0.0),
         eunomia::Complex32::new(0.0, 0.0),
     ];
-    let plan = backend.plan(input.len(), 7, a, w);
+    let plan = backend.plan(ChirpPlan::new(input.len(), 7, a, w));
     let actual = backend
         .execute_forward(&plan, &input)
         .expect("impulse forward");
