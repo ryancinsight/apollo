@@ -1,5 +1,18 @@
 # Apollo Backlog
 
+## Rust crate publication aliases [patch] — in progress
+
+- Owner: Codex `/root`; scope: root dependency identities, clean lockfile,
+  registry package verification, and crates.io publication readiness.
+- Acceptance: clean metadata and package archives resolve Mnemosyne and Moirai
+  through their published package identities without changing Rust imports;
+  the workspace gate remains green and reusable crates publish in dependency
+  order through the OIDC release workflow.
+- Status: the exact external graph resolves the current Mnemosyne, Moirai,
+  Hermes, Leto, and Hephaestus sources; format, locked `apollo-fft` check, and
+  400/400 focused Nextest cases pass. Exact-head hosted verification and merge
+  remain.
+
 ## D20-real-spherical-harmonic-provider [minor] — in progress
 
 - Owner: Codex `codex/real-spherical-harmonics`; scope: `apollo-sht` real,

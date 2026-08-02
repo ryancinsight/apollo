@@ -1,5 +1,13 @@
 # Apollo Checklist
 
+## Rust crate publication aliases [patch]
+
+- [x] Bind Mnemosyne and Moirai to their collision-free registry packages.
+- [x] Regenerate and verify the clean standalone lockfile.
+- [x] Pass the clean-checkout focused package gates.
+- [ ] Publish reusable crates in dependency order and verify the sparse index.
+- [ ] Register crates.io Trusted Publishers for the release workflow.
+
 ## D20-real-spherical-harmonic-provider [minor]
 
 - [x] Ground the real, orthonormal convention in the MRtrix3 formulation.

@@ -33,6 +33,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Bind the existing `mnemosyne` and `moirai` Rust crate aliases to the
+  collision-free `mnemosyne-memory` and `moirai-runtime` registry package
+  identities so published Apollo archives resolve the provider graph.
+
 - [patch] Stores the large bounded Rader and Bluestein flat caches in
   process-wide, `const`-initialized `OnceLock` slot arrays. Direct coordinates
   preserve O(1) lookup, while stored generator tags validate the complete
