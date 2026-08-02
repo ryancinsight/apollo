@@ -62,7 +62,6 @@ fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
         80 => Some((5, 16)),
         90 => Some((9, 10)),
         100 => Some((4, 25)),
-        106 => Some((53, 2)),
         150 => Some((6, 25)),
         200 => Some((8, 25)),
         511 => Some((73, 7)),
@@ -318,22 +317,19 @@ pub(crate) fn dispatch_inplace<
         }
         return;
     }
-    let coprime_factors = static_coprime_factors(n);
-    if coprime_factors.is_none() {
-        if let Some(radices) = cached_prime23_radices(n) {
-            match (INVERSE, NORMALIZE) {
-                (false, _) => F::composite_forward(data, &radices),
-                (true, false) => F::composite_inverse_unnorm(data, &radices),
-                (true, true) => F::composite_inverse(data, &radices),
-            }
-            return;
+    if let Some(radices) = cached_prime23_radices(n) {
+        match (INVERSE, NORMALIZE) {
+            (false, _) => F::composite_forward(data, &radices),
+            (true, false) => F::composite_inverse_unnorm(data, &radices),
+            (true, true) => F::composite_inverse(data, &radices),
         }
+        return;
     }
 
     // Note: 90 and 198 handled by static_prime23_radices (and explicit in plan FftPlan1D for guarantee before short-win f32 policy).
     // 72 f32 now forced composite in plan (md 17x f32 via GT/Policy); static has [4,2,3,3]. Routing hardened per md-worst + "selection may not correct".
 
-    let coprime_factors = coprime_factors.or_else(|| {
+    let coprime_factors = static_coprime_factors(n).or_else(|| {
         if n > 64 {
             cached_coprime_factors(n)
         } else {
@@ -478,10 +474,7 @@ fn try_power_of_two_fast_path<
 // ── Forward ───────────────────────────────────────────────────────────────────
 
 /// In-place forward FFT, unnormalized, for any `MixedRadixScalar` precision.
-// Keep the general selector out of the small fixed-size `FftPrecision` entry.
-// Inlining this body expands that entry by an order of magnitude and charges
-// its register-save prologue to every direct 2/4/8/16/32/64-point transform.
-#[inline(never)]
+#[inline]
 pub(crate) fn forward_inplace<F: MixedRadixScalar<Complex = eunomia::Complex<F>>>(
     data: &mut [F::Complex],
 ) {
