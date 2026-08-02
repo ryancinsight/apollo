@@ -4,8 +4,11 @@
 //! per-transform copies: plan/input/output validation, thread-local
 //! scratch reuse for typed dispatch, `_into` caller-owned-storage
 //! execution, and Mnemosyne-native Leto outputs. The transform supplies
-//! only its kernel dispatch and plan payload through
-//! [`GpuTransformExecutor`].
+//! its kernel dispatch, plan payload, and element types through
+//! [`GpuTransformExecutor`]: `Sample` is the time/space-domain element,
+//! `Bin` the transform-domain element, so complex-valued and asymmetric
+//! transforms (real in, complex out) state their contract in the types
+//! instead of forcing everything through `f32`.
 
 use hephaestus_wgpu::WgpuDevice;
 use mnemosyne::scratch::ScratchPool;
@@ -21,18 +24,24 @@ thread_local! {
     static GPU_OUTPUT_SCRATCH: ScratchPool<f32> = const { ScratchPool::new() };
 }
 
-/// Kernel dispatch and plan payload supplied by a transform to the
-/// shared backend.
+/// Kernel dispatch, plan payload, and element types supplied by a
+/// transform to the shared backend.
 ///
 /// Implementors are zero-sized markers owning the transform's shader
-/// sources, parameter structs, and pass sequence. The plan payload names
+/// sources, parameter structs, and pass sequences. The plan payload names
 /// what the transform's descriptors carry — a bare length for
 /// same-length 1D transforms, a richer structure where the transform
-/// demands one. The `inverse` flag selects the adjoint or
-/// normalized-inverse pass sequence.
+/// demands one. Forward maps `Sample` slices of `input_len` to `Bin`
+/// slices of `output_len`; inverse maps back.
 pub trait GpuTransformExecutor {
     /// Plan payload carried by this transform's descriptors.
     type Plan: Copy + core::fmt::Debug + PartialEq + Send + Sync + 'static;
+
+    /// Time/space-domain element accepted by the forward direction.
+    type Sample: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
+
+    /// Transform-domain element produced by the forward direction.
+    type Bin: bytemuck::Pod + Default + core::fmt::Debug + Send + Sync + 'static;
 
     /// Logical input length demanded by a plan payload.
     fn input_len(plan: &Self::Plan) -> usize;
@@ -59,17 +68,30 @@ pub trait GpuTransformExecutor {
         Ok(())
     }
 
-    /// Execute the transform into caller-owned storage.
+    /// Execute the unnormalized forward transform into caller-owned
+    /// storage.
     ///
     /// # Errors
     ///
     /// Returns the provider failure or an invalid-plan rejection.
-    fn execute_into(
+    fn forward_into(
         device: &WgpuDevice,
         plan: &Self::Plan,
-        input: &[f32],
-        output: &mut [f32],
-        inverse: bool,
+        input: &[Self::Sample],
+        output: &mut [Self::Bin],
+    ) -> WgpuResult<()>;
+
+    /// Execute the normalized inverse transform into caller-owned
+    /// storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns the provider failure or an invalid-plan rejection.
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &Self::Plan,
+        input: &[Self::Bin],
+        output: &mut [Self::Sample],
     ) -> WgpuResult<()>;
 }
 
@@ -108,8 +130,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         WgpuTransformPlan::new(payload)
     }
 
-    /// Execute the unnormalized forward transform for a real-valued `f32`
-    /// signal.
+    /// Execute the unnormalized forward transform.
     ///
     /// # Errors
     ///
@@ -117,9 +138,9 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     pub fn execute_forward(
         &self,
         plan: &WgpuTransformPlan<X>,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
-        let mut output = vec![0.0_f32; plan.output_len()];
+        input: &[X::Sample],
+    ) -> WgpuResult<Vec<X::Bin>> {
+        let mut output = vec![X::Bin::default(); plan.output_len()];
         self.execute_forward_into(plan, input, &mut output)?;
         Ok(output)
     }
@@ -133,15 +154,16 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     pub fn execute_forward_into(
         &self,
         plan: &WgpuTransformPlan<X>,
-        input: &[f32],
-        output: &mut [f32],
+        input: &[X::Sample],
+        output: &mut [X::Bin],
     ) -> WgpuResult<()> {
-        Self::validate_plan_input(plan, input)?;
-        Self::validate_output(plan, output)?;
-        X::execute_into(&self.device, plan.payload(), input, output, false)
+        Self::validate_plan(plan)?;
+        Self::require_len("forward input", input.len(), plan.len())?;
+        Self::require_len("forward output", output.len(), plan.output_len())?;
+        X::forward_into(&self.device, plan.payload(), input, output)
     }
 
-    /// Execute the unnormalized forward transform from a Leto `f32` view.
+    /// Execute the unnormalized forward transform from a Leto view.
     ///
     /// Contiguous Leto views borrow host storage directly; strided views
     /// copy once into logical order before dispatching to the slice path.
@@ -152,13 +174,13 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     pub fn execute_forward_leto(
         &self,
         plan: &WgpuTransformPlan<X>,
-        input: leto::ArrayView1<'_, f32>,
-    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        input: leto::ArrayView1<'_, X::Sample>,
+    ) -> WgpuResult<leto::Array<X::Bin, leto::MnemosyneStorage<X::Bin>, 1>> {
         let input = apollo_leto_interop::view_cow(&input);
         let mut output =
-            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne(
-                [plan.output_len()],
-            );
+            leto::Array::<X::Bin, leto::MnemosyneStorage<X::Bin>, 1>::zeros_mnemosyne([
+                plan.output_len()
+            ]);
         self.execute_forward_into(
             plan,
             &input,
@@ -169,12 +191,96 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         Ok(output)
     }
 
+    /// Execute the normalized inverse transform.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-plan, length-mismatch, or provider failure.
+    pub fn execute_inverse(
+        &self,
+        plan: &WgpuTransformPlan<X>,
+        input: &[X::Bin],
+    ) -> WgpuResult<Vec<X::Sample>> {
+        let mut output = vec![X::Sample::default(); plan.len()];
+        self.execute_inverse_into(plan, input, &mut output)?;
+        Ok(output)
+    }
+
+    /// Execute the normalized inverse transform into caller-owned
+    /// contiguous storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-plan, length-mismatch, or provider failure.
+    pub fn execute_inverse_into(
+        &self,
+        plan: &WgpuTransformPlan<X>,
+        input: &[X::Bin],
+        output: &mut [X::Sample],
+    ) -> WgpuResult<()> {
+        Self::validate_plan(plan)?;
+        Self::require_len("inverse input", input.len(), plan.output_len())?;
+        Self::require_len("inverse output", output.len(), plan.len())?;
+        X::inverse_into(&self.device, plan.payload(), input, output)
+    }
+
+    /// Execute the normalized inverse transform from a Leto view.
+    ///
+    /// Output storage is Mnemosyne-backed Leto host memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-plan, length-mismatch, or provider failure.
+    pub fn execute_inverse_leto(
+        &self,
+        plan: &WgpuTransformPlan<X>,
+        input: leto::ArrayView1<'_, X::Bin>,
+    ) -> WgpuResult<leto::Array<X::Sample, leto::MnemosyneStorage<X::Sample>, 1>> {
+        let input = apollo_leto_interop::view_cow(&input);
+        let mut output =
+            leto::Array::<X::Sample, leto::MnemosyneStorage<X::Sample>, 1>::zeros_mnemosyne([
+                plan.len()
+            ]);
+        self.execute_inverse_into(
+            plan,
+            &input,
+            output
+                .as_slice_mut()
+                .expect("inverse transform Mnemosyne output must be contiguous"),
+        )?;
+        Ok(output)
+    }
+
+    fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
+        let len = plan.len();
+        if len == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {len}: length must be greater than zero"),
+            });
+        }
+        X::validate(plan.payload())
+    }
+
+    fn require_len(role: &'static str, actual: usize, expected: usize) -> WgpuResult<()> {
+        let _ = role;
+        if actual != expected {
+            return Err(WgpuError::LengthMismatch { expected, actual });
+        }
+        Ok(())
+    }
+}
+
+impl<X> WgpuTransformBackend<X>
+where
+    X: GpuTransformExecutor<Sample = f32, Bin = f32>,
+{
     /// Execute the unnormalized forward transform with caller-owned typed
     /// storage.
     ///
     /// WGPU arithmetic remains `f32`; mixed `f16` storage is promoted once
     /// to represented `f32` before dispatch and quantized at the output
-    /// boundary.
+    /// boundary. Available on real symmetric transforms, whose GPU
+    /// contract is natively `f32`.
     ///
     /// # Errors
     ///
@@ -187,7 +293,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         input: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_typed_plan_input::<T>(plan, precision, input, output)?;
+        Self::validate_typed::<T>(plan, precision, input.len(), output.len())?;
         self.execute_typed_into(plan, input, output, false)
     }
 
@@ -220,66 +326,6 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         Ok(output)
     }
 
-    /// Execute the normalized inverse transform for a real-valued `f32`
-    /// spectrum.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-plan, length-mismatch, or provider failure.
-    pub fn execute_inverse(
-        &self,
-        plan: &WgpuTransformPlan<X>,
-        input: &[f32],
-    ) -> WgpuResult<Vec<f32>> {
-        let mut output = vec![0.0_f32; plan.output_len()];
-        self.execute_inverse_into(plan, input, &mut output)?;
-        Ok(output)
-    }
-
-    /// Execute the normalized inverse transform into caller-owned
-    /// contiguous storage.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-plan, length-mismatch, or provider failure.
-    pub fn execute_inverse_into(
-        &self,
-        plan: &WgpuTransformPlan<X>,
-        input: &[f32],
-        output: &mut [f32],
-    ) -> WgpuResult<()> {
-        Self::validate_plan_input(plan, input)?;
-        Self::validate_output(plan, output)?;
-        X::execute_into(&self.device, plan.payload(), input, output, true)
-    }
-
-    /// Execute the normalized inverse transform from a Leto `f32` view.
-    ///
-    /// Output storage is Mnemosyne-backed Leto host memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-plan, length-mismatch, or provider failure.
-    pub fn execute_inverse_leto(
-        &self,
-        plan: &WgpuTransformPlan<X>,
-        input: leto::ArrayView1<'_, f32>,
-    ) -> WgpuResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        let input = apollo_leto_interop::view_cow(&input);
-        let mut output =
-            leto::Array::<f32, leto::MnemosyneStorage<f32>, 1>::zeros_mnemosyne(
-                [plan.output_len()],
-            );
-        self.execute_inverse_into(
-            plan,
-            &input,
-            output
-                .as_slice_mut()
-                .expect("inverse transform Mnemosyne output must be contiguous"),
-        )?;
-        Ok(output)
-    }
-
     /// Execute the normalized inverse transform with caller-owned typed
     /// storage.
     ///
@@ -294,7 +340,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         input: &[T],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        Self::validate_typed_plan_input::<T>(plan, precision, input, output)?;
+        Self::validate_typed::<T>(plan, precision, input.len(), output.len())?;
         self.execute_typed_into(plan, input, output, true)
     }
 
@@ -312,7 +358,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let input = apollo_leto_interop::view_cow(&input);
         let mut output =
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.output_len()]);
+            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_typed_into(
             plan,
             precision,
@@ -324,62 +370,19 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         Ok(output)
     }
 
-    fn validate_plan_input(plan: &WgpuTransformPlan<X>, input: &[f32]) -> WgpuResult<()> {
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        X::validate(plan.payload())?;
-        if input.len() != len {
-            return Err(WgpuError::LengthMismatch {
-                expected: len,
-                actual: input.len(),
-            });
-        }
-        Ok(())
-    }
-
-    fn validate_typed_plan_input<T: GpuStorage>(
+    fn validate_typed<T: GpuStorage>(
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
-        input: &[T],
-        output: &[T],
+        input_len: usize,
+        output_len: usize,
     ) -> WgpuResult<()> {
         let expected = T::PROFILE;
         if precision.storage != expected.storage || precision.compute != expected.compute {
             return Err(WgpuError::InvalidPrecisionProfile);
         }
-        let len = plan.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        X::validate(plan.payload())?;
-        if input.len() != len {
-            return Err(WgpuError::LengthMismatch {
-                expected: len,
-                actual: input.len(),
-            });
-        }
-        if output.len() != plan.output_len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.output_len(),
-                actual: output.len(),
-            });
-        }
-        Ok(())
-    }
-
-    fn validate_output(plan: &WgpuTransformPlan<X>, output: &[f32]) -> WgpuResult<()> {
-        if output.len() != plan.output_len() {
-            return Err(WgpuError::LengthMismatch {
-                expected: plan.output_len(),
-                actual: output.len(),
-            });
-        }
+        Self::validate_plan(plan)?;
+        Self::require_len("typed input", input_len, plan.len())?;
+        Self::require_len("typed output", output_len, plan.output_len())?;
         Ok(())
     }
 
@@ -390,8 +393,15 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
         output: &mut [T],
         inverse: bool,
     ) -> WgpuResult<()> {
+        let run = |represented: &[f32], computed: &mut [f32]| {
+            if inverse {
+                X::inverse_into(&self.device, plan.payload(), represented, computed)
+            } else {
+                X::forward_into(&self.device, plan.payload(), represented, computed)
+            }
+        };
         if let (Some(input), Some(output)) = (T::as_f32_slice(input), T::as_f32_slice_mut(output)) {
-            return X::execute_into(&self.device, plan.payload(), input, output, inverse);
+            return run(input, output);
         }
         GPU_INPUT_SCRATCH.with(|input_pool| {
             input_pool.with_scratch(input.len(), |represented| {
@@ -400,13 +410,7 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
                 }
                 GPU_OUTPUT_SCRATCH.with(|output_pool| {
                     output_pool.with_scratch(output.len(), |computed| {
-                        X::execute_into(
-                            &self.device,
-                            plan.payload(),
-                            represented,
-                            computed,
-                            inverse,
-                        )?;
+                        run(represented, computed)?;
                         for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
                             *slot = T::from_gpu(value);
                         }

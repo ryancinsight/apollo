@@ -73,6 +73,8 @@ pub struct FwhtGpuKernel;
 
 impl GpuTransformExecutor for FwhtGpuKernel {
     type Plan = usize;
+    type Sample = f32;
+    type Bin = f32;
 
     fn input_len(plan: &usize) -> usize {
         *plan
@@ -89,10 +91,39 @@ impl GpuTransformExecutor for FwhtGpuKernel {
         Ok(())
     }
 
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, false)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, true)
+    }
+}
+
+impl FwhtGpuKernel {
     /// Execute the forward or inverse 1D FWHT into caller-owned storage.
     fn execute_into(
         device: &WgpuDevice,
         _plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+        inverse: bool,
+    ) -> WgpuResult<()> {
+        Self::run(device, input, output, inverse)
+    }
+
+    fn run(
+        device: &WgpuDevice,
         input: &[f32],
         output: &mut [f32],
         inverse: bool,

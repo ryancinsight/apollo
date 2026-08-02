@@ -77,11 +77,33 @@ pub struct DhtGpuKernel;
 
 impl GpuTransformExecutor for DhtGpuKernel {
     type Plan = usize;
+    type Sample = f32;
+    type Bin = f32;
 
     fn input_len(plan: &usize) -> usize {
         *plan
     }
 
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, false)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, true)
+    }
+}
+
+impl DhtGpuKernel {
     /// Execute the forward or inverse 1D DHT into caller-owned storage.
     fn execute_into(
         device: &WgpuDevice,

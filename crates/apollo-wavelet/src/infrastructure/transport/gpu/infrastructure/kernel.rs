@@ -100,6 +100,8 @@ pub struct WaveletGpuKernel;
 
 impl GpuTransformExecutor for WaveletGpuKernel {
     type Plan = HaarDwtPlan;
+    type Sample = f32;
+    type Bin = f32;
 
     fn input_len(plan: &HaarDwtPlan) -> usize {
         plan.len
@@ -120,14 +122,22 @@ impl GpuTransformExecutor for WaveletGpuKernel {
         Ok(())
     }
 
-    fn execute_into(
+    fn forward_into(
         device: &WgpuDevice,
         plan: &HaarDwtPlan,
         input: &[f32],
         output: &mut [f32],
-        inverse: bool,
     ) -> WgpuResult<()> {
-        Self::execute_levels_into(device, input, output, plan.levels, inverse)
+        Self::execute_levels_into(device, input, output, plan.levels, false)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &HaarDwtPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_levels_into(device, input, output, plan.levels, true)
     }
 }
 
