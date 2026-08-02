@@ -7,6 +7,14 @@
 //! Twiddle factors exp(2*pi*i*k/n) for k=0..n are precomputed at plan
 //! construction time and reused across all forward and inverse calls.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
 use crate::infrastructure::kernel::dense::{qft_forward_dense_into, qft_inverse_dense_into};
@@ -16,15 +24,7 @@ use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 use serde::{Deserialize, Serialize};
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

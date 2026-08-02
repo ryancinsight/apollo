@@ -1,24 +1,20 @@
 //! Thread-local scratch pools and interop/validation helpers for 1D CZT.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::CztError;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static FORWARD_WORKSPACE_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

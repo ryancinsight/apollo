@@ -1,3 +1,11 @@
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use apollo_fft::FftPlan1D;
 use eunomia::Complex64;
 use leto::Array1;
@@ -8,10 +16,6 @@ use moirai::ParallelSliceMut;
 const BLUESTEIN_PAR_LEN_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

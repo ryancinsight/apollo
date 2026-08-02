@@ -7,16 +7,20 @@
 //! direct-summation kernels and eliminating the SSOT violation documented in
 //! `apollo-radon::infrastructure::kernel::filter`.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use apollo_fft::{FftPlan1D, Shape1D};
 use eunomia::Complex64;
 use moirai::ParallelSliceMut;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static QUADRATURE_ANALYTIC_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

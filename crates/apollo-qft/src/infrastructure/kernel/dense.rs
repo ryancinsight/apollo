@@ -4,6 +4,14 @@
 //! Inverse entry `M[k,j] = exp(-2*pi*i*j*k/n) / sqrt(n)`.
 //! Both maps are unitary (norm-preserving) in exact arithmetic.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
@@ -12,10 +20,6 @@ use moirai::ParallelSliceMut;
 const QFT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static QFT_TWIDDLE_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

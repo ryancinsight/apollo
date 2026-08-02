@@ -4,6 +4,14 @@
 //! the graph Fourier basis is the orthonormal eigenvector matrix `U` of `L`.
 //! The forward transform is `U^T x`; the inverse transform is `U X`.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
@@ -21,20 +29,8 @@ const GFT_PAR_OP_THRESHOLD: usize = 16_384;
 const GFT_HERMES_DOT_LEN_THRESHOLD: usize = 1_024;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static INVERSE_ROW_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

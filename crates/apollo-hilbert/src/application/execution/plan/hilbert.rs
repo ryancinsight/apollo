@@ -1,5 +1,13 @@
 //! Reusable Hilbert transform plan.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{HilbertError, HilbertResult};
 use crate::domain::metadata::length::SignalLength;
 use crate::domain::signal::analytic::{envelope_values_into, phase_values_into, AnalyticSignal};
@@ -11,20 +19,8 @@ use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static OBSERVABLE_ANALYTIC_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

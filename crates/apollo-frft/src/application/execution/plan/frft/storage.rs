@@ -1,5 +1,13 @@
 //! Precision storage contract for FrFT execution.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
 use apollo_fft::{f16, PrecisionProfile};
@@ -8,15 +16,7 @@ use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

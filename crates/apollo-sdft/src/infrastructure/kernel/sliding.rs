@@ -5,6 +5,14 @@
 //! When x_old leaves and x_new enters at the end, the recurrence is
 //! X_k <- (X_k + x_new - x_old) exp(2pi i k/N).
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
@@ -20,10 +28,6 @@ const UPDATE_PAR_BIN_THRESHOLD: usize = 16_384;
 const HERMES_DIRECT_BIN_LEN_THRESHOLD: usize = 128;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static DIRECT_BIN_WEIGHT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

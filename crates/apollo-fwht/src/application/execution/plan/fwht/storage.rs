@@ -1,5 +1,13 @@
 //! Precision storage contract for FWHT execution.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::application::execution::plan::fwht::dimension_1d::FwhtPlan;
 use crate::domain::contracts::error::FwhtError;
@@ -7,20 +15,8 @@ use apollo_fft::{f16, PrecisionProfile};
 use leto::Array1;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_INPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_OUTPUT64_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_F32_SCRATCH: mnemosyne::scratch::ScratchPool<f32> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

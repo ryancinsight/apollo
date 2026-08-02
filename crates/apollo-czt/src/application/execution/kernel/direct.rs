@@ -1,3 +1,11 @@
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::CztError;
 use eunomia::Complex64;
 use leto::Array1;
@@ -8,10 +16,6 @@ use moirai::{enumerate_mut_with, Parallel};
 const DIRECT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

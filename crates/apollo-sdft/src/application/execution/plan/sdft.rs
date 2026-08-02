@@ -4,6 +4,14 @@
 //! update removes the oldest sample, appends the new sample, and updates all
 //! tracked bins through the sliding DFT recurrence.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: thread-local initializers already use const blocks"
+    )
+)]
+
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use crate::domain::metadata::window::SlidingDftConfig;
 use crate::infrastructure::kernel::sliding::{
@@ -15,15 +23,7 @@ use mnemosyne::scratch::ScratchPool;
 use std::collections::VecDeque;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_WINDOW64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static TYPED_BINS64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
