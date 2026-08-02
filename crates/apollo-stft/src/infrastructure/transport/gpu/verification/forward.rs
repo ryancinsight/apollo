@@ -4,6 +4,7 @@ use crate::infrastructure::transport::gpu::StftWgpuPlan;
 use leto::Array1;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
 
 #[test]
 fn stft_wgpu_forward_matches_cpu() {
@@ -17,7 +18,7 @@ fn stft_wgpu_forward_matches_cpu() {
     let signal_f64: Array1<f64> =
         Array1::from(signal_f32.iter().map(|x| *x as f64).collect::<Vec<_>>());
 
-    let plan = StftWgpuPlan::new(8, 4);
+    let plan = StftWgpuPlan::new(FramePlan::new(8, 4));
 
     let gpu_out = backend
         .execute_forward(&plan, &signal_f32)
@@ -63,7 +64,7 @@ fn stft_wgpu_forward_non_pot() {
     let signal = vec![
         0.5_f32, -1.0, 0.25, 0.75, -0.5, 1.5, -0.25, 0.125, 0.875, -0.625, 0.375, -0.125,
     ];
-    let plan = StftWgpuPlan::new(6, 3);
+    let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let actual = backend
         .execute_forward(&plan, &signal)
         .expect("GPU Chirp-Z forward");
@@ -107,7 +108,7 @@ fn stft_wgpu_forward_large_frame() {
         })
         .collect();
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
 
     let spectrum = backend
@@ -155,7 +156,7 @@ fn stft_wgpu_forward_chirpz_400() {
     let signal_f64: leto::Array1<f64> =
         leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
 
-    let gpu_plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let gpu_plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let gpu_out = backend
         .execute_forward(&gpu_plan, &signal_f32)
         .expect("GPU forward Chirp-Z");

@@ -1,3 +1,4 @@
+use apollo_fft::{WgpuError, WgpuResult};
 use eunomia::Complex32;
 use hephaestus_core::{ComputeDevice, GroupedBinding, GroupedCommandStream, GroupedKernelDevice};
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
@@ -6,10 +7,7 @@ use super::{
     dimension, fft_grid, ComplexPod, ForwardBitReverseKernel, ForwardButterflyKernel,
     ForwardInterleaveKernel, ForwardPackKernel, FwdFftStageParams, StftGpuKernel,
 };
-use crate::infrastructure::transport::gpu::{
-    domain::error::{WgpuError, WgpuResult},
-    infrastructure::buffers::StftGpuBuffers,
-};
+use crate::infrastructure::transport::gpu::infrastructure::buffers::StftGpuBuffers;
 
 impl StftGpuKernel {
     /// Execute the forward STFT through the typed radix-2 or Bluestein pipeline.

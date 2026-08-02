@@ -7,7 +7,7 @@ use super::{
     fft_grid, ChirpForwardPointMultiplyKernel, ChirpForwardPostmultiplyKernel,
     ChirpForwardPremultiplyKernel, ComplexPod, StftChirpParams, StftGpuKernel,
 };
-use crate::infrastructure::transport::gpu::domain::error::WgpuResult;
+use apollo_fft::WgpuResult;
 
 impl StftGpuKernel {
     /// Execute the forward non-power-of-two STFT through Bluestein's identity.
@@ -20,12 +20,12 @@ impl StftGpuKernel {
     ) -> WgpuResult<Vec<Complex32>> {
         let chirp_len = chirp_padded_len(frame_len)?;
         let working_elements = frame_count.checked_mul(chirp_len).ok_or_else(|| {
-            crate::infrastructure::transport::gpu::domain::error::WgpuError::InvalidPlan {
+            apollo_fft::WgpuError::InvalidPlan {
                 message: "frame_count * chirp_len overflows host address space".to_owned(),
             }
         })?;
         let output_elements = frame_count.checked_mul(frame_len).ok_or_else(|| {
-            crate::infrastructure::transport::gpu::domain::error::WgpuError::InvalidPlan {
+            apollo_fft::WgpuError::InvalidPlan {
                 message: "frame_count * frame_len overflows host address space".to_owned(),
             }
         })?;

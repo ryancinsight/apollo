@@ -33,6 +33,15 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A framed operation received fewer samples than one frame.
+    #[error("input too short: need at least {min} samples, got {actual}")]
+    InputTooShort {
+        /// Minimum sample count the plan demands.
+        min: usize,
+        /// Samples supplied by the caller.
+        actual: usize,
+    },
+
     /// A high-accuracy component cannot enter the accelerator element
     /// exactly.
     #[error("{component} component {value} cannot be represented exactly in accelerator storage")]

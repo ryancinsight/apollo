@@ -9,7 +9,7 @@ use super::{
     ChirpBitReverseKernel, ChirpFftParams, ChirpForwardButterflyKernel,
     ChirpInverseButterflyKernel, ChirpScaleKernel, FFT_WORKGROUP, OLA_WORKGROUP,
 };
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{WgpuError, WgpuResult};
 
 /// Build a dispatch grid covering independent FFT elements.
 pub(crate) fn fft_grid(elements: usize) -> WgpuResult<DispatchGrid> {

@@ -6,6 +6,7 @@
 #![allow(missing_docs)]
 
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
+use apollo_stft::{FramePlan, FramedExecution};
 use apollo_stft::{StftWgpuBackend, StftWgpuPlan};
 use std::hint::black_box;
 
@@ -17,7 +18,7 @@ fn try_backend() -> Option<StftWgpuBackend> {
         "apollo-stft-wgpu-bench",
         hephaestus_core::DevicePreference::HighPerformance,
         &[],
-        StftWgpuBackend::required_device_limits(),
+        apollo_stft::required_device_limits(),
     ) {
         Ok(device) => Some(StftWgpuBackend::new(device)),
         Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
@@ -42,7 +43,7 @@ fn bench_forward_fft(suite: &mut BenchmarkSuite) {
     };
 
     for &(frame_len, hop_len, signal_len) in PARAMETERS {
-        let plan = StftWgpuPlan::new(frame_len, hop_len);
+        let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
         let signal = analytical_signal(signal_len, frame_len);
         suite.run(
             BenchmarkCase::new("stft_forward_fft", "frame_len", frame_len),
@@ -63,7 +64,7 @@ fn bench_inverse_fft(suite: &mut BenchmarkSuite) {
     };
 
     for &(frame_len, hop_len, signal_len) in PARAMETERS {
-        let plan = StftWgpuPlan::new(frame_len, hop_len);
+        let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
         let signal = analytical_signal(signal_len, frame_len);
         let spectrum = backend
             .execute_forward(&plan, &signal)
@@ -91,7 +92,7 @@ fn bench_forward_reuse(suite: &mut BenchmarkSuite) {
     };
 
     for &(frame_len, hop_len, signal_len) in PARAMETERS {
-        let plan = StftWgpuPlan::new(frame_len, hop_len);
+        let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
         let signal = analytical_signal(signal_len, frame_len);
         suite.run(
             BenchmarkCase::new(
@@ -137,7 +138,7 @@ fn bench_inverse_reuse(suite: &mut BenchmarkSuite) {
     };
 
     for &(frame_len, hop_len, signal_len) in PARAMETERS {
-        let plan = StftWgpuPlan::new(frame_len, hop_len);
+        let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
         let signal = analytical_signal(signal_len, frame_len);
         let spectrum = backend
             .execute_forward(&plan, &signal)

@@ -4,7 +4,7 @@ use hephaestus_core::ComputeDevice;
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 
 use super::kernel::ComplexPod;
-use crate::infrastructure::transport::gpu::domain::error::WgpuResult;
+use apollo_fft::WgpuResult;
 
 /// Storage retained across repeated STFT executions with one fixed geometry.
 ///
@@ -39,15 +39,16 @@ impl StftGpuBuffers {
         hop_len: usize,
     ) -> WgpuResult<Self> {
         let frame_elements = frame_count.checked_mul(frame_len).ok_or_else(|| {
-            crate::infrastructure::transport::gpu::domain::error::WgpuError::InvalidPlan {
+            apollo_fft::WgpuError::InvalidPlan {
                 message: "frame_count * frame_len overflows host address space".to_owned(),
             }
         })?;
-        let spectrum_elements = frame_elements.checked_mul(2).ok_or_else(|| {
-            crate::infrastructure::transport::gpu::domain::error::WgpuError::InvalidPlan {
-                message: "interleaved spectrum length overflows host address space".to_owned(),
-            }
-        })?;
+        let spectrum_elements =
+            frame_elements
+                .checked_mul(2)
+                .ok_or_else(|| apollo_fft::WgpuError::InvalidPlan {
+                    message: "interleaved spectrum length overflows host address space".to_owned(),
+                })?;
         Ok(Self {
             frame_count,
             frame_len,

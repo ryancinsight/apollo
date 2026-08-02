@@ -395,3 +395,17 @@ type OverlapAddKernel = FlatKernel<OverlapAdd>;
 /// Zero-sized typed STFT GPU orchestration.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StftGpuKernel;
+
+impl apollo_fft::GpuTransformPlanner for StftGpuKernel {
+    type Plan = crate::infrastructure::transport::gpu::FramePlan;
+
+    fn input_len(plan: &crate::infrastructure::transport::gpu::FramePlan) -> usize {
+        plan.frame_len()
+    }
+
+    fn validate(
+        plan: &crate::infrastructure::transport::gpu::FramePlan,
+    ) -> apollo_fft::WgpuResult<()> {
+        plan.validate_geometry()
+    }
+}

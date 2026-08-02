@@ -1,5 +1,6 @@
 //! Shared real-device acquisition for STFT GPU verification.
 
+use crate::infrastructure::transport::gpu::required_device_limits;
 use crate::infrastructure::transport::gpu::StftWgpuBackend;
 
 pub(super) fn backend() -> Option<StftWgpuBackend> {
@@ -7,7 +8,7 @@ pub(super) fn backend() -> Option<StftWgpuBackend> {
         "apollo-stft-wgpu",
         hephaestus_core::DevicePreference::HighPerformance,
         &[],
-        StftWgpuBackend::required_device_limits(),
+        required_device_limits(),
     ) {
         Ok(device) => Some(StftWgpuBackend::new(device)),
         Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
