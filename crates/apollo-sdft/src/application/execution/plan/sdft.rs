@@ -15,7 +15,15 @@ use mnemosyne::scratch::ScratchPool;
 use std::collections::VecDeque;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_WINDOW64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_BINS64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

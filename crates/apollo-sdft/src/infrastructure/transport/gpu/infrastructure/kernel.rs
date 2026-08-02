@@ -15,7 +15,10 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuElement, GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
+
+use crate::infrastructure::transport::gpu::WindowPlan;
 
 const WORKGROUP_SIZE: usize = 64;
 const FORWARD_SOURCE: &str = concat!(
@@ -57,6 +60,96 @@ impl SdftParams {
 /// Zero-sized Hephaestus descriptor for real-window SDFT direct bins.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct SdftForwardGpuKernel;
+
+/// Zero-sized SDFT orchestration over the forward and inverse pass
+/// kernels.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SdftGpuKernel;
+
+impl GpuTransformPlanner for SdftGpuKernel {
+    type Plan = WindowPlan;
+
+    fn input_len(plan: &WindowPlan) -> usize {
+        plan.window_len()
+    }
+
+    fn output_len(plan: &WindowPlan) -> usize {
+        plan.bin_count()
+    }
+
+    fn validate(plan: &WindowPlan) -> WgpuResult<()> {
+        if plan.window_len() == 0 || plan.bin_count() == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan window_len={}, bin_count={}: both values must be greater than zero",
+                    plan.window_len(),
+                    plan.bin_count()
+                ),
+            });
+        }
+        if plan.bin_count() > plan.window_len() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan window_len={}, bin_count={}: bin count must not exceed window length",
+                    plan.window_len(),
+                    plan.bin_count()
+                ),
+            });
+        }
+        if u32::try_from(plan.window_len()).is_err() || u32::try_from(plan.bin_count()).is_err() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan window_len={}, bin_count={}: values exceed the accelerator parameter range",
+                    plan.window_len(),
+                    plan.bin_count()
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for SdftGpuKernel {
+    type Sample = f32;
+    type Bin = Complex32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        _plan: &WindowPlan,
+        input: &[f32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        SdftForwardGpuKernel::execute_into(device, input, output)
+    }
+
+    /// The inverse is defined only for `bin_count == window_len`; a
+    /// partial spectrum is a projection, not an inverse of the original
+    /// SDFT window. The pass kernel emits complex samples; the real
+    /// component is the reconstructed signal.
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &WindowPlan,
+        input: &[Complex32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        if plan.bin_count() != plan.window_len() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "inverse SDFT requires a complete spectrum: bin_count {} must equal window_len {}",
+                    plan.bin_count(),
+                    plan.window_len()
+                ),
+            });
+        }
+        Complex32::with_output_scratch(output.len(), |computed| {
+            SdftInverseGpuKernel::execute_into(device, input, computed)?;
+            for (target, value) in output.iter_mut().zip(computed.iter().copied()) {
+                *target = value.re;
+            }
+            Ok(())
+        })
+    }
+}
 
 impl KernelInterface for SdftForwardGpuKernel {
     type Params = SdftParams;
