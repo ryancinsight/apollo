@@ -4,10 +4,11 @@ use crate::infrastructure::transport::gpu::{SftWgpuPlan, WgpuCapabilities, WgpuE
 use eunomia::Complex32;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};
 
 #[test]
 fn capabilities_advertise_direct_dense_sparse_execution() {
-    let capabilities = WgpuCapabilities::direct_dense_spectrum(true);
+    let capabilities = WgpuCapabilities::implemented(true);
     assert!(capabilities.device_available);
     assert!(capabilities.supports_forward);
     assert!(capabilities.supports_inverse);
@@ -20,12 +21,17 @@ fn capabilities_advertise_direct_dense_sparse_execution() {
 
 #[test]
 fn plan_preserves_logical_length_and_sparsity() {
-    let plan = SftWgpuPlan::new(64, 5);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(64, 5));
     assert_eq!(plan.len(), 64);
-    assert_eq!(plan.sparsity(), 5);
-    assert!(!SftWgpuPlan::new(64, 5).is_empty());
-    assert!(SftWgpuPlan::new(0, 5).is_empty());
-    assert!(SftWgpuPlan::new(64, 0).is_empty());
+    assert_eq!(plan.payload().sparsity(), 5);
+    assert!(!SftWgpuPlan::new(SparsityPlan::new(64, 5)).is_empty());
+    assert!(SftWgpuPlan::new(SparsityPlan::new(0, 5)).is_empty());
+    assert_eq!(
+        SftWgpuPlan::new(SparsityPlan::new(64, 0))
+            .payload()
+            .sparsity(),
+        0
+    );
 }
 
 #[test]
@@ -45,7 +51,7 @@ fn invalid_plan_rejects_zero_length_when_device_exists() {
         return;
     };
     let error = backend
-        .execute_forward(&SftWgpuPlan::new(0, 1), &[])
+        .sparse_forward(&SftWgpuPlan::new(SparsityPlan::new(0, 1)), &[])
         .expect_err("zero length must be invalid");
     assert!(matches!(error, WgpuError::InvalidPlan { .. }));
 }
@@ -56,7 +62,10 @@ fn input_length_mismatch_reports_expected_and_actual_when_device_exists() {
         return;
     };
     let error = backend
-        .execute_forward(&SftWgpuPlan::new(8, 2), &[Complex32::new(0.0, 0.0); 4])
+        .sparse_forward(
+            &SftWgpuPlan::new(SparsityPlan::new(8, 2)),
+            &[Complex32::new(0.0, 0.0); 4],
+        )
         .expect_err("mismatched input length must be invalid");
     assert!(matches!(
         error,

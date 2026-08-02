@@ -33,6 +33,16 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A high-accuracy component cannot enter the accelerator element
+    /// exactly.
+    #[error("{component} component {value} cannot be represented exactly in accelerator storage")]
+    PrecisionLoss {
+        /// Component name.
+        component: &'static str,
+        /// Rejected high-accuracy value.
+        value: f64,
+    },
+
     /// A plan parameter that must be finite is NaN or infinite.
     #[error("parameter {parameter} must be finite")]
     NonFiniteParameter {

@@ -16,6 +16,10 @@ const DFT_HERMES_ROW_LEN_THRESHOLD: usize = 256;
 
 #[cfg(test)]
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static DFT_TWIDDLE_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

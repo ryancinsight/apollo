@@ -9,24 +9,25 @@ use crate::{
 };
 
 use super::support::{assert_accelerated_complex_close, backend, INVERSE_N0_ERROR_BOUND};
+use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};
 
 #[test]
 fn typed_path_rejects_profile_mismatch_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(4, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(4, 2));
     let mixed_input: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
 
     let fwd_err = backend
-        .execute_forward_typed::<[f16; 2]>(&plan, PrecisionProfile::LOW_PRECISION_F32, &mixed_input)
+        .sparse_forward_typed::<[f16; 2]>(&plan, PrecisionProfile::LOW_PRECISION_F32, &mixed_input)
         .expect_err("profile mismatch must fail");
     assert!(matches!(fwd_err, WgpuError::InvalidPrecisionProfile));
 
     let spectrum = SparseSpectrum::new(4);
     let mut mixed_output: Vec<[f16; 2]> = vec![[f16::from_f32(0.0); 2]; 4];
     let inv_err = backend
-        .execute_inverse_typed_into::<[f16; 2]>(
+        .sparse_inverse_typed_into::<[f16; 2]>(
             &plan,
             PrecisionProfile::LOW_PRECISION_F32,
             &spectrum,
@@ -41,13 +42,13 @@ fn high_accuracy_sparse_coefficients_are_not_silently_narrowed_when_device_exist
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(4, 1);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(4, 1));
     let mut spectrum = SparseSpectrum::new(4);
     spectrum
         .insert(1, Complex64::new(1.0 / 3.0, 0.0))
         .expect("in-range sparse coefficient");
     let error = backend
-        .execute_inverse(&plan, &spectrum)
+        .sparse_inverse(&plan, &spectrum)
         .expect_err("non-f32 sparse coefficient must be rejected");
     assert!(matches!(
         error,
@@ -63,7 +64,7 @@ fn explicit_quantization_is_required_and_value_visible_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(4, 1);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(4, 1));
     let mut spectrum = SparseSpectrum::new(4);
     spectrum
         .insert(1, Complex64::new(1.0 / 3.0, -1.0 / 7.0))
@@ -80,7 +81,7 @@ fn explicit_quantization_is_required_and_value_visible_when_device_exists() {
         )]
     );
     let actual = backend
-        .execute_inverse(&plan, &quantized)
+        .sparse_inverse(&plan, &quantized)
         .expect("quantized spectrum executes");
     assert_eq!(actual.len(), plan.len());
     assert_accelerated_complex_close(

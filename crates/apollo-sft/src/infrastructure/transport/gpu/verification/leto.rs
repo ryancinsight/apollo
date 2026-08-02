@@ -5,22 +5,23 @@ use leto::{SliceArg, Storage};
 use crate::infrastructure::transport::gpu::SftWgpuPlan;
 
 use super::support::{backend, represented_signal, two_tone_signal};
+use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};
 
 #[test]
 fn leto_forward_matches_slice_forward_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(8, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(8, 2));
     let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
     let input = represented_signal(&signal);
     let leto_input = leto::Array1::from_shape_vec([input.len()], input.clone()).expect("input");
 
     let expected = backend
-        .execute_forward(&plan, &input)
+        .sparse_forward(&plan, &input)
         .expect("slice forward");
     let actual = backend
-        .execute_forward_leto(&plan, leto_input.view())
+        .sparse_forward_leto(&plan, leto_input.view())
         .expect("leto forward");
     assert_eq!(actual.frequencies, expected.frequencies);
     assert_eq!(actual.values, expected.values);
@@ -31,7 +32,7 @@ fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(8, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(8, 2));
     let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
     let logical = represented_signal(&signal);
     let mut backing = Vec::with_capacity(logical.len() * 2);
@@ -45,10 +46,10 @@ fn leto_strided_forward_matches_logical_slice_forward_when_device_exists() {
         .expect("strided view");
 
     let expected = backend
-        .execute_forward(&plan, &logical)
+        .sparse_forward(&plan, &logical)
         .expect("slice forward");
     let actual = backend
-        .execute_forward_leto(&plan, strided)
+        .sparse_forward_leto(&plan, strided)
         .expect("strided Leto forward");
     assert_eq!(actual.frequencies, expected.frequencies);
     assert_eq!(actual.values, expected.values);
@@ -59,16 +60,16 @@ fn leto_inverse_matches_slice_inverse_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(8, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(8, 2));
     let signal = two_tone_signal(8, &[(1, 3.0), (3, 1.25)]);
     let spectrum = backend
-        .execute_forward(&plan, &represented_signal(&signal))
+        .sparse_forward(&plan, &represented_signal(&signal))
         .expect("GPU SFT");
     let expected = backend
-        .execute_inverse(&plan, &spectrum)
+        .sparse_inverse(&plan, &spectrum)
         .expect("slice inverse");
     let actual = backend
-        .execute_inverse_leto(&plan, &spectrum)
+        .sparse_inverse_leto(&plan, &spectrum)
         .expect("Leto inverse");
     assert_eq!(actual.storage().as_slice(), expected.as_slice());
 }
