@@ -70,15 +70,11 @@ pub(crate) fn short_winograd<
 >(
     data: &mut [eunomia::Complex<F>],
 ) -> bool {
-    // Fast-reject: O(log N) binary search on the sorted const array.
-    if !is_short_winograd_size(data.len()) {
-        return false;
-    }
-    // For sizes >64, only use short Winograd codelet if the scalar explicitly selects it
-    // via use_generated_codelet_plan (f32 list reduced to drop slow "Precision Policy" sizes).
-    // This fixes suboptimal method selection for many worst benchmark cases; falls through
-    // to composite / GT / Rader which may have better codegen/perf.
-    if data.len() > 64 && !F::use_generated_codelet_plan(data.len()) {
+    let n = data.len();
+    // The exhaustive dispatch below already performs the membership test. For
+    // larger transforms, reject unselected generated codelets before entering
+    // that dispatch; selected sizes still remain exhaustively checked by it.
+    if n > 64 && !F::use_generated_codelet_plan(n) {
         return false;
     }
     let handled = short_winograd_match!(

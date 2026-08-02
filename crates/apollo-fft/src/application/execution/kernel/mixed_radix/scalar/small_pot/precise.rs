@@ -127,7 +127,11 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
 /// # Safety
 ///
 /// Carries the `MixedRadixScalar::small_pot_inplace_sized` contract unchanged.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "const-sized power-of-two kernels must not depend on cross-crate inlining heuristics"
+)]
 pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn small_pot_inplace_sized_precise<
     const N: usize,
     const INVERSE: bool,
