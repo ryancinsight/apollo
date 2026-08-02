@@ -3,15 +3,20 @@ use crate::ShtPlan;
 use eunomia::Complex64;
 
 use super::support::{assert_complex_close, backend, complex_samples, represented_samples};
+use crate::infrastructure::transport::gpu::{HarmonicExecution, SphericalPlan};
 
 #[test]
 fn forward_matches_cpu_complex_coefficients_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = ShtWgpuPlan::new(4, 5, 1);
-    let cpu_plan = ShtPlan::new(plan.latitudes(), plan.longitudes(), plan.max_degree())
-        .expect("valid CPU SHT plan");
+    let plan = ShtWgpuPlan::new(SphericalPlan::new(4, 5, 1));
+    let cpu_plan = ShtPlan::new(
+        plan.payload().latitudes(),
+        plan.payload().longitudes(),
+        plan.payload().max_degree(),
+    )
+    .expect("valid CPU SHT plan");
     let samples = complex_samples(&plan);
     let accelerator_samples = represented_samples(&samples);
     let represented =
@@ -22,7 +27,7 @@ fn forward_matches_cpu_complex_coefficients_when_device_exists() {
     let actual = backend
         .execute_forward(&plan, &accelerator_samples)
         .expect("GPU forward");
-    for degree in 0..=plan.max_degree() {
+    for degree in 0..=plan.payload().max_degree() {
         for order in -(degree as isize)..=(degree as isize) {
             assert_complex_close(actual.get(degree, order), expected.get(degree, order));
         }

@@ -4,22 +4,17 @@ use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
 
+use apollo_fft::{GpuStorage, WgpuError, WgpuResult};
+
 use crate::{
     infrastructure::{
         kernel::spherical_harmonic::gauss_legendre_nodes_weights,
-        transport::gpu::{
-            application::plan::ShtWgpuPlan,
-            domain::{
-                error::{WgpuError, WgpuResult},
-                storage::ShtGpuStorage,
-            },
-            infrastructure::kernel::GridPod,
-        },
+        transport::gpu::{infrastructure::kernel::GridPod, SphericalPlan},
     },
     SphericalGridSpec, SphericalHarmonicCoefficients,
 };
 
-pub(super) fn validate_plan(plan: &ShtWgpuPlan) -> WgpuResult<()> {
+pub(crate) fn validate_plan(plan: &SphericalPlan) -> WgpuResult<()> {
     let degree_count = plan
         .max_degree()
         .checked_add(1)
@@ -90,12 +85,12 @@ pub(super) fn validate_plan(plan: &ShtWgpuPlan) -> WgpuResult<()> {
     Ok(())
 }
 
-pub(super) fn validate_forward(plan: &ShtWgpuPlan, input_len: usize) -> WgpuResult<()> {
+pub(crate) fn validate_forward(plan: &SphericalPlan, input_len: usize) -> WgpuResult<()> {
     validate_plan(plan)?;
     validate_length(plan.sample_count(), input_len, "sample")
 }
 
-pub(super) fn validate_sample_shape(plan: &ShtWgpuPlan, shape: [usize; 2]) -> WgpuResult<()> {
+pub(crate) fn validate_sample_shape(plan: &SphericalPlan, shape: [usize; 2]) -> WgpuResult<()> {
     validate_plan(plan)?;
     let expected = [plan.latitudes(), plan.longitudes()];
     if shape == expected {
@@ -110,8 +105,8 @@ pub(super) fn validate_sample_shape(plan: &ShtWgpuPlan, shape: [usize; 2]) -> Wg
     }
 }
 
-pub(super) fn validate_coefficient_shape(
-    plan: &ShtWgpuPlan,
+pub(crate) fn validate_coefficient_shape(
+    plan: &SphericalPlan,
     coefficients: &SphericalHarmonicCoefficients,
 ) -> WgpuResult<()> {
     validate_plan(plan)?;
@@ -128,8 +123,8 @@ pub(super) fn validate_coefficient_shape(
     }
 }
 
-pub(super) fn validate_typed_input<T: ShtGpuStorage>(
-    plan: &ShtWgpuPlan,
+pub(crate) fn validate_typed_input<T: GpuStorage<Complex32>>(
+    plan: &SphericalPlan,
     precision: PrecisionProfile,
     input_len: usize,
 ) -> WgpuResult<()> {
@@ -139,8 +134,8 @@ pub(super) fn validate_typed_input<T: ShtGpuStorage>(
     validate_forward(plan, input_len)
 }
 
-pub(super) fn validate_typed_output<T: ShtGpuStorage>(
-    plan: &ShtWgpuPlan,
+pub(crate) fn validate_typed_output<T: GpuStorage<Complex32>>(
+    plan: &SphericalPlan,
     precision: PrecisionProfile,
     output_len: usize,
 ) -> WgpuResult<()> {
@@ -161,7 +156,7 @@ fn validate_length(expected: usize, actual: usize, name: &str) -> WgpuResult<()>
     }
 }
 
-pub(super) fn mode_pairs(max_degree: usize) -> impl Iterator<Item = (usize, isize)> {
+pub(crate) fn mode_pairs(max_degree: usize) -> impl Iterator<Item = (usize, isize)> {
     (0..=max_degree).flat_map(|degree| {
         let degree_as_order =
             isize::try_from(degree).expect("invariant: accelerator mode degree fits isize");
@@ -169,7 +164,7 @@ pub(super) fn mode_pairs(max_degree: usize) -> impl Iterator<Item = (usize, isiz
     })
 }
 
-pub(super) fn grid_samples(plan: &ShtWgpuPlan) -> WgpuResult<Vec<GridPod>> {
+pub(crate) fn grid_samples(plan: &SphericalPlan) -> WgpuResult<Vec<GridPod>> {
     let (cos_theta_nodes, theta_weights) = gauss_legendre_nodes_weights(plan.latitudes());
     let longitude_count = u32::try_from(plan.longitudes()).map_err(|_| WgpuError::InvalidPlan {
         message: format!("longitude count {} exceeds u32", plan.longitudes()),
@@ -198,7 +193,7 @@ pub(super) fn grid_samples(plan: &ShtWgpuPlan) -> WgpuResult<Vec<GridPod>> {
         .collect()
 }
 
-pub(super) fn coefficients_from_modes(
+pub(crate) fn coefficients_from_modes(
     max_degree: usize,
     raw: &[Complex32],
 ) -> SphericalHarmonicCoefficients {
@@ -213,7 +208,7 @@ pub(super) fn coefficients_from_modes(
     coefficients
 }
 
-pub(super) fn populate_modes(
+pub(crate) fn populate_modes(
     output: &mut [Complex32],
     coefficients: &SphericalHarmonicCoefficients,
 ) -> WgpuResult<()> {
@@ -227,7 +222,7 @@ pub(super) fn populate_modes(
     Ok(())
 }
 
-pub(super) fn exact_accelerator_component(value: f64, component: &'static str) -> WgpuResult<f32> {
+pub(crate) fn exact_accelerator_component(value: f64, component: &'static str) -> WgpuResult<f32> {
     let represented = quantize_accelerator_component(value, component)?;
     if f64::from(represented) == value {
         Ok(represented)
@@ -236,7 +231,7 @@ pub(super) fn exact_accelerator_component(value: f64, component: &'static str) -
     }
 }
 
-pub(super) fn quantize_accelerator_component(
+pub(crate) fn quantize_accelerator_component(
     value: f64,
     component: &'static str,
 ) -> WgpuResult<f32> {
@@ -252,12 +247,12 @@ fn quantize_grid_component(value: f64, component: &'static str) -> WgpuResult<f3
     quantize_accelerator_component(value, component)
 }
 
-pub(super) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
+pub(crate) fn array2_from_leto_view<T: Copy>(view: leto::ArrayView2<'_, T>) -> Array2<T> {
     view.to_contiguous()
 }
 
-pub(super) fn coefficients_from_leto_view(
-    plan: &ShtWgpuPlan,
+pub(crate) fn coefficients_from_leto_view(
+    plan: &SphericalPlan,
     coefficients: leto::ArrayView2<'_, Complex64>,
 ) -> WgpuResult<SphericalHarmonicCoefficients> {
     validate_plan(plan)?;

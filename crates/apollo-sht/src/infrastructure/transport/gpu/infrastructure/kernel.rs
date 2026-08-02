@@ -15,10 +15,8 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::{
-    application::plan::ShtWgpuPlan,
-    domain::error::{WgpuError, WgpuResult},
-};
+use crate::infrastructure::transport::gpu::SphericalPlan;
+use apollo_fft::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: usize = 64;
 const SHT_COMMON_SOURCE: &str = include_str!("shaders/common.wgsl");
@@ -81,7 +79,7 @@ pub(crate) struct BasisParams {
 const _: () = assert!(core::mem::size_of::<BasisParams>() == 32);
 
 impl BasisParams {
-    fn new<P: ShtMatrixPass>(plan: &ShtWgpuPlan) -> WgpuResult<Self> {
+    fn new<P: ShtMatrixPass>(plan: &SphericalPlan) -> WgpuResult<Self> {
         Ok(Self {
             mode_count: u32::try_from(plan.mode_count()).map_err(|_| WgpuError::InvalidPlan {
                 message: format!(
@@ -193,13 +191,29 @@ impl<P: ShtMatrixPass> KernelSource<Wgsl> for ShtMatrixKernel<P> {
 
 /// Zero-sized SHT orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct ShtGpuKernel;
+pub struct ShtGpuKernel;
+
+impl apollo_fft::GpuTransformPlanner for ShtGpuKernel {
+    type Plan = SphericalPlan;
+
+    fn input_len(plan: &SphericalPlan) -> usize {
+        plan.sample_count()
+    }
+
+    fn output_len(plan: &SphericalPlan) -> usize {
+        plan.mode_count()
+    }
+
+    fn validate(plan: &SphericalPlan) -> apollo_fft::WgpuResult<()> {
+        super::conversion::validate_plan(plan)
+    }
+}
 
 impl ShtGpuKernel {
     /// Execute forward quadrature into caller-owned mode storage.
     pub(crate) fn execute_forward_into<D>(
         device: &D,
-        plan: &ShtWgpuPlan,
+        plan: &SphericalPlan,
         samples: &[Complex32],
         grid: &[GridPod],
         coefficients: &mut [Complex32],
@@ -215,7 +229,7 @@ impl ShtGpuKernel {
     /// Execute inverse synthesis into caller-owned sample storage.
     pub(crate) fn execute_inverse_into<D>(
         device: &D,
-        plan: &ShtWgpuPlan,
+        plan: &SphericalPlan,
         coefficients: &[Complex32],
         grid: &[GridPod],
         samples: &mut [Complex32],
@@ -230,7 +244,7 @@ impl ShtGpuKernel {
 
     fn execute_into<D, P>(
         device: &D,
-        plan: &ShtWgpuPlan,
+        plan: &SphericalPlan,
         input: &[Complex32],
         grid: &[GridPod],
         output: &mut [Complex32],

@@ -15,12 +15,15 @@ pub(super) fn backend() -> Option<ShtWgpuBackend> {
 }
 
 pub(super) fn complex_samples(plan: &ShtWgpuPlan) -> Array2<Complex64> {
-    Array2::from_shape_fn([plan.latitudes(), plan.longitudes()], |[lat, lon]| {
-        Complex64::new(
-            0.25 + lat as f64 * 0.5 - lon as f64 * 0.125,
-            0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
-        )
-    })
+    Array2::from_shape_fn(
+        [plan.payload().latitudes(), plan.payload().longitudes()],
+        |[lat, lon]| {
+            Complex64::new(
+                0.25 + lat as f64 * 0.5 - lon as f64 * 0.125,
+                0.1 * (lat as f64 + 1.0) * (lon as f64 + 1.0),
+            )
+        },
+    )
 }
 
 pub(super) fn represented_samples(values: &Array2<Complex64>) -> Array2<Complex32> {
