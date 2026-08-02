@@ -224,7 +224,7 @@ mod tests {
                 )
                 .expect("typed slice forward");
             let actual_forward = backend
-                .execute_forward_leto_typed(
+                .execute_forward_leto_typed::<f16, f16>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     leto_input.view(),
@@ -248,7 +248,7 @@ mod tests {
                 )
                 .expect("typed slice inverse");
             let actual_inverse = backend
-                .execute_inverse_leto_typed(
+                .execute_inverse_leto_typed::<f16, f16>(
                     &plan,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     leto_spectrum.view(),

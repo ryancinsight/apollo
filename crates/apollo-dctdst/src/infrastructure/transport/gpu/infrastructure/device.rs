@@ -1,5 +1,13 @@
 //! WGPU device acquisition for this transform backend.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
+
 /// Forward execution implementations.
 pub mod forward;
 /// Inverse execution implementations.

@@ -11,6 +11,7 @@ description = "Sliding DFT streaming plans for Apollo"
 
 [features]
 wgpu = [
+    "apollo-fft/wgpu",
     "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
 ]

@@ -67,7 +67,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_execution() {
         .expect("typed forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto typed input");
     let actual_forward = backend
-        .execute_forward_leto_typed::<[f16; 2]>(
+        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -90,7 +90,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_execution() {
     let leto_spectrum = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("Leto typed spectrum");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<[f16; 2]>(
+        .execute_inverse_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),

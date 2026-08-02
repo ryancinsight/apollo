@@ -1,5 +1,13 @@
 //! Hephaestus device acquisition and Mellin execution boundary.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializer is already a const block"
+    )
+)]
+
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex32;
 use hephaestus_wgpu::WgpuDevice;
