@@ -144,6 +144,12 @@ jobs:
           compile baseline
           mv apollo-measurement apollo-baseline-source
           mv apollo-candidate-source apollo-measurement
+          for package in apollo-fft-macros apollo-fft; do
+            cargo clean \
+              --manifest-path apollo-measurement/Cargo.toml \
+              --release \
+              --package "$package"
+          done
           compile candidate
 
           identical=true
