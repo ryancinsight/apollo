@@ -1,4 +1,4 @@
-use super::helpers::cached_power_of_two_twiddle;
+use super::twiddles::cached_power_of_two_twiddle;
 use super::GATHER_TILE;
 use super::MOIRAI_PARALLEL_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{

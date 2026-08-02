@@ -1,11 +1,11 @@
 //! Hephaestus-device-backed NUFFT backend descriptors.
 
+/// Helper functions for device execution.
+pub mod conversion;
 /// Fast Type-1 execution implementations.
 pub mod fast_type1;
 /// Fast Type-2 execution implementations.
 pub mod fast_type2;
-/// Helper functions for device execution.
-pub mod helpers;
 /// Direct Type-1 execution implementations.
 pub mod type1;
 /// Direct Type-2 execution implementations.

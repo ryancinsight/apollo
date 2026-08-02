@@ -1,7 +1,7 @@
 //! Reusable Discrete Hartley Transform plan.
 
-use super::helpers::{LANE_IN_SCRATCH, LANE_OUT_SCRATCH};
 use super::typed::HartleyStorage;
+use super::workspace::{LANE_IN_SCRATCH, LANE_OUT_SCRATCH};
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use crate::domain::metadata::length::HartleyLength;
 use crate::domain::spectrum::coefficients::HartleySpectrum;

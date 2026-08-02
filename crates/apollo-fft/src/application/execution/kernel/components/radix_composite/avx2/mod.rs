@@ -14,7 +14,7 @@
 //! All `flat_pass_rN_*` functions are visible within `radix_composite` and
 //! called from `cache.rs`.
 
-mod helpers;
+mod complex_simd;
 mod radix2;
 mod radix3;
 mod radix4;

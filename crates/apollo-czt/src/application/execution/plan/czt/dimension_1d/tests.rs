@@ -1,7 +1,7 @@
 //! Unit tests for 1D Chirp Z-Transform.
 
-use super::helpers::{forward_workspace_capacity, typed_scratch_capacities};
 use super::plan::CztPlan;
+use super::workspace::{forward_workspace_capacity, typed_scratch_capacities};
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, PrecisionProfile};
 use eunomia::{assert_abs_diff_eq, assert_relative_eq};

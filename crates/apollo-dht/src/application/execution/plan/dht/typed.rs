@@ -1,7 +1,7 @@
 //! Typed storage implementations for Discrete Hartley Transform.
 
-use super::helpers::{validate_profile, TYPED_INPUT64_SCRATCH, TYPED_OUTPUT64_SCRATCH};
 use super::plan::DhtPlan;
+use super::workspace::{TYPED_INPUT64_SCRATCH, TYPED_OUTPUT64_SCRATCH};
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use apollo_fft::{f16, PrecisionProfile};
 
@@ -153,5 +153,13 @@ impl HartleyStorage for f16 {
 
     fn from_f64(value: f64) -> Self {
         f16::from_f32(value as f32)
+    }
+}
+#[inline]
+fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DhtResult<()> {
+    if actual.matches_storage_and_compute(expected) {
+        Ok(())
+    } else {
+        Err(DhtError::PrecisionMismatch)
     }
 }

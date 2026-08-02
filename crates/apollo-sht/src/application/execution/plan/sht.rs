@@ -6,7 +6,7 @@
 //! quadrature. Inverse transforms evaluate
 //! `f(theta, phi) = sum_l sum_m a_lm Y_lm(theta, phi)` on the same grid.
 
-mod helpers;
+mod quadrature;
 #[cfg(test)]
 mod tests;
 mod typed;
@@ -19,12 +19,12 @@ use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weights;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
-use helpers::{
+use leto::Array2;
+use quadrature::{
     array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes, sht_forward_mode_sum,
     sht_forward_mode_sum_hermes, sht_inverse_sample, sht_inverse_sample_hermes,
     SHT_COEFF_LANE_SCRATCH, SHT_HERMES_DOT_LEN_THRESHOLD,
 };
-use leto::Array2;
 
 /// Reusable spherical harmonic transform (SHT) plan.
 ///

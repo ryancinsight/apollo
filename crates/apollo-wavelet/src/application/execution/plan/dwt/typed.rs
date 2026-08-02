@@ -1,4 +1,4 @@
-use super::helpers::{
+use super::boundary::{
     dwt_typed_coefficients_to_leto, validate_cwt_output_shape, validate_dwt_output_shapes,
     validate_profile,
 };

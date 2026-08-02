@@ -5,7 +5,6 @@
         reason = "false positive on Windows: the initializers are already const blocks"
     )
 )]
-use super::helpers::validate_profile;
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, PrecisionProfile};
@@ -260,5 +259,13 @@ impl RealTransformGpuStorage for f16 {
 
     fn from_gpu(value: f32) -> Self {
         f16::from_f32(value)
+    }
+}
+
+fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DctDstResult<()> {
+    if actual.matches_storage_and_compute(expected) {
+        Ok(())
+    } else {
+        Err(DctDstError::PrecisionMismatch)
     }
 }

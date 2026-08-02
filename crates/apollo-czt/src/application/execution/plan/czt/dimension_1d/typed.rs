@@ -1,7 +1,7 @@
 //! Typed storage implementations for 1D Chirp Z-Transform.
 
-use super::helpers::{validate_profile, with_complex64_workspaces};
 use super::plan::CztPlan;
+use super::workspace::{validate_profile, with_complex64_workspaces};
 use crate::domain::contracts::error::CztError;
 use apollo_fft::{f16, PrecisionProfile};
 use eunomia::{Complex32, Complex64};

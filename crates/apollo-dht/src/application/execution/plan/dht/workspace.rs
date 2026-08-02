@@ -1,7 +1,5 @@
 //! Thread-local scratch pools and interop/validation helpers for Discrete Hartley Transform.
 
-use crate::domain::contracts::error::{DhtError, DhtResult};
-use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
@@ -37,16 +35,4 @@ thread_local! {
         )
     )]
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-}
-
-#[inline]
-pub(crate) fn validate_profile(
-    actual: PrecisionProfile,
-    expected: PrecisionProfile,
-) -> DhtResult<()> {
-    if actual.matches_storage_and_compute(expected) {
-        Ok(())
-    } else {
-        Err(DhtError::PrecisionMismatch)
-    }
 }

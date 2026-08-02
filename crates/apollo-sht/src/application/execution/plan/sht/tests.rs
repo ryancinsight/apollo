@@ -1,4 +1,4 @@
-use super::helpers::{
+use super::quadrature::{
     coefficient_lanes, interleaved_lanes, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
     sht_inverse_sample, sht_inverse_sample_hermes, SHT_HERMES_DOT_LEN_THRESHOLD,
 };
