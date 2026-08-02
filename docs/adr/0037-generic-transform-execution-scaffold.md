@@ -73,6 +73,20 @@ them to the shared scaffold.
 `mod helpers`/`mod utils` junk drawers in an adopting crate are removed
 in that crate's adoption increment (atlas ADR 0039 §5).
 
+## Exemptions
+
+- **apollo-nufft** (revision 2026-08-02): exempted after fifteen
+  adoptions proved the patterns. One backend serves two plan families
+  (1D uniform domains and 3D uniform grids) across type-1/type-2,
+  direct/fast, buffered, and diagnostic variants — under the
+  single-marker scaffold that topology forks into two backends and
+  rewrites its distinct `NufftWgpuError` vocabulary across ~1,100
+  lines for shell-only savings; the parameterization would distort the
+  shared layer, which is this document's recorded exemption test.
+  apollo-ntt, the originally anticipated exemption, adopts the
+  planner/extension form instead: its integer elements never touch the
+  executor contract.
+
 ## Migration
 
 apollo-dht (the modern template) and apollo-fwht (a drifted copy) adopt
