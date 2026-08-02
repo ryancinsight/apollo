@@ -1,9 +1,12 @@
 //! Fast \(O(N \log N)\) FFT-based kernel execution for large arrays.
 //! Leverages the exact correspondence between the Discrete Hartley Transform and the Discrete Fourier Transform.
 
-#![expect(
-    clippy::missing_const_for_thread_local,
-    reason = "false positive: the initializer already uses a const block"
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: the initializer already uses a const block"
+    )
 )]
 
 use apollo_fft::{Complex64, PlanCacheProvider, Shape1D};

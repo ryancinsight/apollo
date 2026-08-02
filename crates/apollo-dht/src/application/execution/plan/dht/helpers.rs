@@ -1,8 +1,11 @@
 //! Thread-local scratch pools and interop/validation helpers for Discrete Hartley Transform.
 
-#![expect(
-    clippy::missing_const_for_thread_local,
-    reason = "false positive: all initializers already use const blocks"
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: all initializers already use const blocks"
+    )
 )]
 
 use crate::domain::contracts::error::{DhtError, DhtResult};

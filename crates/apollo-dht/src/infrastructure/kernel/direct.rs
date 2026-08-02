@@ -1,8 +1,11 @@
 //! Direct real-valued DHT kernel.
 
-#![expect(
-    clippy::missing_const_for_thread_local,
-    reason = "false positive: the initializer already uses a const block"
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "Windows false positive: the initializer already uses a const block"
+    )
 )]
 
 use crate::domain::contracts::error::{DhtError, DhtResult};
