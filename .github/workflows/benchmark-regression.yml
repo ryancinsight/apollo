@@ -69,6 +69,20 @@ jobs:
             test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
               "$candidate_spec"
           done
+          candidate_macro_version="$(
+            grep -m1 '^version = ' \
+              apollo-candidate-source/crates/apollo-fft-macros/Cargo.toml
+          )"
+          test -n "$candidate_macro_version"
+          sed -i "0,/^version = /s|^version = .*$|${candidate_macro_version}|" \
+            apollo-measurement/crates/apollo-fft-macros/Cargo.toml
+          candidate_macro_spec="$(
+            grep -m1 '^apollo-fft-macros = ' \
+              apollo-candidate-source/crates/apollo-fft/Cargo.toml
+          )"
+          test -n "$candidate_macro_spec"
+          sed -i "s|^apollo-fft-macros = .*$|${candidate_macro_spec}|" \
+            apollo-measurement/crates/apollo-fft/Cargo.toml
           git -C apollo-candidate-source archive HEAD \
             crates/apollo-bench crates/apollo-fft/benches \
             | tar -x -C apollo-measurement
