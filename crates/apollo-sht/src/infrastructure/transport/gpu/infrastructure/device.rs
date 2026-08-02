@@ -6,6 +6,14 @@
 //! allocation or dispatch; callers that choose approximation cross the explicit
 //! quantization boundary.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializer is already a const block"
+    )
+)]
+
 use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use hephaestus_wgpu::WgpuDevice;

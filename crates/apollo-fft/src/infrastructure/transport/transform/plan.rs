@@ -1,7 +1,6 @@
 //! Shared WGPU plan descriptor, typed per transform (ADR 0037).
 
 use super::backend::GpuTransformPlanner;
-use super::error::{WgpuError, WgpuResult};
 
 /// Metadata-preserving WGPU plan descriptor typed by its transform.
 ///
@@ -67,22 +66,5 @@ impl<X: GpuTransformPlanner> WgpuTransformPlan<X> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    /// Validate the descriptor: nonzero input length plus the
-    /// transform's structural rules. Extension surfaces run the same
-    /// gate the generic backend applies before dispatch.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-plan rejection naming the violated constraint.
-    pub fn validate(&self) -> WgpuResult<()> {
-        let len = self.len();
-        if len == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be greater than zero"),
-            });
-        }
-        X::validate(&self.payload)
     }
 }

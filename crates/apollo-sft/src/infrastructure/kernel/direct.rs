@@ -5,6 +5,13 @@
 //! (`O(N log N)`) instead. This module is preserved as a ground-truth reference
 //! for verification cross-checks.
 
+#![cfg_attr(
+    all(windows, test),
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializer is already a const block; the thread_local is cfg(test)-gated"
+    )
+)]
 #[cfg(test)]
 use eunomia::Complex64;
 #[cfg(test)]
@@ -16,10 +23,6 @@ const DFT_HERMES_ROW_LEN_THRESHOLD: usize = 256;
 
 #[cfg(test)]
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static DFT_TWIDDLE_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

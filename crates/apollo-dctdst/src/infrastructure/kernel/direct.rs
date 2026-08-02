@@ -1,3 +1,10 @@
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use mnemosyne::scratch::ScratchPool;
 use moirai::ParallelSliceMut;
 

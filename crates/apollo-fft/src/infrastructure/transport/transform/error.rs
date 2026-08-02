@@ -33,13 +33,6 @@ pub enum WgpuError {
         message: String,
     },
 
-    /// A value-domain specification (resampling bounds) is invalid.
-    #[error("invalid signal domain: {message}")]
-    InvalidSignalDomain {
-        /// Failure explanation naming the offending bounds.
-        message: String,
-    },
-
     /// A high-accuracy component cannot enter the accelerator element
     /// exactly.
     #[error("{component} component {value} cannot be represented exactly in accelerator storage")]

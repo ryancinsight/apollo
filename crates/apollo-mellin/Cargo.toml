@@ -11,7 +11,6 @@ description = "Mellin transform plans for scale-domain Apollo signal analysis"
 
 [features]
 wgpu = [
-    "apollo-fft/wgpu",
     "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
 ]

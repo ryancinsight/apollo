@@ -50,9 +50,12 @@ use std::sync::Arc;
 const UNITARY_FRFT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
     )]
     static UNITARY_COEFF_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }

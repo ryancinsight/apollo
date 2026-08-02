@@ -14,9 +14,8 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use apollo_fft::{GpuTransformPlanner, WgpuError, WgpuResult};
-
-use crate::infrastructure::transport::gpu::ScalePlan;
+use crate::infrastructure::transport::gpu::application::plan::MellinWgpuPlan;
+use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: usize = 64;
 const MELLIN_SOURCE: &str = include_str!("shaders/mellin.wgsl");
@@ -39,7 +38,7 @@ const _: () = assert!(core::mem::size_of::<MellinParams>() == 32);
 impl MellinParams {
     fn forward(
         signal_len: usize,
-        plan: &ScalePlan,
+        plan: &MellinWgpuPlan,
         signal_min: f32,
         signal_max: f32,
     ) -> WgpuResult<Self> {
@@ -80,7 +79,7 @@ pub struct InverseMellinParams {
 const _: () = assert!(core::mem::size_of::<InverseMellinParams>() == 32);
 
 impl InverseMellinParams {
-    fn new(plan: &ScalePlan, out_len: usize, out_min: f32, out_max: f32) -> WgpuResult<Self> {
+    fn new(plan: &MellinWgpuPlan, out_len: usize, out_min: f32, out_max: f32) -> WgpuResult<Self> {
         Ok(Self {
             samples: u32::try_from(plan.samples()).map_err(|_| WgpuError::InvalidPlan {
                 message: format!(
@@ -168,58 +167,13 @@ impl MellinPass for ExpResample {
 
 /// Zero-sized Mellin orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct MellinGpuKernel;
-
-impl GpuTransformPlanner for MellinGpuKernel {
-    type Plan = ScalePlan;
-
-    fn input_len(plan: &ScalePlan) -> usize {
-        plan.samples()
-    }
-
-    fn validate(plan: &ScalePlan) -> WgpuResult<()> {
-        if plan.samples() == 0 {
-            return Err(WgpuError::InvalidPlan {
-                message: "Mellin sample count must be greater than zero".to_owned(),
-            });
-        }
-        if u32::try_from(plan.samples()).is_err() {
-            return Err(WgpuError::InvalidPlan {
-                message: format!(
-                    "Mellin sample count {} exceeds the accelerator parameter range",
-                    plan.samples()
-                ),
-            });
-        }
-        validate_domain("plan scale", plan.min_scale(), plan.max_scale()).map_err(|error| {
-            match error {
-                WgpuError::InvalidSignalDomain { message } => WgpuError::InvalidPlan { message },
-                other => other,
-            }
-        })
-    }
-}
-
-/// Reject non-finite, non-positive, or inverted resampling bounds.
-pub(crate) fn validate_domain(label: &str, min: f32, max: f32) -> WgpuResult<()> {
-    if !min.is_finite() || !max.is_finite() || min <= 0.0 || max <= 0.0 {
-        return Err(WgpuError::InvalidSignalDomain {
-            message: format!("{label} bounds must be finite and positive: min={min}, max={max}"),
-        });
-    }
-    if min >= max {
-        return Err(WgpuError::InvalidSignalDomain {
-            message: format!("{label} minimum must be less than maximum: min={min}, max={max}"),
-        });
-    }
-    Ok(())
-}
+pub(crate) struct MellinGpuKernel;
 
 impl MellinGpuKernel {
     /// Execute log-resampling and Mellin spectrum into caller-owned storage.
     pub(crate) fn execute_forward_into<D>(
         device: &D,
-        plan: &ScalePlan,
+        plan: &MellinWgpuPlan,
         signal: &[f32],
         signal_min: f32,
         signal_max: f32,
@@ -260,7 +214,7 @@ impl MellinGpuKernel {
     /// Execute inverse spectrum reconstruction and exponential resampling.
     pub(crate) fn execute_inverse_into<D>(
         device: &D,
-        plan: &ScalePlan,
+        plan: &MellinWgpuPlan,
         spectrum: &[Complex32],
         out_min: f32,
         out_max: f32,

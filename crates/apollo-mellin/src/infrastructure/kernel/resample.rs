@@ -13,6 +13,13 @@
 //! transform of the log-resampled signal. calculate_log_resample performs the
 //! r to e^u substitution; log_frequency_spectrum then applies the discrete Fourier sum.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use eunomia::Complex64;
 use moirai::ParallelSliceMut;
 
@@ -21,20 +28,8 @@ const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
 const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

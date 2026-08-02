@@ -5,9 +5,12 @@ use crate::domain::metadata::wavelet::ContinuousWavelet;
 const HERMES_CWT_LEN_THRESHOLD: usize = 8_192;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
     )]
     static CWT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> =
         const { mnemosyne::scratch::ScratchPool::new() };

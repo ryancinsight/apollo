@@ -1,5 +1,12 @@
 //! Thread-local scratch pools and helpers for 1D Short-Time Fourier Transform.
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use crate::domain::contracts::error::StftResult;
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
