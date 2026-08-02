@@ -30,6 +30,18 @@ impl WgpuCapabilities {
         }
     }
 
+    /// Construct capability state for a forward-only implementation.
+    #[must_use]
+    pub const fn forward_only(device_available: bool) -> Self {
+        Self {
+            device_available,
+            supports_forward: device_available,
+            supports_inverse: false,
+            supports_mixed_precision: true,
+            default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
+        }
+    }
+
     /// Construct capability state for an implemented forward and inverse path.
     #[must_use]
     pub const fn implemented(device_available: bool) -> Self {

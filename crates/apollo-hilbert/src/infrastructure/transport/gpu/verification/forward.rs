@@ -3,6 +3,7 @@
 use crate::HilbertPlan;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::AnalyticSignal;
 
 #[test]
 fn analytic_signal_matches_cpu_reference_when_device_exists() {

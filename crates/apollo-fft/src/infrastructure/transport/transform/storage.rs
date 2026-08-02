@@ -46,9 +46,17 @@ pub trait GpuElement:
         output_len: usize,
         body: impl FnOnce(&mut [Self], &mut [Self]) -> R,
     ) -> R;
+
+    /// Run `body` over reused input scratch only, for callers whose
+    /// output buffer is caller-owned.
+    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R;
 }
 
 impl GpuElement for f32 {
+    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+        REAL_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
+    }
+
     fn with_scratch<R>(
         input_len: usize,
         output_len: usize,
@@ -65,6 +73,10 @@ impl GpuElement for f32 {
 }
 
 impl GpuElement for Complex32 {
+    fn with_input_scratch<R>(len: usize, body: impl FnOnce(&mut [Self]) -> R) -> R {
+        COMPLEX_INPUT_SCRATCH.with(|pool| pool.with_scratch(len, body))
+    }
+
     fn with_scratch<R>(
         input_len: usize,
         output_len: usize,

@@ -14,7 +14,8 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuElement, GpuTransformExecutor, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 64;
 const HILBERT_SOURCE: &str = include_str!("shaders/hilbert.wgsl");
@@ -104,7 +105,57 @@ impl HilbertPass for InverseMask {
 
 /// Zero-sized Hilbert orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct HilbertGpuKernel;
+pub struct HilbertGpuKernel;
+
+impl GpuTransformExecutor for HilbertGpuKernel {
+    type Plan = usize;
+    type Sample = f32;
+    type Bin = f32;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+
+    /// Forward Hilbert quadrature `H{x}`: promote the real signal to the
+    /// complex analytic kernel and keep the imaginary component.
+    fn forward_into(
+        device: &WgpuDevice,
+        _plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        apollo_fft::Complex32::with_scratch(input.len(), output.len(), |promoted, analytic| {
+            for (target, value) in promoted.iter_mut().zip(input.iter().copied()) {
+                *target = Complex32::new(value, 0.0);
+            }
+            Self::execute_analytic_into(device, promoted, analytic)?;
+            for (target, value) in output.iter_mut().zip(analytic.iter()) {
+                *target = value.im;
+            }
+            Ok(())
+        })
+    }
+
+    /// Inverse Hilbert transform: promote the quadrature and keep the
+    /// recovered real component.
+    fn inverse_into(
+        device: &WgpuDevice,
+        _plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        apollo_fft::Complex32::with_scratch(input.len(), output.len(), |promoted, recovered| {
+            for (target, value) in promoted.iter_mut().zip(input.iter().copied()) {
+                *target = Complex32::new(value, 0.0);
+            }
+            Self::execute_inverse_into(device, promoted, recovered)?;
+            for (target, value) in output.iter_mut().zip(recovered.iter()) {
+                *target = value.re;
+            }
+            Ok(())
+        })
+    }
+}
 
 impl HilbertGpuKernel {
     /// Execute `x + i H{x}` into caller-owned complex output storage.
