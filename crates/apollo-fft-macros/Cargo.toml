@@ -7,7 +7,6 @@ license = "MIT"
 authors = ["Ryan Clanton PhD <ryanclanton@outlook.com>"]
 repository.workspace = true
 description = "Proc macros for generated Apollo FFT routing kernels"
-publish = false
 
 [features]
 default = ["parallel", "mnemosyne-memory"]
