@@ -15,6 +15,13 @@ pub enum WgpuError {
     #[error("accelerator provider: {0}")]
     Provider(#[from] HephaestusError),
 
+    /// The requested operation is unavailable for the selected capability set.
+    #[error("{operation} is unsupported by the current WGPU capability set")]
+    UnsupportedExecution {
+        /// Operation requested by the caller.
+        operation: &'static str,
+    },
+
     /// Requested precision profile does not match the typed storage.
     #[error("precision profile does not match typed GPU storage")]
     InvalidPrecisionProfile,

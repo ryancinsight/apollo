@@ -1,62 +1,70 @@
 //! Shared WGPU plan descriptor, typed per transform (ADR 0037).
 
-use core::marker::PhantomData;
+use super::backend::GpuTransformExecutor;
 
 /// Metadata-preserving WGPU plan descriptor typed by its transform.
 ///
 /// The type parameter is the transform's executor marker, so a plan built
 /// for one transform cannot feed another transform's backend. The
-/// descriptor carries the logical length only; equal input and output
-/// length is the scaffold's contract (real-valued same-length transforms —
-/// spectra-shaped transforms own their plan types).
-pub struct WgpuTransformPlan<X> {
-    len: usize,
-    transform: PhantomData<X>,
+/// descriptor carries the transform's plan payload
+/// ([`GpuTransformExecutor::Plan`]) — a bare length for same-length 1D
+/// transforms, a richer structure where the transform demands one.
+pub struct WgpuTransformPlan<X: GpuTransformExecutor> {
+    payload: X::Plan,
 }
 
-impl<X> Clone for WgpuTransformPlan<X> {
+impl<X: GpuTransformExecutor> Clone for WgpuTransformPlan<X> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<X> Copy for WgpuTransformPlan<X> {}
+impl<X: GpuTransformExecutor> Copy for WgpuTransformPlan<X> {}
 
-impl<X> core::fmt::Debug for WgpuTransformPlan<X> {
+impl<X: GpuTransformExecutor> core::fmt::Debug for WgpuTransformPlan<X> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("WgpuTransformPlan")
-            .field("len", &self.len)
+            .field("payload", &self.payload)
             .finish()
     }
 }
 
-impl<X> PartialEq for WgpuTransformPlan<X> {
+impl<X: GpuTransformExecutor> PartialEq for WgpuTransformPlan<X> {
     fn eq(&self, other: &Self) -> bool {
-        self.len == other.len
+        self.payload == other.payload
     }
 }
 
-impl<X> Eq for WgpuTransformPlan<X> {}
+impl<X: GpuTransformExecutor> Eq for WgpuTransformPlan<X> {}
 
-impl<X> WgpuTransformPlan<X> {
-    /// Create a WGPU plan descriptor for a positive logical length.
+impl<X: GpuTransformExecutor> WgpuTransformPlan<X> {
+    /// Create a WGPU plan descriptor from the transform's plan payload.
     #[must_use]
-    pub const fn new(len: usize) -> Self {
-        Self {
-            len,
-            transform: PhantomData,
-        }
+    pub const fn new(payload: X::Plan) -> Self {
+        Self { payload }
     }
 
-    /// Return the logical transform length carried by this descriptor.
+    /// Return the transform's plan payload.
     #[must_use]
-    pub const fn len(self) -> usize {
-        self.len
+    pub const fn payload(&self) -> &X::Plan {
+        &self.payload
     }
 
-    /// Return whether the descriptor carries zero length.
+    /// Return the logical input length demanded by this descriptor.
     #[must_use]
-    pub const fn is_empty(self) -> bool {
-        self.len == 0
+    pub fn len(&self) -> usize {
+        X::input_len(&self.payload)
+    }
+
+    /// Return the logical output length produced by this descriptor.
+    #[must_use]
+    pub fn output_len(&self) -> usize {
+        X::output_len(&self.payload)
+    }
+
+    /// Return whether the descriptor demands zero input.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

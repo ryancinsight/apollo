@@ -1,6 +1,4 @@
-//! WGPU infrastructure for the Haar DWT backend.
+//! Infrastructure for Haar WGPU execution.
 
-/// WGPU device acquisition and backend orchestration.
-pub mod device;
-/// GPU compute kernel for the Haar DWT.
+/// Hephaestus kernel definitions for the Haar passes.
 pub mod kernel;

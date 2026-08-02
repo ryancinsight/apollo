@@ -1,6 +1,9 @@
 //! Value-semantic Wavelet GPU inverse-law contracts.
 
-use crate::{infrastructure::transport::gpu::WaveletWgpuPlan, DiscreteWavelet, DwtPlan};
+use crate::{
+    infrastructure::transport::gpu::{HaarDwtPlan, WaveletWgpuPlan},
+    DiscreteWavelet, DwtPlan,
+};
 
 use super::support::backend;
 
@@ -9,7 +12,7 @@ fn analytical_haar_two_sample_inverse() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = WaveletWgpuPlan::new(2, 1);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 2, levels: 1 });
     let sqrt2 = std::f32::consts::SQRT_2;
     let coeffs = [sqrt2, sqrt2];
     let out = backend.execute_inverse(&plan, &coeffs).expect("inverse");
@@ -23,7 +26,7 @@ fn roundtrip_forward_inverse_single_level() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = WaveletWgpuPlan::new(8, 1);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 8, levels: 1 });
     let signal: Vec<f32> = (0..8).map(|i| (i as f32 * 0.7).sin()).collect();
     let coeffs = backend.execute_forward(&plan, &signal).expect("forward");
     let recovered = backend.execute_inverse(&plan, &coeffs).expect("inverse");
@@ -41,7 +44,7 @@ fn roundtrip_forward_inverse_multi_level() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = WaveletWgpuPlan::new(8, 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 8, levels: 3 });
     let signal = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
     let coeffs = backend.execute_forward(&plan, &signal).expect("forward");
     let recovered = backend.execute_inverse(&plan, &coeffs).expect("inverse");
@@ -59,7 +62,7 @@ fn forward_preserves_energy_parseval() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = WaveletWgpuPlan::new(16, 2);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 16, levels: 2 });
     let signal: Vec<f32> = (0..16).map(|i| (i as f32 * 0.3).sin()).collect();
     let coeffs = backend.execute_forward(&plan, &signal).expect("forward");
     let energy_in: f32 = signal.iter().map(|x| x * x).sum();
@@ -76,7 +79,10 @@ fn inverse_matches_cpu_haar_reconstruction_when_device_exists() {
         return;
     };
     let signal = vec![0.5_f32, 1.25, -0.75, 2.0, -1.0, 0.25, 1.5, -2.5];
-    let plan = WaveletWgpuPlan::new(signal.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: signal.len(),
+        levels: 3,
+    });
     let gpu_coeffs = backend
         .execute_forward(&plan, &signal)
         .expect("wgpu forward Haar DWT");

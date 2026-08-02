@@ -76,9 +76,16 @@ impl KernelSource<Wgsl> for InverseScaleKernel {
 pub struct DhtGpuKernel;
 
 impl GpuTransformExecutor for DhtGpuKernel {
+    type Plan = usize;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+
     /// Execute the forward or inverse 1D DHT into caller-owned storage.
     fn execute_into(
         device: &WgpuDevice,
+        _plan: &usize,
         input: &[f32],
         output: &mut [f32],
         inverse: bool,

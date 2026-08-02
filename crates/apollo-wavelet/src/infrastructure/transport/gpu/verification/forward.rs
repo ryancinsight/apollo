@@ -6,28 +6,41 @@ use crate::{
 };
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::HaarDwtPlan;
 
 #[test]
 fn rejects_invalid_plan_before_dispatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let r = backend.execute_forward(&WaveletWgpuPlan::new(6, 1), &[0.0f32; 6]);
+    let r = backend.execute_forward(
+        &WaveletWgpuPlan::new(HaarDwtPlan { len: 6, levels: 1 }),
+        &[0.0f32; 6],
+    );
     assert!(
         matches!(r, Err(WgpuError::InvalidPlan { .. })),
         "non-pow2: {r:?}"
     );
-    let r = backend.execute_forward(&WaveletWgpuPlan::new(4, 0), &[0.0f32; 4]);
+    let r = backend.execute_forward(
+        &WaveletWgpuPlan::new(HaarDwtPlan { len: 4, levels: 0 }),
+        &[0.0f32; 4],
+    );
     assert!(
         matches!(r, Err(WgpuError::InvalidPlan { .. })),
         "zero levels: {r:?}"
     );
-    let r = backend.execute_forward(&WaveletWgpuPlan::new(4, 3), &[0.0f32; 4]);
+    let r = backend.execute_forward(
+        &WaveletWgpuPlan::new(HaarDwtPlan { len: 4, levels: 3 }),
+        &[0.0f32; 4],
+    );
     assert!(
         matches!(r, Err(WgpuError::InvalidPlan { .. })),
         "levels too large: {r:?}"
     );
-    let r = backend.execute_forward(&WaveletWgpuPlan::new(8, 1), &[0.0f32; 4]);
+    let r = backend.execute_forward(
+        &WaveletWgpuPlan::new(HaarDwtPlan { len: 8, levels: 1 }),
+        &[0.0f32; 4],
+    );
     assert!(
         matches!(r, Err(WgpuError::LengthMismatch { .. })),
         "len mismatch: {r:?}"
@@ -39,7 +52,7 @@ fn analytical_haar_two_sample_forward() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = WaveletWgpuPlan::new(2, 1);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 2, levels: 1 });
     let signal = [2.0f32, 0.0f32];
     let out = backend.execute_forward(&plan, &signal).expect("forward");
     assert_eq!(out.len(), 2);
@@ -64,7 +77,10 @@ fn forward_matches_cpu_haar_coefficients_when_device_exists() {
         return;
     };
     let signal = vec![1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
-    let plan = WaveletWgpuPlan::new(signal.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: signal.len(),
+        levels: 3,
+    });
     let gpu = backend
         .execute_forward(&plan, &signal)
         .expect("wgpu forward Haar DWT");

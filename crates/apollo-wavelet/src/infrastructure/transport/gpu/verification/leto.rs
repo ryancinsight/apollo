@@ -2,7 +2,7 @@
 
 use leto::{SliceArg, Storage};
 
-use crate::infrastructure::transport::gpu::WaveletWgpuPlan;
+use crate::infrastructure::transport::gpu::{HaarDwtPlan, WaveletWgpuPlan};
 
 use super::support::backend;
 
@@ -12,7 +12,10 @@ fn leto_forward_and_inverse_match_slice_when_device_exists() {
         return;
     };
     let signal = vec![1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
-    let plan = WaveletWgpuPlan::new(signal.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: signal.len(),
+        levels: 3,
+    });
     let expected_forward = backend
         .execute_forward(&plan, &signal)
         .expect("slice forward");
@@ -54,7 +57,10 @@ fn leto_strided_forward_matches_logical_slice_when_device_exists() {
     let strided = signal_leto
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .expect("strided signal");
-    let plan = WaveletWgpuPlan::new(signal.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: signal.len(),
+        levels: 3,
+    });
     let expected = backend
         .execute_forward(&plan, &signal)
         .expect("slice forward");

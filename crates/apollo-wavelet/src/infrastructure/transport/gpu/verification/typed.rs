@@ -2,7 +2,7 @@
 
 use leto::Storage;
 
-use crate::infrastructure::transport::gpu::{WaveletWgpuPlan, WgpuError};
+use crate::infrastructure::transport::gpu::{HaarDwtPlan, WaveletWgpuPlan, WgpuError};
 
 use super::support::backend;
 
@@ -15,7 +15,10 @@ fn typed_mixed_storage_matches_represented_f32_execution_when_device_exists() {
     let represented = [1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
     let represented_input: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
-    let plan = WaveletWgpuPlan::new(input.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: input.len(),
+        levels: 3,
+    });
     let expected_fwd = backend
         .execute_forward(&plan, &represented_input)
         .expect("represented forward");
@@ -65,7 +68,10 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     use apollo_fft::{f16, PrecisionProfile};
     let represented = [1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
-    let plan = WaveletWgpuPlan::new(input.len(), 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan {
+        len: input.len(),
+        levels: 3,
+    });
 
     let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
     backend
@@ -135,7 +141,7 @@ fn typed_path_rejects_profile_mismatch_when_device_exists() {
         return;
     };
     use apollo_fft::{f16, PrecisionProfile};
-    let plan = WaveletWgpuPlan::new(8, 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 8, levels: 3 });
     let input = vec![f16::from_f32(1.0); 8];
     let mut output = vec![f16::from_f32(0.0); 8];
     let err = backend

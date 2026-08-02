@@ -72,21 +72,32 @@ impl KernelSource<Wgsl> for InverseScaleKernel {
 pub struct FwhtGpuKernel;
 
 impl GpuTransformExecutor for FwhtGpuKernel {
+    type Plan = usize;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+
+    /// The radix-2 butterfly factorization requires a power-of-two
+    /// length; this is the FWHT's structural plan constraint.
+    fn validate(plan: &usize) -> WgpuResult<()> {
+        if !plan.is_power_of_two() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {plan}: length must be a power of two"),
+            });
+        }
+        Ok(())
+    }
+
     /// Execute the forward or inverse 1D FWHT into caller-owned storage.
     fn execute_into(
         device: &WgpuDevice,
+        _plan: &usize,
         input: &[f32],
         output: &mut [f32],
         inverse: bool,
     ) -> WgpuResult<()> {
         let len = input.len();
-        // The radix-2 butterfly factorization requires a power-of-two
-        // length; this is the FWHT's structural plan constraint.
-        if !len.is_power_of_two() {
-            return Err(WgpuError::InvalidPlan {
-                message: format!("invalid length {len}: length must be a power of two"),
-            });
-        }
         let encoded_len = u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
             message: format!("length {len} exceeds the provider parameter range"),
         })?;
