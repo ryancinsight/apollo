@@ -1,29 +1,18 @@
 //! Thread-local scratch pools and interop/validation helpers for Discrete Hartley Transform.
 
+#![expect(
+    clippy::missing_const_for_thread_local,
+    reason = "false positive: all initializers already use const blocks"
+)]
+
 use crate::domain::contracts::error::{DhtError, DhtResult};
 use apollo_fft::PrecisionProfile;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static LANE_IN_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static LANE_OUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     pub(crate) static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 

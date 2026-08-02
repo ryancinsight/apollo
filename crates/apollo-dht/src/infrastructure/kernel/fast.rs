@@ -1,14 +1,15 @@
 //! Fast \(O(N \log N)\) FFT-based kernel execution for large arrays.
 //! Leverages the exact correspondence between the Discrete Hartley Transform and the Discrete Fourier Transform.
 
+#![expect(
+    clippy::missing_const_for_thread_local,
+    reason = "false positive: the initializer already uses a const block"
+)]
+
 use apollo_fft::{Complex64, PlanCacheProvider, Shape1D};
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
-    )]
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
