@@ -33,6 +33,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [minor] `apollo-fft-macros` 0.2.0 generates the canonical primitive-root
+  table for runtime conformance tests, while runtime-only integer arithmetic
+  now lives inside `apollo-fft`; both crate archives compile without sibling
+  source-tree access.
 - [patch] Bind the existing `mnemosyne` and `moirai` Rust crate aliases to the
   collision-free `mnemosyne-memory` and `moirai-runtime` registry package
   identities so published Apollo archives resolve the provider graph.
