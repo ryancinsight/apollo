@@ -1,16 +1,17 @@
-//! Hephaestus WGPU error contracts.
+//! Shared WGPU transform error contract (ADR 0037).
 
 use hephaestus_core::HephaestusError;
 use thiserror::Error;
 
-/// Result alias for QFT accelerator execution.
+/// Result alias for WGPU transform execution.
 pub type WgpuResult<T> = Result<T, WgpuError>;
 
-/// Failures produced by the concrete Hephaestus WGPU implementation.
+/// Failures produced by a Hephaestus-backed WGPU transform implementation.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum WgpuError {
-    /// The selected provider rejected acquisition, allocation, compilation,
-    /// dispatch, synchronization, or transfer.
+    /// The selected Hephaestus device rejected acquisition, allocation,
+    /// compilation, dispatch, synchronization, or transfer.
     #[error("accelerator provider: {0}")]
     Provider(#[from] HephaestusError),
 
@@ -21,14 +22,21 @@ pub enum WgpuError {
         operation: &'static str,
     },
 
-    /// Requested precision profile does not match the admitted GPU storage.
+    /// Requested precision profile does not match the typed storage.
     #[error("precision profile does not match typed GPU storage")]
     InvalidPrecisionProfile,
 
-    /// Plan parameters are invalid for the selected transform kernel.
+    /// Plan parameters are invalid for the transform kernel.
     #[error("invalid plan: {message}")]
     InvalidPlan {
-        /// Failure explanation including the offending value.
+        /// Failure explanation including the offending plan value.
+        message: String,
+    },
+
+    /// A multi-dimensional operand does not match the plan's shape.
+    #[error("shape mismatch: {message}")]
+    ShapeMismatch {
+        /// Failure explanation naming the expected and offending shapes.
         message: String,
     },
 

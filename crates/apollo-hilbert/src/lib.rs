@@ -27,7 +27,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod verification;
 
-pub use application::execution::plan::hilbert::{HilbertGpuStorage, HilbertPlan, HilbertStorage};
+pub use application::execution::plan::hilbert::{HilbertPlan, HilbertStorage};
 pub use domain::contracts::error::{HilbertError, HilbertResult};
 pub use domain::metadata::length::SignalLength;
 pub use domain::signal::analytic::AnalyticSignal;

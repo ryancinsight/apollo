@@ -8,3 +8,6 @@ pub mod cuda;
 
 #[cfg(feature = "wgpu")]
 pub mod gpu;
+
+#[cfg(feature = "wgpu")]
+pub mod transform;

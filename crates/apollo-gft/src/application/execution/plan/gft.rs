@@ -21,8 +21,20 @@ const GFT_PAR_OP_THRESHOLD: usize = 16_384;
 const GFT_HERMES_DOT_LEN_THRESHOLD: usize = 1_024;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static INVERSE_ROW_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
@@ -365,54 +377,6 @@ impl GftStorage for f16 {
 
     fn from_f64(value: f64) -> Self {
         f16::from_f32(value as f32)
-    }
-}
-
-mod gpu_sealed {
-    pub trait Sealed {}
-
-    impl Sealed for f32 {}
-    impl Sealed for apollo_fft::f16 {}
-}
-
-/// Storage admitted by the concrete `f32` graph-transform accelerator kernel.
-///
-/// The GPU kernel performs all arithmetic in `f32`. It accepts native `f32`
-/// storage and explicit `f16` host storage promoted at the dispatch boundary.
-/// High-accuracy `f64` storage is intentionally excluded so this boundary
-/// cannot silently narrow an advertised typed computation.
-///
-/// ```compile_fail
-/// use apollo_gft::GftGpuStorage;
-///
-/// fn require_gpu_storage<T: GftGpuStorage>() {}
-/// require_gpu_storage::<f64>();
-/// ```
-pub trait GftGpuStorage: GftStorage + gpu_sealed::Sealed {
-    /// Convert storage into the concrete `f32` accelerator representation.
-    fn to_gpu(self) -> f32;
-
-    /// Convert a concrete `f32` accelerator result back to storage.
-    fn from_gpu(value: f32) -> Self;
-}
-
-impl GftGpuStorage for f32 {
-    fn to_gpu(self) -> f32 {
-        self
-    }
-
-    fn from_gpu(value: f32) -> Self {
-        value
-    }
-}
-
-impl GftGpuStorage for f16 {
-    fn to_gpu(self) -> f32 {
-        self.to_f32()
-    }
-
-    fn from_gpu(value: f32) -> Self {
-        f16::from_f32(value)
     }
 }
 

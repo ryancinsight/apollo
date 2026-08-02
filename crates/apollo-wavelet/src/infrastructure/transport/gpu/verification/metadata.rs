@@ -1,6 +1,8 @@
 //! Value-semantic Wavelet GPU metadata and availability contracts.
 
-use crate::infrastructure::transport::gpu::{WaveletWgpuPlan, WgpuCapabilities, WgpuError};
+use crate::infrastructure::transport::gpu::{
+    HaarDwtPlan, WaveletWgpuPlan, WgpuCapabilities, WgpuError,
+};
 
 use super::support::backend;
 
@@ -28,12 +30,11 @@ fn capabilities_reflect_forward_and_inverse() {
 
 #[test]
 fn plan_preserves_len_and_levels() {
-    let plan = WaveletWgpuPlan::new(64, 3);
+    let plan = WaveletWgpuPlan::new(HaarDwtPlan { len: 64, levels: 3 });
     assert_eq!(plan.len(), 64);
-    assert_eq!(plan.levels(), 3);
+    assert_eq!(plan.payload().levels, 3);
     assert!(!plan.is_empty());
-    assert!(WaveletWgpuPlan::new(0, 3).is_empty());
-    assert!(WaveletWgpuPlan::new(64, 0).is_empty());
+    assert!(WaveletWgpuPlan::new(HaarDwtPlan { len: 0, levels: 3 }).is_empty());
 }
 
 #[test]

@@ -3,6 +3,7 @@
 use leto::{SliceArg, Storage};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::AnalyticSignal;
 
 #[test]
 fn leto_analytic_signal_matches_slice_when_device_exists() {

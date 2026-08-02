@@ -42,3 +42,4 @@
 | [0034](0034-gpu-dispatch-verification-tree.md) | Dense FFT dispatch verification tree | — |
 | [0035](0035-remove-radix-policy-wrapper.md) | Remove the Apollo radix-policy wrapper | — |
 | [0036](0036-native-benchmark-regression-oracle.md) | Native benchmark regression oracle | — |
+| [0037](0037-generic-transform-execution-scaffold.md) | Generic transform execution scaffold in apollo-fft | Accepted |

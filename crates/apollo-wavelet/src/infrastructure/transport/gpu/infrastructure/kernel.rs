@@ -13,7 +13,8 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 256;
 const WAVELET_SOURCE: &str = include_str!("shaders/wavelet.wgsl");
@@ -83,42 +84,68 @@ impl KernelSource<Wgsl> for HaarSynthesisKernel {
     }
 }
 
+/// Plan payload for the multilevel Haar DWT: signal length and
+/// decomposition depth.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HaarDwtPlan {
+    /// Signal length; must be a non-zero power of two.
+    pub len: usize,
+    /// Decomposition depth; must satisfy `0 < levels <= log2(len)`.
+    pub levels: usize,
+}
+
 /// Zero-sized multilevel Haar orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct WaveletGpuKernel;
+pub struct WaveletGpuKernel;
+
+impl GpuTransformPlanner for WaveletGpuKernel {
+    type Plan = HaarDwtPlan;
+
+    fn input_len(plan: &HaarDwtPlan) -> usize {
+        plan.len
+    }
+
+    fn validate(plan: &HaarDwtPlan) -> WgpuResult<()> {
+        let HaarDwtPlan { len, levels } = *plan;
+        if len == 0 || !len.is_power_of_two() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("length {len} must be a non-zero power of two"),
+            });
+        }
+        if levels == 0 || levels >= usize::BITS as usize || (1usize << levels) > len {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("levels {levels} must satisfy 0 < levels <= log2({len})"),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for WaveletGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &HaarDwtPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_levels_into(device, input, output, plan.levels, false)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &HaarDwtPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_levels_into(device, input, output, plan.levels, true)
+    }
+}
 
 impl WaveletGpuKernel {
-    /// Execute forward Haar analysis into caller-owned host storage.
-    pub(crate) fn execute_forward_into<D>(
-        device: &D,
-        input: &[f32],
-        output: &mut [f32],
-        levels: usize,
-    ) -> WgpuResult<()>
-    where
-        D: KernelDevice<Dialect = Wgsl>,
-        HaarAnalysisKernel: KernelSource<Wgsl>,
-        HaarSynthesisKernel: KernelSource<Wgsl>,
-    {
-        Self::execute_into(device, input, output, levels, false)
-    }
-
-    /// Execute inverse Haar synthesis into caller-owned host storage.
-    pub(crate) fn execute_inverse_into<D>(
-        device: &D,
-        input: &[f32],
-        output: &mut [f32],
-        levels: usize,
-    ) -> WgpuResult<()>
-    where
-        D: KernelDevice<Dialect = Wgsl>,
-        HaarAnalysisKernel: KernelSource<Wgsl>,
-        HaarSynthesisKernel: KernelSource<Wgsl>,
-    {
-        Self::execute_into(device, input, output, levels, true)
-    }
-
-    fn execute_into<D>(
+    fn execute_levels_into<D>(
         device: &D,
         input: &[f32],
         output: &mut [f32],

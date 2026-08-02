@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for Hilbert WGPU execution.
 
-/// Hephaestus WGPU device acquisition and host boundary.
-pub mod device;
-/// Typed Hephaestus Hilbert kernel orchestration.
+/// Hephaestus kernel definitions for the Hilbert passes.
 pub mod kernel;

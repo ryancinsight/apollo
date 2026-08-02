@@ -5,6 +5,7 @@ use apollo_fft::{f16, PrecisionProfile};
 use crate::infrastructure::transport::gpu::WgpuError;
 
 use super::support::{backend, reference_parameters};
+use crate::infrastructure::transport::gpu::ChirpPlan;
 
 #[test]
 fn typed_path_rejects_profile_mismatch_when_device_exists() {
@@ -19,7 +20,7 @@ fn typed_path_rejects_profile_mismatch_when_device_exists() {
         [f16::from_f32(1.25), f16::from_f32(0.5)],
     ];
     let mut output = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 6];
-    let plan = backend.plan(input.len(), 6, a, w);
+    let plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
     let error = backend
         .execute_forward_typed_into(
             &plan,

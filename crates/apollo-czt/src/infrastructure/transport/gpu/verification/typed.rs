@@ -5,6 +5,7 @@ use eunomia::Complex32;
 use leto::Storage;
 
 use super::support::{backend, reference_input, reference_parameters};
+use crate::infrastructure::transport::gpu::ChirpPlan;
 
 #[test]
 fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
@@ -20,7 +21,7 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
         .iter()
         .map(|value| Complex32::new(value[0].to_f32(), value[1].to_f32()))
         .collect();
-    let plan = backend.plan(input.len(), 6, a, w);
+    let plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
     let expected = backend
         .execute_forward(&plan, &represented)
         .expect("represented forward");
@@ -51,7 +52,7 @@ fn typed_leto_forward_matches_typed_slice_when_device_exists() {
         .iter()
         .map(|value| [f16::from_f32(value.re), f16::from_f32(value.im)])
         .collect();
-    let plan = backend.plan(input.len(), 6, a, w);
+    let plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
     let mut expected = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 6];
     backend
         .execute_forward_typed_into(

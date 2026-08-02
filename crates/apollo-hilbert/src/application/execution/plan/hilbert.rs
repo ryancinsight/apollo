@@ -11,8 +11,20 @@ use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static OBSERVABLE_ANALYTIC_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
@@ -355,53 +367,6 @@ impl HilbertStorage for f16 {
 
     fn from_f64(value: f64) -> Self {
         f16::from_f32(value as f32)
-    }
-}
-
-mod gpu_storage_sealed {
-    pub trait Sealed {}
-
-    impl Sealed for f32 {}
-    impl Sealed for apollo_fft::f16 {}
-}
-
-/// Storage admitted by the concrete `f32` accelerator kernels.
-///
-/// Native [`f32`] storage is zero-copy at the host boundary; `f16` uses an
-/// explicit conversion workspace. [`f64`] is intentionally excluded so the
-/// accelerator API cannot silently narrow a high-accuracy CPU computation.
-///
-/// ```compile_fail
-/// use apollo_hilbert::HilbertGpuStorage;
-///
-/// fn require_gpu_storage<T: HilbertGpuStorage>() {}
-/// require_gpu_storage::<f64>();
-/// ```
-pub trait HilbertGpuStorage: HilbertStorage + gpu_storage_sealed::Sealed {
-    /// Convert host storage into the concrete accelerator representation.
-    fn to_gpu(self) -> f32;
-
-    /// Convert the concrete accelerator representation back into host storage.
-    fn from_gpu(value: f32) -> Self;
-}
-
-impl HilbertGpuStorage for f32 {
-    fn to_gpu(self) -> f32 {
-        self
-    }
-
-    fn from_gpu(value: f32) -> Self {
-        value
-    }
-}
-
-impl HilbertGpuStorage for f16 {
-    fn to_gpu(self) -> f32 {
-        self.to_f32()
-    }
-
-    fn from_gpu(value: f32) -> Self {
-        f16::from_f32(value)
     }
 }
 

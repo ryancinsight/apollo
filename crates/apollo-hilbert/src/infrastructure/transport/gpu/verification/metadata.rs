@@ -19,7 +19,7 @@ fn capabilities_reflect_forward_only_kernel_surface() {
 
 #[test]
 fn capabilities_reflect_forward_and_inverse_surface() {
-    let capabilities = WgpuCapabilities::forward_and_inverse(true);
+    let capabilities = WgpuCapabilities::implemented(true);
     assert!(capabilities.device_available);
     assert!(capabilities.supports_forward);
     assert!(capabilities.supports_inverse);

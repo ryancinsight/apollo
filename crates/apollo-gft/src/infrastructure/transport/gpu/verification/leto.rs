@@ -3,6 +3,7 @@
 use leto::{SliceArg, Storage};
 
 use super::support::{backend, path4_plan_and_basis};
+use crate::infrastructure::transport::gpu::BasisTransform;
 
 #[test]
 fn leto_forward_and_inverse_match_slice_when_device_exists() {

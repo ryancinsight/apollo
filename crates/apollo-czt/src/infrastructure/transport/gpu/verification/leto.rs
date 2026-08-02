@@ -4,6 +4,7 @@ use eunomia::Complex32;
 use leto::{SliceArg, Storage};
 
 use super::support::{backend, dft_input, dft_parameters, reference_input, reference_parameters};
+use crate::infrastructure::transport::gpu::ChirpPlan;
 
 #[test]
 fn leto_forward_matches_slice_forward_when_device_exists() {
@@ -12,7 +13,7 @@ fn leto_forward_matches_slice_forward_when_device_exists() {
     };
     let (a, w) = reference_parameters();
     let input = reference_input().to_vec();
-    let plan = backend.plan(input.len(), 6, a, w);
+    let plan = backend.plan(ChirpPlan::new(input.len(), 6, a, w));
     let expected = backend
         .execute_forward(&plan, &input)
         .expect("slice forward");
@@ -36,7 +37,7 @@ fn leto_strided_forward_matches_logical_slice_when_device_exists() {
         backing.push(value);
         backing.push(sentinel);
     }
-    let plan = backend.plan(logical.len(), 6, a, w);
+    let plan = backend.plan(ChirpPlan::new(logical.len(), 6, a, w));
     let expected = backend
         .execute_forward(&plan, &logical)
         .expect("slice forward");
@@ -58,7 +59,7 @@ fn leto_inverse_matches_slice_inverse_for_dft_parameters_when_device_exists() {
     let len = 8;
     let (a, w) = dft_parameters(len);
     let input = dft_input(len);
-    let plan = backend.plan(len, len, a, w);
+    let plan = backend.plan(ChirpPlan::new(len, len, a, w));
     let spectrum = backend
         .execute_forward(&plan, &input)
         .expect("slice forward");

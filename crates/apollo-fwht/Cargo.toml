@@ -11,6 +11,7 @@ description = "Fast Walsh-Hadamard transform utilities for Apollo"
 
 [features]
 wgpu = [
+    "apollo-fft/wgpu",
     "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
 ]
@@ -22,8 +23,8 @@ mnemosyne-memory = []
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true }
-apollo-fft = { path = "../apollo-fft" }
-apollo-leto-interop = { path = "../apollo-leto-interop" }
+apollo-fft = { version = "0.25.0", path = "../apollo-fft" }
+apollo-leto-interop = { version = "0.17.0", path = "../apollo-leto-interop" }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }
 moirai = { workspace = true }

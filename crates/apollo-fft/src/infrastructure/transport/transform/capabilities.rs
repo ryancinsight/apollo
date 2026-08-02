@@ -1,6 +1,6 @@
-//! WGPU capability contracts.
+//! Shared WGPU transform capability contract (ADR 0037).
 
-use apollo_fft::PrecisionProfile;
+use crate::PrecisionProfile;
 
 /// Truthful WGPU transform capability descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +18,7 @@ pub struct WgpuCapabilities {
 }
 
 impl WgpuCapabilities {
-    /// Construct capabilities for the current crate state.
+    /// Construct capability state for a boundary-only backend.
     #[must_use]
     pub const fn detected(device_available: bool) -> Self {
         Self {
@@ -30,13 +30,25 @@ impl WgpuCapabilities {
         }
     }
 
-    /// Construct capabilities for a direct unitary QFT kernel surface.
+    /// Construct capability state for a forward-only implementation.
     #[must_use]
-    pub const fn direct_unitary(device_available: bool) -> Self {
+    pub const fn forward_only(device_available: bool) -> Self {
         Self {
             device_available,
-            supports_forward: true,
-            supports_inverse: true,
+            supports_forward: device_available,
+            supports_inverse: false,
+            supports_mixed_precision: true,
+            default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
+        }
+    }
+
+    /// Construct capability state for an implemented forward and inverse path.
+    #[must_use]
+    pub const fn implemented(device_available: bool) -> Self {
+        Self {
+            device_available,
+            supports_forward: device_available,
+            supports_inverse: device_available,
             supports_mixed_precision: true,
             default_precision_profile: PrecisionProfile::LOW_PRECISION_F32,
         }

@@ -1,6 +1,7 @@
 //! Value-semantic GFT GPU forward-execution contracts.
 
 use super::support::{backend, path4_plan_and_basis, PATH4_F32_DOT_ABS_TOLERANCE};
+use crate::infrastructure::transport::gpu::BasisTransform;
 
 #[test]
 fn forward_matches_cpu_reference_when_device_exists() {

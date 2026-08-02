@@ -14,7 +14,9 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_core::ComputeDevice;
+use hephaestus_wgpu::WgpuDevice;
 
 const WORKGROUP_SIZE: usize = 256;
 const FWHT_SOURCE: &str = include_str!("shaders/fwht.wgsl");
@@ -67,16 +69,68 @@ impl KernelSource<Wgsl> for InverseScaleKernel {
 
 /// Zero-sized FWHT kernel orchestration over a Hephaestus kernel device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct FwhtGpuKernel;
+pub struct FwhtGpuKernel;
+
+impl GpuTransformPlanner for FwhtGpuKernel {
+    type Plan = usize;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+
+    /// The radix-2 butterfly factorization requires a power-of-two
+    /// length; this is the FWHT's structural plan constraint.
+    fn validate(plan: &usize) -> WgpuResult<()> {
+        if !plan.is_power_of_two() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {plan}: length must be a power of two"),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for FwhtGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, false)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, plan, input, output, true)
+    }
+}
 
 impl FwhtGpuKernel {
-    /// Execute the forward or inverse 1D FWHT on a real-valued `f32` slice.
-    pub(super) fn execute<D>(device: &D, input: &[f32], inverse: bool) -> WgpuResult<Vec<f32>>
-    where
-        D: KernelDevice,
-        ButterflyKernel: KernelSource<D::Dialect>,
-        InverseScaleKernel: KernelSource<D::Dialect>,
-    {
+    /// Execute the forward or inverse 1D FWHT into caller-owned storage.
+    fn execute_into(
+        device: &WgpuDevice,
+        _plan: &usize,
+        input: &[f32],
+        output: &mut [f32],
+        inverse: bool,
+    ) -> WgpuResult<()> {
+        Self::run(device, input, output, inverse)
+    }
+
+    fn run(
+        device: &WgpuDevice,
+        input: &[f32],
+        output: &mut [f32],
+        inverse: bool,
+    ) -> WgpuResult<()> {
         let len = input.len();
         let encoded_len = u32::try_from(len).map_err(|_| WgpuError::InvalidPlan {
             message: format!("length {len} exceeds the provider parameter range"),
@@ -122,8 +176,7 @@ impl FwhtGpuKernel {
         }
 
         stream.submit()?;
-        let mut output = vec![0.0_f32; len];
-        device.download(&storage, &mut output)?;
-        Ok(output)
+        device.download(&storage, output)?;
+        Ok(())
     }
 }

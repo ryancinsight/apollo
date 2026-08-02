@@ -63,6 +63,11 @@ pub use domain::metadata::precision::{
 pub use domain::metadata::shape::{HalfSpectrum3D, Shape1D, Shape2D, Shape3D};
 pub use half::f16;
 pub use infrastructure::transport::cpu::CpuBackend;
+#[cfg(feature = "wgpu")]
+pub use infrastructure::transport::transform::{
+    GpuElement, GpuStorage, GpuTransformExecutor, GpuTransformPlanner, WgpuCapabilities, WgpuError,
+    WgpuResult, WgpuTransformBackend, WgpuTransformPlan,
+};
 
 pub use eunomia::Complex32;
 pub use eunomia::Complex64;

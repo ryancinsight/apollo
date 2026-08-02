@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for FWHT WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// FWHT compute kernel orchestration.
+/// Hephaestus kernel definitions for the FWHT passes.
 pub mod kernel;

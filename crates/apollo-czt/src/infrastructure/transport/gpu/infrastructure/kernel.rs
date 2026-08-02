@@ -15,8 +15,59 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::application::plan::CztWgpuPlan;
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
+/// Plan payload for the chirp-z transform: logical lengths and the
+/// spiral parameters stored as IEEE bit patterns so the payload stays
+/// `Eq`/`Hash`-clean.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChirpPlan {
+    input_len: usize,
+    output_len: usize,
+    a_re: u32,
+    a_im: u32,
+    w_re: u32,
+    w_im: u32,
+}
+
+impl ChirpPlan {
+    /// Create a chirp-z plan payload from the spiral parameters.
+    #[must_use]
+    pub fn new(input_len: usize, output_len: usize, a: Complex32, w: Complex32) -> Self {
+        Self {
+            input_len,
+            output_len,
+            a_re: a.re.to_bits(),
+            a_im: a.im.to_bits(),
+            w_re: w.re.to_bits(),
+            w_im: w.im.to_bits(),
+        }
+    }
+
+    /// Return the logical input length carried by this payload.
+    #[must_use]
+    pub const fn input_len(self) -> usize {
+        self.input_len
+    }
+
+    /// Return the logical output length carried by this payload.
+    #[must_use]
+    pub const fn output_len(self) -> usize {
+        self.output_len
+    }
+
+    /// Return the starting spiral point.
+    #[must_use]
+    pub fn a(self) -> Complex32 {
+        Complex32::new(f32::from_bits(self.a_re), f32::from_bits(self.a_im))
+    }
+
+    /// Return the spiral step ratio.
+    #[must_use]
+    pub fn w(self) -> Complex32 {
+        Complex32::new(f32::from_bits(self.w_re), f32::from_bits(self.w_im))
+    }
+}
 
 const WORKGROUP_SIZE: usize = 64;
 const CZT_SOURCE: &str = include_str!("shaders/czt.wgsl");
@@ -83,13 +134,75 @@ impl<M: CztDirection> KernelSource<Wgsl> for CztKernel<M> {
 
 /// Zero-sized CZT kernel orchestration over a Hephaestus kernel device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(super) struct CztGpuKernel;
+pub struct CztGpuKernel;
+
+impl GpuTransformPlanner for CztGpuKernel {
+    type Plan = ChirpPlan;
+
+    fn input_len(plan: &ChirpPlan) -> usize {
+        plan.input_len()
+    }
+
+    fn output_len(plan: &ChirpPlan) -> usize {
+        plan.output_len()
+    }
+
+    fn validate(plan: &ChirpPlan) -> WgpuResult<()> {
+        let input_len = plan.input_len();
+        let output_len = plan.output_len();
+        if output_len == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "CZT lengths input={input_len}, output={output_len} must be greater than zero"
+                ),
+            });
+        }
+        let a_norm = plan.a().norm();
+        let w_norm = plan.w().norm();
+        if !a_norm.is_finite() || !w_norm.is_finite() || a_norm == 0.0 || w_norm == 0.0 {
+            return Err(WgpuError::InvalidPlan {
+                message: "CZT spiral parameters must have finite non-zero magnitude".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for CztGpuKernel {
+    type Sample = Complex32;
+    type Bin = Complex32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &ChirpPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_forward_into(device, plan, input, output)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &ChirpPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        // The adjoint inverse is defined on square plans only.
+        if plan.input_len() != plan.output_len() {
+            return Err(WgpuError::LengthMismatch {
+                expected: plan.input_len(),
+                actual: plan.output_len(),
+            });
+        }
+        Self::execute_inverse_into(device, plan, input, output)
+    }
+}
 
 impl CztGpuKernel {
     /// Execute the direct forward CZT into caller-owned output storage.
     pub(super) fn execute_forward_into<D>(
         device: &D,
-        plan: &CztWgpuPlan,
+        plan: &ChirpPlan,
         input: &[Complex32],
         output: &mut [Complex32],
     ) -> WgpuResult<()>
@@ -103,7 +216,7 @@ impl CztGpuKernel {
     /// Execute the square-plan adjoint inverse CZT into caller-owned output storage.
     pub(super) fn execute_inverse_into<D>(
         device: &D,
-        plan: &CztWgpuPlan,
+        plan: &ChirpPlan,
         spectrum: &[Complex32],
         output: &mut [Complex32],
     ) -> WgpuResult<()>
@@ -116,7 +229,7 @@ impl CztGpuKernel {
 
     fn execute<D, M>(
         device: &D,
-        plan: &CztWgpuPlan,
+        plan: &ChirpPlan,
         input: &[Complex32],
         output: &mut [Complex32],
     ) -> WgpuResult<()>
