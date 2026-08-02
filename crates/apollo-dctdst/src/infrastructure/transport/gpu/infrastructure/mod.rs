@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for DCT/DST WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// DCT compute kernel orchestration.
+/// Hephaestus kernel definitions for the DCT/DST passes.
 pub mod kernel;
