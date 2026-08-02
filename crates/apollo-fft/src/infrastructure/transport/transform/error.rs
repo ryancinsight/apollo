@@ -33,6 +33,13 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A multi-dimensional operand does not match the plan's shape.
+    #[error("shape mismatch: {message}")]
+    ShapeMismatch {
+        /// Failure explanation naming the expected and offending shapes.
+        message: String,
+    },
+
     /// Input or output length does not match the plan.
     #[error("length mismatch: expected {expected}, got {actual}")]
     LengthMismatch {

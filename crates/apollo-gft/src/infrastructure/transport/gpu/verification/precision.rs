@@ -5,6 +5,7 @@ use apollo_fft::{f16, PrecisionProfile};
 use crate::infrastructure::transport::gpu::{GftWgpuPlan, WgpuError};
 
 use super::support::{backend, path4_plan_and_basis};
+use crate::infrastructure::transport::gpu::BasisTransform;
 
 #[test]
 fn typed_path_rejects_profile_mismatch_when_device_exists() {

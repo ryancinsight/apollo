@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for GFT WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// GPU kernel state for the GFT transform.
+/// Hephaestus kernel definitions for the GFT pass.
 pub mod kernel;

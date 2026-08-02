@@ -1,6 +1,7 @@
 //! Value-semantic GFT GPU inverse and reconstruction contracts.
 
 use super::support::{backend, path4_plan_and_basis, PATH4_F32_DOT_ABS_TOLERANCE};
+use crate::infrastructure::transport::gpu::BasisTransform;
 
 #[test]
 fn inverse_matches_cpu_reference_when_device_exists() {

@@ -13,7 +13,7 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformPlanner, WgpuError, WgpuResult};
 
 const WORKGROUP_SIZE: usize = 64;
 const GFT_SOURCE: &str = include_str!("shaders/gft.wgsl");
@@ -76,7 +76,15 @@ impl KernelSource<Wgsl> for GftKernel {
 
 /// Zero-sized graph Fourier kernel orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct GftGpuKernel;
+pub struct GftGpuKernel;
+
+impl GpuTransformPlanner for GftGpuKernel {
+    type Plan = usize;
+
+    fn input_len(plan: &usize) -> usize {
+        *plan
+    }
+}
 
 impl GftGpuKernel {
     /// Execute one GFT dispatch on the GPU.
