@@ -7,6 +7,7 @@ use super::support::{
     assert_complex32_close, assert_cpu_differential, backend, cpu_input,
     STANDARD_IDENTITY_TOLERANCE, STANDARD_ROUNDTRIP_TOLERANCE,
 };
+use crate::infrastructure::transport::gpu::OrderPlan;
 
 #[test]
 fn forward_at_order_zero_is_identity() {
@@ -16,7 +17,7 @@ fn forward_at_order_zero_is_identity() {
     let input = (0..8)
         .map(|index| Complex32::new(index as f32 * 0.1_f32, -(index as f32) * 0.05_f32))
         .collect::<Vec<_>>();
-    let plan = FrftWgpuPlan::new(input.len(), 0.0_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), 0.0_f32));
     let output = backend
         .execute_forward(&plan, &input)
         .expect("forward order 0");
@@ -41,7 +42,7 @@ fn forward_matches_cpu_frft_for_existing_orders() {
         .collect::<Vec<_>>();
 
     for (input, order) in [(&order_one_input, 1.0_f32), (&general_order_input, 0.5_f32)] {
-        let plan = FrftWgpuPlan::new(input.len(), order);
+        let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), order));
         let actual = backend.execute_forward(&plan, input).expect("GPU forward");
         let expected = crate::frft(&cpu_input(input), order as f64).expect("CPU FrFT");
         assert_cpu_differential(&actual, expected.as_slice().expect("contiguous CPU output"));
@@ -61,7 +62,7 @@ fn leto_forward_and_inverse_match_slice_execution() {
             )
         })
         .collect::<Vec<_>>();
-    let plan = FrftWgpuPlan::new(input.len(), 0.5_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), 0.5_f32));
     let expected_forward = backend
         .execute_forward(&plan, &input)
         .expect("slice forward");
@@ -107,7 +108,7 @@ fn strided_leto_forward_matches_logical_slice() {
         .copied()
         .flat_map(|value| [value, sentinel])
         .collect::<Vec<_>>();
-    let plan = FrftWgpuPlan::new(logical.len(), 0.5_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(logical.len(), 0.5_f32));
     let expected = backend
         .execute_forward(&plan, &logical)
         .expect("slice forward");
@@ -134,7 +135,7 @@ fn inverse_recovers_input() {
             )
         })
         .collect::<Vec<_>>();
-    let plan = FrftWgpuPlan::new(input.len(), 1.0_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), 1.0_f32));
     let spectrum = backend
         .execute_forward(&plan, &input)
         .expect("forward for roundtrip");

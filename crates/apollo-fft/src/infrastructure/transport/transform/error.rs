@@ -33,6 +33,13 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A plan parameter that must be finite is NaN or infinite.
+    #[error("parameter {parameter} must be finite")]
+    NonFiniteParameter {
+        /// Name of the offending parameter.
+        parameter: &'static str,
+    },
+
     /// A multi-dimensional operand does not match the plan's shape.
     #[error("shape mismatch: {message}")]
     ShapeMismatch {

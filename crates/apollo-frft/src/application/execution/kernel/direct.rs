@@ -7,6 +7,10 @@ use std::f64::consts::PI;
 const FRFT_PAR_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static DIRECT_WEIGHT_LANE_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
 }
 
