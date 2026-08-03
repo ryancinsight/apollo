@@ -7,7 +7,7 @@ use crate::infrastructure::kernel::direct::{
     adjoint_backproject, adjoint_backproject_into, forward_project, forward_project_into,
 };
 use crate::infrastructure::kernel::filter::ramp_filter_projection_into;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use leto::Array2;
 
 /// Reusable 2D parallel-beam Radon plan.
@@ -101,7 +101,7 @@ impl RadonPlan {
         let image = array2_from_leto_view(image);
         let mut output = Array2::<T>::from_elem(
             [self.geometry.angle_count(), self.geometry.detector_count()],
-            T::from_f64(0.0),
+            T::from_cpu(0.0),
         );
         self.forward_typed_into(&image, &mut output, profile)?;
         apollo_leto_interop::try_dense_from_array(&output).ok_or(RadonError::ImageShapeMismatch)
@@ -160,7 +160,7 @@ impl RadonPlan {
         let sinogram = array2_from_leto_view(sinogram);
         let mut output = Array2::<T>::from_elem(
             [self.geometry.rows(), self.geometry.cols()],
-            T::from_f64(0.0),
+            T::from_cpu(0.0),
         );
         self.backproject_typed_into(&sinogram, &mut output, profile)?;
         apollo_leto_interop::try_dense_from_array(&output).ok_or(RadonError::ImageShapeMismatch)
@@ -229,30 +229,7 @@ impl RadonPlan {
 }
 
 /// Real storage accepted by typed Radon forward and adjoint paths.
-pub trait RadonStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `f64` arithmetic path.
-    fn to_f64(self) -> f64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_f64(value: f64) -> Self;
-
-    /// View slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait RadonStorage: CpuStorage {
     /// Execute forward projection into caller-owned typed storage.
     fn forward_into(
         plan: &RadonPlan,
@@ -267,7 +244,7 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         if output.shape() != [plan.geometry.angle_count(), plan.geometry.detector_count()] {
             return Err(RadonError::SinogramShapeMismatch);
         }
-        let input64 = image.mapv(Self::to_f64);
+        let input64 = image.mapv(CpuStorage::to_cpu);
         let mut output64 =
             Array2::zeros([plan.geometry.angle_count(), plan.geometry.detector_count()]);
         plan.forward_into(&input64, &mut output64)?;
@@ -277,7 +254,7 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
             .iter_mut()
             .zip(output64.iter().copied())
         {
-            *slot = Self::from_f64(value);
+            *slot = Self::from_cpu(value);
         }
         Ok(())
     }
@@ -296,7 +273,7 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
         if output.shape() != [plan.geometry.rows(), plan.geometry.cols()] {
             return Err(RadonError::ImageShapeMismatch);
         }
-        let sinogram64 = sinogram.mapv(Self::to_f64);
+        let sinogram64 = sinogram.mapv(CpuStorage::to_cpu);
         let mut output64 = Array2::zeros([plan.geometry.rows(), plan.geometry.cols()]);
         let owner_sinogram = Sinogram::new(sinogram64);
         plan.backproject_into(&owner_sinogram, &mut output64)?;
@@ -306,23 +283,13 @@ pub trait RadonStorage: Copy + Send + Sync + 'static {
             .iter_mut()
             .zip(output64.iter().copied())
         {
-            *slot = Self::from_f64(value);
+            *slot = Self::from_cpu(value);
         }
         Ok(())
     }
 }
 
 impl RadonStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value
-    }
-
     fn forward_into(
         plan: &RadonPlan,
         image: &Array2<Self>,
@@ -351,39 +318,9 @@ impl RadonStorage for f64 {
     }
 }
 
-impl RadonStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl RadonStorage for f32 {}
 
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as f32
-    }
-
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
-
-impl RadonStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-
-    fn from_f64(value: f64) -> Self {
-        f16::from_f32(value as f32)
-    }
-}
+impl RadonStorage for f16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> RadonResult<()> {
     if actual.matches_storage_and_compute(expected) {

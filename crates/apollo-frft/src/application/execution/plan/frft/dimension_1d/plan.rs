@@ -102,7 +102,7 @@ impl FrftPlan {
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
         let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.n];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
@@ -178,7 +178,7 @@ impl FrftPlan {
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FrftError> {
         let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.n];
         T::inverse_slice_into(self, &signal, &mut output, profile)?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(

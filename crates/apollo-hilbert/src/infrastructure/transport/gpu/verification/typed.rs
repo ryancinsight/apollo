@@ -1,6 +1,6 @@
 //! Value-semantic Hilbert GPU represented-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use leto::Storage;
 
 use super::support::backend;
@@ -12,7 +12,7 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
     };
     let represented = [1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
-    let represented_input: Vec<f32> = input.iter().map(|value| value.to_f64() as f32).collect();
+    let represented_input: Vec<f32> = input.iter().map(|value| value.to_cpu() as f32).collect();
     let plan = backend.plan(input.len());
     let expected = backend
         .execute_forward(&plan, &represented_input)

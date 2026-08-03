@@ -7,7 +7,7 @@
 use crate::domain::contracts::error::{GftError, GftResult};
 use crate::domain::graph::adjacency::GraphAdjacency;
 use crate::infrastructure::kernel::laplacian::spectral_basis;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use leto::Array1;
 use leto::ArrayView2;
 use mnemosyne::scratch::ScratchPool;
@@ -242,30 +242,7 @@ fn fill_inverse_basis_row(row: &mut [f64], basis: &[f64], n: usize, i: usize) {
 }
 
 /// Real storage accepted by typed GFT paths.
-pub trait GftStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `f64` arithmetic path.
-    fn to_f64(self) -> f64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_f64(value: f64) -> Self;
-
-    /// View slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait GftStorage: CpuStorage {
     /// Execute forward transform into caller-owned storage.
     fn forward_into(
         plan: &GftPlan,
@@ -279,7 +256,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
         }
         with_f64_workspaces(plan.n, |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(signal.iter().copied()) {
-                *slot = Self::to_f64(value);
+                *slot = value.to_cpu();
             }
             plan.forward_f64_slice_into(input64, output64)?;
             for (slot, value) in output
@@ -288,7 +265,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 .iter_mut()
                 .zip(output64.iter().copied())
             {
-                *slot = Self::from_f64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -307,7 +284,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
         }
         with_f64_workspaces(plan.n, |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(spectrum.iter().copied()) {
-                *slot = Self::to_f64(value);
+                *slot = value.to_cpu();
             }
             plan.inverse_f64_slice_into(input64, output64)?;
             for (slot, value) in output
@@ -316,7 +293,7 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
                 .iter_mut()
                 .zip(output64.iter().copied())
             {
-                *slot = Self::from_f64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -324,16 +301,6 @@ pub trait GftStorage: Copy + Send + Sync + 'static {
 }
 
 impl GftStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value
-    }
-
     fn forward_into(
         plan: &GftPlan,
         signal: &Array1<Self>,
@@ -355,39 +322,9 @@ impl GftStorage for f64 {
     }
 }
 
-impl GftStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl GftStorage for f32 {}
 
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as f32
-    }
-
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
-
-impl GftStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-
-    fn from_f64(value: f64) -> Self {
-        f16::from_f32(value as f32)
-    }
-}
+impl GftStorage for f16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> GftResult<()> {
     if actual.matches_storage_and_compute(expected) {

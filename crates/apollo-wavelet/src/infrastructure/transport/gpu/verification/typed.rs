@@ -11,10 +11,10 @@ fn typed_mixed_storage_matches_represented_f32_execution_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    use apollo_fft::{f16, PrecisionProfile};
+    use apollo_fft::{f16, CpuStorage, PrecisionProfile};
     let represented = [1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
-    let represented_input: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
+    let represented_input: Vec<f32> = input.iter().map(|v| v.to_cpu() as f32).collect();
     let plan = WaveletWgpuPlan::new(HaarDwtPlan {
         len: input.len(),
         levels: 3,

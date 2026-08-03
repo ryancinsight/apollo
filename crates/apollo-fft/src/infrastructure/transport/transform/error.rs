@@ -33,6 +33,13 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A value-domain specification (resampling bounds) is invalid.
+    #[error("invalid signal domain: {message}")]
+    InvalidSignalDomain {
+        /// Failure explanation naming the offending bounds.
+        message: String,
+    },
+
     /// A framed operation received fewer samples than one frame.
     #[error("input too short: need at least {min} samples, got {actual}")]
     InputTooShort {

@@ -5,7 +5,7 @@ use crate::domain::metadata::scale::MellinScaleConfig;
 use crate::infrastructure::kernel::resample::{
     calculate_log_resample, log_frequency_spectrum, mellin_moment,
 };
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;
 /// Dense Mellin log-frequency spectrum.
 #[derive(Debug, Clone, PartialEq)]
@@ -123,7 +123,7 @@ impl MellinPlan {
         profile: PrecisionProfile,
     ) -> MellinResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&signal);
-        let mut output = vec![T::from_f64(0.0); self.config.samples()];
+        let mut output = vec![T::from_cpu(0.0); self.config.samples()];
         self.forward_resample_typed_into(&signal, signal_min, signal_max, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(&output).ok_or(MellinError::LengthMismatch)
     }
@@ -328,16 +328,7 @@ impl MellinPlan {
 }
 
 /// Real storage accepted by typed Mellin input and log-resample output paths.
-pub trait MellinStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `f64` arithmetic path.
-    fn to_f64(self) -> f64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_f64(value: f64) -> Self;
-
+pub trait MellinStorage: CpuStorage {
     /// Resample typed input into caller-owned typed output.
     fn forward_resample_into(
         plan: &MellinPlan,
@@ -350,11 +341,11 @@ pub trait MellinStorage: Copy + Send + Sync + 'static {
         validate_profile(profile, Self::PROFILE)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
         validate_output_len(output.len(), plan.config.samples())?;
-        let input64: Vec<f64> = signal.iter().copied().map(Self::to_f64).collect();
+        let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         let mut output64 = vec![0.0_f64; plan.config.samples()];
         plan.forward_resample(&input64, signal_min, signal_max, &mut output64)?;
         for (slot, value) in output.iter_mut().zip(output64.into_iter()) {
-            *slot = Self::from_f64(value);
+            *slot = Self::from_cpu(value);
         }
         Ok(())
     }
@@ -370,7 +361,7 @@ pub trait MellinStorage: Copy + Send + Sync + 'static {
     ) -> MellinResult<f64> {
         validate_profile(profile, Self::PROFILE)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
-        let input64: Vec<f64> = signal.iter().copied().map(Self::to_f64).collect();
+        let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.moment(&input64, signal_min, signal_max, exponent)
     }
 
@@ -384,22 +375,12 @@ pub trait MellinStorage: Copy + Send + Sync + 'static {
     ) -> MellinResult<MellinSpectrum> {
         validate_profile(profile, Self::PROFILE)?;
         validate_signal_domain_typed(signal, signal_min, signal_max)?;
-        let input64: Vec<f64> = signal.iter().copied().map(Self::to_f64).collect();
+        let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         plan.forward_spectrum(&input64, signal_min, signal_max)
     }
 }
 
 impl MellinStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value
-    }
-
     fn forward_resample_into(
         plan: &MellinPlan,
         signal: &[Self],
@@ -436,29 +417,9 @@ impl MellinStorage for f64 {
     }
 }
 
-impl MellinStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl MellinStorage for f32 {}
 
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as f32
-    }
-}
-
-impl MellinStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-
-    fn from_f64(value: f64) -> Self {
-        f16::from_f32(value as f32)
-    }
-}
+impl MellinStorage for f16 {}
 
 mod gpu_storage_sealed {
     pub trait Sealed {}

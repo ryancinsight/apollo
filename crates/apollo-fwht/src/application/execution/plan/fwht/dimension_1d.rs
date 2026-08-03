@@ -101,7 +101,7 @@ impl FwhtPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
-        let mut output = vec![T::from_f64(0.0); self.n];
+        let mut output = vec![T::from_cpu(0.0); self.n];
         self.forward_leto_typed_into(
             input,
             leto::ArrayViewMut1::new(
@@ -215,7 +215,7 @@ impl FwhtPlan {
         input: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> Result<leto::Array<T, leto::MnemosyneStorage<T>, 1>, FwhtError> {
-        let mut output = vec![T::from_f64(0.0); self.n];
+        let mut output = vec![T::from_cpu(0.0); self.n];
         self.inverse_leto_typed_into(
             input,
             leto::ArrayViewMut1::new(
@@ -418,7 +418,7 @@ impl FwhtPlan {
             return transform(self, &signal, output_slice);
         }
 
-        let mut logical = vec![T::from_f64(0.0); self.n];
+        let mut logical = vec![T::from_cpu(0.0); self.n];
         transform(self, &signal, &mut logical)?;
         for (index, value) in logical.into_iter().enumerate() {
             *output

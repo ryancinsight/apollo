@@ -116,7 +116,7 @@ impl CwtPlan {
             return Err(WaveletError::EmptySignal);
         }
         let signal = apollo_leto_interop::view_cow(&signal);
-        let mut output = Array2::<T>::from_elem([self.scales.len(), self.len], T::from_f64(0.0));
+        let mut output = Array2::<T>::from_elem([self.scales.len(), self.len], T::from_cpu(0.0));
         self.transform_typed_into(signal.as_ref(), &mut output, profile)?;
         apollo_leto_interop::try_dense_from_array(&output)
             .ok_or(WaveletError::CoefficientShapeMismatch)

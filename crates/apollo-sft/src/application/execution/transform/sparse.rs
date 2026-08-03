@@ -57,7 +57,7 @@
 
 use crate::domain::plan::config::SparseFftConfig;
 use crate::domain::spectrum::sparse::SparseSpectrum;
-use apollo_fft::{f16, ApolloError, ApolloResult, PrecisionProfile};
+use apollo_fft::{f16, ApolloError, ApolloResult, CpuStorage, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use moirai::ParallelSliceMut;
@@ -360,7 +360,7 @@ impl SparseFftPlan {
         profile: PrecisionProfile,
     ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let values = apollo_leto_interop::view_cow(&values);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
         self.inverse_typed_into(frequencies, &values, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| {
             ApolloError::validation(
@@ -373,30 +373,7 @@ impl SparseFftPlan {
 }
 
 /// Complex storage accepted by typed SFT paths.
-pub trait SparseComplexStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage value into owner `Complex64` arithmetic.
-    fn to_complex64(self) -> Complex64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
-    /// View slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait SparseComplexStorage: CpuStorage<Complex64> {
     /// Execute typed forward sparse transform.
     fn forward_into(
         plan: &SparseFftPlan,
@@ -447,7 +424,7 @@ pub trait SparseComplexStorage: Copy + Send + Sync + 'static {
         }
         let mut spectrum = SparseSpectrum::new(plan.len());
         for (&frequency, &value) in frequencies.iter().zip(values.iter()) {
-            spectrum.insert(frequency, value.to_complex64())?;
+            spectrum.insert(frequency, value.to_cpu())?;
         }
         let owner_values = plan.inverse(&spectrum)?;
         write_storage_from_owner_values(output, &owner_values);
@@ -456,16 +433,6 @@ pub trait SparseComplexStorage: Copy + Send + Sync + 'static {
 }
 
 impl SparseComplexStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_complex64(self) -> Complex64 {
-        self
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-
     fn forward_into(
         plan: &SparseFftPlan,
         signal: &[Self],
@@ -513,42 +480,9 @@ impl SparseComplexStorage for Complex64 {
     }
 }
 
-impl SparseComplexStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl SparseComplexStorage for Complex32 {}
 
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self.re), f64::from(self.im))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
-}
-
-impl SparseComplexStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
-}
+impl SparseComplexStorage for [f16; 2] {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> ApolloResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -568,10 +502,10 @@ fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> Apo
 fn owner_values_from_storage<T: SparseComplexStorage>(values: &[T]) -> Vec<Complex64> {
     if values.len() >= STORAGE_PAR_LEN_THRESHOLD {
         moirai::map_collect_index_with::<moirai::Adaptive, _, _>(values.len(), |index| {
-            values[index].to_complex64()
+            values[index].to_cpu()
         })
     } else {
-        values.iter().copied().map(T::to_complex64).collect()
+        values.iter().copied().map(CpuStorage::to_cpu).collect()
     }
 }
 
@@ -582,11 +516,11 @@ fn extend_storage_from_owner_values<T: SparseComplexStorage>(
     if values.len() >= STORAGE_PAR_LEN_THRESHOLD {
         let converted =
             moirai::map_collect_index_with::<moirai::Adaptive, _, _>(values.len(), |index| {
-                T::from_complex64(values[index])
+                T::from_cpu(values[index])
             });
         output.extend(converted);
     } else {
-        output.extend(values.iter().copied().map(T::from_complex64));
+        output.extend(values.iter().copied().map(T::from_cpu));
     }
 }
 
@@ -597,11 +531,11 @@ fn write_storage_from_owner_values<T: SparseComplexStorage>(
     debug_assert_eq!(output.len(), values.len());
     if output.len() >= STORAGE_PAR_LEN_THRESHOLD {
         output.par_mut().enumerate(|index, slot| {
-            *slot = T::from_complex64(values[index]);
+            *slot = T::from_cpu(values[index]);
         });
     } else {
         for (slot, value) in output.iter_mut().zip(values.iter().copied()) {
-            *slot = T::from_complex64(value);
+            *slot = T::from_cpu(value);
         }
     }
 }
@@ -685,11 +619,8 @@ mod tests {
             .iter()
             .map(|value| Complex32::new(value.re as f32, value.im as f32))
             .collect();
-        let represented32: Vec<Complex64> = signal32
-            .iter()
-            .copied()
-            .map(Complex32::to_complex64)
-            .collect();
+        let represented32: Vec<Complex64> =
+            signal32.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected32 = plan
             .forward(&represented32)
             .expect("represented f32 forward");
@@ -730,11 +661,8 @@ mod tests {
                 ]
             })
             .collect();
-        let represented16: Vec<Complex64> = signal16
-            .iter()
-            .copied()
-            .map(<[f16; 2]>::to_complex64)
-            .collect();
+        let represented16: Vec<Complex64> =
+            signal16.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected16 = plan
             .forward(&represented16)
             .expect("represented f16 forward");
