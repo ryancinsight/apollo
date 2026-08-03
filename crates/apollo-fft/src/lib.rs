@@ -61,6 +61,7 @@ pub use domain::metadata::precision::{
     BackendKind, ComputePrecision, Normalization, PrecisionMode, PrecisionProfile, StoragePrecision,
 };
 pub use domain::metadata::shape::{HalfSpectrum3D, Shape1D, Shape2D, Shape3D};
+pub use domain::storage::scalar::{CpuElement, CpuStorage};
 pub use half::f16;
 pub use infrastructure::transport::cpu::CpuBackend;
 #[cfg(feature = "wgpu")]

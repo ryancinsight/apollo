@@ -10,29 +10,10 @@
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
 use crate::infrastructure::kernel::dense::{qft_forward_dense_into, qft_inverse_dense_into};
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuElement, CpuStorage, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
-use mnemosyne::scratch::ScratchPool;
 use serde::{Deserialize, Serialize};
-thread_local! {
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
-        )
-    )]
-    static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
-        )
-    )]
-    static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-}
 
 /// Reusable QFT plan with precomputed twiddle factors.
 ///
@@ -145,7 +126,7 @@ impl QftPlan {
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
         T::forward_slice_into(self, &signal, &mut output, profile)?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
@@ -227,7 +208,7 @@ impl QftPlan {
         profile: PrecisionProfile,
     ) -> QftResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&input);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.len()];
         T::inverse_slice_into(self, &signal, &mut output, profile)?;
         Ok(
             leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec(
@@ -254,30 +235,11 @@ impl QftPlan {
 }
 
 /// Complex storage accepted by typed QFT paths.
-pub trait QftStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `Complex64` arithmetic path.
-    fn to_complex64(self) -> Complex64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
-    /// View slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        let _ = slice;
-        None
-    }
-
+///
+/// The conversion ladder and precision profile come from the shared
+/// [`CpuStorage`] vocabulary; this trait adds only the plan-coupled
+/// dispatch.
+pub trait QftStorage: CpuStorage<Complex64> {
     /// Execute forward transform into caller-owned contiguous storage.
     fn forward_slice_into(
         plan: &QftPlan,
@@ -287,13 +249,13 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
     ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
         validate_lengths(plan, input.len(), output.len())?;
-        with_complex64_workspaces(plan.len(), |input64, output64| {
+        Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
-                *slot = Self::to_complex64(value);
+                *slot = value.to_cpu();
             }
             plan.forward_complex64_slice_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_complex64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -325,13 +287,13 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
     ) -> QftResult<()> {
         validate_profile(profile, Self::PROFILE)?;
         validate_lengths(plan, input.len(), output.len())?;
-        with_complex64_workspaces(plan.len(), |input64, output64| {
+        Complex64::with_scratch(plan.len(), plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
-                *slot = Self::to_complex64(value);
+                *slot = value.to_cpu();
             }
             plan.inverse_complex64_slice_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_complex64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -356,16 +318,6 @@ pub trait QftStorage: Copy + Send + Sync + 'static {
 }
 
 impl QftStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_complex64(self) -> Complex64 {
-        self
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-
     fn forward_slice_into(
         plan: &QftPlan,
         input: &[Self],
@@ -387,42 +339,9 @@ impl QftStorage for Complex64 {
     }
 }
 
-impl QftStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl QftStorage for Complex32 {}
 
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self.re), f64::from(self.im))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
-}
-
-impl QftStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
-}
+impl QftStorage for [f16; 2] {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> QftResult<()> {
     if actual.matches_storage_and_compute(expected) {
@@ -438,27 +357,6 @@ fn validate_lengths(plan: &QftPlan, input: usize, output: usize) -> QftResult<()
     } else {
         Err(QftError::LengthMismatch)
     }
-}
-
-fn with_complex64_workspaces<R>(
-    n: usize,
-    f: impl FnOnce(&mut [Complex64], &mut [Complex64]) -> R,
-) -> R {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        input_scratch.with_scratch(n, |input64| {
-            TYPED_OUTPUT64_SCRATCH.with(|output_scratch| {
-                output_scratch.with_scratch(n, |output64| f(input64, output64))
-            })
-        })
-    })
-}
-
-#[cfg(test)]
-pub(crate) fn typed_scratch_capacities() -> (usize, usize) {
-    TYPED_INPUT64_SCRATCH.with(|input_scratch| {
-        TYPED_OUTPUT64_SCRATCH
-            .with(|output_scratch| (input_scratch.capacity(), output_scratch.capacity()))
-    })
 }
 
 /// Convenience wrapper for forward QFT.
@@ -667,9 +565,8 @@ mod tests {
         }
 
         let input32 = input.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-        let represented32 = Array1::from(
-            (input32.iter().copied().map(QftStorage::to_complex64)).collect::<Vec<_>>(),
-        );
+        let represented32 =
+            Array1::from((input32.iter().copied().map(CpuStorage::to_cpu)).collect::<Vec<_>>());
         let expected32 = plan
             .forward(&represented32)
             .expect("represented f32 forward");
@@ -687,9 +584,8 @@ mod tests {
                 f16::from_f32(value.im as f32),
             ]
         });
-        let represented16 = Array1::from(
-            (input16.iter().copied().map(QftStorage::to_complex64)).collect::<Vec<_>>(),
-        );
+        let represented16 =
+            Array1::from((input16.iter().copied().map(CpuStorage::to_cpu)).collect::<Vec<_>>());
         let expected16 = plan
             .forward(&represented16)
             .expect("represented f16 forward");
@@ -735,7 +631,7 @@ mod tests {
             PrecisionProfile::LOW_PRECISION_F32,
         )
         .expect("first typed complex32 forward");
-        let forward_caps = typed_scratch_capacities();
+        let forward_caps = Complex64::scratch_capacities();
         plan.forward_typed_into(
             &input,
             &mut second_spectrum,
@@ -743,7 +639,7 @@ mod tests {
         )
         .expect("second typed complex32 forward");
 
-        assert_eq!(typed_scratch_capacities(), forward_caps);
+        assert_eq!(Complex64::scratch_capacities(), forward_caps);
         assert!(forward_caps.0 >= plan.len());
         assert!(forward_caps.1 >= plan.len());
         for (actual, expected) in second_spectrum.iter().zip(first_spectrum.iter()) {
@@ -757,7 +653,7 @@ mod tests {
             PrecisionProfile::LOW_PRECISION_F32,
         )
         .expect("first typed complex32 inverse");
-        let inverse_caps = typed_scratch_capacities();
+        let inverse_caps = Complex64::scratch_capacities();
         plan.inverse_typed_into(
             &first_spectrum,
             &mut second_recovered,
@@ -765,7 +661,7 @@ mod tests {
         )
         .expect("second typed complex32 inverse");
 
-        assert_eq!(typed_scratch_capacities(), inverse_caps);
+        assert_eq!(Complex64::scratch_capacities(), inverse_caps);
         assert!(inverse_caps.0 >= plan.len());
         assert!(inverse_caps.1 >= plan.len());
         for ((actual, expected), original) in second_recovered

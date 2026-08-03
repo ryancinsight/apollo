@@ -73,6 +73,22 @@ them to the shared scaffold.
 `mod helpers`/`mod utils` junk drawers in an adopting crate are removed
 in that crate's adoption increment (atlas ADR 0039 §5).
 
+## Revision 2026-08-02: CPU-tier storage vocabulary
+
+The GPU-tier `GpuElement`/`GpuStorage` design extends one precision
+tier up: `CpuElement` (`f64`, `Complex64`, with per-element scratch
+pools and a capacity observer for reuse tests) and
+`CpuStorage<E: CpuElement = f64>` live in apollo-fft's domain storage
+module, un-gated, so the fourteen per-crate CPU conversion ladders
+(`to_f64`/`from_f64`, `to_complex64`/`from_complex64`, private profile
+consts, private `f64`/`Complex64` pools) consolidate the same way the
+GPU copies did. Transform crates keep their plan-coupled dispatch
+traits and bound them on the shared vocabulary (`HartleyStorage:
+CpuStorage`, `QftStorage: CpuStorage<Complex64>`); dead reinterpret
+views left over from the pre-adoption GPU paths are deleted rather
+than migrated. Delivered with dht (real) and qft (complex) as the
+proving pair under ATLAS-SUBSTRATE-005.
+
 ## Exemptions
 
 - **apollo-nufft** (revision 2026-08-02): exempted after fifteen
