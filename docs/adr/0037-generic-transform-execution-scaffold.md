@@ -89,6 +89,22 @@ views left over from the pre-adoption GPU paths are deleted rather
 than migrated. Delivered with dht (real) and qft (complex) as the
 proving pair under ATLAS-SUBSTRATE-005.
 
+### Completion 2026-08-02
+
+All fourteen crates share the vocabulary; zero conversion ladders
+remain in the workspace. Three shapes emerged. Crates whose storage
+traits carry plan-coupled dispatch keep them and gain `CpuStorage` as
+a supertrait (dht, qft, sht, and the ten batch migrations). Crates
+whose traits were pure conversion vocabulary lose them entirely, with
+the bound applied directly at the call sites — sdft's two and stft's
+four traits fell here, their apparent multiplicity being one direction
+of one element each, which the shared trait already carries together.
+apollo-nufft keeps a view-only trait: its `Complex32`/`Complex64`
+reinterpret views let the device helpers skip a copy when the host
+layout already matches an accelerator element, and the shared
+vocabulary deliberately models conversions but no views. Dead views
+elsewhere — left over from the pre-adoption GPU paths — are deleted.
+
 ## Exemptions
 
 - **apollo-nufft** (revision 2026-08-02): exempted after fifteen
