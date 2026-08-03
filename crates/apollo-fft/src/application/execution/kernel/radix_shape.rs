@@ -20,10 +20,9 @@
 
 #![allow(clippy::same_item_push)]
 
-// ── Shared math helpers ────────────────────────────────────────────────────
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../apollo-fft-macros/src/shared_math.rs"
+    "/src/application/numeric/integer_math.rs"
 ));
 
 /// Factorize `n` into a prime radix sequence for the mixed-radix Cooley-Tukey

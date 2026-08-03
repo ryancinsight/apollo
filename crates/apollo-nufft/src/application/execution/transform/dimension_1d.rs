@@ -33,6 +33,13 @@
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
 
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;

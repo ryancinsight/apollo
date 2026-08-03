@@ -1,6 +1,6 @@
 //! Value-semantic Hilbert GPU represented-storage contracts.
 
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use leto::Storage;
 
 use super::support::backend;
@@ -12,7 +12,7 @@ fn typed_mixed_storage_matches_represented_execution_when_device_exists() {
     };
     let represented = [1.0_f32, -2.0, 0.5, 2.25, -4.0, 1.5, 0.0, -0.75];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
-    let represented_input: Vec<f32> = input.iter().map(|value| value.to_f64() as f32).collect();
+    let represented_input: Vec<f32> = input.iter().map(|value| value.to_cpu() as f32).collect();
     let plan = backend.plan(input.len());
     let expected = backend
         .execute_forward(&plan, &represented_input)
@@ -51,7 +51,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         .expect("typed forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto typed input");
     let actual_forward = backend
-        .execute_forward_leto_typed::<f16>(
+        .execute_forward_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -74,7 +74,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     let leto_quadrature = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("Leto typed quadrature");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<f16>(
+        .execute_inverse_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_quadrature.view(),

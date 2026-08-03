@@ -2,41 +2,32 @@
 
 use crate::application::execution::plan::frft::dimension_1d::FrftPlan;
 use crate::domain::contracts::error::FrftError;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
+    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
+    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
 /// Complex storage accepted by typed FrFT paths.
-pub trait FrftStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile for this storage type.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `Complex64` arithmetic path.
-    fn to_complex64(self) -> Complex64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
-    /// View slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait FrftStorage: CpuStorage<Complex64> {
     /// Execute forward transform into caller-owned contiguous storage.
     fn forward_slice_into(
         plan: &FrftPlan,
@@ -48,11 +39,11 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
-                *slot = Self::to_complex64(value);
+                *slot = value.to_cpu();
             }
             plan.forward_complex64_slice_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_complex64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -84,11 +75,11 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
         validate_lengths(plan, input.len(), output.len())?;
         with_complex64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
-                *slot = Self::to_complex64(value);
+                *slot = value.to_cpu();
             }
             plan.inverse_complex64_slice_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_complex64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -111,16 +102,6 @@ pub trait FrftStorage: Copy + Send + Sync + 'static {
 }
 
 impl FrftStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_complex64(self) -> Complex64 {
-        self
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-
     fn forward_slice_into(
         plan: &FrftPlan,
         input: &[Self],
@@ -162,91 +143,9 @@ impl FrftStorage for Complex64 {
     }
 }
 
-impl FrftStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl FrftStorage for Complex32 {}
 
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self.re), f64::from(self.im))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
-}
-
-impl FrftStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
-}
-
-mod gpu_storage_sealed {
-    pub trait Sealed {}
-
-    impl Sealed for eunomia::Complex32 {}
-    impl Sealed for [apollo_fft::f16; 2] {}
-}
-
-/// Storage admitted by the concrete `Complex32` accelerator kernels.
-///
-/// The accelerator evaluates both the direct and Candan--Gr\u00fcnbaum unitary
-/// FrFT in single-precision complex lanes. Native [`Complex32`] storage is
-/// zero-copy at the host boundary; `[f16; 2]` uses an explicit conversion
-/// workspace. [`Complex64`] is intentionally excluded so the accelerator API
-/// cannot silently narrow a high-accuracy computation.
-///
-/// ```compile_fail
-/// use apollo_frft::FrftGpuStorage;
-///
-/// fn require_gpu_storage<T: FrftGpuStorage>() {}
-/// require_gpu_storage::<eunomia::Complex64>();
-/// ```
-pub trait FrftGpuStorage: FrftStorage + gpu_storage_sealed::Sealed {
-    /// Convert host storage into the concrete accelerator representation.
-    fn to_gpu(self) -> Complex32;
-
-    /// Convert the concrete accelerator representation back into host storage.
-    fn from_gpu(value: Complex32) -> Self;
-}
-
-impl FrftGpuStorage for Complex32 {
-    fn to_gpu(self) -> Complex32 {
-        self
-    }
-
-    fn from_gpu(value: Complex32) -> Self {
-        value
-    }
-}
-
-impl FrftGpuStorage for [f16; 2] {
-    fn to_gpu(self) -> Complex32 {
-        Complex32::new(self[0].to_f32(), self[1].to_f32())
-    }
-
-    fn from_gpu(value: Complex32) -> Self {
-        [f16::from_f32(value.re), f16::from_f32(value.im)]
-    }
-}
+impl FrftStorage for [f16; 2] {}
 
 fn validate_lengths(plan: &FrftPlan, input: usize, output: usize) -> Result<(), FrftError> {
     if input != plan.len() || output != plan.len() {

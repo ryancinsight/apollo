@@ -1,6 +1,4 @@
-//! Hephaestus WGPU infrastructure.
+//! Infrastructure for Mellin WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// Mellin compute kernel orchestration.
+/// Hephaestus kernel definitions for the Mellin passes.
 pub mod kernel;

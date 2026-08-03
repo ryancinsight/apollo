@@ -11,6 +11,8 @@ description = "Number Theoretic Transform plans and utilities for Apollo"
 
 [features]
 wgpu = [
+    "dep:apollo-fft",
+    "apollo-fft/wgpu",
     "dep:hephaestus-core",
     "dep:hephaestus-wgpu",
     "dep:bytemuck"
@@ -21,6 +23,7 @@ mnemosyne-memory = ["leto/mnemosyne-alloc"]
 proptest_gpu = []
 
 [dependencies]
+apollo-fft = { version = "0.25.0", path = "../apollo-fft", default-features = false, optional = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }

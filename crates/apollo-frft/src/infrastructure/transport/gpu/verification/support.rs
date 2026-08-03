@@ -1,6 +1,6 @@
 use eunomia::{Complex32, Complex64};
 
-use crate::infrastructure::transport::gpu::FrftWgpuBackend;
+use crate::infrastructure::transport::gpu::{FrftWgpuBackend, UnitaryFrftWgpuBackend};
 
 /// Preserves the established f32 identity bound for standard FrFT execution.
 pub(super) const STANDARD_IDENTITY_TOLERANCE: f32 = 1.0e-6;
@@ -12,8 +12,16 @@ pub(super) const CPU_DIFFERENTIAL_TOLERANCE: f64 = 1.0e-3;
 pub(super) const UNITARY_VALUE_TOLERANCE: f32 = 1.0e-5;
 
 pub(super) fn backend() -> Option<FrftWgpuBackend> {
+    device().map(FrftWgpuBackend::new)
+}
+
+pub(super) fn unitary_backend() -> Option<UnitaryFrftWgpuBackend> {
+    device().map(UnitaryFrftWgpuBackend::new)
+}
+
+fn device() -> Option<hephaestus_wgpu::WgpuDevice> {
     match hephaestus_wgpu::WgpuDevice::try_default("apollo-frft-wgpu") {
-        Ok(device) => Some(FrftWgpuBackend::new(device)),
+        Ok(device) => Some(device),
         Err(hephaestus_core::HephaestusError::AdapterUnavailable { .. }) => None,
         Err(error) => panic!("FrFT GPU verification requires a working provider: {error}"),
     }

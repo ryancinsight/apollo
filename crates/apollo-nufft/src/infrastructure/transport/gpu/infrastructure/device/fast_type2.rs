@@ -5,7 +5,7 @@ use leto::Array3;
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
-use crate::infrastructure::transport::gpu::infrastructure::device::helpers::{
+use crate::infrastructure::transport::gpu::infrastructure::device::conversion::{
     array3_from_leto_view, fast_1d_metadata, fast_3d_metadata, host_array_error,
     positions3_from_leto_view, typed_to_complex32, validate_fast_1d_plan, validate_typed_profile,
     validate_usize_to_u32, write_typed_output,

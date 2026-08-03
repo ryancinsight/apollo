@@ -13,7 +13,11 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
+
+use crate::infrastructure::transport::gpu::RealTransformPlan;
+use crate::RealTransformKind;
 
 const WORKGROUP_SIZE: usize = 64;
 const DCT_SOURCE: &str = include_str!("shaders/dct.wgsl");
@@ -198,7 +202,81 @@ impl KernelSource<Wgsl> for ScaleKernel {
 
 /// Zero-sized DCT/DST kernel orchestration over a Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct DctGpuKernel;
+pub struct DctGpuKernel;
+
+impl GpuTransformPlanner for DctGpuKernel {
+    type Plan = RealTransformPlan;
+
+    fn input_len(plan: &RealTransformPlan) -> usize {
+        plan.len()
+    }
+
+    fn validate(plan: &RealTransformPlan) -> WgpuResult<()> {
+        if matches!(plan.kind(), RealTransformKind::DctI) && plan.len() < 2 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!("invalid length {}: DCT-I requires length >= 2", plan.len()),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for DctGpuKernel {
+    type Sample = f32;
+    type Bin = f32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &RealTransformPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, forward_mode(plan), 1.0)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &RealTransformPlan,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> WgpuResult<()> {
+        let (mode, scale) = inverse_mode_scale(plan);
+        Self::execute_into(device, input, output, mode, scale)
+    }
+}
+
+/// The GPU kernel mode for the plan's forward transform. The DCT-I
+/// length precondition is rejected by the planner's validate hook.
+pub(crate) fn forward_mode(plan: &RealTransformPlan) -> DctMode {
+    match plan.kind() {
+        RealTransformKind::DctI => DctMode::Dct1,
+        RealTransformKind::DctII => DctMode::Dct2,
+        RealTransformKind::DctIII => DctMode::Dct3,
+        RealTransformKind::DctIV => DctMode::Dct4,
+        RealTransformKind::DstI => DctMode::Dst1,
+        RealTransformKind::DstII => DctMode::Dst2,
+        RealTransformKind::DstIII => DctMode::Dst3,
+        RealTransformKind::DstIV => DctMode::Dst4,
+    }
+}
+
+/// The GPU kernel mode and per-axis normalization scale for the plan's
+/// inverse transform (DCT-I = 1/(2(N-1)), DCT/DST-IV = 2/N, DST-I =
+/// 1/(2(N+1)), else 2/N). A separable rank-`d` inverse applies this scale
+/// once per axis; since the scale is a scalar that commutes with the
+/// linear transform, the batched path folds it into `scale.powi(d)`.
+pub(crate) fn inverse_mode_scale(plan: &RealTransformPlan) -> (DctMode, f32) {
+    match plan.kind() {
+        RealTransformKind::DctII => (DctMode::Dct3, 2.0 / plan.len() as f32),
+        RealTransformKind::DctIII => (DctMode::Dct2, 2.0 / plan.len() as f32),
+        RealTransformKind::DstII => (DctMode::Dst3, 2.0 / plan.len() as f32),
+        RealTransformKind::DstIII => (DctMode::Dst2, 2.0 / plan.len() as f32),
+        RealTransformKind::DctI => (DctMode::Dct1, 1.0 / (2.0 * (plan.len() - 1) as f32)),
+        RealTransformKind::DctIV => (DctMode::Dct4, 2.0 / plan.len() as f32),
+        RealTransformKind::DstI => (DctMode::Dst1, 1.0 / (2.0 * (plan.len() + 1) as f32)),
+        RealTransformKind::DstIV => (DctMode::Dst4, 2.0 / plan.len() as f32),
+    }
+}
 
 impl DctGpuKernel {
     /// Execute one transform pass and optional normalization into caller storage.

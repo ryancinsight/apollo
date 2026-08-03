@@ -1,8 +1,6 @@
-//! WGPU infrastructure.
+//! Infrastructure for SHT WGPU execution.
 
-/// Host conversion, grid construction, and Leto interop.
-mod conversion;
-/// WGPU device acquisition.
-pub mod device;
-/// SHT compute kernel orchestration.
+/// Host-side conversion, validation, and quantization helpers.
+pub(crate) mod conversion;
+/// Hephaestus kernel definitions for the SHT passes.
 pub mod kernel;

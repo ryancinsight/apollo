@@ -1,3 +1,4 @@
+use apollo_fft::{WgpuError, WgpuResult};
 use eunomia::Complex32;
 use hephaestus_core::{
     Binding, ComputeDevice, DeviceBuffer, GroupedBinding, GroupedCommandStream,
@@ -10,10 +11,7 @@ use super::{
     InverseDeinterleaveKernel, InverseScaleWindowKernel, OverlapAddKernel, StftGpuKernel,
     StftParams,
 };
-use crate::infrastructure::transport::gpu::{
-    domain::error::{WgpuError, WgpuResult},
-    infrastructure::buffers::StftGpuBuffers,
-};
+use crate::infrastructure::transport::gpu::infrastructure::buffers::StftGpuBuffers;
 
 impl StftGpuKernel {
     /// Execute inverse STFT through the typed radix-2 or Bluestein pipeline.

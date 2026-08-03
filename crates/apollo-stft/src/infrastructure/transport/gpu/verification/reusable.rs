@@ -4,6 +4,7 @@ use crate::infrastructure::transport::gpu::StftWgpuPlan;
 use eunomia::Complex32;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
 
 #[test]
 fn stft_wgpu_reusable_buffers() {
@@ -19,7 +20,7 @@ fn stft_wgpu_reusable_buffers() {
         .map(|n| (2.0 * std::f32::consts::PI * 16.0 * n as f32 / FRAME_LEN as f32).sin())
         .collect();
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let frame_count = 1 + SIGNAL_LEN.div_ceil(HOP_LEN);
 
     // ── Allocating path (reference) ───────────────────────────────────────
@@ -102,12 +103,12 @@ fn stft_wgpu_non_pot_structural() {
         return;
     };
     let signal = vec![0.0f32; 24];
-    let plan = StftWgpuPlan::new(6, 3);
+    let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let output = backend
         .execute_forward(&plan, &signal)
         .expect("GPU Chirp-Z structural forward");
-    let frame_count = 1 + signal.len().div_ceil(plan.hop_len());
-    assert_eq!(output.len(), frame_count * plan.frame_len());
+    let frame_count = 1 + signal.len().div_ceil(plan.payload().hop_len());
+    assert_eq!(output.len(), frame_count * plan.payload().frame_len());
     assert_eq!(output, vec![Complex32::new(0.0, 0.0); output.len()]);
 }
 
@@ -116,19 +117,19 @@ fn stft_wgpu_make_buffers_non_pot() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = StftWgpuPlan::new(6, 3);
+    let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let signal_len = 24usize;
     let buffers = backend
         .make_buffers(&plan, signal_len)
         .expect("non-PoT buffer allocation");
-    let frame_count = 1 + signal_len.div_ceil(plan.hop_len());
+    let frame_count = 1 + signal_len.div_ceil(plan.payload().hop_len());
     assert_eq!(buffers.frame_count(), frame_count);
-    assert_eq!(buffers.frame_len(), plan.frame_len());
-    assert_eq!(buffers.hop_len(), plan.hop_len());
+    assert_eq!(buffers.frame_len(), plan.payload().frame_len());
+    assert_eq!(buffers.hop_len(), plan.payload().hop_len());
     assert_eq!(buffers.signal_len(), signal_len);
     assert_eq!(
         buffers.fwd_output(),
-        vec![Complex32::new(0.0, 0.0); frame_count * plan.frame_len()]
+        vec![Complex32::new(0.0, 0.0); frame_count * plan.payload().frame_len()]
     );
     assert_eq!(buffers.inv_output(), vec![0.0_f32; signal_len]);
 }
@@ -151,7 +152,7 @@ fn stft_wgpu_forward_buffers_400() {
     let signal_f64: leto::Array1<f64> =
         leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let mut buffers = backend
         .make_buffers(&plan, SIGNAL_LEN)
         .expect("make_buffers non-PoT");
@@ -202,7 +203,7 @@ fn stft_wgpu_inverse_buffers_400() {
     let signal_f64: leto::Array1<f64> =
         leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
     let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");
     let spectrum_f32: Vec<Complex32> = cpu_spectrum

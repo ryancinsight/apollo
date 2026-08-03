@@ -4,6 +4,7 @@ use crate::{infrastructure::transport::gpu::WgpuError, RadonPlan};
 use leto::Array2;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};
 
 #[test]
 fn filtered_backproject_matches_cpu_reference() {
@@ -26,7 +27,7 @@ fn filtered_backproject_matches_cpu_reference() {
         .filtered_backprojection(&cpu_sinogram)
         .expect("cpu fbp");
 
-    let gpu_plan = backend.plan(3, 3, 4, 5, 1.0);
+    let gpu_plan = backend.plan(GeometryPlan::new(3, 3, 4, 5, 1.0));
     let sinogram_f32 = cpu_sinogram.values().mapv(|v| v as f32);
     let gpu_fbp = backend
         .execute_filtered_backproject(&gpu_plan, &sinogram_f32, &angles_f32)
@@ -49,7 +50,7 @@ fn filtered_backproject_rejects_sinogram_shape_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(3, 3, 2, 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, 2, 5, 1.0));
     let wrong_sinogram = Array2::<f32>::zeros([3, 5]);
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
     let err = backend

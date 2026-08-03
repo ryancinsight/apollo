@@ -7,7 +7,7 @@ use super::{
     fft_grid, ola_grid, ChirpInversePointMultiplyKernel, ChirpInversePostmultiplyKernel,
     ChirpInversePremultiplyKernel, OverlapAddKernel, StftChirpParams, StftGpuKernel, StftParams,
 };
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{WgpuError, WgpuResult};
 
 impl StftGpuKernel {
     /// Execute the inverse non-power-of-two STFT through Bluestein's identity.

@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::infrastructure::transport::gpu::WindowPlan;
     use crate::infrastructure::transport::gpu::{
         SdftWgpuBackend, SdftWgpuPlan, WgpuCapabilities, WgpuError,
     };
@@ -12,18 +13,18 @@ mod tests {
 
     #[test]
     fn plan_preserves_window_and_bin_parameters() {
-        let plan = SdftWgpuPlan::new(16, 8);
-        assert_eq!(plan.window_len(), 16);
-        assert_eq!(plan.bin_count(), 8);
+        let plan = SdftWgpuPlan::new(WindowPlan::new(16, 8));
+        assert_eq!(plan.len(), 16);
+        assert_eq!(plan.output_len(), 8);
         assert_eq!(plan.len(), 16);
         assert!(!plan.is_empty());
-        assert!(SdftWgpuPlan::new(0, 8).is_empty());
-        assert!(SdftWgpuPlan::new(8, 0).is_empty());
+        assert!(SdftWgpuPlan::new(WindowPlan::new(0, 8)).is_empty());
+        assert_eq!(SdftWgpuPlan::new(WindowPlan::new(8, 0)).output_len(), 0);
     }
 
     #[test]
     fn capabilities_reflect_forward_and_inverse_surface() {
-        let capabilities = WgpuCapabilities::forward_and_inverse(true);
+        let capabilities = WgpuCapabilities::implemented(true);
         assert!(capabilities.device_available);
         assert!(capabilities.supports_forward);
         assert!(capabilities.supports_inverse);
@@ -55,7 +56,7 @@ mod tests {
         {
             let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
             let reference_samples: Vec<f64> = samples.iter().map(|&x| f64::from(x)).collect();
-            let plan = backend.plan(samples.len(), 4);
+            let plan = backend.plan(WindowPlan::new(samples.len(), 4));
             let gpu = backend
                 .execute_forward(&plan, &samples)
                 .expect("wgpu sdft forward execution");
@@ -83,7 +84,7 @@ mod tests {
             let window = vec![1.0_f32, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
             let input =
                 leto::Array1::from_shape_vec([window.len()], window.clone()).expect("input");
-            let plan = backend.plan(window.len(), 4);
+            let plan = backend.plan(WindowPlan::new(window.len(), 4));
             let expected = backend
                 .execute_forward(&plan, &window)
                 .expect("slice forward");
@@ -105,7 +106,7 @@ mod tests {
             let strided = input
                 .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
                 .expect("strided view");
-            let plan = backend.plan(logical.len(), 4);
+            let plan = backend.plan(WindowPlan::new(logical.len(), 4));
             let expected = backend
                 .execute_forward(&plan, &logical)
                 .expect("slice forward");
@@ -118,11 +119,11 @@ mod tests {
         // 5. rejects_invalid_plan_and_input_before_dispatch
         {
             let empty_err = backend
-                .execute_forward(&SdftWgpuPlan::new(0, 4), &[])
+                .execute_forward(&SdftWgpuPlan::new(WindowPlan::new(0, 4)), &[])
                 .expect_err("zero window_len must fail");
             assert!(matches!(empty_err, WgpuError::InvalidPlan { .. }));
             let mismatch_err = backend
-                .execute_forward(&SdftWgpuPlan::new(8, 4), &[0.0_f32; 4])
+                .execute_forward(&SdftWgpuPlan::new(WindowPlan::new(8, 4)), &[0.0_f32; 4])
                 .expect_err("window length mismatch must fail");
             assert!(matches!(
                 mismatch_err,
@@ -138,7 +139,7 @@ mod tests {
             let samples: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
             let reduced_samples: Vec<f16> = samples.iter().map(|&x| f16::from_f32(x)).collect();
             let represented: Vec<f32> = reduced_samples.iter().map(|v| v.to_f32()).collect();
-            let plan = backend.plan(reduced_samples.len(), 4);
+            let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
             let reference = backend
                 .execute_forward(&plan, &represented)
                 .expect("f32 reference");
@@ -146,7 +147,6 @@ mod tests {
             backend
                 .execute_forward_typed_into(
                     &plan,
-                    PrecisionProfile::MIXED_PRECISION_F16_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     &reduced_samples,
                     &mut typed_out,
@@ -178,12 +178,11 @@ mod tests {
             let input =
                 leto::Array1::from_shape_vec([reduced_samples.len()], reduced_samples.clone())
                     .expect("input");
-            let plan = backend.plan(reduced_samples.len(), 4);
+            let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
             let mut expected: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
             backend
                 .execute_forward_typed_into(
                     &plan,
-                    PrecisionProfile::MIXED_PRECISION_F16_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     &reduced_samples,
                     &mut expected,
@@ -192,7 +191,6 @@ mod tests {
             let actual = backend
                 .execute_forward_leto_typed::<f16, [f16; 2]>(
                     &plan,
-                    PrecisionProfile::MIXED_PRECISION_F16_F32,
                     PrecisionProfile::MIXED_PRECISION_F16_F32,
                     input.view(),
                 )
@@ -217,12 +215,11 @@ mod tests {
         {
             let reduced_samples: Vec<f16> = vec![f16::from_f32(1.0); 8];
             let mut out: Vec<[f16; 2]> = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; 4];
-            let plan = backend.plan(reduced_samples.len(), 4);
+            let plan = backend.plan(WindowPlan::new(reduced_samples.len(), 4));
             let error = backend
                 .execute_forward_typed_into(
                     &plan,
                     PrecisionProfile::LOW_PRECISION_F32,
-                    PrecisionProfile::MIXED_PRECISION_F16_F32,
                     &reduced_samples,
                     &mut out,
                 )
@@ -233,7 +230,7 @@ mod tests {
         // 9. inverse_roundtrip_matches_original_signal
         {
             let original: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let plan = backend.plan(original.len(), original.len());
+            let plan = backend.plan(WindowPlan::new(original.len(), original.len()));
             let bins = backend.execute_forward(&plan, &original).expect("forward");
             let reconstructed = backend.execute_inverse(&plan, &bins).expect("inverse");
             assert_eq!(reconstructed.len(), original.len());
@@ -250,7 +247,7 @@ mod tests {
         // 10. leto_inverse_matches_slice_inverse
         {
             let original: [f32; 8] = [1.0, 0.5, -0.5, -1.0, 0.5, 1.0, -0.25, 0.75];
-            let plan = backend.plan(original.len(), original.len());
+            let plan = backend.plan(WindowPlan::new(original.len(), original.len()));
             let bins = backend.execute_forward(&plan, &original).expect("forward");
             let input = leto::Array1::from_shape_vec([bins.len()], bins.clone()).expect("bins");
             let expected = backend
@@ -265,7 +262,7 @@ mod tests {
         // 11. inverse_matches_cpu_reference
         {
             let original: [f32; 2] = [3.0, 1.0];
-            let plan = backend.plan(original.len(), original.len());
+            let plan = backend.plan(WindowPlan::new(original.len(), original.len()));
             let bins = backend.execute_forward(&plan, &original).expect("forward");
 
             assert!(
@@ -298,7 +295,7 @@ mod tests {
         // 12. inverse_rejects_bin_count_mismatch
         {
             let bins: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); 4];
-            let plan = backend.plan(8, 8);
+            let plan = backend.plan(WindowPlan::new(8, 8));
             let error = backend
                 .execute_inverse(&plan, &bins)
                 .expect_err("bin count mismatch must fail");

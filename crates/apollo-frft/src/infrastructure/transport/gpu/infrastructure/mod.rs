@@ -1,8 +1,6 @@
-//! WGPU infrastructure.
+//! Infrastructure for FrFT WGPU execution.
 
-/// Hephaestus WGPU device acquisition and host boundary.
-pub mod device;
-/// Typed Hephaestus kernel for the direct FrFT transform.
+/// Hephaestus kernel definitions for the direct sampled DFrFT.
 pub mod kernel;
-/// Typed Hephaestus kernel for the unitary FrFT transform.
+/// Hephaestus kernel definitions for the unitary DFrFT.
 pub mod unitary_kernel;

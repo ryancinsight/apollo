@@ -5,6 +5,7 @@ use leto::Storage;
 use crate::infrastructure::transport::gpu::{FrftWgpuPlan, WgpuError};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::OrderPlan;
 
 fn mixed_input() -> Vec<[f16; 2]> {
     let source_re = [0.5_f32, -1.0, 2.0, 0.25, -0.5, 1.5, 0.0, -0.75];
@@ -26,7 +27,7 @@ fn mixed_storage_matches_represented_f32_output() {
         .iter()
         .map(|[re, im]| Complex32::new(re.to_f32(), im.to_f32()))
         .collect::<Vec<_>>();
-    let plan = FrftWgpuPlan::new(input.len(), 0.5_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), 0.5_f32));
     let expected = backend
         .execute_forward(&plan, &represented)
         .expect("f32 forward reference");
@@ -54,7 +55,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_execution() {
         return;
     };
     let input = mixed_input();
-    let plan = FrftWgpuPlan::new(input.len(), 0.5_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(input.len(), 0.5_f32));
     let mut expected_forward = vec![[f16::from_f32(0.0); 2]; input.len()];
     backend
         .execute_forward_typed_into(
@@ -66,7 +67,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_execution() {
         .expect("typed forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto typed input");
     let actual_forward = backend
-        .execute_forward_leto_typed::<[f16; 2]>(
+        .execute_forward_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -89,7 +90,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_execution() {
     let leto_spectrum = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("Leto typed spectrum");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<[f16; 2]>(
+        .execute_inverse_leto_typed::<[f16; 2], [f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),
@@ -106,7 +107,7 @@ fn typed_execution_rejects_profile_storage_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = FrftWgpuPlan::new(2, 0.5_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(2, 0.5_f32));
     let input = [
         [f16::from_f32(1.0), f16::from_f32(0.0)],
         [f16::from_f32(-1.0), f16::from_f32(0.5)],

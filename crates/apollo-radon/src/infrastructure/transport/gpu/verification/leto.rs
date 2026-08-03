@@ -3,6 +3,7 @@
 use leto::{SliceArg, Storage};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{GeometryPlan, ProjectionExecution};
 
 #[test]
 fn leto_forward_inverse_and_fbp_match_leto() {
@@ -19,7 +20,7 @@ fn leto_forward_inverse_and_fbp_match_leto() {
         std::f32::consts::FRAC_PI_4,
         std::f32::consts::FRAC_PI_2,
     ];
-    let plan = backend.plan(3, 3, angles.len(), 7, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 7, 1.0));
     let image_leto =
         leto::Array::from_mnemosyne_slice([3, 3], &image.iter().copied().collect::<Vec<_>>())
             .expect("leto image");
@@ -87,7 +88,7 @@ fn leto_strided_forward_matches_logical_leto() {
     let angles = vec![0.0_f32, std::f32::consts::FRAC_PI_2];
     let angles_leto =
         leto::Array::from_mnemosyne_slice([angles.len()], &angles).expect("leto angles");
-    let plan = backend.plan(3, 3, angles.len(), 5, 1.0);
+    let plan = backend.plan(GeometryPlan::new(3, 3, angles.len(), 5, 1.0));
     let expected = backend
         .execute_forward(&plan, &image, &angles)
         .expect("leto forward");

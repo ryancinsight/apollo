@@ -1,4 +1,4 @@
-use super::helpers::dwt_coefficients_from_leto;
+use super::boundary::dwt_coefficients_from_leto;
 use super::{DwtLetoCoefficients, DwtPlan};
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::spectrum::coefficients::DwtCoefficients;

@@ -3,6 +3,7 @@ use leto::{Array2, Storage};
 use crate::{infrastructure::transport::gpu::WgpuError, DctDstPlan, RealTransformKind};
 
 use super::support::{assert_cpu_differential, assert_roundtrip, backend, DIMENSIONAL_TOLERANCE};
+use crate::infrastructure::transport::gpu::{RealTransformPlan, SeparableExecution};
 
 fn input() -> Array2<f32> {
     Array2::from_shape_vec(
@@ -38,7 +39,7 @@ fn dct_two_forward_matches_independent_cpu_separable_reference() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let actual = backend
         .execute_forward_2d(&plan, input.as_slice().expect("contiguous input"))
         .expect("GPU 2D forward");
@@ -51,7 +52,7 @@ fn dct_two_inverse_recovers_input() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let spectrum = backend
         .execute_forward_2d(&plan, input.as_slice().expect("contiguous input"))
         .expect("GPU 2D forward");
@@ -71,7 +72,7 @@ fn leto_two_dimensional_boundary_matches_slice_execution() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let expected_forward = backend
         .execute_forward_2d(&plan, input.as_slice().expect("contiguous input"))
         .expect("2D forward");
@@ -103,7 +104,7 @@ fn two_dimensional_execution_rejects_non_square_input() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let input = Array2::<f32>::zeros([2, 3]);
     let error = backend
         .execute_forward_2d(&plan, input.as_slice().expect("contiguous input"))

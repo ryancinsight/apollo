@@ -1,8 +1,8 @@
 //! Reusable Discrete Hartley Transform plan.
 
-pub mod helpers;
 pub mod plan;
 pub mod typed;
+pub mod workspace;
 
 #[cfg(test)]
 mod tests;

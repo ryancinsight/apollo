@@ -21,7 +21,5 @@ pub use application::execution::transform::sparse::{
 };
 pub use domain::spectrum::sparse::SparseSpectrum;
 #[cfg(feature = "wgpu")]
-pub use infrastructure::transport::gpu::domain::storage::SftGpuStorage;
-
 #[cfg(feature = "wgpu")]
 pub use infrastructure::transport::gpu::*;

@@ -14,13 +14,10 @@ use hephaestus_core::{
 use hephaestus_wgpu::WgpuDevice;
 use leto::Array2;
 
-use crate::{
-    infrastructure::transport::gpu::{
-        application::plan::RadonWgpuPlan,
-        domain::error::{WgpuError, WgpuResult},
-    },
-    ramp_filter_projection,
-};
+use apollo_fft::{GpuTransformPlanner, WgpuError, WgpuResult};
+
+use crate::infrastructure::transport::gpu::GeometryPlan;
+use crate::ramp_filter_projection;
 
 const WORKGROUP_SIZE: usize = 64;
 
@@ -38,7 +35,7 @@ struct RadonParams {
 const _: () = assert!(core::mem::size_of::<RadonParams>() == 32);
 
 impl RadonParams {
-    fn new(plan: RadonWgpuPlan) -> WgpuResult<Self> {
+    fn new(plan: GeometryPlan) -> WgpuResult<Self> {
         Ok(Self {
             rows: u32::try_from(plan.rows()).map_err(|_| WgpuError::InvalidPlan {
                 message: "row count exceeds u32".to_owned(),
@@ -103,12 +100,56 @@ radon_kernel!(
 
 /// Zero-sized Radon orchestration over a typed Hephaestus device.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct RadonGpuKernel;
+pub struct RadonGpuKernel;
+
+impl GpuTransformPlanner for RadonGpuKernel {
+    type Plan = GeometryPlan;
+
+    fn input_len(plan: &GeometryPlan) -> usize {
+        plan.rows() * plan.cols()
+    }
+
+    fn output_len(plan: &GeometryPlan) -> usize {
+        plan.angle_count() * plan.detector_count()
+    }
+
+    fn validate(plan: &GeometryPlan) -> WgpuResult<()> {
+        if plan.rows() == 0
+            || plan.cols() == 0
+            || plan.angle_count() == 0
+            || plan.detector_count() == 0
+        {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: geometry dimensions must be greater than zero",
+                    plan.rows(),
+                    plan.cols(),
+                    plan.angle_count(),
+                    plan.detector_count(),
+                    plan.detector_spacing()
+                ),
+            });
+        }
+        if !plan.detector_spacing().is_finite() || plan.detector_spacing() <= 0.0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan rows={}, cols={}, angles={}, detectors={}, spacing={}: detector spacing must be finite and positive",
+                    plan.rows(),
+                    plan.cols(),
+                    plan.angle_count(),
+                    plan.detector_count(),
+                    plan.detector_spacing()
+                ),
+            });
+        }
+        Ok(())
+    }
+}
 
 impl RadonGpuKernel {
     pub(crate) fn execute_forward(
         device: &WgpuDevice,
-        plan: RadonWgpuPlan,
+        plan: GeometryPlan,
         image: &Array2<f32>,
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
@@ -134,7 +175,7 @@ impl RadonGpuKernel {
 
     pub(crate) fn execute_backproject(
         device: &WgpuDevice,
-        plan: RadonWgpuPlan,
+        plan: GeometryPlan,
         sinogram: &Array2<f32>,
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
@@ -160,7 +201,7 @@ impl RadonGpuKernel {
 
     pub(crate) fn execute_filtered_backproject(
         device: &WgpuDevice,
-        plan: RadonWgpuPlan,
+        plan: GeometryPlan,
         sinogram: &Array2<f32>,
         angles: &[f32],
     ) -> WgpuResult<Array2<f32>> {
@@ -210,7 +251,7 @@ impl RadonGpuKernel {
         left: &hephaestus_wgpu::WgpuBuffer<f32>,
         right: &hephaestus_wgpu::WgpuBuffer<f32>,
         output: &hephaestus_wgpu::WgpuBuffer<f32>,
-        plan: RadonWgpuPlan,
+        plan: GeometryPlan,
         output_len: usize,
     ) -> WgpuResult<()>
     where

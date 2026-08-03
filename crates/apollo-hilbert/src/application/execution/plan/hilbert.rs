@@ -6,24 +6,33 @@ use crate::domain::signal::analytic::{envelope_values_into, phase_values_into, A
 use crate::infrastructure::kernel::direct::{
     analytic_signal, analytic_signal_into, hilbert_transform, hilbert_transform_into,
 };
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
     )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
     )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive: the initializer is already a const block"
+    #[cfg_attr(
+        windows,
+        expect(
+            clippy::missing_const_for_thread_local,
+            reason = "false positive: the initializer is already a const block"
+        )
     )]
     static OBSERVABLE_ANALYTIC_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
@@ -153,7 +162,7 @@ impl HilbertPlan {
         profile: PrecisionProfile,
     ) -> HilbertResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&signal);
-        let mut output = vec![T::from_f64(0.0); self.len()];
+        let mut output = vec![T::from_cpu(0.0); self.len()];
         self.transform_typed_into(&signal, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(&output).ok_or(HilbertError::LengthMismatch)
     }
@@ -239,30 +248,7 @@ fn observable_workspace_capacity() -> usize {
 }
 
 /// Real storage accepted by typed Hilbert input and quadrature paths.
-pub trait HilbertStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `f64` arithmetic path.
-    fn to_f64(self) -> f64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_f64(value: f64) -> Self;
-
-    /// View slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait HilbertStorage: CpuStorage {
     /// Compute the analytic signal from typed input storage.
     fn analytic_signal(
         plan: &HilbertPlan,
@@ -275,7 +261,7 @@ pub trait HilbertStorage: Copy + Send + Sync + 'static {
         }
         with_typed_signal_workspace(plan.len(), |input64| {
             for (slot, sample) in input64.iter_mut().zip(signal.iter().copied()) {
-                *slot = Self::to_f64(sample);
+                *slot = sample.to_cpu();
             }
             plan.analytic_signal(input64)
         })
@@ -294,11 +280,11 @@ pub trait HilbertStorage: Copy + Send + Sync + 'static {
         }
         with_typed_transform_workspaces(plan.len(), |input64, output64| {
             for (slot, sample) in input64.iter_mut().zip(signal.iter().copied()) {
-                *slot = Self::to_f64(sample);
+                *slot = sample.to_cpu();
             }
             plan.transform_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_f64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -306,16 +292,6 @@ pub trait HilbertStorage: Copy + Send + Sync + 'static {
 }
 
 impl HilbertStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value
-    }
-
     fn analytic_signal(
         plan: &HilbertPlan,
         signal: &[Self],
@@ -336,39 +312,9 @@ impl HilbertStorage for f64 {
     }
 }
 
-impl HilbertStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl HilbertStorage for f32 {}
 
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as f32
-    }
-
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
-
-impl HilbertStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-
-    fn from_f64(value: f64) -> Self {
-        f16::from_f32(value as f32)
-    }
-}
+impl HilbertStorage for f16 {}
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> HilbertResult<()> {
     if actual.matches_storage_and_compute(expected) {

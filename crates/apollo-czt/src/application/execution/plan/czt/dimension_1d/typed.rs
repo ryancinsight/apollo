@@ -1,43 +1,19 @@
 //! Typed storage implementations for 1D Chirp Z-Transform.
 
-use super::helpers::{validate_profile, with_complex64_workspaces};
 use super::plan::CztPlan;
+use super::workspace::{validate_profile, with_complex64_workspaces};
 use crate::domain::contracts::error::CztError;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 
 /// Complex storage accepted by typed CZT paths.
-pub trait CztStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile for this storage type.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into the owner `Complex64` arithmetic path.
-    fn to_complex64(self) -> Complex64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
+pub trait CztStorage: CpuStorage<Complex64> {
     /// Convert storage into the concrete `Complex32` accelerator contract.
     fn to_complex32(self) -> Complex32;
 
     /// Convert a concrete `Complex32` accelerator result back to storage.
     fn from_complex32(value: Complex32) -> Self;
-
-    /// View slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        let _ = slice;
-        None
-    }
-
     /// Execute forward transform into caller-owned storage.
     fn forward_into(
         plan: &CztPlan,
@@ -70,11 +46,11 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
         }
         with_complex64_workspaces(plan.input_len(), plan.output_len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(input.iter().copied()) {
-                *slot = Self::to_complex64(value);
+                *slot = value.to_cpu();
             }
             plan.forward_complex64_slice_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_complex64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -115,11 +91,11 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
             plan.input_len(),
             |spectrum64, output64| {
                 for (slot, value) in spectrum64.iter_mut().zip(spectrum.iter().copied()) {
-                    *slot = Self::to_complex64(value);
+                    *slot = value.to_cpu();
                 }
                 plan.inverse_complex64_slice_into(spectrum64, output64)?;
                 for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                    *slot = Self::from_complex64(value);
+                    *slot = Self::from_cpu(value);
                 }
                 Ok(())
             },
@@ -128,16 +104,6 @@ pub trait CztStorage: Copy + Send + Sync + 'static {
 }
 
 impl CztStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_complex64(self) -> Complex64 {
-        self
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-
     fn to_complex32(self) -> Complex32 {
         // The selected accelerator profile fixes arithmetic to f32; narrowing
         // occurs once at that typed storage/compute boundary.
@@ -200,16 +166,6 @@ impl CztStorage for Complex64 {
 }
 
 impl CztStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self.re), f64::from(self.im))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
     fn to_complex32(self) -> Complex32 {
         self
     }
@@ -217,32 +173,9 @@ impl CztStorage for Complex32 {
     fn from_complex32(value: Complex32) -> Self {
         value
     }
-
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
 }
 
 impl CztStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
-
     fn to_complex32(self) -> Complex32 {
         Complex32::new(self[0].to_f32(), self[1].to_f32())
     }

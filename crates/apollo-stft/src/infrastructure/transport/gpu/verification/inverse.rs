@@ -5,6 +5,7 @@ use eunomia::Complex32;
 use leto::Array1;
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
 
 #[test]
 fn stft_wgpu_inverse_roundtrip_cola() {
@@ -17,7 +18,7 @@ fn stft_wgpu_inverse_roundtrip_cola() {
         Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
     let signal_len = 8usize;
 
-    let plan = StftWgpuPlan::new(8, 4);
+    let plan = StftWgpuPlan::new(FramePlan::new(8, 4));
 
     // Compute spectrum on CPU (f64) as the authoritative input.
     // frame_count = 1 + 8.div_ceil(4) = 3; spectrum_len = 3 * 8 = 24.
@@ -74,7 +75,7 @@ fn stft_wgpu_inverse_matches_cpu() {
         Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
     let signal_len = 16usize;
 
-    let plan = StftWgpuPlan::new(8, 4);
+    let plan = StftWgpuPlan::new(FramePlan::new(8, 4));
 
     // frame_count = 1 + 16.div_ceil(4) = 5; spectrum_len = 5 * 8 = 40.
     let cpu_plan = crate::StftPlan::new(8, 4).expect("CPU plan");
@@ -117,7 +118,7 @@ fn stft_wgpu_multiple_cola_sets() {
     };
     let run_roundtrip = |frame_len: usize, hop_len: usize, signal: &[f32]| {
         let signal_len = signal.len();
-        let plan = StftWgpuPlan::new(frame_len, hop_len);
+        let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
         let cpu_plan = crate::StftPlan::new(frame_len, hop_len).expect("cpu plan");
         let signal_f64 = Array1::from(signal.iter().map(|&x| x as f64).collect::<Vec<_>>());
         let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
@@ -173,7 +174,7 @@ fn stft_wgpu_inverse_non_pot() {
     let signal = vec![
         0.5_f32, -1.0, 0.25, 0.75, -0.5, 1.5, -0.25, 0.125, 0.875, -0.625, 0.375, -0.125,
     ];
-    let plan = StftWgpuPlan::new(6, 3);
+    let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let cpu_plan = crate::StftPlan::new(6, 3).expect("CPU plan");
     let signal_f64 = Array1::from(
         signal
@@ -218,7 +219,7 @@ fn stft_wgpu_inverse_large_frame() {
         .map(|n| (std::f32::consts::TAU * n as f32 / SIGNAL_LEN as f32).sin())
         .collect();
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let cpu_plan = crate::StftPlan::new(FRAME_LEN, HOP_LEN).expect("cpu plan");
     let signal_f64 = Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
     let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("cpu forward");
@@ -269,7 +270,7 @@ fn stft_wgpu_inverse_chirpz_400() {
     let signal_f64: leto::Array1<f64> =
         leto::Array1::from(signal_f32.iter().map(|&x| x as f64).collect::<Vec<_>>());
 
-    let plan = StftWgpuPlan::new(FRAME_LEN, HOP_LEN);
+    let plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
 
     let cpu_plan = crate::StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
     let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU forward");

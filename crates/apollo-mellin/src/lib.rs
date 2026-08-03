@@ -24,9 +24,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod verification;
 
-pub use application::execution::plan::mellin::{
-    MellinGpuStorage, MellinPlan, MellinSpectrum, MellinStorage,
-};
+pub use application::execution::plan::mellin::{MellinPlan, MellinSpectrum, MellinStorage};
 pub use domain::contracts::error::{MellinError, MellinResult};
 pub use domain::metadata::scale::MellinScaleConfig;
 pub use infrastructure::kernel::resample::{

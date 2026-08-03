@@ -4,6 +4,7 @@ use leto::Storage;
 use crate::{infrastructure::transport::gpu::WgpuError, RealTransformKind};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::RealTransformPlan;
 
 #[test]
 fn mixed_storage_matches_represented_f32_output() {
@@ -17,7 +18,10 @@ fn mixed_storage_matches_represented_f32_output() {
         .map(f16::from_f32)
         .collect::<Vec<_>>();
     let represented_input = input.iter().map(|value| value.to_f32()).collect::<Vec<_>>();
-    let plan = backend.plan(input.len(), RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(
+        input.len(),
+        RealTransformKind::DctII,
+    ));
     let expected = backend
         .execute_forward(&plan, &represented_input)
         .expect("represented f32 forward");
@@ -47,7 +51,10 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
         .copied()
         .map(f16::from_f32)
         .collect::<Vec<_>>();
-    let plan = backend.plan(input.len(), RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(
+        input.len(),
+        RealTransformKind::DctII,
+    ));
     let mut expected_forward = vec![f16::from_f32(0.0); input.len()];
     backend
         .execute_forward_typed_into(
@@ -59,7 +66,7 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
         .expect("typed forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto input");
     let actual_forward = backend
-        .execute_forward_leto_typed::<f16>(
+        .execute_forward_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -82,7 +89,7 @@ fn typed_leto_boundaries_match_typed_slice_execution() {
     let leto_spectrum = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("Leto spectrum");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<f16>(
+        .execute_inverse_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_spectrum.view(),
@@ -99,7 +106,7 @@ fn typed_execution_rejects_profile_storage_mismatch() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(4, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(4, RealTransformKind::DctII));
     let input = [1.0_f32, -1.0, 0.5, -0.5];
     let mut output = [0.0_f32; 4];
     let error = backend

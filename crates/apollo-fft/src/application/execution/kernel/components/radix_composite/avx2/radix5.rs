@@ -2,7 +2,7 @@
 //!
 //! Includes DFT-5 constants, scalar butterflies, and AVX2 vectorized butterflies.
 
-use super::helpers::{
+use super::complex_simd::{
     apply_pointwise_f32, apply_pointwise_f64, cmul, cmul_f32, rot_pos_i, rot_pos_i_f32,
 };
 use eunomia::Complex;

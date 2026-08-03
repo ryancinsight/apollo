@@ -1,7 +1,13 @@
-use super::helpers::validate_profile;
+#![cfg_attr(
+    windows,
+    expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive on Windows: the initializers are already const blocks"
+    )
+)]
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
@@ -41,7 +47,7 @@ impl DctDstPlan {
         profile: PrecisionProfile,
     ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&signal);
-        let mut output = vec![T::from_f64(0.0); self.len()];
+        let mut output = vec![T::from_cpu(0.0); self.len()];
         T::forward_into(self, &signal, &mut output, profile)?;
         Ok(apollo_leto_interop::try_array1_from_slice(&output)
             .expect("DCT/DST output length must match Leto output shape"))
@@ -64,7 +70,7 @@ impl DctDstPlan {
         profile: PrecisionProfile,
     ) -> DctDstResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let signal = apollo_leto_interop::view_cow(&signal);
-        let mut output = vec![T::from_f64(0.0); self.len()];
+        let mut output = vec![T::from_cpu(0.0); self.len()];
         T::inverse_into(self, &signal, &mut output, profile)?;
         Ok(apollo_leto_interop::try_array1_from_slice(&output)
             .expect("DCT/DST output length must match Leto output shape"))
@@ -72,29 +78,7 @@ impl DctDstPlan {
 }
 
 /// Real storage accepted by typed DCT/DST paths.
-pub trait RealTransformStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage to owner arithmetic.
-    fn to_f64(self) -> f64;
-    /// Convert owner arithmetic to storage.
-    fn from_f64(value: f64) -> Self;
-
-    /// View slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        let _ = slice;
-        None
-    }
-
+pub trait RealTransformStorage: CpuStorage {
     /// Execute forward transform into caller-owned storage.
     fn forward_into(
         plan: &DctDstPlan,
@@ -108,11 +92,11 @@ pub trait RealTransformStorage: Copy + Send + Sync + 'static {
         }
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(signal.iter()) {
-                *slot = value.to_f64();
+                *slot = value.to_cpu();
             }
             plan.forward_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_f64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -131,11 +115,11 @@ pub trait RealTransformStorage: Copy + Send + Sync + 'static {
         }
         with_f64_workspaces(plan.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(signal.iter()) {
-                *slot = value.to_f64();
+                *slot = value.to_cpu();
             }
             plan.inverse_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = Self::from_f64(value);
+                *slot = Self::from_cpu(value);
             }
             Ok(())
         })
@@ -143,16 +127,6 @@ pub trait RealTransformStorage: Copy + Send + Sync + 'static {
 }
 
 impl RealTransformStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value
-    }
-
     fn forward_into(
         plan: &DctDstPlan,
         signal: &[Self],
@@ -174,39 +148,9 @@ impl RealTransformStorage for f64 {
     }
 }
 
-impl RealTransformStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
+impl RealTransformStorage for f32 {}
 
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    fn from_f64(value: f64) -> Self {
-        value as f32
-    }
-
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
-
-impl RealTransformStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-
-    fn from_f64(value: f64) -> Self {
-        f16::from_f32(value as f32)
-    }
-}
+impl RealTransformStorage for f16 {}
 
 mod sealed {
     pub trait Sealed {}
@@ -253,5 +197,13 @@ impl RealTransformGpuStorage for f16 {
 
     fn from_gpu(value: f32) -> Self {
         f16::from_f32(value)
+    }
+}
+
+fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> DctDstResult<()> {
+    if actual.matches_storage_and_compute(expected) {
+        Ok(())
+    } else {
+        Err(DctDstError::PrecisionMismatch)
     }
 }

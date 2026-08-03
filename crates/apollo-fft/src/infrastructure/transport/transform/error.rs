@@ -33,6 +33,39 @@ pub enum WgpuError {
         message: String,
     },
 
+    /// A value-domain specification (resampling bounds) is invalid.
+    #[error("invalid signal domain: {message}")]
+    InvalidSignalDomain {
+        /// Failure explanation naming the offending bounds.
+        message: String,
+    },
+
+    /// A framed operation received fewer samples than one frame.
+    #[error("input too short: need at least {min} samples, got {actual}")]
+    InputTooShort {
+        /// Minimum sample count the plan demands.
+        min: usize,
+        /// Samples supplied by the caller.
+        actual: usize,
+    },
+
+    /// A high-accuracy component cannot enter the accelerator element
+    /// exactly.
+    #[error("{component} component {value} cannot be represented exactly in accelerator storage")]
+    PrecisionLoss {
+        /// Component name.
+        component: &'static str,
+        /// Rejected high-accuracy value.
+        value: f64,
+    },
+
+    /// A plan parameter that must be finite is NaN or infinite.
+    #[error("parameter {parameter} must be finite")]
+    NonFiniteParameter {
+        /// Name of the offending parameter.
+        parameter: &'static str,
+    },
+
     /// A multi-dimensional operand does not match the plan's shape.
     #[error("shape mismatch: {message}")]
     ShapeMismatch {

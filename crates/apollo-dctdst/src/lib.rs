@@ -15,9 +15,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod verification;
 
-pub use application::execution::plan::dctdst::{
-    DctDstPlan, RealTransformGpuStorage, RealTransformStorage,
-};
+pub use application::execution::plan::dctdst::{DctDstPlan, RealTransformStorage};
 pub use domain::contracts::error::{DctDstError, DctDstResult};
 pub use domain::metadata::kind::{RealTransformConfig, RealTransformKind};
 pub use infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};

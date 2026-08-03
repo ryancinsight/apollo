@@ -6,13 +6,14 @@ use leto::Storage;
 use crate::infrastructure::transport::gpu::SftWgpuPlan;
 
 use super::support::{assert_reference_complex_close, backend, two_tone_signal};
+use crate::infrastructure::transport::gpu::{SparseExecution, SparsityPlan};
 
 #[test]
 fn typed_mixed_storage_forward_matches_represented_execution_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(4, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(4, 2));
     let source_signal = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
     let native_input: Vec<eunomia::Complex32> = source_signal
         .iter()
@@ -28,10 +29,10 @@ fn typed_mixed_storage_forward_matches_represented_execution_when_device_exists(
         .collect();
 
     let expected = backend
-        .execute_forward(&plan, &represented_input)
+        .sparse_forward(&plan, &represented_input)
         .expect("represented f32 forward");
     let actual = backend
-        .execute_forward_typed(
+        .sparse_forward_typed(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             &mixed_input,
@@ -50,7 +51,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = SftWgpuPlan::new(4, 2);
+    let plan = SftWgpuPlan::new(SparsityPlan::new(4, 2));
     let source_signal = two_tone_signal(4, &[(1, 3.0), (2, 1.25)]);
     let native_input: Vec<eunomia::Complex32> = source_signal
         .iter()
@@ -64,14 +65,14 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         leto::Array1::from_shape_vec([mixed_input.len()], mixed_input.clone()).expect("input");
 
     let expected_forward = backend
-        .execute_forward_typed(
+        .sparse_forward_typed(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             &mixed_input,
         )
         .expect("typed slice forward");
     let actual_forward = backend
-        .execute_forward_leto_typed(
+        .sparse_forward_leto_typed(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             leto_input.view(),
@@ -82,7 +83,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
 
     let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; plan.len()];
     backend
-        .execute_inverse_typed_into(
+        .sparse_inverse_typed_into(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             &expected_forward,
@@ -90,7 +91,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         )
         .expect("typed slice inverse");
     let actual_inverse = backend
-        .execute_inverse_leto_typed::<[f16; 2]>(
+        .sparse_inverse_leto_typed::<[f16; 2]>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             &expected_forward,

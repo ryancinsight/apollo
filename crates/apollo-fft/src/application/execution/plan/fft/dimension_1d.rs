@@ -4,8 +4,8 @@
 
 pub(crate) mod dynamic_impl;
 pub(crate) mod executors;
-pub(crate) mod helpers;
 pub(crate) mod static_impl;
+pub(crate) mod strategy;
 
 #[cfg(test)]
 pub(crate) mod plan_tests;

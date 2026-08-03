@@ -14,7 +14,10 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
+
+use crate::infrastructure::transport::gpu::OrderPlan;
 use crate::GrunbaumBasis;
 
 const WORKGROUP_SIZE: usize = 64;
@@ -83,7 +86,45 @@ impl KernelSource<Wgsl> for UnitaryFrftKernel {
 
 /// Zero-sized orchestration for the unitary three-pass DFrFT.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct UnitaryFrftGpuKernel;
+pub struct UnitaryFrftGpuKernel;
+
+impl GpuTransformPlanner for UnitaryFrftGpuKernel {
+    type Plan = OrderPlan;
+
+    fn input_len(plan: &OrderPlan) -> usize {
+        plan.len()
+    }
+
+    fn validate(plan: &OrderPlan) -> WgpuResult<()> {
+        if !plan.order().is_finite() {
+            return Err(WgpuError::NonFiniteParameter { parameter: "order" });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for UnitaryFrftGpuKernel {
+    type Sample = Complex32;
+    type Bin = Complex32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        plan: &OrderPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, plan.order())
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        plan: &OrderPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, -plan.order())
+    }
+}
 
 impl UnitaryFrftGpuKernel {
     /// Execute `V diag(exp(-i a k pi / 2)) V^T` into caller-owned storage.

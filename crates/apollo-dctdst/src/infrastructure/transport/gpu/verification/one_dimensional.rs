@@ -8,6 +8,7 @@ use crate::{
 use super::support::{
     assert_cpu_differential, assert_roundtrip, backend, cpu_forward, ONE_DIMENSIONAL_TOLERANCE,
 };
+use crate::infrastructure::transport::gpu::RealTransformPlan;
 
 #[test]
 fn forward_matches_cpu_for_each_supported_kind() {
@@ -38,7 +39,7 @@ fn forward_matches_cpu_for_each_supported_kind() {
     ];
 
     for (kind, input) in cases {
-        let plan = backend.plan(input.len(), kind);
+        let plan = backend.plan(RealTransformPlan::new(input.len(), kind));
         let actual = backend.execute_forward(&plan, input).expect("GPU forward");
         assert_cpu_differential(
             &actual,
@@ -72,7 +73,7 @@ fn inverse_recovers_each_existing_roundtrip_case() {
     ];
 
     for (kind, input) in cases {
-        let plan = backend.plan(input.len(), kind);
+        let plan = backend.plan(RealTransformPlan::new(input.len(), kind));
         let spectrum = backend.execute_forward(&plan, input).expect("GPU forward");
         let actual = backend
             .execute_inverse(&plan, &spectrum)
@@ -87,7 +88,10 @@ fn caller_owned_execution_matches_allocating_execution() {
         return;
     };
     let input = [0.5_f32, -1.25, 2.0, -0.75, 0.25, 1.5];
-    let plan = backend.plan(input.len(), RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(
+        input.len(),
+        RealTransformKind::DctII,
+    ));
     let expected_forward = backend.execute_forward(&plan, &input).expect("forward");
     let mut forward = [0.0_f32; 6];
     backend
@@ -111,7 +115,10 @@ fn leto_boundaries_match_slice_execution() {
         return;
     };
     let input = vec![0.25_f32, -1.25, 2.0, -0.5, 3.0, 1.5];
-    let plan = backend.plan(input.len(), RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(
+        input.len(),
+        RealTransformKind::DctII,
+    ));
     let expected_forward = backend.execute_forward(&plan, &input).expect("forward");
     let leto_input = leto::Array1::from_shape_vec([input.len()], input).expect("Leto input");
     let actual_forward = backend
@@ -147,7 +154,10 @@ fn strided_leto_input_matches_its_logical_slice() {
         .copied()
         .flat_map(|value| [value, 99.0])
         .collect::<Vec<_>>();
-    let plan = backend.plan(logical.len(), RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(
+        logical.len(),
+        RealTransformKind::DctII,
+    ));
     let expected = backend
         .execute_forward(&plan, &logical)
         .expect("slice forward");
@@ -167,12 +177,18 @@ fn rejects_invalid_plan_and_length_contracts() {
         return;
     };
     let empty_error = backend
-        .execute_forward(&DctDstWgpuPlan::new(0, RealTransformKind::DctII), &[])
+        .execute_forward(
+            &DctDstWgpuPlan::new(RealTransformPlan::new(0, RealTransformKind::DctII)),
+            &[],
+        )
         .expect_err("empty plan must fail");
     assert!(matches!(empty_error, WgpuError::InvalidPlan { .. }));
 
     let mismatch_error = backend
-        .execute_forward(&DctDstWgpuPlan::new(8, RealTransformKind::DctII), &[0.0; 4])
+        .execute_forward(
+            &DctDstWgpuPlan::new(RealTransformPlan::new(8, RealTransformKind::DctII)),
+            &[0.0; 4],
+        )
         .expect_err("length mismatch must fail");
     assert!(matches!(
         mismatch_error,
@@ -183,7 +199,10 @@ fn rejects_invalid_plan_and_length_contracts() {
     ));
 
     let dct_one_error = backend
-        .execute_forward(&DctDstWgpuPlan::new(1, RealTransformKind::DctI), &[0.5])
+        .execute_forward(
+            &DctDstWgpuPlan::new(RealTransformPlan::new(1, RealTransformKind::DctI)),
+            &[0.5],
+        )
         .expect_err("DCT-I length one must fail");
     assert!(matches!(dct_one_error, WgpuError::InvalidPlan { .. }));
 }

@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for SDFT WGPU execution.
 
-/// Hephaestus WGPU device acquisition and execution boundary.
-pub mod device;
-/// SDFT compute kernel orchestration.
+/// Hephaestus kernel definitions for the SDFT passes.
 pub mod kernel;

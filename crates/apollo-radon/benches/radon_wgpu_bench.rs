@@ -7,7 +7,8 @@
 #![allow(missing_docs)]
 
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
-use apollo_radon::{RadonWgpuBackend, RadonWgpuPlan};
+use apollo_radon::ProjectionExecution;
+use apollo_radon::{GeometryPlan, RadonWgpuBackend, RadonWgpuPlan};
 use leto::Array2;
 use std::hint::black_box;
 use std::sync::OnceLock;
@@ -55,13 +56,13 @@ fn bench_forward(suite: &mut BenchmarkSuite) {
     let backend = RadonWgpuBackend::new(device);
 
     for &(image_size, angle_count, detector_count) in PARAMETERS {
-        let plan = RadonWgpuPlan::new(
+        let plan = RadonWgpuPlan::new(GeometryPlan::new(
             image_size,
             image_size,
             angle_count,
             detector_count,
-            detector_spacing(detector_count).to_bits(),
-        );
+            detector_spacing(detector_count),
+        ));
         let image = gaussian_phantom(image_size, image_size);
         let angles = projection_angles(angle_count);
         suite.run(
@@ -84,13 +85,13 @@ fn bench_filtered_backproject(suite: &mut BenchmarkSuite) {
     let backend = RadonWgpuBackend::new(device);
 
     for &(image_size, angle_count, detector_count) in PARAMETERS {
-        let plan = RadonWgpuPlan::new(
+        let plan = RadonWgpuPlan::new(GeometryPlan::new(
             image_size,
             image_size,
             angle_count,
             detector_count,
-            detector_spacing(detector_count).to_bits(),
-        );
+            detector_spacing(detector_count),
+        ));
         let image = gaussian_phantom(image_size, image_size);
         let angles = projection_angles(angle_count);
         let sinogram = backend

@@ -11,10 +11,10 @@ fn typed_mixed_storage_matches_represented_f32_execution_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    use apollo_fft::{f16, PrecisionProfile};
+    use apollo_fft::{f16, CpuStorage, PrecisionProfile};
     let represented = [1.0_f32, -0.5, 2.0, 0.25, -1.25, 0.75, 3.0, -2.0];
     let input: Vec<f16> = represented.iter().copied().map(f16::from_f32).collect();
-    let represented_input: Vec<f32> = input.iter().map(|v| v.to_f64() as f32).collect();
+    let represented_input: Vec<f32> = input.iter().map(|v| v.to_cpu() as f32).collect();
     let plan = WaveletWgpuPlan::new(HaarDwtPlan {
         len: input.len(),
         levels: 3,
@@ -84,7 +84,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
         .expect("typed slice forward");
     let input_leto = leto::Array1::from_shape_vec([input.len()], input).expect("input");
     let actual_forward = backend
-        .execute_forward_leto_typed(
+        .execute_forward_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             input_leto.view(),
@@ -115,7 +115,7 @@ fn typed_leto_forward_and_inverse_match_typed_slice_when_device_exists() {
     let coeffs_leto = leto::Array1::from_shape_vec([expected_forward.len()], expected_forward)
         .expect("coefficients");
     let actual_inverse = backend
-        .execute_inverse_leto_typed(
+        .execute_inverse_leto_typed::<f16, f16>(
             &plan,
             PrecisionProfile::MIXED_PRECISION_F16_F32,
             coeffs_leto.view(),

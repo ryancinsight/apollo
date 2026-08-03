@@ -21,8 +21,20 @@ const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
 const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "false positive: the initializer is already a const block"
+    )]
     static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

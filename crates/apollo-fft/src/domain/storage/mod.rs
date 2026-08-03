@@ -9,3 +9,5 @@ mod views;
 
 pub use contract::{FftSample, FftStorage};
 pub use views::{FftInterleavedCow, FftInterleavedMut, FftPlanarMut};
+/// Shared CPU-tier scalar storage vocabulary.
+pub mod scalar;

@@ -8,14 +8,15 @@ use crate::{
 };
 
 use super::support::{backend, REPRESENTED_STORAGE_TOLERANCE};
+use crate::infrastructure::transport::gpu::{HarmonicExecution, SphericalPlan};
 
 #[test]
 fn typed_flat_mixed_storage_matches_represented_forward_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = ShtWgpuPlan::new(3, 5, 2);
-    let signal: Vec<Complex32> = (0..plan.sample_count())
+    let plan = ShtWgpuPlan::new(SphericalPlan::new(3, 5, 2));
+    let signal: Vec<Complex32> = (0..plan.payload().sample_count())
         .map(|index| Complex32::new(0.5 + index as f32 * 0.1, 0.1 * (index as f32 + 1.0)))
         .collect();
     let reduced_input: Vec<[f16; 2]> = signal
@@ -26,8 +27,11 @@ fn typed_flat_mixed_storage_matches_represented_forward_when_device_exists() {
         .iter()
         .map(|value| Complex32::new(value[0].to_f32(), value[1].to_f32()))
         .collect();
-    let samples = Array2::from_shape_vec([plan.latitudes(), plan.longitudes()], represented)
-        .expect("reshape represented samples");
+    let samples = Array2::from_shape_vec(
+        [plan.payload().latitudes(), plan.payload().longitudes()],
+        represented,
+    )
+    .expect("reshape represented samples");
 
     let expected = backend
         .execute_forward(&plan, &samples)
@@ -40,9 +44,9 @@ fn typed_flat_mixed_storage_matches_represented_forward_when_device_exists() {
         )
         .expect("typed flat mixed forward");
 
-    assert_eq!(actual.max_degree(), plan.max_degree());
+    assert_eq!(actual.max_degree(), plan.payload().max_degree());
     assert_eq!(actual.max_degree(), expected.max_degree());
-    for degree in 0..=plan.max_degree() {
+    for degree in 0..=plan.payload().max_degree() {
         for order in -(degree as isize)..=(degree as isize) {
             let actual_value = actual.get(degree, order);
             let expected_value = expected.get(degree, order);
@@ -63,8 +67,8 @@ fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = ShtWgpuPlan::new(3, 5, 2);
-    let input: Vec<[f16; 2]> = (0..plan.sample_count())
+    let plan = ShtWgpuPlan::new(SphericalPlan::new(3, 5, 2));
+    let input: Vec<[f16; 2]> = (0..plan.payload().sample_count())
         .map(|index| {
             [
                 f16::from_f32(0.5 + index as f32 * 0.1),
@@ -93,7 +97,7 @@ fn typed_flat_leto_forward_and_inverse_match_slice_when_device_exists() {
             .expect("contiguous coefficients")
     );
 
-    let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; plan.sample_count()];
+    let mut expected_inverse = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
     backend
         .execute_inverse_flat_typed_into(
             &plan,
@@ -127,8 +131,8 @@ fn typed_flat_path_rejects_profile_mismatch_when_device_exists() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = ShtWgpuPlan::new(3, 5, 2);
-    let flat_input = vec![[f16::from_f32(0.0); 2]; plan.sample_count()];
+    let plan = ShtWgpuPlan::new(SphericalPlan::new(3, 5, 2));
+    let flat_input = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
 
     let forward_error = backend
         .execute_forward_flat_typed::<[f16; 2]>(
@@ -139,8 +143,8 @@ fn typed_flat_path_rejects_profile_mismatch_when_device_exists() {
         .expect_err("profile mismatch must fail");
     assert!(matches!(forward_error, WgpuError::InvalidPrecisionProfile));
 
-    let coefficients = SphericalHarmonicCoefficients::zeros(plan.max_degree());
-    let mut output = vec![[f16::from_f32(0.0); 2]; plan.sample_count()];
+    let coefficients = SphericalHarmonicCoefficients::zeros(plan.payload().max_degree());
+    let mut output = vec![[f16::from_f32(0.0); 2]; plan.payload().sample_count()];
     let inverse_error = backend
         .execute_inverse_flat_typed_into::<[f16; 2]>(
             &plan,

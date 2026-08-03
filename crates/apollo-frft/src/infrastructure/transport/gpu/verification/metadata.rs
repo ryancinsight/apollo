@@ -3,6 +3,7 @@ use apollo_fft::PrecisionProfile;
 use crate::infrastructure::transport::gpu::{FrftWgpuPlan, WgpuCapabilities, WgpuError};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::OrderPlan;
 
 #[test]
 fn capabilities_reflect_implemented_kernel_surface() {
@@ -30,11 +31,11 @@ fn available_backend_reports_forward_and_inverse_capabilities() {
 
 #[test]
 fn plan_preserves_logical_length() {
-    let plan = FrftWgpuPlan::new(64, 1.0_f32);
+    let plan = FrftWgpuPlan::new(OrderPlan::new(64, 1.0_f32));
     assert_eq!(plan.len(), 64);
-    assert_eq!(plan.order(), 1.0_f32);
-    assert!(!FrftWgpuPlan::new(64, 1.0).is_empty());
-    assert!(FrftWgpuPlan::new(0, 1.0).is_empty());
+    assert_eq!(plan.payload().order(), 1.0_f32);
+    assert!(!FrftWgpuPlan::new(OrderPlan::new(64, 1.0)).is_empty());
+    assert!(FrftWgpuPlan::new(OrderPlan::new(0, 1.0)).is_empty());
 }
 
 #[test]

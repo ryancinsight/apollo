@@ -3,6 +3,7 @@ use leto::{Array3, Storage};
 use crate::{infrastructure::transport::gpu::WgpuError, DctDstPlan, RealTransformKind};
 
 use super::support::{assert_cpu_differential, assert_roundtrip, backend, DIMENSIONAL_TOLERANCE};
+use crate::infrastructure::transport::gpu::{RealTransformPlan, SeparableExecution};
 
 const INPUT: [f32; 27] = [
     1.0, -2.0, 0.5, 0.25, 3.0, -1.5, -0.75, 0.5, 2.0, 0.1, -0.3, 1.2, -0.5, 2.1, -1.1, 0.7, -0.9,
@@ -60,7 +61,7 @@ fn dct_two_forward_matches_independent_cpu_separable_reference() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let actual = backend
         .execute_forward_3d(&plan, input.as_slice().expect("contiguous input"))
         .expect("GPU 3D forward");
@@ -73,7 +74,7 @@ fn dct_two_inverse_recovers_input() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let spectrum = backend
         .execute_forward_3d(&plan, input.as_slice().expect("contiguous input"))
         .expect("GPU 3D forward");
@@ -93,7 +94,7 @@ fn leto_three_dimensional_boundary_matches_slice_execution() {
         return;
     };
     let input = input();
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let expected_forward = backend
         .execute_forward_3d(&plan, input.as_slice().expect("contiguous input"))
         .expect("3D forward");
@@ -124,7 +125,7 @@ fn three_dimensional_execution_rejects_non_cubic_input() {
     let Some(backend) = backend() else {
         return;
     };
-    let plan = backend.plan(3, RealTransformKind::DctII);
+    let plan = backend.plan(RealTransformPlan::new(3, RealTransformKind::DctII));
     let input = Array3::<f32>::zeros([2, 3, 3]);
     let error = backend
         .execute_forward_3d(&plan, input.as_slice().expect("contiguous input"))

@@ -22,7 +22,10 @@ use hephaestus_core::{
     Wgsl,
 };
 
-use crate::infrastructure::transport::gpu::domain::error::{WgpuError, WgpuResult};
+use apollo_fft::{GpuTransformExecutor, GpuTransformPlanner, WgpuError, WgpuResult};
+use hephaestus_wgpu::WgpuDevice;
+
+use crate::infrastructure::transport::gpu::SparsityPlan;
 
 const WORKGROUP_SIZE: usize = 64;
 const SFT_SOURCE: &str = include_str!("shaders/sft.wgsl");
@@ -40,7 +43,7 @@ pub enum SftMode {
 /// Uniform parameters matching WGSL `SftParams`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(crate) struct SftParams {
+pub struct SftParams {
     len: u32,
     mode: u32,
     padding: [u32; 2],
@@ -62,7 +65,78 @@ impl SftParams {
 
 /// Zero-sized Hephaestus descriptor for the direction-parameterized direct DFT.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct SftGpuKernel;
+pub struct SftGpuKernel;
+
+impl GpuTransformPlanner for SftGpuKernel {
+    type Plan = SparsityPlan;
+
+    fn input_len(plan: &SparsityPlan) -> usize {
+        plan.len()
+    }
+
+    fn validate(plan: &SparsityPlan) -> WgpuResult<()> {
+        if plan.len() == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan len={}, sparsity={}: transform length must be greater than zero",
+                    plan.len(),
+                    plan.sparsity()
+                ),
+            });
+        }
+        if plan.sparsity() == 0 {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan len={}, sparsity={}: sparsity must be greater than zero",
+                    plan.len(),
+                    plan.sparsity()
+                ),
+            });
+        }
+        if plan.sparsity() > plan.len() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan len={}, sparsity={}: sparsity must not exceed transform length",
+                    plan.len(),
+                    plan.sparsity()
+                ),
+            });
+        }
+        if u32::try_from(plan.len()).is_err() {
+            return Err(WgpuError::InvalidPlan {
+                message: format!(
+                    "invalid plan len={}, sparsity={}: length exceeds the accelerator parameter range",
+                    plan.len(),
+                    plan.sparsity()
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuTransformExecutor for SftGpuKernel {
+    type Sample = Complex32;
+    type Bin = Complex32;
+
+    fn forward_into(
+        device: &WgpuDevice,
+        _plan: &SparsityPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, SftMode::Forward)
+    }
+
+    fn inverse_into(
+        device: &WgpuDevice,
+        _plan: &SparsityPlan,
+        input: &[Complex32],
+        output: &mut [Complex32],
+    ) -> WgpuResult<()> {
+        Self::execute_into(device, input, output, SftMode::Inverse)
+    }
+}
 
 impl KernelInterface for SftGpuKernel {
     type Params = SftParams;

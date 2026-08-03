@@ -3,6 +3,7 @@
 use crate::infrastructure::transport::gpu::{StftWgpuPlan, WgpuCapabilities, WgpuError};
 
 use super::support::backend;
+use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
 
 #[test]
 fn capabilities_reflect_forward_only_surface() {
@@ -28,12 +29,12 @@ fn capabilities_reflect_forward_only_surface() {
 
 #[test]
 fn capabilities_reflect_forward_and_inverse_surface() {
-    let caps = WgpuCapabilities::forward_and_inverse(true);
+    let caps = WgpuCapabilities::implemented(true);
     assert!(caps.device_available);
     assert!(caps.supports_forward);
     assert!(caps.supports_inverse);
     assert!(caps.supports_mixed_precision);
-    let caps_off = WgpuCapabilities::forward_and_inverse(false);
+    let caps_off = WgpuCapabilities::detected(false);
     assert!(!caps_off.device_available);
     assert!(!caps_off.supports_forward);
     assert!(!caps_off.supports_inverse);
@@ -41,13 +42,13 @@ fn capabilities_reflect_forward_and_inverse_surface() {
 
 #[test]
 fn plan_preserves_frame_and_hop_length() {
-    let plan = StftWgpuPlan::new(8, 4);
-    assert_eq!(plan.frame_len(), 8);
-    assert_eq!(plan.hop_len(), 4);
+    let plan = StftWgpuPlan::new(FramePlan::new(8, 4));
+    assert_eq!(plan.payload().frame_len(), 8);
+    assert_eq!(plan.payload().hop_len(), 4);
     assert_eq!(plan.len(), 8);
     assert!(!plan.is_empty());
-    assert!(StftWgpuPlan::new(0, 4).is_empty());
-    assert!(StftWgpuPlan::new(8, 0).is_empty());
+    assert!(StftWgpuPlan::new(FramePlan::new(0, 4)).is_empty());
+    assert!(StftWgpuPlan::new(FramePlan::new(8, 0)).validate().is_err());
 }
 
 #[test]
@@ -67,19 +68,19 @@ fn stft_wgpu_rejects_invalid_plan() {
         return;
     };
     // zero frame_len
-    let r = backend.execute_forward(&StftWgpuPlan::new(0, 4), &[0.0f32; 8]);
+    let r = backend.execute_forward(&StftWgpuPlan::new(FramePlan::new(0, 4)), &[0.0f32; 8]);
     assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
 
     // zero hop_len
-    let r = backend.execute_forward(&StftWgpuPlan::new(8, 0), &[0.0f32; 8]);
+    let r = backend.execute_forward(&StftWgpuPlan::new(FramePlan::new(8, 0)), &[0.0f32; 8]);
     assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
 
     // hop > frame
-    let r = backend.execute_forward(&StftWgpuPlan::new(4, 8), &[0.0f32; 4]);
+    let r = backend.execute_forward(&StftWgpuPlan::new(FramePlan::new(4, 8)), &[0.0f32; 4]);
     assert!(matches!(r, Err(WgpuError::InvalidPlan { .. })), "{r:?}");
 
     // signal too short
-    let r = backend.execute_forward(&StftWgpuPlan::new(8, 4), &[0.0f32; 4]);
+    let r = backend.execute_forward(&StftWgpuPlan::new(FramePlan::new(8, 4)), &[0.0f32; 4]);
     assert!(matches!(r, Err(WgpuError::InputTooShort { .. })), "{r:?}");
 }
 

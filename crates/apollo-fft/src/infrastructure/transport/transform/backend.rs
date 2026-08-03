@@ -31,6 +31,11 @@ pub trait GpuTransformPlanner {
     /// Plan payload carried by this transform's descriptors.
     type Plan: Copy + core::fmt::Debug + PartialEq + Send + Sync + 'static;
 
+    /// Whether reduced-precision typed dispatch exists for this
+    /// transform. Integer/exact transforms override to `false` so the
+    /// capability descriptor stays truthful.
+    const MIXED_PRECISION: bool = true;
+
     /// Logical input length demanded by a plan payload.
     fn input_len(plan: &Self::Plan) -> usize;
 
@@ -118,7 +123,13 @@ impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
     /// Return truthful current capabilities.
     #[must_use]
     pub const fn capabilities(&self) -> WgpuCapabilities {
-        WgpuCapabilities::implemented(true)
+        WgpuCapabilities {
+            device_available: true,
+            supports_forward: true,
+            supports_inverse: true,
+            supports_mixed_precision: X::MIXED_PRECISION,
+            default_precision_profile: crate::PrecisionProfile::LOW_PRECISION_F32,
+        }
     }
 
     /// Return the acquired Hephaestus device implementation.
@@ -279,33 +290,55 @@ impl<X: GpuTransformExecutor> WgpuTransformBackend<X> {
     }
 }
 
-impl<E, X> WgpuTransformBackend<X>
+impl<X: GpuTransformExecutor> WgpuTransformBackend<X>
 where
-    E: GpuElement,
-    X: GpuTransformExecutor<Sample = E, Bin = E>,
+    X::Sample: GpuElement,
+    X::Bin: GpuElement,
 {
     /// Execute the unnormalized forward transform with caller-owned typed
     /// storage.
     ///
-    /// WGPU arithmetic stays in the transform's native element; reduced
+    /// WGPU arithmetic stays in the transform's native elements; reduced
     /// storage forms are promoted once to the represented element before
-    /// dispatch and quantized at the output boundary. Available on
-    /// symmetric transforms, whose forward and inverse directions share
-    /// one element.
+    /// dispatch and quantized at the output boundary. Input storage maps
+    /// onto the sample element and output storage onto the bin element,
+    /// so asymmetric transforms (real in, complex out) dispatch with
+    /// independently typed sides.
     ///
     /// # Errors
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_forward_typed_into<T: GpuStorage<E>>(
+    pub fn execute_forward_typed_into<I, O>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
-        input: &[T],
-        output: &mut [T],
-    ) -> WgpuResult<()> {
-        Self::validate_typed::<T>(plan, precision, input.len(), output.len())?;
-        self.execute_typed_into(plan, input, output, false)
+        input: &[I],
+        output: &mut [O],
+    ) -> WgpuResult<()>
+    where
+        I: GpuStorage<X::Sample>,
+        O: GpuStorage<X::Bin>,
+    {
+        Self::validate_typed::<I, O>(plan, precision, input.len(), output.len())?;
+        let run = |represented: &[X::Sample], computed: &mut [X::Bin]| {
+            X::forward_into(&self.device, plan.payload(), represented, computed)
+        };
+        match (I::as_element_slice(input), O::as_element_slice_mut(output)) {
+            (Some(input), Some(output)) => run(input, output),
+            _ => X::Sample::with_input_scratch(input.len(), |represented| {
+                for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *slot = value.to_gpu();
+                }
+                X::Bin::with_output_scratch(output.len(), |computed| {
+                    run(represented, computed)?;
+                    for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                        *slot = O::from_gpu(value);
+                    }
+                    Ok(())
+                })
+            }),
+        }
     }
 
     /// Execute the unnormalized forward transform from typed Leto storage.
@@ -317,15 +350,19 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_forward_leto_typed<T: GpuStorage<E> + Default>(
+    pub fn execute_forward_leto_typed<I, O>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
-        input: leto::ArrayView1<'_, T>,
-    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        input: leto::ArrayView1<'_, I>,
+    ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>>
+    where
+        I: GpuStorage<X::Sample>,
+        O: GpuStorage<X::Bin> + Default,
+    {
         let input = apollo_leto_interop::view_cow(&input);
         let mut output =
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.output_len()]);
+            leto::Array::<O, leto::MnemosyneStorage<O>, 1>::zeros_mnemosyne([plan.output_len()]);
         self.execute_forward_typed_into(
             plan,
             precision,
@@ -344,15 +381,36 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_inverse_typed_into<T: GpuStorage<E>>(
+    pub fn execute_inverse_typed_into<I, O>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
-        input: &[T],
-        output: &mut [T],
-    ) -> WgpuResult<()> {
-        Self::validate_typed::<T>(plan, precision, input.len(), output.len())?;
-        self.execute_typed_into(plan, input, output, true)
+        input: &[I],
+        output: &mut [O],
+    ) -> WgpuResult<()>
+    where
+        I: GpuStorage<X::Bin>,
+        O: GpuStorage<X::Sample>,
+    {
+        Self::validate_typed_inverse::<I, O>(plan, precision, input.len(), output.len())?;
+        let run = |represented: &[X::Bin], computed: &mut [X::Sample]| {
+            X::inverse_into(&self.device, plan.payload(), represented, computed)
+        };
+        match (I::as_element_slice(input), O::as_element_slice_mut(output)) {
+            (Some(input), Some(output)) => run(input, output),
+            _ => X::Bin::with_input_scratch(input.len(), |represented| {
+                for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
+                    *slot = value.to_gpu();
+                }
+                X::Sample::with_output_scratch(output.len(), |computed| {
+                    run(represented, computed)?;
+                    for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
+                        *slot = O::from_gpu(value);
+                    }
+                    Ok(())
+                })
+            }),
+        }
     }
 
     /// Execute the normalized inverse transform from typed Leto storage.
@@ -361,15 +419,19 @@ where
     ///
     /// Returns an invalid-plan, length-mismatch, precision-profile, or
     /// provider failure.
-    pub fn execute_inverse_leto_typed<T: GpuStorage<E> + Default>(
+    pub fn execute_inverse_leto_typed<I, O>(
         &self,
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
-        input: leto::ArrayView1<'_, T>,
-    ) -> WgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
+        input: leto::ArrayView1<'_, I>,
+    ) -> WgpuResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>>
+    where
+        I: GpuStorage<X::Bin>,
+        O: GpuStorage<X::Sample> + Default,
+    {
         let input = apollo_leto_interop::view_cow(&input);
         let mut output =
-            leto::Array::<T, leto::MnemosyneStorage<T>, 1>::zeros_mnemosyne([plan.len()]);
+            leto::Array::<O, leto::MnemosyneStorage<O>, 1>::zeros_mnemosyne([plan.len()]);
         self.execute_inverse_typed_into(
             plan,
             precision,
@@ -381,50 +443,50 @@ where
         Ok(output)
     }
 
-    fn validate_typed<T: GpuStorage<E>>(
+    fn validate_profiles(
+        precision: PrecisionProfile,
+        input_profile: PrecisionProfile,
+        output_profile: PrecisionProfile,
+    ) -> WgpuResult<()> {
+        for expected in [input_profile, output_profile] {
+            if precision.storage != expected.storage || precision.compute != expected.compute {
+                return Err(WgpuError::InvalidPrecisionProfile);
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_typed<I, O>(
         plan: &WgpuTransformPlan<X>,
         precision: PrecisionProfile,
         input_len: usize,
         output_len: usize,
-    ) -> WgpuResult<()> {
-        let expected = T::PROFILE;
-        if precision.storage != expected.storage || precision.compute != expected.compute {
-            return Err(WgpuError::InvalidPrecisionProfile);
-        }
+    ) -> WgpuResult<()>
+    where
+        I: GpuStorage<X::Sample>,
+        O: GpuStorage<X::Bin>,
+    {
+        Self::validate_profiles(precision, I::PROFILE, O::PROFILE)?;
         Self::validate_plan(plan)?;
         Self::require_len("typed input", input_len, plan.len())?;
         Self::require_len("typed output", output_len, plan.output_len())?;
         Ok(())
     }
 
-    fn execute_typed_into<T: GpuStorage<E>>(
-        &self,
+    fn validate_typed_inverse<I, O>(
         plan: &WgpuTransformPlan<X>,
-        input: &[T],
-        output: &mut [T],
-        inverse: bool,
-    ) -> WgpuResult<()> {
-        let run = |represented: &[E], computed: &mut [E]| {
-            if inverse {
-                X::inverse_into(&self.device, plan.payload(), represented, computed)
-            } else {
-                X::forward_into(&self.device, plan.payload(), represented, computed)
-            }
-        };
-        if let (Some(input), Some(output)) =
-            (T::as_element_slice(input), T::as_element_slice_mut(output))
-        {
-            return run(input, output);
-        }
-        E::with_scratch(input.len(), output.len(), |represented, computed| {
-            for (slot, value) in represented.iter_mut().zip(input.iter().copied()) {
-                *slot = value.to_gpu();
-            }
-            run(represented, computed)?;
-            for (slot, value) in output.iter_mut().zip(computed.iter().copied()) {
-                *slot = T::from_gpu(value);
-            }
-            Ok(())
-        })
+        precision: PrecisionProfile,
+        input_len: usize,
+        output_len: usize,
+    ) -> WgpuResult<()>
+    where
+        I: GpuStorage<X::Bin>,
+        O: GpuStorage<X::Sample>,
+    {
+        Self::validate_profiles(precision, I::PROFILE, O::PROFILE)?;
+        Self::validate_plan(plan)?;
+        Self::require_len("typed inverse input", input_len, plan.output_len())?;
+        Self::require_len("typed inverse output", output_len, plan.len())?;
+        Ok(())
     }
 }

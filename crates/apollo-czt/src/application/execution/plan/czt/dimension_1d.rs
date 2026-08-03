@@ -1,8 +1,8 @@
 //! 1D Chirp Z-Transform Plan
 
-pub mod helpers;
 pub mod plan;
 pub mod typed;
+pub mod workspace;
 
 #[cfg(test)]
 mod tests;
@@ -13,6 +13,6 @@ mod leto_tests;
 #[cfg(test)]
 mod proptests;
 
-pub use helpers::is_valid_length;
 pub use plan::CztPlan;
 pub use typed::CztStorage;
+pub use workspace::is_valid_length;

@@ -3,10 +3,10 @@
 use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::metadata::wavelet::DiscreteWavelet;
 
+/// Internal conversion and validation helpers.
+pub mod boundary;
 /// Forward transform implementations.
 pub mod forward;
-/// Internal conversion and validation helpers.
-pub mod helpers;
 /// Inverse transform implementations.
 pub mod inverse;
 /// Typed storage transform implementations.

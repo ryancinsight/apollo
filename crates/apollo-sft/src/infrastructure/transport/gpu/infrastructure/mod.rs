@@ -1,6 +1,4 @@
-//! WGPU infrastructure.
+//! Infrastructure for SFT WGPU execution.
 
-/// WGPU device acquisition.
-pub mod device;
-/// SFT compute kernel orchestration.
+/// Hephaestus kernel definitions for the SFT passes.
 pub mod kernel;
