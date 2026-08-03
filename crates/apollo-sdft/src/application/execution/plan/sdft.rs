@@ -4,27 +4,14 @@
 //! update removes the oldest sample, appends the new sample, and updates all
 //! tracked bins through the sliding DFT recurrence.
 
-#![cfg_attr(
-    windows,
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
-    )
-)]
 use crate::domain::contracts::error::{SdftError, SdftResult};
 use crate::domain::metadata::window::SlidingDftConfig;
 use crate::infrastructure::kernel::sliding::{
     direct_bins, direct_bins_into, update_bins, update_twiddles,
 };
-use apollo_fft::{f16, PrecisionProfile};
-use eunomia::{Complex32, Complex64};
-use mnemosyne::scratch::ScratchPool;
+use apollo_fft::{CpuElement, CpuStorage, PrecisionProfile};
+use eunomia::Complex64;
 use std::collections::VecDeque;
-
-thread_local! {
-    static TYPED_WINDOW64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    static TYPED_BINS64_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-}
 
 /// Reusable SDFT plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -119,7 +106,7 @@ impl SdftPlan {
     }
 
     /// Compute direct DFT bins for typed real input and typed complex output storage.
-    pub fn direct_bins_typed_into<T: SdftRealStorage, O: SdftBinStorage>(
+    pub fn direct_bins_typed_into<T: CpuStorage, O: CpuStorage<Complex64>>(
         &self,
         window: &[T],
         output: &mut [O],
@@ -135,24 +122,24 @@ impl SdftPlan {
         }
         with_typed_direct_workspaces(window.len(), output.len(), |input64, output64| {
             for (slot, value) in input64.iter_mut().zip(window.iter().copied()) {
-                *slot = T::to_f64(value);
+                *slot = value.to_cpu();
             }
             self.direct_bins_into(input64, output64)?;
             for (slot, value) in output.iter_mut().zip(output64.iter().copied()) {
-                *slot = O::from_complex64(value);
+                *slot = O::from_cpu(value);
             }
             Ok(())
         })
     }
 
     /// Compute direct DFT bins from typed Leto real input storage.
-    pub fn direct_bins_leto_typed<T: SdftRealStorage, O: SdftBinStorage>(
+    pub fn direct_bins_leto_typed<T: CpuStorage, O: CpuStorage<Complex64>>(
         &self,
         window: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
     ) -> SdftResult<leto::Array<O, leto::MnemosyneStorage<O>, 1>> {
         let window = apollo_leto_interop::view_cow(&window);
-        let mut output = vec![O::from_complex64(Complex64::new(0.0, 0.0)); self.bin_count()];
+        let mut output = vec![O::from_cpu(Complex64::new(0.0, 0.0)); self.bin_count()];
         self.direct_bins_typed_into(&window, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(&output)
             .ok_or(SdftError::OutputBinLengthMismatch)
@@ -164,136 +151,17 @@ fn with_typed_direct_workspaces<R>(
     bin_count: usize,
     f: impl FnOnce(&mut [f64], &mut [Complex64]) -> SdftResult<R>,
 ) -> SdftResult<R> {
-    TYPED_WINDOW64_SCRATCH.with(|window_cell| {
-        window_cell.with_scratch(window_len, |window| {
-            TYPED_BINS64_SCRATCH
-                .with(|bins_cell| bins_cell.with_scratch(bin_count, |bins| f(window, bins)))
-        })
+    f64::with_input_scratch(window_len, |window| {
+        Complex64::with_output_scratch(bin_count, |bins| f(window, bins))
     })
 }
 
 #[cfg(test)]
 fn typed_direct_workspace_capacities() -> (usize, usize) {
-    let window = TYPED_WINDOW64_SCRATCH.with(|cell| cell.capacity());
-    let bins = TYPED_BINS64_SCRATCH.with(|cell| cell.capacity());
-    (window, bins)
-}
-
-/// Real input storage accepted by typed SDFT direct-bin paths.
-pub trait SdftRealStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into owner `f64` arithmetic.
-    fn to_f64(self) -> f64;
-
-    /// View slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `f32` if layout is identical.
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        let _ = slice;
-        None
-    }
-}
-
-impl SdftRealStorage for f64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_f64(self) -> f64 {
-        self
-    }
-}
-
-impl SdftRealStorage for f32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self)
-    }
-
-    #[inline]
-    fn as_f32_slice(slice: &[Self]) -> Option<&[f32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_f32_slice_mut(slice: &mut [Self]) -> Option<&mut [f32]> {
-        Some(slice)
-    }
-}
-
-impl SdftRealStorage for f16 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_f64(self) -> f64 {
-        f64::from(self.to_f32())
-    }
-}
-
-/// Complex output storage accepted by typed SDFT direct-bin paths.
-pub trait SdftBinStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
-    /// View slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        let _ = slice;
-        None
-    }
-
-    /// View mutable slice as `Complex32` if layout is identical.
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        let _ = slice;
-        None
-    }
-}
-
-impl SdftBinStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-}
-
-impl SdftBinStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
-    #[inline]
-    fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
-        Some(slice)
-    }
-
-    #[inline]
-    fn as_c32_slice_mut(slice: &mut [Self]) -> Option<&mut [Complex32]> {
-        Some(slice)
-    }
-}
-
-impl SdftBinStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
+    (
+        f64::scratch_capacities().0,
+        Complex64::scratch_capacities().1,
+    )
 }
 
 fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> SdftResult<()> {
@@ -359,7 +227,9 @@ impl SdftState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apollo_fft::f16;
     use eunomia::assert_abs_diff_eq;
+    use eunomia::Complex32;
 
     #[test]
     fn caller_owned_direct_bins_match_allocating_path() {

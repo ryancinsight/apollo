@@ -1,16 +1,12 @@
 //! 1D Short-Time Fourier Transform plan.
 
-use super::super::storage::{
-    validate_profile, StftRealOutputStorage, StftRealStorage, StftSpectrumInput,
-    StftSpectrumStorage,
-};
 use super::windowing::{
     window_complex_real_frame_into, window_signal_frame_into, with_forward_typed_workspaces,
     with_inverse_typed_workspaces, with_inverse_wola_workspaces,
 };
 use crate::application::execution::kernel::hann::hann_window;
 use crate::domain::contracts::error::{StftError, StftResult};
-use apollo_fft::{FftPlan1D, PrecisionProfile, Shape1D};
+use apollo_fft::{CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
 use leto::Array1;
 
@@ -172,7 +168,7 @@ impl StftPlan {
     }
 
     /// Forward STFT for typed real input and typed complex output storage.
-    pub fn forward_typed_into<T: StftRealStorage, O: StftSpectrumStorage>(
+    pub fn forward_typed_into<T: CpuStorage, O: CpuStorage<Complex64>>(
         &self,
         signal: &Array1<T>,
         output: &mut Array1<O>,
@@ -189,7 +185,7 @@ impl StftPlan {
         }
         with_forward_typed_workspaces(signal.size(), output.size(), |signal64, output64| {
             for (slot, value) in signal64.iter_mut().zip(signal.iter().copied()) {
-                *slot = T::to_f64(value);
+                *slot = value.to_cpu();
             }
             self.forward_f64_slice_into(signal64, output64)?;
             for (slot, value) in output
@@ -198,14 +194,14 @@ impl StftPlan {
                 .iter_mut()
                 .zip(output64.iter().copied())
             {
-                *slot = O::from_complex64(value);
+                *slot = O::from_cpu(value);
             }
             Ok(())
         })
     }
 
     /// Forward STFT from typed Leto input into typed Leto spectrum storage.
-    pub fn forward_leto_typed<T: StftRealStorage, O: StftSpectrumStorage>(
+    pub fn forward_leto_typed<T: CpuStorage, O: CpuStorage<Complex64>>(
         &self,
         signal: leto::ArrayView1<'_, T>,
         profile: PrecisionProfile,
@@ -220,7 +216,7 @@ impl StftPlan {
         let frames = self.frame_count(signal.size());
         let mut output = Array1::<O>::from_elem(
             [frames * self.spectrum_len()],
-            O::from_complex64(Complex64::new(0.0, 0.0)),
+            O::from_cpu(Complex64::new(0.0, 0.0)),
         );
         self.forward_typed_into(&signal, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(
@@ -391,7 +387,7 @@ impl StftPlan {
     }
 
     /// Inverse STFT for typed complex spectrum and typed real output storage.
-    pub fn inverse_typed_into<T: StftSpectrumInput, O: StftRealOutputStorage>(
+    pub fn inverse_typed_into<T: CpuStorage<Complex64>, O: CpuStorage>(
         &self,
         spectrum: &Array1<T>,
         signal_len: usize,
@@ -409,7 +405,7 @@ impl StftPlan {
         }
         with_inverse_typed_workspaces(spectrum.size(), signal_len, |spectrum64, output64| {
             for (slot, value) in spectrum64.iter_mut().zip(spectrum.iter().copied()) {
-                *slot = T::to_complex64(value);
+                *slot = value.to_cpu();
             }
             self.inverse_complex64_slice_into(spectrum64, signal_len, output64)?;
             for (slot, value) in output
@@ -418,14 +414,14 @@ impl StftPlan {
                 .iter_mut()
                 .zip(output64.iter().copied())
             {
-                *slot = O::from_f64(value);
+                *slot = O::from_cpu(value);
             }
             Ok(())
         })
     }
 
     /// Inverse STFT from typed Leto spectrum storage into typed Leto signal storage.
-    pub fn inverse_leto_typed<T: StftSpectrumInput, O: StftRealOutputStorage>(
+    pub fn inverse_leto_typed<T: CpuStorage<Complex64>, O: CpuStorage>(
         &self,
         spectrum: leto::ArrayView1<'_, T>,
         signal_len: usize,
@@ -438,11 +434,19 @@ impl StftPlan {
         }
         let spectrum = apollo_leto_interop::view_cow(&spectrum);
         let spectrum = Array1::from(spectrum.into_owned());
-        let mut output = Array1::<O>::from_elem([signal_len], O::from_f64(0.0));
+        let mut output = Array1::<O>::from_elem([signal_len], O::from_cpu(0.0));
         self.inverse_typed_into(&spectrum, signal_len, &mut output, profile)?;
         apollo_leto_interop::try_array1_from_slice(
             output.as_slice().expect("STFT output must be contiguous"),
         )
         .ok_or(StftError::LengthMismatch)
+    }
+}
+
+fn validate_profile(actual: PrecisionProfile, expected: PrecisionProfile) -> StftResult<()> {
+    if actual.matches_storage_and_compute(expected) {
+        Ok(())
+    } else {
+        Err(StftError::PrecisionMismatch)
     }
 }

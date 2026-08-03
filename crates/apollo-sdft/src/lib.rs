@@ -14,9 +14,7 @@ pub mod infrastructure;
 #[cfg(test)]
 mod verification;
 
-pub use application::execution::plan::sdft::{
-    SdftBinStorage, SdftPlan, SdftRealStorage, SdftState,
-};
+pub use application::execution::plan::sdft::{SdftPlan, SdftState};
 pub use domain::contracts::error::{SdftError, SdftResult};
 pub use domain::metadata::window::SlidingDftConfig;
 

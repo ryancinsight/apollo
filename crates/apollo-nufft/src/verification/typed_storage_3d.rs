@@ -1,8 +1,5 @@
-use crate::{
-    NufftComplexStorage, NufftPlan3D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH,
-    DEFAULT_NUFFT_OVERSAMPLING,
-};
-use apollo_fft::{f16, ApolloError, Complex32, PrecisionProfile};
+use crate::{NufftPlan3D, UniformGrid3D, DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING};
+use apollo_fft::{f16, ApolloError, Complex32, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;
 use leto::Array3;
 
@@ -73,11 +70,7 @@ fn typed_type1_3d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| Complex32::new(v.re as f32, v.im as f32))
         .collect();
-    let represented32: Vec<Complex64> = values32
-        .iter()
-        .copied()
-        .map(Complex32::to_complex64)
-        .collect();
+    let represented32: Vec<Complex64> = values32.iter().copied().map(CpuStorage::to_cpu).collect();
     let expected32 = plan.type1(&positions, &represented32);
     let mut output32 = Array3::<Complex32>::zeros([grid.nx, grid.ny, grid.nz]);
     plan.type1_typed_into(
@@ -109,11 +102,7 @@ fn typed_type1_3d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| [f16::from_f32(v.re as f32), f16::from_f32(v.im as f32)])
         .collect();
-    let represented16: Vec<Complex64> = values16
-        .iter()
-        .copied()
-        .map(<[f16; 2]>::to_complex64)
-        .collect();
+    let represented16: Vec<Complex64> = values16.iter().copied().map(CpuStorage::to_cpu).collect();
     let expected16 = plan.type1(&positions, &represented16);
     let mut output16 = Array3::from_shape_fn([grid.nx, grid.ny, grid.nz], |_| {
         [f16::from_f32(0.0), f16::from_f32(0.0)]
@@ -211,7 +200,7 @@ fn typed_type2_3d_supports_complex64_complex32_and_f16_storage() {
 
     // ── f32 path ──────────────────────────────────────────────────────
     let coeffs32 = coeffs64.mapv(|v| Complex32::new(v.re as f32, v.im as f32));
-    let represented32 = coeffs32.mapv(Complex32::to_complex64);
+    let represented32 = coeffs32.mapv(CpuStorage::to_cpu);
     let expected32 = plan.type2(&positions, &represented32);
     let mut output32 = vec![Complex32::new(0.0, 0.0); positions.len()];
     plan.type2_typed_into(
@@ -236,7 +225,7 @@ fn typed_type2_3d_supports_complex64_complex32_and_f16_storage() {
 
     // ── f16 path ──────────────────────────────────────────────────────
     let coeffs16 = coeffs64.mapv(|v| [f16::from_f32(v.re as f32), f16::from_f32(v.im as f32)]);
-    let represented16 = coeffs16.mapv(<[f16; 2]>::to_complex64);
+    let represented16 = coeffs16.mapv(CpuStorage::to_cpu);
     let expected16 = plan.type2(&positions, &represented16);
     let mut output16 = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; positions.len()];
     plan.type2_typed_into(

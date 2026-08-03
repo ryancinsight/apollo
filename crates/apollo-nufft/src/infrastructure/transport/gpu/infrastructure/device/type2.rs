@@ -86,7 +86,7 @@ impl NufftWgpuBackend {
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
         let positions = apollo_leto_interop::view_cow(&positions);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_type2_1d_leto_typed_into(
             plan,
             precision,
@@ -158,7 +158,7 @@ impl NufftWgpuBackend {
             });
         }
         let modes32 = modes.mapv(|value| {
-            let represented = value.to_complex64();
+            let represented = value.to_cpu();
             Complex32::new(represented.re as f32, represented.im as f32)
         });
         let computed = self.execute_type2_3d(plan, &modes32, positions)?;
@@ -189,7 +189,7 @@ impl NufftWgpuBackend {
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let modes = array3_from_leto_view(modes);
         let positions = positions3_from_leto_view(positions)?;
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); positions.len()];
         self.execute_type2_3d_typed_into(plan, precision, &modes, &positions, &mut output)?;
         apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(host_array_error)
     }

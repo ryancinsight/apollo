@@ -50,7 +50,7 @@ pub(crate) fn typed_to_complex32<T: NufftComplexStorage>(values: &[T]) -> Cow<'_
             .iter()
             .copied()
             .map(|value| {
-                let represented = value.to_complex64();
+                let represented = value.to_cpu();
                 Complex32::new(represented.re as f32, represented.im as f32)
             })
             .collect();
@@ -63,7 +63,7 @@ pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], t
         slice_c64.copy_from_slice(source);
     } else {
         for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
-            *slot = T::from_complex64(value);
+            *slot = T::from_cpu(value);
         }
     }
 }

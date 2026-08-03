@@ -40,7 +40,9 @@
         reason = "false positive on Windows: the initializers are already const blocks"
     )
 )]
-use apollo_fft::{f16, ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
+use apollo_fft::{
+    f16, ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D,
+};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
 use mnemosyne::scratch::ScratchPool;
@@ -393,7 +395,7 @@ impl NufftPlan1D {
         COMPLEX_SCRATCH_POOL.with(|pool| {
             pool.with_scratch(values.len(), |values64| {
                 for (slot, &val) in values64.iter_mut().zip(values.iter()) {
-                    *slot = T::to_complex64(val);
+                    *slot = CpuStorage::to_cpu(val);
                 }
                 pool.with_scratch(self.n_out, |output64| {
                     self.type1_into(positions, values64, scratch_grid, output64);
@@ -414,7 +416,7 @@ impl NufftPlan1D {
         let positions = apollo_leto_interop::view_cow(&positions);
         let values = apollo_leto_interop::view_cow(&values);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); self.n_out];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); self.n_out];
         self.type1_typed_into(
             positions.as_ref(),
             values.as_ref(),
@@ -463,7 +465,7 @@ impl NufftPlan1D {
         COMPLEX_SCRATCH_POOL.with(|pool| {
             pool.with_scratch(fourier_coeffs.len(), |coeffs64| {
                 for (slot, &val) in coeffs64.iter_mut().zip(fourier_coeffs.iter()) {
-                    *slot = T::to_complex64(val);
+                    *slot = CpuStorage::to_cpu(val);
                 }
                 pool.with_scratch(positions.len(), |output64| {
                     self.type2_into(coeffs64, positions, scratch_spread, output64);
@@ -484,7 +486,7 @@ impl NufftPlan1D {
         let fourier_coeffs = apollo_leto_interop::view_cow(&fourier_coeffs);
         let positions = apollo_leto_interop::view_cow(&positions);
         let mut scratch = vec![Complex64::new(0.0, 0.0); self.m];
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); positions.len()];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); positions.len()];
         self.type2_typed_into(
             fourier_coeffs.as_ref(),
             positions.as_ref(),
@@ -502,17 +504,13 @@ impl NufftPlan1D {
     }
 }
 
-/// Complex storage accepted by typed NUFFT paths.
-pub trait NufftComplexStorage: Copy + Send + Sync + 'static {
-    /// Required precision profile.
-    const PROFILE: PrecisionProfile;
-
-    /// Convert storage into owner `Complex64` arithmetic.
-    fn to_complex64(self) -> Complex64;
-
-    /// Convert owner arithmetic result back to storage.
-    fn from_complex64(value: Complex64) -> Self;
-
+/// Complex storage admitted by typed NUFFT paths.
+///
+/// The conversion ladder and precision profile come from the shared
+/// [`CpuStorage`] vocabulary; this trait adds only the reinterpret
+/// views the device conversion helpers use to skip a copy when the
+/// host layout already matches an accelerator element.
+pub trait NufftComplexStorage: CpuStorage<Complex64> {
     /// View slice as `Complex32` if layout is identical.
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
@@ -543,16 +541,6 @@ pub trait NufftComplexStorage: Copy + Send + Sync + 'static {
 }
 
 impl NufftComplexStorage for Complex64 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::HIGH_ACCURACY_F64;
-
-    fn to_complex64(self) -> Complex64 {
-        self
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        value
-    }
-
     #[inline]
     fn as_c64_slice(slice: &[Self]) -> Option<&[Complex64]> {
         Some(slice)
@@ -565,16 +553,6 @@ impl NufftComplexStorage for Complex64 {
 }
 
 impl NufftComplexStorage for Complex32 {
-    const PROFILE: PrecisionProfile = PrecisionProfile::LOW_PRECISION_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self.re), f64::from(self.im))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        Complex32::new(value.re as f32, value.im as f32)
-    }
-
     #[inline]
     fn as_c32_slice(slice: &[Self]) -> Option<&[Complex32]> {
         Some(slice)
@@ -586,20 +564,7 @@ impl NufftComplexStorage for Complex32 {
     }
 }
 
-impl NufftComplexStorage for [f16; 2] {
-    const PROFILE: PrecisionProfile = PrecisionProfile::MIXED_PRECISION_F16_F32;
-
-    fn to_complex64(self) -> Complex64 {
-        Complex64::new(f64::from(self[0].to_f32()), f64::from(self[1].to_f32()))
-    }
-
-    fn from_complex64(value: Complex64) -> Self {
-        [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
-        ]
-    }
-}
+impl NufftComplexStorage for [f16; 2] {}
 
 pub(crate) fn validate_profile(
     actual: PrecisionProfile,
@@ -621,7 +586,7 @@ pub(crate) fn validate_profile(
 
 pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], target: &mut [T]) {
     for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
-        *slot = T::from_complex64(value);
+        *slot = T::from_cpu(value);
     }
 }
 
@@ -976,11 +941,8 @@ mod tests {
             .iter()
             .map(|value| Complex32::new(value.re as f32, value.im as f32))
             .collect();
-        let represented32: Vec<Complex64> = values32
-            .iter()
-            .copied()
-            .map(Complex32::to_complex64)
-            .collect();
+        let represented32: Vec<Complex64> =
+            values32.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected32 = plan.type1(&positions, &represented32);
         let mut output32 = vec![Complex32::new(0.0, 0.0); plan.n_out];
         plan.type1_typed_into(
@@ -1020,11 +982,8 @@ mod tests {
                 ]
             })
             .collect();
-        let represented16: Vec<Complex64> = values16
-            .iter()
-            .copied()
-            .map(<[f16; 2]>::to_complex64)
-            .collect();
+        let represented16: Vec<Complex64> =
+            values16.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected16 = plan.type1(&positions, &represented16);
         let mut output16 = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; plan.n_out];
         plan.type1_typed_into(

@@ -68,7 +68,7 @@ pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(
         .iter_mut()
         .zip(source.iter().copied())
     {
-        *slot = T::from_complex64(value);
+        *slot = T::from_cpu(value);
     }
 }
 

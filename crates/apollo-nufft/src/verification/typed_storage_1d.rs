@@ -1,8 +1,5 @@
-use crate::{
-    NufftComplexStorage, NufftPlan1D, UniformDomain1D, DEFAULT_NUFFT_KERNEL_WIDTH,
-    DEFAULT_NUFFT_OVERSAMPLING,
-};
-use apollo_fft::{f16, ApolloError, Complex32, PrecisionProfile};
+use crate::{NufftPlan1D, UniformDomain1D, DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING};
+use apollo_fft::{f16, ApolloError, Complex32, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;
 use leto::Array1;
 
@@ -58,11 +55,7 @@ fn typed_type1_1d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| Complex32::new(v.re as f32, v.im as f32))
         .collect();
-    let represented32: Vec<Complex64> = values32
-        .iter()
-        .copied()
-        .map(Complex32::to_complex64)
-        .collect();
+    let represented32: Vec<Complex64> = values32.iter().copied().map(CpuStorage::to_cpu).collect();
     let expected32 = plan.type1(&positions, &represented32);
     let mut output32 = vec![Complex32::new(0.0, 0.0); n_out];
     plan.type1_typed_into(
@@ -91,11 +84,7 @@ fn typed_type1_1d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| [f16::from_f32(v.re as f32), f16::from_f32(v.im as f32)])
         .collect();
-    let represented16: Vec<Complex64> = values16
-        .iter()
-        .copied()
-        .map(<[f16; 2]>::to_complex64)
-        .collect();
+    let represented16: Vec<Complex64> = values16.iter().copied().map(CpuStorage::to_cpu).collect();
     let expected16 = plan.type1(&positions, &represented16);
     let mut output16 = vec![[f16::from_f32(0.0), f16::from_f32(0.0)]; n_out];
     plan.type1_typed_into(
@@ -192,11 +181,7 @@ fn typed_type2_1d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| Complex32::new(v.re as f32, v.im as f32))
         .collect();
-    let represented32: Vec<Complex64> = coeffs32
-        .iter()
-        .copied()
-        .map(Complex32::to_complex64)
-        .collect();
+    let represented32: Vec<Complex64> = coeffs32.iter().copied().map(CpuStorage::to_cpu).collect();
     let represented32_array = Array1::from_shape_vec([represented32.len()], represented32)
         .expect("invariant: represented f32 coefficient length matches Array1 shape");
     let expected32 = plan.type2(&represented32_array, &positions);
@@ -227,11 +212,7 @@ fn typed_type2_1d_supports_complex64_complex32_and_f16_storage() {
         .iter()
         .map(|v| [f16::from_f32(v.re as f32), f16::from_f32(v.im as f32)])
         .collect();
-    let represented16: Vec<Complex64> = coeffs16
-        .iter()
-        .copied()
-        .map(<[f16; 2]>::to_complex64)
-        .collect();
+    let represented16: Vec<Complex64> = coeffs16.iter().copied().map(CpuStorage::to_cpu).collect();
     let represented16_array = Array1::from_shape_vec([represented16.len()], represented16)
         .expect("invariant: represented f16 coefficient length matches Array1 shape");
     let expected16 = plan.type2(&represented16_array, &positions);

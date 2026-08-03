@@ -92,7 +92,7 @@ impl NufftWgpuBackend {
     ) -> NufftWgpuResult<leto::Array<T, leto::MnemosyneStorage<T>, 1>> {
         let positions = apollo_leto_interop::view_cow(&positions);
         let values = apollo_leto_interop::view_cow(&values);
-        let mut output = vec![T::from_complex64(Complex64::new(0.0, 0.0)); plan.domain().n];
+        let mut output = vec![T::from_cpu(Complex64::new(0.0, 0.0)); plan.domain().n];
         self.execute_type1_1d_typed_into(
             plan,
             precision,
@@ -159,7 +159,7 @@ impl NufftWgpuBackend {
             .iter_mut()
             .zip(computed.iter().copied())
         {
-            *slot = T::from_complex64(value);
+            *slot = T::from_cpu(value);
         }
         Ok(())
     }
@@ -194,7 +194,7 @@ impl NufftWgpuBackend {
         let grid = plan.grid();
         let mut output = Array3::from_elem(
             [grid.nx, grid.ny, grid.nz],
-            T::from_complex64(Complex64::new(0.0, 0.0)),
+            T::from_cpu(Complex64::new(0.0, 0.0)),
         );
         self.execute_type1_3d_typed_into(
             plan,

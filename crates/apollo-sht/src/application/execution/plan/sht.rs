@@ -276,7 +276,7 @@ impl ShtPlan {
         let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
-            O::from_complex64(Complex64::new(0.0, 0.0)),
+            O::from_cpu(Complex64::new(0.0, 0.0)),
         );
         self.forward_real_typed_into(&samples, &mut output, sample_profile, coefficient_profile)?;
         apollo_leto_interop::try_dense_from_array(&output).ok_or(ShtError::CoefficientShapeMismatch)
@@ -303,7 +303,7 @@ impl ShtPlan {
         let samples = array2_from_leto_view(samples);
         let mut output = Array2::<O>::from_elem(
             self.coefficient_shape(),
-            O::from_complex64(Complex64::new(0.0, 0.0)),
+            O::from_cpu(Complex64::new(0.0, 0.0)),
         );
         self.forward_complex_typed_into(
             &samples,
@@ -341,7 +341,7 @@ impl ShtPlan {
         let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
             [self.grid.latitudes(), self.grid.longitudes()],
-            O::from_complex64(Complex64::new(0.0, 0.0)),
+            O::from_cpu(Complex64::new(0.0, 0.0)),
         );
         self.inverse_complex_typed_into(
             &coefficients,
@@ -379,7 +379,7 @@ impl ShtPlan {
         let coefficients = array2_from_leto_view(coefficients);
         let mut output = Array2::<O>::from_elem(
             [self.grid.latitudes(), self.grid.longitudes()],
-            O::from_f64(0.0),
+            O::from_cpu(0.0),
         );
         self.inverse_real_typed_into(
             &coefficients,

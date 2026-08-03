@@ -2,12 +2,11 @@ use super::quadrature::{
     coefficient_lanes, interleaved_lanes, sht_forward_mode_sum, sht_forward_mode_sum_hermes,
     sht_inverse_sample, sht_inverse_sample_hermes, SHT_HERMES_DOT_LEN_THRESHOLD,
 };
-use super::typed::ShtComplexStorage;
 use super::ShtPlan;
 use crate::domain::contracts::error::ShtError;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
-use apollo_fft::{f16, PrecisionProfile};
+use apollo_fft::{f16, CpuStorage, PrecisionProfile};
 use eunomia::assert_abs_diff_eq;
 use eunomia::{Complex32, Complex64};
 use leto::Array2;
@@ -329,7 +328,7 @@ fn typed_complex_forward_and_inverse_support_complex32_storage() {
         |[lat, lon]| spherical_harmonic(1, 1, plan.theta(lat), plan.phi(lon)),
     );
     let samples32 = samples64.mapv(|value| Complex32::new(value.re as f32, value.im as f32));
-    let represented32 = samples32.mapv(Complex32::to_complex64);
+    let represented32 = samples32.mapv(CpuStorage::to_cpu);
     let expected = plan.forward_complex(&represented32).expect("forward");
     let shape = coefficient_shape(&plan);
 

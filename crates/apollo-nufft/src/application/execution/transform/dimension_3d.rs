@@ -37,7 +37,7 @@
         reason = "false positive on Windows: the initializers are already const blocks"
     )
 )]
-use apollo_fft::{ApolloError, ApolloResult, FftPlan1D, PrecisionProfile, Shape1D};
+use apollo_fft::{ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
 use leto::{Array3, ArrayView3, ArrayViewMut3};
 use mnemosyne::scratch::ScratchPool;
@@ -462,7 +462,7 @@ impl NufftPlan3D {
         MODES3D_SCRATCH.with(|vals_pool| {
             vals_pool.with_scratch(size_vals, |vals_vec| {
                 for (slot, &val) in vals_vec.iter_mut().zip(values.iter()) {
-                    *slot = T::to_complex64(val);
+                    *slot = CpuStorage::to_cpu(val);
                 }
 
                 OUTPUT3D_SCRATCH.with(|out_pool| {
@@ -495,7 +495,7 @@ impl NufftPlan3D {
                                     .copied(),
                             )
                         {
-                            *slot = T::from_complex64(value);
+                            *slot = T::from_cpu(value);
                         }
                     });
                 });
@@ -806,7 +806,7 @@ impl NufftPlan3D {
                             .iter_mut()
                             .zip(modes.iter())
                         {
-                            *slot = T::to_complex64(val);
+                            *slot = CpuStorage::to_cpu(val);
                         }
 
                         OUTPUT3D_SCRATCH.with(|out_pool| {
@@ -1087,11 +1087,8 @@ mod tests {
             .iter()
             .map(|value| eunomia::Complex32::new(value.re as f32, value.im as f32))
             .collect();
-        let represented32: Vec<Complex64> = values32
-            .iter()
-            .copied()
-            .map(eunomia::Complex32::to_complex64)
-            .collect();
+        let represented32: Vec<Complex64> =
+            values32.iter().copied().map(CpuStorage::to_cpu).collect();
         let expected = plan.type1(&positions, &represented32);
 
         let mut scratch_grid = Array3::<Complex64>::zeros([plan.mx, plan.my, plan.mz]);
