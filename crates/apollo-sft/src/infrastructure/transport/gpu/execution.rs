@@ -4,8 +4,7 @@ use eunomia::Complex64;
 use crate::domain::spectrum::sparse::SparseSpectrum;
 
 use super::spectrum::{
-    exact_accelerator_component, populate_dense_spectrum, quantize_accelerator_component,
-    select_top_k, validate_spectrum,
+    populate_dense_spectrum, quantize_accelerator_component, select_top_k, validate_spectrum,
 };
 use super::{SftWgpuBackend, SftWgpuPlan, WgpuError, WgpuResult};
 
