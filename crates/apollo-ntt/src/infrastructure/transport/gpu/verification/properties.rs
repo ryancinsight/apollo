@@ -2,7 +2,10 @@
 
 #[cfg(feature = "proptest_gpu")]
 mod gpu_roundtrip {
-    use crate::{infrastructure::transport::gpu::NttWgpuBackend, DEFAULT_MODULUS};
+    use crate::{
+        infrastructure::transport::gpu::{ModularExecution, NttWgpuBackend, ResiduePlan},
+        DEFAULT_MODULUS,
+    };
     use proptest::prelude::*;
 
     proptest! {

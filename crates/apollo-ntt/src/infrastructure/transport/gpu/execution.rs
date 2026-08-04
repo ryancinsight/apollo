@@ -1,18 +1,8 @@
 //! NTT GPU execution backends.
 
-#![warn(missing_docs)]
-//! WGPU backend boundary for Apollo NTT.
-//!
-//! The execution scaffold is the shared `apollo-fft` transform transport
-//! (ADR 0037); this module owns the NTT kernels, their domain names, and
-//! the residue-field surface. The transform is exact modular arithmetic
-//! over `u64`/`u32` residues — outside the scaffold's floating-point
-//! element families — so the marker implements only the planner contract
-//! and the surface lives on [`ModularExecution`].
-
-/// Infrastructure boundary for the NTT kernels.
-pub mod infrastructure;
-use super::residue::ResiduePlan;
+use super::infrastructure::kernel::{NttGpuBuffers, NttGpuKernel as Kernel, NttMode};
+use super::residue::{ModularExecution, NttWgpuBackend, NttWgpuPlan};
+use super::{WgpuError, WgpuResult};
 
 impl ModularExecution for NttWgpuBackend {
     fn create_buffers(&self, plan: &NttWgpuPlan) -> WgpuResult<NttGpuBuffers> {

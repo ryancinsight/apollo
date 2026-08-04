@@ -1,18 +1,12 @@
 //! NTT residue number theory plan.
 
-#![warn(missing_docs)]
-//! WGPU backend boundary for Apollo NTT.
-//!
-//! The execution scaffold is the shared `apollo-fft` transform transport
-//! (ADR 0037); this module owns the NTT kernels, their domain names, and
-//! the residue-field surface. The transform is exact modular arithmetic
-//! over `u64`/`u32` residues — outside the scaffold's floating-point
-//! element families — so the marker implements only the planner contract
-//! and the surface lives on [`ModularExecution`].
+use super::infrastructure::kernel::{mod_pow_u64, NttGpuBuffers, NttGpuKernel};
+use super::{WgpuError, WgpuResult};
+use crate::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 
-/// Infrastructure boundary for the NTT kernels.
-pub mod infrastructure;
-
+/// Plan payload for the number-theoretic transform: logical length and
+/// the residue-field contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResiduePlan {
     len: usize,
     modulus: u64,
