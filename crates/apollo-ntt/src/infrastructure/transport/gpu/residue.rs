@@ -260,4 +260,3 @@ pub trait ModularExecution {
         input: leto::ArrayView1<'_, u32>,
     ) -> WgpuResult<leto::Array<u32, leto::MnemosyneStorage<u32>, 1>>;
 }
-

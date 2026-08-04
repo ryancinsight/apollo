@@ -19,12 +19,11 @@ use infrastructure::kernel::{mod_pow_u64, NttGpuKernel as Kernel, NttMode};
 pub use apollo_fft::{WgpuCapabilities, WgpuError, WgpuResult};
 pub use infrastructure::kernel::{NttGpuBuffers, NttGpuKernel};
 
+mod execution;
 /// Plan payload for the number-theoretic transform: logical length and
 /// the residue-field contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-
 mod residue;
-mod execution;
 
-pub use residue::ResiduePlan;
 pub use execution::buffer_output;
+pub use residue::ResiduePlan;
