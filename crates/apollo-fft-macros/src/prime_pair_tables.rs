@@ -69,65 +69,93 @@ pub fn generate_prime_pair_tables(input: CompilerTokenStream) -> CompilerTokenSt
     for entry in &input.pairs {
         let n = entry.n;
         let h = entry.h;
+        if n == 0 {
+            return syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "prime-pair table size N must be greater than zero",
+            )
+            .to_compile_error()
+            .into();
+        }
 
         // Compute all H×H cos and sin table entries at macro-expansion time.
         // cos_table[k][m] = cos(TAU * (k+1) * (m+1) / N)
         // sin_table[k][m] = sin(TAU * (k+1) * (m+1) / N)
-        let cos_f64: Vec<Vec<f64>> = (0..h)
-            .map(|k| {
-                (0..h)
-                    .map(|m| (TAU * ((k + 1) * (m + 1)) as f64 / n as f64).cos())
-                    .collect()
-            })
-            .collect();
+        let Some(table_len) = h.checked_mul(h) else {
+            return syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "prime-pair table dimensions overflow",
+            )
+            .to_compile_error()
+            .into();
+        };
 
-        let sin_f64: Vec<Vec<f64>> = (0..h)
-            .map(|k| {
-                (0..h)
-                    .map(|m| (TAU * ((k + 1) * (m + 1)) as f64 / n as f64).sin())
-                    .collect()
-            })
-            .collect();
+        let mut cos_f64 = Vec::with_capacity(table_len);
+        let mut sin_f64 = Vec::with_capacity(table_len);
+        for k in 0..h {
+            for m in 0..h {
+                let angle = TAU * ((k + 1) * (m + 1)) as f64 / n as f64;
+                cos_f64.push(angle.cos());
+                sin_f64.push(angle.sin());
+            }
+        }
 
-        // Emit the row literals as nested arrays.
-        let cos_f64_rows: Vec<proc_macro2::TokenStream> = cos_f64
-            .iter()
-            .map(|row| {
-                let vals = row.iter().map(|&v| quote! { #v });
-                quote! { [#(#vals),*] }
-            })
-            .collect();
+        // Keep expansion-time tables flat; only materialize row-shaped token
+        // streams while emitting the fixed-size arrays used by the FFT.
+        let cos_f64_rows: Vec<proc_macro2::TokenStream> = if h == 0 {
+            Vec::new()
+        } else {
+            cos_f64
+                .chunks_exact(h)
+                .map(|row| {
+                    let vals = row.iter().map(|&v| quote! { #v });
+                    quote! { [#(#vals),*] }
+                })
+                .collect()
+        };
 
-        let sin_f64_rows: Vec<proc_macro2::TokenStream> = sin_f64
-            .iter()
-            .map(|row| {
-                let vals = row.iter().map(|&v| quote! { #v });
-                quote! { [#(#vals),*] }
-            })
-            .collect();
+        let sin_f64_rows: Vec<proc_macro2::TokenStream> = if h == 0 {
+            Vec::new()
+        } else {
+            sin_f64
+                .chunks_exact(h)
+                .map(|row| {
+                    let vals = row.iter().map(|&v| quote! { #v });
+                    quote! { [#(#vals),*] }
+                })
+                .collect()
+        };
 
         // f32 literals: cast from the f64 values computed above.
-        let cos_f32_rows: Vec<proc_macro2::TokenStream> = cos_f64
-            .iter()
-            .map(|row| {
-                let vals = row.iter().map(|&v| {
-                    let fv = v as f32;
-                    quote! { #fv }
-                });
-                quote! { [#(#vals),*] }
-            })
-            .collect();
+        let cos_f32_rows: Vec<proc_macro2::TokenStream> = if h == 0 {
+            Vec::new()
+        } else {
+            cos_f64
+                .chunks_exact(h)
+                .map(|row| {
+                    let vals = row.iter().map(|&v| {
+                        let fv = v as f32;
+                        quote! { #fv }
+                    });
+                    quote! { [#(#vals),*] }
+                })
+                .collect()
+        };
 
-        let sin_f32_rows: Vec<proc_macro2::TokenStream> = sin_f64
-            .iter()
-            .map(|row| {
-                let vals = row.iter().map(|&v| {
-                    let fv = v as f32;
-                    quote! { #fv }
-                });
-                quote! { [#(#vals),*] }
-            })
-            .collect();
+        let sin_f32_rows: Vec<proc_macro2::TokenStream> = if h == 0 {
+            Vec::new()
+        } else {
+            sin_f64
+                .chunks_exact(h)
+                .map(|row| {
+                    let vals = row.iter().map(|&v| {
+                        let fv = v as f32;
+                        quote! { #fv }
+                    });
+                    quote! { [#(#vals),*] }
+                })
+                .collect()
+        };
 
         let cos_f64_name = format_ident!("PRIME_PAIR_COS_F64_{}", n);
         let sin_f64_name = format_ident!("PRIME_PAIR_SIN_F64_{}", n);

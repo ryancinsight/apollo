@@ -33,6 +33,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-wavelet` CWT collects the row-major coefficient matrix
+  directly through `moirai::map_collect_index_with::<Adaptive>` into one flat
+  buffer, removing the per-scale `Vec<Vec<f64>>` intermediate and its row
+  allocations while preserving indexed output order and adaptive parallel
+  execution. The flattened dimension is checked with `checked_mul` and returns
+  `CoefficientShapeMismatch` on overflow.
+- [patch] `apollo-fft` short-Winograd length-matched codelet dispatch replaces
+  the raw `as *mut [T; N]` pointer cast with checked `try_into` conversion
+  (the match arm already proves the length), eliminating the unsafe cast and
+  its alignment assumption while keeping the fixed-size codelet
+  monomorphized. A differential test pins the f32 path against the direct DFT.
+- [patch] `apollo-fft-macros` prime-pair table generation rejects a zero
+  table size with a proper `syn::Error` and builds the cos/sin tables flat
+  instead of as nested row vectors.
 - [minor] `apollo-fft-macros` 0.2.0 generates the canonical primitive-root
   table for runtime conformance tests, while runtime-only integer arithmetic
   now lives inside `apollo-fft`; both crate archives compile without sibling
