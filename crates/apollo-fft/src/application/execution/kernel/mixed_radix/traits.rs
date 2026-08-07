@@ -1,5 +1,9 @@
 //! `ShortWinogradScalar` and generic short-DFT dispatch helpers.
 //!
+//! The length-matched codelet bridge uses checked slice-to-array conversion so
+//! fixed-size kernels retain their monomorphized layout without raw pointer
+//! casts.
+//!
 //! `ShortWinogradScalar` is canonically defined in
 //! `components::winograd::short_winograd` (deep-vertical SSOT next to parent
 //! `WinogradScalar`).
@@ -51,8 +55,13 @@ macro_rules! short_winograd_match {
         match $data.len() {
             $(
                 $n => {
-                    let ptr = $data.as_mut_ptr() as *mut [eunomia::Complex<$F>; $n];
-                    let arr = unsafe { &mut *ptr };
+                    // The match arm proves the slice length. `try_into` preserves
+                    // that proof without relying on a raw pointer cast or alignment
+                    // assumptions, while the fixed-size reference keeps the codelet
+                    // monomorphized for this exact length.
+                    let arr: &mut [eunomia::Complex<$F>; $n] = $data
+                        .try_into()
+                        .expect("short Winograd length matched");
                     <$F as ShortDft<$n>>::dft::<$INVERSE>(arr);
                     true
                 }
@@ -254,6 +263,29 @@ mod tests {
                 "short_winograd must reject n={n} (not in SHORT_WINOGRAD_SIZES)"
             );
         }
+    }
+
+    #[test]
+    fn short_winograd_dispatches_f32_without_raw_pointer_bridge() {
+        let mut data: Vec<eunomia::Complex32> = (0..11)
+            .map(|index| {
+                let value = index as f32;
+                eunomia::Complex32::new((value * 0.19).sin(), (value * 0.31).cos())
+            })
+            .collect();
+        let expected = crate::application::execution::kernel::direct::dft_forward(&data);
+        assert!(short_winograd::<f32, false, false>(&mut data));
+
+        let error = data
+            .iter()
+            .zip(expected.iter())
+            .map(|(actual, expected)| {
+                let real = f64::from(actual.re) - f64::from(expected.re);
+                let imaginary = f64::from(actual.im) - f64::from(expected.im);
+                (real * real + imaginary * imaginary).sqrt()
+            })
+            .fold(0.0_f64, f64::max);
+        assert!(error < 1.0e-5, "f32 short-codelet error={error:.2e}");
     }
 
     #[test]

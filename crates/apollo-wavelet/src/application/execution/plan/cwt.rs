@@ -7,7 +7,6 @@ use crate::infrastructure::kernel::continuous::coefficient;
 use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use leto::Array2;
-use moirai::ParallelSlice;
 
 /// Reusable real-valued 1D CWT plan.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,13 +67,22 @@ impl CwtPlan {
         if signal.len() != self.len {
             return Err(WaveletError::LengthMismatch);
         }
-        // Parallelize over the scale dimension; each scale row is independent.
-        let rows: Vec<Vec<f64>> = self.scales.par().map_collect(|&scale| {
-            (0..self.len)
-                .map(|shift| coefficient(signal, self.wavelet, scale, shift))
-                .collect()
-        });
-        let values = Array2::from_shape_fn([self.scales.len(), self.len], |[s, b]| rows[s][b]);
+        // Collect directly into the row-major output buffer. The indexed map
+        // preserves logical order while avoiding one allocation per scale row.
+        let output_len = self
+            .scales
+            .len()
+            .checked_mul(self.len)
+            .ok_or(WaveletError::CoefficientShapeMismatch)?;
+        let values =
+            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(output_len, |index| {
+                let scale_index = index / self.len;
+                let shift = index % self.len;
+                coefficient(signal, self.wavelet, self.scales[scale_index], shift)
+            });
+        let values = Array2::from_shape_vec([self.scales.len(), self.len], values)
+            .expect("CWT output shape");
+
         Ok(CwtCoefficients::new(self.scales.clone(), values))
     }
 

@@ -1,0 +1,19 @@
+# mdBook configuration for the apollo transforms book.
+[book]
+title = "apollo: Spectral Transforms for Atlas"
+authors = ["Ryan Clanton"]
+description = "Forward-focused FFT, wavelet, NTT, and spectral transforms with autodiff hooks for the Atlas simulation stack."
+src = "."
+language = "en"
+
+[build]
+build-dir = "../../target/book/apollo"
+create-missing = false
+
+[output.html]
+no-section-label = false
+mathjax-support = true
+site-url = "/apollo/"
+git-repository-url = "https://github.com/ryancinsight/apollo"
+edit-url-template = "https://github.com/ryancinsight/apollo/edit/main/docs/book/{path}"
+default-theme = "rust"
