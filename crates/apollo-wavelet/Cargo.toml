@@ -24,8 +24,8 @@ mnemosyne-memory = []
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
-apollo-fft = { version = "0.25.0", path = "../apollo-fft" }
-apollo-leto-interop = { version = "0.17.0", path = "../apollo-leto-interop" }
+apollo-fft = { version = "0.26.0", path = "../apollo-fft" }
+apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }
 moirai = { workspace = true }
