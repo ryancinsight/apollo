@@ -33,9 +33,9 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "android_system_properties"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
+checksum = "ae221649c9976a6f6c56ae1facf410f3ddb33cc661c4b7b61020a912d4237fbc"
 dependencies = [
  "libc",
 ]
@@ -51,7 +51,7 @@ name = "apollo-bench"
 version = "0.16.0"
 dependencies = [
  "csv",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -66,11 +66,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -85,11 +85,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -104,11 +104,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -126,7 +126,7 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "once_cell",
  "parking_lot",
@@ -134,7 +134,7 @@ dependencies = [
  "rand 0.10.2",
  "rustc-hash 2.1.3",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -159,11 +159,11 @@ dependencies = [
  "hermes-simd",
  "leto",
  "leto-ops",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -178,11 +178,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -198,11 +198,11 @@ dependencies = [
  "hermes-simd",
  "leto",
  "leto-ops",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -217,11 +217,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -243,11 +243,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -265,7 +265,7 @@ dependencies = [
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -281,11 +281,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -317,11 +317,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -337,11 +337,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -356,11 +356,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -375,11 +375,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -394,11 +394,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -414,11 +414,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -448,6 +448,7 @@ dependencies = [
  "hephaestus-wgpu",
  "leto",
  "melinoe",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "serde",
  "serde_json",
@@ -465,11 +466,11 @@ dependencies = [
  "hephaestus-wgpu",
  "hermes-simd",
  "leto",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-runtime",
  "proptest",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -561,9 +562,9 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bytecheck"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0caa33a2c0edca0419d15ac723dff03f1956f7978329b1e3b5fdaaaed9d3ca8b"
+checksum = "26333eeac754f0ad8a6bcd0eb0ac012156302e4e16b852b72ee399aea4f12c29"
 dependencies = [
  "bytecheck_derive",
  "ptr_meta",
@@ -573,13 +574,13 @@ dependencies = [
 
 [[package]]
 name = "bytecheck_derive"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89385e82b5d1821d2219e0b095efa2cc1f246cbf99080f3be46a1a85c0d392d9"
+checksum = "46d07918caa9eeaaf06b7873925c53a61daac173539b4f7715090745e44e4e69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -593,13 +594,13 @@ dependencies = [
 
 [[package]]
 name = "bytemuck_derive"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f65693059b6b9c588b9f62fed1cedbf0a8b805631457ea162d68f0de186f3de5"
+checksum = "fc0e56a716f1e132ff6bf4bdac1c944a3fcdc1cae65f70a4a2a1ac3b401d2d1f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -750,9 +751,9 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "futures"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a88cf1f829d945f548cf8fec32c61b1f202b6d93b45848602fc02af4b12ad218"
+checksum = "9a31d2a3fbaaeb2af2368bbdd904aa8e812d3c04a1ee10d3171f52d556e5d0a3"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -765,9 +766,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "262590f4fe6afeb0bc83be1daa64e52657fe185690a958af7f3ad0e92085c5ae"
+checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -775,15 +776,15 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cd50c473c80f6d7c3670a752354b8e569b1a7cbfdc0419ec88e5edad85e0dc7"
+checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6754879cc9f2c66f88c6e5c35344bb0bdb0708b0352b1201815667c7eabc7458"
+checksum = "031b47cf1a3c6cc8bc2fc76cd437f521619387907d469316e7c0bc278f1f5432"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -792,38 +793,38 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4577ecaa3c4f96589d473f679a71b596316f6641bc350038b962a5daf0085d7a"
+checksum = "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed"
 
 [[package]]
 name = "futures-macro"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6d3cde68c518367be28956066ddfef33813991b77a55005a69dae04bf3b10b"
+checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "futures-sink"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e34418ac499d6305c2fb5ad0ed2f6ac998c5f8ca209b4510f7f94242c647e307"
+checksum = "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d"
 
 [[package]]
 name = "futures-task"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b231ed28831efb4a61a08580c4bc233ec56bc009f4cd8f52da2c3cb97df0c109"
+checksum = "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd"
 
 [[package]]
 name = "futures-util"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77a90a256fce34da66415271e30f94ee91c57b04b8a2c042d9cf3220179deaa"
+checksum = "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -876,7 +877,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "log",
  "presser",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -927,7 +928,7 @@ dependencies = [
  "eunomia",
  "leto",
  "themis-topology",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -969,7 +970,7 @@ dependencies = [
 
 [[package]]
 name = "hermes-simd"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -981,18 +982,18 @@ dependencies = [
 
 [[package]]
 name = "hermes-simd-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bytemuck",
  "eunomia",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.7.0",
  "rkyv",
  "themis-topology",
 ]
 
 [[package]]
 name = "hermes-simd-intrinsics"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -1000,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "hermes-simd-macros"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1009,7 +1010,7 @@ dependencies = [
 
 [[package]]
 name = "hermes-simd-types"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -1039,9 +1040,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "js-sys"
-version = "0.3.103"
+version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53b44bfcdb3f8d5837a46dae1ca9660a837176eee74a28b229bc626816589102"
+checksum = "0e0c1080212aad755ea003d18543e8768dd432c48819efd73a7bf1e39b7a5a3a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -1055,9 +1056,9 @@ dependencies = [
  "aequitas",
  "bytemuck",
  "eunomia",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "serde",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1071,7 +1072,7 @@ dependencies = [
  "moirai-runtime",
  "serde",
  "themis-topology",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1153,6 +1154,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mnemosyne-arena"
+version = "0.4.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+dependencies = [
+ "mnemosyne-backend",
+ "mnemosyne-memory-core",
+ "themis-topology",
+]
+
+[[package]]
 name = "mnemosyne-backend"
 version = "0.5.0"
 dependencies = [
@@ -1164,10 +1175,25 @@ name = "mnemosyne-build-util"
 version = "0.2.0"
 
 [[package]]
+name = "mnemosyne-build-util"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+
+[[package]]
 name = "mnemosyne-decay"
 version = "0.2.0"
 dependencies = [
- "mnemosyne-arena",
+ "mnemosyne-arena 0.3.0",
+ "mnemosyne-backend",
+ "mnemosyne-memory-core",
+]
+
+[[package]]
+name = "mnemosyne-decay"
+version = "0.3.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+dependencies = [
+ "mnemosyne-arena 0.4.0",
  "mnemosyne-backend",
  "mnemosyne-memory-core",
 ]
@@ -1177,11 +1203,11 @@ name = "mnemosyne-heap"
 version = "0.3.0"
 dependencies = [
  "melinoe",
- "mnemosyne-arena",
+ "mnemosyne-arena 0.3.0",
  "mnemosyne-backend",
- "mnemosyne-local",
+ "mnemosyne-local 0.3.0",
  "mnemosyne-memory-core",
- "mnemosyne-prof",
+ "mnemosyne-prof 0.2.0",
  "themis-topology",
 ]
 
@@ -1190,12 +1216,27 @@ name = "mnemosyne-local"
 version = "0.3.0"
 dependencies = [
  "melinoe",
- "mnemosyne-arena",
+ "mnemosyne-arena 0.3.0",
  "mnemosyne-backend",
- "mnemosyne-build-util",
- "mnemosyne-decay",
+ "mnemosyne-build-util 0.2.0",
+ "mnemosyne-decay 0.2.0",
  "mnemosyne-memory-core",
- "mnemosyne-prof",
+ "mnemosyne-prof 0.2.0",
+ "themis-topology",
+]
+
+[[package]]
+name = "mnemosyne-local"
+version = "0.4.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+dependencies = [
+ "melinoe",
+ "mnemosyne-arena 0.4.0",
+ "mnemosyne-backend",
+ "mnemosyne-build-util 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-decay 0.3.0",
+ "mnemosyne-memory-core",
+ "mnemosyne-prof 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "themis-topology",
 ]
 
@@ -1204,13 +1245,26 @@ name = "mnemosyne-memory"
 version = "0.6.0"
 dependencies = [
  "eunomia",
- "mnemosyne-arena",
+ "mnemosyne-arena 0.3.0",
  "mnemosyne-backend",
- "mnemosyne-decay",
+ "mnemosyne-decay 0.2.0",
  "mnemosyne-heap",
- "mnemosyne-local",
+ "mnemosyne-local 0.3.0",
  "mnemosyne-memory-core",
- "mnemosyne-prof",
+ "mnemosyne-prof 0.2.0",
+]
+
+[[package]]
+name = "mnemosyne-memory"
+version = "0.7.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+dependencies = [
+ "mnemosyne-arena 0.4.0",
+ "mnemosyne-backend",
+ "mnemosyne-decay 0.3.0",
+ "mnemosyne-local 0.4.0",
+ "mnemosyne-memory-core",
+ "mnemosyne-prof 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
 ]
 
 [[package]]
@@ -1222,7 +1276,17 @@ name = "mnemosyne-prof"
 version = "0.2.0"
 dependencies = [
  "backtrace",
- "mnemosyne-build-util",
+ "mnemosyne-build-util 0.2.0",
+ "mnemosyne-memory-core",
+]
+
+[[package]]
+name = "mnemosyne-prof"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#7541069888e7453ad9f10e1bb4a927276fab5c9f"
+dependencies = [
+ "backtrace",
+ "mnemosyne-build-util 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "mnemosyne-memory-core",
 ]
 
@@ -1256,8 +1320,9 @@ version = "0.4.0"
 dependencies = [
  "bytemuck",
  "libc",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-utils",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1265,11 +1330,12 @@ name = "moirai-executor"
 version = "0.4.0"
 dependencies = [
  "melinoe",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-core",
  "moirai-pal",
  "moirai-scheduler",
  "moirai-utils",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1318,6 +1384,7 @@ dependencies = [
  "melinoe",
  "moirai-core",
  "moirai-executor",
+ "themis-topology",
 ]
 
 [[package]]
@@ -1325,7 +1392,7 @@ name = "moirai-runtime"
 version = "0.4.0"
 dependencies = [
  "melinoe",
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-async",
  "moirai-core",
  "moirai-executor",
@@ -1341,7 +1408,7 @@ dependencies = [
 name = "moirai-scheduler"
 version = "0.4.0"
 dependencies = [
- "mnemosyne-memory",
+ "mnemosyne-memory 0.6.0",
  "moirai-core",
  "moirai-utils",
  "num_cpus",
@@ -1413,7 +1480,7 @@ dependencies = [
  "once_cell",
  "rustc-hash 1.1.0",
  "spirv",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "unicode-ident",
 ]
 
@@ -1426,7 +1493,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "indexmap",
  "rustc-hash 1.1.0",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1611,9 +1678,9 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "portable-atomic"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d20d5497ef88037a52ff98267d066e7f11fcc5e99bbfbd58a42336193aacec3"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "portable-atomic-util"
@@ -1685,29 +1752,29 @@ dependencies = [
 
 [[package]]
 name = "ptr_meta"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9a0cf95a1196af61d4f1cbdab967179516d9a4a4312af1f31948f8f6224a79"
+checksum = "743da816b98c921cdbe8628ef7381b76f25ecf4da599fc80aca90eae7ef70cc0"
 dependencies = [
  "ptr_meta_derive",
 ]
 
 [[package]]
 name = "ptr_meta_derive"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7347867d0a7e1208d93b46767be83e2b8f978c3dad35f775ac8d8847551d6fe1"
+checksum = "1c8d9ca532f185d5d4db7a7c9d51420b452168ea1c2b913953281bd6fe1fcbd0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "pyo3"
-version = "0.29.0"
+version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd274650b21d4bfc26a0a47587962c1edb425f69287324355cd040c3ea66071c"
+checksum = "4688ddedf473e32662b9b067670129a8afb8c18e351482c70d62ba4a88171e8b"
 dependencies = [
  "libc",
  "once_cell",
@@ -1719,18 +1786,18 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.29.0"
+version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5e2a7d2f0d013342f295c048ad19237add5154a55b1c5a254c0ec93d4109078"
+checksum = "f41027e41b4bd03f6e60f9f417fe24a6341a6bb744edd62b6f709f2a52ea30e9"
 dependencies = [
  "target-lexicon",
 ]
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.29.0"
+version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca85c467da1bbc8d866eea5deff9cf29ea5f7785054a17da36e65bda9c05845b"
+checksum = "e591a95526fead067432c3b3a33fc74770b87b1e04e73671090d9c2055a2b327"
 dependencies = [
  "libc",
  "pyo3-build-config",
@@ -1738,9 +1805,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros"
-version = "0.29.0"
+version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ac53762fd065daa3194dd09337a38bd793a188100fd1a9304c4ab312d901771"
+checksum = "73225868fc1cd84eef2c3c230ddb91273bf1de46aeb8a4248da76d32a0924a1c"
 dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
@@ -1750,9 +1817,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros-backend"
-version = "0.29.0"
+version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ca3a1557399783172dc5bf39cfca835157732532cba56b71d2292161e53b362"
+checksum = "571575aa3749fa6216757dd47d2a3e7ef360f329a40f0666a9fbd14889024952"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1789,9 +1856,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rancor"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daff8b7b3ccf5f7ba270b3e7a0a4d4c701c5797e38dec27c7e2c3dbb830fed1c"
+checksum = "9b534442d0fcdb55d66f373d9cac6d33b6293a2335bc2136dbd06ce0e87d2572"
 dependencies = [
  "ptr_meta",
 ]
@@ -1901,9 +1968,9 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "rkyv"
-version = "0.8.17"
+version = "0.8.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "815cc8a37159a463064825246cadb07961e25cd9885908606f6d08a98d8f8874"
+checksum = "d9776093b7ca170454ab1406954f7b7d97a57c51dc6c0642957fb2ef25c2d399"
 dependencies = [
  "bytecheck",
  "bytes",
@@ -1920,13 +1987,13 @@ dependencies = [
 
 [[package]]
 name = "rkyv_derive"
-version = "0.8.17"
+version = "0.8.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ed1a78a1b19d184b0daa629dd9a024573173ec7d485b287cb369fb3607cc1c"
+checksum = "1c25ef604ac7dd839d44d64648952ea23c97866f124ff671b0ed2cf3ad9bb06e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -2146,11 +2213,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.19"
+version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
+checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
 dependencies = [
- "thiserror-impl 2.0.19",
+ "thiserror-impl 2.0.20",
 ]
 
 [[package]]
@@ -2166,9 +2233,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.19"
+version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
+checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2261,9 +2328,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.126"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b067c0c11094aef6b7a801c1e34a26affafdf3d051dba08456b868789aaf9a4"
+checksum = "1b70935747edd64d89de3efa29d73789b806c15798f8e7dca4d8ac356b50ce70"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -2274,9 +2341,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.76"
+version = "0.4.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62df1340f32221cb9c54d6a27b030e3dba64361d4a95bed55f9aacb44da291d"
+checksum = "6b7777d5cc23d0e91404e53ce2d5e8ec7acae3026b16233dba62cd3246457950"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -2284,9 +2351,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.126"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "167ce5e579f6bcf889c4f7175a8a5a585de84e8ff93976ce393efa5f2837aab1"
+checksum = "77775f8f3f7217702089053b94958f8f54061a3f663417df76e19cbdcca29bc1"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -2294,9 +2361,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.126"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3997c7839262f4ef12cf90b818d6340c18e80f263f1a94bf157d0ec4420380e"
+checksum = "e11d33f857dc2fb11b8bc75aee111aa9cbeb12cd9f25efd3d4c2a3dd4e235284"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -2307,18 +2374,18 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.126"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc1b4cb0cc549fcf58d7dfc081778139b3d283a081644e833e84682ad71cea24"
+checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "web-sys"
-version = "0.3.103"
+version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8622dcb61c0bcc9fffa6938bed81210af2da9a7e4a1a834b2e37a59b6dfb6141"
+checksum = "c435338968042f4f59a557f690a253676d47ce13ceb55d70100e7facf6620a30"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -2377,7 +2444,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
@@ -2440,7 +2507,7 @@ dependencies = [
  "renderdoc-sys",
  "smallvec",
  "static_assertions",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "wgpu-naga-bridge",
  "wgpu-types",
  "windows 0.62.2",
@@ -2755,18 +2822,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.55"
+version = "0.8.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5a105cd7b140f6eeec8acff2ea38135d3cab283ada58540f629fe51e46696eb"
+checksum = "556764e583adb45a9f8d413c2a147fa7e8d821e48e12b14fd560b607998b75eb"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.55"
+version = "0.8.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fe976fb70c78cd64cccfe3a6fc142244e8a77b70959b30faf9d0ac37ee228eb"
+checksum = "f2ab42fc20575779bd240faa45f94a74256f755c0fa9e89f0ede20d91d0cdfc1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2778,30 +2845,6 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "gaia"
-version = "0.3.0"
-
-[[patch.unused]]
-name = "moirai-http"
-version = "0.4.0"
-
-[[patch.unused]]
-name = "athena-core"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "athena-leto"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "horae"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "proteus"
-version = "0.1.0"
 
 [[patch.unused]]
 name = "coeus-autograd"
@@ -2832,6 +2875,14 @@ name = "coeus-tensor"
 version = "0.9.0"
 
 [[patch.unused]]
+name = "horae"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "proteus"
+version = "0.1.0"
+
+[[patch.unused]]
 name = "consus-compression"
 version = "0.1.0"
 
@@ -2858,6 +2909,38 @@ version = "0.1.0"
 [[patch.unused]]
 name = "consus-zarr"
 version = "0.1.0"
+
+[[patch.unused]]
+name = "iris-viz"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "tyche-core"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gaia"
+version = "0.3.0"
+
+[[patch.unused]]
+name = "hephaestus-metal"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-rocm"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "moirai-http"
+version = "0.4.0"
 
 [[patch.unused]]
 name = "ritk-core"
@@ -2888,29 +2971,13 @@ name = "ritk-vtk"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "hephaestus-metal"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-rocm"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "hyperion"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius"
+name = "athena-core"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "asclepius-coeus"
+name = "athena-leto"
 version = "0.1.0"
