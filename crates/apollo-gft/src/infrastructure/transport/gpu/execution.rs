@@ -23,8 +23,10 @@ impl BasisTransform for GftWgpuBackend {
         basis: &[f32],
         output: &mut [f32],
     ) -> WgpuResult<()> {
-        validate_plan_input(plan, signal.len(), basis.len())?;
-        validate_output(plan, output.len())?;
+        GftWgpuBackend::validate_plan(plan)?;
+        GftWgpuBackend::require_len("forward input", signal.len(), plan.len())?;
+        validate_basis_len(plan.len(), basis.len())?;
+        GftWgpuBackend::require_len("forward output", output.len(), plan.len())?;
         GftGpuKernel::execute_into(self.device(), signal, basis, output, GftDirection::Forward)
     }
 
@@ -67,8 +69,10 @@ impl BasisTransform for GftWgpuBackend {
         basis: &[f32],
         output: &mut [f32],
     ) -> WgpuResult<()> {
-        validate_plan_input(plan, spectrum.len(), basis.len())?;
-        validate_output(plan, output.len())?;
+        GftWgpuBackend::validate_plan(plan)?;
+        GftWgpuBackend::require_len("inverse input", spectrum.len(), plan.len())?;
+        validate_basis_len(plan.len(), basis.len())?;
+        GftWgpuBackend::require_len("inverse output", output.len(), plan.len())?;
         GftGpuKernel::execute_into(
             self.device(),
             spectrum,
@@ -107,9 +111,11 @@ impl BasisTransform for GftWgpuBackend {
         basis: &[f32],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        validate_typed_precision::<T>(precision)?;
-        validate_plan_input(plan, signal.len(), basis.len())?;
-        validate_output(plan, output.len())?;
+        GftWgpuBackend::validate_storage_profile::<T, f32>(precision)?;
+        GftWgpuBackend::validate_plan(plan)?;
+        GftWgpuBackend::require_len("typed forward input", signal.len(), plan.len())?;
+        validate_basis_len(plan.len(), basis.len())?;
+        GftWgpuBackend::require_len("typed forward output", output.len(), plan.len())?;
         execute_typed_into(self, signal, basis, output, GftDirection::Forward)
     }
 
@@ -144,9 +150,11 @@ impl BasisTransform for GftWgpuBackend {
         basis: &[f32],
         output: &mut [T],
     ) -> WgpuResult<()> {
-        validate_typed_precision::<T>(precision)?;
-        validate_plan_input(plan, spectrum.len(), basis.len())?;
-        validate_output(plan, output.len())?;
+        GftWgpuBackend::validate_storage_profile::<T, f32>(precision)?;
+        GftWgpuBackend::validate_plan(plan)?;
+        GftWgpuBackend::require_len("typed inverse input", spectrum.len(), plan.len())?;
+        validate_basis_len(plan.len(), basis.len())?;
+        GftWgpuBackend::require_len("typed inverse output", output.len(), plan.len())?;
         execute_typed_into(self, spectrum, basis, output, GftDirection::Inverse)
     }
 
@@ -196,40 +204,6 @@ fn execute_typed_into<T: GpuStorage>(
         }
         Ok(())
     })
-}
-
-fn validate_typed_precision<T: GpuStorage>(precision: PrecisionProfile) -> WgpuResult<()> {
-    let expected = T::PROFILE;
-    if precision.storage != expected.storage || precision.compute != expected.compute {
-        return Err(WgpuError::InvalidPrecisionProfile);
-    }
-    Ok(())
-}
-
-fn validate_plan_input(plan: &GftWgpuPlan, input_len: usize, basis_len: usize) -> WgpuResult<()> {
-    let n = plan.len();
-    if n == 0 {
-        return Err(WgpuError::InvalidPlan {
-            message: "length must be greater than zero".to_owned(),
-        });
-    }
-    if input_len != n {
-        return Err(WgpuError::LengthMismatch {
-            expected: n,
-            actual: input_len,
-        });
-    }
-    validate_basis_len(n, basis_len)
-}
-
-fn validate_output(plan: &GftWgpuPlan, output_len: usize) -> WgpuResult<()> {
-    if output_len != plan.len() {
-        return Err(WgpuError::LengthMismatch {
-            expected: plan.len(),
-            actual: output_len,
-        });
-    }
-    Ok(())
 }
 
 fn validate_basis_len(n: usize, actual: usize) -> WgpuResult<()> {
