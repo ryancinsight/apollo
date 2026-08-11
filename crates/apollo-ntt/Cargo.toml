@@ -23,11 +23,11 @@ mnemosyne-memory = ["leto/mnemosyne-alloc"]
 proptest_gpu = []
 
 [dependencies]
-apollo-fft = { version = "0.25.0", path = "../apollo-fft", default-features = false, optional = true }
+apollo-fft = { version = "0.26.0", path = "../apollo-fft", default-features = false, optional = true }
 hephaestus-core = { workspace = true, optional = true }
 hephaestus-wgpu = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
-apollo-leto-interop = { version = "0.17.0", path = "../apollo-leto-interop" }
+apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
 eunomia = { workspace = true, features = ["serde"] }

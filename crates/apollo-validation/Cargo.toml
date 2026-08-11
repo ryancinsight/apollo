@@ -48,7 +48,7 @@ mnemosyne-memory = [
 ]
 
 [dependencies]
-apollo-fft = { version = "0.25.0", path = "../apollo-fft", features = ["wgpu"] }
+apollo-fft = { version = "0.26.0", path = "../apollo-fft", features = ["wgpu"] }
 apollo-nufft = { version = "0.7.0", path = "../apollo-nufft", features = ["wgpu"] }
 apollo-dctdst = { version = "0.10.0", path = "../apollo-dctdst" }
 apollo-dht = { version = "0.10.0", path = "../apollo-dht" }

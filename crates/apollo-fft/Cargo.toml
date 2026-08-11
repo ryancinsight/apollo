@@ -1,6 +1,6 @@
 [package]
 name = "apollo-fft"
-version = "0.25.0"
+version = "0.26.0"
 rust-version.workspace = true
 edition = "2021"
 license = "MIT"
@@ -14,7 +14,7 @@ hephaestus-core = { workspace = true, optional = true }
 hephaestus-cuda = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 apollo-fft-macros = { version = "0.2.0", path = "../apollo-fft-macros" }
-apollo-leto-interop = { version = "0.17.0", path = "../apollo-leto-interop" }
+apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
 half = { workspace = true }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
