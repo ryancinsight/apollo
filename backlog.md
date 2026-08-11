@@ -608,7 +608,12 @@ Remaining replacement work:
     bindings and parameter-layout assertion; 72 focused value-semantic tests,
     including real-device CPU differential execution; warning-denied Clippy,
     doctest, and rustdoc. D8 now partitions this verification tree by contract;
-    only the cross-transform provider extraction remains open.
+    the first shared generic-validation extraction is complete: Apollo's
+    canonical `apollo-fft` scaffold owns non-empty-plan, operand-length, and
+    typed-profile checks, and GFT consumes those helpers while retaining its
+    graph-basis shape validation locally. Remaining cross-transform provider
+    work is acquisition/capability/error consolidation that belongs upstream
+    in Hephaestus, not another Apollo wrapper.
   - [x] D6-GFT: `apollo-gft` 0.3.0 replaces direct WGPU device ownership with
     one direction-parameterized Hephaestus typed kernel and command stream.
     Leto owns host views and Mnemosyne-backed outputs; the sealed GPU storage
@@ -684,6 +689,17 @@ Remaining replacement work:
   doctest, warning-clean rustdoc, provider audit, source-residue scans, and
   0.17.0 major SemVer classification against merged 0.16.0.
 - [ ] [arch] Stage D8: **consolidate the duplicated GPU-transport *scaffolding*.**
+  - [x] [arch] D8-shared-validation-extraction (owner Codex, completed
+    2026-08-08; scope `apollo-fft` shared transform backend validation and
+    `apollo-gft` basis-parameterized execution): expose the canonical shared
+    non-empty-plan, operand-length, and typed-storage-profile checks to
+    extension surfaces; remove GFT's duplicate generic validators while
+    retaining its domain-specific graph-basis shape check. Add direct
+    value-semantic tests for the shared error/profile contracts. No transform
+    formula, provider acquisition, compatibility wrapper, or fallback path
+    changes. Focused `apollo-fft`/`apollo-gft` WGPU checks, strict Clippy,
+    440/440 Nextest cases, doctests, formatting, residue, and diff checks pass;
+    the Cargo lockfile is preserved unchanged.
   - [x] [arch] D8-validation-suite-tree (owner Codex, completed
     2026-07-16; scope `crates/apollo-validation/src/application/suite/`, ADR
     0031, and PM records): partition the 974-line suite manifest into private

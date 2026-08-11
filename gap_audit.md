@@ -1,5 +1,26 @@
 # Apollo Gap Audit
 
+## Shared GPU validation extraction (2026-08-08)
+
+- Finding: `apollo-gft` duplicated the shared scaffold's generic non-empty-plan,
+  operand-length, and typed-profile validation beside its domain-specific graph
+  basis-shape check. That created a second error-validation home and allowed
+  generic behavior to drift from `apollo-fft`'s transport SSOT.
+- Resolution: `WgpuTransformBackend` now exposes the canonical plan, length, and
+  typed-storage-profile validators to extension surfaces. GFT uses those helpers
+  and retains only `validate_basis_len`, whose overflow and shape contract is
+  graph-domain-specific. Direct tests pin the shared invalid-plan,
+  length-mismatch, profile-match, and profile-mismatch behavior.
+- Boundary: no transform formula, device acquisition, capability probe,
+  compatibility alias, or fallback path changed. Remaining cross-transform
+  acquisition/capability/error consolidation is provider-owned Hephaestus work;
+  Apollo does not add a second transport abstraction.
+- Evidence: focused `apollo-fft`/`apollo-gft` WGPU compilation and strict
+  all-target Clippy pass; configured Nextest passes 440/440 cases; doctests,
+  touched-source formatting, residue, and `git diff --check` pass. Validation
+  preserved the committed Cargo.lock unchanged. No transform arithmetic or
+  provider acquisition behavior changed.
+
 ## Real spherical-harmonic diffusion provider (2026-07-31)
 
 - Finding: RITK's diffusion book branch used a real spherical-harmonic API that

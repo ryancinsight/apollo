@@ -144,7 +144,12 @@ impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
         WgpuTransformPlan::new(payload)
     }
 
-    pub(super) fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
+    /// Validate the shared non-empty plan contract before transform-specific checks.
+    ///
+    /// Transform extensions should call this helper before validating their
+    /// additional operands so every backend reports the canonical invalid-plan
+    /// error for an empty descriptor.
+    pub fn validate_plan(plan: &WgpuTransformPlan<X>) -> WgpuResult<()> {
         let len = plan.len();
         if len == 0 {
             return Err(WgpuError::InvalidPlan {
@@ -154,14 +159,31 @@ impl<X: GpuTransformPlanner> WgpuTransformBackend<X> {
         X::validate(plan.payload())
     }
 
-    pub(super) fn require_len(
-        role: &'static str,
-        actual: usize,
-        expected: usize,
-    ) -> WgpuResult<()> {
+    /// Require an operand length to match a shared plan dimension.
+    ///
+    /// `role` is retained for call-site clarity and future diagnostics; the
+    /// stable error contract reports only the expected and actual lengths.
+    pub fn require_len(role: &'static str, actual: usize, expected: usize) -> WgpuResult<()> {
         let _ = role;
         if actual != expected {
             return Err(WgpuError::LengthMismatch { expected, actual });
+        }
+        Ok(())
+    }
+
+    /// Validate one typed storage profile against the requested dispatch.
+    ///
+    /// Extension surfaces use this helper when an operand outside the shared
+    /// slice contract (such as a graph basis) keeps the transform-specific
+    /// method on a local trait.
+    pub fn validate_storage_profile<T, E>(precision: PrecisionProfile) -> WgpuResult<()>
+    where
+        T: GpuStorage<E>,
+        E: GpuElement,
+    {
+        let expected = T::PROFILE;
+        if precision.storage != expected.storage || precision.compute != expected.compute {
+            return Err(WgpuError::InvalidPrecisionProfile);
         }
         Ok(())
     }
@@ -488,5 +510,73 @@ where
         Self::require_len("typed inverse input", input_len, plan.output_len())?;
         Self::require_len("typed inverse output", output_len, plan.len())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{f16, Complex32};
+
+    struct TestPlanner;
+
+    impl GpuTransformPlanner for TestPlanner {
+        type Plan = usize;
+
+        fn input_len(plan: &Self::Plan) -> usize {
+            *plan
+        }
+    }
+
+    #[test]
+    fn shared_plan_validation_preserves_empty_plan_error() {
+        let empty = WgpuTransformPlan::<TestPlanner>::new(0);
+        assert!(matches!(
+            WgpuTransformBackend::<TestPlanner>::validate_plan(&empty),
+            Err(WgpuError::InvalidPlan { message })
+                if message.contains("length must be greater than zero")
+        ));
+        let valid = WgpuTransformPlan::<TestPlanner>::new(4);
+        assert!(WgpuTransformBackend::<TestPlanner>::validate_plan(&valid).is_ok());
+    }
+
+    #[test]
+    fn shared_length_validation_preserves_expected_and_actual_values() {
+        assert!(matches!(
+            WgpuTransformBackend::<TestPlanner>::require_len("input", 3, 4),
+            Err(WgpuError::LengthMismatch {
+                expected: 4,
+                actual: 3,
+            })
+        ));
+        assert!(WgpuTransformBackend::<TestPlanner>::require_len("input", 4, 4).is_ok());
+    }
+
+    #[test]
+    fn shared_storage_validation_uses_canonical_profiles() {
+        assert!(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<f32, f32>(
+                PrecisionProfile::LOW_PRECISION_F32
+            )
+            .is_ok()
+        );
+        assert!(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<f16, f32>(
+                PrecisionProfile::MIXED_PRECISION_F16_F32
+            )
+            .is_ok()
+        );
+        assert!(matches!(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<f16, f32>(
+                PrecisionProfile::LOW_PRECISION_F32
+            ),
+            Err(WgpuError::InvalidPrecisionProfile)
+        ));
+        assert!(
+            WgpuTransformBackend::<TestPlanner>::validate_storage_profile::<Complex32, Complex32>(
+                PrecisionProfile::LOW_PRECISION_F32
+            )
+            .is_ok()
+        );
     }
 }
