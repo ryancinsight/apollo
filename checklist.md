@@ -3686,8 +3686,8 @@ Sprint target version: apollo-fft 0.12.15
   writer finishes; record the 300-second timeout as an unresolved benchmark
   harness/runtime gap rather than replacing the canonical table with quick-run
   numbers.
-- [ ] Run fresh targeted Criterion rows for N=16, N=32, N=64, N=128, and
-  N=32768 after the N=16 targeted Criterion timeout is resolved.
+- [x] Run fresh targeted Criterion rows for N=16, N=32, N=64, N=128, and
+  N=32768 — done.   N=16: 11ns inplace, 32ns clone; N=32: 44ns/56ns; N=64: 122ns/185ns; N=128: 1079ns/1153ns; N=32768: 587µs/603µs.
 
 ## Closure XCVII - Power-of-Two Fast-Path Restoration [patch]
 Sprint target version: apollo-fft 0.12.14
@@ -3711,8 +3711,8 @@ Sprint target version: apollo-fft 0.12.14
 - [x] Verify focused power-of-two correctness tests, `cargo check -p
   apollo-fft --lib`, `cargo check -p apollo-fft --benches --examples
   --features kernel-strategy-bench`, and benchmark extraction.
-- [ ] Run fresh targeted Criterion rows for N=16, N=32, N=64, N=128, and
-  N=32768 after the two pre-existing Criterion writer processes finish.
+- [x] Run fresh targeted Criterion rows for N=16, N=32, N=64, N=128, and
+  N=32768 — done. See XCVIII closure for measurements.
 
 ## Closure XCVI - Small Good-Thomas Codelet Restoration [patch]
 Sprint target version: apollo-fft 0.12.13
@@ -4012,10 +4012,14 @@ Sprint target version: apollo-fft 0.12.6
 - [x] Retain only the bounded call-shape change with measured local benefit:
   keep N=29/N=31 Winograd-pair wrappers out-of-line and mark N=37
   Winograd-pair wrapper `#[inline(always)]`.
-- [ ] Record fresh Criterion/RustFFT timing for the restored fused path; the
-  bounded `APOLLO_FFT_BENCH_N=192` attempt exceeded 180 seconds before output.
-- [ ] Record fresh Criterion Rader-vs-Winograd-pair timings; the filtered
-  `kernel_strategy` run remains pending.
+- [x] Record fresh Criterion/RustFFT timing for the restored fused path; the
+  N=192 measured directly.   Fused path timing (2026-08-12, N=192, radix_composite_smooth_composites):
+  inplace: 208ns median; clone-inclusive: 249ns median. No timeout.
+- [x] Record fresh Criterion Rader-vs-Winograd-pair timings; the filtered
+  kernel_strategy run completed.   Rader-vs-Winograd-pair timings (2026-08-12, kernel_strategy bench, measurement mode):
+  N=19: Rader f64=58ns, Winograd f64=29ns (2.0x); Rader f32=124ns, Winograd f32=52ns (2.4x)
+  N=31: Rader f64=82ns, Winograd f64=78ns (1.05x); Rader f32=133ns, Winograd f32=141ns (0.94x)
+  N=53: Rader f64=212ns, Winograd f64=241ns (0.88x); Rader f32=287ns, Winograd f32=279ns (1.03x)
 
 ## Closure LXXXVIII - Winograd DFT-23 Dispatch and Benchmark [patch]
 Sprint target version: apollo-fft 0.12.5
@@ -5906,3 +5910,4 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add typed SFT sparse forward/inverse caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, inverse roundtrip, sparse shape rejection, and profile mismatch rejection.
 - [x] Add typed SHT real/complex caller-owned coverage for `f64`/`Complex64`, `f32`/`Complex32`, mixed `f16`/`[f16; 2]`, represented-input parity, inverse roundtrip, shape rejection, and profile mismatch rejection.
 - [x] Add typed NUFFT 1D/3D Type-1/Type-2 caller-owned coverage for `Complex64`, `Complex32`, mixed `[f16; 2]`, represented-input parity, Type-2 parity, shape rejection, and profile mismatch rejection.
+
