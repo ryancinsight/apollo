@@ -18,10 +18,10 @@ jobs:
       run:
         working-directory: apollo
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           path: apollo
-      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
         with:
           components: clippy, rustfmt
       # `hephaestus-cuda` uses NVIDIA's generated CUDA bindings, which require
@@ -50,10 +50,10 @@ jobs:
             echo "CUDA_LIB_PATH=$cuda_lib_path"
             echo "LD_LIBRARY_PATH=$cuda_runtime_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           } >> "$GITHUB_ENV"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d
         with:
           tool: cargo-nextest@0.9.140,cargo-audit@0.22.2,cargo-deny@0.20.2
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: apollo
           cache-targets: false
@@ -98,15 +98,15 @@ jobs:
       run:
         working-directory: apollo
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           path: apollo
-      - uses: dtolnay/rust-toolchain@1.97.0
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@889fac408b4da0905346410f253f0c55fbcb6613
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: apollo
           cache-targets: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.14"
       # maturin develop requires an active virtualenv (or conda env) to
