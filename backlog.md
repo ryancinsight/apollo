@@ -16,7 +16,7 @@
   runtime-only integer math is package-owned. Exact package verification,
   hosted verification, and merge remain.
 
-## D20-real-spherical-harmonic-provider [minor] — in progress
+## D20-real-spherical-harmonic-provider [minor] — complete 2026-08-13
 
 - Owner: Codex `codex/real-spherical-harmonics`; scope: `apollo-sht` real,
   even-order spherical-harmonic evaluation and scattered-direction design
@@ -26,8 +26,16 @@
   allocation arithmetic are bounded; matrix construction performs one output
   allocation with no per-row vectors; analytical values, orthonormality,
   antipodal parity, invalid inputs, and direct/matrix equivalence pass; focused
-  Clippy, Nextest, doctest, Rustdoc, SemVer, and exact-head hosted CI pass.
-- Current evidence: 35/35 `apollo-sht` Nextest cases pass under default and
+  Clippy, Nextest, doctest, Rustdoc, and exact-head hosted CI pass. SemVer is
+  attempted with unavailable dependency-rustdoc evidence recorded below.
+- Current evidence: implementation source head `33a40bcee4532c9c1a03fee7cef2d852b3419090`
+  merged to provider default as `db2186650f2e0889555120e6a1491ad93897409e`.
+  Hosted exact-head run `30685185998` passed the Rust workspace and Python
+  bindings jobs; the exact-head benchmark regression run `30685185999` also
+  passed. RITK's committed source at `53bb01312222745325f20d36db95aab780ce39b3`
+  pins `apollo-sht` to provider default `f1e21c524f8d1834bcd03c0adb5dbe9486a615d3`
+  and consumes the real basis in diffusion and tractography. The 35/35
+  `apollo-sht` Nextest cases pass under default and
   no-default feature sets. Warning-denied all-target Clippy passes with the
   existing Rust 1.97 Windows `missing_const_for_thread_local` false positive
   excluded; doctests and warning-denied Rustdoc pass. Independent review's
@@ -39,8 +47,11 @@
   and removes the obsolete Cutile/CUDA graph. Benchmark run `30685105852`
   then exposed that its fixed-instrument A/B job retained the baseline lock;
   the job now pins the candidate lock alongside the candidate benchmark source
-  so both revisions use one provider graph. Exact-head hosted CI and the
-  downstream pin verification remain open.
+  so both revisions use one provider graph. SemVer remains unavailable before
+  API comparison because dependency rustdoc processes fail in `naga`,
+  `apollo-fft-macros`, and `hermes-simd-intrinsics`; this is a verification
+  environment residual, not an unverified implementation claim. Registry
+  publication remains separately tracked by the release item above.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch] — done
 

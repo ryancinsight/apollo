@@ -33,7 +33,14 @@
       refresh that removes the obsolete Cutile/CUDA dependency closure.
 - [x] Pin the candidate lock as part of the fixed A/B benchmark instrument so
       the baseline and candidate compile against one provider graph.
-- [ ] Pass exact-head hosted CI, merge, and verify the downstream consumer pin.
+- [x] Pass exact-head hosted CI and merge: source `33a40bcee4532c9c1a03fee7cef2d852b3419090`,
+      merge `db2186650f2e0889555120e6a1491ad93897409e`, hosted Rust/Python run
+      `30685185998`, and benchmark run `30685185999`.
+- [x] Verify the committed RITK consumer pin: RITK source
+      `53bb01312222745325f20d36db95aab780ce39b3` records `apollo-sht` at
+      provider default `f1e21c524f8d1834bcd03c0adb5dbe9486a615d3`.
+- [x] Record the unavailable SemVer evidence caused by dependency rustdoc
+      process failures; registry publication remains a separate release item.
 
 ## D19-close-eunomia-migration-regressions [minor] [arch]
 
