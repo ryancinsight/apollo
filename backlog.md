@@ -80,10 +80,30 @@
     closure, and the timed body is `copy_from_slice` plus the kernel call for
     both types — a shape that if anything favours `f32`, which copies half the
     bytes.
-- Remaining hypothesis, by elimination: codegen for `Complex<f32>` versus
-  `Complex<f64>` — autovectorization of the interleaved staging arrays, or
-  register pressure/spill differences. Every structural explanation above is
-  excluded at N=19 and N=31 specifically.
+- Codegen confirmed as the locus, and one candidate fix tried and **rejected by
+  measurement**:
+  - The register-pressure asymmetry is real. Under `try_static_rader`'s
+    `#[inline]` hint, LLVM declines for `f64` (`rader_fft::<f64>`: 1215
+    instructions, 0 spills, 40-byte frame) and accepts for `f32`
+    (`rader_fft::<f32>`: 4275 instructions, 469 spills, 720-byte frame).
+  - Marking it `#[inline(never)]` removes the asymmetry entirely: both land
+    near 210 instructions, 0 spills, 40-byte frames.
+  - The replicated counterbalanced gate then rejected it, slower in all four
+    comparisons on every affected row: `rader_f32/53` 366→458 ns (+25%),
+    `rader_f64/53` 375→444 ns (+18%), `rader_f64/19` 106→115 ns (+8%),
+    `half_cyclic_f64/67` 708→723 ns (+2%).
+  - The `f64` rows are the decisive disproof: `f64` spilled zero times before
+    the change, so removing the hint could only cost call overhead and lost
+    specialisation — and measurably did. Inlining lets the caller specialise
+    the static codelets against a known `n`, and that is worth more than the
+    spills it costs.
+  - Recorded in a doc comment on `try_static_rader` so the "obvious" fix is
+    not re-attempted. Spill count is a model of cost, not a measurement of it.
+- Still open, therefore: the `f32` Rader regression at N=19/31 is a codegen
+  effect that is **not** explained by the spill asymmetry, since eliminating
+  the spills makes things worse. Next candidates are vectorisation of the
+  interleaved `Complex<f32>` staging arrays and the shape of the gather/scatter
+  loops, both of which need the counterbalanced gate rather than static reads.
 - Method: emit release assembly (`cargo rustc -p apollo-fft --lib --
   --emit asm`) and diff the `f32` and `f64` instantiations of the Rader inner
   kernel for vector width, spill count, and table load shape. Note that the

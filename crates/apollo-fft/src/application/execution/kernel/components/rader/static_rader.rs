@@ -38,26 +38,45 @@ pub(crate) const STATIC_RADER_PRIMES: &[usize] = &[
     STATIC_RADER_MAX_PRIME,
 ];
 
-/// Kept out of line deliberately: this function body is the whole static
-/// codelet table, and inlining it into [`rader_fft`] amplifies rather than
-/// helps.
+/// The `#[inline]` hint here is load-bearing. Do not remove it, and do not
+/// replace it with `#[inline(never)]` — that was tried and measured, and it
+/// regresses.
 ///
-/// LLVM's cost model reached opposite conclusions for the two scalar types
-/// under a plain `#[inline]` hint. It declined for `f64`, leaving
-/// `rader_fft::<f64>` at 1215 instructions with **zero** stack spills and a
-/// 40-byte frame. It accepted for `f32` — whose individual codelets are
-/// cheaper, so each looks affordable — and the aggregate blew the register
-/// file: `rader_fft::<f32>` reached 4275 instructions with **469**
-/// stack-relative moves and a 720-byte frame. The measured consequence was
-/// `f32` running 1.71x slower than `f64` at N=19 and 1.19x at N=31, despite
-/// moving half the bytes per element.
+/// ## What looks wrong but is not
 ///
-/// One call per Rader invocation is a few cycles; several hundred spill
-/// round-trips is not. Verify with a spill count over the emitted assembly
-/// rather than a timing run — it is exact and immune to host load.
+/// LLVM's cost model reaches opposite conclusions for the two scalar types
+/// under this hint. It declines for `f64`, leaving `rader_fft::<f64>` at 1215
+/// instructions with zero stack spills and a 40-byte frame. It accepts for
+/// `f32` — whose individual codelets are cheaper, so each looks affordable —
+/// and the aggregate exceeds the register file: `rader_fft::<f32>` reaches
+/// 4275 instructions with 469 stack-relative moves and a 720-byte frame.
 ///
-/// [`rader_fft`]: super::rader_fft
-#[inline(never)]
+/// That asymmetry is real and reads like a defect. Marking this function
+/// `#[inline(never)]` does remove it completely: both instantiations then sit
+/// near 210 instructions with zero spills and 40-byte frames.
+///
+/// ## Why it was reverted anyway
+///
+/// The replicated counterbalanced benchmark gate rejected that change, slower
+/// in all four comparisons on every affected row:
+///
+/// | case | with `#[inline]` | with `#[inline(never)]` |
+/// | --- | ---: | ---: |
+/// | `rader_f32/53` | 366 ns | 458 ns (+25%) |
+/// | `rader_f64/53` | 375 ns | 444 ns (+18%) |
+/// | `rader_f64/19` | 106 ns | 115 ns (+8%) |
+/// | `half_cyclic_f64/67` | 708 ns | 723 ns (+2%) |
+///
+/// Inlining lets the caller specialise the static codelets against a known
+/// `n`; that specialisation is worth more than the spills it costs. The `f64`
+/// rows are the decisive disproof — `f64` was spilling zero times to begin
+/// with, so removing the hint could only add call overhead and lost
+/// specialisation, and it measurably did.
+///
+/// The lesson for anyone re-reading the assembly: spill count is a model of
+/// cost, not a measurement of it. Route any change here through the
+/// counterbalanced gate rather than a static read of the emitted code.
+#[inline]
 pub(crate) fn try_static_rader<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
