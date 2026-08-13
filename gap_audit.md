@@ -37,6 +37,14 @@
   stale lock. The fixed instrument now includes the candidate lock, holding
   provider resolution constant while leaving baseline production source
   unchanged.
+- Closure: source `33a40bcee4532c9c1a03fee7cef2d852b3419090` merged as
+  `db2186650f2e0889555120e6a1491ad93897409e`. Hosted exact-head Rust/Python
+  verification passed in run `30685185998`, and the benchmark regression gate
+  passed in run `30685185999`. RITK's committed source pins Apollo default
+  `f1e21c524f8d1834bcd03c0adb5dbe9486a615d3` and uses the provider API in its
+  diffusion and tractography paths. SemVer remains an unavailable evidence
+  tier because dependency rustdoc processes fail before API comparison; no
+  registry publication claim is made here.
 
 ## FFT bounded-cache stack initialization (2026-07-21)
 
