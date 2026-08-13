@@ -1,5 +1,33 @@
 # Apollo Backlog
 
+## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on small prime kernels [patch] — todo
+
+- Owner: unclaimed; scope: the `dft_pair_impl` prime-pair Winograd kernel and
+  the Rader path for N in 19..=31, their static `PrimePairTable` tables, and
+  the generated codegen for `Complex32`. Kernel selection policy, GPU
+  transports, and sizes above 53 are non-goals.
+- Outcome: `f32` transform time is at most `f64` transform time at equal N.
+  `f32` moves half the bytes per element and admits twice the SIMD lane count,
+  so the current inversion is a codegen or layout defect, not a precision cost.
+- Evidence (measured, this tree, `kernel_strategy` release bench, quiet host,
+  100 ordered samples per case, median with 96.5% interval):
+  - N=19 Rader: `f64` 79 ns vs `f32` 135 ns — `f32` 1.71x slower.
+  - N=31 Winograd pair: `f64` 96 ns vs `f32` 149 ns — `f32` 1.55x slower.
+  - N=31 Rader: `f64` 105 ns vs `f32` 125 ns — `f32` 1.19x slower.
+  - N=53 Winograd pair: `f64` 305 ns vs `f32` 251 ns — expected direction.
+  The inversion is localized to small N and closes by N=53, which points at
+  per-call setup or a failed `Complex32` autovectorization rather than at the
+  arithmetic itself.
+- Method: inspect emitted assembly for `dft_pair_impl::<f32, 31, 15, false>`
+  against its `f64` instantiation (`cargo asm` under the release profile the
+  bench uses) and compare vector width, spill count, and table load shape.
+  The kernel is generic over `F` with no widening, and the tables are
+  `&'static` per type, so both hypotheses are codegen-level.
+- Acceptance: a differential benchmark shows `f32` at or below `f64` for
+  N in {19, 23, 29, 31} with the existing accuracy tests unchanged; the fix
+  lands in the production kernel, never in the benchmark or its workload.
+- Dependencies: none. Risk class: [patch], contained in one kernel family.
+
 ## Rust crate publication aliases [patch] — in progress
 
 - Owner: Codex `/root`; scope: root dependency identities, clean lockfile,
