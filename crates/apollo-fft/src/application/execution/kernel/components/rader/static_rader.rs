@@ -38,7 +38,26 @@ pub(crate) const STATIC_RADER_PRIMES: &[usize] = &[
     STATIC_RADER_MAX_PRIME,
 ];
 
-#[inline]
+/// Kept out of line deliberately: this function body is the whole static
+/// codelet table, and inlining it into [`rader_fft`] amplifies rather than
+/// helps.
+///
+/// LLVM's cost model reached opposite conclusions for the two scalar types
+/// under a plain `#[inline]` hint. It declined for `f64`, leaving
+/// `rader_fft::<f64>` at 1215 instructions with **zero** stack spills and a
+/// 40-byte frame. It accepted for `f32` — whose individual codelets are
+/// cheaper, so each looks affordable — and the aggregate blew the register
+/// file: `rader_fft::<f32>` reached 4275 instructions with **469**
+/// stack-relative moves and a 720-byte frame. The measured consequence was
+/// `f32` running 1.71x slower than `f64` at N=19 and 1.19x at N=31, despite
+/// moving half the bytes per element.
+///
+/// One call per Rader invocation is a few cycles; several hundred spill
+/// round-trips is not. Verify with a spill count over the emitted assembly
+/// rather than a timing run — it is exact and immune to host load.
+///
+/// [`rader_fft`]: super::rader_fft
+#[inline(never)]
 pub(crate) fn try_static_rader<F, const INVERSE: bool>(data: &mut [F::Complex], n: usize) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
