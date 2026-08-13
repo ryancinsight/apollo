@@ -63,10 +63,6 @@ pub trait MixedRadixScalar:
     /// different Stockham/composite tradeoffs.
     const BLUESTEIN_PAD_POWER_OF_TWO: bool;
 
-    /// Whether Bluestein phase construction uses native f32 trigonometry before
-    /// entering the scalar complex constructor.
-    const BLUESTEIN_NATIVE_PHASE_TRIG: bool;
-
     type Complex: Copy
         + Send
         + Sync
