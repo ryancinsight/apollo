@@ -135,6 +135,34 @@ pub(crate) fn dft_pair_impl<
     }
 }
 
+/// Split-array (structure-of-arrays) form of [`dft_pair_impl`].
+///
+/// Arithmetically identical to [`dft_pair_impl`] — same operations in the same
+/// order, so both carry the same error bound. The sole difference is layout:
+/// the sum and i-difference staging arrays are split into separate real and
+/// imaginary arrays instead of one interleaved `[Complex<F>; H]`, which changes
+/// what the vectorizer can do with the two accumulation loops.
+///
+/// ## Why only `f32` at N=31 uses this
+///
+/// Layout choice here is empirical, not analytical, so it is narrowed to the
+/// one instantiation where it measured as a win. A broader SoA route covering
+/// `f32` N=29/37/41/53 was measured and rejected: it gave no stable
+/// improvement and regressed the larger short-prime rows. At N=31 the SoA form
+/// measured 87.31 ns against 107.39 ns for the interleaved probe, so
+/// `ShortWinogradScalar for f32` routes `dft31` here and every other `f32`
+/// odd prime — and every `f64` odd prime — stays on [`dft_pair_impl`].
+///
+/// Two consequences worth knowing before touching this:
+///
+/// - The `_reduced` suffix names the *reduced-precision scalar* this route was
+///   introduced for, not a reduced error bound and not reduced register
+///   pressure.
+/// - `benchmark_kernels::winograd_pair_prime_forward` calls [`dft_pair_impl`]
+///   for whatever `F` it is handed, so it does **not** exercise this route.
+///   Benchmarking `f32` at N=31 through that entry point measures the
+///   interleaved path this special case exists to avoid; a comparison meant to
+///   re-evaluate the narrowing has to call both kernels explicitly.
 #[inline]
 pub(crate) fn dft_pair_impl_reduced<
     F: WinogradScalar,
