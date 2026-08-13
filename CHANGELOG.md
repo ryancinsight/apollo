@@ -33,6 +33,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [arch] `apollo-fft`'s shared WGPU transport now exposes canonical generic
+  plan, operand-length, and typed-storage-profile validation to extension
+  surfaces. `apollo-gft` consumes those helpers and retains only its
+  graph-basis shape validation, eliminating duplicate generic validation
+  without changing transform arithmetic, provider acquisition, or compatibility
+  wrappers.
+
 - [patch] `apollo-wavelet` CWT collects the row-major coefficient matrix
   directly through `moirai::map_collect_index_with::<Adaptive>` into one flat
   buffer, removing the per-scale `Vec<Vec<f64>>` intermediate and its row

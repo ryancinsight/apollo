@@ -79,6 +79,23 @@ fn published_reference_suite_checks_computed_fixture_values() {
 }
 
 #[test]
+fn test_mnemosyne_branded_slice_boundary_integration() {
+    use mnemosyne::{branded_scope, BrandedVec, MemoryBackendWrapper, StandardPolicy};
+
+    branded_scope::<StandardPolicy, MemoryBackendWrapper, _, _>(|heap, mut token| {
+        let mut values = BrandedVec::new(&heap);
+        for value in [1_u32, 2, 3, 5] {
+            values.push(&mut token, value).expect("branded value push");
+        }
+
+        let cell = values.into_cell(&mut token);
+        assert_eq!(cell.borrow(&token), &[1, 2, 3, 5]);
+        cell.borrow_mut(&mut token)[2] = 4;
+        assert_eq!(cell.borrow(&token), &[1, 2, 4, 5]);
+    });
+}
+
+#[test]
 fn test_melinoe_zero_copy_boundary_policy_integration() {
     use melinoe::{brand_scope, Borrowed, CellCowExt, MelinoeCell, Retained};
     use std::borrow::Cow;
