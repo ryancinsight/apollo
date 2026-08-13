@@ -1,30 +1,76 @@
 # Apollo Backlog
 
-## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on small prime kernels [patch] — todo
+## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — todo
 
-- Owner: unclaimed; scope: the `dft_pair_impl` prime-pair Winograd kernel and
-  the Rader path for N in 19..=31, their static `PrimePairTable` tables, and
-  the generated codegen for `Complex32`. Kernel selection policy, GPU
-  transports, and sizes above 53 are non-goals.
-- Outcome: `f32` transform time is at most `f64` transform time at equal N.
-  `f32` moves half the bytes per element and admits twice the SIMD lane count,
-  so the current inversion is a codegen or layout defect, not a precision cost.
-- Evidence (measured, this tree, `kernel_strategy` release bench, quiet host,
-  100 ordered samples per case, median with 96.5% interval):
-  - N=19 Rader: `f64` 79 ns vs `f32` 135 ns — `f32` 1.71x slower.
-  - N=31 Winograd pair: `f64` 96 ns vs `f32` 149 ns — `f32` 1.55x slower.
-  - N=31 Rader: `f64` 105 ns vs `f32` 125 ns — `f32` 1.19x slower.
-  - N=53 Winograd pair: `f64` 305 ns vs `f32` 251 ns — expected direction.
-  The inversion is localized to small N and closes by N=53, which points at
-  per-call setup or a failed `Complex32` autovectorization rather than at the
-  arithmetic itself.
-- Method: inspect emitted assembly for `dft_pair_impl::<f32, 31, 15, false>`
-  against its `f64` instantiation (`cargo asm` under the release profile the
-  bench uses) and compare vector width, spill count, and table load shape.
-  The kernel is generic over `F` with no widening, and the tables are
-  `&'static` per type, so both hypotheses are codegen-level.
-- Acceptance: a differential benchmark shows `f32` at or below `f64` for
-  N in {19, 23, 29, 31} with the existing accuracy tests unchanged; the fix
+- Owner: unclaimed; scope: the Rader kernel (`rader_fft`) for small primes and
+  the codegen of its `Complex32` instantiation. Kernel selection policy, the
+  Winograd-pair path, GPU transports, and sizes above 53 are non-goals.
+- Outcome: `f32` Rader time is at most `f64` Rader time at equal N. `f32` moves
+  half the bytes per element and admits twice the SIMD lane count, so the
+  inversion is a codegen or layout defect, not a precision cost.
+- Scope correction (2026-08-13): this item first also claimed an N=31
+  Winograd-pair regression. That row is **retracted**. The `kernel_strategy`
+  bench reaches the Winograd path through
+  `benchmark_kernels::winograd_pair_prime_forward`, whose
+  `dispatch_winograd_pair_prime!` macro calls the interleaved (AoS)
+  `dft_pair_impl` for whatever `F` it is given. Production `f32` at N=31 does
+  not take that route: `ShortWinogradScalar for f32` sends `dft31` to the
+  split-array (SoA) `dft_pair_impl_reduced` instead — a deliberate, measured
+  narrowing recorded under Closure CVXII, which found SoA 87.31 ns against an
+  AoS probe at 107.39 ns. The bench therefore measured exactly the path that
+  special case exists to avoid, and the slow AoS `f32`/31 number is the
+  premise of that decision rather than evidence against it. The Rader rows are
+  unaffected: `rader_prime_forward` calls the production `rader_fft` with no
+  per-type special-casing.
+- Evidence (measured, this tree, `kernel_strategy` release bench, quiet host
+  verified at 0 concurrent `cargo`/`rustc` processes, 100 ordered samples per
+  case). Reported as `min` and `median [lower, upper]` in ns, because one f64
+  case is bimodal and its median alone would overstate precision:
+
+  | case | `f64` min | `f64` median | `f32` min | `f32` median |
+  | --- | ---: | ---: | ---: | ---: |
+  | N=19 Rader | 54 | 79 [79, 80] | 122 | 135 [130, 136] |
+  | N=19 Winograd pair | 29 | 51 [51, 52] | 51 | 53 [53, 53] |
+  | N=31 Rader | 73 | 105 [104, 108] | 123 | 125 [125, 127] |
+  | N=31 Winograd pair | 61 | 96 [74, 115] | 132 | 149 [148, 151] |
+  | N=53 Rader | 202 | 256 [255, 258] | 221 | 251 [249, 254] |
+  | N=53 Winograd pair | 233 | 305 [304, 306] | 217 | 251 [251, 252] |
+
+  Reading, with confidence stated per row rather than one blanket ratio:
+  - **N=19 Rader and N=31 Rader are the item.** Both distributions are tight
+    and both exercise the production kernel: `f32` 1.71x and 1.19x slower.
+  - N=31 Winograd pair is retracted per the scope correction above — not a
+    production `f32` path, and its `f64` median is bimodal ([74, 115]) besides.
+  - N=19 Winograd pair is near parity (51 vs 53) and N=53 reverses in both
+    kernels, so the Winograd path shows no defect where the bench and
+    production agree.
+  Minima are the least contamination-prone statistic here and agree with the
+  medians on direction in every row.
+  The Rader inversion is localized to small N and closes by N=53, which points
+  at per-call setup or a failed `Complex32` autovectorization rather than at
+  the arithmetic itself.
+- Re-measurement note: any confirming or refuting run must re-verify the quiet
+  host first. Concurrent stack builds contend on the shared Atlas target and
+  contaminate timings; a run taken under peer load is not evidence either way.
+- Ruled out already, by reading rather than guessing:
+  - Widening: `rader_fft` and `dft_pair_impl` are generic over `F` with no
+    widen-compute-narrow anywhere on the path.
+  - Per-call table conversion: `impl_prime_pair_table!` emits `static`
+    `[[f32; H]; H]` and `[[f64; H]; H]` literal arrays, and `cos_table` /
+    `sin_table` return `&'static` references to them for both types.
+  - Dispatch asymmetry on the Rader path: `rader_prime_forward` reaches
+    `rader_fft::<F, INVERSE>` with no per-type branch.
+  - A benchmark artifact: `signal32` conversion sits outside the timed
+    closure, and the timed body is `copy_from_slice` plus the kernel call for
+    both types — a shape that if anything favours `f32`, which copies half the
+    bytes.
+- Method: emit release assembly (`cargo rustc -p apollo-fft --lib --
+  --emit asm`) and diff the `f32` and `f64` instantiations of the Rader inner
+  kernel for vector width, spill count, and table load shape. Note that the
+  `f32` instantiation only appears when the `kernel-strategy-bench` feature is
+  enabled, since `benchmark_kernels` is the only in-crate caller at that type.
+- Acceptance: a differential benchmark shows `f32` at or below `f64` Rader time
+  for N in {19, 23, 29, 31} with the existing accuracy tests unchanged; the fix
   lands in the production kernel, never in the benchmark or its workload.
 - Dependencies: none. Risk class: [patch], contained in one kernel family.
 
