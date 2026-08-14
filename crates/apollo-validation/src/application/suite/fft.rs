@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::domain::report::{CpuFftReport, GpuFftReport, PrecisionRunReport};
 use apollo_fft::{FftBackend, Shape3D};
 use hephaestus_core::HephaestusError;

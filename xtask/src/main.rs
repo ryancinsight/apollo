@@ -1,3 +1,6 @@
+//! Apollo repository automation: benchmark orchestration, provider auditing and
+//! the committed maintenance tasks invoked as `cargo run -p xtask -- <task>`.
+
 use anyhow::{bail, Result};
 use std::env;
 

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use super::super::radix::dft8_array_impl;
 use super::super::traits::{apply_twiddle_impl, WinogradScalar};
 use eunomia::Complex64;

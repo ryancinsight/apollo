@@ -43,7 +43,6 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Mathematics of Computation*, 19(90), 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §2.2.
 
-#![allow(clippy::uninit_vec)]
 use half::f16;
 
 use eunomia::{Complex, Complex32, Complex64};

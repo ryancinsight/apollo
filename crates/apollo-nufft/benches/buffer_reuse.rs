@@ -3,8 +3,6 @@
 //! Each case retains the existing per-call and reusable-buffer production
 //! closures, timing host transfer, Hephaestus dispatch, and readback.
 
-#![allow(missing_docs)]
-
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_nufft::{
     NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuBackend, NufftWgpuPlan1D, NufftWgpuPlan3D,

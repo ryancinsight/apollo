@@ -12,6 +12,14 @@
 //!
 //! All three dimensions must equal `n`, which must be a power of two.
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::application::execution::kernel::direct::wht_inplace;
 use crate::domain::contracts::error::FwhtError;
 use eunomia::Complex64;

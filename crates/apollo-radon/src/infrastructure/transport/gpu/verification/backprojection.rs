@@ -1,5 +1,10 @@
 //! Value-semantic Radon GPU adjoint-backprojection contracts.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::{infrastructure::transport::gpu::WgpuError, RadonPlan};
 use leto::Array2;
 

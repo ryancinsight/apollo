@@ -95,58 +95,61 @@ thiserror = "2.0.18"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
-all = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-module_name_repetitions = "allow"
-must_use_candidate = "allow"
-similar_names = "allow"
-too_many_lines = "allow"
-default_constructed_unit_structs = "allow"
-doc_lazy_continuation = "allow"
-needless_range_loop = "allow"
-too_many_arguments = "allow"
-manual_is_multiple_of = "allow"
-manual_div_ceil = "allow"
-manual_slice_size_calculation = "allow"
-len_zero = "allow"
-cast_possible_truncation = "allow"
-cast_precision_loss = "allow"
-cast_sign_loss = "allow"
-cast_possible_wrap = "allow"
-items_after_statements = "allow"
-range_minus_one = "allow"
-default_trait_access = "allow"
-useless_conversion = "allow"
-from_over_into = "allow"
-cast_lossless = "allow"
-fn_params_excessive_bools = "allow"
-struct_excessive_bools = "allow"
-missing_panics_doc = "allow"
-missing_errors_doc = "allow"
-missing_fields_in_debug = "allow"
-needless_pass_by_value = "allow"
-needless_for_each = "allow"
-redundant_closure_for_method_calls = "allow"
-format_in_format_args = "allow"
-match_like_matches_macro = "allow"
-float_cmp = "allow"
-unreadable_literal = "allow"
-explicit_iter_loop = "allow"
-unused_unit = "allow"
-semicolon_if_nothing_returned = "allow"
-pub_underscore_fields = "allow"
-doc_markdown = "allow"
-manual_is_power_of_two = "allow"
-trivially_copy_pass_by_ref = "allow"
-let_and_return = "allow"
-match_same_arms = "allow"
-single_match = "allow"
-single_match_else = "allow"
-redundant_field_names = "allow"
-needless_return = "allow"
-unneeded_field_pattern = "allow"
-explicit_write = "allow"
-manual_range_contains = "allow"
-uninlined_format_args = "allow"
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
 
-# ATLAS-PATH-DEP-AUDIT-2 round-4 closure
+# Pedantic floor ratchet: every class listed below already fires in this
+# workspace and is allowed at its measured baseline; every class NOT listed is a
+# hard error. Counts are `cargo clippy --workspace --all-targets --all-features`
+# hits (the gate's own invocation) at the time the floor was established,
+# deduplicated per source site, as total (production), where production excludes
+# `#[cfg(test)]` modules and test, bench and example targets. Burn a class down
+# to zero, then delete its line -- the floor tightens, never loosens.
+
+cast_precision_loss = "allow"                   # 1096 (801 prod)
+doc_markdown = "allow"                          # 547 (502 prod)
+unreadable_literal = "allow"                    # 433 (422 prod)
+missing_errors_doc = "allow"                    # 395 (395 prod)
+cast_possible_truncation = "allow"              # 390 (347 prod)
+excessive_precision = "allow"                   # 350 (350 prod)
+cast_lossless = "allow"                         # 321 (306 prod)
+missing_panics_doc = "allow"                    # 168 (168 prod)
+similar_names = "allow"                         # 154 (153 prod)
+semicolon_if_nothing_returned = "allow"         # 118 (118 prod)
+cast_possible_wrap = "allow"                    # 90 (78 prod)
+needless_range_loop = "allow"                   # 71 (69 prod)
+items_after_statements = "allow"                # 61 (61 prod)
+needless_pass_by_value = "allow"                # 57 (57 prod)
+elidable_lifetime_names = "allow"               # 45 (45 prod)
+too_many_lines = "allow"                        # 43 (39 prod)
+uninlined_format_args = "allow"                 # 33 (30 prod)
+cast_sign_loss = "allow"                        # 30 (28 prod)
+manual_is_multiple_of = "allow"                 # 30 (29 prod)
+default_trait_access = "allow"                  # 21 (21 prod)
+too_many_arguments = "allow"                    # 20 (20 prod)
+type_complexity = "allow"                       # 17 (17 prod)
+redundant_closure_for_method_calls = "allow"    # 14 (1 prod)
+cast_ptr_alignment = "allow"                    # 14 (14 prod)
+explicit_iter_loop = "allow"                    # 12 (8 prod)
+approx_constant = "allow"                       # 12 (12 prod)
+single_match_else = "allow"                     # 12 (12 prod)
+match_same_arms = "allow"                       # 10 (10 prod)
+missing_const_for_thread_local = "allow"        # 10 (10 prod)
+float_cmp = "allow"                             # 9 (7 prod)
+many_single_char_names = "allow"                # 9 (9 prod)
+manual_div_ceil = "allow"                       # 8 (6 prod)
+same_item_push = "allow"                        # 8 (8 prod)
+must_use_candidate = "allow"                    # 8 (8 prod)
+needless_for_each = "allow"                     # 7 (7 prod)
+trivially_copy_pass_by_ref = "allow"            # 7 (7 prod)
+missing_fields_in_debug = "allow"               # 5 (5 prod)
+struct_excessive_bools = "allow"                # 5 (5 prod)
+unused_self = "allow"                           # 4 (4 prod)
+uninit_vec = "allow"                            # 1 (1 prod)
+
+# --- Restriction floor ---
+# `unwrap_used` is denied outright: no workspace-wide allow. Pre-existing sites
+# are pinned per file by `#![expect(..., reason = "ratchet APOLLO-UNWRAP-1")]`
+# (`#![cfg_attr(test, expect(...))]` where a `src/` file's unwraps are all
+# inside `#[cfg(test)]`), which self-expires the moment a file's last unwrap goes.
+unwrap_used = "deny"

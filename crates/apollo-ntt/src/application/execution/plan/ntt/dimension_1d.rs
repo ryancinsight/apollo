@@ -1,5 +1,13 @@
 //! 1D Number Theoretic Transform Plan
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::application::execution::kernel::direct::ntt_kernel;
 use crate::domain::contracts::config::{DEFAULT_MODULUS, DEFAULT_PRIMITIVE_ROOT};
 use crate::domain::contracts::error::NttError;

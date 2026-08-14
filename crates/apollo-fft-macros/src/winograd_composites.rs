@@ -8,6 +8,11 @@
 //!
 //! Optional: `inline_attr: always | hint` (default: `always`)
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use proc_macro::TokenStream as CompilerTokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};

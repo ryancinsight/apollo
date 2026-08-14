@@ -31,10 +31,6 @@
 //! One dispatch body serves all precision × direction × normalization
 //! combinations. No algorithm body is duplicated across precision variants.
 
-#![allow(clippy::empty_line_after_doc_comments)]
-#![allow(clippy::type_complexity)]
-#![allow(clippy::uninit_vec)]
-
 pub(crate) mod caches;
 pub(crate) mod dispatch;
 pub(crate) mod scalar;

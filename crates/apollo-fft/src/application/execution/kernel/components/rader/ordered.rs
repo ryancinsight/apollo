@@ -17,6 +17,7 @@ use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 /// * `data[1 + q]` is `x[g^q mod N]` for `q in 0..N-1` on entry.
 /// * `data[0]` is `X[0]` on return.
 /// * `data[1 + q]` is `X[g_inv^q mod N]` for `q in 0..N-1` on return.
+///
 /// Ordered Rader implementation for fused prime paths.
 #[inline]
 pub(crate) fn rader_ordered_impl<

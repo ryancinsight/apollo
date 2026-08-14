@@ -4,8 +4,6 @@
 //! composites, and two-by-prime composites without deleting either the
 //! in-place or clone-inclusive workload.
 
-#![allow(missing_docs)]
-
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use apollo_fft::application::execution::kernel::FftPrecision;
 use eunomia::Complex64;
