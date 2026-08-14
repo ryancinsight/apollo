@@ -1,6 +1,7 @@
 # ADR 0001: Fallible WGPU device construction
 
-- Status: Superseded by Hephaestus 0.13.0
+- Status: Rejected
+- Revision (2026-08-14): Hephaestus 0.13.0 removed the process-global Mnemosyne callback contract, so Apollo's infallible constructor is the current decision. The original fallible boundary remains documented below as historical context.
 - Date: 2026-07-13
 - Change class: major
 
