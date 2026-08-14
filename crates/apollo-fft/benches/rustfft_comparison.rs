@@ -42,7 +42,6 @@
 //! through a public API, so those columns cannot be regenerated and are not
 //! invented here.
 
-
 use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
