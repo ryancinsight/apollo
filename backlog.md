@@ -52,18 +52,58 @@
 - Re-measurement note: any confirming or refuting run must re-verify the quiet
   host first. Concurrent stack builds contend on the shared Atlas target and
   contaminate timings; a run taken under peer load is not evidence either way.
-- Ruled out already, by reading rather than guessing:
+- Ruled out already, by reading rather than guessing. Apollo does carry real
+  per-type divergences on this path, so each was checked against the sizes
+  actually measured rather than dismissed generically:
   - Widening: `rader_fft` and `dft_pair_impl` are generic over `F` with no
     widen-compute-narrow anywhere on the path.
   - Per-call table conversion: `impl_prime_pair_table!` emits `static`
     `[[f32; H]; H]` and `[[f64; H]; H]` literal arrays, and `cos_table` /
     `sin_table` return `&'static` references to them for both types.
-  - Dispatch asymmetry on the Rader path: `rader_prime_forward` reaches
+  - Dispatch asymmetry at entry: `rader_prime_forward` reaches
     `rader_fft::<F, INVERSE>` with no per-type branch.
+  - **Convolution-backend selection.** `prefers_bluestein_for_rader` carries an
+    explicit `f32` bias, but its own predicate does not fire at these sizes:
+    N=19 has `m=18` (prime-2/3-smooth, `< 128`, not 67/113) so neither type
+    takes Bluestein, and N=31 has `m=30` (factor 5, so not smooth) which sends
+    **both** types to Bluestein. The comment above that function describes the
+    bias in general terms; the arithmetic is what governs here.
+  - **Half-cyclic selection.** `HALF_CYCLIC_RADER_THRESHOLD` is 32 for both
+    `f32` and `f64`, and neither type's `HALF_CYCLIC_RADER_PRIMES` lists 19 or
+    31 (`f32` is empty, `f64` is `[67]`). Same backend at both sizes.
+  - **Static vs dynamic Rader.** `try_static_rader` is generic with `ShortDft<m>`
+    bounds, and the `ShortDft<N>` impls are blanket over
+    `F: ShortWinogradScalar`. They delegate to per-type methods, but the only
+    method that diverges by type is `dft31`, which `m=18` and `m=30` do not
+    reach. Same path for both.
   - A benchmark artifact: `signal32` conversion sits outside the timed
     closure, and the timed body is `copy_from_slice` plus the kernel call for
     both types — a shape that if anything favours `f32`, which copies half the
     bytes.
+- Codegen confirmed as the locus, and one candidate fix tried and **rejected by
+  measurement**:
+  - The register-pressure asymmetry is real. Under `try_static_rader`'s
+    `#[inline]` hint, LLVM declines for `f64` (`rader_fft::<f64>`: 1215
+    instructions, 0 spills, 40-byte frame) and accepts for `f32`
+    (`rader_fft::<f32>`: 4275 instructions, 469 spills, 720-byte frame).
+  - Marking it `#[inline(never)]` removes the asymmetry entirely: both land
+    near 210 instructions, 0 spills, 40-byte frames.
+  - The replicated counterbalanced gate then rejected it, slower in all four
+    comparisons on every affected row: `rader_f32/53` 366→458 ns (+25%),
+    `rader_f64/53` 375→444 ns (+18%), `rader_f64/19` 106→115 ns (+8%),
+    `half_cyclic_f64/67` 708→723 ns (+2%).
+  - The `f64` rows are the decisive disproof: `f64` spilled zero times before
+    the change, so removing the hint could only cost call overhead and lost
+    specialisation — and measurably did. Inlining lets the caller specialise
+    the static codelets against a known `n`, and that is worth more than the
+    spills it costs.
+  - Recorded in a doc comment on `try_static_rader` so the "obvious" fix is
+    not re-attempted. Spill count is a model of cost, not a measurement of it.
+- Still open, therefore: the `f32` Rader regression at N=19/31 is a codegen
+  effect that is **not** explained by the spill asymmetry, since eliminating
+  the spills makes things worse. Next candidates are vectorisation of the
+  interleaved `Complex<f32>` staging arrays and the shape of the gather/scatter
+  loops, both of which need the counterbalanced gate rather than static reads.
 - Method: emit release assembly (`cargo rustc -p apollo-fft --lib --
   --emit asm`) and diff the `f32` and `f64` instantiations of the Rader inner
   kernel for vector width, spill count, and table load shape. Note that the
