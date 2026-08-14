@@ -1,8 +1,8 @@
-#![allow(missing_docs)]
 
 use anyhow::{bail, Result};
 use std::env;
 
+mod benchmark;
 mod provider_audit;
 
 fn main() -> Result<()> {
@@ -10,6 +10,7 @@ fn main() -> Result<()> {
     let mut args = args.into_iter();
     match args.next().as_deref() {
         Some("provider-audit") => provider_audit::run(args),
+        Some("benchmark") => benchmark::run(args),
         Some("-h" | "--help" | "help") => {
             print_help();
             Ok(())
@@ -24,6 +25,6 @@ fn main() -> Result<()> {
 
 fn print_help() {
     println!(
-        "Usage:\n  cargo run -p xtask -- provider-audit [--root <path>]\n\nProvider audit options:\n  --root <path>       Workspace root to inspect. Defaults to the current directory."
+        "Usage:\n  cargo run -p xtask -- provider-audit [--root <path>]\n  cargo run -p xtask -- benchmark [--full] [--skip-run --csv <path>] [--root <path>]\n\nProvider audit options:\n  --root <path>       Workspace root to inspect. Defaults to the current directory.\n\nBenchmark options:\n  --full              Dense 1..=500 sweep instead of the bounded default set.\n  --skip-run          Re-render from a saved CSV instead of measuring.\n  --csv <path>        CSV to read with --skip-run.\n  --root <path>       Workspace root. Defaults to the current directory."
     );
 }

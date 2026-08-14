@@ -31,6 +31,11 @@ thiserror = { workspace = true }
 [dev-dependencies]
 apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
+rustfft.workspace = true
+
+[[bench]]
+name = "rustfft_comparison"
+harness = false
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",
