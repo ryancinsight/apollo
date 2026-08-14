@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted, 2026-07-15.
+Accepted
+- Revision (2026-08-14): The native benchmark measurement runtime remains the accepted timing boundary; the original decision date is retained in the surrounding ADR history.
 
 ## Context
 
