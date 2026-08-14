@@ -3,6 +3,8 @@
 //! The parameter matrix satisfies the Hann COLA relation `hop = frame / 2`.
 //! Each operation retains its original allocating or reusable-buffer closure.
 
+#![allow(missing_docs)]
+
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_stft::{FramePlan, FramedExecution};
 use apollo_stft::{StftWgpuBackend, StftWgpuPlan};

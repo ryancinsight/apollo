@@ -3,6 +3,8 @@
 //! Measures end-to-end host transfer, provider dispatch, and readback with
 //! either per-call allocation or reusable typed buffers.
 
+#![allow(missing_docs)]
+
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
 use leto::Array3;

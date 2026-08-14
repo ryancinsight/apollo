@@ -1,10 +1,5 @@
 //! Tests for forward/inverse complex FFT API (part 2).
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::*;
 use eunomia::{Complex32, Complex64};
 use leto::{Array1, Array2, Array3};

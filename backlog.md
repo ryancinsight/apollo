@@ -10,11 +10,35 @@
   256 at 3786 ns against 249 ns, and 512 at 7620 ns against 556 ns, while
   neighbouring non-power-of-two sizes are competitive — 200 at 243 ns against
   279 ns is *faster* than RustFFT, and 96 and 121 sit near 1.5–1.8x.
-- Why it looks structural rather than noise: from 128 upward the time scales
-  linearly with n (1889 → 3786 → 7620, almost exactly 2x per doubling) at
-  roughly 14.8 ns per element, whereas 64, 96, and 200 all run near
-  1.2–1.75 ns per element. A transform should scale as n log n, not n, and the
-  per-element constant should not jump tenfold at one size class.
+- Root cause located (dispatch trace, `stockham/butterfly/dispatch.rs:44`):
+  `forward64_avx_with_scratch_sized` routes 32 and 64 to dedicated
+  `fixed_len32_precise_avx_fma` / `fixed_len64_precise_avx_fma` kernels, and
+  4096 to `transform_len4096_four_triples`. **128 | 256 | 512 match an arm whose
+  only body is a comment** — "Route explicitly; falls through to sized
+  transform" — so they land on the generic
+  `transform_sized::<PreciseStockhamAvxFma>`. AVX is therefore reached; the gap
+  is the generic sized transform, not a missing vector path.
+- Per-element cost on a quiet host (7 concurrent processes), minima:
+
+  | n | log2 | ns/element | path |
+  | ---: | ---: | ---: | --- |
+  | 32 | 5 | 1.09 | dedicated AVX kernel |
+  | 64 | 6 | 1.69 | dedicated AVX kernel |
+  | 128 | 7 | 5.39 | generic `transform_sized` |
+  | 256 | 8 | 5.50 | generic `transform_sized` |
+  | 512 | 9 | 6.36 | generic `transform_sized` |
+
+  The cliff is the 64 → 128 boundary: a 3.2x jump in per-element cost exactly
+  where dedicated kernels stop. Growth above it is gradual, consistent with
+  cache effects rather than a second defect.
+- Correction to the first reading of this item: it reported the cost as scaling
+  *linearly* with n and 128 as slower than 256. Both were contamination from a
+  loaded host. On a quiet host the series is monotonic and the per-element cost
+  is roughly flat across 128–512. The dispatch boundary, not the scaling law,
+  is what needs fixing.
+- Two hypotheses eliminated by reading: AVX is not compile-gated off (runtime
+  `is_x86_feature_detected!` with a `target_feature` fast path), and scratch is
+  not a per-call heap allocation (`with_scratch` uses a thread-local pool).
 - Partial corroboration: the independent `kernel_strategy` bench measures
   `generic_selector/256` at 1560 ns on the same host — a different entry point
   and a different absolute figure, but the same order, and likewise far above

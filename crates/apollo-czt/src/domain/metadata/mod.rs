@@ -1,16 +1,8 @@
-//! CZT metadata: validated starting point, frequency step, and transform parameters.
+﻿//! CZT metadata: validated starting point, frequency step, and transform parameters.
 //!
 //! The chirp z-transform evaluates the z-transform at M points on a logarithmic spiral:
 //! `z_k = A * W^{-k}`, `k = 0, 1, ..., M-1`,
 //! where `A` is the starting point and `W` is the frequency step ratio.
-
-#![cfg_attr(
-    test,
-    expect(
-        clippy::unwrap_used,
-        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-    )
-)]
 
 use crate::domain::contracts::error::CztError;
 use eunomia::Complex64;

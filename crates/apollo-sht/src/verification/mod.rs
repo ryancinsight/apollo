@@ -1,13 +1,5 @@
 //! Verification modules for SHT.
 
-#![cfg_attr(
-    test,
-    expect(
-        clippy::unwrap_used,
-        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-    )
-)]
-
 #[cfg(test)]
 mod tests {
     use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
@@ -198,7 +190,7 @@ mod tests {
         // ∫_{-1}^{1} x^k dx = 2/(k+1) when k is even, 0 when k is odd.
         for &n in &[2_usize, 3, 4, 5, 8, 16] {
             let (nodes, weights) = gauss_legendre_nodes_weights(n);
-            for k in 0..(2 * n) {
+            for k in 0..=(2 * n - 1) {
                 let exact = if k % 2 == 0 {
                     2.0 / (k + 1) as f64
                 } else {

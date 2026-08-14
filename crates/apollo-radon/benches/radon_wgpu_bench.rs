@@ -4,6 +4,8 @@
 //! `σ√(2π) exp(-s²/(2σ²))`; each measured closure retains the original
 //! host-to-device upload, Hephaestus execution, and readback workload.
 
+#![allow(missing_docs)]
+
 use apollo_bench::{BenchmarkCase, BenchmarkSuite};
 use apollo_radon::ProjectionExecution;
 use apollo_radon::{GeometryPlan, RadonWgpuBackend, RadonWgpuPlan};

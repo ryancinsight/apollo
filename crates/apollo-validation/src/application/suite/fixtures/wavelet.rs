@@ -1,9 +1,32 @@
 //! Published-reference fixtures for the WAVELET transform family.
 
+#![allow(unused_imports)]
+
 use super::super::SuiteResult;
-use super::builders::{published_real_fixture, published_real_fixture_with_threshold};
+use super::builders::{
+    published_complex_fixture, published_real_fixture, published_real_fixture_with_threshold,
+};
 use crate::domain::report::PublishedFixtureReport;
+use apollo_czt::CztPlan;
+use apollo_dctdst::{DctDstPlan, RealTransformKind};
+use apollo_dht::DhtPlan;
+use apollo_fft::{fft_1d_array, ifft_1d_array};
+use apollo_frft::UnitaryFrftPlan;
+use apollo_fwht::FwhtPlan;
+use apollo_gft::GftPlan;
+use apollo_hilbert::HilbertPlan;
+use apollo_mellin::MellinPlan;
+use apollo_ntt::{intt, ntt, NttPlan, DEFAULT_MODULUS};
+use apollo_nufft::{nufft_type1_1d, nufft_type2_1d, UniformDomain1D};
+use apollo_qft::qft as qft_transform;
+use apollo_radon::RadonPlan;
+use apollo_sdft::SdftPlan;
+use apollo_sft::SparseFftPlan;
+use apollo_sht::ShtPlan;
+use apollo_stft::StftPlan;
 use apollo_wavelet::{ContinuousWavelet, CwtPlan, DiscreteWavelet, DwtPlan};
+use eunomia::Complex64;
+use leto::{Array1, Array2};
 
 /// Haar DWT one-level detail coefficients for [1, −1, 0, 0].
 ///

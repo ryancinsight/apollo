@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::{NufftPlan1D, UniformDomain1D, DEFAULT_NUFFT_KERNEL_WIDTH, DEFAULT_NUFFT_OVERSAMPLING};
 use apollo_fft::{f16, ApolloError, Complex32, CpuStorage, PrecisionProfile};
 use eunomia::Complex64;

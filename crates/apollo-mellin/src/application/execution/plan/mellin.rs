@@ -344,7 +344,7 @@ pub trait MellinStorage: CpuStorage {
         let input64: Vec<f64> = signal.iter().copied().map(CpuStorage::to_cpu).collect();
         let mut output64 = vec![0.0_f64; plan.config.samples()];
         plan.forward_resample(&input64, signal_min, signal_max, &mut output64)?;
-        for (slot, value) in output.iter_mut().zip(output64) {
+        for (slot, value) in output.iter_mut().zip(output64.into_iter()) {
             *slot = Self::from_cpu(value);
         }
         Ok(())

@@ -1,3 +1,6 @@
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::too_many_arguments)]
+
 pub(crate) fn stage_triple_scalar_one_impl<C>(
     src: &[C],
     dst: &mut [C],

@@ -1,13 +1,5 @@
 //! Verification modules for Mellin.
 
-#![cfg_attr(
-    test,
-    expect(
-        clippy::unwrap_used,
-        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-    )
-)]
-
 #[cfg(test)]
 mod tests {
     use crate::{calculate_log_resample, mellin_moment, MellinError, MellinPlan};

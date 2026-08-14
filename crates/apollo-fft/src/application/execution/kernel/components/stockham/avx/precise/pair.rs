@@ -14,6 +14,7 @@ use eunomia::Complex64;
 /// `j+1` per YMM register. The only lane rearrangement transposes the source
 /// from `[x0_j,x1_j] [x0_{j+1},x1_{j+1}]` into `[x0_j,x0_{j+1}]` and
 /// `[x1_j,x1_{j+1}]`, preserving independent FFT instances per complex lane.
+
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn stage_pair_groups_two_precise_avx_fma(

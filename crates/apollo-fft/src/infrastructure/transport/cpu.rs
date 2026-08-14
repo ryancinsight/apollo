@@ -3,14 +3,6 @@
 //! The CPU backend is a thin capability surface over Apollo-owned FFT plan
 //! implementations. It does not depend on external FFT engines in production.
 
-#![cfg_attr(
-    test,
-    expect(
-        clippy::unwrap_used,
-        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-    )
-)]
-
 use crate::application::execution::plan::fft::dimension_1d::FftPlan1D;
 use crate::application::execution::plan::fft::dimension_2d::FftPlan2D;
 use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;

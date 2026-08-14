@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::domain::report::{BenchmarkReport, PrecisionBenchmarkReport, PrecisionRunReport};
 use crate::infrastructure::dft_reference::{dft_1d_array, dft_3d_real};
 use crate::infrastructure::numpy::benchmark_fft;

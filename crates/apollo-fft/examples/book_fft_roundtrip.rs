@@ -6,11 +6,6 @@
 //! rounding.  This example verifies the round-trip for a known analytical
 //! signal and shows how to read back spectral magnitude.
 
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use apollo_fft::{fft_1d_array, fftfreq, ifft_1d_array};
 use leto::Array1;
 

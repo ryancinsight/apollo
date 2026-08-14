@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::{DctDstError, DctDstPlan, RealTransformKind};
 use eunomia::assert_abs_diff_eq;
 use leto::{Array2, Array3};

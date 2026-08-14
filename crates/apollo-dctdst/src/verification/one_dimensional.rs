@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use crate::infrastructure::kernel::direct::{dct2, dst2};
 use crate::infrastructure::kernel::fast::{dct2_dst2_fast, dct2_fast, dst2_fast};
 use crate::{DctDstError, DctDstPlan, RealTransformKind};

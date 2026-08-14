@@ -371,6 +371,7 @@ pub(crate) unsafe fn fixed_len64_second_phase_column_pair<const COLUMN_PAIR: usi
 /// two independent DFT-8 instances.  The only lane movement is the required
 /// 8x2 packed transpose between the two mathematical phases; no standalone
 /// global reordering pass is introduced.
+
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn fixed_len64_precise_avx_fma(

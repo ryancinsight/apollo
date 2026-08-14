@@ -148,7 +148,7 @@ pub trait WaveletStorage: CpuStorage {
         let coefficients =
             DwtCoefficients::new(plan.len(), plan.levels(), approximation64, details64);
         let signal = plan.inverse(&coefficients)?;
-        for (slot, value) in output.iter_mut().zip(signal) {
+        for (slot, value) in output.iter_mut().zip(signal.into_iter()) {
             *slot = Self::from_cpu(value);
         }
         Ok(())

@@ -40,11 +40,6 @@
         reason = "false positive on Windows: the initializers are already const blocks"
     )
 )]
-#![expect(
-    clippy::unwrap_used,
-    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
-)]
-
 use apollo_fft::{
     f16, ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D,
 };

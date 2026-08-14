@@ -75,7 +75,7 @@ impl GpuTransformPlanner for SftGpuKernel {
     }
 
     fn validate(plan: &SparsityPlan) -> WgpuResult<()> {
-        if plan.is_empty() {
+        if plan.len() == 0 {
             return Err(WgpuError::InvalidPlan {
                 message: format!(
                     "invalid plan len={}, sparsity={}: transform length must be greater than zero",
