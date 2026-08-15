@@ -1,5 +1,56 @@
 # Apollo Backlog
 
+## PERF-POT-LARGE-DISCONTINUITY-001 — Power-of-two sizes ≥128 look disproportionately slow [patch] — todo
+
+- Owner: unclaimed; scope: the `PowerOfTwo` / Stockham plan path for n ≥ 128 in
+  `apollo-fft`, and confirmation of the measurement itself. Other strategies,
+  GPU transports, and the `f32` Rader item are non-goals.
+- Observation (regenerated `benchmark_results.md`, **loaded host — not a claim**):
+  the clone-inclusive plan API measures 128 at 1889 ns against RustFFT's 120 ns,
+  256 at 3786 ns against 249 ns, and 512 at 7620 ns against 556 ns, while
+  neighbouring non-power-of-two sizes are competitive — 200 at 243 ns against
+  279 ns is *faster* than RustFFT, and 96 and 121 sit near 1.5–1.8x.
+- Root cause located (dispatch trace, `stockham/butterfly/dispatch.rs:44`):
+  `forward64_avx_with_scratch_sized` routes 32 and 64 to dedicated
+  `fixed_len32_precise_avx_fma` / `fixed_len64_precise_avx_fma` kernels, and
+  4096 to `transform_len4096_four_triples`. **128 | 256 | 512 match an arm whose
+  only body is a comment** — "Route explicitly; falls through to sized
+  transform" — so they land on the generic
+  `transform_sized::<PreciseStockhamAvxFma>`. AVX is therefore reached; the gap
+  is the generic sized transform, not a missing vector path.
+- Per-element cost on a quiet host (7 concurrent processes), minima:
+
+  | n | log2 | ns/element | path |
+  | ---: | ---: | ---: | --- |
+  | 32 | 5 | 1.09 | dedicated AVX kernel |
+  | 64 | 6 | 1.69 | dedicated AVX kernel |
+  | 128 | 7 | 5.39 | generic `transform_sized` |
+  | 256 | 8 | 5.50 | generic `transform_sized` |
+  | 512 | 9 | 6.36 | generic `transform_sized` |
+
+  The cliff is the 64 → 128 boundary: a 3.2x jump in per-element cost exactly
+  where dedicated kernels stop. Growth above it is gradual, consistent with
+  cache effects rather than a second defect.
+- Correction to the first reading of this item: it reported the cost as scaling
+  *linearly* with n and 128 as slower than 256. Both were contamination from a
+  loaded host. On a quiet host the series is monotonic and the per-element cost
+  is roughly flat across 128–512. The dispatch boundary, not the scaling law,
+  is what needs fixing.
+- Two hypotheses eliminated by reading: AVX is not compile-gated off (runtime
+  `is_x86_feature_detected!` with a `target_feature` fast path), and scratch is
+  not a per-call heap allocation (`with_scratch` uses a thread-local pool).
+- Partial corroboration: the independent `kernel_strategy` bench measures
+  `generic_selector/256` at 1560 ns on the same host — a different entry point
+  and a different absolute figure, but the same order, and likewise far above
+  RustFFT. So the effect is not created by the new comparison harness alone.
+- Before treating any magnitude as real: the numbers above were taken with 12–33
+  concurrent stack builds running, and the new harness reads 2.4x higher than
+  `kernel_strategy` at n=256, so the harness contributes some overhead of its
+  own. Reproduce on an idle host and reconcile the two entry points first.
+- Acceptance: either a root-caused fix with the counterbalanced gate confirming
+  it, or evidence that the discontinuity is a measurement artifact, recorded
+  with the same specificity so it is not rediscovered.
+
 ## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — todo
 
 - Owner: unclaimed; scope: the Rader kernel (`rader_fft`) for small primes and

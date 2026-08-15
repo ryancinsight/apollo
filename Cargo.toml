@@ -79,6 +79,10 @@ proptest = "1.11.0"
 quote = "1.0.46"
 pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py38"] }
 rand = "0.10.2"
+# Dev-only comparison baseline for `benchmark_results.md`. Its default features
+# are SIMD (avx/sse/neon) with no rayon edge, so it does not reintroduce the
+# transitive parallelism ADR 0011 removed with Criterion.
+rustfft = "6.4.1"
 # moirai: data-parallel runtime replacing direct scheduler usage.
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }

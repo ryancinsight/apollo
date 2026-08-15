@@ -69,6 +69,26 @@ jobs:
             test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
               "$candidate_spec"
           done
+          # The candidate adds the rustfft comparison benchmark and its
+          # workspace dependency. Add that dependency to the baseline
+          # measurement manifest without replacing unrelated baseline
+          # production requirements.
+          candidate_rustfft_spec="$(grep -m1 '^rustfft = ' apollo-candidate-source/Cargo.toml)"
+          test -n "$candidate_rustfft_spec"
+          if grep -q '^rustfft = ' apollo-measurement/Cargo.toml; then
+            sed -i "s|^rustfft = .*$|${candidate_rustfft_spec}|" \
+              apollo-measurement/Cargo.toml
+          else
+            sed -i "/^rand = /a ${candidate_rustfft_spec}" \
+              apollo-measurement/Cargo.toml
+          fi
+          test "$(grep -m1 '^rustfft = ' apollo-measurement/Cargo.toml)" = \
+            "$candidate_rustfft_spec"
+          # Align the FFT package manifest with the candidate benchmark
+          # instrument so the copied lockfile remains valid under --locked.
+          cp \
+            apollo-candidate-source/crates/apollo-fft/Cargo.toml \
+            apollo-measurement/crates/apollo-fft/Cargo.toml
           # The candidate validation suite adds a Mnemosyne integration
           # dependency. Keep the baseline manifest aligned with the copied
           # candidate lockfile so `--locked` validates the same workspace
