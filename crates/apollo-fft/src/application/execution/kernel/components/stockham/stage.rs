@@ -1,7 +1,5 @@
 //! Scalar Stockham butterfly stage primitives and L1 residency thresholds.
 
-#![allow(clippy::many_single_char_names)]
-
 use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]

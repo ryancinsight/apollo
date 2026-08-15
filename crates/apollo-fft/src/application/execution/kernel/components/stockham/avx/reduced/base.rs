@@ -3,7 +3,6 @@ use eunomia::Complex32;
 
 /// AVX/FMA Stockham reduced stage over two independent complex instances per vector
 /// for `groups == 1`.
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[inline]

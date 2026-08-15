@@ -55,7 +55,7 @@ fn next_power_of_two(n: usize) -> Result<usize, String> {
 
 #[inline]
 fn is_power_of_two(n: usize) -> bool {
-    n > 0 && (n & (n - 1)) == 0
+    n > 0 && n.is_power_of_two()
 }
 
 fn axis_strategy_for(n: usize) -> Result<AxisStrategy, String> {

@@ -1,7 +1,5 @@
 //! Generic storage-precision bridge for kernels executed in `Complex32`.
 
-#![allow(clippy::uninit_vec)]
-
 use eunomia::{Complex, Complex32};
 use half::f16;
 use mnemosyne::scratch::ScratchPool;

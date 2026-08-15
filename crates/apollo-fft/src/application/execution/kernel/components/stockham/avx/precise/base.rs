@@ -13,7 +13,6 @@ use eunomia::Complex64;
 /// registers, then applies the twiddle vector
 /// `[W_N^j, W_N^(j+1)]`. This is the same DAG as the scalar recurrence with
 /// only a representation change; no cross-lane FFT dependency is introduced.
-
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn stage_precise_groups_one_avx_fma(

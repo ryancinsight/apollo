@@ -115,15 +115,9 @@ impl<'py, T: PyArrayElement, const N: usize> FromPyObject<'_, 'py> for PyReadonl
 }
 
 fn row_major_layout<const N: usize>(shape: [usize; N]) -> Layout<N> {
-    let mut strides = [0_isize; N];
-    let mut stride = 1_isize;
-    for axis in (0..N).rev() {
-        strides[axis] = stride;
-        stride = stride
-            .checked_mul(shape[axis] as isize)
-            .expect("invariant: NumPy shape product fits isize on this platform");
-    }
-    Layout::new(shape, strides, 0)
+    // `Layout::c_contiguous` is the canonical row-major stride computation and
+    // performs the same overflow-checked accumulation this used to duplicate.
+    Layout::c_contiguous(shape).expect("invariant: NumPy shape product fits isize on this platform")
 }
 
 fn shape2(shape: &[usize]) -> [usize; 2] {

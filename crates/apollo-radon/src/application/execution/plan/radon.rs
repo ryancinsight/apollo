@@ -1,5 +1,13 @@
 //! Reusable Radon transform plan.
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 use crate::domain::contracts::error::{RadonError, RadonResult};
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
 use crate::domain::projection::sinogram::Sinogram;

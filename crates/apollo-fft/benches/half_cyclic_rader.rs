@@ -2,8 +2,6 @@
 //!
 //! Run with `cargo bench -p apollo-fft --features kernel-strategy-bench --bench half_cyclic_rader`.
 
-#![allow(missing_docs)]
-
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]

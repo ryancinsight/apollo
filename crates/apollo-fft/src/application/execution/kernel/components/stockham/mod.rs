@@ -16,9 +16,6 @@
 //!   butterfly.rs    — packed types, build_butterfly512, fixed-len kernels
 //! ```
 
-#![allow(clippy::many_single_char_names)]
-#![allow(clippy::empty_line_after_doc_comments)]
-
 #[cfg(target_arch = "x86_64")]
 pub(crate) mod avx;
 pub(crate) mod butterfly;

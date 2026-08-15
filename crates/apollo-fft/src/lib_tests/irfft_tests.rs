@@ -1,5 +1,10 @@
 //! Tests for inverse real FFT API.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::*;
 use half::f16;
 use leto::{Array1, Array2, Array3};

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::domain::report::{EnvironmentReport, ExternalBackendReport};
 use crate::infrastructure::numpy::{compare_fft, PythonEnvironmentProbe};
 use eunomia::Complex64;

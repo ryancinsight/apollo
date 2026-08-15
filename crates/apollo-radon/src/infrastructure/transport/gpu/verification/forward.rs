@@ -1,5 +1,10 @@
 //! Value-semantic Radon GPU projection and dispatch-validation contracts.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::{
     infrastructure::transport::gpu::{RadonWgpuPlan, WgpuError},
     RadonPlan,

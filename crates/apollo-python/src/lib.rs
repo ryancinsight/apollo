@@ -1,9 +1,6 @@
 #![warn(missing_docs)]
 //! Python bindings for Apollo FFT and NUFFT.
 
-#![allow(clippy::unused_self)]
-#![allow(clippy::elidable_lifetime_names)]
-
 pub mod application;
 mod bindings;
 pub mod domain;

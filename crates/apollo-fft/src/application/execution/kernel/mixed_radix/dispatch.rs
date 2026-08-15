@@ -71,11 +71,10 @@ fn static_coprime_factors(n: usize) -> Option<(usize, usize)> {
 
 #[inline]
 fn static_is_prime(n: usize) -> bool {
-    match n {
-        2 | 3 | 5 | 7 | 11 | 13 | 17 | 19 | 23 | 29 | 31 | 37 | 41 | 43 | 47 | 53 | 59 | 61
-        | 10007 => true,
-        _ => false,
-    }
+    matches!(
+        n,
+        2 | 3 | 5 | 7 | 11 | 13 | 17 | 19 | 23 | 29 | 31 | 37 | 41 | 43 | 47 | 53 | 59 | 61 | 10007
+    )
 }
 
 /// Static composite radices for commonly-benchmarked sizes with all prime factors ≤ 23.

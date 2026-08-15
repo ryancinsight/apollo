@@ -202,7 +202,7 @@ fn planned_good_thomas_n90_forward_matches_direct() {
     let max_err = actual
         .iter()
         .zip(expected.iter())
-        .map(|(a, b)| f64::from((*a - *b).norm()))
+        .map(|(a, b)| (*a - *b).norm())
         .fold(0.0f64, f64::max);
     assert!(
         max_err <= 1.0e-10,
@@ -681,10 +681,7 @@ fn planned_n484_f32_codelet_forward_matches_direct() {
 fn planned_n511_f32_good_thomas_forward_matches_direct() {
     let n = 511usize;
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
-    match &plan.strategy {
-        PlanStrategy::GoodThomas { .. } => {}
-        _ => {}
-    }
+    if let PlanStrategy::GoodThomas { .. } = &plan.strategy {}
     let input: Vec<Complex32> = (0..n)
         .map(|k| {
             let x = k as f32;

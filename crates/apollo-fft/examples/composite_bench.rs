@@ -1,5 +1,4 @@
 //! Composite FFT bench
-#![allow(missing_docs)]
 use eunomia::Complex64;
 use std::time::{Duration, Instant};
 

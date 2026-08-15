@@ -251,7 +251,7 @@ impl DctDstPlan {
             RealTransformKind::DstI => 1.0 / (2.0 * (n + 1) as f64),
             _ => 2.0 / n as f64,
         };
-        for (slot, value) in output.iter_mut().zip(raw.into_iter()) {
+        for (slot, value) in output.iter_mut().zip(raw) {
             *slot = value * scale;
         }
         Ok(())

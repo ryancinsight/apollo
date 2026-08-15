@@ -1,5 +1,10 @@
 //! `factorize_composite` support/rejection contract tests.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::application::execution::kernel::radix_shape::factorize_composite;
 
 #[test]

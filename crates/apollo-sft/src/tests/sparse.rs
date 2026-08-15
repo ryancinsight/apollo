@@ -1,5 +1,10 @@
 //! Sparse Fourier transform tests.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
+
 use crate::{SparseFftPlan, SparseSpectrum};
 use apollo_fft::ApolloError;
 use eunomia::Complex64;

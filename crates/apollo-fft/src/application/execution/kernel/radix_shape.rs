@@ -18,7 +18,10 @@
 //! - Cooley, J.W. & Tukey, J.W. (1965). *Math. Comp.* 19, 297-301.
 //! - Van Loan, C. (1992). *Computational Frameworks for the FFT*. SIAM, §3.4.
 
-#![allow(clippy::same_item_push)]
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+)]
 
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),

@@ -1,5 +1,13 @@
 //! Verification modules for the Hilbert transform.
 
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        reason = "ratchet APOLLO-UNWRAP-1: pre-existing debt"
+    )
+)]
+
 #[cfg(test)]
 mod tests {
     use crate::{HilbertError, HilbertPlan};

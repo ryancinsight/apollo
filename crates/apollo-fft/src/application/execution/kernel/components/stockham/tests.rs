@@ -1,5 +1,4 @@
 //! Stockham unit and differential tests.
-#![allow(unused_imports)]
 
 #[cfg(target_arch = "x86_64")]
 use super::butterfly::{
@@ -7,7 +6,7 @@ use super::butterfly::{
     hybrid_radix8x512_precise_avx_fma, hybrid_radix8x512_reduced_avx_fma,
     stockham_mixed_twiddle_precise, stockham_mixed_twiddle_reduced,
 };
-use super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_impl};
+use super::butterfly::{stage_quad_impl, stage_triple_impl};
 use super::precision::{PreciseStockham, ReducedStockham, StockhamPrecision};
 #[cfg(target_arch = "x86_64")]
 use super::precision::{PreciseStockhamAvxFma, ReducedStockhamAvxFma};

@@ -152,7 +152,7 @@ fn mode_params(plan: &OrderPlan, inverse: bool) -> WgpuResult<(FrftMode, f32, f3
     let reduced = ((order % 4.0_f32) + 4.0_f32) % 4.0_f32;
     let rounded = reduced.round();
     if (reduced - rounded).abs() < 1.0e-5_f32 {
-        let mode = if reduced < 0.5_f32 || reduced > 3.5_f32 {
+        let mode = if !(0.5_f32..=3.5_f32).contains(&reduced) {
             FrftMode::Identity
         } else if reduced < 1.5_f32 {
             FrftMode::CenteredDft

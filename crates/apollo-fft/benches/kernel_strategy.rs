@@ -1,7 +1,5 @@
 //! Native Apollo benchmarks for FFT kernel strategies.
 
-#![allow(missing_docs)]
-
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 #[cfg(feature = "kernel-strategy-bench")]
 use apollo_fft::application::execution::kernel::benchmark_kernels;
