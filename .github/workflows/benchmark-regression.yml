@@ -69,6 +69,14 @@ jobs:
             test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
               "$candidate_spec"
           done
+          # The candidate adds the rustfft comparison benchmark and its
+          # workspace dependency. Copy both manifests so the baseline source
+          # is compiled with the same benchmark instrument and the candidate
+          # lockfile remains valid under --locked.
+          cp apollo-candidate-source/Cargo.toml apollo-measurement/Cargo.toml
+          cp \
+            apollo-candidate-source/crates/apollo-fft/Cargo.toml \
+            apollo-measurement/crates/apollo-fft/Cargo.toml
           # The candidate validation suite adds a Mnemosyne integration
           # dependency. Keep the baseline manifest aligned with the copied
           # candidate lockfile so `--locked` validates the same workspace
