@@ -123,7 +123,8 @@ fn row_major_layout<const N: usize>(shape: [usize; N]) -> Layout<N> {
             .checked_mul(shape[axis] as isize)
             .expect("invariant: NumPy shape product fits isize on this platform");
     }
-    Layout::new(shape, strides, 0)
+    Layout::try_new(shape, strides, 0)
+        .expect("invariant: NumPy shape product fits isize on this platform")
 }
 
 fn shape2(shape: &[usize]) -> [usize; 2] {
