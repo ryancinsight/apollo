@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-DIRECT-N2-CVXIII [patch]
+
+- [x] Re-audit the N=2 source route; runtime and static plans already use the
+      specialized small power-of-two implementation.
+- [x] Repeat the committed release benchmark three times for f64 and f32.
+- [x] Reject speculative source changes because 1--2 ns medians change sides
+      across repetitions and cannot establish a stable performance delta.
+- [x] Replace the stale `1.953x` / `1.394x` claim with a controlled-measurement
+      reopen trigger in `backlog.md` and `gap_audit.md`.
+
+Evidence limit: the current benchmark's timer resolution cannot rank kernels
+whose medians are approximately one or two nanoseconds; this is an audit
+closure, not an absolute throughput proof.
+
 ## ATLAS-ORPHAN-MODULES-096-APOLLO [patch]
 
 - [x] Audit all three detector-reported Apollo orphan paths against the actual
