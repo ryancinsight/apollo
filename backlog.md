@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SHORT-PRIME-CVXIII — Re-audit f32 N=5/N=7/N=11 rows [patch] — complete 2026-08-16
+
+- Finding: current source already routes public N=5 and N=7 through the
+  canonical `dft5_array_impl` and `dft7_impl` leaves. N=11 dispatches through
+  `ShortWinogradScalar::dft11`; the f32 implementation uses the existing
+  split-array `dft_pair_impl_reduced` kernel.
+- Evidence: three repeated default release sweeps of
+  `cargo bench -p apollo-fft --bench rustfft_comparison` report stable current
+  f32 medians near Apollo/RustFFT `12/9 ns` at N=5, `15/12 ns` at N=7, and
+  `27/13 ns` at N=11. The old `1.209x`, `1.187x`, and `1.138x` rows were
+  produced by an earlier instrument and are stale; the current N=11 miss is
+  approximately `2.08x`.
+- Candidate rejection: a bounded source candidate routed only f32 N=11 to the
+  existing interleaved `dft_pair_impl`. Three candidate sweeps remained at
+  approximately `26--27 ns` against RustFFT `13 ns`, with no stable gain, so
+  the candidate was discarded and production source is unchanged.
+- Closure: this audit increment is complete without a code change. The
+  optimization item remains open for a genuinely vectorized or otherwise
+  measured N=11 candidate; re-open only with codegen/profile evidence and a
+  counterbalanced value-semantic comparison that also protects N=5 and N=7.
+
 ## ATLAS-ORPHAN-MODULES-096-APOLLO — Remove the dead large-composite leaf [patch] — complete 2026-08-16
 
 - Finding: the Atlas orphan-module detector reports three Apollo files. The
@@ -1239,8 +1260,11 @@ Remaining replacement work:
   rows are stale; no source change is accepted without a higher-resolution,
   counterbalanced measurement.
 - [ ] [patch] Continue optimizing f32 short-prime rows after direct public
-  routing reduced but did not close N=5/N=7/N=11. Current focused misses:
-  N=5 f32 `1.209x`, N=7 f32 `1.187x`, N=11 f32 `1.138x`.
+  routing reduced but did not close N=5/N=7/N=11. The current focused
+  medians are approximately Apollo/RustFFT `12/9 ns` (N=5), `15/12 ns`
+  (N=7), and `27/13 ns` (N=11). The interleaved N=11 candidate was measured
+  and rejected in `ATLAS-APOLLO-SHORT-PRIME-CVXIII`; only a measured
+  vectorized or structurally different candidate remains actionable.
 - [ ] [patch] Continue optimizing the planned small power-of-two route used by
   `cargo xtask`. The focused planned row now passes N=2, but N=8 f32 remains
   `1.138x`; the refreshed N=16 row passes f64 at `0.457x` while f32 remains
