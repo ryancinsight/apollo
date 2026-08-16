@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-ORPHAN-MODULES-096-APOLLO — Remove the dead large-composite leaf [patch] — in progress 2026-08-16
+## ATLAS-ORPHAN-MODULES-096-APOLLO — Remove the dead large-composite leaf [patch] — complete 2026-08-16
 
 - Finding: the Atlas orphan-module detector reports three Apollo files. The
   `winograd/composite/large.rs` leaf is a genuine dead duplicate: it is not
@@ -16,6 +16,25 @@
 - Acceptance for this slice: the dead leaf is absent, no generated symbol
   loses a caller, focused provider gates pass, and the residual detector count
   is recorded rather than hidden.
+- Delivery: commit `7bd0c9ca` merged by Apollo PR #98 at provider head
+  `2585e5a3`. Rust workspace, Python bindings, and benchmark regression gates
+  passed at the exact head. The external `recurseml/analysis` status returned
+  an analyzer error without a code diagnostic and was not a repository gate.
+
+## ATLAS-APOLLO-DIRECT-N2-CVXIII — Re-audit the public N=2 performance claim [patch] — complete 2026-08-16
+
+- Finding: the recorded f64 `1.953x` and f32 `1.394x` misses are stale. The
+  current runtime and static N=2 dispatch already enter the specialized
+  `small_pot_inplace_sized` route, and the committed release benchmark reports
+  1--2 ns medians at this size.
+- Evidence: three repeated default benchmark sweeps produced quantized
+  Apollo/RustFFT medians of `(2,1)`, `(1,1)`, `(1,1)` for f64 and `(1,1)`,
+  `(2,1)`, `(1,2)` for f32. The sign changes are timer-resolution noise, not a
+  stable optimization target.
+- Decision: no kernel change is accepted from this audit. Re-open only with a
+  higher-resolution, idle-host measurement that resolves sub-2 ns differences
+  and supplies a counterbalanced baseline/candidate comparison. The stale
+  ratios are removed from the active performance claim.
 
 ## PERF-POT-LARGE-DISCONTINUITY-001 — Power-of-two sizes ≥128 look disproportionately slow [patch] — complete 2026-08-16
 

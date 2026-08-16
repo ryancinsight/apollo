@@ -3259,14 +3259,13 @@ Required work (multi-sprint; this is the project's central objective):
 
 ## Open Gaps
 
-- Closure CVXIII inlines the public N=2 forward/inverse butterfly in the
-  `Complex64` and `Complex32` `FftPrecision` impls, bypassing the mixed-radix
-  trait call for the direct API route. The final focused N=2 row remains open:
-  f64 3.22 ns vs 1.65 ns (`1.953x`) and f32 2.76 ns vs 1.98 ns (`1.394x`).
-  A length-guarded unchecked-access variant is rejected because it regressed
-  the focused row to f64 `4.102x` and f32 `1.523x`. Forced `#[inline(always)]`
-  on the `xtask` precision adapter methods and `bench_pair` is also rejected
-  because the sampled small-size rows regressed.
+- [x] ATLAS-APOLLO-DIRECT-N2-CVXIII re-audit: the prior f64 `1.953x` and f32
+  `1.394x` N=2 ratios are stale. Current runtime and static plans already use
+  the specialized `small_pot_inplace_sized` route. Three repeated committed
+  release sweeps produced f64 Apollo/RustFFT medians `(2,1)`, `(1,1)`, `(1,1)`
+  and f32 medians `(1,1)`, `(2,1)`, `(1,2)` in nanoseconds. The changing sign
+  is timer-resolution noise. No source change is accepted; reopen only with a
+  higher-resolution idle-host measurement and a counterbalanced comparison.
 
 - Closure CVXIII routes f64 N=3 public forward/inverse calls directly to the
   existing Winograd DFT3 leaf. Focused timing improves the f64 Apollo estimate
