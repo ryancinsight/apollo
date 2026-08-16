@@ -1,55 +1,41 @@
 # Apollo Backlog
 
-## PERF-POT-LARGE-DISCONTINUITY-001 — Power-of-two sizes ≥128 look disproportionately slow [patch] — todo
+## PERF-POT-LARGE-DISCONTINUITY-001 — Power-of-two sizes ≥128 look disproportionately slow [patch] — complete 2026-08-16
 
-- Owner: unclaimed; scope: the `PowerOfTwo` / Stockham plan path for n ≥ 128 in
-  `apollo-fft`, and confirmation of the measurement itself. Other strategies,
-  GPU transports, and the `f32` Rader item are non-goals.
-- Observation (regenerated `benchmark_results.md`, **loaded host — not a claim**):
-  the clone-inclusive plan API measures 128 at 1889 ns against RustFFT's 120 ns,
-  256 at 3786 ns against 249 ns, and 512 at 7620 ns against 556 ns, while
-  neighbouring non-power-of-two sizes are competitive — 200 at 243 ns against
-  279 ns is *faster* than RustFFT, and 96 and 121 sit near 1.5–1.8x.
-- Root cause located (dispatch trace, `stockham/butterfly/dispatch.rs:44`):
-  `forward64_avx_with_scratch_sized` routes 32 and 64 to dedicated
-  `fixed_len32_precise_avx_fma` / `fixed_len64_precise_avx_fma` kernels, and
-  4096 to `transform_len4096_four_triples`. **128 | 256 | 512 match an arm whose
-  only body is a comment** — "Route explicitly; falls through to sized
-  transform" — so they land on the generic
-  `transform_sized::<PreciseStockhamAvxFma>`. AVX is therefore reached; the gap
-  is the generic sized transform, not a missing vector path.
-- Per-element cost on a quiet host (7 concurrent processes), minima:
-
-  | n | log2 | ns/element | path |
-  | ---: | ---: | ---: | --- |
-  | 32 | 5 | 1.09 | dedicated AVX kernel |
-  | 64 | 6 | 1.69 | dedicated AVX kernel |
-  | 128 | 7 | 5.39 | generic `transform_sized` |
-  | 256 | 8 | 5.50 | generic `transform_sized` |
-  | 512 | 9 | 6.36 | generic `transform_sized` |
-
-  The cliff is the 64 → 128 boundary: a 3.2x jump in per-element cost exactly
-  where dedicated kernels stop. Growth above it is gradual, consistent with
-  cache effects rather than a second defect.
-- Correction to the first reading of this item: it reported the cost as scaling
-  *linearly* with n and 128 as slower than 256. Both were contamination from a
-  loaded host. On a quiet host the series is monotonic and the per-element cost
-  is roughly flat across 128–512. The dispatch boundary, not the scaling law,
-  is what needs fixing.
-- Two hypotheses eliminated by reading: AVX is not compile-gated off (runtime
-  `is_x86_feature_detected!` with a `target_feature` fast path), and scratch is
-  not a per-call heap allocation (`with_scratch` uses a thread-local pool).
-- Partial corroboration: the independent `kernel_strategy` bench measures
-  `generic_selector/256` at 1560 ns on the same host — a different entry point
-  and a different absolute figure, but the same order, and likewise far above
-  RustFFT. So the effect is not created by the new comparison harness alone.
-- Before treating any magnitude as real: the numbers above were taken with 12–33
-  concurrent stack builds running, and the new harness reads 2.4x higher than
-  `kernel_strategy` at n=256, so the harness contributes some overhead of its
-  own. Reproduce on an idle host and reconcile the two entry points first.
-- Acceptance: either a root-caused fix with the counterbalanced gate confirming
-  it, or evidence that the discontinuity is a measurement artifact, recorded
-  with the same specificity so it is not rediscovered.
+- Owner: Apollo integration audit; scope was the `PowerOfTwo` / Stockham plan
+  path for n ≥ 128 and confirmation of the measurement. Other strategies, GPU
+  transports, and the `f32` Rader item remain separate.
+- Finding: the reported missing specialization is stale. The dispatch arm in
+  `crates/apollo-fft/src/application/execution/kernel/components/stockham/butterfly/dispatch.rs`
+  intentionally enters `transform_sized`; that function routes log2 7, 8, and
+  9 to `transform_impl::<7|8|9>`, which calls the explicit
+  `transform_len128`, `transform_len256`, and `transform_len512` bodies in
+  `stockham/transform.rs`. The radix-1 first stages also select the dedicated
+  AVX leaves `avx/generic/triple/n128.rs`, `n256.rs`, and `n512.rs` for both
+  precise and reduced precision paths. The route is monomorphized and is not a
+  generic runtime loop for these sizes.
+- Existing Apollo PM records already closed this implementation: checklist
+  entries `Deeper per-LOG2 Stockham mono body specials` and `Perf/Arch Pass`
+  record the 128/256/512 bodies, wiring, and value gates; the corresponding
+  gap-audit entries describe the same ownership. The affected source files have
+  no diff from the item’s measurement baseline
+  `36099516c9f5cf2c451ba947295c3c9fa82bd5e7` through the current provider
+  cascade head.
+- Hosted exact-source verification `31952145678` compared the fixed benchmark
+  executables built from baseline `36099516c9f5cf2c451ba947295c3c9fa82bd5e7`
+  and candidate `7fd4d61dbb30c7c66e7daf999da8b41540b45150`. All three benchmark
+  executable hashes were identical, smoke execution passed, and the gate
+  accepted the identity proof. This proves that the candidate introduced no
+  performance regression; it does not establish current absolute latency or
+  RustFFT parity.
+- The local locked benchmark was not usable because the Atlas overlay exposed
+  Hermes 0.7 while Apollo's stale lock requested Hermes 0.6. That resolver
+  defect is covered by the provider-cascade integration work, not used as
+  performance evidence.
+- Closure: no Apollo source change is warranted. A fresh absolute comparison
+  on an idle host belongs in a new item after the provider graph is clean; this
+  item is closed as a stale/duplicate root-cause report rather than as a new
+  optimization.
 
 ## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — todo
 

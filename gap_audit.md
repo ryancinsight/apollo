@@ -1,5 +1,25 @@
 # Apollo Gap Audit
 
+## Power-of-two discontinuity item closure (2026-08-16)
+
+- Finding: `PERF-POT-LARGE-DISCONTINUITY-001` treated the explicit 128/256/512
+  dispatch arm as a generic implementation gap. Current source disproves that
+  premise: `transform_sized` routes log2 7/8/9 to the monomorphized
+  `transform_len128/256/512` bodies, and the AVX radix-1 first stages select
+  dedicated n128/n256/n512 leaves.
+- Reconciliation: the implementation and its value gates were already recorded
+  by the earlier per-LOG2 and PoT 128/256 checklist/gap entries. No source
+  change is required for this item.
+- Evidence: hosted exact-source run `31952145678` compared baseline
+  `36099516c9f5cf2c451ba947295c3c9fa82bd5e7` with candidate
+  `7fd4d61dbb30c7c66e7daf999da8b41540b45150`; all benchmark executable hashes
+  matched and smoke execution passed. This is non-regression evidence, not an
+  absolute performance or RustFFT-parity measurement.
+- Residual: local locked benchmarking remains unavailable while the Atlas
+  overlay exposes Hermes 0.7 against Apollo's Hermes 0.6 lock requirement.
+  Re-measure only after that provider-graph residual is resolved and the host
+  is idle; do not reopen this item for the same stale root-cause claim.
+
 ## Shared GPU validation extraction (2026-08-08)
 
 - Finding: `apollo-gft` duplicated the shared scaffold's generic non-empty-plan,
