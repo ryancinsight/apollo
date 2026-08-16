@@ -15,10 +15,13 @@
   `7fd4d61dbb30c7c66e7daf999da8b41540b45150`; all benchmark executable hashes
   matched and smoke execution passed. This is non-regression evidence, not an
   absolute performance or RustFFT-parity measurement.
-- Residual: local locked benchmarking remains unavailable while the Atlas
-  overlay exposes Hermes 0.7 against Apollo's Hermes 0.6 lock requirement.
-  Re-measure only after that provider-graph residual is resolved and the host
-  is idle; do not reopen this item for the same stale root-cause claim.
+- Resolution: the initial hosted failure exposed a lock generated under the
+  Atlas overlay, whose local patches remove standalone git `source` entries.
+  Regenerating `Cargo.lock` from outside the overlay pins the provider graph,
+  including Hermes `eb1a2f87bbbc83243274741874076c8350edabfa`; standalone
+  `cargo check --workspace --all-features` passes. Re-measure absolute latency
+  only on an idle host; do not reopen this item for the same stale root-cause
+  claim.
 
 ## Shared GPU validation extraction (2026-08-08)
 

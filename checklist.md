@@ -14,8 +14,9 @@
       as a separate future item only after the Hermes provider graph is clean.
 
 Evidence limits: the hosted identity gate does not measure current absolute
-latency or prove parity with RustFFT. The local locked benchmark remains
-blocked by the Hermes 0.6/0.7 resolver mismatch.
+latency or prove parity with RustFFT. The initial local locked check exposed a
+lockfile/source mismatch from the Atlas overlay; the standalone lock refresh
+now resolves it, and the outside-overlay workspace check passes.
 
 ## Rust crate publication aliases [patch]
 

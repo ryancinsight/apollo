@@ -28,10 +28,12 @@
   accepted the identity proof. This proves that the candidate introduced no
   performance regression; it does not establish current absolute latency or
   RustFFT parity.
-- The local locked benchmark was not usable because the Atlas overlay exposed
-  Hermes 0.7 while Apollo's stale lock requested Hermes 0.6. That resolver
-  defect is covered by the provider-cascade integration work, not used as
-  performance evidence.
+- The initial local locked benchmark was not usable because the Atlas overlay
+  exposed Hermes 0.7 while Apollo's lock had been generated under that overlay
+  and omitted standalone git `source` entries. The lock was regenerated from
+  outside the overlay; it now pins the provider graph, including Hermes
+  `eb1a2f87bbbc83243274741874076c8350edabfa`, and standalone
+  `cargo check --workspace --all-features` passed.
 - Closure: no Apollo source change is warranted. A fresh absolute comparison
   on an idle host belongs in a new item after the provider graph is clean; this
   item is closed as a stale/duplicate root-cause report rather than as a new
