@@ -1228,14 +1228,16 @@ Remaining replacement work:
 - [x] [patch] Completion of const LOG2 pot_inplace_sized overrides + full ZST/Cow threading for md-worst PoT 128/256 (plan/dispatch/scalar/kernel) + Cow mem + incidental preexist small fixes for verification. All call sites updated; value 346p/2i on list + n16/128+; gates clean; focused build + --skip-run exercised; benchmark_results + artifacts synced. No regression.
 - [x] [patch] Dispatch optimization: expanded  with ~40 bench-worst composite sizes (72-1024), added LOG2=6 n=64  fast path, collapsed duplicate coprime path, removed dead LOG2=5 ZST and redundant n==90/198 special cases. 175 tests pass, code reviewer approved.
 ## Open in this sprint (Closure CVXIII phase)
-- [ ] [patch] Continue optimizing the public direct N=2 butterfly. The direct
-  route now bypasses `MixedRadixScalar::small_pot_inplace_sized`, but the
-  final focused row remains above target: f64 `1.953x`, f32 `1.394x`.
-- [ ] [patch] Continue optimizing N=3 and N=4 public direct rows. N=3 runtime and
-  static plans now bypass the generic short-Winograd dispatcher and call the
-  canonical DFT-3 codelet directly. Current canonical quick row: N=3 f64
-  `1.001x`, f32 `0.444x`; N=4 f64 `0.774x`, f32 `4.325x`. N=4 f32 remains
-  the direct-row priority.
+- [x] [patch] Re-audit the public direct N=2 butterfly. The historical
+  `1.953x`/`1.394x` ratios are closed as stale by
+  `ATLAS-APOLLO-DIRECT-N2-CVXIII`; the specialized route is already in use and
+  current 1--2 ns medians are not resolvable by the committed timer.
+- [x] [patch] Re-audit N=3 and N=4 public direct rows. Three current default
+  release sweeps report stable f64 N=3 and N=4 medians of `2 ns` versus
+  `2 ns` for RustFFT, f32 N=3 medians of `2 ns` versus `2 ns`, and f32 N=4
+  medians of `1 ns` versus `2 ns`. The historical `1.001x`/`0.444x`/`4.325x`
+  rows are stale; no source change is accepted without a higher-resolution,
+  counterbalanced measurement.
 - [ ] [patch] Continue optimizing f32 short-prime rows after direct public
   routing reduced but did not close N=5/N=7/N=11. Current focused misses:
   N=5 f32 `1.209x`, N=7 f32 `1.187x`, N=11 f32 `1.138x`.
