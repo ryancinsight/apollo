@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-DIRECT-SMALL-CVXIII [patch]
+
+- [x] Re-audit current runtime/static N=3 and N=4 dispatch against the source;
+      both already use specialized direct/small-power-of-two routes.
+- [x] Repeat the committed release benchmark three times for f64 and f32.
+- [x] Reject speculative kernel changes because the historical ratios are
+      superseded by quantized current medians; N=3/N=4 differences are below
+      the current instrument's resolution.
+- [x] Update the active backlog and gap audit with the controlled-measurement
+      reopen trigger.
+
+Evidence limit: the current benchmark is sufficient to falsify the historical
+multi-nanosecond claims, but not to rank sub-2 ns kernels absolutely.
+
 ## ATLAS-APOLLO-DIRECT-N2-CVXIII [patch]
 
 - [x] Re-audit the N=2 source route; runtime and static plans already use the

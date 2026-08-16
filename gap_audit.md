@@ -3267,12 +3267,14 @@ Required work (multi-sprint; this is the project's central objective):
   is timer-resolution noise. No source change is accepted; reopen only with a
   higher-resolution idle-host measurement and a counterbalanced comparison.
 
-- Closure CVXIII routes f64 N=3 public forward/inverse calls directly to the
-  existing Winograd DFT3 leaf. Focused timing improves the f64 Apollo estimate
-  versus the stale table from 2.97 ns to 2.68 ns, but the ratio remains open at
-  `1.361x`; f32 N=3 remains `1.278x`. A direct scalar N=4 public butterfly
-  probe is rejected because the focused absolute Apollo timings did not
-  justify replacing the retained small-PoT leaf.
+- [x] ATLAS-APOLLO-DIRECT-SMALL-CVXIII re-audit: current runtime/static N=3
+  dispatch uses the canonical DFT3 leaf and N=4 uses the specialized small-PoT
+  route. Three repeated committed release sweeps report f64 N=3/N=4 medians
+  `(2,2)` ns, f32 N=3 `(2,2)` ns, and f32 N=4 `(1,2)` ns for Apollo/RustFFT.
+  The historical `1.361x`, `1.278x`, and `4.325x` claims are stale and timer
+  quantization prevents a stable sub-2 ns ranking. No source change is
+  accepted; reopen only with higher-resolution idle-host evidence and a
+  counterbalanced comparison.
 
 - Closure CVXIII routes f32 N=5, f64/f32 N=7, and f32 N=11 public calls
   directly to existing Winograd leaves. Focused value tests for DFT5, DFT7,
