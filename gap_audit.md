@@ -1,5 +1,29 @@
 # Apollo Gap Audit
 
+## Short-prime f32 audit (2026-08-16)
+
+- Current source inspection closes the dispatch question: public N=5 and N=7
+  enter `dft5_array_impl` and `dft7_impl` directly from `auto_dispatch.rs`;
+  public N=11 enters `dispatch_dft11` and the f32
+  `ShortWinogradScalar::dft11` implementation, which uses the existing
+  `dft_pair_impl_reduced` split-array kernel.
+- Three repeated default release benchmark sweeps of
+  `cargo bench -p apollo-fft --bench rustfft_comparison` report current f32
+  medians near Apollo/RustFFT `12/9 ns` at N=5, `15/12 ns` at N=7, and
+  `27/13 ns` at N=11. This supersedes the older `1.209x`, `1.187x`, and
+  `1.138x` records; N=11 is currently the controlling short-prime row at
+  approximately `2.08x`.
+- Candidate test: routing only f32 N=11 through the existing interleaved
+  `dft_pair_impl` leaves the value contract unchanged, but three candidate
+  sweeps remain approximately `26--27 ns` against RustFFT `13 ns`. The
+  candidate is rejected; no production code or benchmark instrument change
+  remains in this increment.
+- Residual: a real closure requires a new N=11 implementation or vectorized
+  layout backed by codegen/profile evidence and a counterbalanced benchmark.
+  Reopening the dispatch question without that evidence would recreate the
+  stale-claim cycle. N=5 and N=7 remain measured optimization targets, not
+  missing-dispatch defects.
+
 ## Orphan-module audit (2026-08-16)
 
 - `winograd/composite/large.rs` was a genuine uncompiled duplicate. It had no

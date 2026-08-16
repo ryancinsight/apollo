@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-SHORT-PRIME-CVXIII [patch]
+
+- [x] Re-audit N=5, N=7, and N=11 dispatch against the current Apollo source;
+      N=5/N=7 use canonical direct leaves and N=11 uses the f32 short-prime
+      Winograd-pair route.
+- [x] Repeat the committed default release benchmark three times for the
+      f32 rows and compare the current medians with RustFFT.
+- [x] Test the existing interleaved Winograd-pair kernel as a bounded f32 N=11
+      candidate; value semantics were unchanged and the candidate was removed
+      after no stable timing improvement.
+- [x] Refresh backlog and gap-audit evidence, retaining the optimization item
+      only for a new codegen/profile-backed candidate.
+
+Evidence limit: the committed small-size benchmark resolves the N=5/N=7/N=11
+rows, but it does not identify the vectorization change needed to close N=11.
+The current N=11 comparison is a performance signal, not proof of an absolute
+hardware-independent ranking.
+
 ## ATLAS-APOLLO-DIRECT-SMALL-CVXIII [patch]
 
 - [x] Re-audit current runtime/static N=3 and N=4 dispatch against the source;
