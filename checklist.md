@@ -1,5 +1,21 @@
 # Apollo Checklist
 
+## ATLAS-ORPHAN-MODULES-096-APOLLO [patch]
+
+- [x] Audit all three detector-reported Apollo orphan paths against the actual
+      compiler inputs and caller graph.
+- [x] Delete the unreferenced `winograd/composite/large.rs` duplicate; live
+      medium-composite ownership already covers the overlapping codelets.
+- [x] Classify the two `include!` inputs as detector false positives and retain
+      their single-source ownership.
+- [ ] Coordinate the shared Atlas detector correction for `include!` edges;
+      the root script is peer-edited in this integration cycle.
+
+Residual evidence: after the source deletion, the provider-local detector
+count is expected to remain two until the shared script recognizes compiled
+`include!` inputs. No generated code is retained solely to satisfy an
+existence-based detector.
+
 ## PERF-POT-LARGE-DISCONTINUITY-001 closure [patch]
 
 - [x] Re-audit the claimed 128/256/512 dispatch gap against current source.

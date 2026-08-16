@@ -1,5 +1,19 @@
 # Apollo Gap Audit
 
+## Orphan-module audit (2026-08-16)
+
+- `winograd/composite/large.rs` was a genuine uncompiled duplicate. It had no
+  `mod` declaration or caller, while the live `medium.rs` leaf owns the
+  overlapping generated composite codelets. The file is deleted.
+- `application/numeric/integer_math.rs` and
+  `apollo-fft-macros/shared_primitives.rs` are `include!` inputs reached by
+  live modules. The current Atlas detector follows only `mod` declarations and
+  reports them incorrectly; the shared detector needs an `include!` edge model.
+- Scope boundary: provider source cleanup is complete in this increment. The
+  shared detector correction remains with the peer-edited Atlas conformance
+  script and must be verified there before the stack-wide orphan count can be
+  claimed as zero.
+
 ## Power-of-two discontinuity item closure (2026-08-16)
 
 - Finding: `PERF-POT-LARGE-DISCONTINUITY-001` treated the explicit 128/256/512
