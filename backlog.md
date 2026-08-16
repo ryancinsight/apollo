@@ -1,5 +1,22 @@
 # Apollo Backlog
 
+## ATLAS-ORPHAN-MODULES-096-APOLLO — Remove the dead large-composite leaf [patch] — in progress 2026-08-16
+
+- Finding: the Atlas orphan-module detector reports three Apollo files. The
+  `winograd/composite/large.rs` leaf is a genuine dead duplicate: it is not
+  declared by `composite/mod.rs`, none of its generated `dft*_impl` symbols is
+  referenced, and its overlapping 72/96/108/112/120/126/144/168/180 pairs are
+  already owned by the live `medium.rs` leaf. It is removed in this increment.
+- Detector reconciliation: `application/numeric/integer_math.rs` is included
+  by the live `radix_shape.rs` and `rader/generator.rs` modules, and
+  `apollo-fft-macros/shared_primitives.rs` is included by `math.rs`. They are
+  compiled inputs, not dead modules; the Atlas detector currently models only
+  `mod` edges and therefore misclassifies both. Extending that root detector is
+  separate shared-script work and is not duplicated in this provider slice.
+- Acceptance for this slice: the dead leaf is absent, no generated symbol
+  loses a caller, focused provider gates pass, and the residual detector count
+  is recorded rather than hidden.
+
 ## PERF-POT-LARGE-DISCONTINUITY-001 — Power-of-two sizes ≥128 look disproportionately slow [patch] — complete 2026-08-16
 
 - Owner: Apollo integration audit; scope was the `PowerOfTwo` / Stockham plan
