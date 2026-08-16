@@ -1,5 +1,23 @@
 # Apollo Checklist
 
+## PERF-POT-LARGE-DISCONTINUITY-001 closure [patch]
+
+- [x] Re-audit the claimed 128/256/512 dispatch gap against current source.
+- [x] Confirm `transform_sized` reaches explicit `transform_len128/256/512`
+      bodies and dedicated AVX first-stage leaves.
+- [x] Reconcile the claim with the prior per-LOG2 and PoT 128/256 completion
+      records in this checklist and `gap_audit.md`.
+- [x] Run the hosted exact-source benchmark gate
+      `31952145678`; identical baseline/candidate executable hashes and smoke
+      execution prove no candidate-caused regression.
+- [x] Close the item as stale/duplicate; record absolute idle-host measurement
+      as a separate future item only after the Hermes provider graph is clean.
+
+Evidence limits: the hosted identity gate does not measure current absolute
+latency or prove parity with RustFFT. The initial local locked check exposed a
+lockfile/source mismatch from the Atlas overlay; the standalone lock refresh
+now resolves it, and the outside-overlay workspace check passes.
+
 ## Rust crate publication aliases [patch]
 
 - [x] Bind Mnemosyne and Moirai to their collision-free registry packages.
