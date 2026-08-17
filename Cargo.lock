@@ -1245,6 +1245,7 @@ dependencies = [
 name = "mnemosyne-heap"
 version = "0.4.0"
 dependencies = [
+ "libc",
  "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
@@ -3017,40 +3018,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
-name = "horae"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "hyperion"
 version = "0.1.0"
-
-[[patch.unused]]
-name = "asclepius"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "asclepius-coeus"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "athena-core"
-version = "0.1.1"
-
-[[patch.unused]]
-name = "athena-leto"
-version = "0.1.1"
-
-[[patch.unused]]
-name = "hephaestus-metal"
-version = "0.19.0"
-
-[[patch.unused]]
-name = "hephaestus-rocm"
-version = "0.19.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.2.0"
 
 [[patch.unused]]
 name = "coeus-autograd"
@@ -3081,20 +3050,28 @@ name = "coeus-tensor"
 version = "0.10.0"
 
 [[patch.unused]]
-name = "gaia-mesh"
-version = "0.4.0"
-
-[[patch.unused]]
-name = "moirai-http"
-version = "0.5.0"
+name = "horae"
+version = "0.1.0"
 
 [[patch.unused]]
 name = "proteus"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris-viz"
-version = "0.1.0"
+name = "tyche-core"
+version = "0.2.0"
+
+[[patch.unused]]
+name = "hephaestus-metal"
+version = "0.19.0"
+
+[[patch.unused]]
+name = "hephaestus-rocm"
+version = "0.19.0"
+
+[[patch.unused]]
+name = "moirai-http"
+version = "0.5.0"
 
 [[patch.unused]]
 name = "consus-compression"
@@ -3125,6 +3102,18 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
+name = "athena-core"
+version = "0.1.1"
+
+[[patch.unused]]
+name = "athena-leto"
+version = "0.1.1"
+
+[[patch.unused]]
+name = "gaia-mesh"
+version = "0.4.0"
+
+[[patch.unused]]
 name = "ritk-core"
 version = "0.10.0"
 
@@ -3151,3 +3140,15 @@ version = "0.2.0"
 [[patch.unused]]
 name = "ritk-vtk"
 version = "0.2.0"
+
+[[patch.unused]]
+name = "iris-viz"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "asclepius-coeus"
+version = "0.1.0"
