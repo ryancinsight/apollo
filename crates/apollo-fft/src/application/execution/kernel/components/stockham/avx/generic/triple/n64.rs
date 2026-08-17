@@ -11,7 +11,7 @@ use super::radix1_triple_do_one;
 /// Called from stage_triple when n==64 radix==1 (first pass of len64, md-worst PoT 64).
 /// Enables ILP / register tuning / DCE per monomorph (Inner-Fn + structural const LOG2).
 /// Additive zero-cost to n32 special + ZST wiring; preserves exact same ops as general radix1 path.
-/// Zero extra cost for other sizes (not routed). Targets 64 ratios from benchmark_results.md.
+/// Zero extra cost for other sizes (not routed). Targets 64 ratios from docs/benchmark_results.md.
 #[inline]
 #[target_feature(enable = "avx,fma")]
 pub(crate) unsafe fn stage_triple_radix1_n64_avx_fma<B: StockhamAvxBackend>(

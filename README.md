@@ -72,7 +72,7 @@ Mixed precision is now a first-class Apollo concept:
   `native-f16` feature (`GpuFft3dF16Native`). Twiddle factors are computed in
   `f32` then narrowed to `f16`; per-output accumulation error is bounded by
   `O(log N)·ε_f16·‖input‖₁`, where `ε_f16 ≈ 9.77×10⁻⁴`.
-- The authoritative per-crate precision surface is documented in `ARCHITECTURE.md` under the Mixed-Precision Capability Table.
+- The authoritative per-crate precision surface is documented in `docs/architecture.md` under the Mixed-Precision Capability Table.
 
 ## Crates
 
@@ -192,7 +192,7 @@ Apollo implements workspace-wide memory-efficiency and strict structural modular
 
 ## References
 
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- [`docs/architecture.md`](./docs/architecture.md)
 - [`docs/THEORY.md`](./docs/THEORY.md)
 - [`docs/VALIDATION.md`](./docs/VALIDATION.md)
 - [`docs/MIGRATION_KWAVERS.md`](./docs/MIGRATION_KWAVERS.md)

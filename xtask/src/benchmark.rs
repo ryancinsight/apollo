@@ -1,4 +1,4 @@
-//! `xtask benchmark` — regenerate `benchmark_results.md`.
+//! `xtask benchmark` — regenerate `docs/benchmark_results.md`.
 //!
 //! Runs the `rustfft_comparison` bench binary and renders its CSV into the
 //! committed markdown table. The measurement contract, sweep sizes, and runtime
@@ -26,7 +26,7 @@ use anyhow::{bail, Context, Result};
 /// Bench binary that owns the measurement contract.
 const BENCH_NAME: &str = "rustfft_comparison";
 /// Rendered artifact.
-const OUTPUT: &str = "benchmark_results.md";
+const OUTPUT: &str = "docs/benchmark_results.md";
 /// Environment switch the bench binary reads for the dense sweep.
 const FULL_SWEEP_VAR: &str = "APOLLO_BENCH_FULL_SWEEP";
 

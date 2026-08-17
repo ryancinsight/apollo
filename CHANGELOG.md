@@ -33,6 +33,10 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Move the authoritative architecture and generated benchmark reports
+  under `docs/`, update the benchmark generator and all active references, and
+  remove the completed one-off WGPU migration script from the repository root.
+
 - [arch] `apollo-fft`'s shared WGPU transport now exposes canonical generic
   plan, operand-length, and typed-storage-profile validation to extension
   surfaces. `apollo-gft` consumes those helpers and retains only its
@@ -754,7 +758,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] `apollo-czt` no longer carries a stale `ndarray` dev-dependency: CZT plan/test
   construction now uses native Leto shape constructors, and rank-1 test assertions use
   Leto coordinate indexing. Verified with `cargo nextest run -p apollo-czt` (40/40).
-- [patch] Refreshed `benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
+- [patch] Refreshed `docs/benchmark_results.md` from the Apollo `xtask benchmark` quick profile on 2026-06-12 and synchronized `Cargo.lock` with the local Atlas provider patches (`leto`/`leto-ops` `0.16.1`, `themis` `0.7.0`) required for locked local verification.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `a673325` (`0.14.2`), importing rank-deficient singular-value support without restoring any downstream nalgebra dependency.
 - [patch] Apollo now pins Leto/Leto Ops to pushed Leto `7d4774a` (`0.14.1`), importing wide full-row-rank thin SVD support as the next provider-side nalgebra-parity increment.
 - [patch] Apollo now pins Moirai to pushed commit `d60317e`, importing default Mnemosyne-backed executor worker idle maintenance and Melinoe partition routing through Moirai's global scheduler for Moirai-routed parallel transform paths.
@@ -879,11 +883,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] : added LOG2=6 (n=64) fast path in  calling  instead of falling through to generic Stockham with scratch allocation.
 - [patch] : collapsed duplicate coprime factors path in  and removed dead LOG2=5 ZST constructions and redundant n==90/n==198 special cases.
 ### Performance/Memory
-- [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark`, refreshing the canonical quick-profile benchmark table after the FRFT-WGPU Leto host-boundary increment.
-- [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 68 rows, f32 faster on 44 rows, and both faster on 19 rows.
-- [patch] Refreshed selected measured rows in `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`; the full table remains populated and only the requested rows received new quick-profile measurements.
+- [patch] Regenerated `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark`, refreshing the canonical quick-profile benchmark table after the FRFT-WGPU Leto host-boundary increment.
+- [patch] Regenerated `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 68 rows, f32 faster on 44 rows, and both faster on 19 rows.
+- [patch] Refreshed selected measured rows in `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`; the full table remains populated and only the requested rows received new quick-profile measurements.
 - [minor] `apollo-fft` public 1D slice wrappers now route through storage-specific owned slice methods and cached in-place `FftPlan1D` execution. Concrete `f64`, `f32`, and `f16` paths allocate one owned output/scratch vector instead of cloning into `Array1` and copying the result back into a second `Vec`. `apollo-fft` version bumped to `0.13.0`; `cargo semver-checks` could not analyze the crate because it is not published in the registry.
-- [patch] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 101 rows, f32 faster on 71 rows, and both faster on 33 rows. N=3 now records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains a direct-row miss at `4.325x`.
+- [patch] Regenerated `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick`, refreshing all 514 canonical rows. Current quick profile records f64 faster on 101 rows, f32 faster on 71 rows, and both faster on 33 rows. N=3 now records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains a direct-row miss at `4.325x`.
 - 32768 PoT 4x unroll first-pass radix1 triple (ILP for controlling md-worst 2.75x f64; extends n512/n1024 + prior GT/rader unrolls): stage_triple_radix1_n32768_avx_fma upgraded 2x->4x (explicit first-4 kk< step-uniform guards for avx/avx512; 4x while remaining); docs updated in triple (fn+3 sites), precise/reduced (if), transform (len32768 doc + special sizes + per-LOG2). Zero-cost additive mono/ILP (no new alloc/cast, TL/Cow reuse). Value green (release n32768 roundtrip tol + list + special exercised 4x+len body); gates clean; focused xtask on md safe list (build 8m39s, wrote, deltas 32768 f64 2.553x/f32 0.747x win, 512 f64 0.518x); md note + rebench cmd; artifacts synced. No reg (identical do_one/seq; native). Advances "surpass all sizes" PoT per md triage.
 - n1024 PoT unroll + f32 avx/pot sub with_scratch (bluestein kernel build + avx sized match lists) + GT col unroll8 + row gather_unroll8 + rader gather_unroll8 + natural scatter unroll8 + n32768 2x unroll for first pass: stage_triple_radix1_n1024_avx_fma (explicit 64/32 iters); wired in precision 4+; 1024 in f32/f64 avx_with_scratch_sized matches (direct); bluestein build for pow2 p>=64 uses with_bluestein_scratch + stockham_forward_sized cascade (f32 sub, unblocks n113/257 bias per gap, mono for rader cache, pool reuse). dimension n113 comment updated (progress). pfa natural col extract unrolled 0-7 + added gather_unroll8 in butterflies + use in pfa_gather for row ILP (helps GT 198/90/84+ in md) + extended gather_unroll8 to rader perm gather in rader/mod.rs (helps f32 rader 67/271/113/257) + natural scatter unrolled to 8 (ILP for GT scatter) + stage_triple_radix1_n32768_avx_fma (2x unrolled while for k/do_one pairs) + wired if radix==1 && n==32768 in avx paths (4 sites). Additive 0-cost to n512+; targets 1024/32768 PoT + rader f32 113/257/67 (md worst) + GT. Value green (n512 + rader 67/271 + n1024 sized exercised + rader/GT/special 32768 tests); gates clean; md note + refresh attempts (lists with/without small, no json, documented full measure cmd); artifacts. No reg (identical, native).
 - n1024 PoT unroll + f32 avx/pot sub with_scratch (bluestein kernel build + avx sized match lists): stage_triple_radix1_n1024_avx_fma (explicit 64/32 iters); wired in precision 4+; 1024 in f32/f64 avx_with_scratch_sized matches (direct); bluestein build for pow2 p>=64 uses with_bluestein_scratch + stockham_forward_sized cascade (f32 sub, unblocks n113/257 bias per gap, mono for rader cache, pool reuse). dimension n113 comment updated (progress). Additive 0-cost to n512+; targets 1024/32768 PoT + rader f32 113/257/67 (md worst). Value green (n512 + rader 67/271 + n1024 sized exercised); gates clean; md note + rebench (incl 1024); artifacts. No reg (identical, native).
@@ -906,8 +910,8 @@ See checklist/gap for details.
 - [patch] ZST threading + Cow in pot_sized (arch + mono + mem): pot_inplace_sized<const INVERSE, NORMALIZE, S: PoTStrategy, const LOG2> (trait with default + f32/f64 impls using const n=1<<LOG2 + Cow<'_, [Complex]> tw_view); plan exec_sized (for LOG2>=7) + dispatch (expanded 5-10 constructions) updated to pass _s (all sites same diff). ZST now drives from plan SSOT to kernel monomorph (const LOG2 + S in sig aids folding to per-LOG2 bodies; zero-cost). Cow zero-copy extended to threaded hot path. Value/gates (clippy no new on it)/focused --skip-run build success/md update. See gap.
 - [patch] Cleanup: updated pot/strategies docs (now reflect wiring); env clean for bench (taskkill+del xtask.exe); targeted fmt/check on edits. Pre-existing allows/clippy noted.
 - [patch] Gates + bench attention: cargo check/fmt/doc/clippy-filter (no new on paths); value tests green (GT incl 90/198, rader, dft, plan n512/n90, composite); focused xtask --sizes PoT+GT/Rader (build of wired succeeded, runner exercised; --skip-run data path; md notes). Special attention to benchmarks (md baseline + "no regression" + rebench cmds on 32/64/67/90/.../32768 +5-16). No regression (identical + ZST 0-cost + pools/Cow). See gap_audit, benchmark_results, checklist.
-- [patch] Shared butterflies expansion (perf+maintainability, no regression): moved canonical small-DFT codelets (dft2/3/4/5/7/8 + array variants w/ fused normalize + dft15 PFA 3x5) from winograd/radix + traits into components/butterflies/dft.rs as single authoritative zero-cost impls (generic WinogradScalar/Mixed via super). Updated forwards in winograd (radix/mod, dft3.rs, traits), cook_toom_gt (for 3/4/5/7), reexports. Reduces dupe across winograd/GT/rader/composite paths; enables future uniform opts (SIMD etc) in one place. Deep vertical + shared mandate. Tests (dft_small 32 incl dft15, GT 64, rader 34, composite, n90 cook, plan) + check + doc + fmt clean; value-semantic preserved (identical code). benchmark_results.md noted for rebench attention on affected sizes (5-90,198,67..). See gap_audit "Next Steps #1".
-- [patch] PoT ZST wiring (perf + mono + memory, no regression): log2 + SizedPoT<StockhamAutosort, LOG2> (via pub(crate) ::new() for exact const-generic) into PlanStrategy::PowerOfTwo in dimension_1d + tag in dispatch try_power_of_two. Added explicit 512 (log2=9) arm + sized helper that constructs the ZST<9> (monomorph zero-cost). New value tests planned_n512_f*_pot_zst (hit arm at runtime, ZST construction, dft_forward match f64/f32). All prior PoT (small specials 2-64, 32768, with_scratch pools, AVX) preserved. Why highest prob + routing: PoT is the lowest-overhead canonical path (fused stages, no-perm autosort, TL scratch, explicit AVX fixed); ZST makes selection/strategy compile-time monomorph (replaces runtime is_power_of_two + n match), zero memory, aligns "zero sized types/phantoms, monomorphization, modernizing architecture". Strengthens "PoT first for powers" in routing (type param + explicit per-log2 for remaining >1x rows like 32/64/128/256/32768 in benchmark_results). Bench attention paid: focused xtask --sizes 32,64,128,256,512,1024,32768 (quick profile attempts exercised runner + --skip-run; current md ratios authoritative baseline); md notes + rebench cmd added; 512 tests + stockham specials green. No regression (numerical + behavior identical to pre-wire). Memory: unchanged pooled paths. See gap_audit (plan item 2), benchmark_results.md, checklist.
+- [patch] Shared butterflies expansion (perf+maintainability, no regression): moved canonical small-DFT codelets (dft2/3/4/5/7/8 + array variants w/ fused normalize + dft15 PFA 3x5) from winograd/radix + traits into components/butterflies/dft.rs as single authoritative zero-cost impls (generic WinogradScalar/Mixed via super). Updated forwards in winograd (radix/mod, dft3.rs, traits), cook_toom_gt (for 3/4/5/7), reexports. Reduces dupe across winograd/GT/rader/composite paths; enables future uniform opts (SIMD etc) in one place. Deep vertical + shared mandate. Tests (dft_small 32 incl dft15, GT 64, rader 34, composite, n90 cook, plan) + check + doc + fmt clean; value-semantic preserved (identical code). docs/benchmark_results.md noted for rebench attention on affected sizes (5-90,198,67..). See gap_audit "Next Steps #1".
+- [patch] PoT ZST wiring (perf + mono + memory, no regression): log2 + SizedPoT<StockhamAutosort, LOG2> (via pub(crate) ::new() for exact const-generic) into PlanStrategy::PowerOfTwo in dimension_1d + tag in dispatch try_power_of_two. Added explicit 512 (log2=9) arm + sized helper that constructs the ZST<9> (monomorph zero-cost). New value tests planned_n512_f*_pot_zst (hit arm at runtime, ZST construction, dft_forward match f64/f32). All prior PoT (small specials 2-64, 32768, with_scratch pools, AVX) preserved. Why highest prob + routing: PoT is the lowest-overhead canonical path (fused stages, no-perm autosort, TL scratch, explicit AVX fixed); ZST makes selection/strategy compile-time monomorph (replaces runtime is_power_of_two + n match), zero memory, aligns "zero sized types/phantoms, monomorphization, modernizing architecture". Strengthens "PoT first for powers" in routing (type param + explicit per-log2 for remaining >1x rows like 32/64/128/256/32768 in benchmark_results). Bench attention paid: focused xtask --sizes 32,64,128,256,512,1024,32768 (quick profile attempts exercised runner + --skip-run; current md ratios authoritative baseline); md notes + rebench cmd added; 512 tests + stockham specials green. No regression (numerical + behavior identical to pre-wire). Memory: unchanged pooled paths. See gap_audit (plan item 2), docs/benchmark_results.md, checklist.
 - Routing audit documented (see gap_audit): current order (PoT fast > short/hardcoded winograd > explicit+ cached composite/radix > has_static GT > coprime GT > Rader) is highest-prob because PoT has lowest overhead (fused stages, no perm, AVX fixed butterflies, autosort cache-friendly, TL zero-alloc scratch); composite CT wins on smooth (incl 2/3/5 coprimes) due to lower perm/scratch/strided cost vs PFA gather+cols (evidenced by 90/198 bench >2x before force, now Composite); GT only when coprime non-smooth or proven static codelet win (PFA math good but impl overhead high for many); Rader unavoidable for primes, but f32 bias to Bluestein routes to PoT (best kernel) vs full-cyclic composite on m. Explicit forces (90/198) and gated short winograd correct mis-selection that violated "assume current method per size may not be optimal".
 - Planning for next: see gap_audit "Next Steps" for ordered list with per-item prob/rationale (expand shared butterflies first for dupe reduction + uniform opt surface; wire PoT ZSTs for compile-time PoT; f32 scratch unify to unblock routing + remove ignores; more composite forces + GT gather opts; bluestein fold SIMD; static rader primes; explicit Stockham for more PoT). Each targets remaining bench worst (f32 small win 6x, GT 1.5-3x, rader 2x, PoT 1.2-2.5x) with lowest arch risk.
 - Gates: fmt clean on touched; check clean; rader (34+1ignore), good_thomas, dimension plan (n90 composite numerical), stockham special tests pass; doc clean. Value-semantic (dft_forward match + roundtrip) preserved. No new defects introduced.
@@ -917,7 +921,7 @@ See checklist/gap for details.
 - GT: explicit Composite for 90/198 (plan + dispatch + static radices) to avoid slow GT-static/cook_toom (3.3x f32 for 90); shared `gather_unroll4` from butterflies/ wired to pfa_gather + rader gather (dupe reduction).
 - Shared components: `mul_conj` + `gather_unroll4` in `components/butterflies/` (deep vertical, zero-cost mono).
 - Pooled scratch emphasis continues.
-- No type names in ids, no mocks, value-semantic tests preserved, selection only for true primes. Updated benchmark_results.md (partial).
+- No type names in ids, no mocks, value-semantic tests preserved, selection only for true primes. Updated docs/benchmark_results.md (partial).
 - [patch] `apollo-fft`: repaired the f32 N=16 `small_pot_inplace_sized`
   branch after a malformed rewrite left the N=32 arm inside the N=16 arm and
   called an undefined fallback macro; the release benchmark runner now compiles
@@ -1420,7 +1424,7 @@ See checklist/gap for details.
   `cargo check -p apollo-fft --lib` and `cargo test -p apollo-fft-macros`.
   Optimized `xtask` subset rows for
   N=11/13/17/19/23/29/31/37/41/43/47/53 were refreshed in
-  `benchmark_results.md`.
+  `docs/benchmark_results.md`.
 - [patch] Post-change verification passes: `cargo check -p apollo-fft
   --features kernel-strategy-bench`, `cargo test -p apollo-fft --lib rader`,
   `cargo test -p apollo-fft --lib good_thomas`, `cargo check -p xtask`, and
@@ -1460,7 +1464,7 @@ See checklist/gap for details.
 - [patch] `apollo-fft`: completed stale Rader/Bluestein const-direction call
   sites exposed by focused lib-test rebuilds.
 - [patch] `xtask benchmark --sizes ...`: subset runs now merge only requested
-  rows into `benchmark_results.md`, insert missing requested rows in sorted
+  rows into `docs/benchmark_results.md`, insert missing requested rows in sorted
   order, and use the optimized bounded adaptive clone-inclusive runner for
   normal measurements. `--skip-run` remains a legacy Criterion JSON merge path.
 
@@ -1470,9 +1474,9 @@ See checklist/gap for details.
   codegen exceeded the bounded verification budget.
 - [patch] Focused N=44 quick-profile probe after fixed PFA routing records
   Apollo/RustFFT 120.96 ns / 78.51 ns for f64 and 145.49 ns / 91.35 ns for
-  f32; the row remains a measured miss, so `benchmark_results.md` was not
+  f32; the row remains a measured miss, so `docs/benchmark_results.md` was not
   rewritten from that probe.
-- [patch] Targeted quick-profile `benchmark_results.md` refresh for
+- [patch] Targeted quick-profile `docs/benchmark_results.md` refresh for
   N=84/N=90/N=94/N=150/N=175 records N=94 as a RustFFT win at 0.729x f64 and
   0.519x f32, and N=150 f64 near parity at 1.042x. N=84/N=90/N=175 and f32
   N=150 remain route-cost misses.
@@ -1483,7 +1487,7 @@ See checklist/gap for details.
   the DFT11 odd-prime-pair const-loop optimization reduced Apollo absolute
   timings under the `xtask` runner. Current N=77 records f64 Apollo/RustFFT
   199.94 ns / 103.96 ns and f32 Apollo/RustFFT 235.34 ns / 78.52 ns.
-- [patch] Full canonical `benchmark_results.md` regeneration completed in
+- [patch] Full canonical `docs/benchmark_results.md` regeneration completed in
   65.6 seconds from the already-built optimized `xtask` binary.
 - [patch] Verified proc-macro compile, `apollo-fft` lib compile, bench compile,
   generated composite direct-DFT coverage, and fixed coprime direct-DFT
@@ -1508,11 +1512,11 @@ See checklist/gap for details.
 
 ### Verification
 - [patch] Added direct-DFT value coverage for the new N=18/N=24/N=36 short
-  Good-Thomas leaves. `benchmark_results.md` was not regenerated because
+  Good-Thomas leaves. `docs/benchmark_results.md` was not regenerated because
   bounded release `vs_rustfft` bench builds did not produce usable timing
   output in this increment.
 - [patch] Focused `2*p` correctness tests pass for N=38/N=58/N=74/N=82/N=94.
-  Quick-profile Criterion refreshes updated `benchmark_results.md`; current
+  Quick-profile Criterion refreshes updated `docs/benchmark_results.md`; current
   rows record N=38 f64/f32 Apollo/RustFFT ratios 1.551x/1.695x, N=82
   1.044x/1.532x, and N=94 0.746x/0.847x. N=74 f32 regressed to 1.959x and
   remains the next targeted miss.
@@ -1531,7 +1535,7 @@ See checklist/gap for details.
   routed problem sizes 38, 58, 74, 82, and 94 in the canonical f64/f32
   Apollo-vs-RustFFT table.
 - [patch] Added `xtask benchmark` as the single benchmark runner and
-  `benchmark_results.md` generator for the Apollo-vs-RustFFT f64/f32 table.
+  `docs/benchmark_results.md` generator for the Apollo-vs-RustFFT f64/f32 table.
 
 ### Fixed
 - [patch] `apollo-fft`: natural Good-Thomas PFA now scatters transformed
@@ -1549,7 +1553,7 @@ See checklist/gap for details.
   private natural PFA kernel on a nontrivial coprime shape, and verified the
   focused Good-Thomas tests, full `apollo-fft` library test suite,
   `apollo-fft-macros` compile, and `apollo-fft` bench/example compile surface.
-- [patch] `benchmark_results.md` is regenerated from Criterion after targeted
+- [patch] `docs/benchmark_results.md` is regenerated from Criterion after targeted
   refreshes for N=33/38/58/74/82/94. Current rows record N=33 f64
   Apollo/RustFFT 91.33 ns / 64.35 ns (1.419x), N=94 f64 449.33 ns /
   675.17 ns (0.665x), and N=94 f32 460.01 ns / 633.28 ns (0.726x).
@@ -1578,7 +1582,7 @@ See checklist/gap for details.
   the current direct generated Winograd prototype.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the Criterion cache after
+- [patch] `docs/benchmark_results.md` is regenerated from the Criterion cache after
   a targeted N=33 refresh. N=33 records f64 Apollo/RustFFT 94.34 ns / 68.16 ns
   (1.384x) and f32 Apollo/RustFFT 108.75 ns / 64.81 ns (1.678x). Fresh release
   quick comparison for N=33/38/58/74/82/94 records ratios
@@ -1602,7 +1606,7 @@ See checklist/gap for details.
   `cargo check -p apollo-fft-macros`.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the canonical Criterion
+- [patch] `docs/benchmark_results.md` is regenerated from the canonical Criterion
   cache. N=33 records f64 Apollo/RustFFT 93.00 ns / 64.92 ns (1.433x) and f32
   Apollo/RustFFT 108.00 ns / 67.49 ns (1.600x). A fresh release quick-compare
   rebuild exceeded the 300-second cap, so the current residual target is
@@ -1619,7 +1623,7 @@ See checklist/gap for details.
   dispatch and avoiding component removal.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the canonical Criterion
+- [patch] `docs/benchmark_results.md` is regenerated from the canonical Criterion
   cache. N=33 still records f64 Apollo/RustFFT 101.49 ns / 70.27 ns (1.444x)
   and f32 Apollo/RustFFT 121.28 ns / 78.91 ns (1.537x). The release quick
   comparison for N=21/33/39/51/69 records N=33 at 0.089 us vs 0.059 us,
@@ -1638,7 +1642,7 @@ See checklist/gap for details.
   const-generic benchmark/test surface explicit.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from completed Criterion rows.
+- [patch] `docs/benchmark_results.md` is regenerated from completed Criterion rows.
   N=33 now records f64 Apollo/RustFFT 101.49 ns / 70.27 ns (1.444x) and f32
   Apollo/RustFFT 121.28 ns / 78.91 ns (1.537x).
 
@@ -1661,7 +1665,7 @@ See checklist/gap for details.
   f64 and 53.186% for f32.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the current Criterion
+- [patch] `docs/benchmark_results.md` is regenerated from the current Criterion
   cache. The N=33 rows now record f64 Apollo/RustFFT 104.08 ns / 69.15 ns
   (1.505x) and f32 Apollo/RustFFT 128.21 ns / 63.15 ns (2.030x).
 
@@ -1683,7 +1687,7 @@ See checklist/gap for details.
   scalar-cache reconciliation are resolved in the verified compile surface.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the current Criterion
+- [patch] `docs/benchmark_results.md` is regenerated from the current Criterion
   cache snapshot. The dedicated post-cutoff Criterion rows for
   N=16/N=32/N=64/N=128/N=32768 remain pending because the targeted N=16
   refresh exceeded the bounded command cap in the prior increment. The
@@ -1711,7 +1715,7 @@ See checklist/gap for details.
   monomorphized typed bench build after the generic plan consolidation.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated as the single canonical
+- [patch] `docs/benchmark_results.md` is regenerated as the single canonical
   Apollo-vs-RustFFT f64/f32 clone-inclusive table from the current Criterion
   cache snapshot. A bounded targeted Criterion refresh for N=16 exceeded the
   300-second command cap, so dedicated post-cutoff Criterion rows remain
@@ -1746,7 +1750,7 @@ See checklist/gap for details.
   by benchmark/example verification.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated as the single canonical
+- [patch] `docs/benchmark_results.md` is regenerated as the single canonical
   Apollo-vs-RustFFT f64/f32 clone-inclusive table from the current Criterion
   cache snapshot. Two pre-existing Criterion jobs are still active, so this
   snapshot can continue to change until those writers finish.
@@ -1768,7 +1772,7 @@ See checklist/gap for details.
   bench build dead-code warning at the source.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the canonical
+- [patch] `docs/benchmark_results.md` is regenerated from the canonical
   Apollo-vs-RustFFT f64/f32 Criterion cache snapshot, including fresh
   post-patch targeted rows for N=6, N=10, N=12, and N=14.
 
@@ -1784,7 +1788,7 @@ See checklist/gap for details.
   route availability.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the canonical
+- [patch] `docs/benchmark_results.md` is regenerated from the canonical
   Apollo-vs-RustFFT f64/f32 Criterion cache snapshot only.
 
 ## [0.12.11] - 2026-05-19
@@ -1800,7 +1804,7 @@ See checklist/gap for details.
   radix-composite factors.
 
 ### Documentation
-- [patch] `benchmark_results.md` remains a single canonical Apollo-vs-RustFFT
+- [patch] `docs/benchmark_results.md` remains a single canonical Apollo-vs-RustFFT
   f64/f32 clone-inclusive table regenerated from Criterion cache records; no
   quick-run or residual Criterion sections are emitted.
 
@@ -1824,7 +1828,7 @@ See checklist/gap for details.
   removing the codelet.
 
 ### Documentation
-- [patch] `benchmark_results.md` is regenerated from the Criterion cache and
+- [patch] `docs/benchmark_results.md` is regenerated from the Criterion cache and
   the latest quick strategy and selected public comparisons after the
   routing/permutation edits.
 
@@ -1844,7 +1848,7 @@ See checklist/gap for details.
   per-prime module paths; Bluestein/Rader differential tests use the same
   shared Rader route, and static Rader permutation tables remain compile-time
   constants generated per prime dispatch arm on stable Rust.
-- [patch] `apollo-fft`: `benchmark_results.md` is regenerated from every
+- [patch] `apollo-fft`: `docs/benchmark_results.md` is regenerated from every
   Criterion `target/criterion/**/new/estimates.json` record, covering f64/f32
   clone-inclusive, zero-allocation, six-step, residual benchmark groups, and
   the latest debug Rader-vs-Winograd-pair quick strategy comparison.
@@ -3790,10 +3794,10 @@ See checklist/gap for details.
 
 ## [0.12.3] — Closure XXIII
 
-### Closure XXIII — ARCHITECTURE.md Capability Annotations + Validation Fixtures 29–30 [patch]
+### Closure XXIII — docs/architecture.md Capability Annotations + Validation Fixtures 29–30 [patch]
 
 #### Changed
-- `ARCHITECTURE.md` Mixed-Precision Capability Table: added `"forward + inverse CZT"` and
+- `docs/architecture.md` Mixed-Precision Capability Table: added `"forward + inverse CZT"` and
   `"forward + inverse Mellin spectrum"` annotations to the `Notes` column for
   `apollo-czt-wgpu` and `apollo-mellin-wgpu`, matching the bidirectional-WGPU annotation
   pattern already established for other transform pairs.
@@ -4089,7 +4093,7 @@ See checklist/gap for details.
 
 ### Fixed
 - `README.md`: stale WGPU crate descriptions for `apollo-radon-wgpu` (was "forward only"), `apollo-stft-wgpu` (was "forward only"), `apollo-hilbert-wgpu` (was "inverse unsupported"), and `apollo-sdft-wgpu` (was "inverse unsupported"). All now accurately describe implemented GPU inverse capabilities. [patch]
-- `ARCHITECTURE.md`: Mixed-Precision Capability Table notes for `apollo-radon-wgpu`, `apollo-stft-wgpu`, `apollo-hilbert-wgpu`, and `apollo-sdft-wgpu` updated to reflect inverse capability status. [patch]
+- `docs/architecture.md`: Mixed-Precision Capability Table notes for `apollo-radon-wgpu`, `apollo-stft-wgpu`, `apollo-hilbert-wgpu`, and `apollo-sdft-wgpu` updated to reflect inverse capability status. [patch]
 
 ---
 
@@ -4154,7 +4158,7 @@ See checklist/gap for details.
 - `apollo-frft-wgpu`: `UnitaryFrftGpuKernel` implementing DFrFT_a(x)=V·diag(exp(−iakπ/2))·V^T·x on GPU via three-submission pattern. `FrftWgpuBackend` exposes `plan_unitary`, `execute_unitary_forward`, `execute_unitary_inverse`. [minor]
 - Three published-reference fixtures (count 17 → 20): FrFT unitary order-2 reversal (Candan 2000), DWT Haar one-level detail (Haar 1910/Mallat 1989), SDFT bin-zero unit impulse. [minor]
 - `design_history_file/adr_unitary_frft.md`: ADR documenting Grünbaum eigendecomposition algorithm selection, unitarity proof, GPU ordering guarantee, and tolerance derivation. [patch]
-- `ARCHITECTURE.md`: "Key: Unitary FrFT" subsection with CPU/GPU plan comparison table. [patch]
+- `docs/architecture.md`: "Key: Unitary FrFT" subsection with CPU/GPU plan comparison table. [patch]
 
 ---
 
@@ -4181,7 +4185,7 @@ See checklist/gap for details.
 
 ### Added
 - Published-reference fixtures expanded to 10. [minor]
-- `ARCHITECTURE.md` Mixed-Precision Capability Table (authoritative per-crate precision record). [patch]
+- `docs/architecture.md` Mixed-Precision Capability Table (authoritative per-crate precision record). [patch]
 
 ---
 

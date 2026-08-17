@@ -1,6 +1,6 @@
 //! Clone-inclusive 1D forward complex FFT, Apollo against RustFFT.
 //!
-//! This is the measurement half of `benchmark_results.md`; `cargo run -p xtask
+//! This is the measurement half of `docs/benchmark_results.md`; `cargo run -p xtask
 //! -- benchmark` runs this binary and renders the table from its CSV.
 //!
 //! ## What "clone-inclusive" means
@@ -37,7 +37,7 @@
 //!
 //! ## What this binary does not measure
 //!
-//! It reports timings only. `benchmark_results.md` historically also carried an
+//! It reports timings only. `docs/benchmark_results.md` historically also carried an
 //! engine-name column per row; neither engine exposes its selected algorithm
 //! through a public API, so those columns cannot be regenerated and are not
 //! invented here.

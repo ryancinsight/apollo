@@ -1,5 +1,12 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-ROOT-CLEANUP [patch]
+
+- [x] Move the architecture and generated benchmark reports under `docs/`,
+      update the generator and active references, and remove the completed
+      one-off `migrate.py` script.
+- [x] Exact-head conformance scan: Apollo `root_sprawl` 3 → 0.
+
 ## ATLAS-APOLLO-SHORT-PRIME-CVXIII [patch]
 
 - [x] Re-audit N=5, N=7, and N=11 dispatch against the current Apollo source;
@@ -1553,7 +1560,7 @@ The source theorem is SSOT: all callers name
   `git diff --check`.
 
 ## Benchmark results refresh [patch]
-- [x] Regenerated `benchmark_results.md` with Apollo `xtask benchmark` quick profile output dated `2026-06-12 14:22 UTC`.
+- [x] Regenerated `docs/benchmark_results.md` with Apollo `xtask benchmark` quick profile output dated `2026-06-12 14:22 UTC`.
 - [x] Synchronized `Cargo.lock` with the active local Atlas provider patches so locked Apollo verification resolves Leto/Leto Ops `0.16.1` and Themis `0.7.0`.
 - Evidence tier: empirical Criterion median estimates from the generated clone-inclusive Apollo/RustFFT benchmark table. No optimization or speedup claim is made beyond the recorded benchmark values.
 
@@ -1866,7 +1873,7 @@ The source theorem is SSOT: all callers name
 - [x] Kept scalar moment accumulation for smaller signals and left existing Moirai resampling/spectrum paths unchanged.
 - [x] Added value tests for Hermes moment parity and trapezoid-weight materialization.
 - [x] Verification: `cargo fmt --check`; `cargo check -p apollo-mellin`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo run -p xtask -- benchmark`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
-- Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes moment tests. Runtime FFT benchmark evidence is recorded in `benchmark_results.md`.
+- Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes moment tests. Runtime FFT benchmark evidence is recorded in `docs/benchmark_results.md`.
 
 ## GFT graph-basis Hermes dot routing [patch]
 - [x] Added the workspace Hermes provider dependency to `apollo-gft`.
@@ -2170,7 +2177,7 @@ The source theorem is SSOT: all callers name
 - [x] Added `DctDstPlan::forward_leto`, `DctDstPlan::inverse_leto`, `DctDstPlan::forward_2d_leto`, `DctDstPlan::inverse_2d_leto`, `DctDstPlan::forward_3d_leto`, `DctDstPlan::inverse_3d_leto`, `DctDstPlan::forward_leto_typed`, and `DctDstPlan::inverse_leto_typed`, returning Mnemosyne-backed Leto arrays.
 - [x] Kept ndarray and slice APIs as validation oracles while routing Leto inputs through the existing DCT/DST transform execution contract.
 - [x] Added value tests proving contiguous 1D, strided 1D, typed 1D, contiguous 2D, strided 2D inverse, and 3D Leto parity against existing slice or ndarray APIs.
-- [x] Regenerated the full canonical quick-profile `benchmark_results.md` table with `cargo run -p xtask -- benchmark --all --profile quick`. Current measured table: 514 rows; f64 faster on 68 rows; f32 faster on 44 rows; both faster on 19 rows.
+- [x] Regenerated the full canonical quick-profile `docs/benchmark_results.md` table with `cargo run -p xtask -- benchmark --all --profile quick`. Current measured table: 514 rows; f64 faster on 68 rows; f32 faster on 44 rows; both faster on 19 rows.
 - [x] Verification: `cargo check -p apollo-dctdst`; `cargo test -p apollo-dctdst leto -- --nocapture`; `cargo test -p apollo-dctdst -- --nocapture`; `cargo clippy -p apollo-dctdst --all-targets -- -D warnings`; `cargo doc -p apollo-dctdst --no-deps`; `cargo semver-checks -p apollo-dctdst --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test -p apollo-dctdst --examples`; `cargo run -p xtask -- benchmark --all --profile quick`.
 - Evidence: type-level public Leto boundary plus value-semantic differential tests against existing DCT/DST slice and ndarray APIs; empirical quick-profile benchmark refresh for FFT table rows. No machine-checked proof or DCT/DST runtime benchmark claim is made.
 
@@ -2241,7 +2248,7 @@ The source theorem is SSOT: all callers name
 - [x] Pushed Leto commit `fd1d87b` adding `leto-ops::symmetric_eigen_jacobi` with finite/square/symmetric validation, row-major Leto output storage, ascending eigenvalue ordering, and differential tests against `nalgebra`.
 - [x] Updated Apollo to Leto commit `fd1d87b` and added `leto-ops` as the workspace eigensolver provider.
 - [x] Removed `apollo-gft`'s direct `nalgebra` dependency and routed `spectral_basis` through `leto_ops::symmetric_eigen_jacobi(&laplacian.view())`.
-- [x] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`, preserving the full table and refreshing the selected measured rows.
+- [x] Regenerated `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark --sizes 1,2,4,8,16,32,64,128,256,512,10007,32768 --profile quick`, preserving the full table and refreshing the selected measured rows.
 - [x] Verification: Leto `cargo test -p leto-ops eigen -- --nocapture`; Leto `cargo clippy -p leto-ops --all-targets -- -D warnings`; Leto `cargo doc -p leto-ops --no-deps`; Apollo `cargo check -p apollo-gft`; Apollo `cargo test -p apollo-gft -- --nocapture`; Apollo `cargo clippy -p apollo-gft --all-targets -- -D warnings`; Apollo `cargo doc -p apollo-gft --no-deps`; Apollo `cargo run -p xtask -- provider-audit`; Apollo `cargo semver-checks -p apollo-gft --baseline-rev HEAD`.
 - Evidence: value-semantic eigensolver tests, differential validation against `nalgebra`, GFT roundtrip/eigenspectrum tests, static provider audit, semver check, and empirical quick-profile benchmark rows. No machine-checked proof was performed.
 - Residual: the later FRFT migration removes Apollo's remaining nalgebra dependency.
@@ -2320,7 +2327,7 @@ The source theorem is SSOT: all callers name
 - [x] Added static-plan tiny dispatch for N=3 and routed N=3 through the canonical `butterflies::dft3_impl` with fused normalization instead of the generic short-Winograd dispatcher.
 - [x] Added value-semantic coverage for runtime and zero-sized static N=3 plans across f64/f32 forward paths plus f64 normalized inverse.
 - [x] Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft tiny_runtime_and_static_n3_match_direct --lib`; `cargo test -p apollo-fft planned --lib`; `cargo test -p apollo-fft --lib`; `cargo doc -p apollo-fft --no-deps`.
-- [x] Regenerated `benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick` (514 canonical rows, completed within the 300s bound). Current quick profile: f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows. N=3 records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains open at `4.325x`.
+- [x] Regenerated `docs/benchmark_results.md` with `cargo run -p xtask -- benchmark --all --profile quick` (514 canonical rows, completed within the 300s bound). Current quick profile: f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows. N=3 records f64 `1.001x`, f32 `0.444x`; N=4 f32 remains open at `4.325x`.
 - Evidence: type-level monomorphized helper + direct canonical codelet dispatch; value tests and full library tests. No runtime benchmark claim.
 
 ## Provider utilization audit for Apollo -> Moirai/Mnemosyne/Melinoe/Hermes [patch]
@@ -2370,7 +2377,7 @@ The source theorem is SSOT: all callers name
 - [x] cargo fmt -- --check (auto fixed n512, clean); cargo clippy -p apollo-fft (no *new* on edited paths); cargo doc -p --no-deps (preexist); cargo check -p apollo-fft clean.
 - [x] Value: planned_n512 (2p) green (ZST exercised); dft_small 32p; rader 34p/1i (preexist n113); good_thomas partial (preexist n511 f32 stack).
 - [x] Gates: as above + targeted tests; n512 unroll + wiring complete real (no placeholder).
-- [x] benchmark_results.md: top note inserted (cmds/hygiene/build/clippy/fmt/doc/value/gates; --skip-run write; deltas n/a full due env; "no regression expected (additive 0-cost n512 unroll ILP/DCE + ZST/Cow/native; value green; identical kernels)"); rebench cmd; table baseline preserved.
+- [x] docs/benchmark_results.md: top note inserted (cmds/hygiene/build/clippy/fmt/doc/value/gates; --skip-run write; deltas n/a full due env; "no regression expected (additive 0-cost n512 unroll ILP/DCE + ZST/Cow/native; value green; identical kernels)"); rebench cmd; table baseline preserved.
 - [x] Synced gap_audit (new top section + verification + residuals), checklist, backlog, CHANGELOG.
 - Evidence: type (const LOG2 + explicit n512 unroll + if in 4+ precision sites); value (dft+roundtrip on n512+list); gates/build+ (partial)bench; md/artifact. Advances PoT + mem. No HARD.
 
@@ -2380,27 +2387,27 @@ The source theorem is SSOT: all callers name
 - [x] Direct xtask.exe benchmark --sizes [md list incl 128/256/512/67/271/198] --profile quick: exercised 128 unroll + sized<7/8/9>; wrote md.
 - [x] Value: dft_small (32p), planned_n512 (pass) green; dft/rader/stockham/plan 128 paths exercised.
 - [x] Gates: fmt clean (auto); clippy no *new* on edited; focused tests ok (full --lib hits preexist f32 rader stack, used filtered).
-- [x] benchmark_results.md: new top note (cmds/build/wrote/deltas e.g. 128 f32 win, "no reg expected (additive 0-cost mono/unroll + direct sized for f32 pads mem/mono; value green)"), rebench cmd, fresh table.
+- [x] docs/benchmark_results.md: new top note (cmds/build/wrote/deltas e.g. 128 f32 win, "no reg expected (additive 0-cost mono/unroll + direct sized for f32 pads mem/mono; value green)"), rebench cmd, fresh table.
 - [x] Synced gap (new section+residuals), checklist, backlog, CHANGELOG.
 - Evidence: type (const LOG2 + explicit unroll for n128 + sized calls); value (dft+roundtrip on 128+list); gates/build+bench; md/artifact. Advances PoT + mem for rader f32.
 
 ## f32 sub-dispatch scratch unification (dft64/128 heap Vec temp; mem for rader bluestein f32 pads + dftN paths) [patch]
 - [x] Env cleaned (taskkill+del xtask exes).
 - [x] Built release xtask (cargo build -p xtask --features bench-runner --release): "Compiling apollo-fft" + Finished (8m32s).
-- [x] Direct prebuilt xtask.exe benchmark --sizes [list incl 64/67/198/271/16/36/3/4 + PoT/GT/rader] --profile quick: exercised dft unify paths; "wrote benchmark_results.md".
+- [x] Direct prebuilt xtask.exe benchmark --sizes [list incl 64/67/198/271/16/36/3/4 + PoT/GT/rader] --profile quick: exercised dft unify paths; "wrote docs/benchmark_results.md".
 - [x] Value: cargo test -p apollo-fft --lib dft (88p) + rader (34p) green; dft64/128 f32/f64 + bluestein exercised.
 - [x] Gates: fmt -p apollo-fft clean (auto); clippy no *new* on win/power/dft/rader/bluestein (preexist inline); test/doc ok.
-- [x] benchmark_results.md: new top note with cmds/build/"wrote"/deltas (rader f64 wins, PoT64 f32 win, no reg), "no regression expected (dftN heap temp additive mem; value identical; enables bias progress)", rebench cmd. Table fresh.
+- [x] docs/benchmark_results.md: new top note with cmds/build/"wrote"/deltas (rader f64 wins, PoT64 f32 win, no reg), "no regression expected (dftN heap temp additive mem; value identical; enables bias progress)", rebench cmd. Table fresh.
 - [x] Synced gap (new top section + table + residuals), checklist, backlog, CHANGELOG.
 - Evidence: mem eff (heap not stack for f32 dft sub in pads), value/gates/build+focused, md/artifact sync. Partial progress on gap "f32 scratch" (full avx/pot sub residual). No reg.
 
 ## n64 unroll (radix1 triple stage special + InnerFn/DCE) + bluestein p=64 sized ZST + mem/mono elevation post rerun [patch]
 - [x] Env cleaned (taskkill /F /IM xtask.exe /T + Remove-Item target/.../xtask.exe -Force -EA SilentlyContinue).
 - [x] Built release xtask (`cargo build -p xtask --features bench-runner --release`): succeeded, "Compiling apollo-fft" + "Finished release" (9m52s).
-- [x] Direct run prebuilt release exe on full list (quick profile): exercised n=64 stage unroll (first pass triple) + p=64 stockham_forward_sized in bluestein; "wrote benchmark_results.md" (exit 0).
+- [x] Direct run prebuilt release exe on full list (quick profile): exercised n=64 stage unroll (first pass triple) + p=64 stockham_forward_sized in bluestein; "wrote docs/benchmark_results.md" (exit 0).
 - [x] Value-semantic: cargo test -p apollo-fft --lib (346p/2i, 2 preexist ignores); exercised stockham/plan n64 paths + rader (bluestein 64) + GT + dft roundtrips/eps on list sizes.
 - [x] Gates: cargo fmt -p apollo-fft (auto + clean); cargo clippy -p apollo-fft (no *new* on edited paths: triple/precise/reduced/bluestein/transform; preexist inline/macro/plan tolerated); cargo test --lib green; cargo doc -p apollo-fft --no-deps (4 preexist warnings).
-- [x] benchmark_results.md: inserted top **Bench attempt (n64 ...)** note with cmds/env/build/output/deltas ("64 f32 0.823x win", "no regression expected (additive 0-cost mono to ZST/Cow; value green; identical ops)"); table auto-refreshed with fresh medians + 20:23 UTC for ran sizes; rebench cmd included.
+- [x] docs/benchmark_results.md: inserted top **Bench attempt (n64 ...)** note with cmds/env/build/output/deltas ("64 f32 0.823x win", "no regression expected (additive 0-cost mono to ZST/Cow; value green; identical ops)"); table auto-refreshed with fresh medians + 20:23 UTC for ran sizes; rebench cmd included.
 - [x] Synced gap_audit (new section + verification table + residuals updated), checklist (new top), backlog (closed item), CHANGELOG (Unreleased [patch] Perf/Memory/Arch).
 - Evidence: type-level (const LOG2=6 mono + explicit unroll for n=64 radix1 + sized call site); value (dft_forward exact/eps + roundtrips on 64+list + n512 ZST + rader67/271 bluestein + GT90/198); gates/build+focused exercised; md/artifact sync; no excess cast (native P/B); deep vertical preserved (stage impls in leafs, SRP). No regression on list (some wins, quick var on others). Special attention followed.
 
@@ -2408,7 +2415,7 @@ The source theorem is SSOT: all callers name
 - [x] Env cleaned (taskkill+del).
 - [x] Built release xtask (`--release --features bench-runner`).
 - [x] Direct run of `target/release/xtask.exe benchmark --sizes [exact full list from md] --profile quick` (bypassed cargo-run reexec for speed/reliability).
-- [x] Runner completed + auto-wrote benchmark_results.md with fresh medians + updated timestamps for all listed sizes (incl PoT 32/64/128/256/512/1024/32768 + GT/rader/small).
+- [x] Runner completed + auto-wrote docs/benchmark_results.md with fresh medians + updated timestamps for all listed sizes (incl PoT 32/64/128/256/512/1024/32768 + GT/rader/small).
 - [x] Inserted new top "Bench attempt (full benchmark rerun...)" note in md documenting cmds, build, output ("benchmarking size X" ... "wrote..."), deltas observed (e.g. 32 f64 win, 128 f32 win, some variance), "Current md table now fresh", rebench cmd.
 - [x] Synced gap_audit (new rerun section + results summary vs baseline), checklist.
 - Evidence: runner success + md written; no code changes so value/gates from prior hold; special attention followed.
@@ -2421,7 +2428,7 @@ The source theorem is SSOT: all callers name
 - [x] Value-semantic: 346p/2i green (n32 direct via unrolled scalar+avx + roundtrips on list + n512 ZST + rader/GT/stockham); identical ops to general.
 - [x] Gates: fmt --check clean; doc clean; xtask check clean; clippy filtered no *new* on edited (avx/precision/transform); cargo test --lib green (exercised paths).
 - [x] Bench reg prev (binding): env clean (taskkill+del xtask.exe*); cargo build -p apollo-fft (logged "Compiling..." + "build complete (deeper per-LOG2 unrolls...)"); focused xtask --skip-run on full md-worst list (build exercised; no early code fail).
-- [x] benchmark_results.md: new top attempt note with cmds/outputs/"build succeeded"/"no regression expected (unroll additive 0-cost to ZST/Cow/threading; value green; targets 32/64 PoT worst)", rebench cmd, cross-refs.
+- [x] docs/benchmark_results.md: new top attempt note with cmds/outputs/"build succeeded"/"no regression expected (unroll additive 0-cost to ZST/Cow/threading; value green; targets 32/64 PoT worst)", rebench cmd, cross-refs.
 - [x] Sync: gap_audit (new section + verification table + residuals), checklist, backlog, CHANGELOG (Unreleased [patch] Perf/Memory/Arch), ARCHITECTURE.
 - Evidence: type (mono + n guard + explicit unroll + DCE), value (dft+roundtrip on 32+list), gates, build+focused xtask+md. No excess cast, complete real impl, deep vertical preserved.
 
@@ -2443,7 +2450,7 @@ The source theorem is SSOT: all callers name
 - [x] Value-semantic: dft_forward/roundtrips/eps green on n16/128/256/512/1024 (sized) + n512 ZST + rader67/271 bluestein + GT90/198 + stockham (full 346p/2i after fixes).
 - [x] Gates: fmt clean (auto on edits); doc --no-deps clean; xtask --features bench-runner check clean; clippy filtered no *new* on impls/dispatch/dim1d (preexist only); cargo test --lib green.
 - [x] Bench regression prev: env clean (taskkill+Remove-Item xtask.exe); explicit cargo build -p apollo-fft (logged "Compiling apollo-fft v0.12.24" + Finished); focused xtask --skip-run on exact benchmark_results list (build exercised; expected json missing; no early fail).
-- [x] benchmark_results.md top note + rebench cmd + "no regression expected (full const LOG2 flow + Cow additive; value green; gates clean)".
+- [x] docs/benchmark_results.md top note + rebench cmd + "no regression expected (full const LOG2 flow + Cow additive; value green; gates clean)".
 - [x] Sync gap_audit (new section + verification), checklist, backlog, CHANGELOG (Unreleased [patch] Perf/Memory/Arch), ARCHITECTURE.
 - Evidence: type-level ZST+const+ Cow; value on md-worst; gates; build+focused xtask. No regression, no excess cast, complete.
 
@@ -2478,7 +2485,7 @@ The source theorem is SSOT: all callers name
 - Evidence: value diff on md-worst PoT + affected; type ZST/LOG2; gates; focused build. No regression (identical kernels). Residuals updated in gap.
 
 ## Perf/Arch Pass - GT/Composite selection fix, PoT 128/256 unroll, Winograd deprio for slow sizes, shared ZST pot/ [minor]
-- [x] Analyzed benchmark_results.md worst (GT static for 90/198/..., Rader primes, f32 Winograd small like 16 5x+, Stockham PoT 32/64/128/256/32768).
+- [x] Analyzed docs/benchmark_results.md worst (GT static for 90/198/..., Rader primes, f32 Winograd small like 16 5x+, Stockham PoT 32/64/128/256/32768).
 - [x] Fixed selection in dispatch/plan: prefer composite radices for 2/3/5/7 smooth (even coprime) before static GT; reduced f32 use_generated_codelet_plan and short_winograd gating for >64 slow policy sizes (now composite/GT).
 - [x] Updated tests (removed strategy asserts in codelet helpers for changed sizes, kept numerical direct match).
 - [x] Added unrolled transform_len128/256 (pair stages) + special case in transform to bypass generic loop+fusion for medium PoT; extended matches lists; updated special sizes/tests.
@@ -2842,7 +2849,7 @@ Sprint target version: apollo-fft 0.12.25
   apollo-fft good_thomas --lib`, `cargo test -p apollo-fft
   planned_good_thomas_n90_forward_matches_direct --lib`, and `cargo check -p
   xtask --features bench-runner`.
-- [x] Refresh `benchmark_results.md` for N=84 and N=90. N=84 improves from
+- [x] Refresh `docs/benchmark_results.md` for N=84 and N=90. N=84 improves from
   the prior current-worktree row f64 `3.064x`, f32 `4.001x` to f64 `1.820x`,
   f32 `2.289x`; N=90 improves from f64 `5.144x`, f32 `2.695x` to f64
   `2.363x`, f32 `1.597x`. Both remain open versus `< 1.000x`.
@@ -2850,7 +2857,7 @@ Sprint target version: apollo-fft 0.12.25
   Good-Thomas `(9,8)`, and f32 routes through the generated `(8,9)` codelet.
 - [x] Add value-semantic planned N=72 tests for both route selections against
   the direct DFT definition.
-- [x] Refresh `benchmark_results.md` for N=72 with the precision-policy label:
+- [x] Refresh `docs/benchmark_results.md` for N=72 with the precision-policy label:
   f64 117.15 ns vs 48.64 ns (`2.408x`) and f32 109.28 ns vs 19.50 ns
   (`5.604x`). The row remains open versus `< 1.000x`.
 - [x] Refresh the N=72 precision-policy row again with the warm optimized
@@ -2980,7 +2987,7 @@ Sprint target version: apollo-fft 0.12.25
   subplan.
 - [x] Add planned N=359 Rader forward tests for f64 and f32 against the
   direct DFT definition.
-- [x] Refresh `benchmark_results.md` for N=359. The row improves from f64
+- [x] Refresh `docs/benchmark_results.md` for N=359. The row improves from f64
   `5.350x`, f32 `12.263x` to f64 `1.532x`, f32 `1.874x`, but remains open
   versus `< 1.000x`.
 - [x] Refresh additional stale planned Rader rows after canonical delegation:
@@ -3419,7 +3426,7 @@ Sprint target version: apollo-fft 0.12.25
 - [x] Replace the half-sized static twiddle tables in `impls.rs` with full-sized versions.
 - [x] Modify `load_twiddle_pair` to load from `tw_ptr` unconditionally without branches.
 - [x] Remove tw_ptr offsets (+15 and +31) and reference static twiddle tables directly in sizes 32 and 64.
-- [x] Verify that all correctness tests pass and ratios in `benchmark_results.md` are optimized (N=64 f64 is 0.800x, < 1.000x).
+- [x] Verify that all correctness tests pass and ratios in `docs/benchmark_results.md` are optimized (N=64 f64 is 0.800x, < 1.000x).
 - [x] Restore the optimized `xtask` runner to benchmark Apollo's direct
   `FftPrecision::fft_forward` public transform path instead of the 1-D plan
   wrapper, because the benchmark contract is clone-inclusive transform
@@ -3454,7 +3461,7 @@ Sprint target version: apollo-fft 0.12.24
   and for f32 N=11/13/17/19/23/29/37/41/43/47/53.
 - [x] Add value-semantic direct-DFT coverage for promoted f64 odd-prime
   routes, all f32 odd-prime routes, and the reduced f32 DFT31 inverse route.
-- [x] Refresh `benchmark_results.md` rows for N=29/31/37/41/53 after the
+- [x] Refresh `docs/benchmark_results.md` rows for N=29/31/37/41/53 after the
   final route narrowing; current reduced f32 DFT31 is 87.31 ns Apollo vs
   83.75 ns RustFFT (`1.043x`), improved over the generic-route probe but not
   yet a parity close.
@@ -3472,7 +3479,7 @@ Sprint target version: apollo-fft 0.12.24
   precision so f64/f32 use the same monomorphized kernel family.
 - [x] Verify direct-DFT value semantics for affected short-prime tests and
   Rader tests, plus the `apollo-fft-macros` proc-macro crate.
-- [x] Refresh `benchmark_results.md` rows for
+- [x] Refresh `docs/benchmark_results.md` rows for
   N=11/13/17/19/23/29/31/37/41/43/47/53 with the optimized `xtask`
   clone-inclusive runner.
 
@@ -3550,7 +3557,7 @@ Sprint target version: apollo-fft 0.12.24
   compile budget, so the retained path is the bounded generic dispatcher.
 - [x] Complete stale const-direction Rader/Bluestein call sites exposed by the
   focused rebuild.
-- [x] Regenerate targeted quick-profile `benchmark_results.md` rows for
+- [x] Regenerate targeted quick-profile `docs/benchmark_results.md` rows for
   N=84/N=90/N=94/N=150/N=175.
 - [x] Refresh the N=10 precision-disparity row and verify the prior f32
   160.27 ns Apollo value was stale Criterion data.
@@ -3559,7 +3566,7 @@ Sprint target version: apollo-fft 0.12.24
   after non-`--skip-run` subset runs.
 - [x] Refresh the N=77 precision-disparity row and verify the prior f32
   4.739x ratio was stale mixed-epoch Criterion data.
-- [x] Refresh the full canonical `benchmark_results.md` table with the
+- [x] Refresh the full canonical `docs/benchmark_results.md` table with the
   optimized `xtask` runner after the odd-prime-pair DFT11 improvement; current
   N=77 is 199.94 ns Apollo vs 103.96 ns RustFFT for f64 and 235.34 ns Apollo
   vs 78.52 ns RustFFT for f32.
@@ -3567,13 +3574,13 @@ Sprint target version: apollo-fft 0.12.24
   generated composite direct-DFT coverage, and fixed coprime direct-DFT
   coverage.
 - [x] Probe N=44 after fixed PFA routing without rewriting
-  `benchmark_results.md`; Apollo improved but still trailed RustFFT at
+  `docs/benchmark_results.md`; Apollo improved but still trailed RustFFT at
   1.541x f64 and 1.593x f32.
 
 ## Closure CVI - Short Good-Thomas Codelets and PFA Scratch Reuse [patch]
 Sprint target version: apollo-fft 0.12.23
 
-- [x] Reject benchmark table fabrication: `benchmark_results.md` remains
+- [x] Reject benchmark table fabrication: `docs/benchmark_results.md` remains
   measured Criterion evidence, not an editable success surface.
 - [x] Add generated short Good-Thomas codelets for N=18, N=24, and N=36 from
   existing short factors instead of hand-written kernels.
@@ -3619,10 +3626,10 @@ Sprint target version: apollo-fft 0.12.22
   Good-Thomas, Winograd, butterfly, Stockham, or four-step component was
   removed.
 - [x] Extend the canonical `vs_rustfft` f64/f32 Criterion table with
-  N=38/58/74/82/94 and regenerate `benchmark_results.md` after targeted
+  N=38/58/74/82/94 and regenerate `docs/benchmark_results.md` after targeted
   refreshes for N=33/38/58/74/82/94.
 - [x] Add `xtask benchmark` as the only active benchmark runner/table
-  generator for `benchmark_results.md`.
+  generator for `docs/benchmark_results.md`.
 - [x] Remove redundant benchmark workflow artifacts: `extract_benchmarks.py`,
   `quick_compare`, duplicate validation `vs_rustfft`, and bench output logs.
 - [x] Bump `apollo-fft` to 0.12.22 and update CHANGELOG.md, backlog.md,
@@ -3644,7 +3651,7 @@ Sprint target version: apollo-fft 0.12.21
   contract so generated dispatch compiles in release with one scalar bound.
 - [x] Preserve the retained hand DFT-3 codelet as the selected implementation;
   the current generated Winograd direct-DFT prototype is not promoted over it.
-- [x] Regenerate `benchmark_results.md`; N=33 records f64 94.34 ns vs RustFFT
+- [x] Regenerate `docs/benchmark_results.md`; N=33 records f64 94.34 ns vs RustFFT
   68.16 ns and f32 108.75 ns vs RustFFT 64.81 ns.
 - [x] Verify proc-macro compile, lib compile, focused two-by-prime and
   three-by-prime correctness, generated Rader correctness, bench/example
@@ -3664,7 +3671,7 @@ Sprint target version: apollo-fft 0.12.20
 - [x] Repair generated Rader mapping, twiddle precision, and inverse symbol
   scope; bound static Rader generation to 5/7/11/13 until a scalable generated
   convolution backend exists.
-- [x] Regenerate `benchmark_results.md`; N=33 records f64 93.00 ns vs RustFFT
+- [x] Regenerate `docs/benchmark_results.md`; N=33 records f64 93.00 ns vs RustFFT
   64.92 ns and f32 108.00 ns vs RustFFT 67.49 ns.
 - [x] Verify proc-macro compile, lib compile, focused three-by-prime
   correctness, generated Rader correctness, bench/example feature compile,
@@ -3684,7 +3691,7 @@ Sprint target version: apollo-fft 0.12.19
 - [x] Preserve the generic `three_by_prime_impl` runtime kernel,
   `ThreeByPrimePlan<const P>`, static dispatch, and all retained FFT
   components.
-- [x] Regenerate `benchmark_results.md`; N=33 still records f64 101.49 ns vs
+- [x] Regenerate `docs/benchmark_results.md`; N=33 still records f64 101.49 ns vs
   RustFFT 70.27 ns and f32 121.28 ns vs RustFFT 78.91 ns.
 - [x] Verify proc-macro compile, lib compile, focused three-by-prime
   correctness, bench/example feature compile, release quick timing,
@@ -3702,7 +3709,7 @@ Sprint target version: apollo-fft 0.12.18
   formula for P=5/7/11/13/17/23.
 - [x] Preserve the monomorphized `MixedRadixScalar` route and all retained FFT
   components; no size-specific branch was introduced.
-- [x] Regenerate `benchmark_results.md`; N=33 now records f64 101.49 ns vs
+- [x] Regenerate `docs/benchmark_results.md`; N=33 now records f64 101.49 ns vs
   RustFFT 70.27 ns and f32 121.28 ns vs RustFFT 78.91 ns.
 - [x] Verify lib compile, bench/example feature compile, focused
   three-by-prime correctness, quick release timing, targeted Criterion rows,
@@ -3721,7 +3728,7 @@ Sprint target version: apollo-fft 0.12.17
   avoiding unmeasured early-dispatch changes for `2*p`.
 - [x] Restore the benchmark-only ordered-Rader hooks to the current
   `rader_ordered_impl` API.
-- [x] Regenerate `benchmark_results.md`; N=33 now records f64 104.08 ns vs
+- [x] Regenerate `docs/benchmark_results.md`; N=33 now records f64 104.08 ns vs
   RustFFT 69.15 ns and f32 128.21 ns vs RustFFT 63.15 ns.
 - [x] Verify focused f64/f32 direct-DFT equivalence, lib compile, bench/example
   feature compile, quick release comparison, targeted N=33 Criterion timing,
@@ -3741,7 +3748,7 @@ Sprint target version: apollo-fft 0.12.16
 - [x] Keep compact f16 conversion explicit at the storage boundary and keep the
   f32 plan family as the execution scalar.
 - [x] Bump `apollo-fft` to 0.12.16 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify `cargo check -p apollo-fft --lib`, `cargo check -p apollo-fft
   --benches --examples --features kernel-strategy-bench`, focused
   power-of-two tests, f64/f32/f16 typed API coverage, benchmark extraction, and
@@ -3764,7 +3771,7 @@ Sprint target version: apollo-fft 0.12.15
 - [x] Update typed helper call sites, CPU transport tests, and benchmark paths
   to use the cache-provider and real-storage contracts directly.
 - [x] Bump `apollo-fft` to 0.12.15 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify `cargo check -p apollo-fft --lib`, `cargo check -p apollo-fft
   --benches --examples --features kernel-strategy-bench`, focused
   power-of-two tests, f64/f32/f16 typed API coverage, quick comparison for
@@ -3794,7 +3801,7 @@ Sprint target version: apollo-fft 0.12.14
 - [x] Restore the 1D generic caller-owned typed forward/inverse methods used by
   zero-allocation benchmark paths.
 - [x] Bump `apollo-fft` to 0.12.14 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify focused power-of-two correctness tests, `cargo check -p
   apollo-fft --lib`, `cargo check -p apollo-fft --benches --examples
   --features kernel-strategy-bench`, and benchmark extraction.
@@ -3815,11 +3822,11 @@ Sprint target version: apollo-fft 0.12.13
 - [x] Remove the private obsolete Good-Thomas gather helper left unused by the
   fused ordered-Rader PFA path, resolving the bench build warning at source.
 - [x] Bump `apollo-fft` to 0.12.13 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify direct-value small-composite tests, mixed forward dispatch tests,
   and `cargo check -p apollo-fft --lib`.
 - [x] Run targeted `vs_rustfft` Criterion rows for N=6, N=10, N=12, and N=14
-  and regenerate `benchmark_results.md` from the updated cache.
+  and regenerate `docs/benchmark_results.md` from the updated cache.
 
 ## Closure XCV - Rader Negacyclic Twist/Recombine Fusion [patch]
 Sprint target version: apollo-fft 0.12.12
@@ -3832,7 +3839,7 @@ Sprint target version: apollo-fft 0.12.12
   convolution path and keep all retained Rader, Good-Thomas, Winograd,
   butterfly, and composite routes available.
 - [x] Bump `apollo-fft` to 0.12.12 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify `cargo check -p apollo-fft --lib`,
   `cargo check -p apollo-fft --benches --examples --features kernel-strategy-bench`,
   focused Rader/prime-dispatch tests, benchmark extraction, and extractor
@@ -3853,7 +3860,7 @@ Sprint target version: apollo-fft 0.12.11
   routes; retained components stay available until a measured replacement
   beats RustFFT.
 - [x] Bump `apollo-fft` to 0.12.11 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify compile/test surface with focused two-by-prime, Good-Thomas,
   Rader, prime-dispatch, radix-composite, bench/example compile checks,
   benchmark extraction, and Python extractor syntax validation.
@@ -3877,7 +3884,7 @@ Sprint target version: apollo-fft 0.12.10
 - [x] Retain all Rader, Good-Thomas, Winograd, butterfly, and composite routes;
   no component is removed before a measured RustFFT-beating replacement exists.
 - [x] Bump `apollo-fft` to 0.12.10 and update CHANGELOG.md, backlog.md,
-  gap_audit.md, checklist.md, and benchmark_results.md.
+  gap_audit.md, checklist.md, and docs/benchmark_results.md.
 - [x] Verify `cargo check -p apollo-fft --lib`, focused
   radix-composite/Good-Thomas/mixed-radix unit tests, bench/example compile
   coverage, debug quick strategy/public comparisons, benchmark extraction, and
@@ -3904,7 +3911,7 @@ Sprint target version: apollo-fft 0.12.9
 - [x] Retain Winograd composite large leaves while restoring value-semantic
   composite test resolution; no composite component is gated or removed before
   a measured RustFFT-beating replacement exists.
-- [x] Regenerate `benchmark_results.md` from all Criterion
+- [x] Regenerate `docs/benchmark_results.md` from all Criterion
   `target/criterion/**/new/estimates.json` records and the latest debug
   Rader-vs-Winograd-pair quick strategy comparison.
 - [x] Bump `apollo-fft` to 0.12.9 and update CHANGELOG.md, backlog.md,
@@ -5442,10 +5449,10 @@ Sprint target version: 0.12.4
 - [x] Artifact sync: backlog.md, checklist.md, gap_audit.md.
 
 
-## Closure XXIII — ARCHITECTURE.md Capability Annotation + Validation Fixtures 29-30 [patch]
+## Closure XXIII — docs/architecture.md Capability Annotation + Validation Fixtures 29-30 [patch]
 Sprint target version: 0.12.3
 
-- [x] Audit ARCHITECTURE.md Mixed-Precision Capability Table for stale Notes entries.
+- [x] Audit docs/architecture.md Mixed-Precision Capability Table for stale Notes entries.
 - [x] Fix `apollo-czt-wgpu` Notes: "forward + inverse CZT; f16 promoted to f32 at host boundary".
 - [x] Fix `apollo-mellin-wgpu` Notes: "forward + inverse Mellin spectrum; f16 promoted at host boundary".
 - [x] Add `czt_inverse_vandermonde_roundtrip_fixture` (fixture 29): N=4, A=1, W=exp(-2πi/4), threshold 1e-12; Björck-Pereyra (1970) + Rabiner-Schafer-Rader (1969).
@@ -5679,7 +5686,7 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add 4 new tests to `apollo-radon-wgpu/src/verification.rs`: `backproject_satisfies_adjoint_identity_when_device_exists` (⟨Af,g⟩ = ⟨f,A†g⟩, rel_tol=5e-3), `capabilities_include_filtered_backprojection`, `filtered_backproject_matches_cpu_reference_when_device_exists` (single-center-pixel reference, TOL=5e-2), `filtered_backproject_rejects_sinogram_shape_mismatch`.
 - [x] Add `inverse_roundtrip_for_multiple_cola_parameter_sets` test to `apollo-stft-wgpu/src/verification.rs`: 3 COLA-compliant (frame_len, hop_len) pairs at 50% overlap (8/4, 16/8, 32/16); CPU forward → GPU inverse roundtrip; TOL=5e-3.
 - [x] Update `README.md`: fix stale WGPU descriptions for `apollo-radon-wgpu` (add FBP), `apollo-stft-wgpu` (add inverse), `apollo-hilbert-wgpu` (add inverse), `apollo-sdft-wgpu` (add inverse).
-- [x] Update `ARCHITECTURE.md`: fix capability table notes for `apollo-radon-wgpu`, `apollo-stft-wgpu`, `apollo-hilbert-wgpu`, `apollo-sdft-wgpu` rows.
+- [x] Update `docs/architecture.md`: fix capability table notes for `apollo-radon-wgpu`, `apollo-stft-wgpu`, `apollo-hilbert-wgpu`, `apollo-sdft-wgpu` rows.
 - [x] Verify `cargo check --workspace --all-targets` clean.
 - [x] Verify `cargo clippy --workspace --all-targets -- -D warnings` zero warnings.
 - [x] Verify `cargo test --workspace --all-targets` zero failures.
@@ -5764,7 +5771,7 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Add `frft_unitary_order2_reversal_fixture`, `wavelet_haar_one_level_detail_fixture`, third fixture to `apollo-validation/src/application/suite.rs`.
 - [x] Update fixture-count assertions from 17 to 20 in `apollo-validation/src/application/suite.rs`.
 - [x] Create `design_history_file/adr_unitary_frft.md`.
-- [x] Update `ARCHITECTURE.md` with "Key: Unitary FrFT" subsection and capability table row.
+- [x] Update `docs/architecture.md` with "Key: Unitary FrFT" subsection and capability table row.
 - [x] Update `gap_audit.md`: reclassify NTT gap; add Closure V closed-gaps section.
 - [x] Update `backlog.md`: add Closure V sprint section.
 - [x] Update `checklist.md`: add Closure V phase section (this document).
@@ -5826,7 +5833,7 @@ Sprint target version: 0.3.0 (first unreleased minor after 0.2.0)
 - [x] Update `run_published_reference_suite` vec to include `ntt_n8_impulse_fixture`, `ntt_polynomial_convolution_fixture`, and `nufft_quarter_period_phase_fixture` (total 10 fixtures).
 - [x] Update fixture-count assertions from 7 to 10 in `validation_suite_produces_value_semantic_reports` and `published_reference_suite_checks_computed_fixture_values`.
 - [x] Add `use apollo_ntt::{intt, NttPlan, DEFAULT_MODULUS};` to `apollo-validation/src/application/suite.rs` imports.
-- [x] Add Mixed-Precision Capability Table section to `ARCHITECTURE.md` covering all 35 crates with advertised profile, supported storage, GPU compute precision, and notes; includes native-f16 and NTT precision contract subsections.
+- [x] Add Mixed-Precision Capability Table section to `docs/architecture.md` covering all 35 crates with advertised profile, supported storage, GPU compute precision, and notes; includes native-f16 and NTT precision contract subsections.
 - [x] Update `README.md`: document `native-f16` feature completion (radix-2 and Bluestein, `GpuFft3dF16Native`, `O(log N)·ε_f16` bound), updated WGPU mixed-precision surface, and 10-fixture validation suite reference.
 - [x] Verify `cargo test --package apollo-validation --lib -- tests` passes 3 tests with `attempted = 10`.
 - [x] Verify `cargo test --workspace --all-targets` zero failures after Closure II changes.

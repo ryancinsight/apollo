@@ -1150,7 +1150,7 @@ Remaining replacement work:
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `6c7899d` (`0.5.0`). This imports dense row-major reshape/into_shape, permute aliases, and row-major to_contiguous materialization for strided/transposed/broadcasted provider views. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `a46dea9` (`0.4.0`). This imports broadcast-aware `binary_map`/`add`/`sub`/`mul`/`div` that write through caller-owned output layouts, covering provider-side `[N,1]`/`[1,C]` elementwise tensor paths without materialized broadcast inputs. Verification: cargo resolver update, provider audit, focused provider-consuming crate checks, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [minor] Pin Apollo's Leto/Leto Ops workspace dependencies to pushed Leto `642d87a3` (`0.3.0`). This imports the provider-side RealScalar generic eigensolver, offset-independent dense view slices, memory-order slice access, unary/scalar-map/dot operations, and Coeus rank-boundary ADR without changing Apollo public APIs. Verification: focused FFT/FRFT/GFT check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
-- [x] [patch] Move `apollo-nufft` 3D separable FFT lane buffers to Mnemosyne scratch. Forward and inverse x/y/z passes now reuse provider-owned `Complex64` scratch slices and call Apollo FFT slice execution directly, removing per-pass temporary `Array1` lane allocation. Verification: NUFFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, workspace docs, and canonical quick-profile `benchmark_results.md` refresh.
+- [x] [patch] Move `apollo-nufft` 3D separable FFT lane buffers to Mnemosyne scratch. Forward and inverse x/y/z passes now reuse provider-owned `Complex64` scratch slices and call Apollo FFT slice execution directly, removing per-pass temporary `Array1` lane allocation. Verification: NUFFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, workspace docs, and canonical quick-profile `docs/benchmark_results.md` refresh.
 - [x] [patch] Replace `apollo-nufft` 3D typed-path thread-local `RefCell<Vec<_>>` scratch with Mnemosyne scratch pools. Type-1 and Type-2 typed 3D NUFFT now build mutable ndarray views over provider-owned scratch slices for grid/mode/output/weight workspaces, preserving public caller-owned `Array3` APIs and value semantics. Verification: NUFFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-ntt` radix-2 butterfly stages through Hermes. Hermes commit `25c261b3` adds exact modular `u64` NTT stage execution with `u128` widening; Apollo pins that revision, adds the workspace Hermes dependency to `apollo-ntt`, and delegates serial and Moirai-chunked stages to the provider kernel. Verification: Hermes modular tests/fmt/clippy/doc; Apollo NTT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-hilbert` analytic-mask scaling through Hermes. Threshold-sized frequency-domain analytic masks now scale positive-frequency interleaved complex lanes by two and negative-frequency lanes by zero using `hermes_simd::scale`, while DC/Nyquist bins and the scalar small-signal formula remain unchanged. Verification: Hilbert fmt/tests/clippy/doc, semver check, and provider audit.
@@ -1159,7 +1159,7 @@ Remaining replacement work:
 - [x] [patch] Route `apollo-stft` frame windowing through Hermes. Threshold-sized forward STFT analysis frames now stage zero-padded real lanes in Mnemosyne scratch and use Hermes elementwise multiplication with the analysis window; inverse WOLA frame windowing extracts real IFFT lanes into Mnemosyne scratch before Hermes multiplication into the existing flat frame workspace. Scalar windowing remains the small-frame formula reference, with Moirai frame scheduling, Leto boundaries, and ndarray validation preserved. Verification: STFT fmt/tests/clippy/doc, semver check, and provider audit.
 - [x] [patch] Route `apollo-sft` direct DFT verification rows through Hermes. The O(N²) reference DFT now materializes one shared interleaved input lane buffer for threshold-sized verification transforms, reuses Mnemosyne thread-local twiddle-lane scratch per row, and delegates complex row reductions to Hermes while preserving the scalar row formula for smaller rows and as the verification oracle. Verification: SFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-radon` adjoint backprojection pixel reductions through Hermes. Threshold-sized angle accumulations now materialize two detector sample lanes and two interpolation-weight lanes per angle in Mnemosyne thread-local scratch before delegating the pixel sum to Hermes, while scalar linear sampling remains the small-path formula reference and forward projection remains the scatter/deposit kernel. Verification: Radon fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
-- [x] [patch] Route `apollo-sht` forward/inverse complex reductions through Hermes. Forward longitude sums now materialize one shared interleaved sample row buffer for threshold-sized rows, inverse synthesis materializes one shared interleaved coefficient buffer for threshold-sized mode sets, and both reuse Mnemosyne thread-local spherical-harmonic lane scratch before delegating complex reductions to Hermes while preserving scalar formulas for smaller workloads plus Moirai latitude-row scheduling. Verification: SHT fmt/tests/clippy/doc, semver check, provider audit, and full quick-profile `benchmark_results.md` refresh.
+- [x] [patch] Route `apollo-sht` forward/inverse complex reductions through Hermes. Forward longitude sums now materialize one shared interleaved sample row buffer for threshold-sized rows, inverse synthesis materializes one shared interleaved coefficient buffer for threshold-sized mode sets, and both reuse Mnemosyne thread-local spherical-harmonic lane scratch before delegating complex reductions to Hermes while preserving scalar formulas for smaller workloads plus Moirai latitude-row scheduling. Verification: SHT fmt/tests/clippy/doc, semver check, provider audit, and full quick-profile `docs/benchmark_results.md` refresh.
 - [x] [patch] Route `apollo-nufft` exact 1D direct rows through Hermes. Type-1 rows now materialize one shared complex value lane buffer for threshold-sized exact transforms, Type-2 rows materialize one shared complex coefficient lane buffer, and both reuse Mnemosyne thread-local phasor-lane scratch per row before delegating complex reductions to Hermes while preserving scalar formulas for smaller workloads plus Moirai output scheduling. Verification: NUFFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-mellin` log-frequency spectrum rows through Hermes. Forward spectrum rows now materialize one shared real interleaved input lane buffer for threshold-sized spectra, inverse rows materialize one shared complex interleaved spectrum lane buffer, and both reuse Mnemosyne thread-local twiddle-lane scratch per row before delegating complex reductions to Hermes while preserving scalar formulas for smaller spectra plus Moirai output scheduling. Verification: Mellin fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-dctdst` direct row reductions through Hermes. Direct DCT-I/II/III/IV and DST-I/II/III/IV rows now materialize basis rows in Mnemosyne thread-local scratch and delegate threshold-sized real reductions to Hermes while preserving scalar formulas for smaller vectors plus Moirai output scheduling. Verification: DCT/DST fmt/tests/clippy/doc, semver check, provider audit, workspace gates, and refreshed benchmarks.
@@ -1186,7 +1186,7 @@ Remaining replacement work:
 - [x] [minor] Add the `apollo-radon-wgpu` Leto host boundary and bump `apollo-radon-wgpu` to `0.2.0`. `RadonWgpuBackend` now accepts Leto 2D image/sinogram views and Leto 1D angle views for forward projection, adjoint backprojection, filtered backprojection, typed forward, and typed inverse execution, borrows contiguous angle views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU ndarray/slice execution. Verification: Radon-WGPU focused Leto tests, full Radon-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the `apollo-sht-wgpu` Leto host boundary and bump `apollo-sht-wgpu` to `0.2.0`. `ShtWgpuBackend` now accepts Leto 2D sample/coefficient views and flat typed 1D sample views for forward, inverse, typed forward, and typed inverse execution, borrows contiguous flat typed views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU ndarray/slice execution. Verification: SHT-WGPU focused Leto tests, full SHT-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the `apollo-gft-wgpu` Leto host boundary and bump `apollo-gft-wgpu` to `0.2.0`. `GftWgpuBackend` now accepts Leto 1D views for forward, inverse, typed forward, and typed inverse execution, borrows contiguous signal/basis views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: GFT-WGPU focused Leto tests, full GFT-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
-- [x] [minor] Add the `apollo-frft-wgpu` Leto host boundary and bump `apollo-frft-wgpu` to `0.2.0`. `FrftWgpuBackend` now accepts Leto 1D views for standard forward/inverse FrFT, unitary forward/inverse DFrFT, and typed forward/inverse execution, borrows contiguous views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: FRFT-WGPU focused Leto tests, full FRFT-WGPU tests, clippy, warning-clean docs, semver check, provider audit, examples target check, and canonical quick-profile `benchmark_results.md` refresh.
+- [x] [minor] Add the `apollo-frft-wgpu` Leto host boundary and bump `apollo-frft-wgpu` to `0.2.0`. `FrftWgpuBackend` now accepts Leto 1D views for standard forward/inverse FrFT, unitary forward/inverse DFrFT, and typed forward/inverse execution, borrows contiguous views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: FRFT-WGPU focused Leto tests, full FRFT-WGPU tests, clippy, warning-clean docs, semver check, provider audit, examples target check, and canonical quick-profile `docs/benchmark_results.md` refresh.
 - [x] [minor] Add the `apollo-ntt-wgpu` Leto host boundary and bump `apollo-ntt-wgpu` to `0.2.0`. `NttWgpuBackend` now accepts Leto 1D views for `u64` forward/inverse NTT and exact `u32` quantized forward/inverse execution, borrows contiguous views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: NTT-WGPU focused Leto tests, full NTT-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the `apollo-mellin-wgpu` Leto host boundary and bump `apollo-mellin-wgpu` to `0.3.0`. `MellinWgpuBackend` now accepts Leto 1D views for forward spectrum, typed forward spectrum, and inverse reconstruction, borrows contiguous views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: Mellin-WGPU focused Leto tests, full Mellin-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the `apollo-hilbert-wgpu` Leto host boundary and bump `apollo-hilbert-wgpu` to `0.2.0`. `HilbertWgpuBackend` now accepts Leto 1D views for analytic signal, quadrature forward, typed forward, inverse, and typed inverse execution, borrows contiguous views through `Cow`, copies strided views once into logical host order, and returns Mnemosyne-backed Leto arrays while preserving WGPU slice execution. Verification: Hilbert-WGPU focused Leto tests, full Hilbert-WGPU tests, clippy, warning-clean docs, semver check, provider audit, and examples target check.
@@ -1206,7 +1206,7 @@ Remaining replacement work:
 - [x] [minor] Add the SDFT public Leto direct-bin boundary and bump `apollo-sdft` to `0.2.0`. `SdftPlan::direct_bins_leto`, `SdftPlan::direct_bins_leto_typed`, and `SdftPlan::state_from_window_leto` accept Leto 1D views, reuse existing slice execution contracts, and return Mnemosyne-backed Leto arrays for direct-bin outputs. Verification: SDFT check, focused Leto differential tests, full SDFT tests, clippy, docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the SFT public Leto sparse spectrum boundary and bump `apollo-sft` to `0.2.0`. `SparseFftPlan::forward_leto`, `SparseFftPlan::inverse_leto`, `SparseFftPlan::forward_leto_typed`, and `SparseFftPlan::inverse_leto_typed` accept Leto 1D views and return sparse spectra or Mnemosyne-backed Leto arrays. The existing slice APIs remain the validation oracle; contiguous views borrow and strided views copy once into logical order. Verification: SFT check, focused Leto differential tests, full SFT tests, clippy, docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the Hilbert public Leto analytic/quadrature boundary and bump `apollo-hilbert` to `0.4.0`. `HilbertPlan::analytic_signal_leto`, `HilbertPlan::transform_leto`, and `HilbertPlan::transform_leto_typed` accept Leto 1D views and return Mnemosyne-backed Leto arrays. Existing slice APIs remain the validation oracle; contiguous views borrow and strided views copy once into logical order. Verification: Hilbert check, focused Leto differential tests, full Hilbert tests, clippy, docs, semver check, provider audit, and examples target check.
-- [x] [minor] Add the DCT/DST public Leto 1D/2D/3D boundary and bump `apollo-dctdst` to `0.2.0`. `DctDstPlan` now accepts Leto 1D/2D/3D views for forward and inverse transforms, including typed 1D storage, and returns Mnemosyne-backed Leto arrays. ndarray and slice APIs remain validation oracles. Verification: DCT/DST check, focused Leto differential tests, full DCT/DST tests, clippy, docs, semver check, provider audit, examples target check, and full quick-profile `benchmark_results.md` refresh.
+- [x] [minor] Add the DCT/DST public Leto 1D/2D/3D boundary and bump `apollo-dctdst` to `0.2.0`. `DctDstPlan` now accepts Leto 1D/2D/3D views for forward and inverse transforms, including typed 1D storage, and returns Mnemosyne-backed Leto arrays. ndarray and slice APIs remain validation oracles. Verification: DCT/DST check, focused Leto differential tests, full DCT/DST tests, clippy, docs, semver check, provider audit, examples target check, and full quick-profile `docs/benchmark_results.md` refresh.
 - [x] [minor] Add the CZT public Leto 1D boundary and bump `apollo-czt` to `0.3.0`. `CztPlan::forward_leto`, `CztPlan::inverse_leto`, `CztPlan::forward_leto_typed`, `CztPlan::inverse_leto_typed`, and `czt_leto` accept Leto 1D views and return Mnemosyne-backed Leto arrays. `CztStorage` now owns canonical typed slice execution hooks reused by ndarray arrays and Leto views. Verification: CZT check, value/property tests, clippy, docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the DHT multidimensional Leto boundary and bump `apollo-dht` to `0.2.0`. `DhtPlan::forward_2d_leto`, `DhtPlan::inverse_2d_leto`, `DhtPlan::forward_3d_leto`, and `DhtPlan::inverse_3d_leto` accept Leto 2D/3D views and return Mnemosyne-backed Leto arrays. The ndarray API remains as the validation oracle while Leto inputs reuse the existing separable DHT kernels. Verification: DHT check, focused Leto differential tests, full DHT tests, clippy, docs, semver check, provider audit, and examples target check.
 - [x] [minor] Add the QFT public Leto 1D boundary and bump `apollo-qft` to `0.2.0`. `QftPlan::forward_leto`, `QftPlan::inverse_leto`, `QftPlan::forward_leto_typed`, `QftPlan::inverse_leto_typed`, `qft_leto`, and `iqft_leto` accept Leto 1D views and return Mnemosyne-backed Leto arrays. `QftStorage` now owns canonical typed slice execution hooks reused by ndarray arrays and Leto views. Verification: QFT check, value tests, clippy, docs, semver check, provider audit, and examples target check.
@@ -1215,7 +1215,7 @@ Remaining replacement work:
 - [x] [minor] Add the FRFT typed Leto storage boundary and bump `apollo-frft` to `0.2.0`. `FrftPlan::forward_leto_typed`, `FrftPlan::inverse_leto_typed`, and `frft_leto_typed` accept `leto::ArrayView1<'_, T>` for `T: FrftStorage` and return Mnemosyne-backed Leto arrays. The `FrftStorage` contract now exposes canonical slice execution hooks reused by ndarray arrays and Leto views. Verification: FRFT check, focused typed Leto parity tests, clippy, docs, semver check, and provider audit.
 - [x] [minor] Add the FRFT public Leto 1D boundary. `FrftPlan::forward_leto`, `FrftPlan::inverse_leto`, and `frft_leto` accept `leto::ArrayView1<'_, Complex64>` and return Mnemosyne-backed Leto arrays. Contiguous views borrow storage and strided views copy once into logical order before reusing the canonical slice execution path. Verification: FRFT check, focused Leto parity tests, clippy, docs, and semver check.
 - [x] [major] Remove Apollo's remaining nalgebra dependency by migrating unitary FRFT to Leto. `apollo-frft` now builds the Grünbaum matrix and eigenbasis with `leto::Array2<f64>` and `leto_ops::symmetric_eigen_jacobi`; `apollo-frft-wgpu` uses an explicit `eigenvectors_column_major_f32()` buffer boundary; stale `nalgebra` declarations were removed from `apollo-frft`, `apollo-fft`, and the workspace root; `Cargo.lock` no longer contains nalgebra. Verification: FFT/FRFT/FRFT-WGPU checks; FRFT unitary tests; FRFT/FRFT-WGPU clippy/docs; provider audit; semver check; `rg` found no nalgebra/SymmetricEigen/DMatrix source, manifest, or lockfile references.
-- [x] [patch] Replace `apollo-gft`'s nalgebra eigensolver adapter with Leto. Leto commit `fd1d87b` adds `leto-ops::symmetric_eigen_jacobi` with finite/square/symmetric validation and differential tests against `nalgebra`; Apollo pins that revision, adds `leto-ops`, removes `apollo-gft`'s direct `nalgebra` dependency, and routes `spectral_basis` through the Leto eigensolver. Verification: Leto eigensolver tests/clippy/doc; Apollo GFT check/tests/clippy/doc/provider-audit/semver. `benchmark_results.md` refreshed selected quick-profile rows with measured data. The later FRFT migration removes Apollo's remaining nalgebra dependency.
+- [x] [patch] Replace `apollo-gft`'s nalgebra eigensolver adapter with Leto. Leto commit `fd1d87b` adds `leto-ops::symmetric_eigen_jacobi` with finite/square/symmetric validation and differential tests against `nalgebra`; Apollo pins that revision, adds `leto-ops`, removes `apollo-gft`'s direct `nalgebra` dependency, and routes `spectral_basis` through the Leto eigensolver. Verification: Leto eigensolver tests/clippy/doc; Apollo GFT check/tests/clippy/doc/provider-audit/semver. `docs/benchmark_results.md` refreshed selected quick-profile rows with measured data. The later FRFT migration removes Apollo's remaining nalgebra dependency.
 - [x] [major] Move Apollo GFT graph-domain adjacency storage from `nalgebra::DMatrix` to Leto. `GraphAdjacency` now owns `leto::Array2<f64>`, `GftPlan::from_adjacency` accepts `leto::ArrayView2`, and the combinatorial Laplacian is built in Leto storage. The later Leto eigensolver increment removes the remaining `apollo-gft` nalgebra adapter. Verification: Leto focused checks, Apollo GFT/GFT-WGPU/validation checks/tests/clippy/docs/provider-audit.
 - [x] [minor] Add the first Apollo FFT boundary that consumes Leto as the ndarray replacement surface. `apollo-fft` now accepts contiguous or strided Leto 1D views, borrows contiguous storage through `Cow`, returns Mnemosyne-backed Leto arrays, and validates values against the existing ndarray array API. Apollo pins Leto `9f639b73`, resolves one Mnemosyne source, and disables ndarray `matrixmultiply-threading`.
 - [x] [patch] Consume Mnemosyne `ScratchBank<T, const N>` in `apollo-fft` scratch/workspace modules. Apollo now keeps domain role names and sealed complex dispatch locally while provider-owned fixed scratch banks hold the per-role pools. Verification: Mnemosyne provider checks plus Apollo check, clippy, Rader tests, slice API tests, doc, provider audit, and touched-file rustfmt.
@@ -1225,7 +1225,7 @@ Remaining replacement work:
 - [x] [patch] Wire `apollo-fft` pointwise mixed-radix fallback through Hermes `PreferredArch` vectors. The x86 AVX/FMA complex kernel remains runtime-gated for the current hot path; non-FMA and non-x86 execution now uses Hermes monomorphized vector load/store chunks with one shared precise/reduced complex pair formula. Verification: `cargo fmt -p apollo-fft -- --check`; `cargo check -p apollo-fft`; `cargo clippy -p apollo-fft --all-targets -- -D warnings`; `cargo test -p apollo-fft --lib rader`; `cargo test -p apollo-fft --test slice_api`; `cargo run -p xtask -- provider-audit`.
 - [x] [minor] Add Apollo Leto provider surface and validation-boundary use. The initial boundary enabled `std` and `ndarray-compat`; Apollo now consumes native Leto arrays from merged provider commit `446d248` without the retired compatibility feature or a Rust `ndarray` dependency. `xtask provider-audit` reports Leto usage. Verification: locked native Leto interop tests and the provider audit.
 - [x] [minor] Add `apollo-fft` 1D slice-owned real-storage execution. `RealFftData` now owns additive slice methods for forward and inverse 1D allocation boundaries, and the `f64`/`f32`/`f16` implementations route public slice wrappers through one owned vector plus in-place `FftPlan1D` slice execution instead of the previous `Array1` bridge plus result copy. Version bumped to `apollo-fft` `0.13.0`. Verification: fmt, slice API integration tests, check, clippy, doc. SemVer check attempted but blocked because `apollo-fft` is not published in the registry.
-- [x] [patch] Consolidate tiny direct FFT plan dispatch for N=2/3/4 and route runtime/static N=3 plans directly to the canonical `butterflies::dft3_impl` codelet. This removes duplicated runtime match blocks, avoids the generic short-Winograd dispatcher for N=3, preserves zero-sized static plan behavior, and verifies runtime/static f64/f32 N=3 value semantics. Verification: fmt, check, clippy, focused N=3 test, planned tests, full `apollo-fft` library tests, docs, and full canonical quick benchmark refresh. Current quick `benchmark_results.md`: 514 rows regenerated; f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows; N=3 f64 `1.001x`, f32 `0.444x`.
+- [x] [patch] Consolidate tiny direct FFT plan dispatch for N=2/3/4 and route runtime/static N=3 plans directly to the canonical `butterflies::dft3_impl` codelet. This removes duplicated runtime match blocks, avoids the generic short-Winograd dispatcher for N=3, preserves zero-sized static plan behavior, and verifies runtime/static f64/f32 N=3 value semantics. Verification: fmt, check, clippy, focused N=3 test, planned tests, full `apollo-fft` library tests, docs, and full canonical quick benchmark refresh. Current quick `docs/benchmark_results.md`: 514 rows regenerated; f64 faster on 101 rows, f32 faster on 71 rows, both faster on 33 rows; N=3 f64 `1.001x`, f32 `0.444x`.
 - [x] [patch] Add Apollo-local provider utilization audit and contract for Moirai/Mnemosyne/Melinoe/Hermes. Delivered `xtask provider-audit`, static crate-level signals for Moirai/Mnemosyne/Melinoe/Hermes/Rayon/WGPU and memory/dispatch patterns, provider contract docs, and artifact sync. Apollo consumes providers from Git, so provider changes must be committed and pushed before Apollo can update revisions.
 - [x] [patch] Update Apollo lockfile to pushed Hermes commit `7eb0b70` after adding Hermes Cow state accessors for zero-copy borrowed/owned contract verification. Verification: provider audit, Hermes Cow tests, and `cargo check -p apollo-fft`.
 - [x] [patch] Add `apollo-fft` domain `FftInterleavedCow` storage view so read-only interleaved FFT paths borrow caller storage and detach to owned storage exactly once on mutation.
@@ -1385,7 +1385,7 @@ Remaining replacement work:
   restored.
 - [x] [patch] Reject N=242 reruns. They failed to improve the retained ratio
   record f64 `1.548x`, f32 `2.494x`; the exact retained timing columns were
-  not recoverable from current artifacts, so `benchmark_results.md` keeps the
+  not recoverable from current artifacts, so `docs/benchmark_results.md` keeps the
   best measured row from this turn: f64 `1.585x`, f32 `3.211x`.
 - [x] [patch] Remove duplicate `apollo-wgpu-helpers` manifest entries from
   WGPU backend crates. The duplicates blocked workspace manifest loading and
@@ -1868,7 +1868,7 @@ Remaining replacement work:
 - [x] [patch] Add an N=72 planned-route scalar policy: f64 retains the
   static Good-Thomas `(9,8)` route, while f32 uses a generated `(8,9)`
   codelet through the `ShortDft<72>` surface. Focused direct-DFT tests pass
-  for both route selections, and `benchmark_results.md` labels the row as
+  for both route selections, and `docs/benchmark_results.md` labels the row as
   `Precision Policy`.
 - [x] [patch] Replace the planned f32 N=72 prime-2/3 composite executor with
   a generated twiddle-free `(8,9)` codelet. The default `cargo xtask` row
@@ -2236,7 +2236,7 @@ Remaining replacement work:
   costs, and N=94 is the direct `2*p` promoted-prime route. A focused N=44
   probe improved Apollo from the prior table row but still missed RustFFT at
   120.96 ns vs 78.51 ns for f64 and 145.49 ns vs 91.35 ns for f32, so
-  `benchmark_results.md` was not rewritten for that row. Targeted
+  `docs/benchmark_results.md` was not rewritten for that row. Targeted
   quick-profile rows were regenerated for N=84/N=90/N=94/N=150/N=175. N=94
   remains a RustFFT win at 0.729x f64 and 0.519x f32; N=150 f64 is near parity
   at 1.042x; N=84/N=90/N=175 and f32 N=150 remain misses that need route-cost
@@ -2269,7 +2269,7 @@ Remaining replacement work:
   twiddle-free Good-Thomas row/column codelet across the promoted-prime family,
   and `xtask benchmark` now defaults to a quick Criterion profile plus an
   optimized `bench-quick` Cargo profile for iterative table refreshes.
-  `benchmark_results.md` was regenerated for N=38/N=58/N=74/N=82/N=94.
+  `docs/benchmark_results.md` was regenerated for N=38/N=58/N=74/N=82/N=94.
   N=94 remains faster than RustFFT in both precisions; N=38/N=58/N=74/N=82
   remain measured misses, with N=74 f32 the largest current regression.
 
@@ -2289,7 +2289,7 @@ Remaining replacement work:
   includes N=38/N=58/N=74/N=82/N=94. Fresh targeted rows show N=33 still
   misses RustFFT at 1.419x f64 and 1.778x f32, while N=94 now beats RustFFT at
   0.665x f64 and 0.726x f32. `xtask benchmark` is now the single active
-  benchmark runner/table generator for `benchmark_results.md`; the old Python
+  benchmark runner/table generator for `docs/benchmark_results.md`; the old Python
   extractor, quick comparison example, duplicate validation `vs_rustfft` bench,
   and bench output logs were removed. `apollo-fft` bumped to 0.12.22.
 
@@ -2302,7 +2302,7 @@ Remaining replacement work:
   carries the prime-pair table capability required by generated dispatch in
   release builds. The hand DFT-3 codelet remains selected because the current
   generated Winograd direct-DFT prototype has not been proven faster.
-  `benchmark_results.md` was regenerated after a targeted N=33 Criterion
+  `docs/benchmark_results.md` was regenerated after a targeted N=33 Criterion
   refresh; N=33 records f64 Apollo/RustFFT 94.34 ns / 68.16 ns and f32
   Apollo/RustFFT 108.75 ns / 64.81 ns. `apollo-fft` bumped to 0.12.21.
 
@@ -2316,7 +2316,7 @@ Remaining replacement work:
   row codelet dispatch. Generated Rader now matches the runtime generator
   convention and uses exact f64 constants; direct static Rader expansion is
   intentionally bounded to 5/7/11/13 until the generator can emit a scalable
-  convolution form. `benchmark_results.md` was regenerated from the canonical
+  convolution form. `docs/benchmark_results.md` was regenerated from the canonical
   Criterion cache; N=33 records f64 Apollo/RustFFT 93.00 ns / 64.92 ns and f32
   Apollo/RustFFT 108.00 ns / 67.49 ns. `apollo-fft` bumped to 0.12.20.
 
@@ -2329,7 +2329,7 @@ Remaining replacement work:
   generic `three_by_prime_impl` over `MixedRadixScalar` and
   `ThreeByPrimePlan<const P>`, so the runtime path stays statically
   dispatched and no retained Rader, Good-Thomas, Winograd, butterfly,
-  Stockham, or four-step component was removed. `benchmark_results.md` was
+  Stockham, or four-step component was removed. `docs/benchmark_results.md` was
   regenerated from the canonical Criterion cache; N=33 still records f64
   Apollo/RustFFT 101.49 ns / 70.27 ns and f32 Apollo/RustFFT 121.28 ns /
   78.91 ns. `apollo-fft` bumped to 0.12.19.
@@ -2342,7 +2342,7 @@ Remaining replacement work:
   factor. The hot transform body now indexes precomputed CRT maps rather than
   calculating modulo-based input/output routes. This is the stable Rust
   foundation for a future proc-macro SSA route generator and keeps the current
-  code maintainable and verifiable. `benchmark_results.md` was regenerated
+  code maintainable and verifiable. `docs/benchmark_results.md` was regenerated
   from completed Criterion rows; N=33 now records f64 Apollo/RustFFT
   101.49 ns / 70.27 ns and f32 Apollo/RustFFT 121.28 ns / 78.91 ns.
   `apollo-fft` bumped to 0.12.18.
@@ -2356,7 +2356,7 @@ Remaining replacement work:
   family before `cached_prime23_radices`. Existing radix-composite,
   Good-Thomas, Rader, Winograd, butterfly, Stockham, and four-step components
   remain available. The benchmark-only ordered-Rader hook was also updated to
-  the current ordered-Rader API. `benchmark_results.md` was regenerated from
+  the current ordered-Rader API. `docs/benchmark_results.md` was regenerated from
   Criterion; N=33 now records f64 Apollo/RustFFT 104.08 ns / 69.15 ns and f32
   Apollo/RustFFT 128.21 ns / 63.15 ns. `apollo-fft` bumped to 0.12.17.
 
@@ -2372,7 +2372,7 @@ Remaining replacement work:
   transforming the mapped output in place. Compact f16 still converts only at
   the storage boundary and executes through the f32 plan family. No Rader,
   Good-Thomas, Winograd, butterfly, Stockham, or four-step component was
-  removed. `benchmark_results.md` remains the single canonical
+  removed. `docs/benchmark_results.md` remains the single canonical
   Apollo-vs-RustFFT f64/f32 clone-inclusive table and was regenerated from the
   current Criterion cache snapshot. `apollo-fft` bumped to 0.12.16.
 
@@ -2387,7 +2387,7 @@ Remaining replacement work:
   N=16/N=32 stay on the faster current short-codelet route, and all retained
   Rader, Good-Thomas, Winograd, butterfly, Stockham, and four-step components
   remain available until measured replacements beat RustFFT.
-  `benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
+  `docs/benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
   clone-inclusive table and was regenerated from the current Criterion cache
   snapshot. `apollo-fft` bumped to 0.12.15.
 
@@ -2405,7 +2405,7 @@ Remaining replacement work:
   zero-allocation benchmark compilation. Rader, Good-Thomas, Winograd,
   butterfly, Stockham, and four-step implementations remain available until a
   measured replacement beats RustFFT.
-  `benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
+  `docs/benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
   clone-inclusive table and was regenerated from the current Criterion cache
   snapshot. `apollo-fft` bumped to 0.12.14.
 
@@ -2420,7 +2420,7 @@ Remaining replacement work:
   The obsolete private Good-Thomas gather helper left unused by the fused
   ordered-Rader PFA path was removed to resolve the bench build dead-code
   warning at source.
-  `benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
+  `docs/benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
   clone-inclusive table. `apollo-fft` bumped to 0.12.13.
 
 ## Closed in this sprint (Closure XCV phase)
@@ -2431,7 +2431,7 @@ Remaining replacement work:
   standalone full passes over the negacyclic half while keeping the same
   mathematical decomposition, fused radix-composite pointwise dispatch, and all
   retained Rader, Good-Thomas, Winograd, butterfly, and composite routes.
-  `benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
+  `docs/benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
   clone-inclusive table. `apollo-fft` bumped to 0.12.12.
 
 ## Closed in this sprint (Closure XCIV phase)
@@ -2445,7 +2445,7 @@ Remaining replacement work:
   negacyclic convolution can fuse supported radix-composite forward FFT stages
   with spectrum multiplication instead of running a separate pointwise pass.
   No Rader, Good-Thomas, Winograd, butterfly, or composite route was removed.
-  `benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
+  `docs/benchmark_results.md` remains the single canonical Apollo-vs-RustFFT f64/f32
   clone-inclusive table. `apollo-fft` bumped to 0.12.11.
 
 ## Closed in this sprint (Closure XCIII phase)
@@ -2460,7 +2460,7 @@ Remaining replacement work:
   Winograd, butterfly, or composite route was removed; retained components stay
   available until a measured replacement beats RustFFT. The retained Winograd
   N=82 composite codelet now carries the required `PrimePairTable<41, 20>`
-  bound. `benchmark_results.md` was regenerated from the Criterion cache plus
+  bound. `docs/benchmark_results.md` was regenerated from the Criterion cache plus
   the latest quick strategy and selected public comparisons. `apollo-fft`
   bumped to 0.12.10.
 
@@ -2479,7 +2479,7 @@ Remaining replacement work:
   compile-time constants per prime dispatch arm.
   Winograd large-composite leaves remain available; no composite component is
   gated or removed before a measured RustFFT-beating replacement exists.
-  `benchmark_results.md` was regenerated from all available Criterion
+  `docs/benchmark_results.md` was regenerated from all available Criterion
   `new/estimates.json` records and the latest debug Rader-vs-Winograd-pair
   quick strategy comparison. `apollo-fft` bumped to 0.12.9.
 
@@ -3242,7 +3242,7 @@ Remaining replacement work:
   GPU argument-reduction error at phase magnitudes up to ~1254 rad for N=400).
 - Final state: `cargo test --workspace` 0 FAILED, 0 ignored across all 38+ crates.
 
-- [x] [patch] ARCHITECTURE.md Mixed-Precision Capability Table: added "forward + inverse CZT" and
+- [x] [patch] docs/architecture.md Mixed-Precision Capability Table: added "forward + inverse CZT" and
   "forward + inverse Mellin spectrum" annotations to the Notes column for `apollo-czt-wgpu` and
   `apollo-mellin-wgpu`, matching the established pattern for other bidirectional WGPU crates.
 - [x] [patch] apollo-validation two new published-reference fixtures (fixtures 29 and 30):
@@ -3392,7 +3392,7 @@ Remaining replacement work:
 - [x] [minor] GPU Radon Filtered Backprojection (`apollo-radon-wgpu`): new `radon_fbp_filter.wgsl` with entry `radon_fbp_filter` performing circular convolution of each projection row with the ramp filter impulse response `h = IFFT(R)`, `R[k] = 2π·|signed_k|/(N·Δ)` (Bracewell & Riddle 1967; Shepp & Logan 1974). `h` computed host-side via `apollo_radon::ramp_filter_projection` applied to unit impulse, then cast to f32. Reuses existing 4-binding bind group layout. Two-pass single encoder: filter pass → backproject pass. Host-side `π/angle_count` normalization. `fbp_filter_pipeline` in `RadonGpuKernel`. `RadonWgpuBackend::execute_filtered_backproject`. `supports_filtered_backprojection` capability flag. `forward_inverse_and_fbp` constructor. 4 verification tests: adjoint identity (⟨Af,g⟩=⟨f,A†g⟩), FBP capability flags, FBP matches CPU reference (TOL=5e-2), FBP shape mismatch rejection.
 - [x] [patch] Radon-WGPU adjoint identity test: `backproject_satisfies_adjoint_identity_when_device_exists` verifies ⟨A·f, g⟩_sinogram = ⟨f, A†·g⟩_image (Natterer 2001, §II.2) to relative tolerance 5e-3. Uses CPU forward (f64) + GPU backproject (f32). Tests the mathematical definition of the adjoint operator.
 - [x] [patch] STFT-WGPU parameterized roundtrip test: `inverse_roundtrip_for_multiple_cola_parameter_sets` tests three COLA-compliant parameter sets (frame_len=8/hop=4, frame_len=16/hop=8, frame_len=32/hop=16) with analytical sine/cosine reference signals. CPU forward → GPU inverse → compare with CPU inverse reference at TOL=5e-3.
-- [x] [patch] Documentation sync: updated `README.md` WGPU crate descriptions to reflect GPU inverse capabilities for `apollo-radon-wgpu` (FBP added), `apollo-stft-wgpu` (inverse WOLA), `apollo-hilbert-wgpu` (inverse analytic-mask), `apollo-sdft-wgpu` (inverse IDFT). Updated `ARCHITECTURE.md` Mixed-Precision Capability Table notes for the same four crates.
+- [x] [patch] Documentation sync: updated `README.md` WGPU crate descriptions to reflect GPU inverse capabilities for `apollo-radon-wgpu` (FBP added), `apollo-stft-wgpu` (inverse WOLA), `apollo-hilbert-wgpu` (inverse analytic-mask), `apollo-sdft-wgpu` (inverse IDFT). Updated `docs/architecture.md` Mixed-Precision Capability Table notes for the same four crates.
 
 ## Closed in this sprint (Closure IX phase)
 - [x] [minor] GPU inverse STFT WOLA (`apollo-stft-wgpu`): new `stft_inverse.wgsl` with two-pass WOLA reconstruction (`stft_inverse_frames`: per-(frame, local_j) windowed IDFT using interleaved f32 spectrum; `stft_inverse_ola`: per-sample OLA with Hann² weight normalization); shared 3-binding layout reusing existing `bind_group_layout`; `inverse_frames_pipeline` + `inverse_ola_pipeline` in `StftGpuKernel`; `StftGpuKernel::execute_inverse` (2-pass single encoder); `StftWgpuBackend::execute_inverse(plan, spectrum, signal_len)` + `execute_inverse_typed_into`; `forward_and_inverse` capability constructor; 3 new verification tests (`capabilities_reflect_forward_and_inverse_surface`, `inverse_roundtrip_recovers_cola_signal_when_device_exists`, `inverse_matches_cpu_reference_for_16sample_signal`). Basis: WOLA identity (Allen–Rabiner 1977, Theorem 1).
@@ -3435,7 +3435,7 @@ Remaining replacement work:
 - [x] Add `UnitaryFrftGpuKernel` to `apollo-frft-wgpu`: 3-pass (V^T·x, phase, V·c) GPU compute; V precomputed from `GrunbaumBasis` and uploaded as f32 storage buffer; 3 sequential submissions with `device.poll(Wait)` enforce cross-workgroup storage ordering. Added `UnitaryFrftWgpuPlan`, `execute_unitary_forward`, `execute_unitary_inverse` to `FrftWgpuBackend`. 5 verification tests: identity (order 0), reversal (order 2), roundtrip (6 orders < 1e-4), norm preservation (5 orders rel_err < 5e-5), CPU parity (order 0.5 < 1e-3).
 - [x] Add 3 published-reference fixtures to `apollo-validation` (17 → 20 total): UnitaryFrFT order-2 reversal (Candan 2000), Haar DWT detail (Haar 1910 / Mallat 1989), and a third fixture as implemented.
 - [x] Add `adr_unitary_frft.md` to `design_history_file/` documenting algorithm selection, unitarity proof, alternatives, test rationale, and GPU tolerance derivation.
-- [x] Update `ARCHITECTURE.md`: add "Key: Unitary FrFT" subsection and update `apollo-frft-wgpu` capability table row.
+- [x] Update `docs/architecture.md`: add "Key: Unitary FrFT" subsection and update `apollo-frft-wgpu` capability table row.
 - [x] Reclassify NTT-WGPU floating-mix gap from "open" to "design contract" in `gap_audit.md`; remove from open-gaps list.
 
 ## Closed in this sprint (Closure IV phase)
@@ -3463,7 +3463,7 @@ Remaining replacement work:
 - [x] Add NTT polynomial convolution published-reference fixture to `apollo-validation`: INTT(NTT([1,2,0,0])⊙NTT([3,4,0,0]))=[3,10,8,0] from (1+2x)(3+4x)=3+10x+8x² (Pollard 1971 Convolution Theorem); verified at PUBLISHED_FIXTURE_LIMIT=1×10⁻¹².
 - [x] Add NUFFT quarter-period phase published-reference fixture to `apollo-validation`: Type-1 with single source at x=L/4, value=1+0i, N=4 → F=[1,-i,-1,i] (Dutt and Rokhlin 1993 definition, exp(-πi·k_signed/2) sequence); verified at PUBLISHED_FIXTURE_LIMIT=1×10⁻¹².
 - [x] Update `apollo-validation` fixture-count assertions from 7 to 10 to reflect the three new published-reference entries.
-- [x] Add Mixed-Precision Capability Table to `ARCHITECTURE.md` as authoritative per-crate precision surface record covering all 35 crates with advertised profile, supported storage types, GPU compute precision, and notes.
+- [x] Add Mixed-Precision Capability Table to `docs/architecture.md` as authoritative per-crate precision surface record covering all 35 crates with advertised profile, supported storage types, GPU compute precision, and notes.
 - [x] Update `README.md` to document the `native-f16` feature completion in `apollo-fft-wgpu` (radix-2 and Bluestein/chirp-Z, `GpuFft3dF16Native`, `O(log N)·ε_f16` error bound), the updated WGPU mixed-precision surface, and the 10-fixture validation suite.
 
 ## Closed in this sprint (Performance & Native GPU Precision phase)
