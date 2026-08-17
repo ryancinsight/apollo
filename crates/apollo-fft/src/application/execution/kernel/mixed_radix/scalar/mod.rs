@@ -1,6 +1,6 @@
 mod bluestein_cache;
 mod impls;
-pub(crate) mod plan_scratch;
+pub mod plan_scratch;
 mod rader;
 pub(crate) mod simd;
 mod small_pot;

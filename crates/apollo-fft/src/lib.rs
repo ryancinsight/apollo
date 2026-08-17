@@ -45,6 +45,8 @@ pub mod infrastructure;
 /// Canonical public API functions.
 pub mod api;
 
+pub use application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
+
 #[cfg(test)]
 mod lib_tests;
 
