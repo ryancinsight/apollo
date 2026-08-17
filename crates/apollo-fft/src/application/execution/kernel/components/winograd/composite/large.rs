@@ -47,9 +47,6 @@ apollo_fft_macros::generate_winograd_composites! {
         (4, 37),  // dft148_impl
         // N = 160 = 32 × 5: gcd(32,5)=1
         (5, 32),  // dft160_impl
-        // N = 166 = 2 × 83: gcd(2,83)=1 — needed as ShortDft<166> for static Rader P=167
-        // ShortDft<83> is backed by rader_fft_83 (rader_prime_impl).
-        (2, 83),  // dft166_impl
         // N = 168 = 8 × 21: gcd(8,21)=1
         (8, 21),  // dft168_impl
         // N = 172 = 4 × 43: gcd(4,43)=1 — needed as ShortDft<172> for static Rader P=173

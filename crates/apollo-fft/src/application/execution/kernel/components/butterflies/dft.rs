@@ -374,8 +374,8 @@ pub(crate) use super::super::winograd::composite::{
 // Medium and large composites (N ≥ 66):
 pub(crate) use super::super::winograd::composite::{
     dft100_impl, dft102_impl, dft104_impl, dft106_impl, dft108_impl, dft112_impl, dft120_impl,
-    dft121_impl, dft126_impl, dft144_impl, dft148_impl, dft154_impl, dft160_impl, dft166_impl,
-    dft168_impl, dft172_impl, dft176_impl, dft180_impl, dft189_impl, dft192_impl, dft200_impl,
+    dft121_impl, dft126_impl, dft144_impl, dft148_impl, dft154_impl, dft160_impl, dft168_impl,
+    dft172_impl, dft176_impl, dft180_impl, dft189_impl, dft192_impl, dft200_impl,
     dft222_impl, dft242_impl, dft246_impl, dft259_impl, dft275_impl, dft280_impl, dft296_impl,
     dft363_impl, dft400_impl, dft484_impl, dft66_impl, dft70_impl, dft72_impl, dft78_impl,
     dft80_impl, dft82_impl, dft88_impl, dft96_impl, dft99_impl,

@@ -20,7 +20,7 @@ pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
     28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
     52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 66, 70, 72, 78, 80, 81, 82, 88, 96, 99, 100, 102, 104,
-    106, 108, 112, 120, 121, 126, 128, 144, 148, 154, 160, 166, 168, 172, 176, 180, 189, 192, 200,
+    106, 108, 112, 120, 121, 126, 128, 144, 148, 154, 160, 168, 172, 176, 180, 189, 192, 200,
     222, 242, 246, 259, 275, 280, 296, 363, 400, 484,
 ];
 
@@ -235,7 +235,6 @@ impl_short_dft!(144, winograd_impl, dft144_impl);
 impl_short_dft!(148, winograd_impl, dft148_impl);
 impl_short_dft!(154, winograd_impl, dft154_impl);
 impl_short_dft!(160, winograd_impl, dft160_impl);
-impl_short_dft!(166, winograd_impl, dft166_impl);
 impl_short_dft!(168, winograd_impl, dft168_impl);
 impl_short_dft!(172, winograd_impl, dft172_impl);
 impl_short_dft!(176, winograd_impl, dft176_impl);
