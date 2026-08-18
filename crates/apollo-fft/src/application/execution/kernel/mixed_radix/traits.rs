@@ -19,9 +19,8 @@ use crate::application::execution::kernel::components::winograd::ShortWinogradSc
 pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
     28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 66, 70, 72, 78, 80, 81, 82, 88, 96, 99, 100, 102, 104,
-    106, 108, 112, 120, 121, 126, 128, 144, 148, 154, 160, 168, 172, 176, 180, 189, 192, 200, 222,
-    242, 246, 259, 275, 280, 296, 363, 400, 484,
+    52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 72, 81, 96, 99, 108, 112, 120, 121, 126, 128, 144, 154,
+    168, 180, 189, 222, 242, 246, 259, 275, 280, 296, 363, 400, 484,
 ];
 
 /// O(log N) membership test for `SHORT_WINOGRAD_SIZES` via binary search.
@@ -211,20 +210,10 @@ impl_short_dft!(60, winograd_impl, dft60_impl);
 impl_short_dft!(62, winograd_impl, dft62_impl);
 impl_short_dft!(63, winograd_impl, dft63_impl);
 impl_short_dft!(64, winograd_impl, dft64_impl);
-impl_short_dft!(66, winograd_impl, dft66_impl);
-impl_short_dft!(70, winograd_impl, dft70_impl);
 impl_short_dft!(72, winograd_impl, dft72_impl);
-impl_short_dft!(78, winograd_impl, dft78_impl);
-impl_short_dft!(80, winograd_impl, dft80_impl);
 impl_short_dft!(81, winograd_impl, dft81_impl);
-impl_short_dft!(82, winograd_impl, dft82_impl);
-impl_short_dft!(88, winograd_impl, dft88_impl);
 impl_short_dft!(96, winograd_impl, dft96_impl);
 impl_short_dft!(99, winograd_impl, dft99_impl);
-impl_short_dft!(100, winograd_impl, dft100_impl);
-impl_short_dft!(102, winograd_impl, dft102_impl);
-impl_short_dft!(104, winograd_impl, dft104_impl);
-impl_short_dft!(106, winograd_impl, dft106_impl);
 impl_short_dft!(108, winograd_impl, dft108_impl);
 impl_short_dft!(112, winograd_impl, dft112_impl);
 impl_short_dft!(120, winograd_impl, dft120_impl);
@@ -232,23 +221,13 @@ impl_short_dft!(121, winograd_impl, dft121_impl);
 impl_short_dft!(126, winograd_impl, dft126_impl);
 impl_short_dft!(128, winograd_impl, dft128_impl);
 impl_short_dft!(144, winograd_impl, dft144_impl);
-impl_short_dft!(148, winograd_impl, dft148_impl);
 impl_short_dft!(154, winograd_impl, dft154_impl);
-impl_short_dft!(160, winograd_impl, dft160_impl);
 impl_short_dft!(168, winograd_impl, dft168_impl);
-impl_short_dft!(172, winograd_impl, dft172_impl);
-impl_short_dft!(176, winograd_impl, dft176_impl);
 impl_short_dft!(180, winograd_impl, dft180_impl);
 impl_short_dft!(189, winograd_impl, dft189_impl);
-impl_short_dft!(192, winograd_impl, dft192_impl);
-impl_short_dft!(200, winograd_impl, dft200_impl);
-impl_short_dft!(222, winograd_impl, dft222_impl);
 impl_short_dft!(242, winograd_impl, dft242_impl);
-impl_short_dft!(246, winograd_impl, dft246_impl);
-impl_short_dft!(259, winograd_impl, dft259_impl);
 impl_short_dft!(275, winograd_impl, dft275_impl);
 impl_short_dft!(280, winograd_impl, dft280_impl);
-impl_short_dft!(296, winograd_impl, dft296_impl);
 impl_short_dft!(363, winograd_impl, dft363_impl);
 impl_short_dft!(400, winograd_impl, dft400_impl);
 impl_short_dft!(484, winograd_impl, dft484_impl);
@@ -267,7 +246,7 @@ mod tests {
     #[test]
     fn short_winograd_fast_reject_sizes_not_in_array() {
         // Sizes absent from SHORT_WINOGRAD_SIZES must be rejected.
-        let test_sizes = [0usize, 1, 57, 59, 61, 65, 256];
+        let test_sizes = [0usize, 1, 57, 59, 61, 65, 100, 256];
         for &n in &test_sizes {
             assert!(
                 !SHORT_WINOGRAD_SIZES.contains(&n),
