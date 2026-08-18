@@ -89,13 +89,20 @@ jobs:
           cp \
             apollo-candidate-source/crates/apollo-fft/Cargo.toml \
             apollo-measurement/crates/apollo-fft/Cargo.toml
-          # The candidate validation suite adds a Mnemosyne integration
-          # dependency. Keep the baseline manifest aligned with the copied
-          # candidate lockfile so `--locked` validates the same workspace
-          # graph for both benchmark revisions.
-          cp \
-            apollo-candidate-source/crates/apollo-validation/Cargo.toml \
-            apollo-measurement/crates/apollo-validation/Cargo.toml
+          # Align every candidate workspace manifest that directly requires
+          # apollo-fft. Otherwise a baseline transform can retain an older
+          # requirement while the copied candidate package is newer, making
+          # the copied lockfile invalid under --locked.
+          while IFS= read -r -d '' manifest; do
+            if grep -Eq '^[[:space:]]*apollo-fft[[:space:]]*=' "$manifest"; then
+              relative="${manifest#apollo-candidate-source/}"
+              mkdir -p "apollo-measurement/$(dirname "$relative")"
+              cp "$manifest" "apollo-measurement/$relative"
+            fi
+          done < <(
+            find apollo-candidate-source/crates \
+              -name Cargo.toml -type f -print0
+          )
           candidate_macro_version="$(
             grep -m1 '^version = ' \
               apollo-candidate-source/crates/apollo-fft-macros/Cargo.toml
