@@ -62,7 +62,7 @@ fn main() {
     );
 
     // ── Inverse FFT round-trip ──
-    let reconstructed = ifft_1d_array(&spectrum);
+    let reconstructed = ifft_1d_array::<f64>(&spectrum);
     println!("reconstructed length: {}", reconstructed.size());
 
     let max_err = (0..n)

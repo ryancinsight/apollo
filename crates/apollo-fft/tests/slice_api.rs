@@ -1,10 +1,9 @@
 //! Leto and slice FFT boundaries: value parity across dimensional APIs.
 
 use apollo_fft::{
-    f16, fft_1d_array_typed, fft_1d_leto_typed, fft_1d_slice_typed, fft_2d_array_typed,
-    fft_2d_leto_typed, fft_3d_array_typed, fft_3d_leto_typed, ifft_1d_array_typed,
-    ifft_1d_leto_typed, ifft_1d_slice_typed, ifft_2d_array_typed, ifft_2d_leto_typed,
-    ifft_3d_array_typed, ifft_3d_leto_typed,
+    f16, fft_1d_array, fft_1d_leto, fft_1d_slice, fft_2d_array, fft_2d_leto, fft_3d_array,
+    fft_3d_leto, ifft_1d_array, ifft_1d_leto, ifft_1d_slice, ifft_2d_array, ifft_2d_leto,
+    ifft_3d_array, ifft_3d_leto,
 };
 use leto::{Array1, Array2, Array3};
 use leto::{SliceArg, Storage};
@@ -12,9 +11,9 @@ use leto::{SliceArg, Storage};
 #[test]
 fn slice_fft_roundtrip_f64() {
     let signal = vec![1.0f64, 2.0, 1.0, -1.0, 1.5, 3.0, 2.2, 0.5];
-    let spectrum = fft_1d_slice_typed::<f64>(&signal);
+    let spectrum = fft_1d_slice::<f64>(&signal);
     assert_eq!(spectrum.len(), signal.len());
-    let recon = ifft_1d_slice_typed::<f64>(&spectrum);
+    let recon = ifft_1d_slice::<f64>(&spectrum);
     assert_eq!(recon.len(), signal.len());
     for (i, (&o, &r)) in signal.iter().zip(&recon).enumerate() {
         assert!(
@@ -27,17 +26,17 @@ fn slice_fft_roundtrip_f64() {
 #[test]
 fn slice_matches_array_api_f32() {
     let signal = vec![0.3f32, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5];
-    let via_slice = fft_1d_slice_typed::<f32>(&signal);
+    let via_slice = fft_1d_slice::<f32>(&signal);
     let via_array =
-        fft_1d_array_typed::<f32>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
+        fft_1d_array::<f32>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
     assert_eq!(via_slice.len(), via_array.size());
     for i in 0..via_slice.len() {
         assert_eq!(via_slice[i].re, via_array[[i]].re, "re mismatch at {i}");
         assert_eq!(via_slice[i].im, via_array[[i]].im, "im mismatch at {i}");
     }
     // Inverse parity too.
-    let inv_slice = ifft_1d_slice_typed::<f32>(&via_slice);
-    let inv_array = ifft_1d_array_typed::<f32>(&via_array);
+    let inv_slice = ifft_1d_slice::<f32>(&via_slice);
+    let inv_array = ifft_1d_array::<f32>(&via_array);
     for i in 0..inv_slice.len() {
         assert_eq!(inv_slice[i], inv_array[[i]], "inverse mismatch at {i}");
     }
@@ -55,17 +54,17 @@ fn slice_matches_array_api_f16_storage() {
         f16::from_f32(3.3),
         f16::from_f32(-2.5),
     ];
-    let via_slice = fft_1d_slice_typed::<f16>(&signal);
+    let via_slice = fft_1d_slice::<f16>(&signal);
     let via_array =
-        fft_1d_array_typed::<f16>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
+        fft_1d_array::<f16>(&Array1::from_shape_vec([signal.len()], signal.clone()).unwrap());
     assert_eq!(via_slice.len(), via_array.size());
     for i in 0..via_slice.len() {
         assert_eq!(via_slice[i].re, via_array[[i]].re, "re mismatch at {i}");
         assert_eq!(via_slice[i].im, via_array[[i]].im, "im mismatch at {i}");
     }
 
-    let inv_slice = ifft_1d_slice_typed::<f16>(&via_slice);
-    let inv_array = ifft_1d_array_typed::<f16>(&via_array);
+    let inv_slice = ifft_1d_slice::<f16>(&via_slice);
+    let inv_array = ifft_1d_array::<f16>(&via_array);
     for i in 0..inv_slice.len() {
         assert_eq!(inv_slice[i], inv_array[[i]], "inverse mismatch at {i}");
     }
@@ -75,16 +74,15 @@ fn slice_matches_array_api_f16_storage() {
 fn leto_fft_matches_leto_array_api_f32() {
     let signal = vec![0.3f32, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5];
     let leto_input = leto::Array1::from_shape_vec([signal.len()], signal.clone()).unwrap();
-    let via_leto = fft_1d_leto_typed::<f32>(leto_input.view());
-    let via_array =
-        fft_1d_array_typed::<f32>(&Array1::from_shape_vec([signal.len()], signal).unwrap());
+    let via_leto = fft_1d_leto::<f32>(leto_input.view());
+    let via_array = fft_1d_array::<f32>(&Array1::from_shape_vec([signal.len()], signal).unwrap());
 
     assert_eq!(via_leto.shape(), [via_array.size()]);
     assert_eq!(via_leto.strides(), [1]);
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 
-    let leto_inverse = ifft_1d_leto_typed::<f32>(via_leto.view());
-    let array_inverse = ifft_1d_array_typed::<f32>(&via_array);
+    let leto_inverse = ifft_1d_leto::<f32>(via_leto.view());
+    let array_inverse = ifft_1d_array::<f32>(&via_array);
     assert_eq!(
         leto_inverse.storage().as_slice(),
         array_inverse.as_slice().unwrap()
@@ -103,9 +101,8 @@ fn leto_fft_accepts_strided_view_and_matches_logical_leto_values() {
         .slice_with::<1>(&[SliceArg::range(Some(0), None, 2)])
         .unwrap();
 
-    let via_leto = fft_1d_leto_typed::<f32>(strided);
-    let via_array =
-        fft_1d_array_typed::<f32>(&Array1::from_shape_vec([logical.len()], logical).unwrap());
+    let via_leto = fft_1d_leto::<f32>(strided);
+    let via_array = fft_1d_array::<f32>(&Array1::from_shape_vec([logical.len()], logical).unwrap());
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 }
 
@@ -113,14 +110,14 @@ fn leto_fft_accepts_strided_view_and_matches_logical_leto_values() {
 fn leto_fft_2d_output_matches_direct_array_boundary() {
     let input = Array2::from_shape_vec([2, 4], vec![0.3_f64, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5])
         .expect("input shape is valid");
-    let via_leto = fft_2d_leto_typed::<f64>(input.view());
-    let via_array = fft_2d_array_typed::<f64>(&input);
+    let via_leto = fft_2d_leto::<f64>(input.view());
+    let via_array = fft_2d_array::<f64>(&input);
 
     assert_eq!(via_leto.shape(), via_array.shape());
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 
-    let inverse_leto = ifft_2d_leto_typed::<f64>(via_leto.view());
-    let inverse_array = ifft_2d_array_typed::<f64>(&via_array);
+    let inverse_leto = ifft_2d_leto::<f64>(via_leto.view());
+    let inverse_array = ifft_2d_array::<f64>(&via_array);
     assert_eq!(inverse_leto.shape(), inverse_array.shape());
     assert_eq!(
         inverse_leto.storage().as_slice(),
@@ -135,14 +132,14 @@ fn leto_fft_3d_output_matches_direct_array_boundary() {
         vec![0.3_f64, -1.2, 4.5, 2.0, -0.7, 1.1, 3.3, -2.5],
     )
     .expect("input shape is valid");
-    let via_leto = fft_3d_leto_typed::<f64>(input.view());
-    let via_array = fft_3d_array_typed::<f64>(&input);
+    let via_leto = fft_3d_leto::<f64>(input.view());
+    let via_array = fft_3d_array::<f64>(&input);
 
     assert_eq!(via_leto.shape(), via_array.shape());
     assert_eq!(via_leto.storage().as_slice(), via_array.as_slice().unwrap());
 
-    let inverse_leto = ifft_3d_leto_typed::<f64>(via_leto.view());
-    let inverse_array = ifft_3d_array_typed::<f64>(&via_array);
+    let inverse_leto = ifft_3d_leto::<f64>(via_leto.view());
+    let inverse_array = ifft_3d_array::<f64>(&via_array);
     assert_eq!(inverse_leto.shape(), inverse_array.shape());
     assert_eq!(
         inverse_leto.storage().as_slice(),

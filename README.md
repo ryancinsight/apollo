@@ -167,11 +167,14 @@ Apollo exposes these precision descriptors through Rust and Python:
 
 In Rust, they are represented by `PrecisionMode`, `StoragePrecision`, `ComputePrecision`, and
 `PrecisionProfile`. Existing APIs keep their current default behavior; lower-precision paths are
-opt-in via `with_precision(...)` constructors or the generic `*_typed(...)` helpers that dispatch on
-`RealFftData`.
+opt-in via `with_precision(...)` constructors or by naming the scalar at a generic entry point.
 
-Apollo now also exposes explicit `*_f16` helpers for real-domain FFT storage. The maintainable
-Rust surface is the generic typed API.
+The `apollo-fft` public API in `api` is generic over one scalar seam per transform family and has
+no concrete-scalar duplicates: complex transforms bound on `MixedRadixScalar` (`f32`, `f64`) and
+real transforms on `PlanCacheProvider` (`f16`, `f32`, `f64`). Calls passing a concrete array infer
+the scalar; `fft_1d_complex::<f32>(..)` names it explicitly. See ADR 0038. The remaining transform
+crates still expose paired `*_typed(...)` helpers that dispatch on `RealFftData`; those pairs are
+tracked for the same collapse.
 
 ## Zero-Copy and Modularity Invariants
 

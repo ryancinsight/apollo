@@ -73,7 +73,7 @@ pub(crate) fn fft_inverse_four_point_fixture() -> PublishedFixtureReport {
         spectrum_nd.as_slice().unwrap(),
     )
     .unwrap();
-    let actual_leto = apollo_fft::ifft_1d_leto(spectrum.view());
+    let actual_leto = apollo_fft::ifft_1d_leto::<f64>(spectrum.view());
     let actual = leto::Array1::from(actual_leto.storage().as_slice().to_vec());
     let expected = [1.0_f64, 0.0, 0.0, 0.0];
     published_real_fixture(

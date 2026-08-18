@@ -141,11 +141,11 @@ fn static_complex_wrappers_match_dynamic_paths() {
     });
     let expected1 = fft_1d_complex(&signal1);
     let mut actual1 = signal1.clone();
-    fft_1d_complex_static_inplace::<16>(&mut actual1);
+    fft_1d_complex_static_inplace::<f64, 16>(&mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
-    ifft_1d_complex_static_inplace::<16>(&mut actual1);
+    ifft_1d_complex_static_inplace::<f64, 16>(&mut actual1);
     for (expected, actual) in signal1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -156,11 +156,11 @@ fn static_complex_wrappers_match_dynamic_paths() {
     });
     let expected2 = fft_2d_complex(&signal2);
     let mut actual2 = signal2.clone();
-    fft_2d_complex_static_inplace::<4, 5>(&mut actual2);
+    fft_2d_complex_static_inplace::<f64, 4, 5>(&mut actual2);
     for (expected, actual) in expected2.iter().zip(actual2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
-    ifft_2d_complex_static_inplace::<4, 5>(&mut actual2);
+    ifft_2d_complex_static_inplace::<f64, 4, 5>(&mut actual2);
     for (expected, actual) in signal2.iter().zip(actual2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -171,11 +171,11 @@ fn static_complex_wrappers_match_dynamic_paths() {
     });
     let expected3 = fft_3d_complex(&signal3);
     let mut actual3 = signal3.clone();
-    fft_3d_complex_static_inplace::<3, 4, 5>(&mut actual3);
+    fft_3d_complex_static_inplace::<f64, 3, 4, 5>(&mut actual3);
     for (expected, actual) in expected3.iter().zip(actual3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
-    ifft_3d_complex_static_inplace::<3, 4, 5>(&mut actual3);
+    ifft_3d_complex_static_inplace::<f64, 3, 4, 5>(&mut actual3);
     for (expected, actual) in signal3.iter().zip(actual3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -189,14 +189,14 @@ fn static_complex_into_wrappers_match_allocating_paths() {
     });
     let expected1 = fft_1d_complex(&signal1);
     let mut actual1 = Array1::<Complex64>::zeros([16]);
-    fft_1d_complex_static_into::<16>(&signal1, &mut actual1);
+    fft_1d_complex_static_into::<f64, 16>(&signal1, &mut actual1);
     for (expected, actual) in expected1.iter().zip(actual1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered1 = ifft_1d_complex(&expected1);
     let mut actual_recovered1 = Array1::<Complex64>::zeros([16]);
-    ifft_1d_complex_static_into::<16>(&expected1, &mut actual_recovered1);
+    ifft_1d_complex_static_into::<f64, 16>(&expected1, &mut actual_recovered1);
     for (expected, actual) in recovered1.iter().zip(actual_recovered1.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -207,14 +207,14 @@ fn static_complex_into_wrappers_match_allocating_paths() {
     });
     let expected2 = fft_2d_complex(&signal2);
     let mut actual2 = Array2::<Complex64>::zeros([4, 5]);
-    fft_2d_complex_static_into::<4, 5>(&signal2, &mut actual2);
+    fft_2d_complex_static_into::<f64, 4, 5>(&signal2, &mut actual2);
     for (expected, actual) in expected2.iter().zip(actual2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered2 = ifft_2d_complex(&expected2);
     let mut actual_recovered2 = Array2::<Complex64>::zeros([4, 5]);
-    ifft_2d_complex_static_into::<4, 5>(&expected2, &mut actual_recovered2);
+    ifft_2d_complex_static_into::<f64, 4, 5>(&expected2, &mut actual_recovered2);
     for (expected, actual) in recovered2.iter().zip(actual_recovered2.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
@@ -225,14 +225,14 @@ fn static_complex_into_wrappers_match_allocating_paths() {
     });
     let expected3 = fft_3d_complex(&signal3);
     let mut actual3 = Array3::<Complex64>::zeros([3, 4, 5]);
-    fft_3d_complex_static_into::<3, 4, 5>(&signal3, &mut actual3);
+    fft_3d_complex_static_into::<f64, 3, 4, 5>(&signal3, &mut actual3);
     for (expected, actual) in expected3.iter().zip(actual3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }
 
     let recovered3 = ifft_3d_complex(&expected3);
     let mut actual_recovered3 = Array3::<Complex64>::zeros([3, 4, 5]);
-    ifft_3d_complex_static_into::<3, 4, 5>(&expected3, &mut actual_recovered3);
+    ifft_3d_complex_static_into::<f64, 3, 4, 5>(&expected3, &mut actual_recovered3);
     for (expected, actual) in recovered3.iter().zip(actual_recovered3.iter()) {
         assert!((expected - actual).norm() < 1e-13);
     }

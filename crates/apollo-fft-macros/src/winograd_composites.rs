@@ -24,7 +24,7 @@ use crate::prime_power_winograd::prime_power_winograd_function;
 ///
 /// - `Always` → `#[inline]`: forced inlining for small N where
 ///   stack depth is safe (N ≤ 36).
-/// - `Hint`   → `#[inline]`:         optimizer hint only; avoids forced
+/// - `Hint`   → `#[inline]`: optimizer hint only; avoids forced
 ///   inlining for larger N where debug-mode stack may overflow.
 #[derive(Clone, Copy)]
 enum InlineAttr {

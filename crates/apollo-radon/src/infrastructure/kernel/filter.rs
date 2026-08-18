@@ -47,7 +47,7 @@ pub fn ramp_filter_projection_into(projection: &[f64], detector_spacing: f64, ou
     }
 
     let spectrum_arr = Array1::from(spectrum);
-    let result = ifft_1d_array(&spectrum_arr);
+    let result = ifft_1d_array::<f64>(&spectrum_arr);
 
     output
         .iter_mut()
