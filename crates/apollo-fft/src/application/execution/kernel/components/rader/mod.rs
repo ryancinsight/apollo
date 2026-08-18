@@ -142,7 +142,7 @@ pub(crate) fn prefers_half_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bo
     n > F::HALF_CYCLIC_RADER_THRESHOLD || F::HALF_CYCLIC_RADER_PRIMES.contains(&n)
 }
 
-#[inline]
+#[inline(never)]
 fn rader_runtime_impl_with_backend<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,
