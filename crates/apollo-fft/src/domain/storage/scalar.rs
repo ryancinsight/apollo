@@ -34,34 +34,34 @@ mod sealed {
 
 thread_local! {
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static REAL64_INPUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static REAL64_OUTPUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static COMPLEX64_INPUT_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static COMPLEX64_OUTPUT_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };

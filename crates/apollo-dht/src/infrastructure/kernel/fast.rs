@@ -6,10 +6,10 @@ use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };

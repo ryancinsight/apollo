@@ -6,10 +6,10 @@ const HERMES_CWT_LEN_THRESHOLD: usize = 8_192;
 
 thread_local! {
     #[cfg_attr(
-        windows,
+        all(windows, target_env = "gnu"),
         expect(
             clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
+            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
         )
     )]
     static CWT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> =

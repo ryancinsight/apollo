@@ -6,10 +6,10 @@
 //! for verification cross-checks.
 
 #![cfg_attr(
-    all(windows, test),
+    all(windows, target_env = "gnu", test),
     expect(
         clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializer is already a const block; the thread_local is cfg(test)-gated"
+        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
     )
 )]
 #[cfg(test)]

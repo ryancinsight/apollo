@@ -158,10 +158,10 @@
 //!   Acoust. Speech Signal Process.*, 28(1), 27–34.
 
 #![cfg_attr(
-    windows,
+    all(windows, target_env = "gnu"),
     expect(
         clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
+        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
     )
 )]
 use apollo_fft::{Complex64, PlanCacheProvider, Shape1D};

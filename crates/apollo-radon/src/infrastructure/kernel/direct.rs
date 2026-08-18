@@ -1,10 +1,10 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
 
 #![cfg_attr(
-    windows,
+    all(windows, target_env = "gnu"),
     expect(
         clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
+        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
     )
 )]
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
