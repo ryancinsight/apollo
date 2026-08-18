@@ -37,6 +37,7 @@ use std::sync::Arc;
 impl MixedRadixScalar for f32 {
     const HALF_CYCLIC_RADER_THRESHOLD: usize = 32;
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[];
+    const FULL_CYCLIC_RADER_PRIMES: &'static [usize] = &[];
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 2, 5, 5];
     const FORCE_COMPOSITE_63: bool = true;
     const FORCE_COMPOSITE_72: bool = true;
@@ -346,6 +347,7 @@ impl MixedRadixScalar for f32 {
 impl MixedRadixScalar for f64 {
     const HALF_CYCLIC_RADER_THRESHOLD: usize = 32;
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize] = &[67];
+    const FULL_CYCLIC_RADER_PRIMES: &'static [usize] = &[127];
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 5, 5, 2];
     const FORCE_COMPOSITE_63: bool = false;
     const FORCE_COMPOSITE_72: bool = false;
