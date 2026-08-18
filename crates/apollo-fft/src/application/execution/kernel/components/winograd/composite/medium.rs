@@ -30,4 +30,3 @@ apollo_fft_macros::generate_winograd_composites! {
     ],
     pp_pairs: [],
 }
-
