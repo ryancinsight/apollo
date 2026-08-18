@@ -153,7 +153,11 @@ jobs:
             local messages="benchmark-executables/$revision.json"
             mkdir -p "$destination"
 
-            cargo bench \
+            # Match the production release profile. The default bench profile
+            # uses eight codegen units, so unrelated public API item changes
+            # can move hot kernel code between units and create a layout-only
+            # regression in this gate.
+            cargo bench --profile release \
               --manifest-path apollo-measurement/Cargo.toml \
               --locked \
               -p apollo-fft \
