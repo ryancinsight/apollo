@@ -231,6 +231,10 @@ impl_short_dft!(280, winograd_impl, dft280_impl);
 impl_short_dft!(363, winograd_impl, dft363_impl);
 impl_short_dft!(400, winograd_impl, dft400_impl);
 impl_short_dft!(484, winograd_impl, dft484_impl);
+impl_short_dft!(222, winograd_impl, dft222_impl);
+impl_short_dft!(246, winograd_impl, dft246_impl);
+impl_short_dft!(259, winograd_impl, dft259_impl);
+impl_short_dft!(296, winograd_impl, dft296_impl);
 
 #[cfg(test)]
 mod tests {
