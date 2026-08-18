@@ -129,6 +129,44 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Breaking
 
+- [major] [arch] `apollo-fft` 0.27.0 collapses the duplicated public FFT
+  entry points in `api`. The surface falls from 140 functions to 71: every
+  concrete `f64` function that merely restated its generic `_typed` sibling is
+  removed, and the generic function takes the concrete name. See ADR 0038.
+
+  The 69 removed functions were verified to be exact twins before deletion —
+  59 delegated to their generic sibling at `<f64>`, and 10 carried a body
+  proven token-identical to the generic body with `T := f64`. Equality is
+  therefore bitwise by construction; no arithmetic, accumulation order, or
+  monomorphisation changed, and the `f32`/`f64` instantiation count is
+  unchanged.
+
+  **Migration.**
+
+  - Callers passing a concrete array (`Array1<Complex64>`, `Array3<f64>`, …)
+    to a non-generic entry point need **no change**: the retained generic
+    function has the same name and infers `T` from the argument.
+  - Callers of a `_typed` name drop the suffix:
+    `fft_1d_complex_typed::<f32>(x)` becomes `fft_1d_complex::<f32>(x)`.
+    `fft_1d_slice_typed` and `ifft_1d_slice_typed`, which never had a concrete
+    sibling, become `fft_1d_slice` and `ifft_1d_slice`.
+  - Const-generic (`_static`) call sites must name the scalar, because Rust
+    accepts explicit generic arguments only all-or-nothing:
+    `fft_1d_complex_static::<8>(x)` becomes `fft_1d_complex_static::<f64, 8>(x)`.
+  - The 3D inverse-real functions move onto the 1D/2D convention, which they
+    previously inverted. `ifft_3d_array_into` is now the explicit-scratch form
+    (`field_hat, out, scratch`), matching `ifft_1d_array_into` and
+    `ifft_2d_array_into`; the spectrum-consuming form is
+    `ifft_3d_array_into_spectrum_scratch` (`field_hat, out`), matching its 1D
+    and 2D siblings. `ifft_3d_array_into_scratch` is removed. The two forms
+    differ in arity, so every affected caller fails to compile rather than
+    silently switching kernel.
+
+  Bound spellings are unchanged by this release. `T: RealFftData +
+  PlanCacheProvider` restates a supertrait (`PlanCacheProvider: RealFftData`)
+  at 23 sites; ADR 0038 names `PlanCacheProvider` as the seam and the spelling
+  reduction is tracked separately.
+
 - [major] `apollo-fft` 0.25.0 removes the redundant public
   `application::execution::policy::RadixCompositePolicy` module. Radix
   execution now instantiates Moirai's canonical

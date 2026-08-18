@@ -26,7 +26,7 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
     )
     .unwrap();
     let spectrum = apollo_fft::fft_1d_leto(signal.view());
-    let recovered = apollo_fft::ifft_1d_leto(spectrum.view());
+    let recovered = apollo_fft::ifft_1d_leto::<f64>(spectrum.view());
     let recovered_nd = leto::Array1::from(recovered.storage().as_slice().to_vec());
     let roundtrip_max_abs_error = max_real_abs_delta(&signal_nd, &recovered_nd);
 

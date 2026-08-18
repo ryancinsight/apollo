@@ -6,24 +6,11 @@ use crate::application::orchestration::cache::plans::PlanCacheProvider;
 use crate::domain::metadata::shape::{Shape1D, Shape2D, Shape3D};
 use apollo_leto_interop::view_cow;
 use eunomia::Complex;
-use eunomia::Complex64;
 use leto::{Array1, Array2, Array3};
-
-/// Inverse 1D FFT of a complex signal.
-#[must_use]
-pub fn ifft_1d_array(field_hat: &Array1<Complex64>) -> Array1<f64> {
-    <f64 as RealFftData>::inverse_1d(
-        f64::get_1d_plan(
-            Shape1D::new(field_hat.size()).expect("ifft_1d_array requires non-zero length"),
-        )
-        .as_ref(),
-        field_hat,
-    )
-}
 
 /// Inverse 1D FFT of a complex spectrum using generic storage dispatch.
 #[must_use]
-pub fn ifft_1d_array_typed<T>(field_hat: &Array1<Complex<T::PlanScalar>>) -> Array1<T>
+pub fn ifft_1d_array<T>(field_hat: &Array1<Complex<T::PlanScalar>>) -> Array1<T>
 where
     T: RealFftData + PlanCacheProvider,
     Complex<T::PlanScalar>: PlanScratch,
@@ -31,46 +18,18 @@ where
 {
     T::inverse_1d(
         T::get_1d_plan(
-            Shape1D::new(field_hat.size()).expect("ifft_1d_array_typed requires non-zero length"),
+            Shape1D::new(field_hat.size()).expect("ifft_1d_array requires non-zero length"),
         )
         .as_ref(),
         field_hat,
     )
 }
 
-/// Inverse 1D FFT into caller-owned real storage and scratch complex storage.
-pub fn ifft_1d_array_into(
-    field_hat: &Array1<Complex64>,
-    out: &mut Array1<f64>,
-    scratch: &mut Array1<Complex64>,
-) {
-    <f64 as RealFftData>::inverse_1d_into(
-        f64::get_1d_plan(
-            Shape1D::new(field_hat.size()).expect("ifft_1d_array_into requires non-zero length"),
-        )
-        .as_ref(),
-        field_hat,
-        out,
-        scratch,
-    );
-}
-
-/// Inverse 1D FFT into caller-owned real storage, reusing the mutable spectrum
-/// as scratch.
-///
-/// This mutates `field_hat`.
-pub fn ifft_1d_array_into_spectrum_scratch(
-    field_hat: &mut Array1<Complex64>,
-    out: &mut Array1<f64>,
-) {
-    ifft_1d_array_typed_into_spectrum_scratch::<f64>(field_hat, out);
-}
-
 /// Inverse 1D FFT into caller-owned typed real storage, reusing the mutable
 /// typed spectrum as scratch.
 ///
 /// This mutates `field_hat`.
-pub fn ifft_1d_array_typed_into_spectrum_scratch<T>(
+pub fn ifft_1d_array_into_spectrum_scratch<T>(
     field_hat: &mut Array1<Complex<T::PlanScalar>>,
     out: &mut Array1<T>,
 ) where
@@ -81,12 +40,12 @@ pub fn ifft_1d_array_typed_into_spectrum_scratch<T>(
     debug_assert_eq!(
         field_hat.size(),
         out.size(),
-        "ifft_1d_array_typed_into_spectrum_scratch: length mismatch"
+        "ifft_1d_array_into_spectrum_scratch: length mismatch"
     );
     T::inverse_1d_spectrum_into(
         T::get_1d_plan(
             Shape1D::new(field_hat.size())
-                .expect("ifft_1d_array_typed_into_spectrum_scratch requires non-zero length"),
+                .expect("ifft_1d_array_into_spectrum_scratch requires non-zero length"),
         )
         .as_ref(),
         field_hat,
@@ -95,7 +54,7 @@ pub fn ifft_1d_array_typed_into_spectrum_scratch<T>(
 }
 
 /// Inverse 1D FFT into caller-owned typed real storage and typed scratch spectrum.
-pub fn ifft_1d_array_typed_into<T>(
+pub fn ifft_1d_array_into<T>(
     field_hat: &Array1<Complex<T::PlanScalar>>,
     out: &mut Array1<T>,
     scratch: &mut Array1<Complex<T::PlanScalar>>,
@@ -106,8 +65,7 @@ pub fn ifft_1d_array_typed_into<T>(
 {
     T::inverse_1d_into(
         T::get_1d_plan(
-            Shape1D::new(field_hat.size())
-                .expect("ifft_1d_array_typed_into requires non-zero length"),
+            Shape1D::new(field_hat.size()).expect("ifft_1d_array_into requires non-zero length"),
         )
         .as_ref(),
         field_hat,
@@ -116,19 +74,9 @@ pub fn ifft_1d_array_typed_into<T>(
     );
 }
 
-/// Inverse 1D FFT into caller-owned real storage and scratch complex storage
-/// for a compile-time-known length.
-pub fn ifft_1d_array_static_into<const N: usize>(
-    field_hat: &Array1<Complex64>,
-    out: &mut Array1<f64>,
-    scratch: &mut Array1<Complex64>,
-) {
-    ifft_1d_array_static_typed_into::<f64, N>(field_hat, out, scratch);
-}
-
 /// Inverse 1D FFT into caller-owned typed real storage and typed scratch
 /// spectrum for a compile-time-known length.
-pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
+pub fn ifft_1d_array_static_into<T, const N: usize>(
     field_hat: &Array1<Complex<T::PlanScalar>>,
     out: &mut Array1<T>,
     scratch: &mut Array1<Complex<T::PlanScalar>>,
@@ -139,17 +87,17 @@ pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
     debug_assert_eq!(
         field_hat.size(),
         N,
-        "ifft_1d_array_static_typed_into: input length mismatch"
+        "ifft_1d_array_static_into: input length mismatch"
     );
     debug_assert_eq!(
         out.size(),
         N,
-        "ifft_1d_array_static_typed_into: output length mismatch"
+        "ifft_1d_array_static_into: output length mismatch"
     );
     debug_assert_eq!(
         scratch.size(),
         N,
-        "ifft_1d_array_static_typed_into: scratch length mismatch"
+        "ifft_1d_array_static_into: scratch length mismatch"
     );
     T::inverse_1d_static_into::<N>(field_hat, out, scratch);
 }
@@ -158,7 +106,7 @@ pub fn ifft_1d_array_static_typed_into<T, const N: usize>(
 ///
 /// Slice/`Vec`-based wrapper for callers that prefer raw slices over Leto `Array` types.
 #[must_use]
-pub fn ifft_1d_slice_typed<T>(spectrum: &[Complex<T::PlanScalar>]) -> Vec<T>
+pub fn ifft_1d_slice<T>(spectrum: &[Complex<T::PlanScalar>]) -> Vec<T>
 where
     T: RealFftData + PlanCacheProvider,
     Complex<T::PlanScalar>: PlanScratch,
@@ -166,19 +114,11 @@ where
 {
     T::inverse_1d_slice_owned(
         T::get_1d_plan(
-            Shape1D::new(spectrum.len()).expect("ifft_1d_slice_typed requires non-zero length"),
+            Shape1D::new(spectrum.len()).expect("ifft_1d_slice requires non-zero length"),
         )
         .as_ref(),
         spectrum,
     )
-}
-
-/// Inverse 1D FFT of a Leto spectrum view, returning Mnemosyne-backed Leto storage.
-#[must_use]
-pub fn ifft_1d_leto(
-    field_hat: leto::ArrayView1<'_, Complex64>,
-) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 1> {
-    ifft_1d_leto_typed::<f64>(field_hat)
 }
 
 /// Inverse 1D FFT of a Leto spectrum view using generic storage dispatch.
@@ -187,7 +127,7 @@ pub fn ifft_1d_leto(
 /// are copied once in logical row-major order before entering the existing IFFT
 /// slice boundary. The returned Leto array is backed by Mnemosyne allocation.
 #[must_use]
-pub fn ifft_1d_leto_typed<T>(
+pub fn ifft_1d_leto<T>(
     field_hat: leto::ArrayView1<'_, Complex<T::PlanScalar>>,
 ) -> leto::Array<T, leto::MnemosyneStorage<T>, 1>
 where
@@ -196,25 +136,14 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let spectrum = view_cow(&field_hat);
-    let signal = ifft_1d_slice_typed::<T>(&spectrum);
+    let signal = ifft_1d_slice::<T>(&spectrum);
     leto::Array::<T, leto::MnemosyneStorage<T>, 1>::from_mnemosyne_vec([signal.len()], signal)
         .expect("IFFT signal length must match Leto output shape")
 }
 
-/// Inverse 2D FFT of a complex array.
-#[must_use]
-pub fn ifft_2d_array(field_hat: &Array2<Complex64>) -> Array2<f64> {
-    let [nx, ny] = field_hat.shape();
-    <f64 as RealFftData>::inverse_2d(
-        f64::get_2d_plan(Shape2D::new(nx, ny).expect("ifft_2d_array requires non-zero dimensions"))
-            .as_ref(),
-        field_hat,
-    )
-}
-
 /// Inverse 2D FFT of a complex spectrum using generic storage dispatch.
 #[must_use]
-pub fn ifft_2d_array_typed<T>(field_hat: &Array2<Complex<T::PlanScalar>>) -> Array2<T>
+pub fn ifft_2d_array<T>(field_hat: &Array2<Complex<T::PlanScalar>>) -> Array2<T>
 where
     T: RealFftData + PlanCacheProvider,
     Complex<T::PlanScalar>: PlanScratch,
@@ -222,48 +151,17 @@ where
 {
     let [nx, ny] = field_hat.shape();
     T::inverse_2d(
-        T::get_2d_plan(
-            Shape2D::new(nx, ny).expect("ifft_2d_array_typed requires non-zero dimensions"),
-        )
-        .as_ref(),
+        T::get_2d_plan(Shape2D::new(nx, ny).expect("ifft_2d_array requires non-zero dimensions"))
+            .as_ref(),
         field_hat,
     )
-}
-
-/// Inverse 2D FFT into caller-owned real storage and scratch complex storage.
-pub fn ifft_2d_array_into(
-    field_hat: &Array2<Complex64>,
-    out: &mut Array2<f64>,
-    scratch: &mut Array2<Complex64>,
-) {
-    let [nx, ny] = field_hat.shape();
-    <f64 as RealFftData>::inverse_2d_into(
-        f64::get_2d_plan(
-            Shape2D::new(nx, ny).expect("ifft_2d_array_into requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field_hat,
-        out,
-        scratch,
-    );
-}
-
-/// Inverse 2D FFT into caller-owned real storage, reusing the mutable spectrum
-/// as scratch.
-///
-/// This mutates `field_hat`.
-pub fn ifft_2d_array_into_spectrum_scratch(
-    field_hat: &mut Array2<Complex64>,
-    out: &mut Array2<f64>,
-) {
-    ifft_2d_array_typed_into_spectrum_scratch::<f64>(field_hat, out);
 }
 
 /// Inverse 2D FFT into caller-owned typed real storage, reusing the mutable
 /// typed spectrum as scratch.
 ///
 /// This mutates `field_hat`.
-pub fn ifft_2d_array_typed_into_spectrum_scratch<T>(
+pub fn ifft_2d_array_into_spectrum_scratch<T>(
     field_hat: &mut Array2<Complex<T::PlanScalar>>,
     out: &mut Array2<T>,
 ) where
@@ -275,12 +173,12 @@ pub fn ifft_2d_array_typed_into_spectrum_scratch<T>(
     debug_assert_eq!(
         out.shape(),
         [nx, ny],
-        "ifft_2d_array_typed_into_spectrum_scratch: shape mismatch"
+        "ifft_2d_array_into_spectrum_scratch: shape mismatch"
     );
     T::inverse_2d_spectrum_into(
         T::get_2d_plan(
             Shape2D::new(nx, ny)
-                .expect("ifft_2d_array_typed_into_spectrum_scratch requires non-zero dimensions"),
+                .expect("ifft_2d_array_into_spectrum_scratch requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,
@@ -289,7 +187,7 @@ pub fn ifft_2d_array_typed_into_spectrum_scratch<T>(
 }
 
 /// Inverse 2D FFT into caller-owned typed real storage and typed scratch spectrum.
-pub fn ifft_2d_array_typed_into<T>(
+pub fn ifft_2d_array_into<T>(
     field_hat: &Array2<Complex<T::PlanScalar>>,
     out: &mut Array2<T>,
     scratch: &mut Array2<Complex<T::PlanScalar>>,
@@ -301,7 +199,7 @@ pub fn ifft_2d_array_typed_into<T>(
     let [nx, ny] = field_hat.shape();
     T::inverse_2d_into(
         T::get_2d_plan(
-            Shape2D::new(nx, ny).expect("ifft_2d_array_typed_into requires non-zero dimensions"),
+            Shape2D::new(nx, ny).expect("ifft_2d_array_into requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,
@@ -310,19 +208,9 @@ pub fn ifft_2d_array_typed_into<T>(
     );
 }
 
-/// Inverse 2D FFT into caller-owned real storage and scratch complex storage
-/// for a compile-time-known shape.
-pub fn ifft_2d_array_static_into<const NX: usize, const NY: usize>(
-    field_hat: &Array2<Complex64>,
-    out: &mut Array2<f64>,
-    scratch: &mut Array2<Complex64>,
-) {
-    ifft_2d_array_static_typed_into::<f64, NX, NY>(field_hat, out, scratch);
-}
-
 /// Inverse 2D FFT into caller-owned typed real storage and typed scratch
 /// spectrum for a compile-time-known shape.
-pub fn ifft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
+pub fn ifft_2d_array_static_into<T, const NX: usize, const NY: usize>(
     field_hat: &Array2<Complex<T::PlanScalar>>,
     out: &mut Array2<T>,
     scratch: &mut Array2<Complex<T::PlanScalar>>,
@@ -333,37 +221,24 @@ pub fn ifft_2d_array_static_typed_into<T, const NX: usize, const NY: usize>(
     debug_assert_eq!(
         field_hat.shape(),
         [NX, NY],
-        "ifft_2d_array_static_typed_into: input shape mismatch"
+        "ifft_2d_array_static_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
         [NX, NY],
-        "ifft_2d_array_static_typed_into: output shape mismatch"
+        "ifft_2d_array_static_into: output shape mismatch"
     );
     debug_assert_eq!(
         scratch.shape(),
         [NX, NY],
-        "ifft_2d_array_static_typed_into: scratch shape mismatch"
+        "ifft_2d_array_static_into: scratch shape mismatch"
     );
     T::inverse_2d_static_into::<NX, NY>(field_hat, out, scratch);
 }
 
-/// Inverse 3D FFT of a complex array.
-#[must_use]
-pub fn ifft_3d_array(field_hat: &Array3<Complex64>) -> Array3<f64> {
-    let [nx, ny, nz] = field_hat.shape();
-    <f64 as RealFftData>::inverse_3d(
-        f64::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
-        )
-        .as_ref(),
-        field_hat,
-    )
-}
-
 /// Inverse 3D FFT of a complex spectrum using generic storage dispatch.
 #[must_use]
-pub fn ifft_3d_array_typed<T>(field_hat: &Array3<Complex<T::PlanScalar>>) -> Array3<T>
+pub fn ifft_3d_array<T>(field_hat: &Array3<Complex<T::PlanScalar>>) -> Array3<T>
 where
     T: RealFftData + PlanCacheProvider,
     Complex<T::PlanScalar>: PlanScratch,
@@ -372,7 +247,7 @@ where
     let [nx, ny, nz] = field_hat.shape();
     T::inverse_3d(
         T::get_3d_plan(
-            Shape3D::new(nx, ny, nz).expect("ifft_3d_array_typed requires non-zero dimensions"),
+            Shape3D::new(nx, ny, nz).expect("ifft_3d_array requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,
@@ -380,7 +255,7 @@ where
 }
 
 /// Inverse 3D FFT into caller-owned typed real storage and typed scratch spectrum.
-pub fn ifft_3d_array_typed_into<T>(
+pub fn ifft_3d_array_into<T>(
     field_hat: &Array3<Complex<T::PlanScalar>>,
     out: &mut Array3<T>,
     scratch: &mut Array3<Complex<T::PlanScalar>>,
@@ -392,8 +267,7 @@ pub fn ifft_3d_array_typed_into<T>(
     let [nx, ny, nz] = field_hat.shape();
     T::inverse_3d_into(
         T::get_3d_plan(
-            Shape3D::new(nx, ny, nz)
-                .expect("ifft_3d_array_typed_into requires non-zero dimensions"),
+            Shape3D::new(nx, ny, nz).expect("ifft_3d_array_into requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,
@@ -406,7 +280,7 @@ pub fn ifft_3d_array_typed_into<T>(
 /// typed spectrum as scratch.
 ///
 /// This mutates `field_hat`.
-pub fn ifft_3d_array_typed_into_spectrum_scratch<T>(
+pub fn ifft_3d_array_into_spectrum_scratch<T>(
     field_hat: &mut Array3<Complex<T::PlanScalar>>,
     out: &mut Array3<T>,
 ) where
@@ -418,12 +292,12 @@ pub fn ifft_3d_array_typed_into_spectrum_scratch<T>(
     debug_assert_eq!(
         out.shape(),
         [nx, ny, nz],
-        "ifft_3d_array_typed_into_spectrum_scratch: shape mismatch"
+        "ifft_3d_array_into_spectrum_scratch: shape mismatch"
     );
     T::inverse_3d_spectrum_into(
         T::get_3d_plan(
             Shape3D::new(nx, ny, nz)
-                .expect("ifft_3d_array_typed_into_spectrum_scratch requires non-zero dimensions"),
+                .expect("ifft_3d_array_into_spectrum_scratch requires non-zero dimensions"),
         )
         .as_ref(),
         field_hat,
@@ -431,19 +305,9 @@ pub fn ifft_3d_array_typed_into_spectrum_scratch<T>(
     );
 }
 
-/// Inverse 3D FFT into caller-owned real storage and scratch complex storage
-/// for a compile-time-known shape.
-pub fn ifft_3d_array_static_into<const NX: usize, const NY: usize, const NZ: usize>(
-    field_hat: &Array3<Complex64>,
-    out: &mut Array3<f64>,
-    scratch: &mut Array3<Complex64>,
-) {
-    ifft_3d_array_static_typed_into::<f64, NX, NY, NZ>(field_hat, out, scratch);
-}
-
 /// Inverse 3D FFT into caller-owned typed real storage and typed scratch
 /// spectrum for a compile-time-known shape.
-pub fn ifft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, const NZ: usize>(
+pub fn ifft_3d_array_static_into<T, const NX: usize, const NY: usize, const NZ: usize>(
     field_hat: &Array3<Complex<T::PlanScalar>>,
     out: &mut Array3<T>,
     scratch: &mut Array3<Complex<T::PlanScalar>>,
@@ -454,46 +318,24 @@ pub fn ifft_3d_array_static_typed_into<T, const NX: usize, const NY: usize, cons
     debug_assert_eq!(
         field_hat.shape(),
         [NX, NY, NZ],
-        "ifft_3d_array_static_typed_into: input shape mismatch"
+        "ifft_3d_array_static_into: input shape mismatch"
     );
     debug_assert_eq!(
         out.shape(),
         [NX, NY, NZ],
-        "ifft_3d_array_static_typed_into: output shape mismatch"
+        "ifft_3d_array_static_into: output shape mismatch"
     );
     debug_assert_eq!(
         scratch.shape(),
         [NX, NY, NZ],
-        "ifft_3d_array_static_typed_into: scratch shape mismatch"
+        "ifft_3d_array_static_into: scratch shape mismatch"
     );
     T::inverse_3d_static_into::<NX, NY, NZ>(field_hat, out, scratch);
 }
 
-/// Inverse 3D FFT of a complex array into a caller-provided real buffer.
-pub fn ifft_3d_array_into(field_hat: &mut Array3<Complex64>, out: &mut Array3<f64>) {
-    ifft_3d_array_typed_into_spectrum_scratch::<f64>(field_hat, out);
-}
-
-/// Inverse 3D FFT into caller-owned real storage and scratch complex storage.
-pub fn ifft_3d_array_into_scratch(
-    field_hat: &Array3<Complex64>,
-    out: &mut Array3<f64>,
-    scratch: &mut Array3<Complex64>,
-) {
-    ifft_3d_array_typed_into::<f64>(field_hat, out, scratch);
-}
-
-/// Inverse 2D FFT of a Leto spectrum view, returning Mnemosyne-backed Leto storage.
-#[must_use]
-pub fn ifft_2d_leto(
-    field_hat: leto::ArrayView2<'_, Complex64>,
-) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 2> {
-    ifft_2d_leto_typed::<f64>(field_hat)
-}
-
 /// Inverse 2D FFT of a Leto spectrum view using generic storage dispatch.
 #[must_use]
-pub fn ifft_2d_leto_typed<T>(
+pub fn ifft_2d_leto<T>(
     field_hat: leto::ArrayView2<'_, Complex<T::PlanScalar>>,
 ) -> leto::Array<T, leto::MnemosyneStorage<T>, 2>
 where
@@ -502,7 +344,7 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let dense_array = field_hat.to_contiguous();
-    let output = ifft_2d_array_typed::<T>(&dense_array);
+    let output = ifft_2d_array::<T>(&dense_array);
     leto::Array::<T, leto::MnemosyneStorage<T>, 2>::from_mnemosyne_slice(
         output.shape(),
         output
@@ -512,17 +354,9 @@ where
     .expect("IFFT signal shape must match Leto output shape")
 }
 
-/// Inverse 3D FFT of a Leto spectrum view, returning Mnemosyne-backed Leto storage.
-#[must_use]
-pub fn ifft_3d_leto(
-    field_hat: leto::ArrayView3<'_, Complex64>,
-) -> leto::Array<f64, leto::MnemosyneStorage<f64>, 3> {
-    ifft_3d_leto_typed::<f64>(field_hat)
-}
-
 /// Inverse 3D FFT of a Leto spectrum view using generic storage dispatch.
 #[must_use]
-pub fn ifft_3d_leto_typed<T>(
+pub fn ifft_3d_leto<T>(
     field_hat: leto::ArrayView3<'_, Complex<T::PlanScalar>>,
 ) -> leto::Array<T, leto::MnemosyneStorage<T>, 3>
 where
@@ -531,7 +365,7 @@ where
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
     let dense_array = field_hat.to_contiguous();
-    let output = ifft_3d_array_typed::<T>(&dense_array);
+    let output = ifft_3d_array::<T>(&dense_array);
     leto::Array::<T, leto::MnemosyneStorage<T>, 3>::from_mnemosyne_slice(
         output.shape(),
         output

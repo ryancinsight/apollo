@@ -230,7 +230,7 @@ mod tests {
     use hephaestus_cuda::CudaDevice;
     use leto::Array1;
 
-    use crate::{fft_1d_complex_typed, Complex32};
+    use crate::{fft_1d_complex, Complex32};
 
     use super::{validate_length, CudaFft1d};
 
@@ -288,7 +288,7 @@ mod tests {
             return;
         };
         let original = signal();
-        let expected = fft_1d_complex_typed(&original);
+        let expected = fft_1d_complex(&original);
         let norm_one: f32 = original
             .as_slice()
             .expect("owned Leto signal is contiguous")
