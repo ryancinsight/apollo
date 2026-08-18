@@ -9,6 +9,7 @@ apollo_fft_macros::generate_winograd_composites! {
         (4, 27), // dft108_impl
         (16, 7), // dft112_impl
         (15, 8), // dft120_impl
+        (2, 63), // dft126_impl
         (11, 14), // dft154_impl
         (20, 9), // dft180_impl
         (2, 121), // dft242_impl
