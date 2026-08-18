@@ -30,6 +30,17 @@ pub(crate) const SHORT_WINOGRAD_SIZES: &[usize] = &[
 /// compiler resolves the entire search at compile time (zero runtime cost).
 #[inline]
 pub(crate) const fn is_short_winograd_size(n: usize) -> bool {
+    // The dense small-size prefix is the hot dispatch domain. A direct
+    // interval check avoids a binary-search walk for every prime-length
+    // transform while retaining the sparse tail entries in the canonical
+    // table below.
+    if n >= 2 && n <= 56 {
+        return true;
+    }
+    if matches!(n, 58 | 60 | 62 | 63 | 64) {
+        return true;
+    }
+
     let mut left = 0;
     let mut right = SHORT_WINOGRAD_SIZES.len();
     while left < right {

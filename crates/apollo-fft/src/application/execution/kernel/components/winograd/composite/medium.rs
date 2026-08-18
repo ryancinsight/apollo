@@ -9,7 +9,6 @@ apollo_fft_macros::generate_winograd_composites! {
         (4, 27), // dft108_impl
         (16, 7), // dft112_impl
         (15, 8), // dft120_impl
-        (2, 63), // dft126_impl
         (11, 14), // dft154_impl
         (20, 9), // dft180_impl
         (2, 121), // dft242_impl
@@ -29,5 +28,15 @@ apollo_fft_macros::generate_winograd_composites! {
         (21, 9),  // dft189_impl
         (22, 22), // dft484_impl
     ],
+    pp_pairs: [],
+}
+
+// The length-126 convolution is the full-cyclic subproblem for generic
+// prime-length 127 Rader transforms. Keep this former large-codelet call
+// boundary intact without restoring the deleted codelet catalogue.
+apollo_fft_macros::generate_winograd_composites! {
+    inline_attr: never,
+    gt_pairs: [(2, 63)], // dft126_impl
+    ct_pairs: [],
     pp_pairs: [],
 }
