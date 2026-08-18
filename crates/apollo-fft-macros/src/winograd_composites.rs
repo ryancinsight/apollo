@@ -6,7 +6,7 @@
 //! - `ct_pairs`: non-coprime (n1, n2) → Cooley-Tukey DIT, precomputed twiddle constants
 //! - `pp_pairs`: prime-power (p, g) → Winograd-Rader on `(Z/p²Z)*`, fully twiddle-free
 //!
-//! Optional: `inline_attr: always | hint` (default: `always`)
+//! Optional: `inline_attr: always | hint | never` (default: `always`)
 
 use proc_macro::TokenStream as CompilerTokenStream;
 use quote::quote;
@@ -22,14 +22,17 @@ use crate::prime_power_winograd::prime_power_winograd_function;
 
 /// Inlining directive for generated codelets.
 ///
-/// - `Always` → `#[inline]`: forced inlining for small N where
+/// - `Always` → `#[inline]`:  forced inlining for small N where
 ///   stack depth is safe (N ≤ 36).
-/// - `Hint`   → `#[inline]`:         optimizer hint only; avoids forced
+/// - `Hint`   → `#[inline]`:  optimizer hint only; avoids forced
 ///   inlining for larger N where debug-mode stack may overflow.
+/// - `Never`  → `#[inline(never)]`: prevents code bloat and debug-mode
+///   stack overflow for the largest fixed-array codelets (64 ≤ N ≤ 200).
 #[derive(Clone, Copy)]
 enum InlineAttr {
     Always,
     Hint,
+    Never,
 }
 
 impl InlineAttr {
@@ -37,6 +40,7 @@ impl InlineAttr {
         match self {
             InlineAttr::Always => quote! { #[inline] },
             InlineAttr::Hint => quote! { #[inline] },
+            InlineAttr::Never => quote! { #[inline(never)] },
         }
     }
 }
@@ -82,11 +86,12 @@ impl Parse for WinogradCompositesInput {
                     inline_attr = match value.to_string().as_str() {
                         "always" => InlineAttr::Always,
                         "hint" => InlineAttr::Hint,
+                        "never" => InlineAttr::Never,
                         other => {
                             return Err(syn::Error::new(
                                 value.span(),
                                 format!(
-                                    "unknown inline_attr `{other}`; expected `always` or `hint`"
+                                    "unknown inline_attr `{other}`; expected `always`, `hint`, or `never`"
                                 ),
                             ));
                         }
