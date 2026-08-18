@@ -112,8 +112,6 @@ fn rader_runtime_impl<
 ) {
     if prefers_bluestein_for_rader::<F>(n) {
         rader_runtime_impl_with_backend::<F, INVERSE, Bluestein>(data, n);
-    } else if prefers_full_cyclic_for_rader::<F>(n) {
-        rader_runtime_impl_with_backend::<F, INVERSE, FullCyclic>(data, n);
     } else if prefers_half_cyclic_for_rader::<F>(n) {
         rader_runtime_impl_with_backend::<F, INVERSE, HalfCyclicWinograd>(data, n);
     } else {
@@ -145,11 +143,6 @@ pub(crate) fn prefers_half_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bo
 }
 
 #[inline]
-pub(crate) fn prefers_full_cyclic_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
-    F::FULL_CYCLIC_RADER_PRIMES.contains(&n)
-}
-
-#[inline(never)]
 fn rader_runtime_impl_with_backend<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>> + ShortWinogradScalar,
     const INVERSE: bool,

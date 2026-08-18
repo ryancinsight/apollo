@@ -225,12 +225,6 @@ fn rader_bluestein_policy_is_scalar_trait_driven() {
 }
 
 #[test]
-fn rader_full_cyclic_policy_is_scalar_trait_driven() {
-    assert!(!super::prefers_full_cyclic_for_rader::<f32>(127));
-    assert!(super::prefers_full_cyclic_for_rader::<f64>(127));
-}
-
-#[test]
 fn runtime_rader_half_cyclic_521_matches_full_cyclic() {
     assert_rader_strategies_match(521, 1.0e-9);
 }

@@ -43,11 +43,6 @@ pub trait MixedRadixScalar:
     /// monomorphization, avoiding runtime type inspection in the Rader selector.
     const HALF_CYCLIC_RADER_PRIMES: &'static [usize];
 
-    /// Prime lengths whose Rader convolution uses the full-cyclic backend
-    /// before the half-cyclic threshold. The slice is scalar-specific and
-    /// records measured exceptions to the threshold policy.
-    const FULL_CYCLIC_RADER_PRIMES: &'static [usize];
-
     /// Precision-specific composite stage order for N=200.
     ///
     /// The stage order is part of the scalar policy because f64 and f32 favor
