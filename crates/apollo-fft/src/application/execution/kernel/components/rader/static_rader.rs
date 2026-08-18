@@ -38,9 +38,9 @@ pub(crate) const STATIC_RADER_PRIMES: &[usize] = &[
     STATIC_RADER_MAX_PRIME,
 ];
 
-/// The `#[inline]` hint here is load-bearing. Do not remove it, and do not
-/// replace it with `#[inline(never)]` — that was tried and measured, and it
-/// regresses.
+/// The `#[inline(always)]` hint here is load-bearing. Do not remove it, and do
+/// not replace it with `#[inline(never)]` — that was tried and measured, and
+/// it regresses.
 ///
 /// ## What looks wrong but is not
 ///
