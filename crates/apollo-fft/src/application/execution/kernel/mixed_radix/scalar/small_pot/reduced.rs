@@ -497,9 +497,8 @@ pub(in crate::application::execution::kernel::mixed_radix::scalar) unsafe fn sma
             }
         }
         16 => {
-            // Use winograd dft16 for correctness (avx2_dft16_reduced path produced wrong spectra
-            // for f32 n=16 plans; winograd dft16 verified in dft_small and other paths).
-            // TODO: repair avx2_dft16_reduced or replace with correct column avx for 16.
+            // Keep the validated Winograd kernel: the reduced f32 AVX2 candidate produced
+            // incorrect N=16 spectra and has no active call site.
             let data_ref = &mut *data.as_mut_ptr().cast::<[Complex32; 16]>();
             crate::application::execution::kernel::components::winograd::dft16_impl::<f32, INVERSE>(
                 data_ref,
