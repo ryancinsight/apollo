@@ -32,7 +32,14 @@ impl PlanCacheProvider for f64 {
     #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
-            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f64>>)>> = const { RefCell::new(None) };
+            #[cfg_attr(
+                windows,
+                expect(
+                    clippy::missing_const_for_thread_local,
+                    reason = "const TLS initialization regressed the mixed-precision plan-cache benchmark"
+                )
+            )]
+            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f64>>)>> = RefCell::new(None);
             static TLS_CACHE: RefCell<HashMap<usize, Arc<FftPlan1D<f64>>>> = RefCell::new(HashMap::new());
         }
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f64>>>>> =
@@ -145,7 +152,14 @@ impl PlanCacheProvider for f32 {
     #[inline]
     fn get_1d_plan(shape: Shape1D) -> Arc<FftPlan1D<Self::PlanScalar>> {
         thread_local! {
-            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f32>>)>> = const { RefCell::new(None) };
+            #[cfg_attr(
+                windows,
+                expect(
+                    clippy::missing_const_for_thread_local,
+                    reason = "const TLS initialization regressed the mixed-precision plan-cache benchmark"
+                )
+            )]
+            static LAST_PLAN: RefCell<Option<(usize, Arc<FftPlan1D<f32>>)>> = RefCell::new(None);
             static TLS_CACHE: RefCell<HashMap<usize, Arc<FftPlan1D<f32>>>> = RefCell::new(HashMap::new());
         }
         static GLOBAL_CACHE: std::sync::LazyLock<RwLock<HashMap<usize, Arc<FftPlan1D<f32>>>>> =
