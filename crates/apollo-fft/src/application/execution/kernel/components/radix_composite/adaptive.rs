@@ -56,7 +56,7 @@ impl ComposeArena {
 
 thread_local! {
     static COMPOSE_ARENA: core::cell::UnsafeCell<ComposeArena> =
-        core::cell::UnsafeCell::new(ComposeArena::new());
+        const { core::cell::UnsafeCell::new(ComposeArena::new()) };
 }
 
 struct ArenaGuard(usize);

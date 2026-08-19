@@ -23,10 +23,10 @@ thread_local! {
     static TL_INV_REDUCED: RefCell<FxHashMap<usize, Arc<[Complex32]>>> =
         RefCell::new(FxHashMap::with_capacity_and_hasher(8, Default::default()));
 
-    static TL_FWD_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = RefCell::new([const { None }; 32]);
-    static TL_INV_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = RefCell::new([const { None }; 32]);
-    static TL_FWD_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = RefCell::new([const { None }; 32]);
-    static TL_INV_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = RefCell::new([const { None }; 32]);
+    static TL_FWD_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = const { RefCell::new([const { None }; 32]) };
+    static TL_INV_PRECISE_POW2: RefCell<[Option<Arc<[Complex64]>>; 32]> = const { RefCell::new([const { None }; 32]) };
+    static TL_FWD_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = const { RefCell::new([const { None }; 32]) };
+    static TL_INV_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = const { RefCell::new([const { None }; 32]) };
 
     static TL_FWD_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
     static TL_INV_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
