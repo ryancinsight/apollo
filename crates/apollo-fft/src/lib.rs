@@ -25,7 +25,6 @@
     clippy::option_option,             // tri-state caches encode unknown/unsupported/supported distinctly
     clippy::approx_constant,           // generated tables preserve audited literal bit patterns
     clippy::needless_pass_by_value,          // Copy-sized plan/shape types passed by value intentionally
-    clippy::missing_const_for_thread_local,  // all thread_local! initializers already use const { }
     clippy::excessive_precision,             // Winograd/codelet coefficients carry one guard digit past
                                              // f64 precision so the compiler selects the intended
                                              // nearest-representable value; trimming would alter

@@ -11,29 +11,8 @@ use eunomia::Complex64;
 use mnemosyne::scratch::ScratchPool;
 
 thread_local! {
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static TYPED_INPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static TYPED_OUTPUT64_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static OBSERVABLE_ANALYTIC_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

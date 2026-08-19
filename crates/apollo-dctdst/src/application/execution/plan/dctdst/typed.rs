@@ -1,10 +1,3 @@
-#![cfg_attr(
-    all(windows, target_env = "gnu"),
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-    )
-)]
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, CpuStorage, PrecisionProfile};

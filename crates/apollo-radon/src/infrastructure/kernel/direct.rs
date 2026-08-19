@@ -1,12 +1,4 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
-
-#![cfg_attr(
-    all(windows, target_env = "gnu"),
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-    )
-)]
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
 use leto::Array2;
 use mnemosyne::scratch::ScratchPool;

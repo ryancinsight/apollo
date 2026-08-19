@@ -4,14 +4,6 @@
 //! code. Forward and inverse sparse execution use Apollo FFT kernels
 //! (`O(N log N)`) instead. This module is preserved as a ground-truth reference
 //! for verification cross-checks.
-
-#![cfg_attr(
-    all(windows, target_env = "gnu", test),
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-    )
-)]
 #[cfg(test)]
 use eunomia::Complex64;
 #[cfg(test)]

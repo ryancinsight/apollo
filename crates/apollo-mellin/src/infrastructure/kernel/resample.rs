@@ -20,36 +20,9 @@ const PAR_THRESHOLD: usize = 256;
 const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
 const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 
-// The initializers below are already `const` blocks. Clippy 1.97 nonetheless
-// reports `missing_const_for_thread_local` against the `thread_local!`
-// expansion on `x86_64-pc-windows-gnu`, and only there: the same clippy build
-// stays silent on `x86_64-pc-windows-msvc`, as does Linux. The suppressions are
-// therefore gated on that host so they are fulfilled where the false positive
-// exists and absent — rather than unfulfilled — everywhere else.
 thread_local! {
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    #[cfg_attr(
-        all(windows, target_env = "gnu"),
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-        )
-    )]
     static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

@@ -1,20 +1,3 @@
-//! `clippy::missing_const_for_thread_local` fires on this module's scratch
-//! `thread_local!`s even though both initializers are already `const` blocks —
-//! a false positive of the pinned 1.97.0 clippy on `x86_64-pc-windows-gnu`
-//! specifically: the same clippy build stays silent on `x86_64-pc-windows-msvc`
-//! and on Linux, so the gate is the host, not the toolchain version. The
-//! expectation is module-scoped because the diagnostic is attributed to the
-//! macro invocation, which no item-level attribute reaches, and there is no
-//! enclosing function to carry it. `expect` rather than `allow`, so it reports
-//! itself as unfulfilled once the false positive is fixed and can be deleted.
-#![cfg_attr(
-    all(windows, target_env = "gnu"),
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "clippy 1.97 false positive on the windows-gnu thread_local expansion: the initializer is already a const block"
-    )
-)]
-
 //! Mathematical and data-structure helpers for Spherical Harmonic Transforms.
 
 use super::ShtPlan;
