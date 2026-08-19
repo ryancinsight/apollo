@@ -1,5 +1,3 @@
-#![allow(clippy::many_single_char_names)]
-#![allow(clippy::too_many_arguments)]
 use super::super::avx::fixed_len64_reduced_avx_fma;
 #[cfg(all(test, target_arch = "x86_64"))]
 use super::super::avx::{

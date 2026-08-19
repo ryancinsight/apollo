@@ -105,6 +105,11 @@ default_constructed_unit_structs = "allow"
 doc_lazy_continuation = "allow"
 needless_range_loop = "allow"
 too_many_arguments = "allow"
+# Butterfly kernels name their radix inputs `a`, `b`, `c`, `d` after the
+# signal-flow diagrams they implement; renaming them to satisfy the lint
+# would make the code harder to check against the reference. Recorded once
+# here rather than as a blanket `#![allow]` in each butterfly module.
+many_single_char_names = "allow"
 manual_is_multiple_of = "allow"
 manual_div_ceil = "allow"
 manual_slice_size_calculation = "allow"
