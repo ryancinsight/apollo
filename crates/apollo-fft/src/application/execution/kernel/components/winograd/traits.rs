@@ -26,8 +26,18 @@ pub trait WinogradScalar:
 }
 
 thread_local! {
-    static TL_WINOGRAD_SCRATCH_64: mnemosyne::scratch::ScratchPool<eunomia::Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
-    static TL_WINOGRAD_SCRATCH_32: mnemosyne::scratch::ScratchPool<eunomia::Complex32> = const { mnemosyne::scratch::ScratchPool::new() };
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "lazy initialization preserves the Rader benchmark path"
+    )]
+    static TL_WINOGRAD_SCRATCH_64: mnemosyne::scratch::ScratchPool<eunomia::Complex64> =
+        mnemosyne::scratch::ScratchPool::new();
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "lazy initialization preserves the mixed-precision Rader path"
+    )]
+    static TL_WINOGRAD_SCRATCH_32: mnemosyne::scratch::ScratchPool<eunomia::Complex32> =
+        mnemosyne::scratch::ScratchPool::new();
 }
 
 impl WinogradScalar for f64 {
