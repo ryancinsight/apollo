@@ -1,5 +1,15 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-BOOK-TEST-2026-08-20 [patch]
+
+- [x] Diagnose PR #108 job 96546609469: package build passed; mdBook
+      compilation failed only because included examples lacked extern crate
+      declarations for staged crates.
+- [x] Add the Apollo, Eunomia, and Leto declarations to the two included
+      examples and repin the shared workflow to Atlas 20c9398.
+- [x] Pass local formatting, mdBook build, strict links, and diff checks.
+- [ ] Collect the exact-head hosted rerun, then merge and verify the default.
+
 ## ATLAS-APOLLO-ROOT-CLEANUP [patch]
 
 - [x] Move the architecture and generated benchmark reports under `docs/`,

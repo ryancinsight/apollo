@@ -1,5 +1,18 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BOOK-TEST-2026-08-20 [patch] — in progress
+
+- The executable-book PR #108 exposed a real mdBook 0.5.4 contract defect in
+  the included Apollo examples: cargo build --locked -p apollo-fft passed,
+  but mdBook test could not resolve apollo_fft, eunomia, or leto because the
+  source files lacked explicit extern crate declarations.
+- The bounded fix adds those declarations to the two included Apollo example
+  sources and repins the shared Atlas workflow to the hash-preserving staging
+  revision 20c9398.
+- Local mdBook build, strict link scan, format, and diff checks pass. Hosted
+  exact-head rerun remains required before merge; the local locked Cargo gate
+  is still subject to the shared Atlas overlay lock-form mismatch.
+
 ## ATLAS-APOLLO-SHORT-PRIME-CVXIII — Re-audit f32 N=5/N=7/N=11 rows [patch] — complete 2026-08-16
 
 - Finding: current source already routes public N=5 and N=7 through the
