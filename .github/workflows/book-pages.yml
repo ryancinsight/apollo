@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   deploy:
-    uses: ryancinsight/atlas/.github/workflows/book-pages.yml@1fcd17c6f7923cb1734756c15e0a5a39e333ee32
+    uses: ryancinsight/atlas/.github/workflows/book-pages.yml@20c93980f7c98f2e23a89c4a0540f16c8f2d7239
     permissions:
       contents: read
       pages: write

@@ -6,6 +6,9 @@
 //! rounding.  This example verifies the round-trip for a known analytical
 //! signal and shows how to read back spectral magnitude.
 
+extern crate apollo_fft;
+extern crate leto;
+
 use apollo_fft::{fft_1d_array, fftfreq, ifft_1d_array};
 use leto::Array1;
 

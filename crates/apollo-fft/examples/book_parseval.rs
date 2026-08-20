@@ -7,6 +7,10 @@
 //! This example verifies the theorem numerically and shows how to use
 //! the complex FFT in-place API.
 
+extern crate apollo_fft;
+extern crate eunomia;
+extern crate leto;
+
 use apollo_fft::{fft_1d_array, fft_1d_complex_inplace, ifft_1d_complex_inplace};
 use eunomia::Complex64;
 use leto::Array1;
