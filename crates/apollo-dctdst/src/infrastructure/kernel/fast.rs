@@ -156,14 +156,6 @@
 //!   Applications*. Academic Press.
 //! - Makhoul, J. (1980). A fast cosine transform in one and two dimensions. *IEEE Trans.
 //!   Acoust. Speech Signal Process.*, 28(1), 27–34.
-
-#![cfg_attr(
-    windows,
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
-    )
-)]
 use apollo_fft::{Complex64, PlanCacheProvider, Shape1D};
 use mnemosyne::scratch::ScratchPool;
 use std::f64::consts::PI;

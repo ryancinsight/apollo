@@ -13,13 +13,6 @@ use eunomia::Complex64;
 use moirai::ParallelSliceMut;
 
 thread_local! {
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
-        )
-    )]
     static QUADRATURE_ANALYTIC_SCRATCH: mnemosyne::scratch::ScratchPool<Complex64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 

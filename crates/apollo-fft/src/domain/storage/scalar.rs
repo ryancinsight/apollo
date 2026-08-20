@@ -33,37 +33,9 @@ mod sealed {
 }
 
 thread_local! {
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
-        )
-    )]
     static REAL64_INPUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
-        )
-    )]
     static REAL64_OUTPUT_SCRATCH: ScratchPool<f64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
-        )
-    )]
     static COMPLEX64_INPUT_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive on Windows: the initializer is already a const block"
-        )
-    )]
     static COMPLEX64_OUTPUT_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

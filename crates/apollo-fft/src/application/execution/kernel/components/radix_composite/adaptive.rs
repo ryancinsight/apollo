@@ -55,6 +55,10 @@ impl ComposeArena {
 }
 
 thread_local! {
+    #[expect(
+        clippy::missing_const_for_thread_local,
+        reason = "lazy initialization preserves the composite-radix benchmark path"
+    )]
     static COMPOSE_ARENA: core::cell::UnsafeCell<ComposeArena> =
         core::cell::UnsafeCell::new(ComposeArena::new());
 }

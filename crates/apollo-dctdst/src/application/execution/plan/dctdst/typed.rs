@@ -1,10 +1,3 @@
-#![cfg_attr(
-    windows,
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
-    )
-)]
 use super::DctDstPlan;
 use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use apollo_fft::{f16, CpuStorage, PrecisionProfile};

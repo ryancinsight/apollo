@@ -29,14 +29,6 @@
 //! - positions/value arrays must have equal length
 //! - oversampling factor must satisfy `sigma >= 2`
 //! - kernel width must satisfy `kernel_width >= 2`
-
-#![cfg_attr(
-    windows,
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
-    )
-)]
 use apollo_fft::{ApolloError, ApolloResult, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::Complex64;
 use leto::{Array3, ArrayView3, ArrayViewMut3};

@@ -1,12 +1,4 @@
 //! Direct discrete Radon projection and adjoint backprojection kernels.
-
-#![cfg_attr(
-    windows,
-    expect(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows: the initializers are already const blocks"
-    )
-)]
 use crate::domain::geometry::parallel_beam::ParallelBeamGeometry;
 use leto::Array2;
 use mnemosyne::scratch::ScratchPool;

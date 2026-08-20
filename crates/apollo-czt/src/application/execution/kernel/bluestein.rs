@@ -8,13 +8,6 @@ use moirai::ParallelSliceMut;
 const BLUESTEIN_PAR_LEN_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    #[cfg_attr(
-        windows,
-        expect(
-            clippy::missing_const_for_thread_local,
-            reason = "false positive: the initializer is already a const block"
-        )
-    )]
     static COMPLEX_SCRATCH_POOL: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 

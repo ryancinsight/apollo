@@ -21,35 +21,8 @@ const HERMES_MOMENT_LEN_THRESHOLD: usize = 8_192;
 const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 
 thread_local! {
-    // `allow`, not `expect`: the lint fires on Windows, where it is a false
-    // positive (the initializer below is already a `const` block), but not on
-    // Linux, because `ScratchPool::new`'s constness differs across mnemosyne's
-    // cfg-gated backends. An `expect` is therefore unfulfilled on exactly one
-    // of the two platforms and cannot be correct for both.
-    #[allow(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows; does not fire on Linux"
-    )]
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    // `allow`, not `expect`: the lint fires on Windows, where it is a false
-    // positive (the initializer below is already a `const` block), but not on
-    // Linux, because `ScratchPool::new`'s constness differs across mnemosyne's
-    // cfg-gated backends. An `expect` is therefore unfulfilled on exactly one
-    // of the two platforms and cannot be correct for both.
-    #[allow(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows; does not fire on Linux"
-    )]
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    // `allow`, not `expect`: the lint fires on Windows, where it is a false
-    // positive (the initializer below is already a `const` block), but not on
-    // Linux, because `ScratchPool::new`'s constness differs across mnemosyne's
-    // cfg-gated backends. An `expect` is therefore unfulfilled on exactly one
-    // of the two platforms and cannot be correct for both.
-    #[allow(
-        clippy::missing_const_for_thread_local,
-        reason = "false positive on Windows; does not fire on Linux"
-    )]
     static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
