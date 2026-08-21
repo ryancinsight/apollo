@@ -15,6 +15,21 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=1.20,<3.0",
 ]
+keywords = ["fft", "nufft", "fourier", "scientific-computing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Documentation = "https://ryancinsight.github.io/apollo/"
+Issues = "https://github.com/ryancinsight/apollo/issues"
+Repository = "https://github.com/ryancinsight/apollo"
 
 [tool.maturin]
 python-source = "python"
