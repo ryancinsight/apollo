@@ -1,7 +1,31 @@
+import ast
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 import pyapollofft as afft
+
+
+def test_package_ships_typed_public_surface():
+    package = Path(afft.__file__).parent
+    assert package.joinpath("py.typed").is_file()
+    stub = package.joinpath("__init__.pyi")
+    assert stub.is_file()
+    module = ast.parse(stub.read_text(encoding="utf-8"), filename=str(stub))
+    declared = {
+        node.name
+        for node in module.body
+        if isinstance(node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef))
+    }
+    declared.update(
+        target.id
+        for node in module.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(target := node.target, ast.Name)
+    )
+    assert set(afft.__all__) <= declared
+    assert "__version__" in declared
 
 
 def test_fft1_roundtrip():
