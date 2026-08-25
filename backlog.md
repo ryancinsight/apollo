@@ -100,7 +100,75 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — todo
+## ATLAS-APOLLO-POT-PLANAR-2026-08-25 — Planar layout for the power-of-two kernel family [arch] — todo
+
+- **Outcome:** the power-of-two f64 path closes most of the measured 2.0x-3.5x
+  gap against PhastFT, by removing the per-butterfly cross-lane shuffles that
+  the interleaved `Complex64` layout forces on every complex multiply.
+- **Finding:** profiling establishes that the gap is entirely in the Stockham
+  kernel — plan dispatch, twiddle lookup, and scratch acquisition cost nothing
+  measurable — and that the hand-written AVX backend is *slower* than the
+  auto-vectorized scalar backend at three of four sizes measured. The AVX code
+  is reached and does run; it loses. The most plausible dominant cause is
+  layout: PhastFT holds split real/imaginary planes so a complex multiply is
+  four real operations on aligned same-component vectors, while Apollo's
+  interleaved layout needs shuffles to separate and recombine components on
+  every butterfly. Full analysis and numbers in
+  `gap_audit.md#pot-f64-profile`.
+- **Scope:** the power-of-two Stockham kernel family against the existing
+  `FftPlanarMut` view, with conversion at the plan boundary — which the view's
+  own documentation already describes as the intended arrangement but which the
+  Stockham path does not use. **Non-goals:** the non-power-of-two paths; the
+  four-step decomposition, which is a separate layer; adopting PhastFT's
+  in-place DIT formulation, which is a distinct question gated on
+  `ATLAS-APOLLO-PEAK-MEMORY-2026-08-25`.
+- **Acceptance oracle:** interleaved in-process measurement against PhastFT
+  across 2^8..2^16 showing the ratio reduced, with no size regressed; the
+  PhastFT parity test and the analytical-oracle accuracy ratios unchanged;
+  per-size isolated runs confirming the sweep result. Layout conversion cost is
+  charged to Apollo, not excluded.
+- **Dependencies:** none. **Risk / change class:** [arch] with an ADR; public
+  API unchanged, so [patch] on the SemVer axis pending `cargo-semver-checks`.
+- **Prerequisite finding — the backends are not independently selectable.**
+  Routing only N=256 and N=512 to the scalar backend was implemented and
+  measured: 2x faster at those two sizes, ~1.8x slower at 2^10, 2^11, and 2^12,
+  which do not route through the changed arm. Adding a second instantiation of
+  the shared generic `transform_sized` perturbs code generation for the
+  neighbouring `PreciseStockhamAvxFma` instantiations; `#[inline(never)]`
+  isolation did not remove the effect. Any per-size routing decision in this
+  family must therefore be measured across the whole size range, and the
+  instantiation coupling should be understood before the rewrite rather than
+  discovered during it.
+
+## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — todo
+
+- **Outcome:** the AVX Stockham backend either earns its place with measurements
+  or is retired, rather than being carried on the assumption that hand-written
+  intrinsics are faster than what the optimizer produces.
+- **Finding:** measured against the scalar backend on identical inputs,
+  interleaved: 0.35x at N=256, 0.55x at N=512, 1.11x at N=1024, 0.69x at N=4096
+  (scalar/AVX — below 1.0 means the AVX backend is slower). It is a
+  pessimization at three of four sizes. That backend is the larger part of
+  `apollo-fft`'s ISA surface, which the PhastFT audit measured at 28 files
+  importing `core::arch`, 90 `#[target_feature]` attributes, and 429 `unsafe`
+  blocks.
+- **Scope:** a per-size measurement of every route the AVX backend serves, then
+  one of: retire it in favour of the auto-vectorized scalar backend; keep only
+  the fixed-length kernels (32, 64, 4096) that may still win; or rebuild it on
+  the planar layout under `ATLAS-APOLLO-POT-PLANAR-2026-08-25`, which would
+  change the premise. **Non-goals:** deleting anything before the per-size
+  measurement exists.
+- **Acceptance oracle:** a per-size table covering every dispatch route, and a
+  recorded decision per route. Retirement, if chosen, shows no size regressed.
+- **Risk / change class:** [arch]. **Dependencies:** interacts with
+  `ATLAS-APOLLO-POT-PLANAR-2026-08-25`; the planar rewrite may make this moot,
+  so sequence the planar decision first.
+- **Note:** this supersedes the "clarity and duplication" framing that the FWHT
+  negative result left the ISA fork with. There is now a measured performance
+  argument against the largest part of that fork, which the `apollo-fwht` case
+  did not have.
+
+## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — done 2026-08-25
 
 - **Outcome:** the gap between Apollo and PhastFT on power-of-two forward
   transforms is explained by profile evidence and either closed or recorded as
@@ -126,6 +194,21 @@
 - **Risk / change class:** [patch] for the investigation; any kernel change is
   classified when proposed.
 - **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 4.
+- **Delivered 2026-08-25:** profile in `gap_audit.md#pot-f64-profile`. The gap
+  is entirely in the Stockham kernel — plan dispatch, twiddle lookup, and
+  scratch acquisition measure as zero overhead — and the hand-written AVX
+  backend is *slower* than the auto-vectorized scalar one at three of four
+  sizes (0.35x at N=256). Three claims in Finding 4 did not survive interleaved
+  measurement and are corrected there: the gap is a flat 2.0x-3.5x rather than
+  a 1.5x-9.5x spread, and neither the N=1024 anomaly nor the odd-power penalty
+  reproduces. `four_step_fft` is already general for `n1 != n2`, so the
+  parity gate that appeared to cause the odd-power penalty is not one.
+- **Not fixed here, and why:** routing N=256/512 to the scalar backend was
+  implemented and measured — 2x faster at those sizes, ~1.8x slower at three
+  larger ones that do not route through the changed arm — and reverted. The
+  backends are not independently selectable per size. Follow-on work is
+  `ATLAS-APOLLO-POT-PLANAR-2026-08-25` and
+  `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25`.
 
 ## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — blocked
 

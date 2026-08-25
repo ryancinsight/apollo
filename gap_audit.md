@@ -1,5 +1,146 @@
 # Apollo Gap Audit
 
+## Power-of-two f64 throughput profile (2026-08-25) <a id="pot-f64-profile"></a>
+
+Evidence tier: measured, interleaved within a single process, with a
+change-reverted control and per-size isolation runs. Host: x86-64 with AVX2 and
+FMA, no AVX-512; no `target-cpu` or `RUSTFLAGS` set anywhere in Apollo or the
+Atlas root config.
+
+### Method, and why the earlier numbers were wrong
+
+Finding 4 of the PhastFT audit reported a 1.5x-9.5x spread against PhastFT, an
+N=1024 anomaly, and an odd-power penalty. Those came from sweeps run in separate
+processes and compared across runs. This host drifts enough between runs to
+manufacture all three. Re-measured with both engines interleaved inside one
+process — alternating arms so drift hits them equally — the picture is simpler
+and the three specific claims do not survive:
+
+- **The gap is 2.0x-3.5x**, not 1.5x-9.5x, and is roughly flat across
+  2^9..2^16 rather than spiking.
+- **There is no N=1024 anomaly.** The apparent one was drift.
+- **There is no odd-power penalty.** 2^13 and 2^15 measured 13.64 and 19.93
+  ns/element in the original sweep and 8.6 and 10.5 when interleaved, in line
+  with their even neighbours. `four_step_fft` is in fact already general for
+  `n1 != n2` (`k1 = k/2; k2 = k - k1`), and the caller's `trailing_zeros() % 2`
+  gate has no measurable effect on the plan path.
+
+Correcting these matters more than the original numbers did: two of the three
+would have sent the next increment after a defect that does not exist.
+
+### Where the time actually goes
+
+Decomposed inside the crate, with twiddles and scratch hoisted out of the timed
+region and the input copy subtracted:
+
+| N | plan path | kernel alone | plumbing (plan − kernel) |
+| --- | --- | --- | --- |
+| 2^8 | 1436 ns | 1413 ns | ~0 |
+| 2^9 | 3211 ns | 3092 ns | ~0 |
+| 2^10 | 6398 ns | 6165 ns | ~0 |
+| 2^12 | 31465 ns | 29637 ns | ~0 |
+
+**There is no plumbing overhead.** Plan dispatch, the twiddle-cache lookup, and
+scratch acquisition together cost nothing measurable: the twiddle cache has a
+thread-local raw-pointer fast path for power-of-two sizes, and scratch comes
+from a pooled thread-local allocator. Scaling across 2^7..2^10 is clean
+`N log N` (2.05x, 2.24x, 1.99x per doubling), so no constant overhead dominates
+at small sizes either. The Stockham kernel is the entire cost.
+
+### The kernel: the AVX backend is not paying
+
+`forward64_avx_with_scratch` versus `transform_sized::<PreciseStockham>` on
+identical inputs, interleaved in one process:
+
+| N | AVX backend | scalar backend | scalar/AVX |
+| --- | --- | --- | --- |
+| 2^8 | 2933 ns | 1023 ns | **0.35** |
+| 2^9 | 3195 ns | 1746 ns | **0.55** |
+| 2^10 | 6372 ns | 7097 ns | 1.11 |
+| 2^12 | 33049 ns | 22804 ns | **0.69** |
+
+The hand-written AVX Stockham is *slower than the scalar backend* at three of
+four sizes, by up to 2.9x. This is not a case of the AVX code failing to be
+reached: the dispatch does runtime-detect AVX and FMA and does enter
+`forward64_avx_with_scratch`, and the `#[target_feature(enable = "avx,fma")]`
+attributes sit on the per-stage kernels, so the stage bodies compile in scope.
+The backend is entered, runs, and loses.
+
+`PreciseStockham` is not scalar in the sense the name suggests — it is a plain
+loop over `Complex64`, which the optimizer auto-vectorizes at the build's
+baseline ISA. The hand-written AVX path has to beat that, and at these sizes it
+does not.
+
+### Why the obvious fix is not a fix
+
+Sizes 256 and 512 have no fixed-length AVX kernel; the code comments say they
+"fall through to transform with AvxFma backend". Routing just those two to the
+scalar backend was implemented and measured, per size, in isolated processes
+with a change-reverted control:
+
+| N | routed to scalar | unchanged | effect |
+| --- | --- | --- | --- |
+| 2^8 | 1018, 1017 ns | 1702, 3061 ns | ~2x faster |
+| 2^9 | 1728, 1777 ns | 3198, 3189 ns | 1.8x faster |
+| 2^10 | 14546, 13427 ns | 9501, 9666 ns | ~1.45x slower |
+| 2^11 | 27875, 31392 ns | 17623, 13983 ns | ~1.9x slower |
+| 2^12 | 62561, 62747 ns | 34251, 34265 ns | 1.83x slower |
+
+It buys 2x at the two sizes it touches and costs ~1.8x at every larger size it
+does not. The change was reverted.
+
+That coupling is the substantive finding. Sizes 1024, 2048, and 4096 do not
+route through the 256/512 arm, and 4096 goes through four-step with `n1 = n2 =
+64`, so this is not sub-transform recursion. Adding a second instantiation of
+the shared generic `transform_sized` appears to change code generation for the
+neighbouring `PreciseStockhamAvxFma` instantiations. Isolating the new route
+behind `#[inline(never)]` did not remove the effect.
+
+**The Stockham backends are therefore not independently selectable per size.**
+Any per-size routing decision has to be measured across the whole size range,
+because changing one instantiation perturbs the others. That is a property of
+the current structure and is the reason this is an architectural item rather
+than a tuning constant.
+
+### What would close the gap
+
+PhastFT sustains ~1.4-3 ns/element where Apollo sustains ~6-10. The structural
+differences that plausibly account for it, in the order they are worth testing:
+
+1. **Layout.** PhastFT holds split real and imaginary planes, so a complex
+   multiply is four real operations on aligned same-component vectors with no
+   shuffles. Apollo's Stockham operates on interleaved `Complex64`, where every
+   butterfly needs cross-lane shuffles to separate and recombine components.
+   This is the most likely dominant term and it is exactly what the hand-written
+   AVX kernels spend their instructions on. Apollo already has the planar view
+   (`FftPlanarMut`) and its documentation says orchestration converts to planar
+   "when a SIMD path requires SoA" — the Stockham path does not use it.
+2. **Fused multi-stage codelets.** PhastFT fuses the first four f64 stages into
+   one codelet, cutting memory round-trips per stage. Apollo fuses up to
+   `MAX_FUSED_STAGES = 4` in the AvxFma backend, so this is partly present.
+3. **In-place versus ping-pong.** Stockham is self-sorting but writes through
+   scratch every stage; PhastFT is in place after one bit-reversal. This is the
+   memory-traffic difference recorded as Finding 2 and is a smaller term than
+   layout.
+
+None of these is a tuning change. The layout item in particular is a rewrite of
+the power-of-two kernel family against the planar view, which is why it is filed
+as `ATLAS-APOLLO-POT-PLANAR-2026-08-25` rather than attempted here.
+
+### Measurement guidance for whoever takes this
+
+The methodology cost more than the diagnosis did, so it is recorded:
+
+- Interleave arms inside one process. Sequential arms, and especially arms in
+  separate runs, drift enough on a developer workstation to invent 2x effects
+  and hide real ones. Three of this audit's earlier claims came from that.
+- Isolate the size under test in a fresh process when judging a routing change.
+  Running a size sweep in one process leaves the thread-local scratch pool and
+  caches warm, which changed 2^10 by more than 2x between sweep and isolated
+  measurement — in both arms.
+- Do not trust a single round. Every conclusion here is reproduced across at
+  least three, and the ones that were not survived only until they were.
+
 ## FWHT migration onto the Hermes entry — negative result (2026-08-25) <a id="fwht-vectorize-negative"></a>
 
 Evidence tier: measured, three structures, min-of-15 per size on one host.
@@ -209,7 +350,13 @@ here; those rows are reported without being claimed.
 | 1048576 | 3.34x | 1.43x |
 
 Apollo is slower in all sixteen rows, and the f64 ratios at N=256, N=1024,
-N=4096, N=65536, and N=1048576 sit outside the noise band. Two structural
+N=4096, N=65536, and N=1048576 sit outside the noise band.
+
+> **Corrected 2026-08-25.** Re-measured with both engines interleaved inside one
+> process, the gap is a roughly flat 2.0x-3.5x, not the 1.5x-9.5x spread above.
+> The N=1024 anomaly and the f32/f64 divergence at N=4096 were run-to-run drift
+> and do not reproduce. The direction — Apollo slower at every size — stands.
+> See [the profile](#pot-f64-profile). Two structural
 observations follow from the same table and do not depend on the absolute
 figures:
 
