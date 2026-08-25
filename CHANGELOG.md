@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Profile the power-of-two f64 transform path and record it in
+  `gap_audit.md#pot-f64-profile`. No source change: the measured candidate fix
+  regressed larger sizes and was reverted. Corrects three claims in the PhastFT
+  audit's Finding 4 that came from cross-run rather than interleaved
+  measurement — the gap against PhastFT is a flat 2.0x-3.5x, and neither the
+  reported N=1024 anomaly nor the odd-power penalty reproduces.
+
 - [patch] Advance the `hermes-simd` pin to the consumer target-feature entry
   (`vectorize`), with `eunomia`, `mnemosyne`, and `themis` moving in dependency
   order as the integration sweep requires. No Apollo source changes: the
