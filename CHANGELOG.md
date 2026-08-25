@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Advance the `hermes-simd` pin to the consumer target-feature entry
+  (`vectorize`), with `eunomia`, `mnemosyne`, and `themis` moving in dependency
+  order as the integration sweep requires. No Apollo source changes: the
+  candidate migration (`apollo-fwht`) measured slower than the code it would
+  replace and was reverted, and the measurement is recorded in
+  `gap_audit.md#fwht-vectorize-negative` together with the suitability criterion
+  the remaining consumer migrations are now scoped by.
+
 - [patch] PhastFT joins RustFFT as an external transform reference for the
   power-of-two domain: a dev-only `phastft_comparison` bench and a dev-only
   differential parity test whose tolerance is derived from the FFT forward-error
