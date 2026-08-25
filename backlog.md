@@ -100,7 +100,45 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-POT-PLANAR-2026-08-25 — Planar layout for the power-of-two kernel family [arch] — todo
+## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — todo
+
+- **Outcome:** the power-of-two f64 transform moves less memory, which is the
+  binding constraint. Target is the pass count, not the arithmetic.
+- **Finding:** the path is memory-bound, established by roofline. At 2^16 Apollo
+  runs at 7.6 flops/ns and a from-scratch prototype at 4.6, against a scalar
+  f64 pipeline rate of roughly 6 and an AVX2 rate of roughly 48; PhastFT runs at
+  20.7. Adding explicit vector arithmetic to the prototype's butterfly through
+  `hermes_simd::vectorize` changed its time by nothing, which is what a
+  memory-bound kernel does. `log2 N` full passes over both planes is ~17 MB of
+  traffic at 2^16 and accounts for the measured time on its own. Details in
+  `gap_audit.md#planar-hypothesis-falsified`.
+- **Scope:** raise the number of stages executed per pass over the data. Two
+  routes, to be measured against each other: extend the existing fused-stage
+  machinery (`MAX_FUSED_STAGES` is already 4 in the AvxFma backend, so establish
+  first whether it is actually firing on the measured sizes), and keep a block
+  resident across several stages rather than one stage per pass — the prototype's
+  recursion failed to do the latter and measured flat as a result.
+  **Non-goals:** changing the layout, which was tested and does not matter here;
+  vectorizing the butterfly further, which was tested and changes nothing while
+  the kernel is memory-bound.
+- **Acceptance oracle:** measured traffic or pass count reduced, with time
+  following, interleaved in-process against PhastFT across 2^8..2^16 and no size
+  regressed. Per-size isolated confirmation, since the backends are not
+  independently selectable. Accuracy ratios against the analytical oracle
+  unchanged.
+- **First step, cheap and decisive:** determine how many passes each backend
+  actually performs at 2^12 and 2^16. If `MAX_FUSED_STAGES = 4` were firing,
+  Apollo would already be at a quarter of the passes and would not be sitting at
+  a scalar flop rate; that contradiction should be resolved before any code
+  changes.
+- **Carried forward from the prototype:** fusing the first three stages into one
+  straight-line pass measured 2.2x-2.4x faster than Apollo at N=256, reproduced
+  across rounds. That win is orthogonal to layout and is the concrete evidence
+  that pass reduction is the right target.
+- **Risk / change class:** [arch]. **Dependencies:** none; supersedes
+  `ATLAS-APOLLO-POT-PLANAR-2026-08-25`.
+
+## ATLAS-APOLLO-POT-PLANAR-2026-08-25 — Planar layout for the power-of-two kernel family [arch] — closed 2026-08-25, premise falsified
 
 - **Outcome:** the power-of-two f64 path closes most of the measured 2.0x-3.5x
   gap against PhastFT, by removing the per-butterfly cross-lane shuffles that
@@ -129,6 +167,17 @@
   charged to Apollo, not excluded.
 - **Dependencies:** none. **Risk / change class:** [arch] with an ADR; public
   API unchanged, so [patch] on the SemVer axis pending `cargo-semver-checks`.
+- **Closed 2026-08-25 without the rewrite.** The premise was tested with a
+  from-scratch planar prototype before committing 28 files, and does not hold.
+  Layout alone measured *worse* than Apollo at every size from 2^10 up. Adding
+  cache-oblivious recursion changed nothing; adding explicit SIMD through
+  `hermes_simd::vectorize` changed nothing. A roofline check then showed why:
+  Apollo runs at 7.6 flops/ns and the prototype at 4.6 against a ~6 flops/ns
+  scalar pipeline, so the path is memory-bound and no amount of arithmetic
+  vectorization moves it. The one technique that did help — fusing the first
+  three stages, 2.2x-2.4x at N=256 — is orthogonal to layout. Replaced by
+  `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`. Evidence:
+  `gap_audit.md#planar-hypothesis-falsified`.
 - **Prerequisite finding — the backends are not independently selectable.**
   Routing only N=256 and N=512 to the scalar backend was implemented and
   measured: 2x faster at those two sizes, ~1.8x slower at 2^10, 2^11, and 2^12,

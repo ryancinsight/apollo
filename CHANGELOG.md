@@ -10,6 +10,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Test the planar-layout hypothesis for the power-of-two path with a
+  prototype before committing to the rewrite, and record the result in
+  `gap_audit.md#planar-hypothesis-falsified`. No source change: layout alone
+  measures worse than the current kernel, and a roofline check shows the path is
+  memory-bound, so the filed rewrite is closed as not-justified and replaced by
+  a pass-reduction item.
+
 - [patch] Profile the power-of-two f64 transform path and record it in
   `gap_audit.md#pot-f64-profile`. No source change: the measured candidate fix
   regressed larger sizes and was reverted. Corrects three claims in the PhastFT
