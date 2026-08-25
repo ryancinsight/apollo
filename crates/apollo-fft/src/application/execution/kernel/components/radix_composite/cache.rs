@@ -1,7 +1,5 @@
 use crate::application::execution::kernel::components::winograd::ShortWinogradScalar;
-use crate::application::execution::kernel::components::winograd::{
-    apply_twiddle_impl, WinogradScalar,
-};
+use crate::application::execution::kernel::components::winograd::WinogradScalar;
 use eunomia::Complex;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -152,28 +150,34 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
     let mut offset_idx = 0;
     for &r in radices {
         let stage_len = prev_len * r;
-        let arm1_start = tw_idx;
         unsafe { *stage_offsets.get_unchecked_mut(offset_idx) = tw_idx };
         offset_idx += 1;
-        let base_angle = sign * std::f64::consts::TAU / stage_len as f64;
-        let w_base = Complex::new(
-            F::from_precise(base_angle.cos()),
-            F::from_precise(base_angle.sin()),
-        );
-        // Arm 1: W^j for j=0..prev_len-1.
-        let mut tw = one;
-        for _ in 0..prev_len {
-            unsafe { *all_twiddles.get_unchecked_mut(tw_idx) = tw };
-            tw_idx += 1;
-            tw = apply_twiddle_impl(tw, w_base);
-        }
-        // Arms 2..R-1: arm-k[j] = arm-(k-1)[j] * arm-1[j] (element-wise).
-        for _ in 2..r {
-            let prev_arm = tw_idx - prev_len;
+        // Arms 1..R-1: arm-k[j] = W^{k*j}, evaluated directly.
+        //
+        // The exponent is reduced modulo `stage_len` before the angle is
+        // formed, so every argument stays inside one period and the
+        // library's own argument reduction is never the accuracy limit.
+        //
+        // The superseded form built arm 1 by the recurrence
+        // `tw[j] = tw[j-1] * W_base` and each later arm by multiplying the
+        // previous arm, so entry `j` of the last stage carried the rounding
+        // of `j` complex multiplications. That is `O(N * u)` twiddle error,
+        // and it propagates directly into the transform: the `O(log N * u)`
+        // FFT forward-error bound (Higham, *Accuracy and Stability of
+        // Numerical Algorithms*, 2nd ed., section 24.1) holds only for
+        // accurately computed twiddles and degrades to `O(N * u)` without
+        // them. Direct evaluation costs one `sin_cos` per entry at plan
+        // build, which a plan amortizes; the recurrence saved that at the
+        // cost of the bound.
+        for k in 1..r {
             for j in 0..prev_len {
-                let a = unsafe { *all_twiddles.get_unchecked(prev_arm + j) };
-                let b = unsafe { *all_twiddles.get_unchecked(arm1_start + j) };
-                unsafe { *all_twiddles.get_unchecked_mut(tw_idx) = apply_twiddle_impl(a, b) };
+                let reduced = (k * j) % stage_len;
+                let angle = sign * std::f64::consts::TAU * reduced as f64 / stage_len as f64;
+                let (sin, cos) = angle.sin_cos();
+                unsafe {
+                    *all_twiddles.get_unchecked_mut(tw_idx) =
+                        Complex::new(F::from_precise(cos), F::from_precise(sin));
+                }
                 tw_idx += 1;
             }
         }

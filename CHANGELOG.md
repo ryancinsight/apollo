@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] PhastFT joins RustFFT as an external transform reference for the
+  power-of-two domain: a dev-only `phastft_comparison` bench and a dev-only
+  differential parity test whose tolerance is derived from the FFT forward-error
+  bound rather than fitted to observed error. `phastft` enters the workspace as
+  a dev-dependency with default features off, because its `parallel` feature
+  pulls the rayon edge ADR 0011 removed. Audit:
+  `gap_audit.md#phastft-2026-08-25`.
+
 - [minor] `apollo-sht` adds a checked, orthonormal real spherical-harmonic
   basis for antipodally symmetric diffusion signals. The API validates degree,
   order, angle, and unit-direction domains and constructs scattered-direction
@@ -403,6 +411,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - Upgrade consumers to Rust 1.95 before updating Apollo.
 
 ### Fixed
+
+- [patch] Twiddle-factor tables are evaluated directly instead of being advanced
+  by a multiplicative recurrence, in all three builders (`build_twiddle_table`,
+  `build_composite_twiddles`, `build_four_step_twiddles`). Entry `j` of a
+  recurrence-built table carried the rounding of `j` complex multiplications, so
+  twiddle error reached `O(N * u)` and defeated the `O(log N * u)` FFT
+  forward-error bound, which holds only for accurately computed twiddles
+  (Higham, section 24.1). Worst-bin error against a compensated direct-DFT
+  oracle falls from 27.00 to 0.19 multiples of `m * u * max|y|` at N=4096, from
+  21.47 to 0.49 at N=2400, and from 9.11 to 0.17 at N=2018; the growth with `N`
+  is removed and the ratio is now flat from N=96 to N=2^20. The module
+  documentation had already stated the correct per-entry bound, which the
+  recurrence did not deliver. Found by the PhastFT parity test added above.
 
 - [patch] Replace five release-only FFT `inline(always)` directives with
   compiler-selected `#[inline]` hints so the Rust 1.95 warning-denied release

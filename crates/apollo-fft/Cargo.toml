@@ -32,9 +32,14 @@ thiserror = { workspace = true }
 apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
 rustfft.workspace = true
+phastft.workspace = true
 
 [[bench]]
 name = "rustfft_comparison"
+harness = false
+
+[[bench]]
+name = "phastft_comparison"
 harness = false
 [features]
 wgpu = [
