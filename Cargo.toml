@@ -83,6 +83,11 @@ rand = "0.10.2"
 # are SIMD (avx/sse/neon) with no rayon edge, so it does not reintroduce the
 # transitive parallelism ADR 0011 removed with Criterion.
 rustfft = "6.4.1"
+# Dev-only power-of-two transform reference (external comparison). Default
+# features are `parallel`, which pulls rayon; they are off so this baseline does
+# not reintroduce the transitive parallelism ADR 0011 removed with Criterion.
+# The split real/imaginary entry points used here need no optional feature.
+phastft = { version = "0.4.1", default-features = false }
 # moirai: data-parallel runtime replacing direct scheduler usage.
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }

@@ -43,51 +43,29 @@ fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
     n1: usize,
     n2: usize,
 ) -> Vec<C> {
-    let total = n1 * n2;
-    let mut re_tbl = vec![0.0f64; total];
-    let mut im_tbl = vec![0.0f64; total];
-
-    for k in 0..n1 {
-        re_tbl[k] = 1.0;
-    }
-    if n2 == 1 {
-        return re_tbl
-            .iter()
-            .zip(im_tbl.iter())
-            .map(|(&r, &i)| C::from_components(r, i))
-            .collect();
-    }
-
     let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-    let base_angle = sign * std::f64::consts::TAU / n as f64;
-    let w_re = base_angle.cos();
-    let w_im = base_angle.sin();
-    let mut cur_re = 1.0_f64;
-    let mut cur_im = 0.0_f64;
-    for k in 0..n1 {
-        re_tbl[n1 + k] = cur_re;
-        im_tbl[n1 + k] = cur_im;
-        let nr = cur_re * w_re - cur_im * w_im;
-        let ni = cur_re * w_im + cur_im * w_re;
-        cur_re = nr;
-        cur_im = ni;
-    }
+    let scale = sign * std::f64::consts::TAU / n as f64;
 
-    for j in 2..n2 {
-        for k in 0..n1 {
-            let pr = re_tbl[(j - 1) * n1 + k];
-            let pi = im_tbl[(j - 1) * n1 + k];
-            let br = re_tbl[n1 + k];
-            let bi = im_tbl[n1 + k];
-            re_tbl[j * n1 + k] = pr * br - pi * bi;
-            im_tbl[j * n1 + k] = pr * bi + pi * br;
-        }
-    }
-
-    re_tbl
-        .iter()
-        .zip(im_tbl.iter())
-        .map(|(&r, &i)| C::from_components(r, i))
+    // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), evaluated
+    // directly. The exponent is reduced modulo `n` first — `j*k` reaches
+    // `(n2-1)*(n1-1)`, just under `n` — so every angle stays inside one period.
+    //
+    // The superseded form built row 1 by a recurrence over `k` and each later
+    // row by multiplying the row above it, so entry (j, k) carried the rounding
+    // of `j + k` complex multiplications, up to `O(n1 + n2) = O(2*sqrt(n))`.
+    // Twiddle error of that size defeats the `O(log N * u)` FFT forward-error
+    // bound (Higham, *Accuracy and Stability of Numerical Algorithms*, 2nd ed.,
+    // section 24.1), which holds only for accurately computed twiddles. The
+    // cost is `n1 * n2` `sin_cos` calls once per `(n, direction)`, behind the
+    // thread-local and global caches above.
+    (0..n2)
+        .flat_map(|j| {
+            (0..n1).map(move |k| {
+                let reduced = (j * k) % n;
+                let (sin, cos) = (scale * reduced as f64).sin_cos();
+                C::from_components(cos, sin)
+            })
+        })
         .collect()
 }
 

@@ -1,5 +1,161 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PHASTFT-REF-2026-08-25 [patch] — complete 2026-08-25
+
+- **Outcome:** PhastFT is a standing external reference for Apollo's
+  power-of-two transform domain, alongside the existing RustFFT baseline: a
+  dev-only comparison bench and a dev-only differential parity test, plus the
+  audit in `gap_audit.md#phastft-2026-08-25`.
+- **Delivered:** `crates/apollo-fft/benches/phastft_comparison.rs` (8 geometric
+  power-of-two sizes, clone-inclusive, 30 s hard budget) and
+  `crates/apollo-fft/tests/phastft_parity.rs` (f64 and f32, tolerance derived
+  from Higham section 24.1 rather than fitted, margin consumed reported per size).
+  `phastft = "0.4.1"` enters `[workspace.dependencies]` with default features
+  off, because `parallel` pulls rayon that ADR 0011 removed.
+- **Consequence:** the parity test failed on first run at N=4096, which is what
+  produced `ATLAS-APOLLO-TWIDDLE-ACCURACY-2026-08-25` below.
+- **Evidence:** `cargo test -p apollo-fft` 403 passing; workspace suite passing;
+  `cargo clippy -p apollo-fft --all-targets -- -D warnings` clean; bench inside
+  its budget.
+
+## ATLAS-APOLLO-TWIDDLE-ACCURACY-2026-08-25 [patch] — complete 2026-08-25
+
+- **Outcome:** Apollo's twiddle tables are evaluated directly rather than
+  advanced by a multiplicative recurrence, restoring the `O(log N * u)` forward
+  error bound the transform documentation already claimed.
+- **Finding:** all three twiddle builders advanced entries by recurrence, so
+  entry `j` carried the rounding of `j` complex multiplications — `O(N * u)`
+  twiddle error, which defeats the `O(log N * u)` FFT bound (Higham, section
+  24.1) because that bound is conditional on accurate twiddles.
+- **Measured:** worst-bin error against a compensated direct-DFT oracle fell
+  from 27.00 to 0.19 multiples of `m * u * max|y|` at N=4096 (144x), 21.47 to
+  0.49 at N=2400 (44x), and 9.11 to 0.17 at N=2018 (53x). The growth with `N` is
+  removed; the ratio is now flat at 0.08-0.49 from N=96 to N=2^20 and matches
+  PhastFT's 0.12-0.22. Full table in `gap_audit.md#phastft-2026-08-25`.
+- **Cost:** one `sin_cos` per table entry at build instead of one per stage.
+  Cold transform 0.118 -> 0.132 ms at N=4096 and 26.9 -> 29.3 ms at N=2^20;
+  steady state unchanged, since the table keeps its length, layout, and access
+  pattern. Tables remain behind the existing thread-local and global caches.
+- **Non-goals:** consolidating the three builders (filed below); any change to
+  kernel structure, dispatch, or the four-step threshold.
+
+## ATLAS-APOLLO-ACCURACY-GATE-2026-08-25 — Commit the analytical accuracy probe [patch] — todo
+
+- **Outcome:** an `O(N * u)` error-growth signature fails a committed test
+  instead of waiting for the next external audit. The defect above lived in the
+  tree while 403 tests passed, because every existing accuracy assertion is at a
+  size or on a signal where recurrence error is still below its tolerance.
+- **Scope:** promote the throwaway probe used in this change into
+  `crates/apollo-fft/tests/`: a compensated direct-DFT oracle for small `N`, an
+  exact multi-tone oracle for large `N`, and an assertion on the *ratio*
+  `err / (m * u * max|y|)` being bounded and non-growing across a size ladder —
+  growth is the signal, and an absolute per-size threshold would not have caught
+  this.
+- **Non-goals:** replacing the published-reference fixtures in
+  `apollo-validation`, which check different properties.
+- **Acceptance oracle:** re-introducing either recurrence form fails the test;
+  the current tree passes with the margin reported per size. Sizes cover the
+  Stockham, composite, four-step, and two-by-prime paths, chosen by reading the
+  dispatch rather than assumed — the probe used in this change initially
+  mislabelled which sizes reach `four_step_fft`.
+- **Dependencies:** none. **Risk / change class:** [patch], test-only.
+- **Verification plan:** the test must run inside the standard nextest budget;
+  the multi-tone oracle is `O(N)` so the large sizes are cheap, and the
+  compensated `O(N^2)` oracle stays below N=4096.
+- **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 1.
+
+## ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25 — One twiddle builder [patch] — todo
+
+- **Outcome:** one generic twiddle-table entry point replaces the three parallel
+  builders in `twiddle_table.rs`, `radix_composite/cache.rs`, and
+  `mixed_radix/caches/four_step.rs`.
+- **Finding:** the same defect had to be fixed three times in this change
+  because the same computation is authored three times. The three differ only in
+  their index-to-exponent map: stage-relative `j`, `k*j mod stage_len`, and
+  `j*k mod n`.
+- **Scope:** a single builder parameterized by that map, with the existing
+  caches and `TwiddleOutput` narrowing unchanged. **Non-goals:** changing table
+  layouts, cache keys, or any kernel.
+- **Acceptance oracle:** every existing test passes unchanged, the accuracy gate
+  above passes, and exactly one `sin_cos` call site remains in twiddle
+  construction.
+- **Risk / change class:** [patch], internal. **Dependencies:**
+  `ATLAS-APOLLO-ACCURACY-GATE-2026-08-25` should land first so the
+  consolidation is covered by the gate it motivated.
+
+## ATLAS-APOLLO-PEAK-MEMORY-2026-08-25 — Measure peak working set against PhastFT [patch] — todo
+
+- **Outcome:** Apollo's peak working set for a large power-of-two transform is a
+  measured number, so the in-place-versus-ping-pong question is decided on
+  evidence rather than on PhastFT's claim.
+- **Finding:** PhastFT computes in place after bit reversal and reports up to
+  50% lower memory than RustFFT. Apollo's Stockham is self-sorting and needs a
+  second buffer. Whether that costs Apollo anything at the sizes its consumers
+  use is unknown.
+- **Scope:** instrument peak resident allocation across the power-of-two ladder
+  for both engines through the existing bench harness. **Non-goals:** changing
+  Apollo's formulation — that is the [arch] item this measurement would justify
+  or close.
+- **Acceptance oracle:** a recorded peak-bytes figure per size per engine, with
+  the measurement method stated.
+- **Risk / change class:** [patch], measurement only.
+
+## ATLAS-APOLLO-POT-THROUGHPUT-2026-08-25 — Profile the power-of-two f64 path [patch] — todo
+
+- **Outcome:** the gap between Apollo and PhastFT on power-of-two forward
+  transforms is explained by profile evidence and either closed or recorded as
+  an accepted design cost.
+- **Finding:** `phastft_comparison`, minimum of three runs, puts Apollo slower in
+  all sixteen rows — f64 ratios 1.49x at N=64 rising to 9.47x at N=1024 and
+  settling near 3x for large `N`. Two structure-level observations do not depend
+  on the absolute numbers: N=1024 f64 costs 10.8x N=256 for 4x the work while
+  N=4096 costs only 2.4x N=1024, and the f32/f64 divergence is 7.6x at N=4096
+  where lane width predicts 2x but is exactly 2x at N=1024.
+- **Scope:** profile the f64 power-of-two path (`cargo flamegraph` or `perf`)
+  starting at the N=1024 anomaly and the N=1024-to-4096 f32/f64 divergence;
+  state the bound (compute, bandwidth, or latency) before proposing any change.
+  **Non-goals:** changing kernels before the profile exists; adopting PhastFT's
+  formulation, which is a separate [arch] question gated on
+  `ATLAS-APOLLO-PEAK-MEMORY-2026-08-25`.
+- **Acceptance oracle:** a recorded profile identifying where the time goes at
+  N=1024 and N=4096 f64, plus a statement of the binding constraint. A fix, if
+  one follows, carries a before/after median comparison from the same host.
+- **Dependencies:** a quiet host. The figures above come from a developer
+  workstation running concurrent builds, where one unchanged binary spread 2.64x
+  across three runs; anything under roughly 2.6x is not separable there.
+- **Risk / change class:** [patch] for the investigation; any kernel change is
+  classified when proposed.
+- **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 4.
+
+## ATLAS-APOLLO-ISA-FORK-2026-08-25 — Retire the per-ISA fork onto the Hermes seam [arch] — blocked
+
+- **Outcome:** `apollo-fft` stops carrying its own AVX2 and AVX-512 intrinsics
+  and reaches lane-parallel CPU work through `hermes-simd`, which is the Atlas
+  owner of that bounded context.
+- **Finding:** at revision `424ce431`, `apollo-fft` carries 28 files importing
+  `core::arch`, 90 `#[target_feature]` attributes, 429 `unsafe` blocks, and 228
+  `unsafe fn` declarations, while using its declared `hermes-simd` dependency in
+  one file for one function. PhastFT delivers the same class of transform under
+  `#![forbid(unsafe_code)]`, so the surface is not intrinsic to the workload.
+- **Blocker:** upstream. Hermes does not re-export `#[runtime_dispatch]`, so a
+  consumer has no supported route into a `#[target_feature]` scope, and every
+  `BackendKernel<T>` facet method is an `unsafe fn`. `apollo-fwht` already
+  demonstrates the failure mode: a generic Hermes kernel called from a crate
+  with no `#[target_feature]` attribute, which is the baseline-codegen defect
+  Hermes ADR 009 exists to prevent.
+- **Re-open trigger:** `HS-FEARLESS-TOKEN-2026-08-25` merges in Hermes.
+- **Scope when unblocked:** dependency-ordered per-family increments, each
+  fully converting one operation family with its call sites so the tree builds
+  green per commit and no compatibility layer is introduced. **Non-goals:** GPU
+  paths, the Winograd and Rader scalar kernels that carry no ISA code.
+- **Acceptance oracle:** `core::arch` imports and `#[target_feature]` attributes
+  in `apollo-fft` reach zero or a recorded sanctioned remainder; per-family
+  differential tests against the scalar path hold; benchmark medians do not
+  regress against the recorded baseline.
+- **Risk / change class:** [arch] with an ADR; public API unchanged, so [patch]
+  on the SemVer axis pending `cargo-semver-checks`.
+- **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 3.
+
 ## ATLAS-APOLLO-BOOK-TEST-2026-08-20 [patch] — in progress
 
 - The executable-book PR #108 exposed a real mdBook 0.5.4 contract defect in
