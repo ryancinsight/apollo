@@ -1,5 +1,104 @@
 # Apollo Gap Audit
 
+## Planar rewrite: hypothesis falsified before the rewrite (2026-08-25) <a id="planar-hypothesis-falsified"></a>
+
+Evidence tier: measured, four prototype variants, all three engines interleaved
+in one process, with a correctness assertion against Apollo gating every timing.
+
+`ATLAS-APOLLO-POT-PLANAR-2026-08-25` was filed on the premise that the split
+real/imaginary layout is the dominant term in PhastFT's lead — that a complex
+multiply on planar data is four real operations on contiguous same-component
+vectors, where Apollo's interleaved `Complex64` needs cross-lane shuffles per
+butterfly. The premise was tested with a prototype before the rewrite. **It does
+not hold, and the rewrite is not justified.**
+
+### What was built and measured
+
+A radix-2 DIT over planar f64 planes, written from scratch in this repository's
+test tree, correctness-gated at every size against Apollo's output within a
+derived bound. Four variants, each adding one of the techniques PhastFT's lead
+was attributed to. Nanoseconds per transform, minimum of four interleaved
+rounds:
+
+| N | Apollo | v1 plain | v2 +fused first 3 stages | v3 +cache-oblivious recursion | v4 +explicit SIMD via Hermes | PhastFT |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2^8 | ~3100 | 2133 | 1393 | 1402 | 1285 | ~320 |
+| 2^10 | ~6200 | 11761 | 8591 | 7135 | 7860 | ~1500 |
+| 2^12 | ~30200 | 47454 | 40268 | 47231 | 36458 | ~9500 |
+| 2^16 | ~700000 | 1317581 | 984022 | 1057941 | 1143678 | ~260000 |
+
+- **v1 — layout alone: worse than Apollo everywhere** (2x at 2^10 and above).
+  The layout hypothesis fails on its own terms at the first test.
+- **v2 — fused first three stages: a real win at small N.** 2^8 goes to 1393 ns
+  against Apollo's ~3100, i.e. 2.2x-2.4x faster, reproduced across rounds. This
+  is the one positive result and it is a small-N effect: at 2^10 and above the
+  prototype still loses.
+- **v3 — cache-oblivious recursion to a 1024-element L1 block**, matching
+  PhastFT's `L1_BLOCK_SIZE`: no measurable effect, in either direction.
+- **v4 — the butterfly stage rewritten as a Hermes lane kernel** through
+  `hermes_simd::vectorize`, dispatch once per stage, real vector loads, FMA, and
+  stores: **no measurable effect.**
+
+### Why v4 changes the diagnosis
+
+Explicit SIMD in the butterfly buying nothing is the informative result. Taken
+with achieved arithmetic rates at 2^16 — counting `5 N log2 N` flops:
+
+| engine | ns | flops/ns |
+| --- | --- | --- |
+| planar prototype | 1143678 | 4.6 |
+| Apollo | 691808 | 7.6 |
+| PhastFT | 253528 | 20.7 |
+
+A single f64 FMA pipeline at this clock is roughly 6 flops/ns; AVX2 with two FMA
+ports is roughly 48. Apollo and the prototype both sit at scalar-pipeline rates,
+and adding vector arithmetic to the prototype moved neither its time nor,
+therefore, its rate. **Both are memory-bound, not arithmetic-bound**, which is
+why vectorizing the butterfly cannot help either of them and why Apollo's own AVX
+fork measures no faster than its scalar path (recorded separately in
+[the profile](#pot-f64-profile)).
+
+The traffic is the cost: `log2 N` full passes over the data, each reading and
+writing both planes. At 2^16 that is ~17 MB of traffic per transform, which at
+achievable bandwidth accounts for the measured time on its own.
+
+PhastFT's 4x lead must therefore come from moving less memory — fusing several
+stages into one pass so the pass count falls well below `log2 N`. Its
+`fft_dit_codelet_16_f64` fuses four stages, and its recursion keeps a block
+resident while several stages run against it. My v3 implemented the recursion
+but still ran one stage per pass inside the leaf, so it reduced nothing; that is
+the likely reason it measured flat, and it is a defect in the prototype rather
+than evidence against blocking as such.
+
+### Decision
+
+Do not perform the layout rewrite. Three of the four techniques it bundled were
+tested independently and none closes the gap; the one that helps (stage fusion)
+is orthogonal to layout and applies equally to Apollo's existing interleaved
+kernel.
+
+`ATLAS-APOLLO-POT-PLANAR-2026-08-25` is closed as not-justified and replaced by
+`ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`, which targets what the measurement
+actually points at: reducing the number of full passes over the data. That work
+does not require changing the layout, so it can proceed against the current
+interleaved kernels.
+
+### What a future attempt should not repeat
+
+- Do not bundle four techniques into one architectural item. Each was cheap to
+  test alone, and three of them turned out not to matter. The item as filed
+  would have committed a 28-file rewrite to obtain the one effect (fusion) that
+  needs no rewrite at all.
+- Establish the bound before optimizing. The roofline check that showed this
+  workload to be memory-bound took minutes and would have redirected the item
+  before any prototype was written. It is the step this repository's own
+  performance rules put first, and skipping it cost four prototype variants.
+- The small-N fusion win (2.2x-2.4x at N=256) is real and unclaimed. It is
+  recorded here rather than shipped because the profile established that the
+  Stockham backends are not independently selectable per size — a partial
+  addition has to be measured across the whole range, which is
+  `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`'s job.
+
 ## Power-of-two f64 throughput profile (2026-08-25) <a id="pot-f64-profile"></a>
 
 Evidence tier: measured, interleaved within a single process, with a
