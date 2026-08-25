@@ -143,7 +143,15 @@
   demonstrates the failure mode: a generic Hermes kernel called from a crate
   with no `#[target_feature]` attribute, which is the baseline-codegen defect
   Hermes ADR 009 exists to prevent.
-- **Re-open trigger:** `HS-FEARLESS-TOKEN-2026-08-25` merges in Hermes.
+- **Re-open trigger:** ~~`HS-FEARLESS-TOKEN-2026-08-25` merges in Hermes~~ —
+  fired 2026-08-25 (hermes PRs #63, #64). Replaced by a measurement gate, per
+  the FWHT negative result: `apollo-fwht` was migrated onto the entry and
+  measured 1.6x to 8.8x slower across three dispatch placements, then reverted.
+  The entry pays for compute-dense kernels with large per-dispatch work units
+  and loses to the auto-vectorized `Scalar` backend for bandwidth-bound
+  elementwise ones; it must never wrap a thread-spawning call. Each candidate
+  family in this item now needs a before/after measurement before conversion,
+  not a `core::arch` census entry. See `gap_audit.md#fwht-vectorize-negative`.
 - **Scope when unblocked:** dependency-ordered per-family increments, each
   fully converting one operation family with its call sites so the tree builds
   green per commit and no compatibility layer is introduced. **Non-goals:** GPU

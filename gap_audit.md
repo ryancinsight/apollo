@@ -1,5 +1,85 @@
 # Apollo Gap Audit
 
+## FWHT migration onto the Hermes entry — negative result (2026-08-25) <a id="fwht-vectorize-negative"></a>
+
+Evidence tier: measured, three structures, min-of-15 per size on one host.
+
+`apollo-fwht` was the intended worked example for
+`ATLAS-APOLLO-ISA-FORK-2026-08-25`: smallest ISA-touching surface, already
+generic over the Hermes backend, and — per Finding 3 below — apparently paying
+the ADR 009 penalty. It was migrated onto `hermes_simd::vectorize` and then
+reverted. The migration is not shipped, and Finding 3 is corrected by what the
+measurement showed.
+
+### What was measured
+
+`fwht_inplace` over f64, nanoseconds per element, minimum of 15 runs after 3
+warm-up passes:
+
+| N | baseline (`PreferredArch`) | vectorize per chunk | vectorize whole transform | vectorize hybrid |
+| --- | --- | --- | --- | --- |
+| 2^12 | 2.39 | 5.18 | 10.47 | 4.88 |
+| 2^16 | 2.87 | 5.69 | 15.28 | 5.52 |
+| 2^20 | 2.98 | 5.71 | 26.29 | 4.77 |
+
+Every structure is slower than the code it would replace — by 1.6x at best and
+8.8x at worst. The direction is consistent across all sizes and all three
+structures, which no plausible noise model produces on this host.
+
+### Why
+
+Two mechanisms, both structural rather than incidental:
+
+- **`vectorize` must not wrap work that crosses a thread boundary.** The whole-
+  transform structure put `moirai::for_each_chunk_mut_with` inside the
+  `#[target_feature]` scope. The scope does not follow a closure onto another
+  thread, so the backend operations inside it stopped inlining and the hot loop
+  became a chain of calls into out-of-line intrinsic stubs — the ADR 009 penalty
+  applied to the hot path by the very mechanism meant to remove it. That is the
+  8.8x row.
+- **The kernel is bandwidth-bound and the baseline was never scalar in the way
+  the name suggests.** Hermes' `Scalar` backend is a plain `[T; N]` array loop.
+  The optimizer inlines it completely and auto-vectorizes it at the build's
+  baseline ISA, with no dispatch and no call boundary. An explicit AVX2 path
+  adds a non-inlinable target-feature boundary per work unit and buys little on
+  a kernel whose limit is memory traffic, not arithmetic.
+
+### Correction to Finding 3
+
+The PhastFT audit recorded that `apollo-fwht` "calls generic Hermes kernels from
+a crate with no `#[target_feature]` attribute, which is the defect Hermes ADR 009
+exists to prevent". The premise is accurate — `PreferredArch` is a compile-time
+alias and resolves to the scalar backend on every Apollo build, which was
+confirmed directly (`PreferredArch::NAME == "scalar"`, register width 0, with no
+`target-cpu` or `RUSTFLAGS` anywhere in Apollo or the Atlas root config). The
+*conclusion* that this costs throughput does not follow, and is withdrawn: the
+measured baseline is the fastest of the four structures tried.
+
+What remains true is narrower. `apollo-fwht` carries `unsafe` pointer loads and
+four copies of one butterfly body for a backend selection made at compile time,
+where a runtime-detected one would be more honest about what it does. That is a
+clarity and duplication argument, not a throughput one, and it does not justify
+a 1.6x regression.
+
+### Migration-suitability criterion, for the remaining consumers
+
+This is what the worked example established, and it changes how the rest of
+`ATLAS-HERMES-CONSUMER-ENTRY-2026-08-25` should be scoped:
+
+- `vectorize` pays where the kernel is **compute-dense** and the **per-dispatch
+  work unit is large** — the AXPY probe in Hermes ADR 016 is that shape, and it
+  emits fully inlined 256-bit code with no call into the backend operations.
+- It loses to the auto-vectorized `Scalar` backend where the kernel is
+  **bandwidth-bound and elementwise**, because there is no arithmetic for the
+  wider registers to save and the dispatch boundary is pure overhead.
+- It must **never wrap a thread-spawning call**. Dispatch belongs inside the
+  per-thread work unit, not around the partitioning.
+
+A consumer migration should therefore be preceded by a measurement, not
+scheduled from a `core::arch` census. `kwavers`' AVX-512 FDTD stencils are the
+most promising remaining candidate on this criterion — compute-dense, large work
+units per call — and `CFDrs`' elementwise `cfd-core` kernels are the least.
+
 ## PhastFT reference audit (2026-08-25) <a id="phastft-2026-08-25"></a>
 
 Reference: `https://github.com/QuState/PhastFT` at commit
@@ -161,7 +241,14 @@ not re-exported, so a consumer has no supported route into a `#[target_feature]`
 scope, and every `BackendKernel<T>` facet method is an `unsafe fn`.
 `apollo-fwht` shows the consequence from the other side — it does write a
 generic Hermes kernel, and calls it from a crate with no `#[target_feature]`
-attribute at all, which is the defect Hermes ADR 009 exists to prevent. Filed
+attribute at all, which is the defect Hermes ADR 009 exists to prevent.
+
+> **Corrected 2026-08-25.** The premise holds — `PreferredArch` resolves to the
+> scalar backend on every Apollo build, confirmed directly — but the throughput
+> conclusion does not, and is withdrawn. Migrating `apollo-fwht` onto the Hermes
+> entry was measured 1.6x to 8.8x *slower* across three structures and reverted.
+> See [the negative result](#fwht-vectorize-negative), which also carries the
+> suitability criterion the remaining consumer migrations should be scoped by. Filed
 upstream as `HS-FEARLESS-TOKEN-2026-08-25`; the Apollo-side retirement is
 `ATLAS-APOLLO-ISA-FORK-2026-08-25` and is blocked on it.
 
