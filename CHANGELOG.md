@@ -102,6 +102,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [arch] Preserve benchmark observations as integer picoseconds instead
+  of truncating each operation to integer nanoseconds. The hosted regression
+  gate compiles only its three consumed FFT benchmarks, restores compiler
+  artifacts, builds baseline and candidate concurrently at the same canonical
+  path, and runs its four same-runner matched pairs concurrently. The 100
+  observations, family-wise confidence construction, measured workloads, and
+  four-comparison regression rule are unchanged.
+
 - [patch] [arch] Route `apollo-fft` two- and three-dimensional
   gather/scatter transposes through Leto's canonical rank-two assignment
   kernel. Static and dynamic plans share one caller-scratch implementation,

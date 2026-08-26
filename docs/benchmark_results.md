@@ -10,7 +10,7 @@ Sweep: default (representative sizes). Benchmark: clone-inclusive 1D forward com
 iteration restores its input, so the copy is charged to both engines and
 cancels in the ratio. Plans are built once, outside the timed region.
 
-Values are median point estimates in nanoseconds; lower is better.
+Values are median point estimates in nanoseconds to three decimal places; lower is better.
 `Apollo/RustFFT < 1.000x` means Apollo is faster.
 
 Engine-selection columns are absent by design: neither Apollo nor RustFFT
@@ -19,10 +19,10 @@ regenerated and are not invented here.
 
 ## Reading these numbers
 
-Medians are integer nanoseconds. At the smallest sizes a transform costs
-only a few nanoseconds, so quantization alone is a large fraction of the
-value and a ratio such as `2.000x` on a 1 ns versus 2 ns row carries no
-signal. Treat sizes below roughly 16 as presence checks, not comparisons.
+The report stores integer picoseconds and renders nanoseconds to three
+decimal places, so normalization does not discard sub-nanosecond
+differences. Small-size ratios remain sensitive to host noise; treat
+sizes below roughly 16 as presence checks, not comparisons.
 
 A run is only as quiet as its host. Concurrent builds on the machine that
 produced a table inflate every absolute figure, and not uniformly. Before
@@ -31,25 +31,25 @@ confirm the figure reproduces.
 
 | Size | f64 Apollo (ns) | f64 RustFFT (ns) | f64 Apollo/RustFFT | f32 Apollo (ns) | f32 RustFFT (ns) | f32 Apollo/RustFFT |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 2 | 28 | 0.071x | 2 | 23 | 0.087x |
-| 2 | 2 | 1 | 2.000x | 2 | 1 | 2.000x |
-| 3 | 2 | 2 | 1.000x | 2 | 3 | 0.667x |
-| 4 | 2 | 3 | 0.667x | 2 | 2 | 1.000x |
-| 5 | 3 | 11 | 0.273x | 12 | 9 | 1.333x |
-| 7 | 6 | 12 | 0.500x | 16 | 15 | 1.067x |
-| 8 | 6 | 7 | 0.857x | 12 | 3 | 4.000x |
-| 11 | 13 | 16 | 0.812x | 29 | 13 | 2.231x |
-| 13 | 15 | 14 | 1.071x | 22 | 19 | 1.158x |
-| 16 | 12 | 9 | 1.333x | 26 | 10 | 2.600x |
-| 19 | 32 | 40 | 0.800x | 61 | 33 | 1.848x |
-| 31 | 65 | 69 | 0.942x | 109 | 88 | 1.239x |
-| 32 | 37 | 17 | 2.176x | 62 | 24 | 2.583x |
-| 53 | 211 | 283 | 0.746x | 305 | 248 | 1.230x |
-| 64 | 111 | 119 | 0.933x | 165 | 48 | 3.438x |
-| 67 | 466 | 448 | 1.040x | 1792 | 322 | 5.565x |
-| 96 | 266 | 212 | 1.255x | 227 | 130 | 1.746x |
-| 121 | 322 | 330 | 0.976x | 706 | 222 | 3.180x |
-| 128 | 703 | 229 | 3.070x | 398 | 136 | 2.926x |
-| 200 | 523 | 544 | 0.961x | 293 | 345 | 0.849x |
-| 256 | 1433 | 487 | 2.943x | 787 | 269 | 2.926x |
-| 512 | 3123 | 1136 | 2.749x | 1675 | 291 | 5.756x |
+| 1 | 2.000 | 28.000 | 0.071x | 2.000 | 23.000 | 0.087x |
+| 2 | 2.000 | 1.000 | 2.000x | 2.000 | 1.000 | 2.000x |
+| 3 | 2.000 | 2.000 | 1.000x | 2.000 | 3.000 | 0.667x |
+| 4 | 2.000 | 3.000 | 0.667x | 2.000 | 2.000 | 1.000x |
+| 5 | 3.000 | 11.000 | 0.273x | 12.000 | 9.000 | 1.333x |
+| 7 | 6.000 | 12.000 | 0.500x | 16.000 | 15.000 | 1.067x |
+| 8 | 6.000 | 7.000 | 0.857x | 12.000 | 3.000 | 4.000x |
+| 11 | 13.000 | 16.000 | 0.812x | 29.000 | 13.000 | 2.231x |
+| 13 | 15.000 | 14.000 | 1.071x | 22.000 | 19.000 | 1.158x |
+| 16 | 12.000 | 9.000 | 1.333x | 26.000 | 10.000 | 2.600x |
+| 19 | 32.000 | 40.000 | 0.800x | 61.000 | 33.000 | 1.848x |
+| 31 | 65.000 | 69.000 | 0.942x | 109.000 | 88.000 | 1.239x |
+| 32 | 37.000 | 17.000 | 2.176x | 62.000 | 24.000 | 2.583x |
+| 53 | 211.000 | 283.000 | 0.746x | 305.000 | 248.000 | 1.230x |
+| 64 | 111.000 | 119.000 | 0.933x | 165.000 | 48.000 | 3.438x |
+| 67 | 466.000 | 448.000 | 1.040x | 1792.000 | 322.000 | 5.565x |
+| 96 | 266.000 | 212.000 | 1.255x | 227.000 | 130.000 | 1.746x |
+| 121 | 322.000 | 330.000 | 0.976x | 706.000 | 222.000 | 3.180x |
+| 128 | 703.000 | 229.000 | 3.070x | 398.000 | 136.000 | 2.926x |
+| 200 | 523.000 | 544.000 | 0.961x | 293.000 | 345.000 | 0.849x |
+| 256 | 1433.000 | 487.000 | 2.943x | 787.000 | 269.000 | 2.926x |
+| 512 | 3123.000 | 1136.000 | 2.749x | 1675.000 | 291.000 | 5.756x |

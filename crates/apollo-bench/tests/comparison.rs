@@ -29,9 +29,9 @@ fn disjoint_slower_interval_is_a_regression() {
         Path::new("fft/kernel.csv")
     );
     assert_eq!(summary.regressions()[0].case(), "n256");
-    assert_eq!(summary.regressions()[0].baseline_upper_nanoseconds(), 62);
+    assert_eq!(summary.regressions()[0].baseline_upper_picoseconds(), 62);
     assert_eq!(
-        summary.regressions()[0].candidate_lower_nanoseconds(),
+        summary.regressions()[0].candidate_lower_picoseconds(),
         1_038
     );
 }
@@ -142,7 +142,7 @@ fn unordered_raw_evidence_fails_closed() {
 
     assert!(error
         .to_string()
-        .contains("violates nondecreasing ordered_samples_ns"));
+        .contains("violates nondecreasing ordered_samples_ps"));
 }
 
 #[test]
@@ -239,9 +239,9 @@ fn slowdown_in_both_orders_is_a_counterbalanced_regression() {
     assert_eq!(summary.regressions().len(), 1);
     let regression = &summary.regressions()[0];
     assert_eq!(regression.case(), "n256");
-    assert_eq!(regression.baseline_first().baseline_upper_nanoseconds(), 62);
+    assert_eq!(regression.baseline_first().baseline_upper_picoseconds(), 62);
     assert_eq!(
-        regression.candidate_first().candidate_lower_nanoseconds(),
+        regression.candidate_first().candidate_lower_picoseconds(),
         1_038
     );
 }
@@ -351,14 +351,14 @@ fn slowdown_must_reproduce_across_both_counterbalanced_blocks() {
         regression
             .first_replication()
             .baseline_first()
-            .baseline_upper_nanoseconds(),
+            .baseline_upper_picoseconds(),
         62
     );
     assert_eq!(
         regression
             .second_replication()
             .candidate_first()
-            .candidate_lower_nanoseconds(),
+            .candidate_lower_picoseconds(),
         1_038
     );
 }
@@ -471,12 +471,12 @@ fn slowdown_clearing_the_replication_spread_is_still_a_regression() {
     ];
     let slowest_baseline = separations
         .iter()
-        .map(|separation| separation.baseline_upper_nanoseconds())
+        .map(|separation| separation.baseline_upper_picoseconds())
         .max()
         .expect("invariant: four separations are present");
     let fastest_candidate = separations
         .iter()
-        .map(|separation| separation.candidate_lower_nanoseconds())
+        .map(|separation| separation.candidate_lower_picoseconds())
         .min()
         .expect("invariant: four separations are present");
     assert!(

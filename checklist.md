@@ -22,17 +22,27 @@ uncontrolled-host variation exceeds the isolated layout effect.
 Delivery: Apollo PR #127 merged as `967e6e84`; implementation commit
 `aacc65d3`; Leto provider merge `1e70b27e`.
 
-## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 [patch] — Codex
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 [patch] [arch] — Codex
 
-- [ ] Preserve or derive exact failing-symbol codegen and test the
-      code-placement hypothesis without changing the benchmark workload.
-- [ ] Remove integer-nanosecond sample truncation while retaining the same
+- [x] Falsify the code-placement hypothesis against the later pinned-core
+      evidence and keep the rebased gate free of production-kernel changes.
+- [x] Remove integer-nanosecond sample truncation while retaining the same
       observations, confidence construction, and regression thresholds.
-- [ ] Compile only the three consumed benchmark binaries and add compiler
+- [x] Compile only the three consumed benchmark binaries and add compiler
       artifact reuse without introducing a separate target cache.
-- [ ] Verify the unchanged counterbalanced regression oracle, focused unit
+- [x] Verify the unchanged counterbalanced regression oracle, focused unit
       tests, warning-denied Clippy, and workflow syntax/security checks.
 - [ ] Commit, push, merge, and record exact hosted runtime/regression evidence.
+
+Evidence: the focused release build compiles the three consumed binaries in
+1m16s; warning-denied Clippy, 45/45 Apollo-bench/xtask Nextest cases, 428/428
+Apollo FFT cases, doctests, and focused warning-denied rustdoc pass. A bounded
+format-validation run exercised integer-picosecond CSV output; its noisy
+wall-clock values are not substituted for the committed benchmark evidence.
+Independent review passed workflow routing and Bash syntax after three
+picosecond-label/historical-documentation discrepancies were fixed. The full
+workspace rustdoc command exceeded five minutes and is tracked separately as
+`ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME-2026-08-26`.
 
 ## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 [arch] — Codex
 

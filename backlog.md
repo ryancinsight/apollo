@@ -98,7 +98,7 @@
   ownership decision. Independent architectural review passed with no blocking
   findings; its documentation clarification landed before merge.
 
-## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] — in progress
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] [arch] — in progress
 
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
 - **Lease:** `.github/workflows/benchmark-regression.yml`,
@@ -116,14 +116,46 @@
 - **Acceptance oracle:** every affected row passes the unchanged replicated
   counterbalanced comparison, and the workflow records where its wall time is
   spent so the binding build or execution component can be reduced.
-- **Risk / change class:** [patch]. **Driver:** hosted default-branch run after
-  Apollo PR #125.
+- **Risk / change class:** [patch] [arch]. The non-published benchmark schema
+  changes from integer nanoseconds to integer picoseconds, and the experiment
+  moves from one runner timeline to four independent same-runner pairs.
+  **Driver:** hosted default-branch run after Apollo PR #125.
 - **Entry evidence:** the 12m36s hosted job spent 7m11s compiling and 5m04s
   measuring. It compiled all seven FFT benchmark targets while retaining three,
   cached dependencies but no compiler artifacts, and normalized samples by
   truncating per-operation nanoseconds. All six failing rows execute unchanged
   kernels; exact executable code placement remains the leading production-side
   hypothesis.
+- **Local evidence:** the release build now compiles only the three consumed
+  benchmark binaries in 1m16s. The benchmark schema preserves integer
+  picoseconds end to end; the bounded comparison binary exercised that output
+  without changing observations, confidence construction, or workloads.
+  Later pinned-core investigation falsified the entry code-placement
+  hypothesis: the observed process difference was Windows hybrid-core
+  scheduling. The rebased gate therefore leaves production FFT routing and
+  kernels unchanged.
+  Warning-denied Clippy, 45/45 focused Nextest cases, 428/428 Apollo FFT cases,
+  doctests, and focused warning-denied rustdoc pass. Independent architecture
+  review validated all workflow scripts, artifact routes, pair orders, and
+  comparator inputs; its three unit-label/documentation findings are resolved.
+  Exact hosted comparison and workflow critical-path runtime remain the merge
+  acceptance evidence.
+
+## ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME-2026-08-26 — Bound the workspace documentation gate [patch] — todo
+
+- **Outcome:** make warning-denied workspace documentation complete inside the
+  five-minute verification budget without dropping public crates or warnings.
+- **Scope:** profile rustdoc process/build-graph time, remove duplicated work,
+  and partition or cache the gate only where every crate remains covered.
+  **Non-goals:** skipping slow crates, weakening `-D warnings`, or raising the
+  timeout.
+- **Acceptance oracle:** `RUSTDOCFLAGS=-Dwarnings cargo doc --workspace
+  --no-deps` completes under five minutes on the reference host, with the same
+  public-crate coverage and no long-lived child processes after completion.
+- **Entry evidence:** the exact Apollo benchmark-regression diff passed focused
+  warning-denied docs in 6.11s, while the workspace command exceeded five
+  minutes with multiple rustdoc children and was terminated. That run supplies
+  no workspace-doc green claim.
 
 ## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — done 2026-08-26, one part open
 

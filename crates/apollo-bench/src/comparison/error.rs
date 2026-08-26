@@ -292,13 +292,13 @@ impl Display for RecordInvariant {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::EmptyCase => "a non-empty case label",
-            Self::ZeroSamples => "non-empty ordered_samples_ns",
-            Self::SamplesNotOrdered => "nondecreasing ordered_samples_ns",
-            Self::MinimumMismatch => "min_ns == first ordered sample",
-            Self::MedianMismatch => "median_ns == the ordered-sample median",
+            Self::ZeroSamples => "non-empty ordered_samples_ps",
+            Self::SamplesNotOrdered => "nondecreasing ordered_samples_ps",
+            Self::MinimumMismatch => "min_ps == first ordered sample",
+            Self::MedianMismatch => "median_ps == the ordered-sample median",
             Self::UnsupportedSampleCount => "1..=100 ordered samples",
             Self::MedianIntervalMismatch => {
-                "median interval columns derived from ordered_samples_ns"
+                "median interval columns derived from ordered_samples_ps"
             }
             Self::ZeroIterations => "iterations_per_sample > 0",
         })

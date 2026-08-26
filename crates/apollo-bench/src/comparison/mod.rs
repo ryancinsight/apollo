@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 pub struct BenchmarkRegression {
     report: PathBuf,
     case: String,
-    baseline_upper_nanoseconds: u128,
-    candidate_lower_nanoseconds: u128,
+    baseline_upper_picoseconds: u128,
+    candidate_lower_picoseconds: u128,
 }
 
 impl BenchmarkRegression {
@@ -43,14 +43,14 @@ impl BenchmarkRegression {
 
     /// Returns the baseline median interval's upper bound.
     #[must_use]
-    pub const fn baseline_upper_nanoseconds(&self) -> u128 {
-        self.baseline_upper_nanoseconds
+    pub const fn baseline_upper_picoseconds(&self) -> u128 {
+        self.baseline_upper_picoseconds
     }
 
     /// Returns the candidate median interval's lower bound.
     #[must_use]
-    pub const fn candidate_lower_nanoseconds(&self) -> u128 {
-        self.candidate_lower_nanoseconds
+    pub const fn candidate_lower_picoseconds(&self) -> u128 {
+        self.candidate_lower_picoseconds
     }
 }
 
@@ -124,8 +124,8 @@ impl ComparisonSummary {
 ///     .collect::<Vec<_>>()
 ///     .join(";");
 /// let report = format!(
-///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,\
-///      median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\
+///     "case,min_ps,median_ps,median_lower_ps,median_upper_ps,\
+///      median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n\
 ///      fft/forward/256,1,50,40,61,964799,{samples},4\n"
 /// );
 /// fs::write(baseline.join("fft.csv"), &report)?;
@@ -198,12 +198,12 @@ pub fn compare_report_directories(
                 case: case.clone(),
             });
 
-            if candidate_interval.lower_nanoseconds > baseline_interval.upper_nanoseconds {
+            if candidate_interval.lower_picoseconds > baseline_interval.upper_picoseconds {
                 regressions.push(BenchmarkRegression {
                     report: relative_path.clone(),
                     case,
-                    baseline_upper_nanoseconds: baseline_interval.upper_nanoseconds,
-                    candidate_lower_nanoseconds: candidate_interval.lower_nanoseconds,
+                    baseline_upper_picoseconds: baseline_interval.upper_picoseconds,
+                    candidate_lower_picoseconds: candidate_interval.lower_picoseconds,
                 });
             }
         }
