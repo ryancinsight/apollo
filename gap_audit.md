@@ -37,6 +37,18 @@ the four-step and batched builders. And the batched merge (PR #119) is live for
 2-D/3-D lanes and dead for 1-D, so the census aimed at it would have measured
 nothing — recorded as `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`.
 
+**Resolved for the instrument.** `engine_census` now carries a 2-D section over
+four shapes whose routing was again established by instrumenting rather than
+inferred: `4096x16`, `4096x64` and `16384x16` take the batched layout, and
+`65536x4` falls past the threading threshold onto the four-step twiddle matrix,
+giving a same-engine contrast at an equal element count. The batched work is
+therefore measurable, and a quiet-host run comparing against the commit before
+`e97f0b51` will show it. Two observations from the first local run, both
+provisional on a host known to move Apollo's own figure by 2x: the 2-D path
+allocates twice per call (64 bytes, size-independent — bookkeeping, not
+scratch), and Apollo leads the composed RustFFT reference at `4096x64` while
+trailing it at the other three shapes.
+
 Both errors share a cause: a plausible reading of a dispatch chain is a
 hypothesis, and a one-line `eprintln!` settles it in a minute.
 
