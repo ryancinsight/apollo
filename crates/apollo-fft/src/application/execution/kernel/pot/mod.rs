@@ -8,6 +8,10 @@
 //! Stockham, Winograd-codelet, and future radix-4/8 in-place variants can
 //! coexist behind a single facade while sharing butterfly primitives.
 
+// Windows-gated: the instrument pins threads through Win32, and the hybrid
+// scheduling it exists to control for is a Windows behavior.
+#[cfg(all(test, windows))]
+mod core_matrix;
 #[cfg(test)]
 mod crossover;
 pub(crate) mod route;

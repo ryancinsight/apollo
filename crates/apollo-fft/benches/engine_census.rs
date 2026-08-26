@@ -233,7 +233,67 @@ fn complex_signal(n: usize) -> Vec<Complex64> {
         .collect()
 }
 
+/// Opts this process out of Windows power throttling (EcoQoS).
+///
+/// Windows classifies benchmark child processes as background work and hands
+/// them EcoQoS: efficiency cores at efficiency frequency. Measured on the
+/// hybrid Core Ultra 9 285K, that made the batched four-step kernel report
+/// 45 us per call in this process while the same binary's calls, pinned to
+/// either core type, take 13 to 17 us — every earlier "process-dependent"
+/// four-step anomaly in the audit trail was this, not code. An instrument that
+/// measures the scheduler's opinion of it is not measuring the engines.
+#[cfg(windows)]
+fn opt_out_of_power_throttling() {
+    #[repr(C)]
+    struct PowerThrottlingState {
+        version: u32,
+        control_mask: u32,
+        state_mask: u32,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn SetProcessInformation(
+            process: isize,
+            class: i32,
+            information: *mut core::ffi::c_void,
+            size: u32,
+        ) -> i32;
+    }
+    /// `ProcessPowerThrottling` in the `PROCESS_INFORMATION_CLASS` enumeration.
+    const PROCESS_POWER_THROTTLING: i32 = 4;
+    /// `PROCESS_POWER_THROTTLING_EXECUTION_SPEED`: naming it in the control
+    /// mask while leaving it clear in the state mask disables throttling
+    /// outright rather than leaving it to the scheduler.
+    const EXECUTION_SPEED: u32 = 0x1;
+    let mut state = PowerThrottlingState {
+        version: 1,
+        control_mask: EXECUTION_SPEED,
+        state_mask: 0,
+    };
+    // SAFETY: documented Win32 call; the struct matches
+    // PROCESS_POWER_THROTTLING_STATE and outlives the call.
+    let ok = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            PROCESS_POWER_THROTTLING,
+            (&raw mut state).cast(),
+            core::mem::size_of::<PowerThrottlingState>() as u32,
+        )
+    };
+    // Surfaced rather than silent either way: a run that could not opt out is
+    // a run whose numbers carry the throttling caveat.
+    eprintln!(
+        "engine_census: power throttling opt-out {}",
+        if ok != 0 { "applied" } else { "REFUSED" }
+    );
+}
+
+#[cfg(not(windows))]
+fn opt_out_of_power_throttling() {}
+
 fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
+    opt_out_of_power_throttling();
     let started = Instant::now();
     let config = BenchmarkConfig::try_with_budgets(
         Duration::from_millis(WARM_UP_MS),

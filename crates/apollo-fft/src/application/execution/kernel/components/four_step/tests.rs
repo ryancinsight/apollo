@@ -45,7 +45,10 @@ fn selection_starts_at_the_even_power_threshold() {
         FOUR_STEP_THRESHOLD
     ));
 
-    let mut one_dimensional_below = signal(16_384);
+    // Contract, not constant: whatever the crossover is, an even power of two
+    // one step below it stays on the Stockham route untouched.
+    let below_len = ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD >> 2;
+    let mut one_dimensional_below = signal(below_len);
     let original = one_dimensional_below.clone();
     assert!(!try_four_step::<f64, false, false>(
         &mut one_dimensional_below,

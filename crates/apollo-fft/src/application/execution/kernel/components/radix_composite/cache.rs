@@ -382,9 +382,15 @@ impl CompositeCache for f64 {
         if !batched_four_step_applies(n) {
             return false;
         }
-        Self::with_scratch(n, |scratch| {
-            four_step_batched::<Self, INVERSE>(data, scratch);
-        });
+        // The driver pads each plane row by a cache line to break power-of-two
+        // stride aliasing, so its scratch requirement exceeds n; the driver's
+        // own helper is the single definition of it.
+        Self::with_scratch(
+            crate::application::execution::kernel::components::batched::scratch_len(n),
+            |scratch| {
+                four_step_batched::<Self, INVERSE>(data, scratch);
+            },
+        );
         true
     }
 
@@ -588,9 +594,14 @@ impl CompositeCache for f32 {
         if !batched_four_step_applies(n) {
             return false;
         }
-        Self::with_scratch(n, |scratch| {
-            four_step_batched::<Self, INVERSE>(data, scratch);
-        });
+        // As the f64 impl above: the driver's helper is the single definition
+        // of the padded-plane scratch requirement.
+        Self::with_scratch(
+            crate::application::execution::kernel::components::batched::scratch_len(n),
+            |scratch| {
+                four_step_batched::<Self, INVERSE>(data, scratch);
+            },
+        );
         true
     }
 
