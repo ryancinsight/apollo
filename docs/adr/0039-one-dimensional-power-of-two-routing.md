@@ -76,8 +76,11 @@ operation and leave the measured census on the known slower route.
 
 ### Use the general dispatcher's 4096 crossover for 1-D
 
-Rejected by direct measurement. Relative to the retained Stockham entry run,
-selecting four-step at 4096 moved the 4096 median from 57.477 us to 338.85 us
+Rejected by direct measurement in `benches/engine_census` (named here because
+the original record did not name it, which is what made the figure
+unfalsifiable; see the third revision note). Relative to the retained Stockham
+entry run, selecting four-step at 4096 moved the 4096 median from 57.477 us to
+338.85 us
 and the 16384 median from 149.512 us to 1.6165 ms. The same route became
 profitable at 65536 (920.95 us to 579.45 us) and 262144 (6.51215 ms to
 2.4801 ms). One selector remains authoritative, but the caller supplies the
@@ -165,3 +168,71 @@ from 1-D and added executable coverage for both four-step implementations.
 2026-08-26: revised after crossover experiments rejected a universal 4096
 threshold, selected the parallel 65536 route for 1-D, and the Moirai provider
 fix restored zero-allocation parallel execution.
+
+2026-08-26 (third): the decision is unchanged and the reasoning behind it is
+now recorded. The defect this revision fixes is that the crossover was stated
+without naming the instrument that produced it, which made the figure
+unfalsifiable and cost a full re-derivation to recover.
+
+**The record now names its instrument.** `benches/engine_census`, which flushes
+64 MiB between arms and measures Apollo against RustFFT, PhastFT and RealFFT in
+one process, produced the rejected-alternative figures above. Re-run against
+this revision's code they reproduce closely: selecting four-step at 4096 gives
+348 us at N = 4096 against the recorded 338.85 us, and 1.64 ms at N = 16384
+against the recorded 1.6165 ms.
+
+**A second instrument disagreed, and both are right.** `pot::crossover` runs
+both routes at one length in one process, with the cache flushed before each arm
+and the arm order alternating so neither route is charged for reloading its own
+input. It puts four-step ahead of Stockham from N = 256 upward and by 2 to 3x
+through the whole ladder:
+
+| N | stockham | four-step | ratio |
+| --- | --- | --- | --- |
+| 16 | 300 ns | 1800 ns | 6.00 |
+| 64 | 1300 ns | 2100 ns | 1.62 |
+| 256 | 5700 ns | 3300 ns | 0.58 |
+| 4096 | 68500 ns | 23100 ns | 0.34 |
+| 16384 | 296300 ns | 94400 ns | 0.32 |
+| 262144 | 5324000 ns | 2669300 ns | 0.50 |
+
+Reaching the same route through `FftPlan1D` rather than calling it directly
+costs nothing measurable (23200 ns against 23500 at N = 4096), so the gap is not
+plan overhead.
+
+**The difference is the process, not the harness.** Timing `four_step_fft` from
+inside the census binary shows it genuinely taking 99 us per call at N = 4096 —
+a minimum over thousands of calls — where the same binary's test process takes
+12. The twiddle matrix is built once in both (verified by counting builds: four,
+one per size), and neither allocates per call. The route is not mismeasured
+there; it is slower there.
+
+The available explanation is layout: four-step holds three `N`-sized arrays live
+at once — the data, the scratch, and the `W_N^(j*k)` matrix — against Stockham's
+two, and how those three land relative to one another depends on allocation
+history, which differs between a process holding four engines' plans and a
+64 MiB flush buffer and a process holding one plan. That is a hypothesis with a
+mechanism, not a measurement, and it is filed as
+`ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26`.
+
+**Why the threshold stays at 65536.** Between an isolated figure and one taken in
+a process that resembles a caller, the second decides. Lowering the threshold on
+the isolated measurement would ship a 12x regression at N = 4096 in exactly the
+benchmark that represents real use. The isolated figure is not discarded — it
+says the route itself is faster and that something around it is not, which is a
+more useful statement than either number alone.
+
+**What this host cannot settle.** Apollo's own N = 4096 Stockham figure moved
+between 29 us and 65 us across runs in one session with its code untouched, so
+the absolute values here bound nothing. What survives is reproducible within a
+run: the ordering between routes, the ratio between them, and the 15x gap
+between processes. Confirming the crossover on a quiet host remains open under
+`ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26`.
+
+**Structural change that came with this.** Routes are now zero-sized types
+implementing `PotRoute` (`kernel/pot/route.rs`) rather than a bare `if` against
+a constant. That is what let both routes run at one length in one process, which
+is what made the two instruments comparable at all; admission is defined once on
+`FourStep::admits`, so the general dispatcher and one-dimensional plans cannot
+drift apart on which lengths the split is valid for. Selection remains one
+branch per transform and the types carry no data.
