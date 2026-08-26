@@ -1,5 +1,36 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — done 2026-08-26, by deletion
+
+- **Outcome exceeded the filing.** The item asked for the scalar twiddle pass to
+  become a vector loop. Profiling first changed the plan: the pass is 7 to 14%
+  of the driver, but the **transpose is 41 to 48% at n >= 2^16** — it runs 20x
+  slower per element at m = 256 than at m = 128, because the plane stride is a
+  power of two and every tile row aliases to the same L1 set (`re` and `im`,
+  halves of one allocation, share sets too). The binding cost was next door to
+  the one filed.
+- **Delivered:** `twiddle_transpose` — the twiddle multiply fused into the
+  transpose swap, so the separate elementwise pass is deleted rather than
+  vectorized, and the transpose tile dropped from 32 to 8 rows so in-flight
+  lines per set stay within associativity. Element `p` is multiplied by `tw[p]`
+  at its pre-transpose index, exactly as the deleted pass did; the six existing
+  direct-DFT oracles pass unchanged.
+- **Measured on the driver in isolation** (three consistent runs in a clean
+  window): 2^16 goes 384699 -> ~238000 ns (**+62%**, 13.6 -> 22.0 flops/ns),
+  2^20 +28%, 2^18 +7%, 2^14 flat, 2^12 within this host's noise (-11% in one
+  pairing, but the same build later measured 13.7 and 13.65 us against a
+  baseline observed only once).
+- **A tile-size sweep was aborted honestly:** mid-sweep the host went into
+  contention (a peer's benchmark work) and produced 3x slowdowns at sizes a
+  tile cannot affect, so 16 and 32 were not adjudicated. Tile 8 stands on the
+  associativity derivation plus its three consistent runs; re-sweeping on a
+  quiet host is part of the standing quiet-host item, not a new one.
+- **Non-goal kept:** the stride itself. Padding the plane stride off the
+  power-of-two boundary would remove the aliasing at its root and may also bear
+  on `ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26` (three same-sized
+  power-of-two-strided arrays is exactly that item's mechanism); it changes the
+  stage kernel's indexing contract, so it is that item's scope, not this one's.
+
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 — Route multidimensional layout passes through Leto [arch] — in progress
 
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
@@ -125,24 +156,6 @@
   carrying, and it was invisible until the kernel was measured on its own.
   Successors are `ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26` and the 2-D
   machinery itself.
-
-## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — todo
-
-- **Outcome:** the elementwise `W_N^{b*k1}` multiply in `four_step_batched`
-  becomes a vector loop instead of a scalar one.
-- **Finding:** it is a full pass over the data, one complex multiply per
-  element, and it cannot vectorize as written — the data is planar while the
-  cached twiddle matrix is interleaved `Complex<T>`, so every iteration would
-  need a deinterleave. It is a prime suspect for the term that dominates
-  `four_step_batched` now that the stage kernel has been isolated and improved.
-- **Scope:** a planar twiddle matrix beside the interleaved one, or a planar
-  view of it, so the pass reads two contiguous streams and writes two.
-  **Non-goals:** the stage kernel, which is done; the cache keying, which is
-  correct.
-- **Acceptance oracle:** the kernel-isolation probe shows the driver improving
-  at fixed stage cost, the existing correctness suite passes unchanged, and
-  allocations stay at zero per call.
-- **Risk / change class:** [patch]; touches one loop and a cache representation.
 
 ## ATLAS-APOLLO-REAL-HALF-API-2026-08-26 — Expose the n/2+1 forward spectrum [minor] — done 2026-08-26
 

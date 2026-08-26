@@ -41,12 +41,6 @@ use std::sync::Arc;
 
 /// Tile side for the in-place transpose, in elements.
 ///
-/// A row-by-row transpose strides its destination by the row length and misses
-/// on nearly every store once the array outruns L1. Tiling bounds both
-/// footprints: `32 x 32` f64 pairs is 16 KB across the two planes, which stays
-/// resident while the tile is processed.
-const TRANSPOSE_TILE: usize = 32;
-
 /// Per-length batched-transform plan: the decimation-in-time twiddle table and
 /// the bit-reversal permutation, both build-time cost.
 pub(crate) struct BatchedPlan<T> {
@@ -323,18 +317,65 @@ fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usi
 }
 
 /// Square in-place transpose of an `m x m` plane, tiled for locality.
-fn transpose_square<T: Copy>(plane: &mut [T], m: usize) {
-    debug_assert_eq!(plane.len(), m * m);
-    for ib in (0..m).step_by(TRANSPOSE_TILE) {
-        let ie = (ib + TRANSPOSE_TILE).min(m);
-        // The diagonal tile transposes within itself; off-diagonal tiles are
-        // exchanged with their mirror, so each pair is visited once.
-        for jb in (ib..m).step_by(TRANSPOSE_TILE) {
-            let je = (jb + TRANSPOSE_TILE).min(m);
-            for i in ib..ie {
-                let start = if jb == ib { i + 1 } else { jb };
-                for j in start.max(jb)..je {
-                    plane.swap(i * m + j, j * m + i);
+/// Tile edge for [`twiddle_transpose`]. The plane stride is `m * 8` bytes — a power of
+/// two, so at `m >= 256` every tile row aliases to the same L1 set, and `re`
+/// and `im` (halves of one allocation, also a power of two apart) share sets
+/// too. A 32-row tile then puts 64+ lines into one set of an 8/12-way cache
+/// and thrashes: the standalone transpose measured 20x slower per element at
+/// `m = 256` than at `m = 128`. Eight rows keeps the in-flight lines per set
+/// within associativity.
+const TWIDDLE_TRANSPOSE_TILE: usize = 8;
+
+/// Applies the four-step twiddle `W_N^(k1*b)` and transposes both planes, in
+/// one in-place pass.
+///
+/// Fused because the twiddle multiply is elementwise and the transpose already
+/// touches every element: riding one on the other deletes a full pass over the
+/// data. Element `p` is multiplied by `tw[p]` and moved to its mirror, so each
+/// element is twiddled exactly once — at its pre-transpose index, which is the
+/// order the separate pass used.
+fn twiddle_transpose<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], m: usize)
+where
+    T: LaneScalar + MixedRadixScalar,
+{
+    debug_assert_eq!(re.len(), m * m);
+    debug_assert_eq!(tw.len(), m * m);
+
+    fn swap_twiddled<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], p: usize, q: usize)
+    where
+        T: LaneScalar + MixedRadixScalar,
+    {
+        let (tp, tq) = (tw[p], tw[q]);
+        let (ar, ai) = (re[p], im[p]);
+        let (br, bi) = (re[q], im[q]);
+        re[p] = br * tq.re - bi * tq.im;
+        im[p] = br * tq.im + bi * tq.re;
+        re[q] = ar * tp.re - ai * tp.im;
+        im[q] = ar * tp.im + ai * tp.re;
+    }
+
+    for ib in (0..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
+        let ie = (ib + TWIDDLE_TRANSPOSE_TILE).min(m);
+        for jb in (ib..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
+            let je = (jb + TWIDDLE_TRANSPOSE_TILE).min(m);
+            if jb == ib {
+                // Diagonal tile: fixed points are twiddled in place, and each
+                // off-diagonal pair inside the tile is visited once.
+                for i in ib..ie {
+                    let p = i * m + i;
+                    let t = tw[p];
+                    let (a, c) = (re[p], im[p]);
+                    re[p] = a * t.re - c * t.im;
+                    im[p] = a * t.im + c * t.re;
+                    for j in (i + 1)..je {
+                        swap_twiddled(re, im, tw, i * m + j, j * m + i);
+                    }
+                }
+            } else {
+                for i in ib..ie {
+                    for j in jb..je {
+                        swap_twiddled(re, im, tw, i * m + j, j * m + i);
+                    }
                 }
             }
         }
@@ -434,22 +475,12 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let plan = T::cached_plan::<INVERSE>(m);
     run_batched(re, im, plan.as_ref(), m);
 
-    // 2. Elementwise four-step twiddle, W_N^{b·k1}. Direct evaluation is
-    // paid once when the matrix enters the shared cache, never per transform.
+    // 2+3. The four-step twiddle W_N^{b·k1} and the transpose, in one pass.
+    // The matrix is built once when it enters the shared cache, never per
+    // transform; the multiply rides the transpose's traffic, so the separate
+    // elementwise pass this replaces is deleted rather than optimized.
     let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
-    for k1 in 0..m {
-        for b in 0..m {
-            let i = k1 * m + b;
-            let twiddle = twiddles[i];
-            let (a, c) = (re[i], im[i]);
-            re[i] = a * twiddle.re - c * twiddle.im;
-            im[i] = a * twiddle.im + c * twiddle.re;
-        }
-    }
-
-    // 3. Transpose so the second axis becomes batch-major.
-    transpose_square(re, m);
-    transpose_square(im, m);
+    twiddle_transpose(re, im, &twiddles, m);
 
     // 4. The `m` transforms along the second axis. The result lands at
     //    `k2 * m + k1`, which is the natural output index, so nothing follows.
