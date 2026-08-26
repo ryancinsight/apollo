@@ -153,7 +153,12 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — todo
+## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+- **Lease:** `crates/apollo-fft/src/application/execution/kernel/`,
+  `crates/apollo-fft/benches/`, `docs/adr/0039-*`, and the item-owned PM/doc
+  entries through the next verified commit.
 
 - **Finding, and it corrects PR #119.** `four_step_fft` is never called by any
   one-dimensional transform. `FftPlan1D` dispatches through `F::pot_inplace`,
@@ -178,16 +183,37 @@
   power-of-two path to the four-step above a measured crossover, or scope the
   batched layout to lane transforms explicitly and retarget the census to 2-D.
   The first is the reason the work was done and is preferred if it measures well.
+- **Decision implemented:** one shared selector retains the general dispatcher's
+  4096 crossover and starts standalone 1-D four-step at 65536. A universal 4096
+  route regressed 4096 from 57.477 us to 338.85 us and 16384 from 149.512 us to
+  1.6165 ms; the route became profitable only once its row transforms ran in
+  parallel. The batched driver now obtains its twiddle matrix from the shared
+  direct-evaluation cache instead of evaluating `N` trigonometric functions per
+  call.
+- **Provider closure:** Apollo pins Moirai PR #168 merge `10082209`, which
+  removes the two 32-byte indexed-scope allocations without serializing the FFT.
+  The decision-run `engine_census` completed in 3.10 s with zero warm complex
+  allocations at every size and one `16N`-byte real-output allocation.
+- **Final same-binary medians:** Apollo/RustFFT/PhastFT were
+  512.950/466.325/259.283 us at 65536 and
+  2.87025/2.49200/1.30655 ms at 262144. The upper route is retained; the
+  1024--16384 Stockham band remains the next kernel target.
+- **Immutable confirmation:** implementation commit `5ca9deb4` was measured
+  twice from a standalone exact-dependency Cargo resolution. Both runs kept
+  complex execution at zero allocations and real execution at one `16N`-byte
+  allocation; 65536 medians were 718.100 and 615.550 us, and 262144 medians
+  were 2.57070 and 2.58700 ms. The cross-run wall-clock spread confirms that
+  uncontrolled-host timing is diagnostic rather than a deterministic gate.
 - **Acceptance oracle:** an instrumented run shows the intended path executing at
   the intended sizes, and the census measures whatever path the decision selects.
 - **Risk / change class:** [arch]; touches 1-D power-of-two dispatch.
 
-## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — merged 2026-08-25 (PR #119); reach corrected 2026-08-26
+## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — merged 2026-08-25 (PR #119); 1-D reach resolved 2026-08-26
 
-- **Correction:** the path is live for 2-D/3-D lane transforms and **unreachable
-  from every 1-D route** — see `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`,
-  which supersedes the validation plan below. The quiet-host census as written
-  measures the 1-D API and would not have exercised this path at all.
+- **Correction and resolution:** PR #119's path was initially live only for
+  2-D/3-D lane transforms. `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`
+  now routes standalone square powers through the shared four-step selector at
+  the measured 65536 crossover and records the end-to-end census.
 
 - **Delivered:** `components/batched/` holds the batched sub-transform kernel and
   a four-step driver built on it, reached from `four_step_fft` for square splits
@@ -204,18 +230,12 @@
   complex buffer, reinterpreted as two real planes.
 - **Measured at kernel level:** 10.2 to 10.7 flops/ns against the 3.4 to 6.1
   band nine earlier variants shared, using the same lane operations.
-- **Not yet measured end to end.** This host cannot adjudicate it: adding an arm
-  to the rotation moved Apollo's own timing by a factor of two with its code
-  untouched. `benches/engine_census.rs` is the instrument for a quiet host — it
-  flushes the cache between arms so that specific failure cannot recur, and
-  reports transient allocation per call alongside time.
-- **Remaining work, in order:**
-  1. Validate on a quiet host with `engine_census`, comparing against the commit
-     before this one. If any covered size regresses, the gate in
-     `batched_four_step_applies` narrows rather than the path being reverted
-     wholesale.
-  2. Extend past `PARALLEL_ROW_THRESHOLD` — see the item below, which is the
-     blocker for the upper bound.
+- **End-to-end result:** `engine_census` now flushes the cache between arms and
+  reports timing plus allocation. The corrected 1-D route retains Stockham
+  below 65536, uses parallel generic four-step above it, and is zero-allocation
+  after the Moirai provider fix. The single-threaded batched stage set remains
+  bounded below `PARALLEL_ROW_THRESHOLD`; its independent extension item below
+  is still valid.
 
 ## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — todo
 

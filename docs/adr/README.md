@@ -42,5 +42,6 @@
 | [0034](0034-gpu-dispatch-verification-tree.md) | Dense FFT dispatch verification tree | Accepted |
 | [0035](0035-remove-radix-policy-wrapper.md) | Remove the Apollo radix-policy wrapper | Accepted |
 | [0036](0036-native-benchmark-regression-oracle.md) | Native benchmark regression oracle | Accepted |
-| [0037](0037-generic-transform-execution-scaffold.md) | 0037 — Generic transform execution scaffold in apollo-fft | Accepted |
+| [0037](0037-generic-transform-execution-scaffold.md) | Generic transform execution scaffold in apollo-fft | Accepted |
 | [0038](0038-single-scalar-seam-public-fft-api.md) | One scalar seam for the public FFT API | Accepted |
+| [0039](0039-one-dimensional-power-of-two-routing.md) | One-dimensional power-of-two routing | Accepted |

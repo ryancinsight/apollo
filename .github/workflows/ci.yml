@@ -76,6 +76,8 @@ jobs:
           cargo metadata --locked --no-deps --format-version=1 \
             | jq -r '.packages[].name' \
             | while read -r package; do cargo fmt -p "$package" -- --check; done
+      - name: ADR index
+        run: python scripts/adr-index.py check
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       # apollo-python builds pyo3 with the "extension-module" feature, which

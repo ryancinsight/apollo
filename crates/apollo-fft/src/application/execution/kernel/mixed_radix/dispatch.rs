@@ -425,17 +425,15 @@ fn try_power_of_two_fast_path<
         _ => {}
     }
 
-    if n >= crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD {
-        let use_four_step = n.trailing_zeros() % 2 == 0;
-        if use_four_step {
-            crate::application::execution::kernel::components::four_step::four_step_fft::<F, INVERSE>(
-                data,
-            );
-            if INVERSE && NORMALIZE {
-                F::normalize(data, n);
-            }
-            return true;
-        }
+    if crate::application::execution::kernel::components::four_step::try_four_step::<
+        F,
+        INVERSE,
+        NORMALIZE,
+    >(
+        data,
+        crate::application::execution::kernel::tuning::FOUR_STEP_THRESHOLD,
+    ) {
+        return true;
     }
 
     match twiddles {
