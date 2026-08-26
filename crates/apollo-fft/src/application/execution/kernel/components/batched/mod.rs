@@ -34,7 +34,7 @@
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
-use hermes_simd::{LaneKernel, LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
+use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -112,7 +112,7 @@ where
 {
     type Output = ();
 
-    fn call<A: SimdArch + SimdKernel<T>>(self) {
+    fn call<A: SimdArch + SimdKernel<T>>(self, _simd: Simd<T, A>) {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;
         let mut twx = 0usize;
