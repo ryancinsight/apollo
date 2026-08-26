@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Record a power-of-two kernel design that leaves the throughput band
+  nine earlier variants shared: holding the transform index in the lane position
+  removes every cross-lane shuffle and reaches 10.2-10.7 flops/ns against
+  3.4-6.1, using the same lane operations. A four-step assembled on it matches
+  RustFFT bin-for-bin. No source change — the end-to-end comparison is not
+  established on this host and is gated on a quiet one. See
+  `gap_audit.md#batched-layout`.
+
 - [patch] Localize the power-of-two throughput gap to per-lane operation
   efficiency and record it in `gap_audit.md#lane-throughput`. No source change:
   seven kernel variants covering layout, stage fusion, cache blocking, primitive
