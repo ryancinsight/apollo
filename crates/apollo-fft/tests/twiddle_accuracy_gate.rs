@@ -63,8 +63,9 @@
 //! `four_step_fft`. Sized ZST codelets claim `log2` 4 through 10 *before* the
 //! four-step gate is consulted, so `N = 1024` is a codelet path, not four-step.
 
-use apollo_fft::{FftPlan1D, Shape1D};
+use apollo_fft::{FftPlan1D, FftPlan2D, Shape1D, Shape2D};
 use eunomia::Complex64;
+use leto::Array2;
 use std::f64::consts::TAU;
 
 /// Unit roundoff.
@@ -91,10 +92,14 @@ const BASELINE_FLOOR: f64 = 0.5;
 ///
 /// | sizes | route |
 /// | --- | --- |
-/// | 16, 64, 256, 1024 | sized ZST Stockham codelets (`log2` 4..=10) |
-/// | 8, 2048, 8192, 32768 | Stockham autosort against a twiddle table |
-/// | 4096, 16384 | four-step on the batched layout |
-/// | 65536, 262144 | four-step with threaded row transforms |
+/// | 8, 16, 64 | `small_pot_inplace_sized` codelets |
+/// | 256 .. 262144 | Stockham autosort against the `twiddle_table` twiddles |
+///
+/// Every size here uses the one twiddle builder. The four-step decomposition is
+/// *not* on this route: `FftPlan1D` dispatches through `F::pot_inplace`, which
+/// runs codelets to `N = 64` and Stockham above, while the four-step gate lives
+/// in `try_power_of_two_fast_path`, reachable only from `dispatch_inplace`. See
+/// [`TWO_D_LADDER`] for the ladder that does reach it.
 const POT_LADDER: [usize; 12] = [
     8, 16, 64, 256, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 262144,
 ];
@@ -111,21 +116,28 @@ const POT_LADDER: [usize; 12] = [
 /// the point of it.
 const COMPOSITE_LADDER: [usize; 6] = [81, 243, 729, 2187, 6561, 19683];
 
-/// Primes whose Rader/Bluestein convolution buffer is a power of two with an
-/// even `log2`, which is the only route by which a *one-dimensional* transform
-/// reaches `four_step_fft` and, through it, the batched layout.
-///
-/// The 1-D power-of-two plan does not: it runs sized codelets to `N = 64` and
-/// Stockham autosort above that, and the four-step gate lives in
-/// `try_power_of_two_fast_path`, reached only from `dispatch_inplace` — 2-D and
-/// 3-D lane transforms and these convolution buffers. Verified by instrumenting
-/// `four_step_fft` and observing zero calls across the whole power-of-two
-/// ladder, after reading the dispatch had twice suggested otherwise.
-///
-/// Buffers here are 4096, 16384, 65536 and 262144: the first two reach the
-/// batched layout, the second two the four-step twiddle matrix, so between them
-/// the two builders the power-of-two ladder cannot see are covered.
+/// Primes, which route through Rader and Bluestein and so exercise the
+/// convolution machinery and its power-of-two inner transforms.
 const CONVOLUTION_LADDER: [usize; 4] = [2039, 8191, 32749, 131071];
+
+/// Transformed-axis lengths for the two-dimensional ladder.
+///
+/// This ladder covers the four-step twiddle matrix and the batched layout
+/// because 2-D lane transforms reach them:
+/// instrumenting `four_step_fft` and `batched_four_step_applies` recorded zero
+/// calls across the power-of-two, mixed-radix and convolution ladders — every
+/// 1-D route from `N = 8` to `N = 262144` — and both firing immediately for a
+/// 2-D transform with a 4096-long axis.
+///
+/// 4096 and 16384 take the batched layout; 65536 and 262144 exceed the
+/// threading threshold and take the four-step twiddle matrix, so the two
+/// builders are split across the ladder.
+const TWO_D_LADDER: [usize; 4] = [4_096, 16_384, 65_536, 262_144];
+
+/// Columns in the two-dimensional ladder. Two is the smallest width that still
+/// makes the transform two-dimensional; the second axis is a single exact
+/// butterfly and contributes no error of its own.
+const TWO_D_COLUMNS: usize = 2;
 
 /// Position of the unit impulse. Bin `k` of the result is then `W_N^k`, so the
 /// probe walks the twiddle table in unit steps — the index sequence along which
@@ -223,6 +235,75 @@ fn normalized_error_does_not_grow_across_the_power_of_two_ladder() {
 #[test]
 fn normalized_error_does_not_grow_across_the_mixed_radix_ladder() {
     assert_ratio_is_flat("mixed-radix", &COMPOSITE_LADDER);
+}
+
+/// `ratio` for a 2-D transform whose first axis has length `nx`.
+///
+/// The impulse sits at row 1, column 0, so the exact spectrum is
+/// `X[k1, k2] = exp(-2πi k1 / nx)` — independent of `k2`, and reading out the
+/// twiddles of the `nx` axis exactly as the 1-D probe does. Row 1 rather than
+/// row 0 matters: a delta in row 0 makes the four-step's twiddle row `W^0`,
+/// which is exactly one whatever the builder did, and the probe would be blind
+/// for the same reason the tone oracle was.
+fn normalized_error_2d(nx: usize) -> f64 {
+    let ny = TWO_D_COLUMNS;
+    let mut values = vec![Complex64::new(0.0, 0.0); nx * ny];
+    values[ny] = Complex64::new(1.0, 0.0);
+    let mut plane = Array2::from_shape_vec((nx, ny), values).expect("shape matches the data");
+    FftPlan2D::<f64>::new(Shape2D { nx, ny }).forward_complex_inplace(&mut plane);
+    let out = plane
+        .as_slice()
+        .expect("the transform leaves the plane contiguous");
+
+    let mut worst = 0.0f64;
+    for k1 in 0..nx {
+        let (sin, cos) = (-TAU * k1 as f64 / nx as f64).sin_cos();
+        for k2 in 0..ny {
+            let v = out[k1 * ny + k2];
+            worst = worst.max((v.re - cos).hypot(v.im - sin));
+        }
+    }
+    // A unit impulse has an l1 norm of one, so the normalizer is just the
+    // stage count of the transformed axis.
+    worst / ((nx as f64).log2() * U)
+}
+
+#[test]
+fn normalized_error_does_not_grow_across_the_two_dimensional_ladder() {
+    let ratios: Vec<(usize, f64)> = TWO_D_LADDER
+        .iter()
+        .map(|&nx| (nx, normalized_error_2d(nx)))
+        .collect();
+
+    for &(nx, ratio) in &ratios {
+        println!("two-dimensional: nx={nx:<8} ratio = {ratio:.3}");
+    }
+
+    for &(nx, ratio) in &ratios {
+        assert!(
+            ratio <= RATIO_CEILING,
+            "two-dimensional, nx={nx}: normalized error {ratio:.3} exceeds \
+             {RATIO_CEILING}. This axis reaches the four-step twiddle matrix and the \
+             batched layout; one of their tables is being advanced rather than \
+             evaluated."
+        );
+    }
+
+    let split = TWO_D_LADDER[TWO_D_LADDER.len() / 2];
+    let extreme = |keep: fn(usize, usize) -> bool| {
+        ratios
+            .iter()
+            .filter(|&&(nx, _)| keep(nx, split))
+            .map(|&(_, r)| r)
+            .fold(0.0f64, f64::max)
+    };
+    let small = extreme(|nx, split| nx < split);
+    let large = extreme(|nx, split| nx >= split);
+    assert!(
+        large <= GROWTH_ALLOWANCE * small.max(BASELINE_FLOOR),
+        "two-dimensional: normalized error grows with size — {large:.3} at \
+         nx >= {split} against {small:.3} below it."
+    );
 }
 
 #[test]
