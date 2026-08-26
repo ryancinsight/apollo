@@ -30,25 +30,18 @@
 //! the returned spectrum. A rise in either is a regression whatever the timings
 //! say.
 //!
-//! The 2-D path reports **two allocations, 64 bytes total per call, and the
-//! figure does not move with the shape**. Size-independence is what identifies
-//! it: this is per-call bookkeeping rather than scratch, so it is invisible at
-//! these shapes and would only bite a workload of many small 2-D transforms.
-//! Recorded as the baseline that column exists to hold, not as a number to
-//! chase.
+//! The 2-D path also reports zero warm allocations at every shape after the
+//! Moirai indexed-scope state became stack-borrowed. Any non-zero result is a
+//! regression: plans, twiddles, transpose scratch, and scheduler bookkeeping
+//! are all reused.
 //!
 //! ## Why there is a two-dimensional section
 //!
-//! The batched four-step layout is **unreachable from any one-dimensional
-//! transform**. `FftPlan1D` dispatches through `F::pot_inplace`, which runs
-//! sized codelets to `N = 64` and Stockham autosort above that; the four-step
-//! gate lives in `try_power_of_two_fast_path`, reached only from
-//! `dispatch_inplace` — that is, from 2-D and 3-D lane transforms.
-//!
-//! So the 1-D arms below, useful as they are, cannot measure that work at all:
-//! a census consisting only of them would report a change of exactly zero and
-//! read as a null result rather than as a miss. The 2-D shapes exist to put the
-//! batched path under measurement.
+//! The first census contained only 1-D arms, while the batched four-step layout
+//! was initially reachable only from 2-D and 3-D lane transforms. Standalone
+//! 1-D plans now enter the generic four-step route at 65536, but they still do
+//! not exercise the lower-size batched layout or multidimensional transpose
+//! passes. The 2-D shapes therefore remain necessary to measure those paths.
 //!
 //! Which shape takes which route was established by instrumenting
 //! `four_step_fft` and `batched_four_step_applies` and reading the calls, not by

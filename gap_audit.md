@@ -42,13 +42,14 @@ claim about the corrected tree.
 four shapes whose routing was again established by instrumenting rather than
 inferred: `4096x16`, `4096x64` and `16384x16` take the batched layout, and
 `65536x4` falls past the threading threshold onto the four-step twiddle matrix,
-giving a same-engine contrast at an equal element count. The batched work is
-therefore measurable, and a quiet-host run comparing against the commit before
-`e97f0b51` will show it. Two observations from the first local run, both
-provisional on a host known to move Apollo's own figure by 2x: the 2-D path
-allocates twice per call (64 bytes, size-independent — bookkeeping, not
-scratch), and Apollo leads the composed RustFFT reference at `4096x64` while
-trailing it at the other three shapes.
+giving a same-engine contrast at an equal element count. At merge commit
+`db9cd6f5`, the standalone exact-dependency census completed in 5.39 seconds
+and all four Apollo shapes allocated zero bytes per call after the Moirai
+provider fix. Apollo/RustFFT medians were 616.950/347.850 us at `4096x16`,
+2.53435/2.79455 ms at `4096x64`, 3.45125/1.89380 ms at `16384x16`, and
+3.94880/1.73210 ms at `65536x4`. Apollo leads only the wider-batch
+`4096x64` shape; the remaining aspect-ratio sensitivity is the next
+multidimensional profile target.
 
 Both errors share a cause: a plausible reading of a dispatch chain is a
 hypothesis, and a one-line `eprintln!` settles it in a minute.
@@ -77,9 +78,10 @@ impulse — the worst case, not the average — is the growth probe.
 ## The batched layout breaks the throughput ceiling (2026-08-25) <a id="batched-layout"></a>
 
 Evidence tier: measured at kernel level, reproducible across four shapes and
-several runs; correctness verified against a direct DFT and against RustFFT. The
-end-to-end comparison is explicitly **not** established — see the measurement
-caveat at the end, which is the reason this is a design record and not a change.
+several runs; correctness verified against a direct DFT and against RustFFT.
+The initial end-to-end result was withheld because the instrument allowed
+cross-arm cache state to move Apollo's result; the cache-flushing census above
+now provides the end-to-end comparison while retaining that historical caveat.
 
 ### The pre-validated surfaces do not close it
 
