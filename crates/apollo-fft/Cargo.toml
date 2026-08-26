@@ -42,6 +42,10 @@ harness = false
 [[bench]]
 name = "phastft_comparison"
 harness = false
+
+[[bench]]
+name = "engine_census"
+harness = false
 [features]
 wgpu = [
     "dep:hephaestus-wgpu",

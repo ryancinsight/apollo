@@ -108,6 +108,33 @@ quiet host — the same gate the throughput item has carried since the first
 profile, and this is the fourth conclusion in this audit that a noisy host has
 either hidden or invented.
 
+### Implemented 2026-08-25
+
+The design is now in the tree as `components/batched/`, reached from
+`four_step_fft` for square splits below the threading threshold. Correctness is
+covered by six unit tests — transpose involution, forward and inverse against a
+direct DFT, round trip, f32, and plan caching — and by the existing suite, which
+passes with the path live and whose PhastFT differential crosses into it.
+
+Two properties are worth stating because they were design constraints rather
+than conveniences. Scratch is unchanged from the Stockham path it replaces: an
+`N`-element complex buffer is exactly the two `N`-element real planes the batched
+layout needs, so the layout costs no memory. And the upper bound is not
+arbitrary — the superseded path distributes its row transforms across threads at
+`N >= 65536`, and the batched kernel is single-threaded, so rather than remove
+parallelism that exists today the new path stops below it.
+
+The structure that makes parallelizing it tractable is recorded with the
+follow-up item: every stage couples elements along the length dimension and
+never across the batch, so each batch column is an independent transform through
+the entire stage set, and the partition is by batch range once, outside the stage
+loop.
+
+The end-to-end comparison is still not made here, and the instrument for making
+it elsewhere is now committed: `benches/engine_census.rs` flushes the cache
+between arms, which is precisely the failure that made this host unable to
+adjudicate the question.
+
 ## The power-of-two gap is per-lane throughput, not algorithm (2026-08-25) <a id="lane-throughput"></a>
 
 Evidence tier: measured, seven kernel variants, all engines interleaved in one
