@@ -44,18 +44,20 @@
 //! the returned spectrum. A rise in either is a regression whatever the timings
 //! say.
 //!
-//! The 2-D path also reports zero warm allocations at every shape after the
+//! The multidimensional paths also report zero warm allocations after the
 //! Moirai indexed-scope state became stack-borrowed. Any non-zero result is a
 //! regression: plans, twiddles, transpose scratch, and scheduler bookkeeping
 //! are all reused.
 //!
-//! ## Why there is a two-dimensional section
+//! ## Why there is a multidimensional section
 //!
 //! The first census contained only 1-D arms, while the batched four-step layout
 //! was initially reachable only from 2-D and 3-D lane transforms. Standalone
 //! 1-D plans now enter the generic four-step route at 65536, but they still do
 //! not exercise the lower-size batched layout or multidimensional transpose
-//! passes. The 2-D shapes therefore remain necessary to measure those paths.
+//! passes. The 2-D shapes therefore remain necessary to measure those paths,
+//! and the 3-D row pins the corresponding multi-plane Leto assignment and
+//! allocation contract.
 //!
 //! Which shape takes which route was established by instrumenting
 //! `four_step_fft` and `batched_four_step_applies` and reading the calls, not by
@@ -68,7 +70,8 @@
 //! per case  = WARM_UP_MS + MEASUREMENT_MS  = 20 ms + 60 ms = 80 ms
 //! 1-D cases = 6 per size x 5 sizes                         = 30
 //! 2-D cases = 2 per shape x 4 shapes                       =  8
-//! total     = 38 x 80 ms                   ~ 3.0 s, plus flush overhead
+//! 3-D cases = 1                                             =  1
+//! total     = 39 x 80 ms                   ~ 3.1 s, plus flush overhead
 //! ```
 //!
 //! [`main`] exits non-zero if the sweep exceeds [`BUDGET_SECS`]. A breach is a
@@ -82,7 +85,7 @@ use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
-use leto::Array2;
+use leto::{Array2, Array3};
 use realfft::RealFftPlanner;
 use rustfft::num_complex::Complex as RustComplex;
 use rustfft::{Fft, FftPlanner};
@@ -110,6 +113,11 @@ const SIZES: [usize; 5] = [1_024, 4_096, 16_384, 65_536, 262_144];
 /// same-engine contrast at an equal element count. Three of the four hold
 /// 262144 elements for that reason.
 const TWO_D_SHAPES: [(usize, usize); 4] = [(4_096, 16), (4_096, 64), (16_384, 16), (65_536, 4)];
+
+/// Three-dimensional shape with a 4096-point X axis and sixteen independent
+/// X lanes. It exercises both the volume-wide X transpose and 4096 adjacent
+/// 4x4 Y/Z planes while retaining the cache-resident 65,536-element regime.
+const THREE_D_SHAPE: [usize; 3] = [4_096, 4, 4];
 
 /// Tile edge for [`transpose_into`], matching the kernel's own choice.
 const TRANSPOSE_TILE: usize = 32;
@@ -403,6 +411,36 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
         });
         eprintln!("engine_census: 2-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
     }
+
+    let [nx, ny, nz] = THREE_D_SHAPE;
+    let total = nx * ny * nz;
+    let shape = format!("{nx}x{ny}x{nz}");
+    let src = complex_signal(total);
+    let apollo = apollo_fft::FftPlan3D::<f64>::new(apollo_fft::Shape3D { nx, ny, nz });
+    let mut volume =
+        Array3::from_shape_vec([nx, ny, nz], src.clone()).expect("shape matches the data");
+
+    flush_cache(&mut flush);
+    suite.run_with_config(
+        config,
+        BenchmarkCase::new("complex_forward_3d_f64", "apollo", shape.clone()),
+        || {
+            volume
+                .as_slice_mut()
+                .expect("the volume stays contiguous")
+                .copy_from_slice(&src);
+            apollo.forward_complex_inplace(black_box(&mut volume));
+            black_box(&volume);
+        },
+    );
+    let (allocs, bytes) = count_allocations(|| {
+        volume
+            .as_slice_mut()
+            .expect("the volume stays contiguous")
+            .copy_from_slice(&src);
+        apollo.forward_complex_inplace(&mut volume);
+    });
+    eprintln!("engine_census: 3-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
 
     suite.emit();
     let elapsed = started.elapsed();

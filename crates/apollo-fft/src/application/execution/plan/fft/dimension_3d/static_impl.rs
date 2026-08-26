@@ -1,10 +1,10 @@
-use super::GATHER_TILE;
 use super::MOIRAI_PARALLEL_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
+use crate::application::execution::plan::fft::layout::transpose_matrices;
 use core::marker::PhantomData;
 use eunomia::Complex;
 use leto::Array3;
@@ -133,20 +133,7 @@ where
             .as_mut_slice_memory_order()
             .expect("3D complex data must be contiguous");
         with_3d_y_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
-            for i in 0..NX {
-                for j_t in (0..NY).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(NY);
-                    for k_t in (0..NZ).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(NZ);
-                        for j in j_t..j_end {
-                            let src = (i * NY + j) * NZ;
-                            for k in k_t..k_end {
-                                scratch[(i * NZ + k) * NY + j] = data_slice[src + k];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, NX, NY, NZ);
 
             let lane_plan = StaticFftPlan1D::<F, NY>::new();
             let lane_fn = |lane: &mut [F::Complex]| {
@@ -162,20 +149,7 @@ where
                 _,
             >(scratch, NY, lane_fn);
 
-            for i in 0..NX {
-                for j_t in (0..NY).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(NY);
-                    for k_t in (0..NZ).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(NZ);
-                        for j in j_t..j_end {
-                            let dst = (i * NY + j) * NZ;
-                            for k in k_t..k_end {
-                                data_slice[dst + k] = scratch[(i * NZ + k) * NY + j];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, NX, NZ, NY);
         });
     }
 
@@ -187,21 +161,7 @@ where
             .as_mut_slice_memory_order()
             .expect("3D complex data must be contiguous");
         with_3d_x_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
-            for i in 0..NX {
-                let src_base = i * NY * NZ;
-                for j_t in (0..NY).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(NY);
-                    for k_t in (0..NZ).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(NZ);
-                        for j in j_t..j_end {
-                            let src = src_base + j * NZ;
-                            for k in k_t..k_end {
-                                scratch[(j * NZ + k) * NX + i] = data_slice[src + k];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, 1, NX, NY * NZ);
 
             let lane_plan = StaticFftPlan1D::<F, NX>::new();
             let lane_fn = |lane: &mut [F::Complex]| {
@@ -217,21 +177,7 @@ where
                 _,
             >(scratch, NX, lane_fn);
 
-            for i in 0..NX {
-                let dst_base = i * NY * NZ;
-                for j_t in (0..NY).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(NY);
-                    for k_t in (0..NZ).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(NZ);
-                        for j in j_t..j_end {
-                            let dst = dst_base + j * NZ;
-                            for k in k_t..k_end {
-                                data_slice[dst + k] = scratch[(j * NZ + k) * NX + i];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, 1, NY * NZ, NX);
         });
     }
 }

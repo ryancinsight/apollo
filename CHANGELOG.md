@@ -102,6 +102,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [arch] Route `apollo-fft` two- and three-dimensional
+  gather/scatter transposes through Leto's canonical rank-two assignment
+  kernel. Static and dynamic plans share one caller-scratch implementation,
+  removing their duplicated tiled index loops while preserving transform
+  arithmetic, public shape contracts, and zero-allocation warm execution. ADR
+  0040 records the CPU layout ownership boundary and its performance-evidence
+  limits.
+
 - [patch] Advance the Moirai lock to PR #168 merge `10082209`. Its indexed
   scopes borrow stack state instead of allocating per call, removing the two
   32-byte scheduler allocations from Apollo's parallel four-step route while

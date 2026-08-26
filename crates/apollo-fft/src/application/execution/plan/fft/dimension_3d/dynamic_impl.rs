@@ -1,10 +1,10 @@
 use super::twiddles::cached_power_of_two_twiddle;
-use super::GATHER_TILE;
 use super::MOIRAI_PARALLEL_THRESHOLD;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
+use crate::application::execution::plan::fft::layout::transpose_matrices;
 use crate::domain::metadata::shape::Shape3D;
 use eunomia::Complex;
 use leto::Array3;
@@ -193,20 +193,7 @@ where
             .as_mut_slice_memory_order()
             .expect("3D complex data must be contiguous");
         with_3d_y_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
-            for i in 0..self.nx {
-                for j_t in (0..self.ny).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(self.ny);
-                    for k_t in (0..self.nz).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(self.nz);
-                        for j in j_t..j_end {
-                            let src = (i * self.ny + j) * self.nz;
-                            for k in k_t..k_end {
-                                scratch[(i * self.nz + k) * self.ny + j] = data_slice[src + k];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, self.nx, self.ny, self.nz);
             let lane_fn = |lane: &mut [F::Complex]| match (
                 FORWARD,
                 &self.twiddle_y_fwd,
@@ -231,20 +218,7 @@ where
                 _,
                 _,
             >(&mut scratch[..], self.ny, lane_fn);
-            for i in 0..self.nx {
-                for j_t in (0..self.ny).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(self.ny);
-                    for k_t in (0..self.nz).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(self.nz);
-                        for j in j_t..j_end {
-                            let dst = (i * self.ny + j) * self.nz;
-                            for k in k_t..k_end {
-                                data_slice[dst + k] = scratch[(i * self.nz + k) * self.ny + j];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, self.nx, self.nz, self.ny);
         });
     }
 
@@ -253,21 +227,7 @@ where
             .as_mut_slice_memory_order()
             .expect("3D complex data must be contiguous");
         with_3d_x_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
-            for i in 0..self.nx {
-                let src_base = i * self.ny * self.nz;
-                for j_t in (0..self.ny).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(self.ny);
-                    for k_t in (0..self.nz).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(self.nz);
-                        for j in j_t..j_end {
-                            let src = src_base + j * self.nz;
-                            for k in k_t..k_end {
-                                scratch[(j * self.nz + k) * self.nx + i] = data_slice[src + k];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, 1, self.nx, self.ny * self.nz);
             let lane_fn = |lane: &mut [F::Complex]| match (
                 FORWARD,
                 &self.twiddle_x_fwd,
@@ -292,21 +252,7 @@ where
                 _,
                 _,
             >(&mut scratch[..], self.nx, lane_fn);
-            for i in 0..self.nx {
-                let dst_base = i * self.ny * self.nz;
-                for j_t in (0..self.ny).step_by(GATHER_TILE) {
-                    let j_end = (j_t + GATHER_TILE).min(self.ny);
-                    for k_t in (0..self.nz).step_by(GATHER_TILE) {
-                        let k_end = (k_t + GATHER_TILE).min(self.nz);
-                        for j in j_t..j_end {
-                            let dst = dst_base + j * self.nz;
-                            for k in k_t..k_end {
-                                data_slice[dst + k] = scratch[(j * self.nz + k) * self.nx + i];
-                            }
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, 1, self.ny * self.nz, self.nx);
         });
     }
 

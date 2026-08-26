@@ -1,5 +1,24 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
+
+- [x] Advance the lock to merged Leto PR #125 (`1e70b27e`) under the standalone
+      lock-resolution discipline.
+- [x] Replace manual 2-D and 3-D gather/scatter loops with Leto assignment and
+      consolidate static/dynamic axis orchestration on one implementation.
+- [x] Verify rectangular, ragged-tile, zero/singleton, forward/inverse, and
+      allocation contracts with analytical and differential tests.
+- [x] Run the bounded multidimensional census and affected package/workspace
+      gates; synchronize the ADR, changelog, gap audit, and provider records.
+- [ ] Commit, push, merge, and bind the exact Apollo consumer revision to Leto
+      provider merge `1e70b27e`.
+
+Evidence: warning-denied all-target Clippy passes; Nextest passes 428/428;
+doctests, rustdoc, provider audit, locked metadata, and ADR-index checks pass.
+The census completes in 7.97 seconds with zero warm allocations for every
+2-D/3-D row. Its repeated wall-clock medians remain diagnostic because the
+uncontrolled-host variation exceeds the isolated layout effect.
+
 ## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 [arch] — Codex
 
 - [x] Record the exact 1-D Stockham baseline and profile the live production
@@ -10,7 +29,7 @@
       identifies them as binding; keep warm complex execution allocation-free.
 - [x] Verify analytical accuracy, PhastFT parity, allocations, codegen, focused
       nextest, clippy, docs, and the bounded engine census.
-- [ ] Synchronize the backlog, gap audit, ADR index, changelog, and benchmark
+- [x] Synchronize the backlog, gap audit, ADR index, changelog, and benchmark
       evidence; commit, push, and merge each green increment.
 
 ## ATLAS-APOLLO-BOOK-TEST-2026-08-20 [patch]
