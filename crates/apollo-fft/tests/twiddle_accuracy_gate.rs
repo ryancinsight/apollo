@@ -57,11 +57,16 @@
 //!
 //! ## Sizes
 //!
-//! Read off the dispatch in `mixed_radix/dispatch.rs` and
-//! `plan/fft/dimension_1d/dynamic_impl.rs` rather than assumed — the throwaway
-//! probe that motivated this test initially mislabelled which sizes reach
-//! `four_step_fft`. Sized ZST codelets claim `log2` 4 through 10 *before* the
-//! four-step gate is consulted, so `N = 1024` is a codelet path, not four-step.
+//! Established by instrumenting the entry points, not by reading the dispatch —
+//! reading it gave the wrong answer twice. `four_step_fft` recorded **zero**
+//! calls across every one-dimensional ladder here, because `FftPlan1D`
+//! dispatches through `F::pot_inplace` while the four-step gate lives in
+//! `try_power_of_two_fast_path`, reached only from `dispatch_inplace`. Hence the
+//! two-dimensional ladder: lane transforms are the route that reaches the
+//! four-step matrix and the batched layout.
+//!
+//! Reachability is a runtime property, and a one-line `eprintln!` settles in a
+//! minute what a plausible reading of a dispatch chain cannot.
 
 use apollo_fft::{FftPlan1D, FftPlan2D, Shape1D, Shape2D};
 use eunomia::Complex64;
