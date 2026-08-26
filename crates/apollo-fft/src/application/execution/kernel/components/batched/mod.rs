@@ -96,7 +96,10 @@ struct BatchedStages<'a, T> {
     re: &'a mut [T],
     im: &'a mut [T],
     tw: &'a [(T, T)],
+    /// Live columns per row — the loop bound.
     batch: usize,
+    /// Elements per row including [`ROW_PAD`] — the index multiplier.
+    stride: usize,
     len: usize,
 }
 
@@ -109,6 +112,7 @@ where
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;
+        let s = self.stride;
         let mut twx = 0usize;
         let mut l = 2usize;
 
@@ -144,10 +148,10 @@ where
                 let (v3r, v3i) = (simd.splat(w3r), simd.splat(w3i));
 
                 for g in 0..groups {
-                    let ia = (g * 2 * l + j) * b;
-                    let ib = ia + half * b;
-                    let ic = ia + l * b;
-                    let id = ic + half * b;
+                    let ia = (g * 2 * l + j) * s;
+                    let ib = ia + half * s;
+                    let ic = ia + l * s;
+                    let id = ic + half * s;
                     let mut k = 0;
                     while k + lanes <= b {
                         let ar = load::<T, A>(self.re, ia + k);
@@ -233,8 +237,8 @@ where
                 let wr = simd.splat(twr);
                 let wi = simd.splat(twi);
                 for g in 0..groups {
-                    let lo = (g * l + j) * b;
-                    let hi = lo + half * b;
+                    let lo = (g * l + j) * s;
+                    let hi = lo + half * s;
                     let mut k = 0;
                     while k + lanes <= b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
@@ -306,9 +310,9 @@ where
 }
 
 /// Applies the bit-reversal permutation across every transform in the batch.
-fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usize) {
+fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usize, stride: usize) {
     for &(i, j) in swaps {
-        let (i, j) = (i as usize * batch, j as usize * batch);
+        let (i, j) = (i as usize * stride, j as usize * stride);
         for k in 0..batch {
             re.swap(i + k, j + k);
             im.swap(i + k, j + k);
@@ -317,6 +321,20 @@ fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usi
 }
 
 /// Square in-place transpose of an `m x m` plane, tiled for locality.
+/// Extra elements appended to each plane row, so the row stride is `m + 8`
+/// rather than `m`.
+///
+/// With an unpadded power-of-two stride, all of it aliases: every plane row
+/// maps to the same L1 sets, `re` and `im` (a power-of-two apart) share sets,
+/// and the three same-sized buffers a four-step holds live — caller data,
+/// scratch planes, twiddle matrix — collide by allocation accident. Eight
+/// f64 elements are one cache line, so consecutive rows shift by a full line
+/// and the uniform aliasing is gone; for f32 the shift is half a line, which
+/// still rotates the sets. The pad is a spacer, never computed on: every loop
+/// bounds itself by the live column count and multiplies row indices by the
+/// stride.
+pub(crate) const ROW_PAD: usize = 8;
+
 /// Tile edge for [`twiddle_transpose`]. The plane stride is `m * 8` bytes — a power of
 /// two, so at `m >= 256` every tile row aliases to the same L1 set, and `re`
 /// and `im` (halves of one allocation, also a power of two apart) share sets
@@ -334,18 +352,25 @@ const TWIDDLE_TRANSPOSE_TILE: usize = 8;
 /// data. Element `p` is multiplied by `tw[p]` and moved to its mirror, so each
 /// element is twiddled exactly once — at its pre-transpose index, which is the
 /// order the separate pass used.
-fn twiddle_transpose<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], m: usize)
+fn twiddle_transpose<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], m: usize, stride: usize)
 where
     T: LaneScalar + MixedRadixScalar,
 {
-    debug_assert_eq!(re.len(), m * m);
+    debug_assert!(stride >= m && re.len() >= m * stride);
     debug_assert_eq!(tw.len(), m * m);
 
-    fn swap_twiddled<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], p: usize, q: usize)
-    where
+    /// `p`/`q` index the padded planes; `ptw`/`qtw` index the unpadded twiddle
+    /// matrix for the same two logical elements.
+    fn swap_twiddled<T>(
+        re: &mut [T],
+        im: &mut [T],
+        tw: &[Complex<T>],
+        (p, ptw): (usize, usize),
+        (q, qtw): (usize, usize),
+    ) where
         T: LaneScalar + MixedRadixScalar,
     {
-        let (tp, tq) = (tw[p], tw[q]);
+        let (tp, tq) = (tw[ptw], tw[qtw]);
         let (ar, ai) = (re[p], im[p]);
         let (br, bi) = (re[q], im[q]);
         re[p] = br * tq.re - bi * tq.im;
@@ -362,19 +387,31 @@ where
                 // Diagonal tile: fixed points are twiddled in place, and each
                 // off-diagonal pair inside the tile is visited once.
                 for i in ib..ie {
-                    let p = i * m + i;
-                    let t = tw[p];
+                    let p = i * stride + i;
+                    let t = tw[i * m + i];
                     let (a, c) = (re[p], im[p]);
                     re[p] = a * t.re - c * t.im;
                     im[p] = a * t.im + c * t.re;
                     for j in (i + 1)..je {
-                        swap_twiddled(re, im, tw, i * m + j, j * m + i);
+                        swap_twiddled(
+                            re,
+                            im,
+                            tw,
+                            (i * stride + j, i * m + j),
+                            (j * stride + i, j * m + i),
+                        );
                     }
                 }
             } else {
                 for i in ib..ie {
                     for j in jb..je {
-                        swap_twiddled(re, im, tw, i * m + j, j * m + i);
+                        swap_twiddled(
+                            re,
+                            im,
+                            tw,
+                            (i * stride + j, i * m + j),
+                            (j * stride + i, j * m + i),
+                        );
                     }
                 }
             }
@@ -420,16 +457,17 @@ impl_plan_cache!(f64, PLAN_CACHE_F64);
 impl_plan_cache!(f32, PLAN_CACHE_F32);
 
 /// Runs `batch` transforms of length `plan.len` over planar `re`/`im`.
-fn run_batched<T>(re: &mut [T], im: &mut [T], plan: &BatchedPlan<T>, batch: usize)
+fn run_batched<T>(re: &mut [T], im: &mut [T], plan: &BatchedPlan<T>, batch: usize, stride: usize)
 where
     T: LaneScalar + MixedRadixScalar,
 {
-    permute(re, im, &plan.swaps, batch);
+    permute(re, im, &plan.swaps, batch, stride);
     hermes_simd::vectorize(BatchedStages {
         re,
         im,
         tw: &plan.tw,
         batch,
+        stride,
         len: plan.len,
     });
 }
@@ -445,6 +483,16 @@ where
 ///
 /// Panics if `data.len()` is not an even power of two, or if `scratch` is
 /// shorter than `data`.
+/// Scratch length, in complex elements, that [`four_step_batched`] requires
+/// for a transform of length `n`.
+///
+/// The single definition of the padded-plane requirement, so callers and the
+/// driver cannot disagree about it.
+pub(crate) fn scratch_len(n: usize) -> usize {
+    let m = 1usize << (n.trailing_zeros() / 2);
+    m * (m + ROW_PAD)
+}
+
 pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     scratch: &mut [Complex<T>],
@@ -457,37 +505,46 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         n.is_power_of_two() && k % 2 == 0,
         "requires an even power of two"
     );
-    assert!(scratch.len() >= n, "scratch must hold the whole transform");
     let m = 1usize << (k / 2);
+    let stride = m + ROW_PAD;
+    let plane = scratch_len(n);
+    // One complex scratch element is two reals, so `m * stride` complexes hold
+    // the two padded planes. The pad breaks the power-of-two row stride that
+    // makes every plane row alias to one L1 set (see [`ROW_PAD`]).
+    assert!(
+        scratch.len() >= plane,
+        "scratch must hold two padded planes"
+    );
+    let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
+    let (re, im) = flat.split_at_mut(plane);
 
-    // One complex scratch element is two reals, so an N-element complex buffer
-    // is exactly the two N-element planes this needs.
-    let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..n]);
-    let (re, im) = flat.split_at_mut(n);
-
-    for (i, c) in data.iter().enumerate() {
-        re[i] = c.re;
-        im[i] = c.im;
+    for (row, chunk) in data.chunks_exact(m).enumerate() {
+        for (b, c) in chunk.iter().enumerate() {
+            re[row * stride + b] = c.re;
+            im[row * stride + b] = c.im;
+        }
     }
 
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
-    run_batched(re, im, plan.as_ref(), m);
+    run_batched(re, im, plan.as_ref(), m, stride);
 
     // 2+3. The four-step twiddle W_N^{b·k1} and the transpose, in one pass.
     // The matrix is built once when it enters the shared cache, never per
     // transform; the multiply rides the transpose's traffic, so the separate
     // elementwise pass this replaces is deleted rather than optimized.
     let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
-    twiddle_transpose(re, im, &twiddles, m);
+    twiddle_transpose(re, im, &twiddles, m, stride);
 
     // 4. The `m` transforms along the second axis. The result lands at
     //    `k2 * m + k1`, which is the natural output index, so nothing follows.
-    run_batched(re, im, plan.as_ref(), m);
+    run_batched(re, im, plan.as_ref(), m, stride);
 
-    for (i, c) in data.iter_mut().enumerate() {
-        *c = Complex::new(re[i], im[i]);
+    for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
+        for (b, c) in chunk.iter_mut().enumerate() {
+            *c = Complex::new(re[row * stride + b], im[row * stride + b]);
+        }
     }
 }
 

@@ -236,3 +236,38 @@ is what made the two instruments comparable at all; admission is defined once on
 `FourStep::admits`, so the general dispatcher and one-dimensional plans cannot
 drift apart on which lengths the split is valid for. Selection remains one
 branch per transform and the types carry no data.
+
+2026-08-26 (fourth): the threshold moves to 4096, and the third revision's
+open question — why the same call cost 12 us in one process and 99 us in
+another — is answered: **the hybrid scheduler, not the code and not memory
+layout.** The host is a Core Ultra 9 285K (8 P-cores, 16 E-cores). Windows
+hands benchmark child processes EcoQoS — efficiency cores at efficiency
+frequency — and instrumenting the census process showed the batched kernel
+executing exclusively on E-cores (CPUs 8 through 21, wandering), every call
+slow, while the identical binary elsewhere ran unthrottled.
+
+`pot::core_matrix`, which pins the thread and so removes the scheduler from
+the question, gives at N = 4096:
+
+| route | P-core | E-core |
+| --- | --- | --- |
+| Stockham | 28.1 us | 62.6 us |
+| four-step | **16.6 us** | **13.2 us** |
+
+Four-step wins on both core types, consistent with `pot::crossover`'s
+in-process ladder (ahead from N = 256 through 2^20). The third revision kept
+65536 on the census's evidence; that evidence is now known to have measured
+scheduling, so the constant follows the controlled instruments instead.
+
+Plane-stride padding (`ROW_PAD`) was implemented while testing the layout
+hypothesis and is kept on its own merits — +10% pinned on a P-core at 4096,
+and it removes a real power-of-two aliasing hazard the fused transpose had to
+tile around — but it did not and could not cure the anomaly, because the
+anomaly was never layout.
+
+The census now opts itself out of power throttling
+(`PROCESS_POWER_THROTTLING_EXECUTION_SPEED`), which is necessary but not
+sufficient on a contended host: absolute census figures from this machine
+remain unusable while other work runs, and the quiet-host item stands. The
+instruments to run there are `pot::crossover` and `pot::core_matrix`, both
+named here so this figure is falsifiable in a way the original was not.

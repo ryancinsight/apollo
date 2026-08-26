@@ -1,5 +1,47 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26 — Four-step 8x slower in one process than another [arch] — closed 2026-08-26, root-caused: not layout
+
+- **Root cause: the hybrid scheduler.** The host is a Core Ultra 9 285K (8
+  P-cores, 16 E-cores). Windows hands benchmark child processes EcoQoS —
+  efficiency cores at efficiency frequency — and instrumenting the census
+  process caught the batched kernel executing exclusively on E-cores (CPUs 8
+  through 21, thread wandering among them), every call slow, while the same
+  binary elsewhere ran unthrottled. Every "process-dependent" four-step anomaly
+  in this audit, the 2x same-code timing swings included, was scheduling.
+- **The layout hypothesis was tested honestly and refuted.** The plane stride
+  was padded off the power-of-two boundary (`ROW_PAD`), which was this item's
+  proposed mechanism — and the census figure did not move. Padding is kept on
+  its own merits: +10% pinned on a P-core at N = 4096, and it removes the
+  aliasing hazard the fused transpose had to tile around.
+- **The decisive instrument** is `pot::core_matrix`: pin the thread, measure
+  both routes. At N = 4096, four-step beats Stockham on a P-core (16.6 us
+  against 28.1) and on an E-core (13.2 against 62.6) — nowhere near the 45-99
+  us the throttled process reported.
+- **Consequences shipped with the closure:** the 1-D crossover moves to 4096 on
+  the controlled evidence (ADR 0039, fourth revision note); the census opts
+  itself out of power throttling and says so in its banner; and the fix
+  surfaced a latent defect — the f32 `try_four_step_batched` impl still passed
+  the unpadded scratch length, caught by the suite the moment routing exposed
+  f32 at 4096 to the batched path. The duplicated impl bodies that hid it are
+  the known clone-pair debt in `radix_composite/cache.rs`.
+- **What remains true:** absolute census figures from this machine are unusable
+  while other work runs — the throttling opt-out is necessary, not sufficient.
+  The quiet-host validation item stands, and its instruments are now named:
+  `pot::crossover` and `pot::core_matrix`.
+
+## ATLAS-APOLLO-PADDED-STRIDE-2026-08-26 — Pad the batched plane stride [patch] — done 2026-08-26
+
+- **Delivered:** plane rows carry `ROW_PAD = 8` extra elements, so the stride
+  is `m + 8` rather than the power of two that made every row alias to one L1
+  set and `re`/`im` share sets. The pad is a spacer: every loop bounds itself
+  by the live column count, the NaN-sentinel test proves the fused transpose
+  never writes it, and `scratch_len` is the single definition of the enlarged
+  requirement for driver, callers, and tests alike.
+- **Measured pinned at N = 4096:** +10% on a P-core (16.6 against 18.3 us),
+  neutral on an E-core. The aliasing argument bites hardest at m >= 256, which
+  the quiet-host run should confirm.
+
 ## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — done 2026-08-26, by deletion
 
 - **Outcome exceeded the filing.** The item asked for the scalar twiddle pass to
@@ -100,37 +142,6 @@
   65 us in one session with its code untouched, so no absolute here bounds
   anything. Confirming the crossover on a quiet host stays open, and
   `pot::crossover` is the named instrument to run.
-
-## ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26 — Four-step is 8x slower in one process than another [arch] — todo
-
-- **Finding.** The same `four_step_fft` call at N = 4096, in the same binary,
-  takes 12 us of wall clock in the library test process and 99 us in the census
-  bench process. Minimum over thousands of calls in both, so it is not an
-  outlier. This is the single largest unexplained factor in the audit and it
-  currently costs Apollo the entire 4096-to-16384 range, since the routing
-  threshold has to be set for the slow case.
-- **Ruled out, each by measurement rather than argument:** plan overhead
-  (reaching the route through `FftPlan1D` measures within 3% of calling it
-  directly), twiddle rebuilds (instrumented `build_four_step_twiddles`: four
-  calls total, one per size), and per-call allocation (the census allocation
-  column reports zero on the complex path).
-- **Hypothesis with a mechanism.** Four-step holds three `N`-sized arrays live
-  simultaneously — data, scratch, and the `W_N^(j*k)` matrix — where Stockham
-  holds two. Three same-sized arrays whose relative alignment is decided by
-  allocation history can conflict in a set-associative cache; the census process
-  has four engines' plans and a 64 MiB flush buffer allocated before Apollo's,
-  the test process has almost nothing. That predicts the effect is sensitive to
-  allocation order and curable by controlling the alignment of the three.
-- **Scope:** confirm or refute by perturbing allocation order in the isolated
-  instrument, then by measuring the three arrays' relative offsets in both
-  processes. If confirmed, align the scratch and twiddle allocations to avoid
-  conflict rather than tuning around it. **Non-goals:** the routing threshold,
-  which is correct for as long as this stands.
-- **Acceptance oracle:** the same call costs the same in both processes, or the
-  cause is identified and recorded with a mechanism. If it is curable, the
-  crossover is re-derived afterward, since it was set for the slow case.
-- **Risk / change class:** [arch]; would change the crossover and the routing
-  for the whole 4096-to-16384 range.
 
 ## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — done 2026-08-26
 

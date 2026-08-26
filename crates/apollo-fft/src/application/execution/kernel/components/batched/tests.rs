@@ -3,7 +3,7 @@
 //! The transpose and the batched stage set are verified separately from the
 //! assembled transform, so a failure localizes.
 
-use super::{four_step_batched, twiddle_transpose, BatchedPlanCache};
+use super::{four_step_batched, scratch_len, twiddle_transpose, BatchedPlanCache};
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
@@ -30,10 +30,39 @@ fn fused_twiddle_transpose_matches_the_separate_passes() {
             }
         }
 
-        let (mut re, mut im) = (re0.clone(), im0.clone());
-        twiddle_transpose(&mut re, &mut im, &tw, m);
-        assert_eq!(re, expected_re, "m={m}: fused real plane differs");
-        assert_eq!(im, expected_im, "m={m}: fused imaginary plane differs");
+        // Unpadded and padded strides run the same logical operation; both
+        // must match the reference, and the padded run must never touch pad.
+        for pad in [0usize, 8] {
+            let stride = m + pad;
+            let sentinel = f64::NAN;
+            let mut re = vec![sentinel; m * stride];
+            let mut im = vec![sentinel; m * stride];
+            for r in 0..m {
+                re[r * stride..r * stride + m].copy_from_slice(&re0[r * m..(r + 1) * m]);
+                im[r * stride..r * stride + m].copy_from_slice(&im0[r * m..(r + 1) * m]);
+            }
+            twiddle_transpose(&mut re, &mut im, &tw, m, stride);
+            for r in 0..m {
+                for c in 0..m {
+                    assert_eq!(
+                        re[r * stride + c],
+                        expected_re[r * m + c],
+                        "m={m} pad={pad}: real ({r},{c}) differs"
+                    );
+                    assert_eq!(
+                        im[r * stride + c],
+                        expected_im[r * m + c],
+                        "m={m} pad={pad}: imaginary ({r},{c}) differs"
+                    );
+                }
+                for c in m..stride {
+                    assert!(
+                        re[r * stride + c].is_nan() && im[r * stride + c].is_nan(),
+                        "m={m} pad={pad}: pad column {c} of row {r} was written"
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -78,7 +107,7 @@ fn forward_matches_the_direct_transform() {
         let src = signal(n);
         let expected = dft(&src, false);
         let mut data = src.clone();
-        let mut scratch = vec![Complex64::default(); n];
+        let mut scratch = vec![Complex64::default(); scratch_len(n)];
         four_step_batched::<f64, false>(&mut data, &mut scratch);
 
         let bound = tolerance(n, &src);
@@ -101,7 +130,7 @@ fn inverse_matches_the_direct_transform() {
         let src = signal(n);
         let expected = dft(&src, true);
         let mut data = src.clone();
-        let mut scratch = vec![Complex64::default(); n];
+        let mut scratch = vec![Complex64::default(); scratch_len(n)];
         four_step_batched::<f64, true>(&mut data, &mut scratch);
 
         let bound = tolerance(n, &src);
@@ -123,7 +152,7 @@ fn forward_then_inverse_recovers_the_input() {
         let n = 1usize << k;
         let src = signal(n);
         let mut data = src.clone();
-        let mut scratch = vec![Complex64::default(); n];
+        let mut scratch = vec![Complex64::default(); scratch_len(n)];
         four_step_batched::<f64, false>(&mut data, &mut scratch);
         four_step_batched::<f64, true>(&mut data, &mut scratch);
 
@@ -154,7 +183,7 @@ fn f32_forward_matches_the_direct_transform() {
             .collect();
         let expected = dft(&src64, false);
         let mut data = src.clone();
-        let mut scratch = vec![Complex32::default(); n];
+        let mut scratch = vec![Complex32::default(); scratch_len(n)];
         four_step_batched::<f32, false>(&mut data, &mut scratch);
 
         let l1: f64 = src64.iter().map(|v| v.re.hypot(v.im)).sum();

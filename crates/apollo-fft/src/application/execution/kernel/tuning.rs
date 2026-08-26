@@ -21,25 +21,19 @@ pub(crate) const FOUR_STEP_THRESHOLD: usize = 1 << 12;
 /// one route per process, where the between-process difference exceeded the
 /// between-route difference it was resolving; see ADR 0039's revision note.
 ///
-/// **The isolated crossover is not the operating crossover, and the difference
-/// is the whole reason this constant is 65536.** `pot::crossover` puts
-/// four-step ahead of Stockham from `N = 256` upward, by 2 to 3x. Setting the
-/// threshold there reproduces ADR 0039's rejected measurement exactly: 4096
-/// degrades from 29 to 348 us and 16384 from 275 us to 1.64 ms in
-/// `benches/engine_census`.
-///
-/// Both are real. Timing the kernel from inside the census process shows it
-/// genuinely taking 99 us per call at `N = 4096` where the same binary's test
-/// process takes 12, so the route is not mismeasured — it is slower there.
-/// Four-step touches three `N`-sized arrays at once (data, scratch, and the
-/// `W_N^(j*k)` matrix) against Stockham's two, and appears sensitive to how
-/// those land relative to each other, which differs by allocation history.
-///
-/// So the retained value is the one measured in a process that resembles a
-/// caller. Raising it on the isolated figure would ship a 12x regression at
-/// 4096. See ADR 0039's 2026-08-26 revision and
-/// `ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26`.
-pub(crate) const ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD: usize = 1 << 16;
+/// Set from measurements that control for the hybrid scheduler, because the
+/// previous value was set by measurements that did not. On the Core Ultra 9
+/// 285K, Windows hands benchmark child processes EcoQoS — efficiency cores at
+/// efficiency frequency, the thread wandering between them — and every
+/// "process-dependent" four-step anomaly in this audit was that, not code.
+/// `pot::core_matrix` pins the thread and removes the scheduler from the
+/// question entirely; at N = 4096 four-step beats Stockham on **both** core
+/// types (16.6 us against 28.1 on a P-core, 13.2 against 62.6 on an E-core),
+/// and `pot::crossover` — both routes, one process, cache flushed per arm —
+/// has it ahead from N = 256 through 2^20. The plan's sized codelet arms own
+/// everything below `log2 = 11`, so 4096 is the smallest length this constant
+/// can route; see ADR 0039's fourth revision note.
+pub(crate) const ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD: usize = 1 << 12;
 
 /// Maximum value of `prev_len * R_TOTAL` for which a fused Compose stage fires.
 ///
