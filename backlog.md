@@ -1,5 +1,42 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 — Route multidimensional layout passes through Leto [arch] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+- **Lease:** `crates/apollo-fft/src/application/execution/plan/fft/dimension_2d*`,
+  `crates/apollo-fft/src/application/execution/plan/fft/dimension_3d*`, the
+  multidimensional census/tests, and this item's PM and documentation entries
+  through the next verified commit.
+- **Outcome:** Apollo's 2-D and 3-D separable axis transforms delegate their
+  gather/scatter transpositions to Leto's canonical assignment kernel instead
+  of maintaining duplicate indexed copies in each plan implementation.
+- **Scope:** replace the existing 2-D/3-D layout loops, consolidate static and
+  dynamic execution on shared helpers, and advance the Leto lock pin to merged
+  provider PR #125 (`1e70b27e`). **Non-goals:** changing FFT arithmetic,
+  normalization, public shape contracts, or GPU execution in this increment.
+- **Acceptance oracle:** analytical and differential 2-D/3-D forward/inverse
+  tests pass across rectangular and boundary shapes; warm execution preserves
+  its allocation budget; the end-to-end multidimensional census records the
+  effect at the existing geometric regimes; Clippy, Nextest, doctests, rustdoc,
+  provider audit, and lock discipline pass.
+- **Risk / change class:** [arch], internal execution ownership; the public FFT
+  API is unchanged. **Dependency:** Leto PR #125 merged as `1e70b27e`.
+
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] — todo
+
+- **Outcome:** determine and remove the production or build-layout cause of the
+  six exact-head regressions reported after PR #125, and reduce the benchmark
+  job's roughly twelve-minute duration without weakening its workload,
+  counterbalancing, thresholds, or comparison count.
+- **Scope:** the affected small-kernel codegen, benchmark comparator, build reuse,
+  and workflow topology. **Non-goals:** threshold relaxation, fewer samples, or
+  reclassifying a reproducible regression as noise.
+- **Acceptance oracle:** every affected row passes the unchanged replicated
+  counterbalanced comparison, and the workflow records where its wall time is
+  spent so the binding build or execution component can be reduced.
+- **Risk / change class:** [patch]. **Driver:** hosted default-branch run after
+  Apollo PR #125.
+
 ## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — done 2026-08-26
 
 - **Delivered:** the batched stage loop fuses stage `l` with stage `2l` into a
@@ -191,12 +228,12 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — in progress
+## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — done 2026-08-26 (PR #125)
 
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-- **Lease:** `crates/apollo-fft/src/application/execution/kernel/`,
-  `crates/apollo-fft/benches/`, `docs/adr/0039-*`, and the item-owned PM/doc
-  entries through the next verified commit.
+- **Delivery:** PR #125 merged as `26fc4ab8`; the provider closure is Moirai
+  PR #168 (`10082209`). The later hosted small-kernel regression is tracked by
+  `ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26` rather than leaving this
+  delivered architecture item open.
 
 - **Finding, and it corrects PR #119.** `four_step_fft` is never called by any
   one-dimensional transform. `FftPlan1D` dispatches through `F::pot_inplace`,
