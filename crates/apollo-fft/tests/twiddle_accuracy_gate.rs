@@ -58,12 +58,10 @@
 //! ## Sizes
 //!
 //! Established by instrumenting the entry points, not by reading the dispatch —
-//! reading it gave the wrong answer twice. `four_step_fft` recorded **zero**
-//! calls across every one-dimensional ladder here, because `FftPlan1D`
-//! dispatches through `F::pot_inplace` while the four-step gate lives in
-//! `try_power_of_two_fast_path`, reached only from `dispatch_inplace`. Hence the
-//! two-dimensional ladder: lane transforms are the route that reaches the
-//! four-step matrix and the batched layout.
+//! reading it gave the wrong answer twice. The initial audit found the
+//! four-step route absent from every one-dimensional transform. The route now
+//! starts at 65536 for square power-of-two splits, while the two-dimensional
+//! ladder continues to cover both the batched and generic four-step builders.
 //!
 //! Reachability is a runtime property, and a one-line `eprintln!` settles in a
 //! minute what a plausible reading of a dispatch chain cannot.
@@ -98,13 +96,12 @@ const BASELINE_FLOOR: f64 = 0.5;
 /// | sizes | route |
 /// | --- | --- |
 /// | 8, 16, 64 | `small_pot_inplace_sized` codelets |
-/// | 256 .. 262144 | Stockham autosort against the `twiddle_table` twiddles |
+/// | 256 .. 32768 | Stockham autosort against the `twiddle_table` twiddles |
+/// | 65536, 262144 | parallel four-step against the cached matrix |
 ///
-/// Every size here uses the one twiddle builder. The four-step decomposition is
-/// *not* on this route: `FftPlan1D` dispatches through `F::pot_inplace`, which
-/// runs codelets to `N = 64` and Stockham above, while the four-step gate lives
-/// in `try_power_of_two_fast_path`, reachable only from `dispatch_inplace`. See
-/// [`TWO_D_LADDER`] for the ladder that does reach it.
+/// The ladder therefore covers both power-of-two builders used by the public
+/// one-dimensional plan. See [`TWO_D_LADDER`] for the independent lane-transform
+/// route that also exercises the batched builder below the parallel crossover.
 const POT_LADDER: [usize; 12] = [
     8, 16, 64, 256, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 262144,
 ];
@@ -128,11 +125,9 @@ const CONVOLUTION_LADDER: [usize; 4] = [2039, 8191, 32749, 131071];
 /// Transformed-axis lengths for the two-dimensional ladder.
 ///
 /// This ladder covers the four-step twiddle matrix and the batched layout
-/// because 2-D lane transforms reach them:
-/// instrumenting `four_step_fft` and `batched_four_step_applies` recorded zero
-/// calls across the power-of-two, mixed-radix and convolution ladders — every
-/// 1-D route from `N = 8` to `N = 262144` — and both firing immediately for a
-/// 2-D transform with a 4096-long axis.
+/// through the independent 2-D lane-transform route. The original runtime
+/// instrumentation established that route before one-dimensional plans gained
+/// their measured 65536 crossover.
 ///
 /// 4096 and 16384 take the batched layout; 65536 and 262144 exceed the
 /// threading threshold and take the four-step twiddle matrix, so the two

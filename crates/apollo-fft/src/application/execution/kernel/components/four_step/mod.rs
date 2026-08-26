@@ -6,10 +6,10 @@
 //!
 //! ## Twiddle caching
 //!
-//! The W_N^{j·k} matrix (N entries) is built once via a double recurrence
-//! (1 cos/sin call total) and reused across all transforms of the same length.
-//! This eliminates the O(N) trigonometric evaluations that were previously
-//! performed on every call.
+//! The W_N^{j·k} matrix (N entries) is evaluated directly once per length and
+//! direction, then reused across transforms. Direct evaluation avoids the
+//! O(sqrt(N) * u) error growth of the superseded recurrence without putting
+//! trigonometric work in the execution path.
 //!
 //! ## Parallelism
 //!
@@ -50,8 +50,37 @@ fn transpose_square_inplace<T: Copy>(data: &mut [T], n: usize) {
     }
 }
 
-/// N above which the independent row transforms in steps 2 and 4 use Moirai.
+/// Crossover for executing independent four-step rows through Moirai.
+///
+/// This remains separate from the algorithm-selection crossovers: scheduler
+/// economics may change without proving that a different transform route wins.
 pub(crate) const PARALLEL_ROW_THRESHOLD: usize = 65_536;
+
+/// Runs the shared four-step route when the length admits the selected split.
+///
+/// Selection lives here so one-dimensional plans and the general mixed-radix
+/// dispatcher cannot diverge on split or normalization semantics. The caller
+/// supplies its measured workload crossover.
+#[inline]
+pub(crate) fn try_four_step<
+    F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
+    const INVERSE: bool,
+    const NORMALIZE: bool,
+>(
+    data: &mut [F::Complex],
+    minimum_len: usize,
+) -> bool {
+    let n = data.len();
+    if n < minimum_len || !n.is_power_of_two() || n.trailing_zeros() % 2 != 0 {
+        return false;
+    }
+
+    four_step_fft::<F, INVERSE>(data);
+    if INVERSE && NORMALIZE {
+        F::normalize(data, n);
+    }
+    true
+}
 
 /// In-place four-step FFT for large power-of-two lengths.
 pub(crate) fn four_step_fft<
@@ -161,3 +190,6 @@ pub(crate) fn four_step_fft<
         }
     });
 }
+
+#[cfg(test)]
+mod tests;

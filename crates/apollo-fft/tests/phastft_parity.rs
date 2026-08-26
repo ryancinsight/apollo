@@ -8,7 +8,7 @@
 //! independently authored power-of-two engine — radix-2 decimation-in-time with
 //! CO-BRAVO bit reversal over split real/imaginary planes, against Apollo's
 //! self-sorting Stockham over interleaved samples. The two share no code and no
-//! data layout, so agreement at 2^12 is evidence about the parts a small-N
+//! data layout, so agreement through 2^16 is evidence about the parts a small-N
 //! analytical case cannot reach.
 //!
 //! ## Convention pinning
@@ -45,7 +45,7 @@ const TOLERANCE_FACTOR: f64 = 16.0;
 /// Powers of two from the smallest non-trivial transform through a length whose
 /// working set leaves L1, so blocking and staging paths are exercised rather
 /// than only the codelets.
-const SIZES: [usize; 7] = [4, 8, 16, 64, 256, 1_024, 4_096];
+const SIZES: [usize; 8] = [4, 8, 16, 64, 256, 1_024, 4_096, 65_536];
 
 fn signal(len: usize) -> Vec<Complex64> {
     (0..len)

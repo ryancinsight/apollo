@@ -326,17 +326,16 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let plan = T::cached_plan::<INVERSE>(m);
     run_batched(re, im, plan.as_ref(), m);
 
-    // 2. Elementwise four-step twiddle, W_N^{b·k1}.
-    let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
+    // 2. Elementwise four-step twiddle, W_N^{b·k1}. Direct evaluation is
+    // paid once when the matrix enters the shared cache, never per transform.
+    let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
     for k1 in 0..m {
         for b in 0..m {
             let i = k1 * m + b;
-            let (sin, cos) =
-                (sign * core::f64::consts::TAU * ((b * k1) % n) as f64 / n as f64).sin_cos();
-            let (wr, wi) = (T::from_precise(cos), T::from_precise(sin));
+            let twiddle = twiddles[i];
             let (a, c) = (re[i], im[i]);
-            re[i] = a * wr - c * wi;
-            im[i] = a * wi + c * wr;
+            re[i] = a * twiddle.re - c * twiddle.im;
+            im[i] = a * twiddle.im + c * twiddle.re;
         }
     }
 

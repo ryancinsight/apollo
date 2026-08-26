@@ -225,6 +225,16 @@ impl MixedRadixScalar for f32 {
         twiddles: &[Self::Complex],
     ) {
         let n = data.len();
+        if crate::application::execution::kernel::components::four_step::try_four_step::<
+            Self,
+            INVERSE,
+            NORMALIZE,
+        >(
+            data,
+            crate::application::execution::kernel::tuning::ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD,
+        ) {
+            return;
+        }
         match n {
             2 => unsafe {
                 Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
@@ -534,6 +544,16 @@ impl MixedRadixScalar for f64 {
         twiddles: &[Self::Complex],
     ) {
         let n = data.len();
+        if crate::application::execution::kernel::components::four_step::try_four_step::<
+            Self,
+            INVERSE,
+            NORMALIZE,
+        >(
+            data,
+            crate::application::execution::kernel::tuning::ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD,
+        ) {
+            return;
+        }
         match n {
             2 => unsafe {
                 Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
