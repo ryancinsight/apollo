@@ -1,5 +1,108 @@
 # Apollo Gap Audit
 
+## The power-of-two gap is per-lane throughput, not algorithm (2026-08-25) <a id="lane-throughput"></a>
+
+Evidence tier: measured, seven kernel variants, all engines interleaved in one
+process, every variant correctness-gated against Apollo before its timing was
+read.
+
+### Correcting the earlier bound
+
+[The power-of-two profile](#pot-f64-profile) concluded the path is memory-bound,
+from measurements at 2^16. That does not hold where the gap is largest. Counting
+`5 N log2 N` flops and the working set:
+
+| N | working set | resident in | Apollo | RustFFT | PhastFT |
+| --- | --- | --- | --- | --- | --- |
+| 2^10 | 16 KB | L1 | 3.9 f/ns | 38.5 | 32.8 |
+| 2^12 | 64 KB | L2 | 4.4 | 34.3 | 28.7 |
+| 2^14 | 256 KB | L2 | 4.3 | 29.6 | 26.4 |
+| 2^16 | 1 MB | L2/L3 | 7.3 | 9.7 | 15.8 |
+
+A scalar f64 pipeline on this host is roughly 6 flops/ns and AVX2 roughly 48. At
+2^10 the entire array is L1-resident — there is no DRAM traffic to be bound by —
+and Apollo still runs at 8% of peak while RustFFT reaches 80%. The memory-bound
+reading was drawn at the one size where the field compresses and generalized to
+sizes where it does not. At 2^16 it is defensible; at 2^10 to 2^14, where the
+gap is 7x to 10x, it is wrong.
+
+### What the gap is not
+
+Each candidate was measured and eliminated:
+
+- **Not transient allocation.** The complex path allocates zero per call —
+  plan, twiddles, and scratch are all cached — measured with a counting global
+  allocator.
+- **Not pass count.** `transform_len1024` performs three `stage_triple` calls
+  (radix-8 each) and one `stage`: **four passes for ten radix-2 stages**. That is
+  fewer passes than RustFFT's radix-4 needs. The fused-stage machinery is firing,
+  which resolves the contradiction
+  `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25` was filed to investigate and
+  disproves that item's premise.
+- **Not layout.** Recorded separately in
+  [the planar result](#planar-hypothesis-falsified): a planar prototype measured
+  worse than the interleaved incumbent at every size from 2^10 up.
+- **Not bandwidth.** L1-resident at 2^10, and an AXPY through the same Hermes
+  entry streams at ~63 GB/s on this host while the transform achieves the
+  equivalent of ~5 GB/s over its four passes.
+
+### What it is
+
+Every kernel written against Hermes' lane surface lands in the same narrow band,
+regardless of algorithm, layout, or primitive set:
+
+| kernel | flops/ns at 2^10 |
+| --- | --- |
+| planar radix-2, plain loops (autovectorized) | 4.6 |
+| planar, fused first three stages | ~4.6 |
+| planar, cache-oblivious recursion | ~4.6 |
+| planar, Hermes `Vector` ops via `vectorize` | ~4.5 |
+| interleaved, Hermes `dup_even`/`dup_odd`/`swap_adjacent`/`fmaddsub` | 4.2 |
+| the same with per-call slice validation hoisted to raw loads | 6.1 |
+| Apollo's own hand-written AVX Stockham | 3.4-4.3 |
+| **RustFFT** | **38.5** |
+| **PhastFT (fearless_simd)** | **32.8** |
+
+The last two run *inside the same test binary*, compiled with the same profile
+and flags, so build configuration is excluded. The common factor among the slow
+rows is that the lane operations come from Apollo's own AVX code or from Hermes'
+`Vector`; the fast rows use neither.
+
+The interleaved variant is the sharpest comparison, because it uses the exact
+primitive sequence RustFFT's AVX path uses for a complex multiply —
+`fmaddsub(dup_even(w), b, dup_odd(w) * swap_adjacent(b))`, one shuffle pair and
+one fused instruction — and still lands at 4.2.
+
+Normalizing for pass count does not close it. The prototype runs ten passes
+against RustFFT's five, so at most a factor of two is structural; Apollo's own
+kernel runs *four* passes and still reaches only 3.4-8.4. A 4x to 5x difference
+in per-pass efficiency remains after that adjustment.
+
+### One mechanism identified, partially
+
+Replacing `Vector::load_unaligned_from_slice(..).unwrap()` with the raw
+pointer load moved the interleaved variant from 4.2 to 6.1 flops/ns — the
+per-call length and alignment validation costs about 45% in a kernel this
+fine-grained. That is a real and actionable finding, and it is not the whole
+gap: 6.1 is still 6x from RustFFT.
+
+Hermes has the machinery to hoist those checks — `SimdView` typestates and the
+`SimdChunks` iterators exist for exactly this — and the prototype did not use
+them. Whether they close the remaining distance is the next measurement, and it
+belongs upstream.
+
+### Where this leaves Apollo
+
+Apollo cannot reach competitive power-of-two throughput by changing its
+algorithm. Seven variants covering layout, fusion, blocking, primitive set, and
+validation strategy all land between 3.4 and 6.1 flops/ns, while two external
+engines reach 33-38 in the same binary. The remaining lever is the per-lane-
+operation efficiency of the substrate Apollo is built on, which is a Hermes
+question — filed there as `HS-LANE-THROUGHPUT-2026-08-25` with these numbers.
+
+`ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25` is closed: its premise, that the
+pass count is high, is false.
+
 ## Cost census against RustFFT, PhastFT, and RealFFT (2026-08-25) <a id="engine-census"></a>
 
 Evidence tier: measured, all engines interleaved inside one process, with
@@ -215,6 +318,13 @@ region and the input copy subtracted:
 | 2^9 | 3211 ns | 3092 ns | ~0 |
 | 2^10 | 6398 ns | 6165 ns | ~0 |
 | 2^12 | 31465 ns | 29637 ns | ~0 |
+
+> **Corrected 2026-08-25.** This section's memory-bound conclusion holds at
+> 2^16 and not below it. At 2^10 the working set is 16 KB and fully L1-resident,
+> yet Apollo still runs at 8% of AVX2 peak while RustFFT reaches 80%. See
+> [the lane-throughput finding](#lane-throughput), which also disproves the
+> pass-count premise: `transform_len1024` runs four passes for ten stages,
+> fewer than RustFFT's radix-4 needs.
 
 **There is no plumbing overhead.** Plan dispatch, the twiddle-cache lookup, and
 scratch acquisition together cost nothing measurable: the twiddle cache has a

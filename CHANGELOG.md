@@ -10,6 +10,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [patch] Localize the power-of-two throughput gap to per-lane operation
+  efficiency and record it in `gap_audit.md#lane-throughput`. No source change:
+  seven kernel variants covering layout, stage fusion, cache blocking, primitive
+  set, and validation strategy all land between 3.4 and 6.1 flops/ns while
+  RustFFT and PhastFT reach 33-38 in the same binary. Corrects two earlier
+  readings — the path is not memory-bound at L1-resident sizes, and the pass
+  count is already lower than RustFFT's.
+
 - [minor] Real-input forward transforms now run a size-`N/2` complex transform
   and untangle it instead of widening to complex and transforming at size `N`,
   which is 1.5x-1.8x faster at the same allocation count. A real signal's
