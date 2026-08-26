@@ -51,7 +51,7 @@ fn transpose_square_inplace<T: Copy>(data: &mut [T], n: usize) {
 }
 
 /// N above which the independent row transforms in steps 2 and 4 use Moirai.
-const PARALLEL_ROW_THRESHOLD: usize = 65_536;
+pub(crate) const PARALLEL_ROW_THRESHOLD: usize = 65_536;
 
 /// In-place four-step FFT for large power-of-two lengths.
 pub(crate) fn four_step_fft<
@@ -62,6 +62,13 @@ pub(crate) fn four_step_fft<
 ) {
     let n = data.len();
     debug_assert!(n.is_power_of_two());
+
+    // The batched layout keeps the transform index in the lane position, which
+    // removes every cross-lane shuffle from the butterfly. It covers the square
+    // splits below the threading threshold; everything else continues below.
+    if F::try_four_step_batched::<INVERSE>(data) {
+        return;
+    }
 
     // Split N = N1 × N2 with N1 ≈ N2 ≈ √N for cache balance.
     let k = n.trailing_zeros();

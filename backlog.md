@@ -100,45 +100,80 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — todo, gated on a quiet host
+## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — implemented 2026-08-25, validation pending
 
-- **Outcome:** Apollo's power-of-two path runs its sub-transforms with the
-  transform index in the lane position, which removes every cross-lane shuffle
-  and makes the butterfly a pure elementwise vector operation.
-- **Finding:** the batched layout is the first structure in this audit to leave
-  the 3.4-6.1 flops/ns band that nine earlier variants occupied, reaching a
-  reproducible 10.2-10.7 across four shapes with the same `Vector` operations
-  the slower variants used. The layout is the variable. It is also the layout
-  `FftPlanarMut` already documents and nothing uses. Design and numbers in
-  `gap_audit.md#batched-layout`.
-- **Assembled and verified:** a four-step on this layout needs only one
-  transpose — the input is already batch-major for the first direction and the
-  output index falls out of the second pass — and matches RustFFT bin-for-bin
-  within the derived bound at 2^12 through 2^16. The prototype is archived with
-  the audit.
-- **Why this is gated, not shipped:** the end-to-end comparison against Apollo
-  is not established. Adding a fourth arm to the measurement rotation moved
-  *Apollo's own* 2^14 timing by a factor of two with its code untouched, and two
-  successive runs reported 2.33x and 0.81x for the same comparison. The
-  kernel-level rate reproduces because it does not depend on inter-arm state;
-  the end-to-end one does.
-- **Unpaid cost to measure first:** Apollo's public API takes interleaved
-  `Complex64` and this kernel is planar, so integration adds a deinterleave and
-  an interleave pass. Whether the layout win survives them is the first thing a
-  quiet-host measurement must answer, before any integration work starts.
-- **Scope when unblocked:** the sub-transforms inside the existing four-step
-  path for N at or above `FOUR_STEP_THRESHOLD`, where the decomposition already
-  exists. **Non-goals:** the specialized `transform_len*` codelets for N <= 2048,
-  which the measurements above do not cover; f32 and the inverse direction until
-  f64 forward is established.
-- **Acceptance oracle:** on a quiet host, interleaved in-process measurement
-  showing the interleaved-entry variant faster than the current path at every
-  size from 2^12 to 2^18 with no size regressed, plus the existing correctness
-  suite and the RustFFT differential.
-- **Risk / change class:** [arch] with an ADR. **Dependencies:** a quiet host —
-  the same gate `ATLAS-APOLLO-POT-THROUGHPUT` has carried since the first
-  profile. This is the fourth conclusion in this audit that host noise has
-  hidden or invented.
+- **Delivered:** `components/batched/` holds the batched sub-transform kernel and
+  a four-step driver built on it, reached from `four_step_fft` for square splits
+  below the threading threshold. Correctness is covered by six unit tests
+  (transpose involution, forward and inverse against a direct DFT, round trip,
+  f32, plan caching) and by the existing suite, which passes with the path live —
+  including the PhastFT differential, whose sizes cross into it.
+- **Design:** the transform index sits in the lane position, so a butterfly reads
+  two contiguous runs of `B` values with the twiddle broadcast, and no cross-lane
+  shuffle occurs. The four-step needs one transpose rather than three: the input
+  is already batch-major for the first axis, and the output index `k2*m + k1`
+  falls out of the second pass. Square splits let that transpose run in place, so
+  scratch stays at parity with the Stockham path it replaces — one `N`-element
+  complex buffer, reinterpreted as two real planes.
+- **Measured at kernel level:** 10.2 to 10.7 flops/ns against the 3.4 to 6.1
+  band nine earlier variants shared, using the same lane operations.
+- **Not yet measured end to end.** This host cannot adjudicate it: adding an arm
+  to the rotation moved Apollo's own timing by a factor of two with its code
+  untouched. `benches/engine_census.rs` is the instrument for a quiet host — it
+  flushes the cache between arms so that specific failure cannot recur, and
+  reports transient allocation per call alongside time.
+- **Remaining work, in order:**
+  1. Validate on a quiet host with `engine_census`, comparing against the commit
+     before this one. If any covered size regresses, the gate in
+     `batched_four_step_applies` narrows rather than the path being reverted
+     wholesale.
+  2. Extend past `PARALLEL_ROW_THRESHOLD` — see the item below, which is the
+     blocker for the upper bound.
+
+## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — todo
+
+- **Outcome:** the batched four-step covers every square split, not only those
+  below the threading threshold, without giving up the row parallelism the
+  superseded path has above it.
+- **Why the bound exists today:** the batched kernel is single-threaded, and its
+  batch dimension is the innermost one, so handing a worker a sub-range of the
+  batch gives it a strided view rather than a contiguous chunk — which is what
+  `moirai::for_each_chunk_mut_with` partitions. Rather than remove parallelism
+  that exists today at `N >= 65536`, the new path stops below it.
+- **The structure that makes this tractable, recorded so it is not rediscovered:**
+  every stage couples elements along the length dimension and never across the
+  batch, so **each batch column is a fully independent transform through the
+  entire stage set**. Partitioning is therefore by batch range, once, outside the
+  stage loop — not per stage. Each worker runs the whole stage set for its
+  columns.
+- **Scope:** a disjoint-range partition over the batch with `moirai` outside and
+  `hermes_simd::vectorize` inside each worker, which is the placement Hermes ADR
+  016 requires — never wrap a thread-spawning call. The ranges are strided rather
+  than contiguous sub-slices, so the split needs a pointer-level disjointness
+  argument with a `SAFETY` comment, not `split_at_mut`.
+- **Acceptance oracle:** on a quiet host, no regression at `N >= 65536` against
+  the superseded parallel path, the existing correctness suite, and a
+  thread-count sweep showing the partition actually scales.
+- **Risk / change class:** [patch]; adds one `unsafe` block behind a safe API.
+  **Dependencies:** the validation in the item above.
+
+## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25
+
+- **Delivered:** `benches/engine_census.rs`, budgeted at 60 s and running in
+  about 3.4 s. Measures Apollo against RustFFT, PhastFT, and RealFFT across five
+  sizes, and reports transient allocation per call from a wrapping global
+  allocator alongside the timings.
+- **Cache flushing between arms is the point.** Developing the batched
+  comparison, adding a fourth arm to the rotation moved Apollo's own 2^14 timing
+  by a factor of two with its code untouched, because arms were warming each
+  other's working sets; two successive runs then reported 2.33x and 0.81x for the
+  same comparison. The flush is charged to no arm, since it runs outside every
+  timed region.
+- **The allocation column is a regression gate independent of timing.** Apollo's
+  complex path reports zero allocations per call and its real path one — the
+  returned spectrum. A rise in either is a defect whatever the wall-clock says,
+  and that column already caught one: a real-split implementation that halved the
+  arithmetic and still ran slower, because it had added two transient buffers.
 
 ## ATLAS-APOLLO-REAL-SPLIT-2026-08-25 — Real input costs a half-length transform [patch] — done 2026-08-25
 
@@ -195,7 +230,7 @@
 - **Risk / change class:** [patch] for the forward paths; the inverse
   complex-to-real needs its own derivation and tests.
 
-## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — todo
+## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25 (see above)
 
 - **Outcome:** the comparison against RustFFT, PhastFT, and RealFFT is a
   committed, budgeted instrument rather than a throwaway harness rebuilt per

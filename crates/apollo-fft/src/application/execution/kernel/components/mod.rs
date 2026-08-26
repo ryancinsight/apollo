@@ -1,3 +1,4 @@
+pub(crate) mod batched;
 pub(crate) mod butterflies;
 pub(crate) mod four_step;
 pub(crate) mod good_thomas;

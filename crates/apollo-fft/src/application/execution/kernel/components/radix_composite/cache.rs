@@ -13,6 +13,14 @@ pub struct CompositeTwiddleEntry<C> {
 
 pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R;
+
+    /// Runs the batched-layout four-step transform, reporting whether it applied.
+    ///
+    /// The batched kernel needs bounds (`LaneScalar`, `Pod`) that this trait's
+    /// generic callers do not carry, so the concrete scalars route to it here.
+    /// Returns `false` when the length is outside the path's domain, leaving the
+    /// caller to take its existing route.
+    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool;
     fn cached_twiddles<const INVERSE: bool>(
         radices: &[usize],
     ) -> (Arc<[Complex<Self>]>, Arc<[usize]>);
@@ -125,6 +133,23 @@ thread_local! {
         const { mnemosyne::scratch::ScratchPool::new() };
     static TL_COMPOSITE_SCRATCH_32: mnemosyne::scratch::ScratchPool<eunomia::Complex32> =
         const { mnemosyne::scratch::ScratchPool::new() };
+}
+
+/// Whether the batched-layout four-step covers this length.
+///
+/// Square splits only, which is what the four-step gate already admits and what
+/// lets the middle transpose run in place. The upper bound is where the
+/// superseded path begins distributing its row transforms across threads: the
+/// batched kernel is single-threaded, and its batch dimension is the innermost
+/// one, so splitting it across workers hands each a strided view rather than a
+/// contiguous chunk. Extending past this bound is a measurement plus a
+/// partitioning design, not a constant change.
+#[inline]
+fn batched_four_step_applies(n: usize) -> bool {
+    n.is_power_of_two()
+        && n.trailing_zeros() % 2 == 0
+        && n >= 4
+        && n < crate::application::execution::kernel::components::four_step::PARALLEL_ROW_THRESHOLD
 }
 
 fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
@@ -351,6 +376,19 @@ impl CompositeCache for f64 {
     }
 
     #[inline]
+    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool {
+        use crate::application::execution::kernel::components::batched::four_step_batched;
+        let n = data.len();
+        if !batched_four_step_applies(n) {
+            return false;
+        }
+        Self::with_scratch(n, |scratch| {
+            four_step_batched::<Self, INVERSE>(data, scratch);
+        });
+        true
+    }
+
+    #[inline]
     fn cached_twiddles<const INVERSE: bool>(
         radices: &[usize],
     ) -> (Arc<[Complex<Self>]>, Arc<[usize]>) {
@@ -541,6 +579,19 @@ impl CompositeCache for f32 {
     #[inline]
     fn with_scratch<R>(n: usize, f: impl FnOnce(&mut [Complex<Self>]) -> R) -> R {
         TL_COMPOSITE_SCRATCH_32.with(|pool| pool.with_scratch(n, f))
+    }
+
+    #[inline]
+    fn try_four_step_batched<const INVERSE: bool>(data: &mut [Complex<Self>]) -> bool {
+        use crate::application::execution::kernel::components::batched::four_step_batched;
+        let n = data.len();
+        if !batched_four_step_applies(n) {
+            return false;
+        }
+        Self::with_scratch(n, |scratch| {
+            four_step_batched::<Self, INVERSE>(data, scratch);
+        });
+        true
     }
 
     #[inline]
