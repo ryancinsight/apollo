@@ -22,6 +22,20 @@
 //! Flushing costs wall-clock and is charged to no arm, since it happens outside
 //! every timed region.
 //!
+//! ## The real arms compare like for like
+//!
+//! `fft_1d_slice` returns all `n` bins; RealFFT returns `n/2 + 1`. A real
+//! signal's spectrum is conjugate-symmetric, so the upper half is redundant —
+//! which means the original pairing charged Apollo for a mirror pass and twice
+//! the output storage that RealFFT never performed, and then reported the
+//! difference as a throughput gap. It was measuring a contract difference.
+//!
+//! So the comparison now runs `real_half_forward_f64`, where both engines
+//! produce `n/2 + 1` bins into caller-owned storage. `real_full_forward_f64`
+//! keeps Apollo's full-spectrum form beside it, unpaired: the distance between
+//! the two Apollo rows *is* the cost of materializing the redundant half, which
+//! is worth seeing rather than hiding.
+//!
 //! ## Interpreting the allocation column
 //!
 //! Allocations are counted by a wrapping global allocator, so the figure is
@@ -59,9 +73,9 @@
 //!
 //! ```text
 //! per case  = WARM_UP_MS + MEASUREMENT_MS  = 20 ms + 60 ms = 80 ms
-//! 1-D cases = 5 per size x 5 sizes                         = 25
+//! 1-D cases = 6 per size x 5 sizes                         = 30
 //! 2-D cases = 2 per shape x 4 shapes                       =  8
-//! total     = 33 x 80 ms                   ~ 2.6 s, plus flush overhead
+//! total     = 38 x 80 ms                   ~ 3.0 s, plus flush overhead
 //! ```
 //!
 //! [`main`] exits non-zero if the sweep exceeds [`BUDGET_SECS`]. A breach is a
@@ -235,7 +249,8 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
 
     for &n in &SIZES {
         const COMPLEX: &str = "complex_forward_f64";
-        const REAL: &str = "real_forward_f64";
+        const REAL_HALF: &str = "real_half_forward_f64";
+        const REAL_FULL: &str = "real_full_forward_f64";
 
         let src = complex_signal(n);
         let rust_src: Vec<RustComplex<f64>> =
@@ -279,19 +294,33 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
             black_box(&re);
         });
 
+        // Both engines write n/2 + 1 bins into storage the caller already owns,
+        // so neither is charged for an allocation or for redundant output.
+        let mut half_out = vec![Complex64::default(); n / 2 + 1];
         flush_cache(&mut flush);
-        suite.run_with_config(config, BenchmarkCase::new(REAL, "apollo", n), || {
-            black_box(apollo_fft::fft_1d_slice::<f64>(black_box(&real_src)));
+        suite.run_with_config(config, BenchmarkCase::new(REAL_HALF, "apollo", n), || {
+            apollo_fft::fft_1d_slice_half_into::<f64>(
+                black_box(&real_src),
+                black_box(&mut half_out),
+            );
+            black_box(&half_out);
         });
 
         let mut rf_in = r2c.make_input_vec();
         let mut rf_out = r2c.make_output_vec();
         flush_cache(&mut flush);
-        suite.run_with_config(config, BenchmarkCase::new(REAL, "realfft", n), || {
+        suite.run_with_config(config, BenchmarkCase::new(REAL_HALF, "realfft", n), || {
             rf_in.copy_from_slice(&real_src);
             r2c.process(black_box(&mut rf_in), black_box(&mut rf_out))
                 .expect("realfft length agrees with the plan");
             black_box(&rf_out);
+        });
+
+        // Unpaired on purpose: the distance from the Apollo row above is the
+        // cost of materializing the redundant half plus its allocation.
+        flush_cache(&mut flush);
+        suite.run_with_config(config, BenchmarkCase::new(REAL_FULL, "apollo", n), || {
+            black_box(apollo_fft::fft_1d_slice::<f64>(black_box(&real_src)));
         });
 
         // Allocation is a property of the call, not of the machine, so it is
@@ -302,9 +331,12 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
         });
         let (real_allocs, real_bytes) =
             count_allocations(|| drop(apollo_fft::fft_1d_slice::<f64>(&real_src)));
+        let (half_allocs, half_bytes) = count_allocations(|| {
+            apollo_fft::fft_1d_slice_half_into::<f64>(&real_src, &mut half_out);
+        });
         eprintln!(
             "engine_census: N={n:<8} apollo allocations/call — complex {complex_allocs} \
-             ({complex_bytes} B), real {real_allocs} ({real_bytes} B)"
+             ({complex_bytes} B), real-full {real_allocs} ({real_bytes} B), real-half {half_allocs} ({half_bytes} B)"
         );
     }
 
