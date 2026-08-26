@@ -9,6 +9,9 @@
 
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::PlanScratch;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::real_fft::{
+    mirror_half_spectrum_in_place, untangle_real_half,
+};
 use crate::application::execution::plan::fft::dimension_1d::{FftPlan1D, StaticFftPlan1D};
 use crate::application::execution::plan::fft::dimension_2d::{FftPlan2D, StaticFftPlan2D};
 use crate::application::execution::plan::fft::dimension_3d::{FftPlan3D, StaticFftPlan3D};
@@ -106,6 +109,98 @@ where
         plan.forward_complex_slice_inplace(&mut output);
         output
     }
+
+    /// Whether [`RealFftData::forward_1d_half_into`] applies to this length.
+    ///
+    /// The split needs an even packed length, so `n` must be a positive
+    /// multiple of four; shorter or odd lengths keep the widening path, where
+    /// the redundant half costs nothing worth routing around.
+    #[must_use]
+    fn real_split_applies(n: usize) -> bool {
+        n >= 4 && n % 4 == 0
+    }
+
+    /// Packs a real slice as `n/2` complex samples directly into `out`.
+    ///
+    /// Consecutive real pairs become one complex sample, which is what lets a
+    /// size-`n/2` transform carry a size-`n` real signal. No intermediate
+    /// buffer: the storage-boundary conversion happens during the pack.
+    fn pack_real_pairs(input: &[Self], out: &mut [Complex<Self::PlanScalar>]) {
+        for (slot, pair) in out.iter_mut().zip(input.chunks_exact(2)) {
+            *slot = Complex::new(pair[0].to_spectrum().re, pair[1].to_spectrum().re);
+        }
+    }
+
+    /// Forward transform of a real slice into the `n/2 + 1` independent bins.
+    ///
+    /// `half_plan` must be a complex plan of length `input.len() / 2`. Allocates
+    /// nothing: the pack, the sub-transform, and the untangle all happen in
+    /// `out`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`RealFftData::real_split_applies`] is false for the input
+    /// length, or if `out.len() < input.len() / 2 + 1`.
+    fn forward_1d_half_into(
+        half_plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self],
+        out: &mut [Complex<Self::PlanScalar>],
+    ) {
+        let n = input.len();
+        assert!(
+            Self::real_split_applies(n),
+            "real split does not apply to length {n}"
+        );
+        let m = n / 2;
+        assert!(out.len() > m, "real spectrum needs n/2 + 1 slots");
+        Self::pack_real_pairs(input, &mut out[..m]);
+        half_plan.forward_complex_slice_inplace(&mut out[..m]);
+        untangle_real_half(out, n);
+    }
+
+    /// Forward transform of a real array into caller-owned spectrum storage,
+    /// through the half-spectrum split.
+    ///
+    /// Falls back to the widening path when either side is not contiguous, so
+    /// strided views keep working; the split needs slice access to pack pairs.
+    ///
+    /// Returns whether the split ran, so callers can take the widening path
+    /// without probing contiguity themselves.
+    fn forward_1d_into_via_split(
+        half_plan: &FftPlan1D<Self::PlanScalar>,
+        input: &Array1<Self>,
+        output: &mut Array1<Complex<Self::PlanScalar>>,
+    ) -> bool {
+        let n = input.size();
+        if !Self::real_split_applies(n) || output.size() != n {
+            return false;
+        }
+        let (Some(src), Some(dst)) = (input.as_slice(), output.as_slice_mut()) else {
+            return false;
+        };
+        Self::forward_1d_half_into(half_plan, src, dst);
+        mirror_half_spectrum_in_place(dst);
+        true
+    }
+
+    /// Forward transform of a real slice returning the full `n`-bin spectrum,
+    /// computed through the half-spectrum split.
+    ///
+    /// One allocation — the returned spectrum — which doubles as the pack
+    /// buffer and the untangle target. The upper half is a conjugate reflection
+    /// of the lower, so it costs a copy rather than a transform.
+    #[must_use]
+    fn forward_1d_slice_owned_via_split(
+        half_plan: &FftPlan1D<Self::PlanScalar>,
+        input: &[Self],
+    ) -> Vec<Complex<Self::PlanScalar>> {
+        let n = input.len();
+        let mut output = vec![Complex::<Self::PlanScalar>::default(); n];
+        Self::forward_1d_half_into(half_plan, input, &mut output);
+        mirror_half_spectrum_in_place(&mut output);
+        output
+    }
+
     /// Inverse 1D transform from a spectrum slice into owned real storage.
     #[must_use]
     fn inverse_1d_slice_owned(

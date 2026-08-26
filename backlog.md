@@ -100,6 +100,82 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
+## ATLAS-APOLLO-REAL-SPLIT-2026-08-25 — Real input costs a half-length transform [patch] — done 2026-08-25
+
+- **Outcome:** a real-input forward transform runs one size-`N/2` complex
+  transform and an untangle instead of widening to complex and running a size-`N`
+  one. Measured 1.5x-1.8x faster than the path it replaced, at the same
+  allocation count. Full census in `gap_audit.md#engine-census`.
+- **Finding:** a real signal's spectrum is conjugate-symmetric, so a size-`N`
+  complex transform on zero-imaginary input computes a redundant half. RealFFT,
+  the standard Rust wrapper over RustFFT for this case, returns `N/2 + 1` bins
+  for about half the cost. Apollo had no real transform at all: the module named
+  `real_fft.rs` documented itself as holding "real-FFT half-complex split
+  routines" and contained only twiddle-table builders.
+- **Delivered:** `untangle_real_half` and `mirror_half_spectrum_in_place` in
+  `real_fft.rs`, which makes that module's documentation true; `pack_real_pairs`,
+  `forward_1d_half_into`, `forward_1d_slice_owned_via_split`, and
+  `real_split_applies` on `RealFftData`; `fft_1d_slice` routed through the split
+  where it applies. `realfft` 3.5.0 enters as a dev-dependency reference.
+- **Non-breaking:** `fft_1d_slice` still returns the full `N`-bin spectrum. The
+  upper half is now a conjugate reflection rather than a transform, so the
+  contract is unchanged and the arithmetic halves. `forward_1d_half_into` is the
+  additive zero-allocation entry for callers that want only the `N/2 + 1`
+  independent bins.
+- **Correctness:** four oracles in `tests/real_split_parity.rs`, in order of
+  authority — the exact spectrum of a known tone sum (no reference
+  implementation involved), conjugate symmetry (a property of the input, not of
+  any implementation), differential agreement with RealFFT, and half-versus-full
+  consistency. Tolerances derive from the `O(log N · u)` forward-error bound.
+- **Lesson worth keeping:** the first implementation was *slower* than the code
+  it replaced at three of four sizes despite halving the arithmetic, because it
+  added two transient allocations — an intermediate widened copy and a separate
+  half buffer — taking the per-call cost from 1 allocation and 16N bytes to 3
+  and 32N. The allocation counter surfaced that immediately; wall-clock alone
+  read as noise. Transient allocation belongs in the measurement, not just the
+  timing.
+
+## ATLAS-APOLLO-REAL-SPLIT-COVERAGE-2026-08-25 — Extend the split past the 1-D forward slice [patch] — todo
+
+- **Outcome:** every real-input entry point benefits from the split, not only
+  `fft_1d_slice`.
+- **Finding:** the split is currently reached from one API. `fft_1d_array`,
+  `fft_1d_array_into`, `fft_1d_leto`, the static-length variants, and the 2-D and
+  3-D real paths still widen to complex and transform at full length, so they
+  carry the 2x arithmetic the split removes. The inverse direction
+  (`inverse_1d_slice_owned`) additionally does `input.to_owned()` followed by a
+  `collect`, which is two transient allocations per call where one would do.
+- **Scope:** route the remaining real entry points through
+  `forward_1d_slice_owned_via_split` or `forward_1d_half_into`, and give the
+  inverse a complex-to-real counterpart of the untangle. **Non-goals:** the
+  complex kernel, which is `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`.
+- **Acceptance oracle:** the census extended to each migrated entry point shows
+  the same 1.5x-1.8x, allocation counts do not rise, and the parity oracles pass
+  for each. The `_into` variants must measure zero allocations per call.
+- **Risk / change class:** [patch] for the forward paths; the inverse
+  complex-to-real needs its own derivation and tests.
+
+## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — todo
+
+- **Outcome:** the comparison against RustFFT, PhastFT, and RealFFT is a
+  committed, budgeted instrument rather than a throwaway harness rebuilt per
+  investigation.
+- **Finding:** the census measures the three axes that actually drive this
+  workload — arithmetic complexity, passes over the data, and transient
+  allocation per call — with allocation counted by a wrapping global allocator
+  rather than estimated. It caught a regression that wall-clock alone reported
+  as noise, and it is the instrument that will show
+  `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25` moving.
+- **Scope:** a bench binary beside `rustfft_comparison` and `phastft_comparison`,
+  with a committed wall-clock budget, arms interleaved in one process, and the
+  allocation counter behind its own target so the global allocator does not
+  affect other binaries. **Non-goals:** replacing the existing two comparison
+  benches, whose CSV feeds `docs/benchmark_results.md`.
+- **Acceptance oracle:** runs inside its budget; reports time and allocations
+  per engine per size; the allocation column reproduces the 1-per-call figure
+  for the split path and 0 for the complex path.
+- **Risk / change class:** [patch], dev-only.
+
 ## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — todo
 
 - **Outcome:** the power-of-two f64 transform moves less memory, which is the

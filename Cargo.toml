@@ -88,6 +88,10 @@ rustfft = "6.4.1"
 # not reintroduce the transitive parallelism ADR 0011 removed with Criterion.
 # The split real/imaginary entry points used here need no optional feature.
 phastft = { version = "0.4.1", default-features = false }
+# Dev-only real-to-complex reference. realfft is the standard Rust wrapper that
+# exploits real-input symmetry over rustfft: a size-N real transform costs about
+# half a size-N complex one and yields N/2+1 bins instead of N.
+realfft = "3.5.0"
 # moirai: data-parallel runtime replacing direct scheduler usage.
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", features = ["melinoe"] }
 serde = { version = "1.0.228", features = ["derive"] }

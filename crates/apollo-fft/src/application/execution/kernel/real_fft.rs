@@ -60,3 +60,118 @@ impl RealFft for f32 {
         super::twiddle_table::build_twiddle_table(n, 1.0)
     }
 }
+
+// ── Real-to-complex half-complex split ────────────────────────────────────────
+
+/// Untangles a packed half-length transform into the `N/2 + 1` real-input bins.
+///
+/// ## Why this exists
+///
+/// A real signal of length `N` has a conjugate-symmetric spectrum: `X[N-k] =
+/// conj(X[k])`, so only `N/2 + 1` bins carry information. Running a full
+/// size-`N` complex transform on real input widened with a zero imaginary part
+/// computes the redundant half as well, at roughly twice the arithmetic.
+///
+/// The caller packs the `N` reals as `M = N/2` complex samples
+/// `z[k] = x[2k] + i·x[2k+1]`, transforms those with a size-`M` complex FFT
+/// into `out[..M]`, and calls this to untangle in place. Writing `a = Z[k]` and
+/// `b = Z[M-k]`:
+///
+/// ```text
+/// Fe[k] = (a + conj(b)) / 2          spectrum of the even-indexed samples
+/// Fo[k] = (a - conj(b)) / (2i)       spectrum of the odd-indexed samples
+/// X[k]  = Fe[k] + W_N^k · Fo[k],     W_N^k = exp(-2πi k / N)
+/// ```
+///
+/// The paired bin follows from `Fe[M-k] = conj(Fe[k])`, `Fo[M-k] =
+/// conj(Fo[k])`, and `W_N^{M-k} = -conj(W_N^k)`, which give
+/// `X[M-k] = conj(Fe[k] - W_N^k · Fo[k])`. Both bins come from one twiddle
+/// multiply, so the loop runs to `M/2` rather than `M`.
+///
+/// The purely real bins are the special cases: `X[0] = Z[0].re + Z[0].im` and
+/// `X[M] = Z[0].re - Z[0].im`. When `M` is even the midpoint is
+/// `X[M/2] = conj(Z[M/2])`, since there `a = b` and `W_N^{M/2} = -i`.
+///
+/// ## Allocation
+///
+/// None, and the untangle is in place: `out[..M]` arrives holding `Z` and
+/// leaves holding `X[..M]`, with `X[M]` written to the spare slot.
+///
+/// ## Panics
+///
+/// Panics if `out.len() < n / 2 + 1` or if `n` is not even.
+pub(crate) fn untangle_real_half<T>(out: &mut [eunomia::Complex<T>], n: usize)
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<T>,
+    >,
+{
+    assert!(
+        n % 2 == 0,
+        "real transform requires an even length, got {n}"
+    );
+    let m = n / 2;
+    assert!(
+        out.len() > m,
+        "real spectrum needs n/2 + 1 slots, got {}",
+        out.len()
+    );
+    if m == 0 {
+        return;
+    }
+
+    let two = T::from_precise(2.0);
+    let zero = T::from_precise(0.0);
+    let z0 = out[0];
+    out[0] = eunomia::Complex::new(z0.re + z0.im, zero);
+    out[m] = eunomia::Complex::new(z0.re - z0.im, zero);
+
+    let scale = -core::f64::consts::TAU / n as f64;
+    for k in 1..m.div_ceil(2) {
+        let a = out[k];
+        let b = out[m - k];
+
+        let fe_re = (a.re + b.re) / two;
+        let fe_im = (a.im - b.im) / two;
+        let fo_re = (a.im + b.im) / two;
+        let fo_im = (b.re - a.re) / two;
+
+        // Direct evaluation per entry, matching the twiddle-accuracy contract
+        // in this module: a recurrence here would reintroduce O(N·u) error.
+        let (sin, cos) = (scale * k as f64).sin_cos();
+        let (wr, wi) = (T::from_precise(cos), T::from_precise(sin));
+        let t_re = fo_re * wr - fo_im * wi;
+        let t_im = fo_re * wi + fo_im * wr;
+
+        out[k] = eunomia::Complex::new(fe_re + t_re, fe_im + t_im);
+        out[m - k] = eunomia::Complex::new(fe_re - t_re, t_im - fe_im);
+    }
+
+    if m % 2 == 0 && m >= 2 {
+        let mid = out[m / 2];
+        out[m / 2] = eunomia::Complex::new(mid.re, -mid.im);
+    }
+}
+
+/// Mirrors the `N/2 + 1` independent bins over the upper half, in place.
+///
+/// `X[N-k] = conj(X[k])` for a real input signal, so the upper half is a
+/// reflection and costs a copy rather than a transform. `full[..=N/2]` must
+/// already hold the independent bins.
+///
+/// ## Panics
+///
+/// Panics if `full.len()` is odd.
+pub(crate) fn mirror_half_spectrum_in_place<T>(full: &mut [eunomia::Complex<T>])
+where
+    T: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<T>,
+    >,
+{
+    let n = full.len();
+    assert!(n % 2 == 0, "full spectrum length must be even, got {n}");
+    for k in 1..n / 2 {
+        let v = full[k];
+        full[n - k] = eunomia::Complex::new(v.re, -v.im);
+    }
+}

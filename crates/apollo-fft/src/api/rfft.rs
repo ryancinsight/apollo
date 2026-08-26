@@ -16,9 +16,19 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    let n = field.size();
+    if T::real_split_applies(n) {
+        let mut out =
+            Array1::<Complex<T::PlanScalar>>::from(vec![Complex::<T::PlanScalar>::default(); n]);
+        let half_plan = T::get_1d_plan(
+            Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+        );
+        if T::forward_1d_into_via_split(half_plan.as_ref(), field, &mut out) {
+            return out;
+        }
+    }
     T::forward_1d(
-        T::get_1d_plan(Shape1D::new(field.size()).expect("fft_1d_array requires non-zero length"))
-            .as_ref(),
+        T::get_1d_plan(Shape1D::new(n).expect("fft_1d_array requires non-zero length")).as_ref(),
         field,
     )
 }
@@ -30,11 +40,18 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    let n = field.size();
+    if T::real_split_applies(n) {
+        let half_plan = T::get_1d_plan(
+            Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+        );
+        if T::forward_1d_into_via_split(half_plan.as_ref(), field, out) {
+            return;
+        }
+    }
     T::forward_1d_into(
-        T::get_1d_plan(
-            Shape1D::new(field.size()).expect("fft_1d_array_into requires non-zero length"),
-        )
-        .as_ref(),
+        T::get_1d_plan(Shape1D::new(n).expect("fft_1d_array_into requires non-zero length"))
+            .as_ref(),
         field,
         out,
     );
@@ -72,9 +89,18 @@ where
     Complex<T::PlanScalar>: PlanScratch,
     <T as RealFftData>::PlanScalar: PlanCacheProvider,
 {
+    let n = signal.len();
+    if T::real_split_applies(n) {
+        // One size-n/2 complex transform plus an untangle, against one size-n
+        // transform on zero-imaginary input: about half the arithmetic for the
+        // same spectrum.
+        let half_plan = T::get_1d_plan(
+            Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+        );
+        return T::forward_1d_slice_owned_via_split(half_plan.as_ref(), signal);
+    }
     T::forward_1d_slice_owned(
-        T::get_1d_plan(Shape1D::new(signal.len()).expect("fft_1d_slice requires non-zero length"))
-            .as_ref(),
+        T::get_1d_plan(Shape1D::new(n).expect("fft_1d_slice requires non-zero length")).as_ref(),
         signal,
     )
 }
