@@ -25,17 +25,43 @@
 //! ## Interpreting the allocation column
 //!
 //! Allocations are counted by a wrapping global allocator, so the figure is
-//! calls and bytes actually requested. Apollo's complex path should report zero
-//! — plan, twiddles, and scratch are all cached — and its real path one, the
-//! returned spectrum. A rise in either is a regression whatever the timings say.
+//! calls and bytes actually requested. Apollo's 1-D complex path should report
+//! zero — plan, twiddles, and scratch are all cached — and its real path one,
+//! the returned spectrum. A rise in either is a regression whatever the timings
+//! say.
+//!
+//! The 2-D path reports **two allocations, 64 bytes total per call, and the
+//! figure does not move with the shape**. Size-independence is what identifies
+//! it: this is per-call bookkeeping rather than scratch, so it is invisible at
+//! these shapes and would only bite a workload of many small 2-D transforms.
+//! Recorded as the baseline that column exists to hold, not as a number to
+//! chase.
+//!
+//! ## Why there is a two-dimensional section
+//!
+//! The batched four-step layout is **unreachable from any one-dimensional
+//! transform**. `FftPlan1D` dispatches through `F::pot_inplace`, which runs
+//! sized codelets to `N = 64` and Stockham autosort above that; the four-step
+//! gate lives in `try_power_of_two_fast_path`, reached only from
+//! `dispatch_inplace` — that is, from 2-D and 3-D lane transforms.
+//!
+//! So the 1-D arms below, useful as they are, cannot measure that work at all:
+//! a census consisting only of them would report a change of exactly zero and
+//! read as a null result rather than as a miss. The 2-D shapes exist to put the
+//! batched path under measurement.
+//!
+//! Which shape takes which route was established by instrumenting
+//! `four_step_fft` and `batched_four_step_applies` and reading the calls, not by
+//! inferring it from the gate conditions — inference gave the wrong answer twice
+//! while this was being worked out.
 //!
 //! ## Runtime budget
 //!
 //! ```text
 //! per case  = WARM_UP_MS + MEASUREMENT_MS  = 20 ms + 60 ms = 80 ms
-//! cases     = 6 per size (4 complex + 2 real)
-//! sizes     = 5
-//! total     = 5 x 6 x 80 ms                ~ 2.4 s, plus flush overhead
+//! 1-D cases = 5 per size x 5 sizes                         = 25
+//! 2-D cases = 2 per shape x 4 shapes                       =  8
+//! total     = 33 x 80 ms                   ~ 2.6 s, plus flush overhead
 //! ```
 //!
 //! [`main`] exits non-zero if the sweep exceeds [`BUDGET_SECS`]. A breach is a
@@ -49,9 +75,11 @@ use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
+use leto::Array2;
 use realfft::RealFftPlanner;
 use rustfft::num_complex::Complex as RustComplex;
-use rustfft::FftPlanner;
+use rustfft::{Fft, FftPlanner};
+use std::sync::Arc;
 
 /// Hard wall-clock bound for the sweep.
 const BUDGET_SECS: u64 = 60;
@@ -61,6 +89,23 @@ const MEASUREMENT_MS: u64 = 60;
 /// Powers of two spanning L1-resident through past last-level cache, which is
 /// where the engines' relative standing changes.
 const SIZES: [usize; 5] = [1_024, 4_096, 16_384, 65_536, 262_144];
+
+/// Two-dimensional shapes, chosen so the census actually exercises the batched
+/// layout rather than reporting a null result.
+///
+/// | shape | route taken by the `nx` axis |
+/// | --- | --- |
+/// | 4096 x 16, 4096 x 64, 16384 x 16 | four-step on the **batched** layout |
+/// | 65536 x 4 | four-step with threaded row transforms |
+///
+/// The batched gate admits square splits with an even `log2` from 4 up to the
+/// threading threshold, so 65536 falls past it and gives the batched shapes a
+/// same-engine contrast at an equal element count. Three of the four hold
+/// 262144 elements for that reason.
+const TWO_D_SHAPES: [(usize, usize); 4] = [(4_096, 16), (4_096, 64), (16_384, 16), (65_536, 4)];
+
+/// Tile edge for [`transpose_into`], matching the kernel's own choice.
+const TRANSPOSE_TILE: usize = 32;
 
 /// Bytes touched to evict the working set between arms. Sized past any
 /// plausible last-level cache on a developer machine.
@@ -121,6 +166,47 @@ fn count_allocations<F: FnMut()>(mut f: F) -> (usize, usize) {
         ALLOCS.load(Ordering::Relaxed),
         BYTES.load(Ordering::Relaxed),
     )
+}
+
+/// Transposes a `rows x cols` plane into a `cols x rows` one, in tiles.
+///
+/// Tiled deliberately. Apollo's 2-D path transposes internally, so a composed
+/// reference built on a naive strided copy would measure transpose quality
+/// rather than transform throughput, and would flatter Apollo for a reason that
+/// has nothing to do with the layout under test.
+fn transpose_into<T: Copy>(src: &[T], dst: &mut [T], rows: usize, cols: usize) {
+    for row_block in (0..rows).step_by(TRANSPOSE_TILE) {
+        let row_end = (row_block + TRANSPOSE_TILE).min(rows);
+        for col_block in (0..cols).step_by(TRANSPOSE_TILE) {
+            let col_end = (col_block + TRANSPOSE_TILE).min(cols);
+            for r in row_block..row_end {
+                for c in col_block..col_end {
+                    dst[c * rows + r] = src[r * cols + c];
+                }
+            }
+        }
+    }
+}
+
+/// Composed 2-D forward transform for RustFFT, which has no 2-D planner.
+///
+/// Rows, transpose, columns, transpose back — the same algorithm shape Apollo's
+/// 2-D path runs internally, so the two are comparable. `process_with_scratch`
+/// rather than `process` because the latter allocates a scratch buffer per call,
+/// which would charge RustFFT for an allocation the comparison is not about.
+fn rustfft_2d(
+    data: &mut [RustComplex<f64>],
+    plane: &mut [RustComplex<f64>],
+    scratch: &mut [RustComplex<f64>],
+    nx: usize,
+    ny: usize,
+    along_ny: &Arc<dyn Fft<f64>>,
+    along_nx: &Arc<dyn Fft<f64>>,
+) {
+    along_ny.process_with_scratch(data, scratch);
+    transpose_into(data, plane, nx, ny);
+    along_nx.process_with_scratch(plane, scratch);
+    transpose_into(plane, data, ny, nx);
 }
 
 fn complex_signal(n: usize) -> Vec<Complex64> {
@@ -220,6 +306,77 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
             "engine_census: N={n:<8} apollo allocations/call — complex {complex_allocs} \
              ({complex_bytes} B), real {real_allocs} ({real_bytes} B)"
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // Two-dimensional arms: the only route that reaches the batched layout.
+    // ---------------------------------------------------------------------
+    for &(nx, ny) in &TWO_D_SHAPES {
+        const TWO_D: &str = "complex_forward_2d_f64";
+        let total = nx * ny;
+        let shape = format!("{nx}x{ny}");
+
+        let src = complex_signal(total);
+        let rust_src: Vec<RustComplex<f64>> =
+            src.iter().map(|v| RustComplex::new(v.re, v.im)).collect();
+
+        let apollo = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx, ny });
+        let mut plane =
+            Array2::from_shape_vec((nx, ny), src.clone()).expect("shape matches the data");
+
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D, "apollo", shape.clone()),
+            || {
+                plane
+                    .as_slice_mut()
+                    .expect("the plane stays contiguous")
+                    .copy_from_slice(&src);
+                apollo.forward_complex_inplace(black_box(&mut plane));
+                black_box(&plane);
+            },
+        );
+
+        let mut planner = FftPlanner::<f64>::new();
+        let along_ny = planner.plan_fft_forward(ny);
+        let along_nx = planner.plan_fft_forward(nx);
+        let mut rust_work = rust_src.clone();
+        let mut rust_plane = rust_src.clone();
+        let mut rust_scratch = vec![
+            RustComplex::new(0.0, 0.0);
+            along_ny
+                .get_inplace_scratch_len()
+                .max(along_nx.get_inplace_scratch_len())
+        ];
+
+        flush_cache(&mut flush);
+        suite.run_with_config(
+            config,
+            BenchmarkCase::new(TWO_D, "rustfft (composed)", shape.clone()),
+            || {
+                rust_work.copy_from_slice(&rust_src);
+                rustfft_2d(
+                    black_box(&mut rust_work),
+                    &mut rust_plane,
+                    &mut rust_scratch,
+                    nx,
+                    ny,
+                    &along_ny,
+                    &along_nx,
+                );
+                black_box(&rust_work);
+            },
+        );
+
+        let (allocs, bytes) = count_allocations(|| {
+            plane
+                .as_slice_mut()
+                .expect("the plane stays contiguous")
+                .copy_from_slice(&src);
+            apollo.forward_complex_inplace(&mut plane);
+        });
+        eprintln!("engine_census: 2-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
     }
 
     suite.emit();
