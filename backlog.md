@@ -100,7 +100,12 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — todo
+## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+- **Lease:** `crates/apollo-fft/src/application/execution/kernel/`,
+  `crates/apollo-fft/benches/`, `docs/adr/0039-*`, and the item-owned PM/doc
+  entries through the next verified commit.
 
 - **Finding, and it corrects PR #119.** `four_step_fft` is never called by any
   one-dimensional transform. `FftPlan1D` dispatches through `F::pot_inplace`,
