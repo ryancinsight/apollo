@@ -117,7 +117,121 @@ where
         let b = self.batch;
         let mut twx = 0usize;
         let mut l = 2usize;
-        while l <= self.len {
+
+        // Two stages per pass over the data.
+        //
+        // A stage-per-pass loop re-streams the whole `len * batch` array
+        // `log2(len)` times, and at these sizes that traffic binds rather than
+        // the arithmetic: RustFFT runs six stages in two passes by holding a
+        // column in registers, and PhastFT fuses four into one codelet. Fusing
+        // stage `l` with stage `2l` loads each of the four operands once and
+        // writes each once, halving the passes.
+        //
+        // Four is the width rather than eight, and that follows from the planar
+        // layout rather than being a conservative choice: real and imaginary
+        // parts occupy separate registers here, so a radix-8 step would need
+        // sixteen vector registers for operands alone and would spill on AVX2.
+        // The three twiddles are invariant in `g` and hoist out of the inner
+        // loops.
+        while l * 2 <= self.len {
+            let half = l >> 1;
+            let groups = self.len / (2 * l);
+            for j in 0..half {
+                // Stage `l` occupies `half` table entries and stage `2l` the
+                // `l` that follow, so the second stage's two twiddles are read
+                // straight from the table rather than derived by rotation:
+                // exact stored values, and no sign case for the inverse
+                // direction.
+                let (w1r, w1i) = self.tw[twx + j];
+                let (w2r, w2i) = self.tw[twx + half + j];
+                let (w3r, w3i) = self.tw[twx + half + j + half];
+                let (v1r, v1i) = (simd.splat(w1r), simd.splat(w1i));
+                let (v2r, v2i) = (simd.splat(w2r), simd.splat(w2i));
+                let (v3r, v3i) = (simd.splat(w3r), simd.splat(w3i));
+
+                for g in 0..groups {
+                    let ia = (g * 2 * l + j) * b;
+                    let ib = ia + half * b;
+                    let ic = ia + l * b;
+                    let id = ic + half * b;
+                    let mut k = 0;
+                    while k + lanes <= b {
+                        let ar = load::<T, A>(self.re, ia + k);
+                        let ai = load::<T, A>(self.im, ia + k);
+                        let br = load::<T, A>(self.re, ib + k);
+                        let bi = load::<T, A>(self.im, ib + k);
+                        let cr = load::<T, A>(self.re, ic + k);
+                        let ci = load::<T, A>(self.im, ic + k);
+                        let dr = load::<T, A>(self.re, id + k);
+                        let di = load::<T, A>(self.im, id + k);
+
+                        // Stage `l`: (a,b) and (c,d), both against W_l^j.
+                        let tbr = v1r.mul_add(br, -(v1i * bi));
+                        let tbi = v1r.mul_add(bi, v1i * br);
+                        let (uar, uai) = (ar + tbr, ai + tbi);
+                        let (ubr, ubi) = (ar - tbr, ai - tbi);
+
+                        let tdr = v1r.mul_add(dr, -(v1i * di));
+                        let tdi = v1r.mul_add(di, v1i * dr);
+                        let (ucr, uci) = (cr + tdr, ci + tdi);
+                        let (udr, udi) = (cr - tdr, ci - tdi);
+
+                        // Stage `2l`: (a,c) against W_2l^j and (b,d) against
+                        // W_2l^(j + l/2). Neither operand has left a register.
+                        let vcr = v2r.mul_add(ucr, -(v2i * uci));
+                        let vci = v2r.mul_add(uci, v2i * ucr);
+                        let vdr = v3r.mul_add(udr, -(v3i * udi));
+                        let vdi = v3r.mul_add(udi, v3i * udr);
+
+                        store::<T, A>(uar + vcr, self.re, ia + k);
+                        store::<T, A>(uai + vci, self.im, ia + k);
+                        store::<T, A>(ubr + vdr, self.re, ib + k);
+                        store::<T, A>(ubi + vdi, self.im, ib + k);
+                        store::<T, A>(uar - vcr, self.re, ic + k);
+                        store::<T, A>(uai - vci, self.im, ic + k);
+                        store::<T, A>(ubr - vdr, self.re, id + k);
+                        store::<T, A>(ubi - vdi, self.im, id + k);
+                        k += lanes;
+                    }
+                    // Scalar remainder when the batch is not a lane multiple.
+                    for k in k..b {
+                        let (ar, ai) = (self.re[ia + k], self.im[ia + k]);
+                        let (br, bi) = (self.re[ib + k], self.im[ib + k]);
+                        let (cr, ci) = (self.re[ic + k], self.im[ic + k]);
+                        let (dr, di) = (self.re[id + k], self.im[id + k]);
+
+                        let tbr = w1r * br - w1i * bi;
+                        let tbi = w1r * bi + w1i * br;
+                        let (uar, uai) = (ar + tbr, ai + tbi);
+                        let (ubr, ubi) = (ar - tbr, ai - tbi);
+
+                        let tdr = w1r * dr - w1i * di;
+                        let tdi = w1r * di + w1i * dr;
+                        let (ucr, uci) = (cr + tdr, ci + tdi);
+                        let (udr, udi) = (cr - tdr, ci - tdi);
+
+                        let vcr = w2r * ucr - w2i * uci;
+                        let vci = w2r * uci + w2i * ucr;
+                        let vdr = w3r * udr - w3i * udi;
+                        let vdi = w3r * udi + w3i * udr;
+
+                        self.re[ia + k] = uar + vcr;
+                        self.im[ia + k] = uai + vci;
+                        self.re[ib + k] = ubr + vdr;
+                        self.im[ib + k] = ubi + vdi;
+                        self.re[ic + k] = uar - vcr;
+                        self.im[ic + k] = uai - vci;
+                        self.re[id + k] = ubr - vdr;
+                        self.im[id + k] = ubi - vdi;
+                    }
+                }
+            }
+            twx += half + l;
+            l <<= 2;
+        }
+
+        // One radix-2 stage remains when `log2(len)` is odd.
+        if l <= self.len {
             let half = l >> 1;
             let groups = self.len / l;
             for j in 0..half {
@@ -130,9 +244,6 @@ where
                     let mut k = 0;
                     while k + lanes <= b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
-                        // Every operand is contiguous and same-component, so
-                        // this is elementwise with a broadcast twiddle: no
-                        // shuffle, and one fused multiply-add per component.
                         let ar = load::<T, A>(self.re, lo_s);
                         let ai = load::<T, A>(self.im, lo_s);
                         let br = load::<T, A>(self.re, hi_s);
@@ -147,7 +258,6 @@ where
                         store::<T, A>(ai - ti, self.im, hi_s);
                         k += lanes;
                     }
-                    // Scalar remainder when the batch is not a lane multiple.
                     for k in k..b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
                         let (ar, ai) = (self.re[lo_s], self.im[lo_s]);
@@ -161,8 +271,6 @@ where
                     }
                 }
             }
-            twx += half;
-            l <<= 1;
         }
     }
 }
