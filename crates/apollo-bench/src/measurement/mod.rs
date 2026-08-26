@@ -4,7 +4,9 @@ mod sample;
 use crate::config::BenchmarkConfig;
 
 pub(crate) use sample::SampleSummary;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+const PICOSECONDS_PER_NANOSECOND: u128 = 1_000;
 
 pub(crate) fn measure(config: BenchmarkConfig, mut operation: impl FnMut()) -> SampleSummary {
     let warm_up_start = Instant::now();
@@ -27,9 +29,31 @@ pub(crate) fn measure(config: BenchmarkConfig, mut operation: impl FnMut()) -> S
         for _ in 0..iterations_per_sample {
             operation();
         }
-        samples.push(sample_start.elapsed().as_nanos() / u128::from(iterations_per_sample));
+        samples.push(normalized_picoseconds(
+            sample_start.elapsed(),
+            iterations_per_sample,
+        ));
     }
 
     SampleSummary::from_samples(samples, iterations_per_sample)
         .expect("invariant: the non-zero sample count fills every timing sample")
+}
+
+fn normalized_picoseconds(elapsed: Duration, iterations: u64) -> u128 {
+    debug_assert!(
+        iterations > 0,
+        "calibration always returns at least one iteration"
+    );
+    elapsed.as_nanos() * PICOSECONDS_PER_NANOSECOND / u128::from(iterations)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalized_picoseconds;
+    use std::time::Duration;
+
+    #[test]
+    fn normalization_preserves_sub_nanosecond_observations() {
+        assert_eq!(normalized_picoseconds(Duration::from_nanos(1), 4), 250);
+    }
 }

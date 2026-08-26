@@ -85,14 +85,14 @@ mod tests {
         assert_eq!(
             suite.report(),
             format!(
-                "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\nsuite/increment/1,{},{},{},{},{},{},1\n",
-                record.minimum_nanoseconds(),
-                record.median_nanoseconds(),
-                record.median_lower_nanoseconds(),
-                record.median_upper_nanoseconds(),
+                "case,min_ps,median_ps,median_lower_ps,median_upper_ps,median_confidence_ppm,ordered_samples_ps,iterations_per_sample\nsuite/increment/1,{},{},{},{},{},{},1\n",
+                record.minimum_picoseconds(),
+                record.median_picoseconds(),
+                record.median_lower_picoseconds(),
+                record.median_upper_picoseconds(),
                 record.median_confidence_parts_per_million(),
                 record
-                    .ordered_samples_nanoseconds()
+                    .ordered_samples_picoseconds()
                     .iter()
                     .map(u128::to_string)
                     .collect::<Vec<_>>()

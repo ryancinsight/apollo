@@ -93,11 +93,11 @@ fn report_single(summary: &ComparisonSummary) -> ExitCode {
 
     for regression in summary.regressions() {
         eprintln!(
-            "{}: {} candidate lower bound {} ns exceeds baseline upper bound {} ns",
+            "{}: {} candidate lower bound {} ps exceeds baseline upper bound {} ps",
             regression.report().display(),
             regression.case(),
-            regression.candidate_lower_nanoseconds(),
-            regression.baseline_upper_nanoseconds()
+            regression.candidate_lower_picoseconds(),
+            regression.baseline_upper_picoseconds()
         );
     }
     ExitCode::FAILURE
@@ -117,13 +117,13 @@ fn report_counterbalanced(summary: &CounterbalancedComparisonSummary) -> ExitCod
         let baseline_first = regression.baseline_first();
         let candidate_first = regression.candidate_first();
         eprintln!(
-            "{}: {} candidate is slower in both orders: baseline-first {} ns > {} ns; candidate-first {} ns > {} ns",
+            "{}: {} candidate is slower in both orders: baseline-first {} ps > {} ps; candidate-first {} ps > {} ps",
             regression.report().display(),
             regression.case(),
-            baseline_first.candidate_lower_nanoseconds(),
-            baseline_first.baseline_upper_nanoseconds(),
-            candidate_first.candidate_lower_nanoseconds(),
-            candidate_first.baseline_upper_nanoseconds()
+            baseline_first.candidate_lower_picoseconds(),
+            baseline_first.baseline_upper_picoseconds(),
+            candidate_first.candidate_lower_picoseconds(),
+            candidate_first.baseline_upper_picoseconds()
         );
     }
     ExitCode::FAILURE
@@ -167,17 +167,17 @@ fn report_replicated_counterbalanced(
         let first = regression.first_replication();
         let second = regression.second_replication();
         eprintln!(
-            "{}: {} candidate is slower in all four comparisons: first baseline-first {} ns > {} ns; first candidate-first {} ns > {} ns; second baseline-first {} ns > {} ns; second candidate-first {} ns > {} ns",
+            "{}: {} candidate is slower in all four comparisons: first baseline-first {} ps > {} ps; first candidate-first {} ps > {} ps; second baseline-first {} ps > {} ps; second candidate-first {} ps > {} ps",
             regression.report().display(),
             regression.case(),
-            first.baseline_first().candidate_lower_nanoseconds(),
-            first.baseline_first().baseline_upper_nanoseconds(),
-            first.candidate_first().candidate_lower_nanoseconds(),
-            first.candidate_first().baseline_upper_nanoseconds(),
-            second.baseline_first().candidate_lower_nanoseconds(),
-            second.baseline_first().baseline_upper_nanoseconds(),
-            second.candidate_first().candidate_lower_nanoseconds(),
-            second.candidate_first().baseline_upper_nanoseconds()
+            first.baseline_first().candidate_lower_picoseconds(),
+            first.baseline_first().baseline_upper_picoseconds(),
+            first.candidate_first().candidate_lower_picoseconds(),
+            first.candidate_first().baseline_upper_picoseconds(),
+            second.baseline_first().candidate_lower_picoseconds(),
+            second.baseline_first().baseline_upper_picoseconds(),
+            second.candidate_first().candidate_lower_picoseconds(),
+            second.candidate_first().baseline_upper_picoseconds()
         );
     }
     ExitCode::FAILURE

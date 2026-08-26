@@ -32,31 +32,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  benchmark-regression:
-    name: benchmark regression check
+  benchmark-artifact:
+    name: benchmark artifact (${{ matrix.revision }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        revision:
+          - baseline
+          - candidate
     env:
+      BASELINE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
+      CANDIDATE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.candidate_ref }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      REVISION: ${{ matrix.revision }}
     steps:
-      - name: Checkout baseline
+      - name: Checkout baseline at canonical path
+        if: matrix.revision == 'baseline'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.baseline_ref }}
+          ref: ${{ env.BASELINE_REF }}
           path: apollo-measurement
+          persist-credentials: false
 
-      - name: Checkout candidate
+      - name: Checkout candidate instrument
+        if: matrix.revision == 'baseline'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.ref || inputs.candidate_ref }}
+          ref: ${{ env.CANDIDATE_REF }}
           path: apollo-candidate-source
+          persist-credentials: false
+
+      - name: Checkout candidate at canonical path
+        if: matrix.revision == 'candidate'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CANDIDATE_REF }}
+          path: apollo-measurement
+          persist-credentials: false
 
       # Hold the candidate instrument and representative workloads constant
-      # across both revisions while leaving baseline production code unchanged.
-      # The lock and provider identities are part of that instrument: using
-      # baseline identities would compare different provider graphs and fail
-      # when an upstream package is renamed without changing its Rust import.
+      # while leaving baseline production source unchanged.
       - name: Pin candidate benchmark instrument
+        if: matrix.revision == 'baseline'
         shell: bash
         run: |
           set -euo pipefail
@@ -69,10 +88,6 @@ jobs:
             test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
               "$candidate_spec"
           done
-          # The candidate adds the rustfft comparison benchmark and its
-          # workspace dependency. Add that dependency to the baseline
-          # measurement manifest without replacing unrelated baseline
-          # production requirements.
           candidate_rustfft_spec="$(grep -m1 '^rustfft = ' apollo-candidate-source/Cargo.toml)"
           test -n "$candidate_rustfft_spec"
           if grep -q '^rustfft = ' apollo-measurement/Cargo.toml; then
@@ -84,15 +99,9 @@ jobs:
           fi
           test "$(grep -m1 '^rustfft = ' apollo-measurement/Cargo.toml)" = \
             "$candidate_rustfft_spec"
-          # Align the FFT package manifest with the candidate benchmark
-          # instrument so the copied lockfile remains valid under --locked.
           cp \
             apollo-candidate-source/crates/apollo-fft/Cargo.toml \
             apollo-measurement/crates/apollo-fft/Cargo.toml
-          # Align every candidate workspace manifest that directly requires
-          # apollo-fft. Otherwise a baseline transform can retain an older
-          # requirement while the copied candidate package is newer, making
-          # the copied lockfile invalid under --locked.
           while IFS= read -r -d '' manifest; do
             if grep -Eq '^[[:space:]]*apollo-fft[[:space:]]*=' "$manifest"; then
               relative="${manifest#apollo-candidate-source/}"
@@ -131,79 +140,98 @@ jobs:
         with:
           toolchain: 1.97.0
 
+      # Restore compiler artifacts as well as registry sources. Pull requests
+      # restore the shared default-branch cache but cannot replace it.
       - name: Restore the benchmark build cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-apollo-bench-${{ hashFiles('apollo-candidate-source/Cargo.lock') }}
+          shared-key: apollo-benchmark
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Both revisions compile at the same absolute path. This removes source
-      # path and code-layout variation from the measurement boundary. Each
-      # executable is preserved before the second revision occupies that path.
-      - name: Compile fixed benchmark executables
-        id: benchmark_artifacts
+      - name: Compile measured benchmark executables
         shell: bash
         run: |
           set -euo pipefail
-          compile() {
-            local revision="$1"
-            local destination="benchmark-executables/$revision"
-            local messages="benchmark-executables/$revision.json"
-            mkdir -p "$destination"
+          messages="$RUNNER_TEMP/$REVISION-artifacts.json"
+          target_args=(
+            --bench kernel_strategy
+            --bench prime_compose
+            --bench half_cyclic_rader
+          )
+          cargo bench --profile release \
+            --manifest-path apollo-measurement/Cargo.toml \
+            --locked \
+            -p apollo-fft \
+            --features kernel-strategy-bench \
+            "${target_args[@]}" \
+            --no-run \
+            --message-format=json \
+            > "$messages"
 
-            # Match the production release profile. The default bench profile
-            # uses eight codegen units, so unrelated public API item changes
-            # can move hot kernel code between units and create a layout-only
-            # regression in this gate.
-            cargo bench --profile release \
+          destination="benchmark-executables/$REVISION"
+          mkdir -p "$destination"
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            executable="$(
+              jq -r \
+                --arg benchmark "$benchmark" \
+                'select(.reason == "compiler-artifact" and .target.name == $benchmark) | .executable // empty' \
+                "$messages" \
+                | tail -n 1
+            )"
+            test -n "$executable"
+            install -m 755 "$executable" "$destination/$benchmark"
+          done
+
+          if [[ "$REVISION" == candidate ]]; then
+            cargo build --profile release \
               --manifest-path apollo-measurement/Cargo.toml \
               --locked \
-              -p apollo-fft \
-              --features kernel-strategy-bench \
-              --no-run \
-              --message-format=json \
-              > "$messages"
+              -p apollo-bench \
+              --bin apollo-bench-compare
+            install -m 755 \
+              "$CARGO_TARGET_DIR/release/apollo-bench-compare" \
+              benchmark-executables/apollo-bench-compare
+          fi
 
-            for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-              executable="$(
-                jq -r \
-                  --arg benchmark "$benchmark" \
-                  'select(.reason == "compiler-artifact" and .target.name == $benchmark) | .executable // empty' \
-                  "$messages" \
-                  | tail -n 1
-              )"
-              test -n "$executable"
-              install -m 755 "$executable" "$destination/$benchmark"
-            done
-          }
-
-          compile baseline
-          mv apollo-measurement apollo-baseline-source
-          mv apollo-candidate-source apollo-measurement
-          for package in apollo-fft-macros apollo-fft; do
-            cargo clean \
-              --manifest-path apollo-measurement/Cargo.toml \
-              --release \
-              --package "$package"
-          done
-          compile candidate
-
-          identical=true
           for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
-            sha256sum \
-              "benchmark-executables/baseline/$benchmark" \
-              "benchmark-executables/candidate/$benchmark"
-            if ! cmp --silent \
-              "benchmark-executables/baseline/$benchmark" \
-              "benchmark-executables/candidate/$benchmark"; then
-              identical=false
-            fi
-          done
-          echo "identical=$identical" >> "$GITHUB_OUTPUT"
+            sha256sum "benchmark-executables/$REVISION/$benchmark"
+          done > "benchmark-executables/$REVISION.sha256"
+          tar --create --gzip \
+            --file "benchmark-executables-$REVISION.tar.gz" \
+            benchmark-executables
 
-      - name: Smoke benchmark executables
+      - name: Upload benchmark executables
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-executables-${{ matrix.revision }}
+          path: benchmark-executables-${{ matrix.revision }}.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  benchmark-identity:
+    name: benchmark executable identity
+    needs: benchmark-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      measurements_required: ${{ steps.identity.outputs.measurements_required }}
+    steps:
+      - name: Download benchmark executables
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: benchmark-executables-*
+          path: executable-artifacts
+          merge-multiple: true
+
+      - name: Restore benchmark executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in executable-artifacts/*.tar.gz; do
+            tar --extract --gzip --file "$archive"
+          done
+
+      - name: Smoke candidate benchmark executables
         shell: bash
         env:
           APOLLO_BENCH_MODE: smoke
@@ -213,49 +241,158 @@ jobs:
             timeout 60s "benchmark-executables/candidate/$benchmark" > /dev/null
           done
 
-      - name: Accept executable identity proof
-        if: steps.benchmark_artifacts.outputs.identical == 'true'
-        run: >-
-          echo "baseline and candidate benchmark executables are byte-identical;
-          no candidate-caused performance regression exists"
+      - name: Compare benchmark executables
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          measurements_required=false
+          for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
+            sha256sum \
+              "benchmark-executables/baseline/$benchmark" \
+              "benchmark-executables/candidate/$benchmark"
+            if ! cmp --silent \
+              "benchmark-executables/baseline/$benchmark" \
+              "benchmark-executables/candidate/$benchmark"; then
+              measurements_required=true
+            fi
+          done
+          echo "measurements_required=$measurements_required" >> "$GITHUB_OUTPUT"
 
-      - name: Measure counterbalanced revisions
-        if: steps.benchmark_artifacts.outputs.identical != 'true'
+  benchmark-pair:
+    name: benchmark pair (${{ matrix.pair_id }})
+    needs: benchmark-identity
+    if: needs.benchmark-identity.outputs.measurements_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pair_id: first-baseline-first
+            report_root: reports/first/baseline-first
+            first_revision: baseline
+            second_revision: candidate
+          - pair_id: first-candidate-first
+            report_root: reports/first/candidate-first
+            first_revision: candidate
+            second_revision: baseline
+          - pair_id: second-candidate-first
+            report_root: reports/second/candidate-first
+            first_revision: candidate
+            second_revision: baseline
+          - pair_id: second-baseline-first
+            report_root: reports/second/baseline-first
+            first_revision: baseline
+            second_revision: candidate
+    env:
+      FIRST_REVISION: ${{ matrix.first_revision }}
+      PAIR_ID: ${{ matrix.pair_id }}
+      REPORT_ROOT: ${{ matrix.report_root }}
+      SECOND_REVISION: ${{ matrix.second_revision }}
+    steps:
+      - name: Download benchmark executables
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: benchmark-executables-*
+          path: executable-artifacts
+          merge-multiple: true
+
+      - name: Restore benchmark executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in executable-artifacts/*.tar.gz; do
+            tar --extract --gzip --file "$archive"
+          done
+
+      - name: Measure counterbalanced pair
         shell: bash
         run: |
           set -euo pipefail
           measure() {
             local revision="$1"
-            local report_directory="$2"
+            local report_directory="$REPORT_ROOT/$revision"
             mkdir -p "$report_directory"
-            echo "measuring $revision -> $report_directory" >&2
             for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
               timeout 300s "benchmark-executables/$revision/$benchmark" \
                 > "$report_directory/$benchmark.csv"
             done
           }
 
-          # ABBA followed by its phase reversal BAAB assigns each revision to
-          # period positions with equal sums and equal squared sums. Agreement
-          # across both blocks guards against a slowdown confined to one phase.
-          measure baseline reports/first/baseline-first/baseline
-          measure candidate reports/first/baseline-first/candidate
-          measure candidate reports/first/candidate-first/candidate
-          measure baseline reports/first/candidate-first/baseline
-          measure candidate reports/second/candidate-first/candidate
-          measure baseline reports/second/candidate-first/baseline
-          measure baseline reports/second/baseline-first/baseline
-          measure candidate reports/second/baseline-first/candidate
+          measure "$FIRST_REVISION"
+          measure "$SECOND_REVISION"
+          tar --create --gzip --file "$PAIR_ID.tar.gz" reports
+
+      - name: Upload counterbalanced pair
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-pair-${{ matrix.pair_id }}
+          path: ${{ matrix.pair_id }}.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  benchmark-regression:
+    name: benchmark regression check
+    if: always()
+    needs:
+      - benchmark-identity
+      - benchmark-pair
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      MEASUREMENTS_REQUIRED: ${{ needs.benchmark-identity.outputs.measurements_required }}
+    steps:
+      - name: Validate benchmark prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs.benchmark-identity.result }}" != success ]]; then
+            echo "::error::benchmark executable identity did not pass"
+            exit 1
+          fi
+          if [[ "$MEASUREMENTS_REQUIRED" == true \
+            && "${{ needs.benchmark-pair.result }}" != success ]]; then
+            echo "::error::one or more benchmark pairs did not pass"
+            exit 1
+          fi
+
+      - name: Accept executable identity proof
+        if: env.MEASUREMENTS_REQUIRED == 'false'
+        run: >-
+          echo "baseline and candidate benchmark executables are byte-identical;
+          no candidate-caused performance regression exists"
+
+      - name: Download candidate comparator
+        if: env.MEASUREMENTS_REQUIRED == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: benchmark-executables-candidate
+          path: executable-artifacts
+
+      - name: Download counterbalanced pairs
+        if: env.MEASUREMENTS_REQUIRED == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: benchmark-pair-*
+          path: pair-artifacts
+          merge-multiple: true
+
+      - name: Restore comparison inputs
+        if: env.MEASUREMENTS_REQUIRED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --extract --gzip \
+            --file executable-artifacts/benchmark-executables-candidate.tar.gz
+          for archive in pair-artifacts/*.tar.gz; do
+            tar --extract --gzip --file "$archive"
+          done
 
       - name: Compare reports
-        if: steps.benchmark_artifacts.outputs.identical != 'true'
+        if: env.MEASUREMENTS_REQUIRED == 'true'
         run: >-
-          cargo run
-          --manifest-path apollo-measurement/Cargo.toml
-          --locked
-          -p apollo-bench
-          --bin apollo-bench-compare
-          --
+          benchmark-executables/apollo-bench-compare
           compare-replicated-counterbalanced
           --first-baseline-first-baseline-directory reports/first/baseline-first/baseline
           --first-baseline-first-candidate-directory reports/first/baseline-first/candidate

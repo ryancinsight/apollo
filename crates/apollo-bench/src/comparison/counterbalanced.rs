@@ -5,7 +5,7 @@ use super::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// Owns the four report trees in one ABBA counterbalanced measurement block.
+/// Owns the four report trees in one counterbalanced replication.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CounterbalancedReportSet {
     pub(super) baseline_first_baseline: PathBuf,
@@ -35,21 +35,21 @@ impl CounterbalancedReportSet {
 /// Records one execution order's disjoint median interval bounds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct IntervalSeparation {
-    baseline_upper_nanoseconds: u128,
-    candidate_lower_nanoseconds: u128,
+    baseline_upper_picoseconds: u128,
+    candidate_lower_picoseconds: u128,
 }
 
 impl IntervalSeparation {
     /// Returns the baseline median interval's upper bound.
     #[must_use]
-    pub const fn baseline_upper_nanoseconds(self) -> u128 {
-        self.baseline_upper_nanoseconds
+    pub const fn baseline_upper_picoseconds(self) -> u128 {
+        self.baseline_upper_picoseconds
     }
 
     /// Returns the candidate median interval's lower bound.
     #[must_use]
-    pub const fn candidate_lower_nanoseconds(self) -> u128 {
-        self.candidate_lower_nanoseconds
+    pub const fn candidate_lower_picoseconds(self) -> u128 {
+        self.candidate_lower_picoseconds
     }
 }
 
@@ -152,8 +152,8 @@ impl CounterbalancedComparisonSummary {
 ///     .collect::<Vec<_>>()
 ///     .join(";");
 /// let report = format!(
-///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,\
-///      median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\
+///     "case,min_ps,median_ps,median_lower_ps,median_upper_ps,\
+///      median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n\
 ///      fft/forward/256,1,50,40,61,964799,{samples},4\n"
 /// );
 /// for directory in [
@@ -270,7 +270,7 @@ fn key(regression: &BenchmarkRegression) -> BenchmarkKey {
 
 const fn separation(regression: &BenchmarkRegression) -> IntervalSeparation {
     IntervalSeparation {
-        baseline_upper_nanoseconds: regression.baseline_upper_nanoseconds,
-        candidate_lower_nanoseconds: regression.candidate_lower_nanoseconds,
+        baseline_upper_picoseconds: regression.baseline_upper_picoseconds,
+        candidate_lower_picoseconds: regression.candidate_lower_picoseconds,
     }
 }

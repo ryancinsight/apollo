@@ -20,9 +20,10 @@
 //! baseline and candidate interval with miscoverage at most `0.05 / (2m)`.
 //! Bonferroni's inequality then bounds the probability that any of the `2m`
 //! intervals misses its population median by 5%, without an independence
-//! assumption. CI intersects four such comparison events across phase-reversed
-//! ABBA and BAAB blocks, so the final family-wise false-positive event remains
-//! bounded by any one comparison's 5% bound.
+//! assumption. CI intersects four such comparison events across two
+//! counterbalanced replications and requires the candidate to clear the full
+//! cross-replication spread, so the final family-wise false-positive event
+//! remains bounded by any one comparison's 5% bound.
 //!
 //! Benchmark closures execute sequentially. Parallel execution would overlap
 //! the measured work and destroy the per-operation timing contract; Moirai

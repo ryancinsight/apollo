@@ -3,21 +3,21 @@ use core::fmt::Write;
 
 pub(super) fn render(records: &[BenchmarkRecord]) -> String {
     let mut output = String::from(
-        "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n",
+        "case,min_ps,median_ps,median_lower_ps,median_upper_ps,median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n",
     );
     for record in records {
         write_csv_field(&record.case.to_string(), &mut output);
         write!(
             output,
             ",{},{},{},{},{},",
-            record.minimum_nanoseconds,
-            record.median_nanoseconds,
-            record.median_lower_nanoseconds,
-            record.median_upper_nanoseconds,
+            record.minimum_picoseconds,
+            record.median_picoseconds,
+            record.median_lower_picoseconds,
+            record.median_upper_picoseconds,
             record.median_confidence_parts_per_million,
         )
         .expect("invariant: formatting a String cannot fail");
-        write_ordered_samples(&record.ordered_samples_nanoseconds, &mut output);
+        write_ordered_samples(&record.ordered_samples_picoseconds, &mut output);
         writeln!(output, ",{}", record.iterations_per_sample)
             .expect("invariant: formatting a String cannot fail");
     }
@@ -68,7 +68,7 @@ mod tests {
 
         assert_eq!(
             render(&[record]),
-            "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,7,7,968750,7;7;7;7;7;7,1\n"
+            "case,min_ps,median_ps,median_lower_ps,median_upper_ps,median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n\"group,with/quoted\"\"label/line\nbreak\",7,7,7,7,968750,7;7;7;7;7;7,1\n"
         );
     }
 }

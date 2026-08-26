@@ -6,7 +6,7 @@ use super::{
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// Identifies a slowdown reproduced by two phase-reversed ABBA blocks.
+/// Identifies a slowdown reproduced by two counterbalanced replications.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplicatedCounterbalancedBenchmarkRegression {
     first: CounterbalancedBenchmarkRegression,
@@ -26,20 +26,20 @@ impl ReplicatedCounterbalancedBenchmarkRegression {
         self.first.case()
     }
 
-    /// Returns the first ABBA block's supported slowdown.
+    /// Returns the first replication's supported slowdown.
     #[must_use]
     pub const fn first_replication(&self) -> &CounterbalancedBenchmarkRegression {
         &self.first
     }
 
-    /// Returns the phase-reversed ABBA block's supported slowdown.
+    /// Returns the second replication's supported slowdown.
     #[must_use]
     pub const fn second_replication(&self) -> &CounterbalancedBenchmarkRegression {
         &self.second
     }
 }
 
-/// Summarizes two phase-reversed counterbalanced measurement blocks.
+/// Summarizes two counterbalanced measurement replications.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplicatedCounterbalancedComparisonSummary {
     compared_reports: usize,
@@ -86,17 +86,15 @@ impl ReplicatedCounterbalancedComparisonSummary {
     }
 }
 
-/// Compares two counterbalanced blocks whose execution phases are reversed.
+/// Compares two counterbalanced replications whose pair orders are reversed.
 ///
-/// The caller executes the first set as ABBA and the second as BAAB. This
-/// assigns baseline and candidate to equal sums of the eight period indices
-/// and their squares, balancing exposure to constant, linear, and quadratic
-/// period terms. A case regresses only when all four base/head comparisons
-/// support it *and* the slowest candidate median bound still clears the fastest
-/// baseline median bound across all four. The second requirement charges the
-/// decision the between-run spread the replication measures; a per-run median
-/// interval bounds only that run's sampling noise, so four of them can separate
-/// together on a host whose regime shifts between runs.
+/// Each baseline/candidate pair executes on one host in its prescribed order;
+/// pairs may execute independently. A case regresses only when all four
+/// base/head comparisons support it *and* the slowest candidate median bound
+/// still clears the fastest baseline median bound across all four. The second
+/// requirement charges the decision the between-pair spread; a per-run median
+/// interval bounds only that run's sampling noise, so four intervals can
+/// separate together when execution regimes differ between pairs.
 ///
 /// # Errors
 ///
@@ -122,8 +120,8 @@ impl ReplicatedCounterbalancedComparisonSummary {
 ///     .collect::<Vec<_>>()
 ///     .join(";");
 /// let report = format!(
-///     "case,min_ns,median_ns,median_lower_ns,median_upper_ns,\
-///      median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n\
+///     "case,min_ps,median_ps,median_lower_ps,median_upper_ps,\
+///      median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n\
 ///      fft/forward/256,1,50,40,61,964799,{samples},4\n"
 /// );
 /// for replication in ["first", "second"] {
@@ -217,11 +215,11 @@ fn separated_across_replications(
     ];
     let slowest_baseline = separations
         .iter()
-        .map(|separation| separation.baseline_upper_nanoseconds())
+        .map(|separation| separation.baseline_upper_picoseconds())
         .max();
     let fastest_candidate = separations
         .iter()
-        .map(|separation| separation.candidate_lower_nanoseconds())
+        .map(|separation| separation.candidate_lower_picoseconds())
         .min();
     match (fastest_candidate, slowest_baseline) {
         (Some(candidate), Some(baseline)) => candidate > baseline,

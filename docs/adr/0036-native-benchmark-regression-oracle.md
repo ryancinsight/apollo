@@ -21,14 +21,17 @@ implementation.
 
 Keep report generation and interpretation in `apollo-bench`.
 
-1. Extend each 100-sample CSV record with its ordered observations and a
-   symmetric, distribution-free descriptive interval for the population
-   median.
+1. Extend each 100-sample CSV record with its ordered picosecond observations
+   and a symmetric, distribution-free descriptive interval for the population
+   median. Picosecond normalization preserves sub-nanosecond per-operation
+   differences that integer nanoseconds would discard.
 2. Discover CSV reports recursively and require identical report and case
    sets between independently executed base and candidate trees.
 3. At comparison time, derive simultaneous intervals whose individual
    miscoverage is at most `0.05 / (2m)` for `m` cases and two revisions.
-4. Counterbalance execution as baseline→candidate then candidate→baseline.
+4. Counterbalance execution as baseline→candidate then candidate→baseline,
+   with both revisions of each matched pair executing on the same hosted
+   runner.
 5. Classify a regression only when the candidate lower bound exceeds the
    baseline upper bound in both execution orders.
 6. Compile both revisions against the candidate `apollo-bench` source so the
@@ -37,12 +40,19 @@ Keep report generation and interpretation in `apollo-bench`.
 7. Delete the copied Python comparator. CI orchestration checks out and runs
    base and candidate revisions separately after the new schema reaches the
    default branch.
-8. Replicate ABBA with the phase-reversed BAAB schedule and require the same
-   slowdown in all four comparisons.
+8. Replicate both orders twice as four independent matched-pair jobs and
+   require the same slowdown in all four comparisons. The resulting evidence
+   is equivalent to the phase-reversed ABBA/BAAB classifier but does not depend
+   on one long runner timeline.
 9. Execute the hosted experiment only when a pull request changes the measured
    `apollo-fft` local dependency closure, the `apollo-bench` instrument, Cargo
    resolution, toolchain configuration, or the benchmark workflow itself.
    Keep this applicability boundary in a dedicated path-filtered workflow.
+10. Compile baseline and candidate artifacts concurrently at the same
+    canonical checkout path on the pinned runner image. Compile only the three
+    benchmark targets consumed by the gate, restore the shared compiler cache,
+    and pass immutable executables and reports between jobs as one-day
+    artifacts.
 
 The strongest rejected alternative is converting Apollo to Criterion solely
 to reuse the Atlas Criterion comparator. Apollo already owns a cohesive native
@@ -74,8 +84,13 @@ therefore bounds the probability that any baseline or candidate interval
 misses its population median by 5%, without requiring independence. Integer
 binomial counts encode this contract without floating-point rounding.
 
-The comparison makes no cross-machine performance claim. Base and candidate
-must execute on the same hosted runner in one job. Hosted run `29757554816`
+The comparison makes no cross-machine absolute-performance claim. Base and
+candidate must execute on the same hosted runner within each matched pair.
+Different pairs may use different hosts because the classifier first requires
+a slowdown within every pair and then charges the result the complete
+cross-pair spread: the slowest baseline upper bound must remain below the
+fastest candidate lower bound. Host heterogeneity can suppress evidence but
+cannot manufacture this final separation. Hosted run `29757554816`
 falsified a single fixed-order pair: source-identical revisions produced 31
 disjoint candidate slowdowns, including one-nanosecond separations. Reversing
 the order supplies the control for systematic thermal, frequency, and runner
@@ -101,27 +116,28 @@ slowdowns under one ABBA block despite an empty production transform diff
 between base `66e37ab` and candidate `65dd9ad`. ABBA alone assigns the two
 revisions to different periods of one runner timeline. Appending BAAB yields
 baseline period positions `{1, 4, 6, 7}` and candidate positions
-`{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so the
-complete schedule balances revision exposure to constant, linear, and
-quadratic period terms. The final
-regression event is the intersection of the four family-wise comparison
-events; it therefore remains bounded by 5% without assuming that the blocks
-are independent.
+`{2, 3, 5, 8}`. Both sets sum to 18 and both squared sets sum to 102, so that
+historical one-runner schedule balanced revision exposure to constant, linear,
+and quadratic period terms. The current topology instead executes those four
+ordered pairs independently. The final regression event remains the
+intersection of the four family-wise comparison events and therefore stays
+bounded by 5% without assuming that the pairs are independent.
 
 ## Consequences
 
-The CSV schema carries the ordered observations as the statistical source of
-truth, while the summary columns remain validated descriptive output.
+The CSV schema carries ordered integer-picosecond observations as the
+statistical source of truth, while the summary columns remain validated
+descriptive output.
 `apollo-bench` exposes an additive public comparison API and CLI. Missing,
 malformed, insufficient, or unpaired evidence fails closed, including
 mismatched case universes across execution orders or replications. A pull
 request that changes `apollo-bench` measures the base transform with the
 candidate instrument; this intentionally evaluates transform regression
-rather than benchmark-harness performance. The eight measurements roughly
-double the empirical lane from 17 to 34 minutes while remaining inside its
-60-minute purpose-specific bound. The base/head CI increment cannot precede
-this schema on the default branch because legacy baseline reports do not
-contain the ordered observations.
+rather than benchmark-harness performance. The initial serialized
+implementation's eight measurements roughly doubled the empirical lane from
+17 to 34 minutes while remaining inside its 60-minute purpose-specific bound.
+The base/head CI increment cannot precede this schema on the default branch
+because legacy baseline reports do not contain the ordered observations.
 
 Exact-head hosted run `29766127266` passed the eight-run source-identical
 canary and replicated comparison in 31 minutes. This validates the operational
@@ -150,9 +166,9 @@ checkout paths produced persistent f32 N=1031 automatic and forced-Bluestein
 separations in all four comparisons. The experiment cannot attribute that
 binary-level variation to production code.
 
-The workflow therefore compiles baseline and candidate sequentially at one
-canonical absolute path, copies each resulting executable before the next
-revision occupies that path, and measures those immutable artifacts directly.
+The workflow therefore compiles baseline and candidate concurrently in
+separate jobs that use the same canonical absolute checkout path, then measures
+the immutable artifacts directly.
 The candidate `apollo-bench` source and benchmark entry points remain pinned
 into the baseline before compilation. SHA-256 identities are emitted as build
 evidence; source-identical revisions can now reuse or reproduce the same
@@ -164,10 +180,10 @@ replicated measurement and comparison path.
 
 The measurement workload uses geometric representatives for each distinct
 dispatch regime instead of dense linear size sweeps. Every retained case still
-records 100 ordered observations, and the family-wise interval and
-phase-reversed ABBA/BAAB classifier are unchanged. The suite retains both f32
-and f64 strategy comparisons and the f32 N=1031 Bluestein case that exposed
-the false attribution. A 100 ms warm-up plus 400 ms measurement budget yields
+records 100 ordered observations, and the family-wise interval plus four
+ordered-pair acceptance rule are unchanged. The suite retains both f32 and f64
+strategy comparisons and the f32 N=1031 Bluestein case that exposed the false
+attribution. A 100 ms warm-up plus 400 ms measurement budget yields
 approximately 21 seconds for `half_cyclic_rader`, 10 seconds for
 `prime_compose`, and 11 seconds for `kernel_strategy` before process overhead.
 Each binary has a 300-second hard bound. A full-case smoke mode uses minimum
@@ -191,4 +207,20 @@ executions, proved all three executable pairs byte-identical, and accepted the
 identity evidence in 4 minutes. Exact-head CI run `29956621235` independently
 passed the Rust workspace and Python binding jobs. This is static causal
 evidence for the unchanged artifacts, not empirical performance evidence; any
-differing executable pair still enters the complete ABBA/BAAB experiment.
+differing executable pair enters the complete four-matched-pair experiment.
+
+## Revision: 2026-08-26
+
+The post-PR #127 hosted run completed in 12 minutes 36 seconds: 7 minutes
+11 seconds compiled seven FFT benchmark targets even though the gate retained
+three, and 5 minutes 4 seconds serialized all eight complete measurements.
+It also exposed integer-nanosecond normalization as a resolution defect for
+sub-2 ns kernels. The workflow now compiles only the consumed targets, restores
+compiler artifacts, builds baseline and candidate concurrently at the same
+canonical path, and executes the four matched pairs concurrently. Each pair
+still keeps both revisions on one runner in the prescribed order, and the
+comparator, 100 observations, confidence construction, workloads, and
+four-comparison acceptance rule are unchanged. The operational critical path
+is therefore one artifact build plus one matched pair instead of two builds
+plus eight serialized measurements; hosted validation of the resulting bound
+remains the delivery gate for this revision.

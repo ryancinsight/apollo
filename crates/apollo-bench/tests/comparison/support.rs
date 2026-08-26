@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const HEADER: &str = "case,min_ns,median_ns,median_lower_ns,median_upper_ns,median_confidence_ppm,ordered_samples_ns,iterations_per_sample\n";
+const HEADER: &str = "case,min_ps,median_ps,median_lower_ps,median_upper_ps,median_confidence_ppm,ordered_samples_ps,iterations_per_sample\n";
 static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub(super) struct Fixture {

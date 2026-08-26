@@ -1,8 +1,8 @@
 /// Exact symmetric distribution-free interval for a population median.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MedianInterval {
-    pub(crate) lower_nanoseconds: u128,
-    pub(crate) upper_nanoseconds: u128,
+    pub(crate) lower_picoseconds: u128,
+    pub(crate) upper_picoseconds: u128,
     pub(crate) confidence_parts_per_million: u32,
 }
 
@@ -73,8 +73,8 @@ impl MedianInterval {
         let confidence_parts_per_million =
             u32::try_from(selected_coverage * PARTS_PER_MILLION / total_outcomes).ok()?;
         Some(Self {
-            lower_nanoseconds: samples[selected_rank - 1],
-            upper_nanoseconds: samples[sample_count - selected_rank],
+            lower_picoseconds: samples[selected_rank - 1],
+            upper_picoseconds: samples[sample_count - selected_rank],
             confidence_parts_per_million,
         })
     }
@@ -102,8 +102,8 @@ mod tests {
         let interval = MedianInterval::from_ordered_samples(&(1..=100).collect::<Vec<_>>(), 1)
             .expect("invariant: 100 samples support one-case coverage");
 
-        assert_eq!(interval.lower_nanoseconds, 40);
-        assert_eq!(interval.upper_nanoseconds, 61);
+        assert_eq!(interval.lower_picoseconds, 40);
+        assert_eq!(interval.upper_picoseconds, 61);
         assert_eq!(interval.confidence_parts_per_million, 964_799);
     }
 
@@ -115,10 +115,10 @@ mod tests {
         let two_cases = MedianInterval::from_ordered_samples(&samples, 4)
             .expect("invariant: 100 samples support two paired comparisons");
 
-        assert_eq!(paired.lower_nanoseconds, 39);
-        assert_eq!(paired.upper_nanoseconds, 62);
-        assert_eq!(two_cases.lower_nanoseconds, 38);
-        assert_eq!(two_cases.upper_nanoseconds, 63);
+        assert_eq!(paired.lower_picoseconds, 39);
+        assert_eq!(paired.upper_picoseconds, 62);
+        assert_eq!(two_cases.lower_picoseconds, 38);
+        assert_eq!(two_cases.upper_picoseconds, 63);
     }
 
     #[test]
@@ -129,8 +129,8 @@ mod tests {
         let family = MedianInterval::from_ordered_samples(&samples, 400)
             .expect("invariant: 100 samples support 400-case coverage");
 
-        assert!(family.lower_nanoseconds < one.lower_nanoseconds);
-        assert!(family.upper_nanoseconds > one.upper_nanoseconds);
+        assert!(family.lower_picoseconds < one.lower_picoseconds);
+        assert!(family.upper_picoseconds > one.upper_picoseconds);
         assert!(family.confidence_parts_per_million > one.confidence_parts_per_million);
     }
 
