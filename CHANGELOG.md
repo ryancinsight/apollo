@@ -10,6 +10,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] Real-input forward transforms now run a size-`N/2` complex transform
+  and untangle it instead of widening to complex and transforming at size `N`,
+  which is 1.5x-1.8x faster at the same allocation count. A real signal's
+  spectrum is conjugate-symmetric, so the size-`N` route computed a redundant
+  half. `RealFftData::forward_1d_half_into` is the additive zero-allocation
+  entry for the `N/2 + 1` independent bins; `fft_1d_slice`, `fft_1d_array`, and
+  `fft_1d_array_into` keep returning the full `N` bins, with the upper half now
+  a conjugate reflection rather than a transform. `realfft` 3.5.0 joins RustFFT
+  and PhastFT as a dev-only reference. Census in `gap_audit.md#engine-census`.
+
 - [patch] Test the planar-layout hypothesis for the power-of-two path with a
   prototype before committing to the rewrite, and record the result in
   `gap_audit.md#planar-hypothesis-falsified`. No source change: layout alone

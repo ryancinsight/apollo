@@ -1,5 +1,82 @@
 # Apollo Gap Audit
 
+## Cost census against RustFFT, PhastFT, and RealFFT (2026-08-25) <a id="engine-census"></a>
+
+Evidence tier: measured, all engines interleaved inside one process, with
+transient allocation counted by a wrapping global allocator rather than
+estimated. Correctness gated by analytical, symmetry, and differential oracles
+before any timing was read.
+
+The axes are the ones that drive throughput here — arithmetic complexity, passes
+over the data, and transient allocation — not wall-clock alone.
+
+### Complex forward, f64
+
+| N | Apollo | RustFFT | PhastFT | Apollo allocations/call |
+| --- | --- | --- | --- | --- |
+| 2^10 | 13036 | 1330 | 1563 | 0 |
+| 2^12 | 55506 | 7158 | 8549 | 0 |
+| 2^14 | 264528 | 38721 | 43471 | 0 |
+| 2^16 | 722972 | 539586 | 331744 | 0 |
+
+The complex path allocates nothing per call — plan, twiddles, and scratch are
+all cached — so its gap is entirely kernel throughput, which
+[the power-of-two profile](#pot-f64-profile) attributes to pass count and
+[the planar result](#planar-hypothesis-falsified) confirms is not a layout
+problem. RustFFT lands in the same band as PhastFT, so two independently
+authored engines agree on what this workload should cost.
+
+### Real forward, f64 — a complexity defect, now fixed
+
+Apollo's real-input transform widened every real sample to a complex one with a
+zero imaginary part and ran a full size-`N` complex transform. A real signal's
+spectrum is conjugate-symmetric, so half of that output is redundant and the
+arithmetic producing it is wasted. RealFFT — the standard Rust wrapper over
+RustFFT for exactly this case — returns `N/2 + 1` bins and costs about half a
+complex transform.
+
+The module named `real_fft.rs` documented itself as holding "real-FFT
+half-complex split routines" and held none; it contained only twiddle-table
+builders. The split now exists there, which makes that documentation true.
+
+Measured with the split path, the widening path it replaced, and RealFFT all
+interleaved in one process, minimum of four rounds, reproduced twice:
+
+| N | split | widen (before) | speedup | RealFFT | allocations, split \| widen |
+| --- | --- | --- | --- | --- | --- |
+| 2^10 | 8629 | 13863 | **1.61x** | 713 | 1 \| 1 |
+| 2^12 | 33538 | 61641 | **1.84x** | 3851 | 1 \| 1 |
+| 2^14 | 170838 | 286636 | **1.68x** | 19245 | 1 \| 1 |
+| 2^16 | 938253 | 1473111 | **1.57x** | 98484 | 1 \| 1 |
+
+1.5x to 1.8x against a 2x ceiling, the remainder being the untangle and the
+conjugate mirror. Allocation count is unchanged at one — the returned spectrum,
+which doubles as the pack buffer and the untangle target.
+
+**Getting the allocation count right mattered as much as the algorithm.** A
+first implementation was *slower than the code it replaced* at three of four
+sizes despite doing half the arithmetic, because it introduced two extra
+transient allocations — an intermediate widened copy and a separate half
+buffer — taking the per-call total from 1 allocation and 16N bytes to 3 and 32N.
+The allocation counter showed that immediately; wall-clock alone would have read
+as noise. Packing directly into the output and untangling in place restored one
+allocation and turned the regression into the speedup above.
+
+### What remains
+
+The real path is now ~9x from RealFFT rather than ~8-15x, and that residual is
+not a real-transform problem: RealFFT is built on RustFFT, which is 6.8x-9.8x
+faster than Apollo's *complex* kernel over 2^10..2^14. The two gaps are the same
+gap. Closing it is `ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25`, and the census
+above is the instrument that will show it moving.
+
+### Method note
+
+Every timing here is interleaved inside one process. Three earlier conclusions
+in this audit came from comparing separate runs and did not survive that change;
+the first version of *this* measurement showed the split as a regression at 2^10
+for the same reason before the arms were interleaved.
+
 ## Planar rewrite: hypothesis falsified before the rewrite (2026-08-25) <a id="planar-hypothesis-falsified"></a>
 
 Evidence tier: measured, four prototype variants, all three engines interleaved

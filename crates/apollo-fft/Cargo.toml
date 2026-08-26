@@ -33,6 +33,7 @@ apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
 rustfft.workspace = true
 phastft.workspace = true
+realfft.workspace = true
 
 [[bench]]
 name = "rustfft_comparison"
