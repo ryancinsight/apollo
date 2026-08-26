@@ -34,7 +34,7 @@
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
-use hermes_simd::{LaneKernel, LaneScalar, SimdArch, SimdKernel, SimdStorage, Vector};
+use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -112,7 +112,7 @@ where
 {
     type Output = ();
 
-    fn call<A: SimdArch + SimdKernel<T>>(self) {
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
         let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         let b = self.batch;
         let mut twx = 0usize;
@@ -122,8 +122,8 @@ where
             let groups = self.len / l;
             for j in 0..half {
                 let (twr, twi) = self.tw[twx + j];
-                let wr = Vector::<T, A>::splat(twr);
-                let wi = Vector::<T, A>::splat(twi);
+                let wr = simd.splat(twr);
+                let wi = simd.splat(twi);
                 for g in 0..groups {
                     let lo = (g * l + j) * b;
                     let hi = lo + half * b;
@@ -180,9 +180,10 @@ where
 {
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: the caller's loop condition bounds `at + LANE_COUNT` by the slice
-    // length, and holding an `A`-parameterized value means the host executes
-    // `A`. The checked wrapper revalidates both per call, which measured as 45%
-    // of this kernel's time; the bound here is loop-invariant.
+    // length, and `BatchedStages::call` receives the capability proving that
+    // the host executes `A`. The checked wrapper revalidates both per call,
+    // which measured as 45% of this kernel's time; the bound here is
+    // loop-invariant.
     unsafe { Vector::<T, A>::load_unaligned(data.as_ptr().add(at)) }
 }
 
