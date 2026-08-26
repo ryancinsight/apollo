@@ -176,7 +176,7 @@
   for the split path and 0 for the complex path.
 - **Risk / change class:** [patch], dev-only.
 
-## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — todo
+## ATLAS-APOLLO-POT-PASS-REDUCTION-2026-08-25 — Cut the pass count over the data [arch] — closed 2026-08-25, premise false
 
 - **Outcome:** the power-of-two f64 transform moves less memory, which is the
   binding constraint. Target is the pass count, not the arithmetic.
@@ -202,6 +202,16 @@
   regressed. Per-size isolated confirmation, since the backends are not
   independently selectable. Accuracy ratios against the analytical oracle
   unchanged.
+- **Closed 2026-08-25.** The first step was run and the premise is false.
+  `transform_len1024` performs three `stage_triple` calls (radix-8 each) plus one
+  `stage` — four passes for ten radix-2 stages, fewer than RustFFT's radix-4
+  needs. The fused-stage machinery is firing. The gap is per-lane throughput,
+  not pass count: seven kernel variants covering layout, fusion, blocking,
+  primitive set, and validation strategy all land between 3.4 and 6.1 flops/ns
+  while RustFFT and PhastFT reach 33-38 in the same binary. Also corrects the
+  memory-bound reading — at 2^10 the array is L1-resident and Apollo still runs
+  at 8% of peak. Evidence: `gap_audit.md#lane-throughput`. Continues upstream as
+  `HS-LANE-THROUGHPUT-2026-08-25` in Hermes.
 - **First step, cheap and decisive:** determine how many passes each backend
   actually performs at 2^12 and 2^16. If `MAX_FUSED_STAGES = 4` were firing,
   Apollo would already be at a quarter of the passes and would not be sitting at
