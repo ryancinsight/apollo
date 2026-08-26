@@ -224,45 +224,15 @@ impl MixedRadixScalar for f32 {
         data: &mut [Self::Complex],
         twiddles: &[Self::Complex],
     ) {
-        let n = data.len();
-        if crate::application::execution::kernel::components::four_step::try_four_step::<
-            Self,
-            INVERSE,
-            NORMALIZE,
-        >(
-            data,
-            crate::application::execution::kernel::tuning::ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD,
-        ) {
-            return;
-        }
-        match n {
-            2 => unsafe {
-                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
-            },
-            4 => unsafe {
-                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
-            },
-            8 => unsafe {
-                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
-            },
-            16 => unsafe {
-                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
-            },
-            32 => unsafe {
-                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
-            },
-            64 => unsafe {
-                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
-            },
-            _ => {
-                Self::with_scratch(n, |scratch| {
-                    if INVERSE && NORMALIZE {
-                        Self::stockham_forward_normalized(data, scratch, twiddles, n);
-                    } else {
-                        Self::stockham_forward(data, scratch, twiddles);
-                    }
-                });
-            }
+        use crate::application::execution::kernel::pot::{
+            one_dimensional_uses_four_step, FourStep, PotRoute, StockhamAutosort,
+        };
+        // One branch per transform, against a crossover the decision record
+        // carries; both arms monomorphize to the route's own code.
+        if one_dimensional_uses_four_step(data.len()) {
+            FourStep::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
+        } else {
+            StockhamAutosort::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
         }
     }
 
@@ -543,45 +513,15 @@ impl MixedRadixScalar for f64 {
         data: &mut [Self::Complex],
         twiddles: &[Self::Complex],
     ) {
-        let n = data.len();
-        if crate::application::execution::kernel::components::four_step::try_four_step::<
-            Self,
-            INVERSE,
-            NORMALIZE,
-        >(
-            data,
-            crate::application::execution::kernel::tuning::ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD,
-        ) {
-            return;
-        }
-        match n {
-            2 => unsafe {
-                Self::small_pot_inplace_sized::<2, INVERSE, NORMALIZE>(data);
-            },
-            4 => unsafe {
-                Self::small_pot_inplace_sized::<4, INVERSE, NORMALIZE>(data);
-            },
-            8 => unsafe {
-                Self::small_pot_inplace_sized::<8, INVERSE, NORMALIZE>(data);
-            },
-            16 => unsafe {
-                Self::small_pot_inplace_sized::<16, INVERSE, NORMALIZE>(data);
-            },
-            32 => unsafe {
-                Self::small_pot_inplace_sized::<32, INVERSE, NORMALIZE>(data);
-            },
-            64 => unsafe {
-                Self::small_pot_inplace_sized::<64, INVERSE, NORMALIZE>(data);
-            },
-            _ => {
-                Self::with_scratch(n, |scratch| {
-                    if INVERSE && NORMALIZE {
-                        Self::stockham_forward_normalized(data, scratch, twiddles, n);
-                    } else {
-                        Self::stockham_forward(data, scratch, twiddles);
-                    }
-                });
-            }
+        use crate::application::execution::kernel::pot::{
+            one_dimensional_uses_four_step, FourStep, PotRoute, StockhamAutosort,
+        };
+        // One branch per transform, against a crossover the decision record
+        // carries; both arms monomorphize to the route's own code.
+        if one_dimensional_uses_four_step(data.len()) {
+            FourStep::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
+        } else {
+            StockhamAutosort::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
         }
     }
 

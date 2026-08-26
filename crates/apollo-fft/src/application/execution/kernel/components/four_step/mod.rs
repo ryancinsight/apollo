@@ -70,15 +70,17 @@ pub(crate) fn try_four_step<
     data: &mut [F::Complex],
     minimum_len: usize,
 ) -> bool {
+    use crate::application::execution::kernel::pot::{FourStep, PotRoute};
+    // Admission is the route's own property, defined once on `FourStep`, so the
+    // general dispatcher and one-dimensional plans cannot drift apart on which
+    // lengths the split is valid for. Only the crossover differs between them,
+    // and that is what the caller supplies.
     let n = data.len();
-    if n < minimum_len || !n.is_power_of_two() || n.trailing_zeros() % 2 != 0 {
+    if n < minimum_len || !FourStep::admits(n) {
         return false;
     }
 
-    four_step_fft::<F, INVERSE>(data);
-    if INVERSE && NORMALIZE {
-        F::normalize(data, n);
-    }
+    FourStep::run::<F, INVERSE, NORMALIZE>(data, &[]);
     true
 }
 

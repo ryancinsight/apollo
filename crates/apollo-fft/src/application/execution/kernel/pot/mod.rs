@@ -8,8 +8,12 @@
 //! Stockham, Winograd-codelet, and future radix-4/8 in-place variants can
 //! coexist behind a single facade while sharing butterfly primitives.
 
+#[cfg(test)]
+mod crossover;
+pub(crate) mod route;
 pub mod strategies;
 
+pub(crate) use route::{one_dimensional_uses_four_step, FourStep, PotRoute};
 pub use strategies::{PoTStrategy, SizedPoT, StockhamAutosort};
 
 /// Constructs a `SizedPoT<StockhamAutosort, LOG2>` ZST, binds it to the

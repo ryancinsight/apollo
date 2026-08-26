@@ -1,5 +1,65 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — done 2026-08-26, one part open
+
+- **Outcome: the decision is unchanged and now defensible.** The threshold stays
+  at 65536. What was wrong with ADR 0039 was not its value but that it stated a
+  crossover without naming the instrument that produced it, which made the
+  figure unfalsifiable — and cost a full re-derivation to recover. The record
+  now names it at the claim site and carries a third revision note.
+- **My contrary evidence was real and did not overturn it.** `pot::crossover`,
+  a new instrument that runs both routes at one length in one process with the
+  cache flushed per arm and the arm order alternating, puts four-step ahead from
+  N = 256 upward by 2 to 3x. Setting the threshold there reproduces ADR 0039's
+  rejected figures almost exactly: 4096 goes from 29 us to 348 us against its
+  recorded 338.85, and 16384 to 1.64 ms against its recorded 1.6165.
+- **Both are right, and the difference is the process.** Timing `four_step_fft`
+  from inside the census binary shows it genuinely taking 99 us per call at
+  N = 4096 — a minimum over thousands — where the same binary's test process
+  takes 12. Not plan overhead (reaching the route through `FftPlan1D` costs
+  nothing measurable), not twiddle rebuilds (counted: four, one per size), not
+  allocation (zero per call). Successor:
+  `ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26`.
+- **Delivered besides the record:** routes are zero-sized types implementing
+  `PotRoute`, which is what made the two instruments comparable at all, and
+  admission is defined once on `FourStep::admits` so the general dispatcher and
+  1-D plans cannot drift on which lengths the split is valid for.
+- **Open:** this host moved Apollo's own N = 4096 Stockham figure between 29 and
+  65 us in one session with its code untouched, so no absolute here bounds
+  anything. Confirming the crossover on a quiet host stays open, and
+  `pot::crossover` is the named instrument to run.
+
+## ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26 — Four-step is 8x slower in one process than another [arch] — todo
+
+- **Finding.** The same `four_step_fft` call at N = 4096, in the same binary,
+  takes 12 us of wall clock in the library test process and 99 us in the census
+  bench process. Minimum over thousands of calls in both, so it is not an
+  outlier. This is the single largest unexplained factor in the audit and it
+  currently costs Apollo the entire 4096-to-16384 range, since the routing
+  threshold has to be set for the slow case.
+- **Ruled out, each by measurement rather than argument:** plan overhead
+  (reaching the route through `FftPlan1D` measures within 3% of calling it
+  directly), twiddle rebuilds (instrumented `build_four_step_twiddles`: four
+  calls total, one per size), and per-call allocation (the census allocation
+  column reports zero on the complex path).
+- **Hypothesis with a mechanism.** Four-step holds three `N`-sized arrays live
+  simultaneously — data, scratch, and the `W_N^(j*k)` matrix — where Stockham
+  holds two. Three same-sized arrays whose relative alignment is decided by
+  allocation history can conflict in a set-associative cache; the census process
+  has four engines' plans and a 64 MiB flush buffer allocated before Apollo's,
+  the test process has almost nothing. That predicts the effect is sensitive to
+  allocation order and curable by controlling the alignment of the three.
+- **Scope:** confirm or refute by perturbing allocation order in the isolated
+  instrument, then by measuring the three arrays' relative offsets in both
+  processes. If confirmed, align the scratch and twiddle allocations to avoid
+  conflict rather than tuning around it. **Non-goals:** the routing threshold,
+  which is correct for as long as this stands.
+- **Acceptance oracle:** the same call costs the same in both processes, or the
+  cause is identified and recorded with a mechanism. If it is curable, the
+  crossover is re-derived afterward, since it was set for the slow case.
+- **Risk / change class:** [arch]; would change the crossover and the routing
+  for the whole 4096-to-16384 range.
+
 ## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — done 2026-08-26
 
 - **Delivered:** the batched stage loop fuses stage `l` with stage `2l` into a
@@ -42,36 +102,6 @@
   at fixed stage cost, the existing correctness suite passes unchanged, and
   allocations stay at zero per call.
 - **Risk / change class:** [patch]; touches one loop and a cache representation.
-
-## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — todo
-
-- **Why it must be re-derived regardless:** fusing stages changed the batched
-  kernel's cost, and the crossover in ADR 0039 was measured against the previous
-  one. A threshold derived from a superseded cost is stale by construction.
-- **And there is a contradiction to settle** (`gap_audit.md#crossover-contradiction`).
-  ADR 0039 records that selecting four-step at 4096 moved the 4096 median from
-  57.477 us to 338.85 us and 16384 from 149.512 us to 1.6165 ms. Changing only
-  that constant, the committed census measures the opposite: 4096 from 29216 to
-  17724 ns (1.65x faster) and 16384 from 274800 to 83128 ns (3.3x faster),
-  reproduced across three runs at zero allocations per call. Normalized, the
-  lowered threshold gives a flat 13.8-14.0 flops/ns from 4096 through 262144,
-  where the retained one leaves N = 16384 at 4.2 against neighbours at 8.4 and
-  12.7 — an anomaly with no physical explanation and the exact shape of a size
-  falling off a routing gate.
-- **The instruments differ and only one is identified.** `rustfft_comparison`
-  stops at 512, so it cannot have produced the ADR's 4096 and 16384 medians, and
-  it charges a per-iteration clone; the census flushes the cache between arms.
-  Whatever produced the ADR's figures is not named in the record.
-- **Scope:** settle it on a quiet host with one named instrument, then either
-  keep 65536 with the measurement recorded, or lower it and revise ADR 0039 with
-  a dated revision note. **Non-goal:** flipping the constant on this evidence
-  alone — a recorded decision is revised deliberately, not overridden in
-  passing.
-- **Acceptance oracle:** one instrument, named in the ADR, produces a crossover
-  reproducible across runs, and the census shows no size left on an anomalous
-  route.
-- **Risk / change class:** [arch]; changes routing for every 1-D power-of-two
-  length in the affected range.
 
 ## ATLAS-APOLLO-REAL-HALF-API-2026-08-26 — Expose the n/2+1 forward spectrum [minor] — done 2026-08-26
 
