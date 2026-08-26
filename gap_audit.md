@@ -1,5 +1,113 @@
 # Apollo Gap Audit
 
+## The batched layout breaks the throughput ceiling (2026-08-25) <a id="batched-layout"></a>
+
+Evidence tier: measured at kernel level, reproducible across four shapes and
+several runs; correctness verified against a direct DFT and against RustFFT. The
+end-to-end comparison is explicitly **not** established — see the measurement
+caveat at the end, which is the reason this is a design record and not a change.
+
+### The pre-validated surfaces do not close it
+
+[The lane-throughput finding](#lane-throughput) left one question open: whether
+Hermes' `SimdView` typestates and `SimdChunks`/`ZipChunks` iterators — built to
+hoist the per-call validation that costs about 45% — recover the gap. They do
+not, for two reasons visible in the source:
+
+- `SimdChunks::next()` constructs a fresh view per chunk via
+  `SimdView::new(chunk).expect(..)`, which re-runs the host-support probe each
+  iteration. The iterator amortizes slicing, not validation.
+- The chunk item is a `SimdView`, and there is no `SimdView` to `Vector`
+  accessor. The iterators compose with the view-level whole-slice operations
+  (sum, dot, elementwise), not with a custom butterfly that needs three read
+  streams and two write streams at different strides.
+
+The raw-pointer measurement already bounds what removing validation buys:
+4.2 to 6.1 flops/ns, still far from the references. So the answer is that the
+existing surfaces are not the lever.
+
+### What the reference engines actually do
+
+- **RustFFT**, on its AVX path, does not use the `radix4.rs` algorithm at all.
+  Its AVX planner selects hand-written butterfly bases up to **512** for f64 and
+  composes them with "8xn" mixed-radix steps, with a source comment that the
+  "8xn algorithm is blazing fast". A 1024-point transform is therefore roughly
+  two passes over a very large codelet, not ten small stages.
+- **PhastFT** fuses four stages into a radix-16 codelet
+  (`fft_dit_codelet_16_f64`), pairs it with CO-BRAVO bit reversal, and recurses
+  cache-obliviously to an L1 block.
+
+Both concentrate work into large units. Every Apollo prototype in this audit
+instead streamed the whole array once per stage and vectorized *within* one
+transform, which forces cross-lane shuffles for the complex multiply.
+
+### The design that breaks the ceiling
+
+Hold `B` independent transforms with the **transform index in the lane
+position**: element `j` of transform `b` lives at `j * B + b`. A butterfly is
+then a pure elementwise vector operation over two contiguous runs of `B` values,
+with the twiddle broadcast as a scalar. No shuffles anywhere.
+
+This is the layout Apollo's own `FftPlanarMut` documents — "lane `c` across all
+rows is one independent transform instance and no cross-lane shuffle is
+required" — and which nothing in the tree used.
+
+Kernel-level arithmetic rate, dispatch hoisted to one per transform and the
+twiddle table and bit-reversal permutation precomputed into a plan:
+
+| shape | flops/ns |
+| --- | --- |
+| 64 transforms x 64 | 10.7 |
+| 128 x 32 | 10.2 |
+| 256 x 16 | 10.5 |
+| 64 x 256 | 10.5 |
+
+Against the band every previous variant occupied — 3.4 to 6.1 — and Apollo's own
+kernel at 3.9 to 4.3. **This is the first structure in the audit to leave that
+band**, at roughly 2.5x, and it does so with the same `Vector` operations the
+slower variants used. The layout is what changed.
+
+Two contaminants were found and removed while measuring it, both of which had
+made an earlier version read as 6.4 flops/ns: the twiddle table was being built
+with `sin_cos` per call inside the timed region, and the backend was being
+dispatched once per twiddle index rather than once per transform.
+
+### Assembling it into a transform
+
+A four-step decomposition needs only one transpose on this layout. Writing
+`i = j*n2 + b`, the input is *already* batch-major for the first direction, so
+the `n2` transforms of length `n1` run with no transpose; and the output index
+`k2*n1 + k1` falls out of the second batched pass, so there is no final
+transpose either. A tiled (32x32) transpose sits between them.
+
+The assembled transform is **correct** — verified bin-for-bin against RustFFT
+within the derived bound at 2^12 through 2^16 — and the split matters: at 2^14,
+`64 x 256` measured 1.4x faster than `256 x 64`, favouring a small first
+dimension and a wide batch.
+
+### Why no end-to-end claim, and no change
+
+The end-to-end comparison against Apollo is not established, and the reason is
+worth recording. Adding a fourth arm to the measurement rotation — an
+interleaved-entry variant — moved **Apollo's own timing** at 2^14 from ~284000 ns
+to ~134000 ns, a factor of two, with Apollo's code untouched. The arms perturb
+each other's cache state. Two successive runs of the same code therefore
+reported 2.33x and 0.81x for the same comparison.
+
+Nothing in that pair is trustworthy, so neither is claimed. What survives is the
+kernel-level rate, which reproduced across four shapes and several runs and does
+not depend on inter-arm state.
+
+The integration also has an unpaid cost: Apollo's public API takes interleaved
+`Complex64` while this kernel is planar, so a real integration adds a
+deinterleave and an interleave pass. Those were measured only in the run whose
+numbers are untrustworthy.
+
+`ATLAS-APOLLO-BATCHED-POT-2026-08-25` carries the design forward, gated on a
+quiet host — the same gate the throughput item has carried since the first
+profile, and this is the fourth conclusion in this audit that a noisy host has
+either hidden or invented.
+
 ## The power-of-two gap is per-lane throughput, not algorithm (2026-08-25) <a id="lane-throughput"></a>
 
 Evidence tier: measured, seven kernel variants, all engines interleaved in one

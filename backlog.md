@@ -100,6 +100,46 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
+## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — todo, gated on a quiet host
+
+- **Outcome:** Apollo's power-of-two path runs its sub-transforms with the
+  transform index in the lane position, which removes every cross-lane shuffle
+  and makes the butterfly a pure elementwise vector operation.
+- **Finding:** the batched layout is the first structure in this audit to leave
+  the 3.4-6.1 flops/ns band that nine earlier variants occupied, reaching a
+  reproducible 10.2-10.7 across four shapes with the same `Vector` operations
+  the slower variants used. The layout is the variable. It is also the layout
+  `FftPlanarMut` already documents and nothing uses. Design and numbers in
+  `gap_audit.md#batched-layout`.
+- **Assembled and verified:** a four-step on this layout needs only one
+  transpose — the input is already batch-major for the first direction and the
+  output index falls out of the second pass — and matches RustFFT bin-for-bin
+  within the derived bound at 2^12 through 2^16. The prototype is archived with
+  the audit.
+- **Why this is gated, not shipped:** the end-to-end comparison against Apollo
+  is not established. Adding a fourth arm to the measurement rotation moved
+  *Apollo's own* 2^14 timing by a factor of two with its code untouched, and two
+  successive runs reported 2.33x and 0.81x for the same comparison. The
+  kernel-level rate reproduces because it does not depend on inter-arm state;
+  the end-to-end one does.
+- **Unpaid cost to measure first:** Apollo's public API takes interleaved
+  `Complex64` and this kernel is planar, so integration adds a deinterleave and
+  an interleave pass. Whether the layout win survives them is the first thing a
+  quiet-host measurement must answer, before any integration work starts.
+- **Scope when unblocked:** the sub-transforms inside the existing four-step
+  path for N at or above `FOUR_STEP_THRESHOLD`, where the decomposition already
+  exists. **Non-goals:** the specialized `transform_len*` codelets for N <= 2048,
+  which the measurements above do not cover; f32 and the inverse direction until
+  f64 forward is established.
+- **Acceptance oracle:** on a quiet host, interleaved in-process measurement
+  showing the interleaved-entry variant faster than the current path at every
+  size from 2^12 to 2^18 with no size regressed, plus the existing correctness
+  suite and the RustFFT differential.
+- **Risk / change class:** [arch] with an ADR. **Dependencies:** a quiet host —
+  the same gate `ATLAS-APOLLO-POT-THROUGHPUT` has carried since the first
+  profile. This is the fourth conclusion in this audit that host noise has
+  hidden or invented.
+
 ## ATLAS-APOLLO-REAL-SPLIT-2026-08-25 — Real input costs a half-length transform [patch] — done 2026-08-25
 
 - **Outcome:** a real-input forward transform runs one size-`N/2` complex
