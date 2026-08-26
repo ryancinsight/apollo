@@ -1,39 +1,77 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — todo
+## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — done 2026-08-26
 
-- **Outcome:** the batched kernel loads a group of `R` lane registers once and
-  carries it through `log2(R)` stages before storing, instead of streaming the
-  whole array once per radix-2 stage.
-- **Derivation, not a hunch** (`gap_audit.md#register-residency`). Normalizing
-  every census arm by `5 N log2 N`: Apollo 1-D sits at 3.8–5.4 flops/ns and is
-  *flat across a 64x size range*, which rules out cache capacity; the batched
-  2-D path reaches 9.2–11.0, reproducing its kernel-level figure end to end;
-  RustFFT reaches 10.9–32.7 and PhastFT 18.9–28.8.
-- **What the references do.** `Butterfly64Avx64` treats 64 as 8x8, holds **eight
-  AVX vectors simultaneously**, runs `column_butterfly8` across them and
-  transposes in registers — six stages, two memory passes. `phastft`'s
-  `run_stages_0_to_3_f64` fuses four stages likewise. Both pair the batched lane
-  assignment (which Apollo has) with register residency (which it does not).
-- **The gap is quantified and self-consistent.** Apollo's stage loop is the
-  outer loop, so each radix-2 stage streams the whole `len x batch` array:
-  `log2` passes against the references' `log2 / 3`. At 64x64 that is 6 passes
-  over 64 KiB against 2. The predicted 3x traffic ratio and the measured 2.6x
-  rate ratio agree closely enough to name register residency as the binding
-  constraint rather than one contributor among several.
-- **Scope:** invert the loop nest in `components/batched/` so groups are outer
-  and stages inner over a fixed register set; `R = 8` reproduces RustFFT's
-  shape. Twiddles for the fused stages are broadcast scalars already.
-  **Non-goals:** the layout itself, which is correct and already measured.
-- **Acceptance oracle:** the batched arms of `engine_census` improve on a quiet
-  host with no regression elsewhere; `twiddle_accuracy_gate`'s 2-D ladder stays
-  flat (fusing stages changes evaluation order, so the ratio is the check that
-  it stayed within the error bound); allocations unchanged at zero.
-- **Risk / change class:** [arch]; hot-path kernel restructuring.
-  **Dependency:** `crates/apollo-fft/src/application/execution/kernel/` is
-  currently leased by `codex/apollo-stockham-throughput`, whose 1-D routing item
-  covers the same tree — this belongs to that integrator or to whoever holds the
-  kernel next, not to a second concurrent editor.
+- **Delivered:** the batched stage loop fuses stage `l` with stage `2l` into a
+  radix-4 step, so each of the four operands is loaded once and written once
+  rather than twice. Pass reduction verified by instrumenting the loop, not
+  assumed: `len = 64` runs three passes for six stages, `len = 32` three for
+  five, `len = 16` two for four.
+- **Measured on the kernel in isolation**, both builds in one session:
+  1.48x at a 64 KiB working set, 1.32x at 256 KiB, 1.18x at 1 MiB, 1.25x at
+  4 MiB, 1.27x at 16 MiB.
+- **Radix-4 and not radix-8, for a layout reason.** Planar storage puts real and
+  imaginary parts in separate registers, so a radix-8 step needs sixteen vector
+  registers for operands alone and spills on AVX2. RustFFT affords
+  `column_butterfly8` because its vectors hold interleaved complex pairs.
+- **The prediction was too confident.** `gap_audit.md#register-residency`
+  derived about 2.6x from a 3x traffic ratio; the kernel gained 1.2 to 1.5x.
+  Traffic was a real term but not the whole one — issue throughput and
+  dependency chains carry the rest. A single ratio does not predict a speedup.
+- **And the end-to-end census does not move**: 541300 ns against 535000 at
+  4096x16, inside noise. A 1.48x kernel improvement showing zero end to end
+  means the kernel is not what dominates that path — which is the finding worth
+  carrying, and it was invisible until the kernel was measured on its own.
+  Successors are `ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26` and the 2-D
+  machinery itself.
+
+## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — todo
+
+- **Outcome:** the elementwise `W_N^{b*k1}` multiply in `four_step_batched`
+  becomes a vector loop instead of a scalar one.
+- **Finding:** it is a full pass over the data, one complex multiply per
+  element, and it cannot vectorize as written — the data is planar while the
+  cached twiddle matrix is interleaved `Complex<T>`, so every iteration would
+  need a deinterleave. It is a prime suspect for the term that dominates
+  `four_step_batched` now that the stage kernel has been isolated and improved.
+- **Scope:** a planar twiddle matrix beside the interleaved one, or a planar
+  view of it, so the pass reads two contiguous streams and writes two.
+  **Non-goals:** the stage kernel, which is done; the cache keying, which is
+  correct.
+- **Acceptance oracle:** the kernel-isolation probe shows the driver improving
+  at fixed stage cost, the existing correctness suite passes unchanged, and
+  allocations stay at zero per call.
+- **Risk / change class:** [patch]; touches one loop and a cache representation.
+
+## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — todo
+
+- **Why it must be re-derived regardless:** fusing stages changed the batched
+  kernel's cost, and the crossover in ADR 0039 was measured against the previous
+  one. A threshold derived from a superseded cost is stale by construction.
+- **And there is a contradiction to settle** (`gap_audit.md#crossover-contradiction`).
+  ADR 0039 records that selecting four-step at 4096 moved the 4096 median from
+  57.477 us to 338.85 us and 16384 from 149.512 us to 1.6165 ms. Changing only
+  that constant, the committed census measures the opposite: 4096 from 29216 to
+  17724 ns (1.65x faster) and 16384 from 274800 to 83128 ns (3.3x faster),
+  reproduced across three runs at zero allocations per call. Normalized, the
+  lowered threshold gives a flat 13.8-14.0 flops/ns from 4096 through 262144,
+  where the retained one leaves N = 16384 at 4.2 against neighbours at 8.4 and
+  12.7 — an anomaly with no physical explanation and the exact shape of a size
+  falling off a routing gate.
+- **The instruments differ and only one is identified.** `rustfft_comparison`
+  stops at 512, so it cannot have produced the ADR's 4096 and 16384 medians, and
+  it charges a per-iteration clone; the census flushes the cache between arms.
+  Whatever produced the ADR's figures is not named in the record.
+- **Scope:** settle it on a quiet host with one named instrument, then either
+  keep 65536 with the measurement recorded, or lower it and revise ADR 0039 with
+  a dated revision note. **Non-goal:** flipping the constant on this evidence
+  alone — a recorded decision is revised deliberately, not overridden in
+  passing.
+- **Acceptance oracle:** one instrument, named in the ADR, produces a crossover
+  reproducible across runs, and the census shows no size left on an anomalous
+  route.
+- **Risk / change class:** [arch]; changes routing for every 1-D power-of-two
+  length in the affected range.
 
 ## ATLAS-APOLLO-REAL-HALF-API-2026-08-26 — Expose the n/2+1 forward spectrum [minor] — done 2026-08-26
 

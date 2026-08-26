@@ -1,3 +1,101 @@
+## Stage fusion pays on the kernel, and the end-to-end census cannot see it (2026-08-26) <a id="stage-fusion"></a>
+
+Evidence tier: kernel measured in isolation across five working-set sizes, both
+builds in the same session on the same host; correctness from the direct-DFT
+oracle and the existing suite. End-to-end figures from the committed census with
+the cache flushed between arms.
+
+### The result
+
+Fusing stage `l` with stage `2l` into a radix-4 step, so each of the four
+operands is loaded once and written once instead of twice:
+
+| n | working set | unfused | fused | |
+| --- | --- | --- | --- | --- |
+| 2^12 | 64 KiB | 13.57 | **20.12** | 1.48x |
+| 2^14 | 256 KiB | 13.80 | **18.19** | 1.32x |
+| 2^16 | 1 MiB | 11.58 | **13.63** | 1.18x |
+| 2^18 | 4 MiB | 7.03 | **8.78** | 1.25x |
+| 2^20 | 16 MiB | 5.34 | **6.76** | 1.27x |
+
+Pass reduction was verified by instrumenting the stage loop rather than assumed:
+`len = 64` now runs three passes for six stages, `len = 32` three for five, and
+`len = 16` two for four.
+
+Four is the radix, not eight, and that follows from the layout. Planar storage
+keeps real and imaginary parts in separate registers, so a radix-8 step needs
+sixteen vector registers for operands alone and spills on AVX2. RustFFT can
+afford `column_butterfly8` because its `AvxVector` holds interleaved complex
+pairs, halving the register count for the same values.
+
+### Two things the prediction got wrong
+
+The derivation in `#register-residency` predicted about 2.6x from a 3x traffic
+ratio. The kernel gained 1.2 to 1.5x. Traffic was a real term and not the whole
+story: radix-4 halves memory *operations* as well as traffic, yet the gain is
+well under either ratio, so issue throughput and dependency chains carry the
+rest. Predicting a speedup from a single ratio overstates it.
+
+More importantly, **the end-to-end 2-D census does not move at all** — 541300 ns
+against 535000 at 4096x16, inside noise. A 1.48x improvement in the kernel that
+produces zero end to end means the kernel is not what dominates that path.
+That is the finding worth carrying forward, and it was invisible until the
+kernel was measured on its own.
+
+### What to look at next, in order
+
+1. The elementwise four-step twiddle in `four_step_batched` is a full scalar
+   pass over the data — one complex multiply per element, with the twiddle read
+   from an *interleaved* `Complex<T>` table while the data is planar, so it
+   cannot vectorize without a deinterleave. Storing that table planar would make
+   it a pure vector loop. It is a whole pass, so it is a candidate for the
+   dominant term.
+2. The surrounding 2-D machinery — lane extraction, the transposes, the second
+   axis — which the census charges to Apollo and which no kernel change touches.
+
+The general lesson is the one this audit keeps re-learning: measure the
+component you changed, in isolation, before and after. The census answers
+"did the product get faster", never "did this change work", and treating the
+first as evidence for the second reported a real 1.48x improvement as nothing.
+
+## The one-dimensional crossover contradicts ADR 0039 (2026-08-26) <a id="crossover-contradiction"></a>
+
+Raised as a contradiction to resolve, not as a correction to apply. The decision
+is recorded and Accepted; this is the evidence that disagrees with it.
+
+ADR 0039 sets `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD = 65536` and records, under
+rejected alternatives, that selecting four-step at 4096 "moved the 4096 median
+from 57.477 us to 338.85 us and the 16384 median from 149.512 us to 1.6165 ms".
+
+Changing that constant to 4096 and altering nothing else, the committed census
+measures the opposite:
+
+| N | threshold 65536 | threshold 4096 | |
+| --- | --- | --- | --- |
+| 4096 | 29216 ns | **17724 ns** | 1.65x faster |
+| 16384 | 274800 ns | **83128 ns** | 3.3x faster |
+| 65536 | 411400 ns | 427200 ns | unchanged |
+| 262144 | 1864900 ns | 1866300 ns | unchanged |
+
+Reproduced across three runs (4096: 17461, 17617, 17724; 16384: 76371, 82971,
+83128), with the allocation counter reporting zero per call, so no hidden
+per-call cost distinguishes the two configurations. Normalized, the lowered
+threshold gives a flat 13.8 to 14.0 flops/ns from 4096 through 262144, where the
+retained threshold leaves N = 16384 at 4.2 while its neighbours sit at 8.4 and
+12.7 — an anomaly with no physical explanation, and exactly the shape of a size
+falling off a routing gate.
+
+The instruments differ. `rustfft_comparison`'s `DEFAULT_SIZES` stops at 512, so
+it cannot be the source of the ADR's 4096 and 16384 medians, and its group is
+`fft_forward_clone_inclusive`, which charges a per-iteration clone. The census
+flushes the cache between arms; whatever produced the ADR's numbers is not
+identified in the record.
+
+Both cannot be right. Since fusing stages changes the batched kernel's cost, the
+crossover has to be re-derived against the current kernel regardless — filed as
+`ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26`, to be settled on a quiet host with
+one instrument named in the ADR revision.
+
 ## Where the remaining gap to RustFFT and PhastFT lives (2026-08-26) <a id="register-residency"></a>
 
 Evidence tier: arithmetic rates measured in one process with the cache flushed
