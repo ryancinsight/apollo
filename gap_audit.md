@@ -1,3 +1,64 @@
+## An exactly-representable oracle can be exactly blind (2026-08-26) <a id="blind-oracle"></a>
+
+Evidence tier: measured, with each ladder verified by reintroducing the real
+recurrence and confirming the failure. Delivered as
+`crates/apollo-fft/tests/twiddle_accuracy_gate.rs` in PR #121.
+
+### The trap
+
+The accuracy gate's first oracle summed tones at bins `0, N/4, N/2, 3N/4`, whose
+twiddles are `1, i, -1, -i`. With dyadic amplitudes both the input samples and
+the expected spectrum are exactly representable, so the oracle contributes zero
+error — which is exactly why it looked attractive.
+
+It measured a ratio of **exactly 0.000 at every size on the ladder**. That is not
+a pass. The same bin alignment that makes the construction exact also means every
+butterfly is either exact or applied to a zero, so the inexact twiddles never
+touch live data. The test would have passed against any twiddle table whatsoever.
+
+The property that makes such an oracle attractive is the property that makes it
+blind. A row of zeros is a defect report, not a result.
+
+The replacement is a unit impulse at `t = 1`, whose spectrum `X[k] = W_N^k` *is*
+the twiddle table read out bin by bin — the most direct probe of the property
+being gated, and still exactly representable on the input side.
+
+### Reachability is a runtime property
+
+Establishing which sizes reach which builder by reading the dispatch produced the
+wrong answer **twice**. `FftPlan1D` dispatches through `F::pot_inplace`
+(codelets to `N = 64`, Stockham above); the four-step gate lives in
+`try_power_of_two_fast_path`, reached only from `dispatch_inplace`. Instrumenting
+the entry points recorded zero calls to `four_step_fft` across every 1-D ladder
+and immediate calls for a 2-D transform with a 4096 axis.
+
+Two consequences. The gate grew a 2-D ladder, which is the only route covering
+the four-step and batched builders. And the batched merge (PR #119) is live for
+2-D/3-D lanes and dead for 1-D, so the census aimed at it would have measured
+nothing — recorded as `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`.
+
+Both errors share a cause: a plausible reading of a dispatch chain is a
+hypothesis, and a one-line `eprintln!` settles it in a minute.
+
+### The gate caught a live regression, not a synthetic one
+
+While the test was being written, a concurrent change rewrote
+`build_four_step_twiddles` into a recurrence. The gate failed on it immediately,
+reproducing the deliberate probe's figures exactly: ratio 2.346 at `nx = 65536`
+and 11.684 at 262144, against 0.488 and 0.434 clean.
+
+### Stated limits
+
+The batched tables at `m <= 128` accumulate at most `m*u`, within a small
+multiple of the bound. An 18u perturbation moves the ratio from 0.651 to 3.150,
+so the ladder does see that table, but a recurrence there would sit near the
+detection threshold rather than over it.
+
+`every_dispatch_path_matches_a_compensated_reference` passes with a recurrence
+live: a broad-spectrum signal lets twiddle errors cancel in a random walk. That
+is precisely how the original defect survived 403 tests, and it is why the
+impulse — the worst case, not the average — is the growth probe.
+
 # Apollo Gap Audit
 
 ## The batched layout breaks the throughput ceiling (2026-08-25) <a id="batched-layout"></a>

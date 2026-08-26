@@ -39,7 +39,7 @@
 - **Non-goals:** consolidating the three builders (filed below); any change to
   kernel structure, dispatch, or the four-step threshold.
 
-## ATLAS-APOLLO-ACCURACY-GATE-2026-08-25 — Commit the analytical accuracy probe [patch] — todo
+## ATLAS-APOLLO-ACCURACY-GATE-2026-08-25 — Commit the analytical accuracy probe [patch] — done 2026-08-26 (PR #121)
 
 - **Outcome:** an `O(N * u)` error-growth signature fails a committed test
   instead of waiting for the next external audit. The defect above lived in the
@@ -100,7 +100,41 @@
   the measurement method stated.
 - **Risk / change class:** [patch], measurement only.
 
-## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — implemented 2026-08-25, validation pending
+## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 — The batched layout is dead on the 1-D route [arch] — todo
+
+- **Finding, and it corrects PR #119.** `four_step_fft` is never called by any
+  one-dimensional transform. `FftPlan1D` dispatches through `F::pot_inplace`,
+  which runs `small_pot_inplace_sized` codelets to `N = 64` and Stockham autosort
+  above that; the four-step gate lives in `try_power_of_two_fast_path`, reached
+  only from `dispatch_inplace` — 2-D and 3-D lane transforms, and the
+  Rader/Bluestein inner transforms.
+- **Evidence:** instrumented `four_step_fft`, `batched_four_step_applies` and
+  `four_step_batched`, with the rebuild confirmed on each run. Zero calls across
+  the power-of-two ladder (8 to 262144), the mixed-radix ladder (81 to 19683),
+  the convolution ladder (primes 2039 to 131071) and the compensated-reference
+  sizes. All three fire immediately for a 2-D transform with a 4096-long axis.
+  Reading the dispatch suggested otherwise **twice** before instrumenting settled
+  it, which is the reusable lesson: reachability is a runtime property.
+- **What this means for #119.** The kernel is correct and live for 2-D/3-D lanes,
+  and the 2-D ladder in PR #121 now covers it. But the merge described it as
+  transforming power-of-two sizes without qualification, and `engine_census`
+  measures `forward_complex_slice_inplace` — the 1-D API — so the planned
+  quiet-host validation would have measured a path that never runs. Both records
+  are corrected rather than left standing.
+- **Outcome:** decide and implement, not merely document — either route the 1-D
+  power-of-two path to the four-step above a measured crossover, or scope the
+  batched layout to lane transforms explicitly and retarget the census to 2-D.
+  The first is the reason the work was done and is preferred if it measures well.
+- **Acceptance oracle:** an instrumented run shows the intended path executing at
+  the intended sizes, and the census measures whatever path the decision selects.
+- **Risk / change class:** [arch]; touches 1-D power-of-two dispatch.
+
+## ATLAS-APOLLO-BATCHED-POT-2026-08-25 — Power-of-two on the batched layout [arch] — merged 2026-08-25 (PR #119); reach corrected 2026-08-26
+
+- **Correction:** the path is live for 2-D/3-D lane transforms and **unreachable
+  from every 1-D route** — see `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`,
+  which supersedes the validation plan below. The quiet-host census as written
+  measures the 1-D API and would not have exercised this path at all.
 
 - **Delivered:** `components/batched/` holds the batched sub-transform kernel and
   a four-step driver built on it, reached from `four_step_fft` for square splits
