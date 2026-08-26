@@ -16,24 +16,20 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   the four-step use one in-place transpose instead of three. Scratch is unchanged
   — one `N`-element complex buffer reinterpreted as two real planes. Measured at
   kernel level as 10.2-10.7 flops/ns against the 3.4-6.1 band every other kernel
-  shape in this crate occupies; the end-to-end comparison awaits a quiet host,
-  and the gate narrows rather than the path reverting if a covered size
-  regresses. Correctness: six unit tests plus the existing suite, whose PhastFT
-  differential crosses into the new path.
+  shape in this crate occupies. Standalone 1-D plans now enter the shared
+  parallel four-step route at the measured 65536 crossover; 4096 and 16384
+  retain Stockham after a universal 4096 threshold regressed both. The paired
+  decision-run medians are 512.950 us at 65536 and 2.87025 ms at 262144, with
+  zero warm complex allocations. Two standalone exact-commit repeats at
+  `5ca9deb4` retained zero allocations while wall-clock medians ranged from
+  615.550 to 718.100 us and 2.57070 to 2.58700 ms, respectively; wall-clock
+  variance remains non-gating outside a controlled host.
 
 - [patch] `benches/engine_census.rs` measures Apollo against RustFFT, PhastFT,
   and RealFFT with the cache flushed between arms and transient allocation
   counted per call. The flush is the point: arms were previously warming each
   other's working sets badly enough to move Apollo's own timing by a factor of
   two with its code untouched.
-
-- [patch] Record a power-of-two kernel design that leaves the throughput band
-  nine earlier variants shared: holding the transform index in the lane position
-  removes every cross-lane shuffle and reaches 10.2-10.7 flops/ns against
-  3.4-6.1, using the same lane operations. A four-step assembled on it matches
-  RustFFT bin-for-bin. No source change — the end-to-end comparison is not
-  established on this host and is gated on a quiet one. See
-  `gap_audit.md#batched-layout`.
 
 - [patch] Localize the power-of-two throughput gap to per-lane operation
   efficiency and record it in `gap_audit.md#lane-throughput`. No source change:
@@ -105,6 +101,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   BAAB blocks.
 
 ### Changed
+
+- [patch] Advance the Moirai lock to PR #168 merge `10082209`. Its indexed
+  scopes borrow stack state instead of allocating per call, removing the two
+  32-byte scheduler allocations from Apollo's parallel four-step route while
+  preserving panic-safe draining and parallel row execution.
 
 - [patch] Move the authoritative architecture and generated benchmark reports
   under `docs/`, update the benchmark generator and all active references, and

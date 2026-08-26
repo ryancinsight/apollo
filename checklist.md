@@ -2,13 +2,13 @@
 
 ## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 [arch] — Codex
 
-- [ ] Record the exact 1-D Stockham baseline and profile the live production
+- [x] Record the exact 1-D Stockham baseline and profile the live production
       route without modifying the benchmark workload.
-- [ ] Draft ADR 0039 for the 1-D power-of-two routing decision and its measured
+- [x] Draft ADR 0039 for the 1-D power-of-two routing decision and its measured
       crossover rule.
-- [ ] Remove per-call work and reduce kernel passes only where the profile
+- [x] Remove per-call work and reduce kernel passes only where the profile
       identifies them as binding; keep warm complex execution allocation-free.
-- [ ] Verify analytical accuracy, PhastFT parity, allocations, codegen, focused
+- [x] Verify analytical accuracy, PhastFT parity, allocations, codegen, focused
       nextest, clippy, docs, and the bounded engine census.
 - [ ] Synchronize the backlog, gap audit, ADR index, changelog, and benchmark
       evidence; commit, push, and merge each green increment.

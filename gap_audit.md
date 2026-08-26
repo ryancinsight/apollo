@@ -25,17 +25,18 @@ being gated, and still exactly representable on the input side.
 
 ### Reachability is a runtime property
 
-Establishing which sizes reach which builder by reading the dispatch produced the
-wrong answer **twice**. `FftPlan1D` dispatches through `F::pot_inplace`
-(codelets to `N = 64`, Stockham above); the four-step gate lives in
-`try_power_of_two_fast_path`, reached only from `dispatch_inplace`. Instrumenting
-the entry points recorded zero calls to `four_step_fft` across every 1-D ladder
-and immediate calls for a 2-D transform with a 4096 axis.
+Establishing which sizes reached which builder by reading the dispatch produced
+the wrong answer **twice**. Before the routing correction, `FftPlan1D`
+dispatched through `F::pot_inplace` (codelets to `N = 64`, Stockham above), while
+the four-step gate lived only in `try_power_of_two_fast_path`. Instrumenting the
+entry points recorded zero four-step calls across the 1-D ladder and immediate
+calls for a 2-D transform with a 4096 axis.
 
-Two consequences. The gate grew a 2-D ladder, which is the only route covering
-the four-step and batched builders. And the batched merge (PR #119) is live for
-2-D/3-D lanes and dead for 1-D, so the census aimed at it would have measured
-nothing — recorded as `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`.
+That finding produced both the 2-D accuracy ladder and
+`ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`. The latter now routes square
+1-D powers through the shared selector at the measured 65536 crossover. The
+historical zero-call observation remains the regression's entry evidence, not a
+claim about the corrected tree.
 
 Both errors share a cause: a plausible reading of a dispatch chain is a
 hypothesis, and a one-line `eprintln!` settles it in a minute.
@@ -146,16 +147,16 @@ within the derived bound at 2^12 through 2^16 — and the split matters: at 2^14
 `64 x 256` measured 1.4x faster than `256 x 64`, favouring a small first
 dimension and a wide batch.
 
-### Why no end-to-end claim, and no change
+### Why the initial audit made no end-to-end claim
 
-The end-to-end comparison against Apollo is not established, and the reason is
-worth recording. Adding a fourth arm to the measurement rotation — an
+The initial end-to-end comparison against Apollo was not established, and the
+reason is worth recording. Adding a fourth arm to the measurement rotation — an
 interleaved-entry variant — moved **Apollo's own timing** at 2^14 from ~284000 ns
 to ~134000 ns, a factor of two, with Apollo's code untouched. The arms perturb
 each other's cache state. Two successive runs of the same code therefore
 reported 2.33x and 0.81x for the same comparison.
 
-Nothing in that pair is trustworthy, so neither is claimed. What survives is the
+Nothing in that pair was trustworthy, so neither was claimed. What survived is the
 kernel-level rate, which reproduced across four shapes and several runs and does
 not depend on inter-arm state.
 
@@ -164,10 +165,8 @@ The integration also has an unpaid cost: Apollo's public API takes interleaved
 deinterleave and an interleave pass. Those were measured only in the run whose
 numbers are untrustworthy.
 
-`ATLAS-APOLLO-BATCHED-POT-2026-08-25` carries the design forward, gated on a
-quiet host — the same gate the throughput item has carried since the first
-profile, and this is the fourth conclusion in this audit that a noisy host has
-either hidden or invented.
+`ATLAS-APOLLO-BATCHED-POT-2026-08-25` carried the design forward into the
+cache-flushing census used below.
 
 ### Implemented 2026-08-25
 
@@ -191,10 +190,36 @@ never across the batch, so each batch column is an independent transform through
 the entire stage set, and the partition is by batch range once, outside the stage
 loop.
 
-The end-to-end comparison is still not made here, and the instrument for making
-it elsewhere is now committed: `benches/engine_census.rs` flushes the cache
-between arms, which is precisely the failure that made this host unable to
-adjudicate the question.
+### One-dimensional closure (2026-08-26)
+
+The cache-flushing `engine_census` now measures the corrected 1-D route. A
+universal 4096 threshold was rejected: four-step moved the 4096 median from
+57.477 us to 338.85 us and the 16384 median from 149.512 us to 1.6165 ms. It
+became profitable at 65536 and 262144, so the shared selector accepts a
+caller-supplied crossover: 4096 for the existing lane dispatcher, 65536 for the
+standalone 1-D plan.
+
+The first parallel candidate exposed two 32-byte Moirai indexed-scope
+allocations per transform. Serializing the rows removed those allocations but
+regressed to 7.663 ms and 27.554 ms. The defect belonged to the provider, not
+the FFT: Moirai PR #168 replaced heap-owned scope state with borrowed stack
+state, and Apollo pins merge `10082209`.
+
+The paired decision-run census then completed in 3.10 seconds and reported zero warm
+complex allocations at every size; the real path retained exactly one `16N`-
+byte returned-spectrum allocation. Apollo medians were 512.950 us at 65536 and
+2.87025 ms at 262144, versus RustFFT 466.325 us / 2.49200 ms and PhastFT
+259.283 us / 1.30655 ms. The high-size route closes most of the former
+Stockham deficit but does not close the reference gap. The 1024--16384 Stockham
+band remains 7.5x--10.4x behind the faster reference and is the next CPU target.
+
+Implementation commit `5ca9deb4` makes the measured source immutable. Two
+standalone exact-dependency repeats completed in 3.14 and 3.12 seconds. Both
+confirmed zero warm complex allocations and one `16N`-byte real allocation;
+their 65536 medians were 718.100 and 615.550 us, and their 262144 medians were
+2.57070 and 2.58700 ms. The cross-run wall-clock intervals do not all overlap,
+so these host timings remain diagnostic; the threshold decision rests on the
+paired entry/candidate run, while allocation counts are stable across runs.
 
 ## The power-of-two gap is per-lane throughput, not algorithm (2026-08-25) <a id="lane-throughput"></a>
 
