@@ -1,3 +1,85 @@
+## Where the remaining gap to RustFFT and PhastFT lives (2026-08-26) <a id="register-residency"></a>
+
+Evidence tier: arithmetic rates measured in one process with the cache flushed
+between arms; structural claims derived by reading the reference sources at the
+locked versions (`rustfft 6.4.1`, `phastft 0.4.1`). Absolute timings are from a
+host known to move Apollo's own figure by 2x, so ratios within a single run are
+used and cross-run absolutes are not.
+
+### Normalizing every arm to arithmetic rate
+
+Dividing by `5 N log2 N` turns incomparable timings into one number:
+
+| path | flops/ns |
+| --- | --- |
+| Apollo 1-D complex, N = 4096 .. 262144 | **3.8 – 5.4** |
+| Apollo 2-D on the batched layout | **9.2 – 11.0** |
+| Apollo 2-D four-step, non-batched | 7.5 |
+| RustFFT 1-D | 10.9 – 32.7 |
+| PhastFT 1-D | 18.9 – 28.8 |
+
+Two facts fall out. Apollo's 1-D rate is **flat across a 64x size range**, which
+rules out cache capacity as the cause and identifies a fixed per-butterfly cost.
+And the batched layout independently reproduces its kernel-level 10.2 – 10.7
+end to end, so the earlier kernel measurement was not an artefact of measuring a
+kernel in isolation.
+
+### What the references actually do
+
+`rustfft`'s AVX f64 planner carries hand-written butterflies up to **512**, so
+N = 4096 is one base plus a single `8xn` step. `Butterfly64Avx64` shows the
+mechanism: it treats 64 as 8x8, loads **eight AVX vectors at once**, runs
+`column_butterfly8` across those eight registers, applies twiddles, and does
+`transpose8_packed` — also in registers — before storing. Each ymm holds two
+complex f64 belonging to two *different* columns, so the butterfly is elementwise
+and needs no cross-lane shuffle. Six stages, two memory passes.
+
+`phastft` reaches the same place differently: `fft_dit_codelet_16_f64` and
+`run_stages_0_to_3_f64` fuse four stages into one codelet with radix-4
+transposes held in registers.
+
+Both therefore combine two things: the transform index in the lane position
+(which Apollo's batched layout already has) **and 3–4 stages resident in
+registers per memory pass**.
+
+### The derived gap
+
+Apollo's batched kernel has the first and not the second. Its stage loop is the
+outer loop, so every radix-2 stage streams the whole `len x batch` array: `log2`
+passes where the references use `log2 / 3`. At 64x64 that is six passes over
+64 KiB against RustFFT's two.
+
+That is a memory-traffic ratio of about 3x, and the measured rate ratio is about
+2.6x (10.5 against 27). The two agree closely enough to name register residency
+as the binding constraint rather than a contributor, and it predicts the fix:
+invert the loop nest so a group of `R` registers is loaded once and carried
+through `log2(R)` stages, storing once. `R = 8` reproduces RustFFT's shape.
+Filed as `ATLAS-APOLLO-STAGE-FUSION-2026-08-26`.
+
+### Leto and Hephaestus are not on this path, and the census says so
+
+Worth stating because it was an open question rather than an assumption. Apollo's
+2-D transform end to end runs at 9.2 – 11.0 flops/ns while the batched kernel
+alone measures 10.2 – 10.7. Everything the 2-D path adds around that kernel —
+Leto `Array2` storage, lane extraction, the transposes, plan lookup — therefore
+costs on the order of nothing measurable at these shapes, and the 1-D complex
+slice path never touches Leto at all.
+
+So Leto is not the FFT bottleneck and enhancing it would not move these numbers.
+The lever is inside Apollo's own kernel. Hephaestus is a separate axis
+altogether: it backs GPU execution, and a GPU comparison against two CPU
+libraries would not be the like-for-like the rest of this audit holds to.
+
+### The real-transform arms were measuring a contract difference
+
+`fft_1d_slice` returns all `n` bins; RealFFT returns `n/2 + 1`. Pairing them
+charged Apollo for a mirror pass and twice the output storage RealFFT never
+performed, and reported it as throughput. Corrected by exposing
+`fft_1d_slice_half_into` and pairing like with like; the residual gap is
+6.8 – 8.8x, inherited from the complex kernel above rather than from the real
+machinery, and the redundant half was worth 10 – 26% of the time plus one
+allocation of `16n` bytes.
+
 ## An exactly-representable oracle can be exactly blind (2026-08-26) <a id="blind-oracle"></a>
 
 Evidence tier: measured, with each ladder verified by reintroducing the real

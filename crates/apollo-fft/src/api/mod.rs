@@ -17,8 +17,9 @@ pub mod shift;
 
 pub use rfft::{
     fft_1d_array, fft_1d_array_into, fft_1d_array_static_into, fft_1d_leto, fft_1d_slice,
-    fft_2d_array, fft_2d_array_into, fft_2d_array_static_into, fft_2d_leto, fft_3d_array,
-    fft_3d_array_into, fft_3d_array_static_into, fft_3d_leto,
+    fft_1d_slice_half, fft_1d_slice_half_into, fft_2d_array, fft_2d_array_into,
+    fft_2d_array_static_into, fft_2d_leto, fft_3d_array, fft_3d_array_into,
+    fft_3d_array_static_into, fft_3d_leto,
 };
 
 pub use irfft::{

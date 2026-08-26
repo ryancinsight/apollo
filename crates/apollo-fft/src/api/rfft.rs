@@ -105,6 +105,71 @@ where
     )
 }
 
+/// Forward 1D FFT of a real signal slice into caller storage, writing only the
+/// `n / 2 + 1` independent bins.
+///
+/// A real signal's spectrum satisfies `X[n-k] = conj(X[k])`, so the upper half
+/// carries no information. [`fft_1d_slice`] materializes it anyway, which costs
+/// a mirror pass and twice the output storage. Callers that consume the
+/// half-spectrum directly — power spectra, filtering, and anything that
+/// round-trips through [`irfft`](crate::ifft_1d_slice) — should use this.
+///
+/// This is the form other real-FFT implementations expose, so it is also the
+/// shape in which Apollo is comparable to them.
+///
+/// # Panics
+///
+/// If `out` is not exactly `signal.len() / 2 + 1` long.
+pub fn fft_1d_slice_half_into<T>(signal: &[T], out: &mut [Complex<T::PlanScalar>])
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let n = signal.len();
+    assert_eq!(
+        out.len(),
+        n / 2 + 1,
+        "fft_1d_slice_half_into: output must hold exactly n/2 + 1 bins"
+    );
+
+    if T::real_split_applies(n) {
+        let half_plan = T::get_1d_plan(
+            Shape1D::new(n / 2).expect("half length is non-zero when the split applies"),
+        );
+        T::forward_1d_half_into(half_plan.as_ref(), signal, out);
+        return;
+    }
+
+    // Lengths the split does not admit still owe the caller the same contract,
+    // so the full transform runs and its redundant half is dropped rather than
+    // copied out.
+    let full = T::forward_1d_slice_owned(
+        T::get_1d_plan(Shape1D::new(n).expect("fft_1d_slice_half_into requires non-zero length"))
+            .as_ref(),
+        signal,
+    );
+    out.copy_from_slice(&full[..=n / 2]);
+}
+
+/// Forward 1D FFT of a real signal slice, returning the `n / 2 + 1` independent
+/// bins as an owned `Vec`.
+///
+/// One allocation, half the size [`fft_1d_slice`] returns. See
+/// [`fft_1d_slice_half_into`] for the allocation-free form and for why the
+/// upper half is redundant.
+#[must_use]
+pub fn fft_1d_slice_half<T>(signal: &[T]) -> Vec<Complex<T::PlanScalar>>
+where
+    T: RealFftData + PlanCacheProvider,
+    Complex<T::PlanScalar>: PlanScratch,
+    <T as RealFftData>::PlanScalar: PlanCacheProvider,
+{
+    let mut out = vec![Complex::<T::PlanScalar>::default(); signal.len() / 2 + 1];
+    fft_1d_slice_half_into::<T>(signal, &mut out);
+    out
+}
+
 /// Forward 1D FFT of a Leto real view using generic storage dispatch.
 ///
 /// C-contiguous Leto views are consumed through a borrowed slice. Strided views

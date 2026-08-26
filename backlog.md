@@ -1,5 +1,58 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-STAGE-FUSION-2026-08-26 — Carry registers across stages in the batched kernel [arch] — todo
+
+- **Outcome:** the batched kernel loads a group of `R` lane registers once and
+  carries it through `log2(R)` stages before storing, instead of streaming the
+  whole array once per radix-2 stage.
+- **Derivation, not a hunch** (`gap_audit.md#register-residency`). Normalizing
+  every census arm by `5 N log2 N`: Apollo 1-D sits at 3.8–5.4 flops/ns and is
+  *flat across a 64x size range*, which rules out cache capacity; the batched
+  2-D path reaches 9.2–11.0, reproducing its kernel-level figure end to end;
+  RustFFT reaches 10.9–32.7 and PhastFT 18.9–28.8.
+- **What the references do.** `Butterfly64Avx64` treats 64 as 8x8, holds **eight
+  AVX vectors simultaneously**, runs `column_butterfly8` across them and
+  transposes in registers — six stages, two memory passes. `phastft`'s
+  `run_stages_0_to_3_f64` fuses four stages likewise. Both pair the batched lane
+  assignment (which Apollo has) with register residency (which it does not).
+- **The gap is quantified and self-consistent.** Apollo's stage loop is the
+  outer loop, so each radix-2 stage streams the whole `len x batch` array:
+  `log2` passes against the references' `log2 / 3`. At 64x64 that is 6 passes
+  over 64 KiB against 2. The predicted 3x traffic ratio and the measured 2.6x
+  rate ratio agree closely enough to name register residency as the binding
+  constraint rather than one contributor among several.
+- **Scope:** invert the loop nest in `components/batched/` so groups are outer
+  and stages inner over a fixed register set; `R = 8` reproduces RustFFT's
+  shape. Twiddles for the fused stages are broadcast scalars already.
+  **Non-goals:** the layout itself, which is correct and already measured.
+- **Acceptance oracle:** the batched arms of `engine_census` improve on a quiet
+  host with no regression elsewhere; `twiddle_accuracy_gate`'s 2-D ladder stays
+  flat (fusing stages changes evaluation order, so the ratio is the check that
+  it stayed within the error bound); allocations unchanged at zero.
+- **Risk / change class:** [arch]; hot-path kernel restructuring.
+  **Dependency:** `crates/apollo-fft/src/application/execution/kernel/` is
+  currently leased by `codex/apollo-stockham-throughput`, whose 1-D routing item
+  covers the same tree — this belongs to that integrator or to whoever holds the
+  kernel next, not to a second concurrent editor.
+
+## ATLAS-APOLLO-REAL-HALF-API-2026-08-26 — Expose the n/2+1 forward spectrum [minor] — done 2026-08-26
+
+- **Delivered:** `fft_1d_slice_half_into` and `fft_1d_slice_half`. A real
+  signal's spectrum is conjugate-symmetric, so `fft_1d_slice`'s upper half is
+  redundant; producing it cost a mirror pass and an allocation of `16n` bytes.
+  The `_into` form is **allocation-free** and the owned form allocates half of
+  what it did.
+- **It also corrected the instrument.** The census had been pairing Apollo's
+  `n`-bin result against RealFFT's `n/2 + 1`, so part of the reported real-path
+  gap was a contract difference rather than throughput. Paired like with like,
+  the residual is 6.8–8.8x and is inherited from the complex kernel, which is
+  `ATLAS-APOLLO-STAGE-FUSION-2026-08-26` above.
+- **Measured:** the redundant half was worth 10–26% of wall clock and one
+  allocation per call (1 MiB at N = 65536).
+- **Verification:** bitwise agreement with the full spectrum's first `n/2 + 1`
+  bins, conjugate symmetry, a RealFFT differential, a zero-allocation assertion,
+  and a rejected wrong output length.
+
 ## ATLAS-APOLLO-PHASTFT-REF-2026-08-25 [patch] — complete 2026-08-25
 
 - **Outcome:** PhastFT is a standing external reference for Apollo's
