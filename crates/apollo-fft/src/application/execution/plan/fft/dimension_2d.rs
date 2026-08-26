@@ -28,6 +28,7 @@
 //! place, while non-contiguous passes gather lanes into scratch buffers before
 //! scattering them back.
 
+use super::layout::transpose_matrices;
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_2d_scratch, PlanScratch,
 };
@@ -44,10 +45,6 @@ use std::sync::Arc;
 /// Below the threshold, sequential iteration avoids parallel task-spawn overhead
 /// that dominates for small matrices (e.g. 32×32 = 1024 elements).
 const MOIRAI_PARALLEL_THRESHOLD: usize = 32768;
-
-/// Tile size for cache-blocked transpose.
-/// A 32×32 tile of Complex64 = 8 KB, fitting comfortably in L1 (32–48 KB).
-const TRANSPOSE_TILE: usize = 32;
 
 /// Reusable 2D FFT plan generic over `MixedRadixScalar`.
 pub struct FftPlan2D<F: MixedRadixScalar> {
@@ -149,17 +146,7 @@ where
             .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         with_2d_scratch::<F::Complex, _>(NX * NY, |scratch| {
-            for col_t in (0..NY).step_by(TRANSPOSE_TILE) {
-                let col_end = (col_t + TRANSPOSE_TILE).min(NY);
-                for row_t in (0..NX).step_by(TRANSPOSE_TILE) {
-                    let row_end = (row_t + TRANSPOSE_TILE).min(NX);
-                    for col in col_t..col_end {
-                        for row in row_t..row_end {
-                            scratch[col * NX + row] = data_slice[row * NY + col];
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, 1, NX, NY);
 
             let lane_plan = StaticFftPlan1D::<F, NX>::new();
             let lane_fn = |lane: &mut [F::Complex]| {
@@ -175,17 +162,7 @@ where
                 _,
             >(scratch, NX, lane_fn);
 
-            for col_t in (0..NY).step_by(TRANSPOSE_TILE) {
-                let col_end = (col_t + TRANSPOSE_TILE).min(NY);
-                for row_t in (0..NX).step_by(TRANSPOSE_TILE) {
-                    let row_end = (row_t + TRANSPOSE_TILE).min(NX);
-                    for col in col_t..col_end {
-                        for row in row_t..row_end {
-                            data_slice[row * NY + col] = scratch[col * NX + row];
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, 1, NY, NX);
         });
     }
 }
@@ -321,20 +298,7 @@ where
             .as_mut_slice_memory_order()
             .expect("2D complex data must be contiguous");
         with_2d_scratch::<F::Complex, _>(self.nx * self.ny, |scratch| {
-            // Cache-blocked gather: data[row, col] (row-major) → scratch[col, row] (row-major)
-            // Tile size TRANSPOSE_TILE×TRANSPOSE_TILE fits in L1, avoiding cache miss
-            // on the strided column-read of data.
-            for col_t in (0..self.ny).step_by(TRANSPOSE_TILE) {
-                let col_end = (col_t + TRANSPOSE_TILE).min(self.ny);
-                for row_t in (0..self.nx).step_by(TRANSPOSE_TILE) {
-                    let row_end = (row_t + TRANSPOSE_TILE).min(self.nx);
-                    for col in col_t..col_end {
-                        for row in row_t..row_end {
-                            scratch[col * self.nx + row] = data_slice[row * self.ny + col];
-                        }
-                    }
-                }
-            }
+            transpose_matrices(data_slice, scratch, 1, self.nx, self.ny);
             let lane_fn = |lane: &mut [F::Complex]| match (
                 FORWARD,
                 &self.twiddle_col_fwd,
@@ -359,18 +323,7 @@ where
                 _,
                 _,
             >(&mut scratch[..], self.nx, lane_fn);
-            // Cache-blocked scatter: scratch[col, row] → data[row, col]
-            for col_t in (0..self.ny).step_by(TRANSPOSE_TILE) {
-                let col_end = (col_t + TRANSPOSE_TILE).min(self.ny);
-                for row_t in (0..self.nx).step_by(TRANSPOSE_TILE) {
-                    let row_end = (row_t + TRANSPOSE_TILE).min(self.nx);
-                    for col in col_t..col_end {
-                        for row in row_t..row_end {
-                            data_slice[row * self.ny + col] = scratch[col * self.nx + row];
-                        }
-                    }
-                }
-            }
+            transpose_matrices(scratch, data_slice, 1, self.ny, self.nx);
         });
     }
 }

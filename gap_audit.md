@@ -154,19 +154,27 @@ invert the loop nest so a group of `R` registers is loaded once and carried
 through `log2(R)` stages, storing once. `R = 8` reproduces RustFFT's shape.
 Filed as `ATLAS-APOLLO-STAGE-FUSION-2026-08-26`.
 
-### Leto and Hephaestus are not on this path, and the census says so
+### Leto owns layout movement; Hephaestus owns the GPU axis
 
-Worth stating because it was an open question rather than an assumption. Apollo's
-2-D transform end to end runs at 9.2 – 11.0 flops/ns while the batched kernel
-alone measures 10.2 – 10.7. Everything the 2-D path adds around that kernel —
-Leto `Array2` storage, lane extraction, the transposes, plan lookup — therefore
-costs on the order of nothing measurable at these shapes, and the 1-D complex
-slice path never touches Leto at all.
+The earlier census was sufficient to show that Apollo's arithmetic and pass
+structure dominate the CPU gap, but it was not sufficient to conclude that
+Leto could not improve the surrounding layout passes. That conclusion is now
+corrected. Leto provider PR 125 (`1e70b27e`) added a canonical tiled
+C-destination/Fortran-source assignment, and Apollo's 2-D/3-D gather/scatter
+passes now delegate their transposes to it instead of retaining four copies of
+the index loops in static and dynamic plans.
 
-So Leto is not the FFT bottleneck and enhancing it would not move these numbers.
-The lever is inside Apollo's own kernel. Hephaestus is a separate axis
-altogether: it backs GPU execution, and a GPU comparison against two CPU
-libraries would not be the like-for-like the rest of this audit holds to.
+The controlled provider benchmark compares both implementations in one binary
+at identical addresses. Four of eight gather/scatter confidence intervals are
+disjoint in Leto's favour and four overlap; none favours the removed Apollo
+loop. Repeated end-to-end Apollo census runs remain host-variable, so they prove
+the zero-allocation contract and provide diagnostic baselines rather than an
+isolated layout speedup. Apollo's FFT arithmetic, twiddle pass, and pass
+structure therefore remain the CPU throughput target. Hephaestus remains a
+separate but required GPU execution axis; Kwavers backend-selection work must
+compare Leto CPU and Hephaestus GPU under equivalent transform contracts rather
+than treating the CPU-library census as GPU evidence. ADR 0040 records this
+ownership boundary.
 
 ### The real-transform arms were measuring a contract difference
 
@@ -218,8 +226,9 @@ That finding produced both the 2-D accuracy ladder and
 historical zero-call observation remains the regression's entry evidence, not a
 claim about the corrected tree.
 
-**Resolved for the instrument.** `engine_census` now carries a 2-D section over
-four shapes whose routing was again established by instrumenting rather than
+**Resolved for the instrument.** `engine_census` now carries a multidimensional
+section over four 2-D shapes and one `4096x4x4` 3-D shape. The 2-D routing was
+again established by instrumenting rather than
 inferred: `4096x16`, `4096x64` and `16384x16` take the batched layout, and
 `65536x4` falls past the threading threshold onto the four-step twiddle matrix,
 giving a same-engine contrast at an equal element count. At merge commit
@@ -229,7 +238,15 @@ provider fix. Apollo/RustFFT medians were 616.950/347.850 us at `4096x16`,
 2.53435/2.79455 ms at `4096x64`, 3.45125/1.89380 ms at `16384x16`, and
 3.94880/1.73210 ms at `65536x4`. Apollo leads only the wider-batch
 `4096x64` shape; the remaining aspect-ratio sensitivity is the next
-multidimensional profile target.
+multidimensional profile target. The Leto-assignment candidate records zero
+warm allocations for all five multidimensional rows. Two candidate runs
+completed in 7.93 and 7.97 seconds. The first measured Apollo/RustFFT medians
+of 429.150/496.500 us, 2.37775/4.57665 ms, 3.89495/4.64410 ms, and
+4.37905/2.89585 ms for the four 2-D shapes, with an Apollo 3-D median of
+1.41280 ms. The second measured 599.612/375.825 us, 2.23420/3.58495 ms,
+1.53260/2.36610 ms, and 3.94100/4.15750 ms, with an Apollo 3-D median of
+1.53540 ms. These same-source wall-clock values are diagnostic because host
+variance is larger than the isolated layout effect.
 
 Both errors share a cause: a plausible reading of a dispatch chain is a
 hypothesis, and a one-line `eprintln!` settles it in a minute.

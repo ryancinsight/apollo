@@ -21,6 +21,11 @@
   provider audit, and lock discipline pass.
 - **Risk / change class:** [arch], internal execution ownership; the public FFT
   API is unchanged. **Dependency:** Leto PR #125 merged as `1e70b27e`.
+- **Evidence:** warning-denied all-target Clippy passes; Nextest passes 428/428;
+  doctests and rustdoc pass; the provider audit resolves Leto and Hephaestus
+  from Git with no path overrides; the bounded census completes in 7.97 seconds
+  with zero warm allocations for every 2-D/3-D row. ADR 0040 records the
+  ownership decision. Independent architectural review is in progress.
 
 ## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] — todo
 
