@@ -10,7 +10,7 @@
       allocation contracts with analytical and differential tests.
 - [x] Run the bounded multidimensional census and affected package/workspace
       gates; synchronize the ADR, changelog, gap audit, and provider records.
-- [ ] Commit, push, merge, and bind the exact Apollo consumer revision to Leto
+- [x] Commit, push, merge, and bind the exact Apollo consumer revision to Leto
       provider merge `1e70b27e`.
 
 Evidence: warning-denied all-target Clippy passes; Nextest passes 428/428;
@@ -18,6 +18,21 @@ doctests, rustdoc, provider audit, locked metadata, and ADR-index checks pass.
 The census completes in 7.97 seconds with zero warm allocations for every
 2-D/3-D row. Its repeated wall-clock medians remain diagnostic because the
 uncontrolled-host variation exceeds the isolated layout effect.
+
+Delivery: Apollo PR #127 merged as `967e6e84`; implementation commit
+`aacc65d3`; Leto provider merge `1e70b27e`.
+
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 [patch] — Codex
+
+- [ ] Preserve or derive exact failing-symbol codegen and test the
+      code-placement hypothesis without changing the benchmark workload.
+- [ ] Remove integer-nanosecond sample truncation while retaining the same
+      observations, confidence construction, and regression thresholds.
+- [ ] Compile only the three consumed benchmark binaries and add compiler
+      artifact reuse without introducing a separate target cache.
+- [ ] Verify the unchanged counterbalanced regression oracle, focused unit
+      tests, warning-denied Clippy, and workflow syntax/security checks.
+- [ ] Commit, push, merge, and record exact hosted runtime/regression evidence.
 
 ## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 [arch] — Codex
 

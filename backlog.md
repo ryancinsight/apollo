@@ -73,13 +73,10 @@
   power-of-two-strided arrays is exactly that item's mechanism); it changes the
   stage kernel's indexing contract, so it is that item's scope, not this one's.
 
-## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 — Route multidimensional layout passes through Leto [arch] — in progress
+## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 — Route multidimensional layout passes through Leto [arch] — done 2026-08-26
 
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-- **Lease:** `crates/apollo-fft/src/application/execution/plan/fft/dimension_2d*`,
-  `crates/apollo-fft/src/application/execution/plan/fft/dimension_3d*`, the
-  multidimensional census/tests, and this item's PM and documentation entries
-  through the next verified commit.
+- **Delivered:** Leto provider PR #125 merged as `1e70b27e`; Apollo consumer PR
+  #127 merged as `967e6e84` with implementation commit `aacc65d3`.
 - **Outcome:** Apollo's 2-D and 3-D separable axis transforms delegate their
   gather/scatter transpositions to Leto's canonical assignment kernel instead
   of maintaining duplicate indexed copies in each plan implementation.
@@ -98,9 +95,16 @@
   doctests and rustdoc pass; the provider audit resolves Leto and Hephaestus
   from Git with no path overrides; the bounded census completes in 7.97 seconds
   with zero warm allocations for every 2-D/3-D row. ADR 0040 records the
-  ownership decision. Independent architectural review is in progress.
+  ownership decision. Independent architectural review passed with no blocking
+  findings; its documentation clarification landed before merge.
 
-## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] — todo
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+- **Lease:** `.github/workflows/benchmark-regression.yml`,
+  `crates/apollo-bench/src/measurement`, the affected Apollo FFT dispatch/code
+  boundaries, focused regression tests, and this item's PM/documentation
+  entries through the next verified commit.
 
 - **Outcome:** determine and remove the production or build-layout cause of the
   six exact-head regressions reported after PR #125, and reduce the benchmark
@@ -114,6 +118,13 @@
   spent so the binding build or execution component can be reduced.
 - **Risk / change class:** [patch]. **Driver:** hosted default-branch run after
   Apollo PR #125.
+- **Entry evidence:** the 12m36s hosted job spent 7m11s compiling and 5m04s
+  measuring. It compiled all seven FFT benchmark targets while retaining three,
+  cached dependencies but no compiler artifacts, and normalized samples by
+  truncating per-operation nanoseconds. All six failing rows execute unchanged
+  kernels; exact executable code placement remains the leading production-side
+  hypothesis.
+
 ## ATLAS-APOLLO-CROSSOVER-REDERIVE-2026-08-26 — Re-derive the 1-D four-step crossover [arch] — done 2026-08-26, one part open
 
 - **Outcome: the decision is unchanged and now defensible.** The threshold stays
