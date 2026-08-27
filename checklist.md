@@ -12,7 +12,7 @@
       behavior without changing transform arithmetic.
 - [x] Synchronize ADR 0040, Rustdoc, changelog, and provider records; run focused
       and package gates plus independent architecture review.
-- [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
+- [x] Commit, push, enqueue, merge, and record exact delivery evidence.
 
 Evidence at `f413040a`: 443/443 Apollo FFT Nextest cases pass in 6.439
 seconds; warning-denied all-target Clippy, doctests, warning-denied rustdoc,
@@ -23,6 +23,21 @@ observes zero warm allocations for the F-order 2-D and strided 3-D staging
 paths. Independent architecture review passes after its implementation and
 evidence findings were corrected. Shared-cache contention affected compile
 wall time, not the timed body.
+
+Delivery: Apollo PR #139 merged as `61c5abdc`; implementation commits
+`c95cdfb9`, `a3b3cacf`, and `915893fa`; evidence correction `f413040a`.
+
+## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 [patch] — Codex
+
+- [x] Reproduce the unoptimized bench-runtime breach and audit the existing
+      `BenchmarkMode` and custom `engine_census` entry path.
+- [ ] Make smoke mode execute one measured sample for every unchanged case
+      while preserving the full measurement configuration exactly.
+- [ ] Route `engine_census` and the committed bench gate through smoke mode;
+      retain all value-semantic and allocation checks.
+- [ ] Verify bench smoke inside 60 seconds, the unchanged optimized census,
+      warning-denied Clippy, Nextest, documentation, and source consistency.
+- [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
 
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 
