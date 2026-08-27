@@ -54,6 +54,28 @@
   passed the Rust workspace, Python, lock, and executable-identity gates. The
   seven-binary local smoke completed in about 26 seconds.
 
+## ATLAS-APOLLO-BENCH-SMOKE-COLD-COMPILE-2026-08-27 — Keep compilation outside the runtime bound [ci] [patch] — review
+
+- **Failure:** PR #153 run 33112324749 wrapped cold benchmark compilation and
+  execution in one 60-second timeout. Compilation consumed 39.9 seconds and
+  `cargo test --benches` redundantly ran 453 library tests for 16.5 seconds,
+  leaving about 3.6 seconds for seven smoke binaries; the unchanged census
+  timed out at N = 262144.
+- **Outcome:** compile the seven named benchmark targets outside the execution
+  timeout, then run only those targets inside the unchanged 60-second bound.
+  No benchmark input, sample, workload, mode, assertion, or timeout changes.
+- **Acceptance oracle:** the exact command selects no library-test binary; all
+  seven benchmark executables complete in smoke mode within 60 seconds after
+  their no-run build; PR #153's Rust workspace job passes.
+- **Local evidence:** the locked no-run command built exactly seven benchmark
+  executables in 40.66 seconds with no library-test binary; the same locked
+  seven-binary smoke then completed in 21.54 seconds. `git diff --check`
+  passes. Hosted workflow parsing and the exact Linux job remain the merge
+  gate.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `.github/workflows/ci.yml` and this item entry through the fix
+  commit. **Last update:** 2026-08-27.
+
 ## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 
 - **The shape the references have, implemented:** four-step at N = 1024 with
@@ -65,8 +87,8 @@
   in-place involution. Five passes, zero scratch. All five oracles pass:
   direct DFT both directions, round trip, batched differential,
   decline-untouched.
-- **Blocked on an upstream codegen defect, localized with asm evidence.** The
-  row kernel runs ~30x its expected cost (5000 cycles per row). Three body
+- **Historical codegen blocker, resolved by Hermes PR #78.** The initial row
+  kernel ran ~30x its expected cost (5000 cycles per row). Three body
   shapes — indexed array with loops, closure sequence, sixteen named locals —
   all slow, differently. Section timers put all the loss in the two row
   passes; the dispatched symbol in the test binary contains **zero FMA
@@ -74,10 +96,9 @@
   body exceeds the inline budget, falls out of the dispatcher's
   `#[target_feature]` scope, and compiles at baseline codegen.
   `#[inline(always)]` on `LaneKernel::call` does not cure it, so the failure
-  sits inside hermes' `vectorize` dispatch machinery for large bodies — filed
-  as `HS-VECTORIZE-LARGE-KERNEL` upstream. The module is test-gated until
-  that lands; every small kernel in the tree (batched, boundary experiments)
-  inlines fine, which is why this class was never seen before.
+  sat inside Hermes' `vectorize` dispatch machinery for large bodies and was
+  filed as `HS-VECTORIZE-LARGE-KERNEL` upstream. The post-fix evidence and
+  structural verdict are recorded below.
 - **The probe delivered the turn's most important correction regardless:**
   the four engines measured in ONE pinned process at N = 1024 —
 
@@ -90,9 +111,9 @@
   "weak" range, and the true RustFFT gap is 1.4x — not the 2.4x that
   cross-instrument arithmetic (pinned apollo against unpinned census
   references, and `process()` versus `process_with_scratch`) had been
-  reporting. Matching PhastFT at mid sizes on P-cores is nearly done;
-  RustFFT-parity and the E-core gap are what the resident shape targets once
-  the hermes defect is fixed.
+  reporting. Matching PhastFT at mid sizes on P-cores is nearly done; the
+  post-fix verdict below shows this resident shape cannot close the remaining
+  RustFFT or E-core gaps.
 
 ## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
@@ -156,7 +177,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — todo
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: plan ownership
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -207,6 +228,76 @@
   full 128-base construction; re-derive after they land.
 - **Risk / change class:** [arch]; production routing stays on batched
   until all oracles pass.
+- **Base butterfly corrected (2026-08-27, `components/base128`):** the
+  128-point mixed-radix 8x16 uses gather-free redistribution, DIT-ordered
+  staging, register-resident DIT-16 rows, and a twiddled lane-wise DIF-8
+  column pass with natural-order contiguous stores. Six oracles pass: direct
+  DFT in both directions, round trip, incumbent differential, f32 execution
+  or clean decline, and zero phase-meter effects in the comparison
+  specialization. Plan storage is one immutable boxed table per direction;
+  calls borrow it from `OnceCell` without allocation or atomic reference-count
+  traffic. Constants use the existing Hermes dispatch token, so internal
+  support probes do not recur.
+- **Corrected pinned evidence:** the first 326/194 ns figures are invalid
+  because they included four timestamp reads and four atomic updates per
+  transform. The 100-sample zero-instrumentation medians and 96.4799% exact
+  intervals are 294.518 ns [294.275, 294.826] P-core and 146.401 ns
+  [146.364, 146.468] E-core. The incumbent route is 687.152 ns
+  [686.937, 687.564] and 1844.331 ns [1843.457, 1845.866], so the base is
+  2.33x and 12.60x faster. PhastFT is 330.019 ns [329.688, 330.503] and
+  148.974 ns [148.899, 149.065], while RustFFT remains faster at 181.788 ns
+  [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The measurement body
+  completes in 11.98 seconds; its optimized test-binary rebuild took 2m15s
+  and is build-cost evidence, not runtime evidence. Serialized phase
+  attribution, run separately, reports 164/521/452 TSC P-core and
+  96/232/300 TSC E-core (redistribution/rows/columns).
+- **Provider closure:** Hermes PR #86 merged exact-count dispatch as
+  `5734b85a`; the four-lane f64 kernel now selects AVX2 on AVX-512 hosts, and
+  an unavailable width returns `None` without invoking or mutating the kernel.
+  PR #87 merged the AArch64 all-target import correction as `4f6a1ebb`;
+  Apollo's standalone lock includes that correction through Hermes `8fc54dfa`,
+  whose later delta is CI/PM configuration only.
+- **Remaining production requirement:** move the immutable base plan into
+  `FftPlan1D` before N = 128 routing changes. ADR 0041 is Accepted and
+  records the address map, failure modes, evidence, and provider boundary.
+  **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** fixed-four-lane kernels under `components/{base128,resident,
+  batched,codelet}`, `components/test_support.rs`, their module comments, the
+  Hermes lock pin, and this item's PM entries through the exact-width adoption
+  commit.
+  **Last update:** 2026-08-27.
+- **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
+  through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
+  before constructing plans or mutating input, and the base shares that
+  preflight so unsupported hosts do not initialize its plan. Independent review confirmed
+  the complete fixed-width call-site set after requiring that ordering and the
+  planar decline oracle. Focused base/resident coverage passes 16/16, the
+  complete Apollo FFT suite passes 459/459, strict all-target and all-feature
+  Clippy passes, and the standalone lock resolves with 36 first-party Git
+  sources. Hosted AVX-512 execution remains PR #153's merge gate.
+- **Small-size gate standing (`base128::pinned_probe`):** production
+  vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
+  powers route scalar (ADR 0042) and are the worst sizes in the ladder;
+  n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
+  into `FftPlan1D` and route supported N = 128 calls; (2) tighten the base toward
+  RustFFT after a fresh profile of the now-uninstrumented specialization;
+  (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
+  traffic model predicts a complete-transform win.
+
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — todo
+
+- **Outcome:** `apollo-fft` builds every library and test target warning-free on
+  AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks
+  do not leave unused parameters.
+- **Scope/non-goals:** correct cfg ownership in Stockham precision/stage/tests
+  and radix-composite cache helpers; do not alter transform math or suppress
+  diagnostics. **Risk:** patch correctness, broad test-target closure.
+- **Acceptance:** warning-denied AArch64 all-target check passes, host strict
+  Clippy stays green, and the complete Apollo FFT Nextest suite retains all
+  analytical/differential results. Entry evidence: after Moirai PR #170 fixed
+  the first provider warnings, the cross-check reaches 75 Apollo diagnostics:
+  x86-only Stockham imports/test calls, cfg-unused cache parameters, and
+  target-specific dead code.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
@@ -617,7 +708,21 @@
   `ATLAS-APOLLO-ACCURACY-GATE-2026-08-25` should land first so the
   consolidation is covered by the gate it motivated.
 
-## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — todo
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — in progress 2026-08-27
+
+- **Attribution delivered (2026-08-27):** `kernel/retained_footprint.rs` —
+  windowed counting allocator with a per-window ledger of blocks ≥ n bytes;
+  window sums reproduce the peak census to the byte. Findings
+  (`gap_audit.md#retained-attribution`): duplicate full-size twiddle tables
+  (one at `cached_twiddle_fwd`, a second at plan build, a third at 262144's
+  first forward — 8.4 MB of its 15.8 MB) are the dominant avoidable term,
+  and their dedup lever is `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, with this
+  probe as its acceptance instrument; the 65536 spike is 24 x 262,144-byte
+  threaded-four-step worker blocks (6.0 MB) — reduction needs that route's
+  buffer-lifetime read (next sub-step); scratch/planes are minor, closing
+  the in-place-DIT direction again from the attribution side. Integrator:
+  Claude session 5050c72a. Remaining: the reduction phase, sequenced behind
+  TWIDDLE-SSOT for the duplicate-table term.
 
 - **Outcome:** Apollo's retained bytes per size are attributed to their owning
   caches (twiddle planes, four-step planes, threaded arena, scratch) and the

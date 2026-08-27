@@ -16,10 +16,10 @@ pub(super) fn executed_or_declined_untouched(
     after: &[Complex64],
     executed: bool,
 ) -> bool {
-    let expected = hermes_simd::vectorize(NativeLaneCount) == 4;
+    let expected = hermes_simd::vectorize_lanes::<4, f64, _>(NativeLaneCount) == Some(4);
     assert_eq!(
         executed, expected,
-        "kernel execution must match the independently dispatched native lane width"
+        "kernel execution must match the independently dispatched four-lane capability"
     );
     if !expected {
         assert_eq!(after.len(), before.len(), "declined kernel changed length");

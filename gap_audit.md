@@ -1,14 +1,80 @@
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
 
-Hosted verification selected a native width other than the four lanes required
-by the AVX2-shaped codelet and resident-row diagnostics. The kernels correctly
-declined before mutation, but their tests asserted that every host must execute
-the four-lane path. The escaped-defect guard is two-sided: a supported-width
-host runs the complete analytical and differential oracles, while any other
-width must return `false` with every input bit unchanged. Cross-target
-verification must not treat runtime-selected native width as a universal host
-property; production routing still requires a separately verified exact-width
-capability before these diagnostics can become a selected path.
+Hosted verification selected a widest-native width other than the four lanes
+required by the AVX2-shaped codelet and resident-row diagnostics. The kernels
+correctly declined before mutation, but their tests initially asserted that
+every host must execute the widest-selected path. Hermes PR #86 added
+`vectorize_lanes::<4, T, _>`: f64 selects AVX2 even on AVX-512 hosts, while a
+host without an exact match returns `None` without invoking the kernel. Apollo
+now requests that capability explicitly for every fixed-four-lane base,
+resident, boundary, and codelet kernel; the analytical and differential
+oracles execute when it is available, and clean decline remains the contract
+otherwise. Resident drivers resolve the capability before constructing their
+cached plan or applying any in-place permutation; this ordering is pinned by
+the supported-or-bit-preserving-decline tests.
+
+The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
+the compared base executed four timestamp reads, three atomic phase
+accumulators, and an atomic call counter per transform while the references did
+not. The corrected instrument monomorphizes timing and attribution separately,
+borrows the immutable thread-local plan without an `Arc` increment, and creates
+vectors from the existing Hermes capability token. Its 100-sample 96.4799%
+exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] P-core and
+146.401 ns [146.364, 146.468] E-core. The incumbent Apollo route is 687.152 ns
+[686.937, 687.564] and 1844.331 ns [1843.457, 1845.866]; PhastFT is 330.019 ns
+[329.688, 330.503] and 148.974 ns [148.899, 149.065]. RustFFT remains faster at
+181.788 ns [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The corrected
+base therefore clears the incumbent route and PhastFT on this AVX2 host, but it
+does not close the RustFFT kernel gap.
+
+The escaped benchmark-defect guard is structural: performance comparisons use
+the zero-instrumentation const specialization; attribution runs afterward in a
+separate specialization. A regression test requires a normal transform to
+leave every phase counter at zero, and optimized-binary inspection requires
+exactly the four serialized timestamp pairs owned by the attributed call. The
+remaining production blocker is ownership of the immutable base plan by
+`FftPlan1D`.
+
+## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
+
+Evidence tier: exact allocation accounting — `kernel/retained_footprint.rs`,
+a windowed counting allocator whose ledger records every allocation of at
+least `n` bytes, one window per acquisition stage; blocks attributed to
+owners by byte signature. Run
+`cargo test --release -p apollo-fft --lib retained_footprint_attribution --
+--ignored --nocapture`. Window sums reproduce the peak census totals
+([above](#peak-working-set)) to the byte at every size.
+
+| n | window | retained | blocks ≥ n bytes |
+| --- | --- | --- | --- |
+| 1024 | twiddle table / plan build / first fwd | 16,916 / 16,916 / 37,840 | 16n / 16n / 20,480 + 2×8,192 |
+| 4096 | same | 65,536 / 65,536 / 120,168 | 16n / 16n / 73,728 + 2×32,768 |
+| 16384 | same | 262,144 / 262,144 / 469,608 | 16n / 16n / 278,528 + 2×131,072 |
+| 65536 | same | 1,048,676 / 1,048,676 / 8,779,908 | 16n / 16n / 16n+16 + 16n + **24×262,144** |
+| 262144 | same | 4,194,304 / 4,194,304 / 7,426,064 | 16n / 16n / 16n+16 + **16n** |
+
+Warm-forward windows retain 0 everywhere (8,192 transient at 262144) — the
+steady-state contract holds; everything below is acquisition-time retention.
+
+Attribution, largest first:
+
+1. **Full-size twiddle tables are retained in duplicate.** One 16n table from
+   `cached_twiddle_fwd`, a second 16n table at plan construction, and at
+   262144 a third during the first forward. At 262144 that is 8.4 MB of the
+   15.8 MB total; at every size ≥ 4096 the duplicate is a quarter to a third
+   of retained bytes. This is the memory cost of the three twiddle builders
+   `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25` records — the dedup lever lives
+   there, and the probe's per-window ledger is its acceptance instrument.
+2. **The 65536 spike is threaded-route worker retention:** 24 blocks of
+   262,144 bytes (6.0 MB) held after the first forward at exactly the
+   `FUSE_THRESHOLD` size — per-worker state of the Moirai four-step, absent
+   at 262144 where the route shape differs. Reduction needs the threaded
+   four-step's buffer-lifetime read; filed as the item's next sub-step.
+3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
+   padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
+   planar halves at four-step sizes — the terms an in-place rewrite would
+   target, confirming the census reading that in-place-DIT is not the lever.
+
 ## Peak working set: Apollo retains 4-10x the references (2026-08-27) <a id="peak-working-set"></a>
 
 Evidence tier: exact allocation accounting — the census's wrapping global

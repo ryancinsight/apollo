@@ -33,7 +33,7 @@
 //! the same transposes, rev-baked matrix, and closing involution, and the two
 //! kernels are differential oracles for each other.
 
-use super::{ResidentPlan, ResidentPlanCache, ROW};
+use super::{exact_lanes_supported, ResidentPlan, ResidentPlanCache, ROW};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -404,6 +404,11 @@ where
     if data.len() != ROW * ROW {
         return false;
     }
+    // Match the interleaved driver: capability resolution precedes plan
+    // construction and every in-place permutation.
+    if !exact_lanes_supported::<4, T>() {
+        return false;
+    }
     let plan = T::cached_resident_plan::<INVERSE>(ROW * ROW);
 
     #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -431,10 +436,11 @@ where
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
         if !sect!("rows1", {
-            hermes_simd::vectorize(PlanarRows::<T, false> {
+            hermes_simd::vectorize_lanes::<4, T, _>(PlanarRows::<T, false> {
                 data: flat,
                 plan: plan.as_ref(),
             })
+            .unwrap_or(false)
         }) {
             super::transpose_samples(data, ROW);
             return false;
@@ -444,12 +450,12 @@ where
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
         let handled = sect!("rows2", {
-            hermes_simd::vectorize(PlanarRows::<T, true> {
+            hermes_simd::vectorize_lanes::<4, T, _>(PlanarRows::<T, true> {
                 data: flat,
                 plan: plan.as_ref(),
             })
         });
-        debug_assert!(handled, "width accepted the first pass");
+        debug_assert_eq!(handled, Some(true), "width accepted the first pass");
     }
     sect!("untangle", { super::untangle_output(data, ROW) });
     true

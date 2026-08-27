@@ -9,9 +9,9 @@
 //! and the earlier "boundary vectorization loses" verdict still holds on the
 //! load side — so only the store-side kernel exists here.
 //!
-//! The kernel gates on the four-lane width and reports `false` otherwise;
-//! the driver falls back to the scalar loop, which stays the reference
-//! implementation for every other width.
+//! The driver requests the four-lane width explicitly. A host without that
+//! width, or a shape not divisible by it, falls back to the scalar loop, which
+//! remains the reference implementation.
 
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
