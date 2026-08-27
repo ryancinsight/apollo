@@ -11,7 +11,8 @@ use eunomia::{Complex32, Complex64};
 const SCRATCH_2D_SLOT: usize = 0;
 const SCRATCH_3D_Y_SLOT: usize = 1;
 const SCRATCH_3D_X_SLOT: usize = 2;
-const PLAN_SCRATCH_ROLE_COUNT: usize = 3;
+const SCRATCH_VIEW_STAGING_SLOT: usize = 3;
+const PLAN_SCRATCH_ROLE_COUNT: usize = 4;
 
 mod sealed {
     pub trait Sealed {}
@@ -43,6 +44,11 @@ pub trait PlanScratch: sealed::Sealed + 'static {
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
     where
         Self: Sized;
+
+    /// Run a closure with thread-local logical-view staging sized to `n`.
+    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
+    where
+        Self: Sized;
 }
 
 impl PlanScratch for Complex64 {
@@ -60,6 +66,11 @@ impl PlanScratch for Complex64 {
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
         TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
     }
+
+    #[inline]
+    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
+        TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_VIEW_STAGING_SLOT, _>(n, f))
+    }
 }
 
 impl PlanScratch for Complex32 {
@@ -76,6 +87,11 @@ impl PlanScratch for Complex32 {
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
         TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
+    }
+
+    #[inline]
+    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
+        TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_VIEW_STAGING_SLOT, _>(n, f))
     }
 }
 
@@ -95,4 +111,10 @@ pub(crate) fn with_3d_y_scratch<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut
 #[inline]
 pub(crate) fn with_3d_x_scratch<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut [C]) -> R) -> R {
     C::with_3d_x_scratch_impl(n, f)
+}
+
+/// Run `f` with thread-local logical-view staging sized to `n`.
+#[inline]
+pub(crate) fn with_view_staging<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut [C]) -> R) -> R {
+    C::with_view_staging_impl(n, f)
 }

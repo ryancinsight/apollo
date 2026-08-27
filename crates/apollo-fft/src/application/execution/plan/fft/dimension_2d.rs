@@ -28,7 +28,7 @@
 //! place, while non-contiguous passes gather lanes into scratch buffers before
 //! scattering them back.
 
-use super::layout::transpose_matrices;
+use super::layout::{transpose_matrices, with_c_order_view};
 use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_2d_scratch, PlanScratch,
 };
@@ -107,25 +107,35 @@ where
     }
 
     /// Forward transform of a complex Leto view in-place.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
     #[inline]
-    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+    pub fn forward_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(data.shape(), [NX, NY], "static 2D forward shape mismatch");
-        Self::axis1_pass_complex::<true>(data.reborrow());
-        Self::axis0_pass_complex::<true>(data);
+        with_c_order_view(data, |mut contiguous| {
+            Self::axis1_pass_complex::<true>(contiguous.reborrow());
+            Self::axis0_pass_complex::<true>(contiguous);
+        });
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
     #[inline]
-    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+    pub fn inverse_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(data.shape(), [NX, NY], "static 2D inverse shape mismatch");
-        Self::axis0_pass_complex::<false>(data.reborrow());
-        Self::axis1_pass_complex::<false>(data);
+        with_c_order_view(data, |mut contiguous| {
+            Self::axis0_pass_complex::<false>(contiguous.reborrow());
+            Self::axis1_pass_complex::<false>(contiguous);
+        });
     }
 
     fn axis1_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("2D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 2D axis execution receives C-order data");
         let lane_plan = StaticFftPlan1D::<F, NY>::new();
         let lane_fn = |lane: &mut [F::Complex]| {
             if FORWARD {
@@ -143,8 +153,8 @@ where
 
     fn axis0_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("2D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 2D axis execution receives C-order data");
         with_2d_scratch::<F::Complex, _>(NX * NY, |scratch| {
             transpose_matrices(data_slice, scratch, 1, NX, NY);
 
@@ -227,25 +237,35 @@ where
     }
 
     /// Forward transform of a complex Leto view in-place.
-    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn forward_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [self.nx, self.ny],
             "complex forward shape mismatch"
         );
-        self.axis_pass_complex::<true>(data.reborrow(), 1);
-        self.axis_pass_complex::<true>(data, 0);
+        with_c_order_view(data, |mut contiguous| {
+            self.axis_pass_complex::<true>(contiguous.reborrow(), 1);
+            self.axis_pass_complex::<true>(contiguous, 0);
+        });
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
-    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn inverse_complex_leto_inplace(&self, data: ArrayViewMut2<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [self.nx, self.ny],
             "complex inverse shape mismatch"
         );
-        self.axis_pass_complex::<false>(data.reborrow(), 0);
-        self.axis_pass_complex::<false>(data, 1);
+        with_c_order_view(data, |mut contiguous| {
+            self.axis_pass_complex::<false>(contiguous.reborrow(), 0);
+            self.axis_pass_complex::<false>(contiguous, 1);
+        });
     }
 
     fn axis_pass_complex<const FORWARD: bool>(
@@ -267,8 +287,8 @@ where
 
     fn axis1_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("2D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 2D axis execution receives C-order data");
         let lane_fn =
             |lane: &mut [F::Complex]| match (FORWARD, &self.twiddle_row_fwd, &self.twiddle_row_inv)
             {
@@ -295,8 +315,8 @@ where
 
     fn axis0_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut2<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("2D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 2D axis execution receives C-order data");
         with_2d_scratch::<F::Complex, _>(self.nx * self.ny, |scratch| {
             transpose_matrices(data_slice, scratch, 1, self.nx, self.ny);
             let lane_fn = |lane: &mut [F::Complex]| match (
@@ -344,73 +364,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use eunomia::Complex64;
-    use std::f64::consts::PI;
-
-    fn signal<const NX: usize, const NY: usize>() -> Array2<Complex64> {
-        Array2::from_shape_fn([NX, NY], |[i, j]| {
-            let x = (i * NY + j) as f64;
-            Complex64::new(
-                (0.17 * x).sin() + 0.11 * (0.07 * x).cos(),
-                0.23 * (0.31 * x).cos(),
-            )
-        })
-    }
-
-    fn direct_forward<const NX: usize, const NY: usize>(
-        input: &Array2<Complex64>,
-    ) -> Array2<Complex64> {
-        let mut out = Array2::from_elem([NX, NY], Complex64::new(0.0, 0.0));
-        for kx in 0..NX {
-            for ky in 0..NY {
-                let mut acc = Complex64::new(0.0, 0.0);
-                for x in 0..NX {
-                    for y in 0..NY {
-                        let phase =
-                            -2.0 * PI * ((kx * x) as f64 / NX as f64 + (ky * y) as f64 / NY as f64);
-                        acc += input[[x, y]] * Complex64::from_polar(1.0, phase);
-                    }
-                }
-                out[[kx, ky]] = acc;
-            }
-        }
-        out
-    }
-
-    fn max_err(a: &Array2<Complex64>, b: &Array2<Complex64>) -> f64 {
-        a.iter()
-            .zip(b.iter())
-            .map(|(x, y)| (*x - *y).norm())
-            .fold(0.0, f64::max)
-    }
-
-    #[test]
-    fn static_fft_2d_plan_is_zero_sized() {
-        assert_eq!(std::mem::size_of::<StaticFftPlan2D<f64, 4, 5>>(), 0);
-        assert_eq!(StaticFftPlan2D::<f64, 4, 5>::new().shape(), (4, 5));
-    }
-
-    #[test]
-    fn static_fft_2d_forward_matches_direct() {
-        let plan = StaticFftPlan2D::<f64, 4, 5>::new();
-        let input = signal::<4, 5>();
-        let expected = direct_forward::<4, 5>(&input);
-        let mut actual = input;
-        plan.forward_complex_inplace(&mut actual);
-        let err = max_err(&actual, &expected);
-        assert!(err <= 1.0e-10, "static 2D forward mismatch err={err:.2e}");
-    }
-
-    #[test]
-    fn static_fft_2d_inverse_roundtrip_recovers_input() {
-        let plan = StaticFftPlan2D::<f64, 4, 5>::new();
-        let input = signal::<4, 5>();
-        let mut actual = input.clone();
-        plan.forward_complex_inplace(&mut actual);
-        plan.inverse_complex_inplace(&mut actual);
-        let err = max_err(&actual, &input);
-        assert!(err <= 1.0e-10, "static 2D roundtrip mismatch err={err:.2e}");
-    }
-}
+mod tests;

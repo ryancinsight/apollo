@@ -21,6 +21,23 @@
   tests, ADR 0040, changelog, and this item's PM entries through the next
   verified commit. **Last update:** 2026-08-27.
 
+## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — todo
+
+- **Outcome:** bench binaries prove they build and execute inside the standard
+  test budget without running full timing sweeps under the unoptimized test
+  profile; local optimized runs retain the complete measurement workload.
+- **Scope / non-goals:** add one explicit smoke route to Apollo's custom bench
+  harness and the committed gate. Timing sizes, warm-up, measurement duration,
+  sample construction, confidence intervals, and the 60-second optimized-suite
+  guard do not change.
+- **Acceptance oracle:** `cargo test --benches` executes one value-semantic
+  iteration per bench inside 60 seconds; `engine_census` still completes its
+  full optimized sweep and emits the same case set; Clippy and Nextest pass.
+- **Risk / change class:** [patch], verification-instrument behavior only.
+  **Entry evidence:** the full engine census completed its allocation checks
+  under `cargo test --bench engine_census` but hit the runtime guard at 103.29
+  seconds because the test profile executes every timed arm unoptimized.
+
 ## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — done 2026-08-27: radix-8 declined by both instruments, the twiddle fold delivered instead
 
 - **Radix-8 was implemented and measured honestly, and it loses.** The full

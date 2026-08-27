@@ -2,16 +2,22 @@
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
-- [ ] Record the C/F/offset/strided multidimensional entry baseline and pin the
+- [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
       old physical-memory-order behavior with failing value-semantic cases.
-- [ ] Add one reusable view-staging role to plan scratch and one canonical Leto
+- [x] Add one reusable view-staging role to plan scratch and one canonical Leto
       stage/assign helper while preserving the direct C-order slice path.
-- [ ] Route static and dynamic 2-D/3-D complex view transforms through that
+- [x] Route static and dynamic 2-D/3-D complex view transforms through that
       boundary; verify forward, normalized inverse, tails, and warm allocation
       behavior without changing transform arithmetic.
 - [ ] Synchronize ADR 0040, Rustdoc, changelog, and provider records; run focused
       and package gates plus independent architecture review.
 - [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
+
+Evidence pending independent review: 442/442 Apollo FFT Nextest cases pass in
+6.33 seconds; warning-denied all-target Clippy, doctests, warning-denied
+rustdoc, provider audit, lock validation, format, and 223/223 SemVer checks
+pass. The optimized engine census completes in 47.01 seconds and observes zero
+warm allocations for the new F-order 2-D and strided 3-D staging paths.
 
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 
