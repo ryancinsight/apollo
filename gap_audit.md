@@ -1,3 +1,15 @@
+## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
+
+Hosted verification selected a native width other than the four lanes required
+by the AVX2-shaped codelet and resident-row diagnostics. The kernels correctly
+declined before mutation, but their tests asserted that every host must execute
+the four-lane path. The escaped-defect guard is two-sided: a supported-width
+host runs the complete analytical and differential oracles, while any other
+width must return `false` with every input bit unchanged. Cross-target
+verification must not treat runtime-selected native width as a universal host
+property; production routing still requires a separately verified exact-width
+capability before these diagnostics can become a selected path.
+
 ## Stage fusion pays on the kernel, and the end-to-end census cannot see it (2026-08-26) <a id="stage-fusion"></a>
 
 Evidence tier: kernel measured in isolation across five working-set sizes, both

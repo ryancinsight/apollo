@@ -81,7 +81,7 @@
   RustFFT-parity and the E-core gap are what the resident shape targets once
   the hermes defect is fixed.
 
-## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — filed 2026-08-28
+## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
 - **Defect:** a `LaneKernel` whose `call` body is large (a fully unrolled
   32-sample FFT row pass, ~500 vector ops) is not inlined into the generated
@@ -132,7 +132,6 @@
   recommended option: planar-register rows + fused boundary networks).
   **Last update:** 2026-08-27 — ADR drafted; next increment is the planar row
   body behind the resident oracle set.
-
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
 
