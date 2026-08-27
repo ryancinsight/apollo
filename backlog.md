@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — todo
+
+- **Outcome:** the planar batched kernel holds three stages per memory pass
+  (radix-8) where it now holds two (radix-4), closing toward the reference
+  engines' shape: RustFFT's column butterflies hold eight registers through
+  three stages, and the interleaved-kernel experiment proved the remaining gap
+  is radix depth, not layout.
+- **The register-pressure problem, stated up front:** planar radix-8 needs
+  sixteen data registers (eight rows x two planes) before twiddles, which is
+  the whole AVX2 file. Candidate schedules, to be decided by codegen
+  inspection and pinned measurement rather than argument: (a) process one
+  plane's rows through the stage triple while the other plane's intermediates
+  spill to a hot stack slot; (b) split each row pass into half-width column
+  strips so eight half-rows fit beside twiddles; (c) fold the four-step
+  twiddle multiply into the last fused stage's stores instead, which deletes a
+  pass without deepening the radix.
+- **Acceptance oracle:** pinned P-core improvement over the current radix-4
+  kernel at 256 through 65536 with the six planar oracles and the interleaved
+  differential oracle unchanged; codegen inspection confirms no spill storm.
+- **Risk / change class:** [arch]; hot-kernel restructuring.
+- **Dependencies:** none — the differential oracle from
+  `ATLAS-APOLLO-INTERLEAVED-BATCHED-2026-08-27` is the safety net.
+
 ## ATLAS-APOLLO-BATCHED-SEAMS-2026-08-27 — Fold the batched driver's permutation seams [patch] — done 2026-08-27
 
 - **Cycle-accurate section profile** (rdtsc, pinned; the Instant-based section
