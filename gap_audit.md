@@ -9,6 +9,57 @@ width must return `false` with every input bit unchanged. Cross-target
 verification must not treat runtime-selected native width as a universal host
 property; production routing still requires a separately verified exact-width
 capability before these diagnostics can become a selected path.
+## Peak working set: Apollo retains 4-10x the references (2026-08-27) <a id="peak-working-set"></a>
+
+Evidence tier: exact allocation accounting — the census's wrapping global
+allocator extended with a live-bytes balance and high-water mark, measured in
+explicit windows (`engine_census::peak_working_set_census`, run
+`APOLLO_PEAK_WORKING_SET_ONLY=1 cargo bench -p apollo-fft --bench
+engine_census`). Counts are exact regardless of host load; this section,
+unlike the timing census, needs no quiet machine.
+
+`ATLAS-APOLLO-PEAK-MEMORY-2026-08-25` asked whether the self-sorting
+Stockham's second buffer costs Apollo anything against PhastFT's in-place
+claim. Per engine and size: the cold window covers plan construction plus one
+forward f64 transform (charging twiddles, scratch, and process-global caches
+at first touch); retained is what stays live after it; warm peak is one
+further call on the built plan. Signal buffers are caller-owned in every
+engine's contract and excluded (16 bytes/element in each layout).
+
+| n | signal (16n) | apollo cold peak | apollo retained | rustfft retained | phastft retained | apollo warm | rustfft warm | phastft warm |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1024 | 16,384 | 87,892 | 71,672 | 16,448 | 15,552 | 0 | 16,384 | 0 |
+| 4096 | 65,536 | 316,728 | 251,240 | 65,536 | 64,896 | 0 | 65,536 | 0 |
+| 16384 | 262,144 | 1,255,992 | 993,896 | 262,240 | 261,504 | 0 | 262,144 | 0 |
+| 65536 | 1,048,576 | 10,873,164 | 10,873,164 | 1,048,960 | 1,048,320 | 4,096 | 1,048,576 | 0 |
+| 262144 | 4,194,304 | 16,785,424 | 15,802,384 | 4,194,624 | 4,194,048 | 20,480 | 4,194,304 | 0 |
+
+Readings:
+
+- **The zero-allocation steady state holds** — Apollo's warm-call peak is 0
+  at cache-resident sizes (4-20 KiB past the threading threshold), while
+  RustFFT's `process` allocates a full 16n scratch every call. On transient
+  traffic Apollo is the best of the three.
+- **The retained working set is the cost.** Apollo holds 3.8-4.4x the signal
+  size at most sizes, against ~1.0x for both references (PhastFT: in-place
+  plus a twiddle plane; RustFFT: plan tables plus per-call scratch). The
+  Stockham scratch itself (16n) is a minor term; twiddle planes and
+  process-global caches dominate.
+- **N = 65536 spikes to 10.4x** (10.87 MB retained for a 1 MB signal) —
+  exactly the `FUSE_THRESHOLD` where the threaded four-step arena pre-grows
+  to 2 x `FUSE_THRESHOLD` x lane width (`tuning.rs`), plus that route's
+  twiddle planes. The spike is the follow-on item's first attribution
+  target (`ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27`).
+- PhastFT's "up to 50% less memory than RustFFT" claim does not reproduce as
+  retained state (both ~16n); it is about RustFFT's per-call scratch, which
+  Apollo already avoids.
+
+The in-place-DIT [arch] question this measurement gates: an in-place
+formulation would remove the 16n scratch — the smallest of Apollo's retained
+terms. The measured lever is cache and arena retention, not the ping-pong
+buffer, so the in-place rewrite is not the indicated next step on memory
+grounds.
+
 ## The AVX-Stockham retirement premise was a scheduler artifact (2026-08-27) <a id="stockham-backend-matrix"></a>
 
 Evidence tier: same-binary pinned measurement (`stockham::backend_matrix`,

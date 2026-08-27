@@ -161,6 +161,21 @@
 - **Evidence base:** ADR 0041 revision (both register-row shapes measured
   out); RustFFT f64 planner arm read at the locked version; batched
   per-pass attribution is this item's first diagnostic step.
+- **First diagnostic delivered (2026-08-27):** batched per-pass TSC
+  attribution at N = 1024 pinned P-core — deint 1431, stages1 2655,
+  transpose 1659, permute 582, stages2 3259, reint 1252: **45% of the
+  budget is data movement**, and the stage arithmetic alone (5.9k) is
+  already below RustFFT's whole-transform 7.9k, so the RustFFT gap is
+  movement, not butterflies. First harvest: the reinterleave pass
+  vectorized through the native interleave network with capability-hoisted
+  view chunks, 1252 → 900 TSC; the mirrored deinterleave kernel measured
+  slower than its auto-vectorized scalar loop (1431 → 1520) and was
+  deleted. Remaining movement targets, in order: transpose 1659 (needs
+  in-register 4x4 unpack/half-permute primitives upstream in hermes —
+  flat `interleave` composes a 4x4 transpose at 16 shuffles where unpack +
+  half-permute does 8), permute 582 (fold into the transpose), and the
+  fold-side deint. These may close much of the RustFFT gap without the
+  full 128-base construction; re-derive after they land.
 - **Risk / change class:** [arch]; production routing stays on batched
   until all oracles pass.
 
@@ -573,7 +588,40 @@
   `ATLAS-APOLLO-ACCURACY-GATE-2026-08-25` should land first so the
   consolidation is covered by the gate it motivated.
 
-## ATLAS-APOLLO-PEAK-MEMORY-2026-08-25 — Measure peak working set against PhastFT [patch] — todo
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — todo
+
+- **Outcome:** Apollo's retained bytes per size are attributed to their owning
+  caches (twiddle planes, four-step planes, threaded arena, scratch) and the
+  avoidable terms are reduced, with the peak census as the regression
+  instrument.
+- **Evidence:** `gap_audit.md#peak-working-set` — retained working set is
+  3.8-4.4x the signal (references: ~1.0x), spiking to 10.4x at N = 65536
+  (10.87 MB for a 1 MB signal), where the threaded four-step arena pre-grows
+  to 2 x `FUSE_THRESHOLD` lanes (`tuning.rs`) and that route's twiddle planes
+  land. The Stockham ping-pong scratch (16n) is a minor term, so the
+  in-place-DIT rewrite is not the indicated lever.
+- **Scope:** attribution first (per-cache byte accounting through the census
+  windows), then reduction of the avoidable terms — arena growth policy,
+  plane lifetime, cache eviction. **Non-goals:** trading warm-call
+  allocations back in; the zero-allocation steady state is the contract.
+- **Acceptance oracle:** per-cache attribution recorded; any reduction shows
+  the peak census retained column shrinking with warm peaks still zero and
+  no timing-census regression.
+- **Risk / change class:** [perf]; attribution is [patch].
+
+## ATLAS-APOLLO-PEAK-MEMORY-2026-08-25 — Measure peak working set against PhastFT [patch] — done 2026-08-27
+
+- **Delivered (2026-08-27):** `engine_census::peak_working_set_census` — the
+  census allocator extended with a live-bytes balance and high-water mark;
+  cold (plan + first call), retained, and warm-call peaks per engine across
+  the PoT ladder, exact under host load. Table and readings:
+  `gap_audit.md#peak-working-set`. Answer to the item's question: the
+  Stockham second buffer is a minor term; Apollo's warm transient is the best
+  of the three engines (0 vs RustFFT's per-call 16n), but retained caches run
+  3.8-10.4x the signal — filed as
+  `ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27`. The in-place-DIT [arch]
+  question closes on memory grounds: the rewrite would remove the smallest
+  retained term. Integrator: Claude session 5050c72a.
 
 - **Outcome:** Apollo's peak working set for a large power-of-two transform is a
   measured number, so the in-place-versus-ping-pong question is decided on

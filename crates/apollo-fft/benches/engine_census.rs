@@ -74,13 +74,18 @@
 //! total     = 39 x 80 ms                   ~ 3.1 s, plus flush overhead
 //! ```
 //!
+//! The peak-working-set section that precedes the timed sweep is allocation
+//! accounting, not timing — a plan build and three transforms per engine and
+//! size, roughly a second in total, charged before `started` so the budget
+//! above is unaffected.
+//!
 //! [`main`] exits non-zero if the sweep exceeds [`BUDGET_SECS`]. A breach is a
 //! defect to root-cause, never fixed by raising the bound in the change that
 //! caused it.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
@@ -129,8 +134,19 @@ const FLUSH_BYTES: usize = 64 << 20;
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
 static BYTES: AtomicUsize = AtomicUsize::new(0);
 static COUNTING: AtomicBool = AtomicBool::new(false);
+/// Live-bytes balance inside a counting window. Signed because a window may
+/// observe the free of an allocation made before it opened; the peak is only
+/// read as a high-water mark, so a transiently negative balance is harmless.
+static LIVE: AtomicIsize = AtomicIsize::new(0);
+/// High-water mark of [`LIVE`] inside the window.
+static PEAK: AtomicIsize = AtomicIsize::new(0);
 
 struct Counting;
+
+fn track_live(delta: isize) {
+    let live = LIVE.fetch_add(delta, Ordering::Relaxed) + delta;
+    PEAK.fetch_max(live, Ordering::Relaxed);
+}
 
 // SAFETY: every method forwards to `System` unchanged; the counters observe and
 // never affect the returned pointer.
@@ -139,16 +155,21 @@ unsafe impl GlobalAlloc for Counting {
         if COUNTING.load(Ordering::Relaxed) {
             ALLOCS.fetch_add(1, Ordering::Relaxed);
             BYTES.fetch_add(l.size(), Ordering::Relaxed);
+            track_live(l.size() as isize);
         }
         unsafe { System.alloc(l) }
     }
     unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+        if COUNTING.load(Ordering::Relaxed) {
+            track_live(-(l.size() as isize));
+        }
         unsafe { System.dealloc(p, l) }
     }
     unsafe fn realloc(&self, p: *mut u8, l: Layout, new: usize) -> *mut u8 {
         if COUNTING.load(Ordering::Relaxed) {
             ALLOCS.fetch_add(1, Ordering::Relaxed);
             BYTES.fetch_add(new, Ordering::Relaxed);
+            track_live(new as isize - l.size() as isize);
         }
         unsafe { System.realloc(p, l, new) }
     }
@@ -166,6 +187,118 @@ fn flush_cache(buffer: &mut [u8]) {
         chunk[0] = chunk[0].wrapping_add(1);
     }
     black_box(&buffer[0]);
+}
+
+/// Peak and end-of-window live bytes across one closure.
+///
+/// Opens a fresh counting window (live balance and peak reset to zero), runs
+/// `f`, and returns `(peak_bytes, retained_bytes, result)` — the high-water
+/// mark of live bytes inside the window and the balance still allocated when
+/// it closed. The returned value keeps whatever `f` built (a plan) alive, so
+/// `retained` includes it plus any process-global caches it populated.
+fn peak_live_bytes<R>(f: impl FnOnce() -> R) -> (isize, isize, R) {
+    LIVE.store(0, Ordering::Relaxed);
+    PEAK.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::Relaxed);
+    let result = f();
+    COUNTING.store(false, Ordering::Relaxed);
+    (
+        PEAK.load(Ordering::Relaxed),
+        LIVE.load(Ordering::Relaxed),
+        result,
+    )
+}
+
+/// Peak working set per engine across the power-of-two ladder
+/// (`ATLAS-APOLLO-PEAK-MEMORY-2026-08-25`).
+///
+/// Method: the wrapping global allocator tracks a live-bytes balance and its
+/// high-water mark inside explicit windows. Per engine and size, the **cold**
+/// window covers plan construction plus one forward transform — so it charges
+/// twiddle tables, scratch, and any process-global caches at their first
+/// touch — and reports its peak and its retained (still-live) balance; the
+/// **warm** window covers one further call on the built plan and reports its
+/// peak, which is the steady-state transient footprint. Signal buffers are
+/// allocated outside the windows: every engine's contract leaves them
+/// caller-owned, and they cost the same 16 bytes per element in each layout
+/// (interleaved complex vs split re/im planes).
+///
+/// Allocation counts are exact regardless of host load, so unlike the timing
+/// census this section needs no quiet machine. Run it alone with
+/// `APOLLO_PEAK_WORKING_SET_ONLY=1`. Ordering matters within a process: each
+/// size's cold window must be that size's first touch, so this runs before the
+/// timing suites.
+fn peak_working_set_census() {
+    println!("== peak working set (bytes) ==");
+    println!(
+        "{:>8}  {:>10} {:>12} {:>12} {:>10}   engine",
+        "n", "cold peak", "retained", "warm peak", "16n"
+    );
+    for &n in &SIZES {
+        let src = complex_signal(n);
+        let rust_src: Vec<RustComplex<f64>> =
+            src.iter().map(|v| RustComplex::new(v.re, v.im)).collect();
+        let (re_src, im_src): (Vec<f64>, Vec<f64>) = src.iter().map(|v| (v.re, v.im)).unzip();
+
+        let mut work = src.clone();
+        let (peak, retained, apollo) = peak_live_bytes(|| {
+            let plan = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n });
+            plan.forward_complex_slice_inplace(black_box(&mut work));
+            plan
+        });
+        let (warm_peak, _, ()) = peak_live_bytes(|| {
+            work.copy_from_slice(&src);
+            apollo.forward_complex_slice_inplace(black_box(&mut work));
+        });
+        drop(apollo);
+        println!(
+            "{n:>8}  {peak:>10} {retained:>12} {warm_peak:>12} {:>10}   apollo",
+            n * 16
+        );
+
+        let mut rust_work = rust_src.clone();
+        let (peak, retained, rust) = peak_live_bytes(|| {
+            let plan = FftPlanner::<f64>::new().plan_fft_forward(n);
+            plan.process(black_box(&mut rust_work));
+            plan
+        });
+        let (warm_peak, _, ()) = peak_live_bytes(|| {
+            rust_work.copy_from_slice(&rust_src);
+            rust.process(black_box(&mut rust_work));
+        });
+        drop(rust);
+        println!(
+            "{n:>8}  {peak:>10} {retained:>12} {warm_peak:>12} {:>10}   rustfft",
+            n * 16
+        );
+
+        let (mut re, mut im) = (re_src.clone(), im_src.clone());
+        let (peak, retained, phast) = peak_live_bytes(|| {
+            let planner = phastft::planner::PlannerDit64::new(n);
+            phastft::fft_f64_dit_with_planner(
+                black_box(&mut re),
+                black_box(&mut im),
+                phastft::planner::Direction::Forward,
+                &planner,
+            );
+            planner
+        });
+        let (warm_peak, _, ()) = peak_live_bytes(|| {
+            re.copy_from_slice(&re_src);
+            im.copy_from_slice(&im_src);
+            phastft::fft_f64_dit_with_planner(
+                black_box(&mut re),
+                black_box(&mut im),
+                phastft::planner::Direction::Forward,
+                &phast,
+            );
+        });
+        drop(phast);
+        println!(
+            "{n:>8}  {peak:>10} {retained:>12} {warm_peak:>12} {:>10}   phastft",
+            n * 16
+        );
+    }
 }
 
 /// Counts allocations across one call, after a warm-up call that pays any
@@ -326,6 +459,12 @@ fn opt_out_of_power_throttling() {}
 
 fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     opt_out_of_power_throttling();
+    // Before the timing suites, so each size's cold window is its first touch
+    // of the process-global caches (see the function's method note).
+    peak_working_set_census();
+    if std::env::var_os("APOLLO_PEAK_WORKING_SET_ONLY").is_some() {
+        return Ok(());
+    }
     let started = Instant::now();
     let mode = BenchmarkMode::from_environment()?;
     let config = mode.apply(
