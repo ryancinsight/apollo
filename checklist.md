@@ -10,16 +10,19 @@
 - [x] Route static and dynamic 2-D/3-D complex view transforms through that
       boundary; verify forward, normalized inverse, tails, and warm allocation
       behavior without changing transform arithmetic.
-- [ ] Synchronize ADR 0040, Rustdoc, changelog, and provider records; run focused
+- [x] Synchronize ADR 0040, Rustdoc, changelog, and provider records; run focused
       and package gates plus independent architecture review.
 - [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
 
-Evidence pending independent re-review: 443/443 Apollo FFT Nextest cases pass
-in 5.99 seconds; warning-denied all-target Clippy, doctests, warning-denied
-rustdoc, provider audit, lock validation, format, and 223/223 SemVer checks
-pass. The optimized engine census completes its unchanged body in 7.77 seconds
-and observes zero warm allocations for the F-order 2-D and strided 3-D staging
-paths. Shared-cache contention affected compile wall time, not the timed body.
+Evidence at `f413040a`: 443/443 Apollo FFT Nextest cases pass in 6.439
+seconds; warning-denied all-target Clippy, doctests, warning-denied rustdoc,
+provider audit, lock validation, format, and 223/223 SemVer checks pass. The
+five layout cases require bit-for-bit staged-versus-C-order parity. The
+optimized engine census completes its unchanged body in 7.77 seconds and
+observes zero warm allocations for the F-order 2-D and strided 3-D staging
+paths. Independent architecture review passes after its implementation and
+evidence findings were corrected. Shared-cache contention affected compile
+wall time, not the timed body.
 
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 

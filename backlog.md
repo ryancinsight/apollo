@@ -19,7 +19,8 @@
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
   **Lease:** plan scratch, FFT layout helper, 2-D/3-D plan implementations and
   tests, ADR 0040, changelog, and this item's PM entries through the next
-  verified commit. **Last update:** 2026-08-27.
+  verified commit. **Last update:** 2026-08-27; exact-revision architecture
+  review passes at `f413040a`, pending PR #139 delivery.
 
 ## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — todo
 
