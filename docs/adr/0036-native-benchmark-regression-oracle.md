@@ -3,6 +3,10 @@
 - **Status:** Accepted
 - **Date:** 2026-07-20
 - **Class:** [minor] [arch]
+- **Revision 2026-08-27:** Smoke execution now invokes every unchanged case
+  exactly once without warm-up or inferential statistics. Full measurement
+  retains its budgets, 100 observations, and comparison contract. The change
+  follows an unoptimized `cargo test --bench engine_census` runtime breach.
 
 ## Context
 
@@ -186,12 +190,17 @@ strategy comparisons and the f32 N=1031 Bluestein case that exposed the false
 attribution. A 100 ms warm-up plus 400 ms measurement budget yields
 approximately 21 seconds for `half_cyclic_rader`, 10 seconds for
 `prime_compose`, and 11 seconds for `kernel_strategy` before process overhead.
-Each binary has a 300-second hard bound. A full-case smoke mode uses minimum
-timing budgets while retaining 100 samples per case under a 60-second bound.
-These are instrument-design changes; no comparator threshold is widened and no
-production transform path changes. On the reference Windows host the three
-smoke runs complete in 0.75-0.81 seconds each; full measurement runs complete
-in 9.44 seconds, 7.53 seconds, and 20.66 seconds respectively.
+Each binary has a 300-second hard bound. A full-case smoke mode invokes each
+production closure once without warm-up and marks its single observation as
+non-inferential. The committed bench gate applies a 60-second process bound.
+These are instrument-design changes; full measurement retains 100 observations
+per case, no comparator threshold is widened, and no production transform path
+changes. Before the one-observation correction, the reference Windows host ran
+the three minimum-budget smoke binaries in 0.75-0.81 seconds each; full
+measurement runs complete in 9.44 seconds, 7.53 seconds, and 20.66 seconds
+respectively. After the correction, all seven custom bench binaries complete
+their unoptimized smoke gate in 26.8 seconds after linking, while the unchanged
+100-observation optimized engine census completes in 5.57 seconds.
 
 Hosted run `29955865616` confirmed that canonical-path compilation produced
 byte-identical SHA-256 values for every base/candidate executable. It then

@@ -102,6 +102,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Apollo's native benchmark smoke mode executes every unchanged case
+  exactly once without warm-up or inferential statistics. All seven custom
+  `apollo-fft` bench binaries honor the mode, and the main verification workflow
+  runs them under a 60-second process bound. Full measurement retains its
+  existing case sets, timing budgets, 100 observations, and confidence rules.
+
 - [patch] [arch] Preserve logical row-major order when `apollo-fft` transforms
   Fortran-contiguous or strided 2-D and 3-D mutable Leto views. C-contiguous
   views, including offset dense blocks, retain direct execution; other layouts

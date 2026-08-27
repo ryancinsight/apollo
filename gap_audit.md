@@ -276,10 +276,17 @@ and plan shape; C-only array tests cannot establish a view API's stride
 semantics.
 
 The same census exposed a separate instrument defect: `cargo test --bench
-engine_census` runs the full timed sweep under the unoptimized test profile and
-reached its 60-second guard at 103.29 seconds. The optimized local timing path
-remains the performance instrument. A dedicated board item owns a bounded
-single-iteration smoke route without changing the timing workload or guard.
+engine_census` ran the full timed sweep under the unoptimized test profile and
+reached its 60-second guard at 103.29 seconds. The corrected smoke mode executes
+each unchanged case exactly once, omits warm-up and calibration, and reports its
+single observation with zero confidence coverage rather than presenting it as
+timing evidence. All seven custom benchmark binaries now honor that mode. On the
+reference Windows host, the all-bench smoke gate completed in 26.8 seconds after
+the one-time link build, and the focused census body completed in 1.93 seconds.
+The optimized local timing path remains the performance instrument: the full
+100-observation census completed in 5.57 seconds with the same case set, zero
+warmed 2-D/3-D staging allocations, zero 1-D complex and half-spectrum
+allocations, and the documented single `16N`-byte full-real allocation.
 
 ### The gate caught a live regression, not a synthetic one
 

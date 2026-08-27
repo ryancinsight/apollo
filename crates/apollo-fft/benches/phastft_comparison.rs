@@ -51,7 +51,7 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use eunomia::{Complex32, Complex64};
 use phastft::planner::{Direction, PlannerDit32, PlannerDit64};
 use phastft::{fft_f32_dit_with_planner, fft_f64_dit_with_planner};
@@ -168,16 +168,20 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     );
 }
 
-fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     let started = Instant::now();
+    let mode = BenchmarkMode::from_environment()?;
 
-    let config = BenchmarkConfig::try_with_budgets(
-        Duration::from_millis(WARM_UP_MS),
-        Duration::from_millis(MEASUREMENT_MS),
-    )?;
+    let config = mode.apply(
+        BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(WARM_UP_MS),
+            Duration::from_millis(MEASUREMENT_MS),
+        )
+        .expect("invariant: benchmark duration constants are non-zero"),
+    );
 
     eprintln!(
-        "phastft_comparison: {} sizes, warm-up {WARM_UP_MS}ms, measurement {MEASUREMENT_MS}ms, budget {BUDGET_SECS}s (hard)",
+        "phastft_comparison: {mode:?} mode, {} sizes, measurement configuration warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms, budget {BUDGET_SECS}s (hard)",
         SIZES.len()
     );
 
