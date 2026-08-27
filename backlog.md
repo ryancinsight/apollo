@@ -1,27 +1,39 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — todo
+## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — done 2026-08-27: radix-8 declined by both instruments, the twiddle fold delivered instead
 
-- **Outcome:** the planar batched kernel holds three stages per memory pass
-  (radix-8) where it now holds two (radix-4), closing toward the reference
-  engines' shape: RustFFT's column butterflies hold eight registers through
-  three stages, and the interleaved-kernel experiment proved the remaining gap
-  is radix depth, not layout.
-- **The register-pressure problem, stated up front:** planar radix-8 needs
-  sixteen data registers (eight rows x two planes) before twiddles, which is
-  the whole AVX2 file. Candidate schedules, to be decided by codegen
-  inspection and pinned measurement rather than argument: (a) process one
-  plane's rows through the stage triple while the other plane's intermediates
-  spill to a hot stack slot; (b) split each row pass into half-width column
-  strips so eight half-rows fit beside twiddles; (c) fold the four-step
-  twiddle multiply into the last fused stage's stores instead, which deletes a
-  pass without deepening the radix.
-- **Acceptance oracle:** pinned P-core improvement over the current radix-4
-  kernel at 256 through 65536 with the six planar oracles and the interleaved
-  differential oracle unchanged; codegen inspection confirms no spill storm.
-- **Risk / change class:** [arch]; hot-kernel restructuring.
-- **Dependencies:** none — the differential oracle from
-  `ATLAS-APOLLO-INTERLEAVED-BATCHED-2026-08-27` is the safety net.
+- **Radix-8 was implemented and measured honestly, and it loses.** The full
+  three-stage fused block (eight rows, seven hoisted twiddles) passed all
+  eleven oracles including the interleaved differential on the first run —
+  and measured flat to slower pinned: +5/+3/+8% on a P-core at 256/4096/65536,
+  +7 to +13% slower on an E-core at small sizes. Codegen inspection confirmed
+  the mechanism the item predicted: **108 ymm-to-stack spill instructions
+  against 17 FMAs** in the kernel body — register traffic exceeding
+  arithmetic. Sixteen data registers is the whole AVX2 file, and the register
+  allocator cannot be argued out of that. Reverted; radix-4 stands as the
+  planar fusion depth on this ISA. A wider file (AVX-512's 32 registers)
+  reopens the question; the block is one commit back in history if it does.
+- **Candidate (c) from the item delivered the win instead.** The four-step
+  twiddle matrix is symmetric (`W^(j*b)` is its own transpose), so its
+  multiply moves to the other side of the transpose: `FourStepPlanes` caches
+  planar, bit-reversed-row twiddle planes, stage-set-2's first-stage loads
+  multiply by them as vectors, and the transpose becomes a pure exchange —
+  the scalar multiply that was 26% of the driver at N = 256 is deleted, not
+  optimized.
+- **Measured pinned on the P-core (the item's primary oracle):** +4 to 9% at
+  256 through 16384 against both recorded radix-4 baselines (1024: 3805 to
+  3504 ns, now 14.6 flops/ns; cumulative with the seam pass, 4228 to 3504 =
+  17%); 65536 inside the baseline noise band. E-core figures are within their
+  historical swing and not claimed.
+- **Memory accounting, stated:** the planes cache adds `2n` reals per
+  `(n, direction)` key beside the interleaved matrix, which must stay because
+  the threaded four-step path still consumes it. Unifying the two
+  representations is recorded as the follow-up consolidation, not silently
+  ignored.
+- **Verification:** twelve batched-module tests including the two new units
+  (pure-transpose involution with pad sentinels; planes equal the
+  row-permuted split of the interleaved matrix, bitwise, and cache by
+  pointer), the interleaved differential, and the accuracy gate's ladders.
 
 ## ATLAS-APOLLO-BATCHED-SEAMS-2026-08-27 — Fold the batched driver's permutation seams [patch] — done 2026-08-27
 

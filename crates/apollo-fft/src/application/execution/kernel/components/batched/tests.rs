@@ -3,56 +3,36 @@
 //! The transpose and the batched stage set are verified separately from the
 //! assembled transform, so a failure localizes.
 
-use super::{four_step_batched, scratch_len, twiddle_transpose, BatchedPlanCache};
+use super::{four_step_batched, scratch_len, transpose_planes, BatchedPlanCache};
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
 #[test]
-fn fused_twiddle_transpose_matches_the_separate_passes() {
-    // Reference: the two passes the fused function replaced — an elementwise
-    // multiply at the pre-transpose index, then a plain transpose. Synthetic
-    // twiddle values (not roots of unity) so an index mix-up cannot cancel.
+fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
     for m in [1usize, 2, 4, 8, 16, 33, 64] {
-        let re0: Vec<f64> = (0..m * m).map(|i| 0.5 + i as f64).collect();
-        let im0: Vec<f64> = (0..m * m).map(|i| 0.25 - i as f64 * 0.5).collect();
-        let tw: Vec<Complex64> = (0..m * m)
-            .map(|i| Complex64::new(1.0 + 0.01 * i as f64, 0.02 * i as f64 - 0.3))
-            .collect();
-
-        let mut expected_re = vec![0.0f64; m * m];
-        let mut expected_im = vec![0.0f64; m * m];
-        for r in 0..m {
-            for c in 0..m {
-                let p = r * m + c;
-                let t = tw[p];
-                expected_re[c * m + r] = re0[p] * t.re - im0[p] * t.im;
-                expected_im[c * m + r] = re0[p] * t.im + im0[p] * t.re;
-            }
-        }
-
-        // Unpadded and padded strides run the same logical operation; both
-        // must match the reference, and the padded run must never touch pad.
         for pad in [0usize, 8] {
             let stride = m + pad;
             let sentinel = f64::NAN;
+            let re0: Vec<f64> = (0..m * m).map(|i| 0.5 + i as f64).collect();
+            let im0: Vec<f64> = (0..m * m).map(|i| 0.25 - i as f64 * 0.5).collect();
             let mut re = vec![sentinel; m * stride];
             let mut im = vec![sentinel; m * stride];
             for r in 0..m {
                 re[r * stride..r * stride + m].copy_from_slice(&re0[r * m..(r + 1) * m]);
                 im[r * stride..r * stride + m].copy_from_slice(&im0[r * m..(r + 1) * m]);
             }
-            twiddle_transpose(&mut re, &mut im, &tw, m, stride);
+            transpose_planes(&mut re, &mut im, m, stride);
             for r in 0..m {
                 for c in 0..m {
                     assert_eq!(
                         re[r * stride + c],
-                        expected_re[r * m + c],
-                        "m={m} pad={pad}: real ({r},{c}) differs"
+                        re0[c * m + r],
+                        "m={m} pad={pad} re ({r},{c})"
                     );
                     assert_eq!(
                         im[r * stride + c],
-                        expected_im[r * m + c],
-                        "m={m} pad={pad}: imaginary ({r},{c}) differs"
+                        im0[c * m + r],
+                        "m={m} pad={pad} im ({r},{c})"
                     );
                 }
                 for c in m..stride {
@@ -62,8 +42,38 @@ fn fused_twiddle_transpose_matches_the_separate_passes() {
                     );
                 }
             }
+            transpose_planes(&mut re, &mut im, m, stride);
+            for r in 0..m {
+                assert_eq!(&re[r * stride..r * stride + m], &re0[r * m..(r + 1) * m]);
+            }
         }
     }
+}
+
+#[test]
+fn four_step_planes_are_the_row_permuted_split_of_the_interleaved_matrix() {
+    use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+    let (n, m) = (256usize, 16usize);
+    let planes = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
+    let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
+    let bits = m.trailing_zeros();
+    for row in 0..m {
+        let src = row.reverse_bits() >> (usize::BITS - bits);
+        for col in 0..m {
+            assert_eq!(
+                planes.re[row * m + col].to_bits(),
+                interleaved[src * m + col].re.to_bits(),
+                "re ({row},{col})"
+            );
+            assert_eq!(
+                planes.im[row * m + col].to_bits(),
+                interleaved[src * m + col].im.to_bits(),
+                "im ({row},{col})"
+            );
+        }
+    }
+    let again = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
+    assert!(std::sync::Arc::ptr_eq(&planes, &again), "planes must cache");
 }
 
 /// Direct DFT, the analytical oracle for the assembled transform.
