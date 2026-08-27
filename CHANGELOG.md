@@ -826,7 +826,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [patch] [arch] Preserve logical row-major order when `apollo-fft` transforms
   Fortran-contiguous or strided 2-D and 3-D mutable Leto views. C-contiguous
   views, including offset dense blocks, retain direct execution; other layouts
-  stage once through a dedicated reusable plan-scratch role and assign back
+  stage once through a rank-disjoint reusable plan-scratch role and assign back
   through Leto, with zero allocations after warm-up. ADR 0040 records the
   corrected layout boundary.
 

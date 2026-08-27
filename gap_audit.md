@@ -262,14 +262,16 @@ F-order regressions reproduce with 2-D and 3-D maximum errors of `3.10` and
 view instead reached the old contiguity panic.
 
 The corrected entry boundary exposes only C-dense views directly. Every other
-valid layout is assigned into a C-order view backed by a distinct plan-scratch
-role, transformed, and assigned back through Leto. Static and dynamic 2-D/3-D
-tests now cover offset C, Fortran, and gapped strides for direct forward parity
-and normalized round trips. A pointer-identity test guards the direct offset-C
-path, and the engine census observes zero allocations on warmed F-order 2-D and
-strided 3-D calls. The escaped-defect guard is the cross-product of logical
-layout class and plan shape; C-only array tests cannot establish a view API's
-stride semantics.
+valid layout is assigned into a C-order view backed by a rank-disjoint existing
+plan-scratch role: rank two uses the dormant 3-D X role and rank three uses the
+dormant 2-D role. The transformed result is assigned back through Leto. Static
+and dynamic 2-D/3-D tests now cover offset C, Fortran, and gapped strides for
+direct forward parity and normalized round trips. Their tolerances use an
+explicit `gamma(k) = k*u/(1-k*u)` operation model instead of heuristic factors.
+A pointer-identity test guards the direct offset-C path, and the engine census
+observes zero allocations on warmed F-order 2-D and strided 3-D calls. The
+escaped-defect guard is the cross-product of logical layout class and plan
+shape; C-only array tests cannot establish a view API's stride semantics.
 
 The same census exposed a separate instrument defect: `cargo test --bench
 engine_census` runs the full timed sweep under the unoptimized test profile and

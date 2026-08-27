@@ -4,8 +4,9 @@
 
 - [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
       old physical-memory-order behavior with failing value-semantic cases.
-- [x] Add one reusable view-staging role to plan scratch and one canonical Leto
-      stage/assign helper while preserving the direct C-order slice path.
+- [x] Reuse rank-disjoint existing plan-scratch roles through one canonical
+      Leto stage/assign helper while preserving the direct C-order slice path
+      and the three-slot scratch-bank bound.
 - [x] Route static and dynamic 2-D/3-D complex view transforms through that
       boundary; verify forward, normalized inverse, tails, and warm allocation
       behavior without changing transform arithmetic.
@@ -13,11 +14,12 @@
       and package gates plus independent architecture review.
 - [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
 
-Evidence pending independent review: 442/442 Apollo FFT Nextest cases pass in
-6.33 seconds; warning-denied all-target Clippy, doctests, warning-denied
+Evidence pending independent re-review: 443/443 Apollo FFT Nextest cases pass
+in 5.99 seconds; warning-denied all-target Clippy, doctests, warning-denied
 rustdoc, provider audit, lock validation, format, and 223/223 SemVer checks
-pass. The optimized engine census completes in 47.01 seconds and observes zero
-warm allocations for the new F-order 2-D and strided 3-D staging paths.
+pass. The optimized engine census completes its unchanged body in 7.77 seconds
+and observes zero warm allocations for the F-order 2-D and strided 3-D staging
+paths. Shared-cache contention affected compile wall time, not the timed body.
 
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 

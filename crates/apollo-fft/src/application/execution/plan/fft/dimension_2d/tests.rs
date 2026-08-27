@@ -1,4 +1,5 @@
 use super::*;
+use crate::application::execution::plan::fft::layout::error_bound;
 use eunomia::Complex64;
 use leto::{ArrayView2, Layout};
 use std::f64::consts::PI;
@@ -47,15 +48,6 @@ fn max_view_err(view: &ArrayView2<'_, Complex64>, expected: &Array2<Complex64>) 
         .fold(0.0, f64::max)
 }
 
-fn view_error_bound<const NX: usize, const NY: usize>(input: &Array2<Complex64>) -> f64 {
-    let input_l1 = input.iter().map(|value| value.norm()).sum::<f64>();
-    // Each separable pass is a sum of at most NX or NY terms. The factor 64
-    // covers complex multiply/add rounding and both FFT/direct-reference
-    // evaluation orders; the remaining factors are the summed pass lengths
-    // and input scale.
-    64.0 * f64::EPSILON * (NX + NY) as f64 * input_l1.max(1.0)
-}
-
 fn assert_view_layout<const NX: usize, const NY: usize>(
     label: &str,
     layout: Layout<2>,
@@ -65,7 +57,9 @@ fn assert_view_layout<const NX: usize, const NY: usize>(
 ) {
     let input = signal::<NX, NY>();
     let expected = direct_forward::<NX, NY>(&input);
-    let bound = view_error_bound::<NX, NY>(&input);
+    let input_l1 = input.iter().map(|value| value.norm()).sum::<f64>();
+    let forward_bound = error_bound::forward(input_l1, &[NX, NY]);
+    let round_trip_bound = error_bound::round_trip(input_l1, &[NX, NY]);
     let mut storage = vec![Complex64::default(); storage_len];
     ArrayViewMut2::try_new(layout, &mut storage)
         .expect("test layout fits storage")
@@ -75,17 +69,16 @@ fn assert_view_layout<const NX: usize, const NY: usize>(
     let transformed = ArrayView2::try_new(layout, &storage).expect("test layout fits storage");
     let forward_error = max_view_err(&transformed, &expected);
     assert!(
-        forward_error <= bound,
-        "{label} forward mismatch: error={forward_error:.3e}, bound={bound:.3e}"
+        forward_error <= forward_bound,
+        "{label} forward mismatch: error={forward_error:.3e}, bound={forward_bound:.3e}"
     );
 
     inverse(ArrayViewMut2::try_new(layout, &mut storage).expect("test layout fits storage"));
     let recovered = ArrayView2::try_new(layout, &storage).expect("test layout fits storage");
     let roundtrip_error = max_view_err(&recovered, &input);
     assert!(
-        roundtrip_error <= 2.0 * bound,
-        "{label} roundtrip mismatch: error={roundtrip_error:.3e}, bound={:.3e}",
-        2.0 * bound
+        roundtrip_error <= round_trip_bound,
+        "{label} roundtrip mismatch: error={roundtrip_error:.3e}, bound={round_trip_bound:.3e}"
     );
 }
 

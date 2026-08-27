@@ -11,8 +11,7 @@ use eunomia::{Complex32, Complex64};
 const SCRATCH_2D_SLOT: usize = 0;
 const SCRATCH_3D_Y_SLOT: usize = 1;
 const SCRATCH_3D_X_SLOT: usize = 2;
-const SCRATCH_VIEW_STAGING_SLOT: usize = 3;
-const PLAN_SCRATCH_ROLE_COUNT: usize = 4;
+const PLAN_SCRATCH_ROLE_COUNT: usize = 3;
 
 mod sealed {
     pub trait Sealed {}
@@ -44,11 +43,6 @@ pub trait PlanScratch: sealed::Sealed + 'static {
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
     where
         Self: Sized;
-
-    /// Run a closure with thread-local logical-view staging sized to `n`.
-    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Self]) -> R) -> R
-    where
-        Self: Sized;
 }
 
 impl PlanScratch for Complex64 {
@@ -66,11 +60,6 @@ impl PlanScratch for Complex64 {
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
         TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
     }
-
-    #[inline]
-    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Complex64]) -> R) -> R {
-        TL_PLAN_SCRATCH_BANK_64.with(|bank| bank.with_scratch::<SCRATCH_VIEW_STAGING_SLOT, _>(n, f))
-    }
 }
 
 impl PlanScratch for Complex32 {
@@ -87,11 +76,6 @@ impl PlanScratch for Complex32 {
     #[inline]
     fn with_3d_x_scratch_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
         TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_3D_X_SLOT, _>(n, f))
-    }
-
-    #[inline]
-    fn with_view_staging_impl<R>(n: usize, f: impl FnOnce(&mut [Complex32]) -> R) -> R {
-        TL_PLAN_SCRATCH_BANK_32.with(|bank| bank.with_scratch::<SCRATCH_VIEW_STAGING_SLOT, _>(n, f))
     }
 }
 
@@ -113,8 +97,22 @@ pub(crate) fn with_3d_x_scratch<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut
     C::with_3d_x_scratch_impl(n, f)
 }
 
-/// Run `f` with thread-local logical-view staging sized to `n`.
+/// Run `f` with rank-disjoint thread-local logical-view staging sized to `n`.
+///
+/// A rank-two transform borrows the 3-D X role, while a rank-three transform
+/// borrows the 2-D role. Neither role is reached by the nested axis passes for
+/// that rank, so staging remains live without adding public trait surface or a
+/// fourth full-volume scratch allocation.
 #[inline]
-pub(crate) fn with_view_staging<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut [C]) -> R) -> R {
-    C::with_view_staging_impl(n, f)
+pub(crate) fn with_view_staging<C: PlanScratch, const N: usize, R>(
+    n: usize,
+    f: impl FnOnce(&mut [C]) -> R,
+) -> R {
+    match N {
+        2 => C::with_3d_x_scratch_impl(n, f),
+        3 => C::with_2d_scratch_impl(n, f),
+        _ => unreachable!(
+            "invariant: logical-view staging is only used by rank-two and rank-three plans"
+        ),
+    }
 }

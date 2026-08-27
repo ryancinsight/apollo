@@ -11,7 +11,7 @@ for internal transpose passes but admitted public mutable views through
 `as_mut_slice_memory_order`. That accessor returns physical order for both C-
 and Fortran-dense layouts, while Apollo's axis kernels require logical C order.
 The corrected boundary executes C-dense views directly and stages every other
-layout once through a dedicated reusable scratch role before assigning the
+layout once through a rank-disjoint reusable scratch role before assigning the
 result back through Leto.
 
 ## Context
@@ -36,9 +36,10 @@ Two private Apollo helpers enforce that boundary:
 
 1. The public multidimensional view entry exposes a C-dense block directly,
    including offset C-dense views. Fortran-dense and general strided layouts
-   are assigned into a C-order view backed by a fourth, role-separated plan
-   scratch slot. The complete transform runs there before Leto assigns logical
-   indices back to the caller's layout.
+   are assigned into a C-order view backed by a rank-disjoint plan-scratch
+   role. Rank two borrows the otherwise dormant 3-D X role; rank three borrows
+   the otherwise dormant 2-D role. The complete transform runs there before
+   Leto assigns logical indices back to the caller's layout.
 2. Each internal non-contiguous FFT axis pass is presented as a Leto rank-two
    assignment. A row-major source with shape `[rows, columns]` is viewed as a
    Fortran-contiguous matrix with shape `[columns, rows]`, then assigned to a
@@ -94,10 +95,10 @@ ordering.
 The transpose helper accepts only exactly sized source and destination slices
 and checks dimension multiplication before constructing views. Empty batches
 and zero-area matrices perform no assignment. The entry helper preserves
-logical indices for any valid injective mutable layout. Its staging slot is
-distinct from the 2-D, 3-D Y-axis, and 3-D X-axis roles because those buffers
-remain live during the staged transform. All scratch remains thread-local and
-reused by the plan scratch bank.
+logical indices for any valid injective mutable layout. The selected staging
+role is unreachable from that rank's nested axis passes, so it remains live
+without adding another full-volume scratch slot. All scratch remains
+thread-local and reused by the plan scratch bank.
 
 The controlled provider benchmark compares Leto assignment with Apollo's
 superseded loops in one binary at identical addresses. Four of eight
