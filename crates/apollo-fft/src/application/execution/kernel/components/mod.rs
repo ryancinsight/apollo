@@ -1,5 +1,10 @@
 pub(crate) mod batched;
+// Test-gated: correct on every oracle, blocked on a hermes vectorize
+// codegen defect for large kernel bodies (the module doc carries the
+// evidence); its pinned probe is the four-engine same-process instrument.
 pub(crate) mod butterflies;
+#[cfg(test)]
+mod resident;
 // Test-gated deliberately, not provisionally: the N = 16 codelet is correct
 // against a direct-DFT oracle but measured slower than the incumbent sized
 // kernel pinned on both core types, so it ships as a measurement instrument
