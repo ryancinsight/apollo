@@ -37,6 +37,31 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
+## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
+
+- **Delivered:** `FourStepPlanes` builds from a new uncached
+  `build_four_step_twiddles` entry instead of the caching accessor, so the
+  interleaved matrix is a build transient — split into planes and dropped.
+  Batched sizes (256..16384) now cache exactly the planar planes; threaded
+  sizes (65536 and up) exactly the interleaved matrix their fused
+  transpose-multiply reads with better locality; the ranges are disjoint by
+  the routing thresholds. The doubled-footprint defect the fold recorded —
+  4n reals per batched key — is halved to 2n, equal to the pre-fold state.
+- **The boundary-pass vectorization was tried and declined by same-session
+  A/B.** Explicit `interleave`/`deinterleave` lane kernels for the driver's
+  conversion loops measured 2 to 7% slower than the "scalar" loops at every
+  size, pinned: the compiler already auto-vectorizes those canonical
+  patterns, and the explicit version added two dispatch round-trips per
+  transform. The cost the section profile attributed to those loops was
+  real but already near-optimal — cost and waste are not the same column.
+- **Stage-set arithmetic closes at its local optimum on this ISA, each exit
+  measured:** radix-8 spills (108 stack moves vs 17 FMAs, flat-to-slower
+  pinned), the interleaved kernel loses 16-37%, boundary vectorization loses
+  2-7%, and codegen shows the fold branch properly unswitched with
+  branch-free inner loops. Remaining levers, filed rather than implied: the
+  per-transform cache lookups (~6% at N = 256; needs plan-owned resources
+  threaded through `PotRoute`, a route-signature change), and quiet-host
+  confirmation of the cumulative gains.
 
 ## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — done 2026-08-27: radix-8 declined by both instruments, the twiddle fold delivered instead
 
