@@ -54,6 +54,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>, const N: usize> StaticFftPlan1D<
     }
 
     /// Forward transform of a complex Leto view in-place.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from `N`.
     #[inline]
     pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.forward_complex_slice_inplace(
@@ -63,6 +68,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>, const N: usize> StaticFftPlan1D<
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from `N`.
     #[inline]
     pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.inverse_complex_slice_inplace(
@@ -72,6 +82,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>, const N: usize> StaticFftPlan1D<
     }
 
     /// Inverse transform of a complex Leto view in-place without normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from `N`.
     #[inline]
     pub fn inverse_complex_leto_unnorm_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.inverse_complex_slice_unnorm_inplace(
