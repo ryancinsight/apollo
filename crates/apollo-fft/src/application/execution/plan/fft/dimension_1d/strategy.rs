@@ -17,7 +17,6 @@ pub(crate) enum PlanStrategy<F: MixedRadixScalar> {
     ShortWinograd,
     PowerOfTwo {
         twiddle_fwd: Arc<[F::Complex]>,
-        twiddle_inv: Arc<[F::Complex]>,
         log2: u32,
         pot: PhantomData<SizedPoT<StockhamAutosort, 0>>,
     },
@@ -38,12 +37,10 @@ impl<F: MixedRadixScalar> Clone for PlanStrategy<F> {
             Self::ShortWinograd => Self::ShortWinograd,
             Self::PowerOfTwo {
                 twiddle_fwd,
-                twiddle_inv,
                 log2,
                 pot,
             } => Self::PowerOfTwo {
                 twiddle_fwd: twiddle_fwd.clone(),
-                twiddle_inv: twiddle_inv.clone(),
                 log2: *log2,
                 pot: *pot,
             },
