@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Ten stale local branches hold unique patches — todo
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Ten stale local branches hold unique patches — in progress
 
 - **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
   codex/apollo-arch-006-junk-drawer-rename (2), codex/fix-apollo-package-sources
@@ -13,6 +13,9 @@
   closest-to-done first, one branch per increment. PR #142
   (codex/fix-apollo-bench-smoke-runtime, held by the apollo-stockham-throughput
   lane) is separate live review work.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** this item entry and `codex/fix-atlas-sha` through the next verified
+  branch-debt commit. **Last update:** 2026-08-27.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
 

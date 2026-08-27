@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 [patch] — Codex
+
+- [ ] Remove `codex/fix-atlas-sha` after proving its Hermes 0.6 requirement is
+      superseded by main's Hermes 0.7 requirement and `08306b94` lock pin.
+- [ ] Reconcile `fix/apollo-fft-workspace-buffers` against current main and
+      either integrate its unique value with focused gates or prove it obsolete.
+- [ ] Process the remaining stale branches one complete increment at a time;
+      keep the board inventory and branch count exact.
+
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
 - [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
