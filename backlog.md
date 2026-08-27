@@ -1,5 +1,56 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BATCHED-SEAMS-2026-08-27 — Fold the batched driver's permutation seams [patch] — done 2026-08-27
+
+- **Cycle-accurate section profile** (rdtsc, pinned; the Instant-based section
+  timer quantized to zero at these scales) of the batched driver at N = 256:
+  stage sets 53%, the fused twiddle-transpose 26% (its multiply is scalar),
+  deinterleave + interleave 15%, cache lookups 6%. The planar seams —
+  conversions plus the scalar transpose multiply — cost about a third of the
+  driver at mid sizes.
+- **Delivered:** the deinterleave now writes each row at its bit-reversed
+  position (bit reversal is an involution, so writing to `rev(row)` equals the
+  swap list), deleting stage-set-1's separate permutation pass outright; the
+  remaining set-2 permutation exchanges whole rows via `swap_with_slice`
+  (block copies the compiler vectorizes) instead of two scalar swaps per lane;
+  `run_batched` sheds its embedded permute so callers own row order.
+- **Measured pinned, same session, both core types:** 7 to 12% end to end
+  (1024-P 4228 to 3953 ns, 1024-E 2668 to 2344, 256-P 964 to 892). All six
+  batched oracles pass; the results are bit-identical by construction since
+  the arithmetic order is unchanged.
+- **Standing after this:** 1024-P at 13.0 flops/ns against RustFFT's ~35. The
+  remaining measured seams are the scalar twiddle-transpose multiply (26%) and
+  the conversion passes (15%), both artifacts of the planar layout itself —
+  which is the successor item's case.
+
+## ATLAS-APOLLO-INTERLEAVED-BATCHED-2026-08-27 — Interleaved batched kernel [arch] — todo
+
+- **Outcome:** the batched four-step operates directly on interleaved
+  `Complex<T>` data via `hermes_simd::ComplexReg`, eliminating the planar
+  conversion passes, the planar scratch planes, and the scalar
+  twiddle-transpose multiply in one structural change.
+- **Why, with measured shares:** the planar layout buys shuffle-free
+  butterflies but pays deinterleave + interleave passes (15% of the driver at
+  mid sizes), a transpose whose fused twiddle multiply is scalar (26%), and a
+  scratch requirement of two full planes. Interleaved butterflies pay three
+  shuffles and one alternating FMA per twiddle multiply — RustFFT's own trade,
+  at 35 flops/ns — and shuffle ports are otherwise idle in this kernel.
+- **Memory efficiency is half the case:** planar scratch is `m * (m + 8) * 2`
+  reals; the interleaved kernel transposes `Complex` elements in place and
+  needs no conversion staging, dropping peak transient footprint from about
+  `3n` (data + planes + twiddle matrix) toward `2n`.
+- **Scope:** a sibling stage kernel over `ComplexReg` in `components/batched/`
+  selected by the same plan cache; the twiddle table stays shared. The
+  transpose moves 16-byte `Complex` units with the same 8-row tiling.
+  **Non-goals:** the four-step structure, admission, or thresholds.
+- **Acceptance oracle:** the six existing batched oracles instantiated for the
+  interleaved kernel; pinned probe beats the planar kernel at 256 through
+  65536 on a P-core before any route change; allocation column at zero and
+  scratch requirement reduced.
+- **Risk / change class:** [arch]; the planar kernel is deleted in the same
+  change if the interleaved one dominates at every covered size, else both
+  stay behind the measured selection.
+
 ## ATLAS-APOLLO-INTERLEAVED-CODELETS-2026-08-27 — Interleaved register-resident small-N codelets [arch] — done 2026-08-27, measurement redirected the wiring
 
 - **The codelet was built, verified, measured pinned — and declined.** The

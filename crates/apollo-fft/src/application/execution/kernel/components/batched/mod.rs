@@ -311,12 +311,16 @@ where
 
 /// Applies the bit-reversal permutation across every transform in the batch.
 fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usize, stride: usize) {
+    // Whole-row exchanges rather than element swaps: `swap_with_slice` lowers
+    // to block copies the compiler vectorizes, where the element loop issued
+    // two scalar swaps per lane. The plan's swap list guarantees `i < j`, so
+    // splitting at `j`'s row start yields the two disjoint rows safely.
     for &(i, j) in swaps {
         let (i, j) = (i as usize * stride, j as usize * stride);
-        for k in 0..batch {
-            re.swap(i + k, j + k);
-            im.swap(i + k, j + k);
-        }
+        let (re_low, re_high) = re.split_at_mut(j);
+        re_low[i..i + batch].swap_with_slice(&mut re_high[..batch]);
+        let (im_low, im_high) = im.split_at_mut(j);
+        im_low[i..i + batch].swap_with_slice(&mut im_high[..batch]);
     }
 }
 
@@ -456,12 +460,14 @@ macro_rules! impl_plan_cache {
 impl_plan_cache!(f64, PLAN_CACHE_F64);
 impl_plan_cache!(f32, PLAN_CACHE_F32);
 
-/// Runs `batch` transforms of length `plan.len` over planar `re`/`im`.
+/// Runs the stage set of `batch` transforms of length `plan.len` over planar
+/// `re`/`im`, whose rows the caller has already bit-reversed — either by
+/// [`permute`] or by writing rows to their reversed positions in the first
+/// place, which is how the driver's deinterleave avoids a whole pass.
 fn run_batched<T>(re: &mut [T], im: &mut [T], plan: &BatchedPlan<T>, batch: usize, stride: usize)
 where
     T: LaneScalar + MixedRadixScalar,
 {
-    permute(re, im, &plan.swaps, batch, stride);
     hermes_simd::vectorize(BatchedStages {
         re,
         im,
@@ -502,8 +508,8 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let n = data.len();
     let k = n.trailing_zeros();
     assert!(
-        n.is_power_of_two() && k % 2 == 0,
-        "requires an even power of two"
+        n.is_power_of_two() && k % 2 == 0 && n >= 4,
+        "requires an even power of two of at least 4"
     );
     let m = 1usize << (k / 2);
     let stride = m + ROW_PAD;
@@ -518,10 +524,16 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
     let (re, im) = flat.split_at_mut(plane);
 
+    // The stage set wants bit-reversed rows, so the deinterleave writes each
+    // row at its reversed position and the separate permutation pass this
+    // replaces is deleted: bit reversal is an involution, so writing to
+    // `rev(row)` is exactly the swap list the plan would have applied.
+    let row_bits = k / 2;
     for (row, chunk) in data.chunks_exact(m).enumerate() {
+        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
         for (b, c) in chunk.iter().enumerate() {
-            re[row * stride + b] = c.re;
-            im[row * stride + b] = c.im;
+            re[dest * stride + b] = c.re;
+            im[dest * stride + b] = c.im;
         }
     }
 
@@ -537,8 +549,10 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
     twiddle_transpose(re, im, &twiddles, m, stride);
 
-    // 4. The `m` transforms along the second axis. The result lands at
-    //    `k2 * m + k1`, which is the natural output index, so nothing follows.
+    // 4. The `m` transforms along the second axis. The transpose produced
+    //    natural row order, so this set still needs its bit-reversal pass; the
+    //    result lands at `k2 * m + k1`, the natural output index.
+    permute(re, im, &plan.swaps, m, stride);
     run_batched(re, im, plan.as_ref(), m, stride);
 
     for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
