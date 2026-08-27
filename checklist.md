@@ -4,7 +4,7 @@
 
 - [x] Remove `codex/fix-atlas-sha` after proving its Hermes 0.6 requirement is
       superseded by main's Hermes 0.7 requirement and `08306b94` lock pin.
-- [ ] Reconcile `fix/apollo-fft-workspace-buffers` against current main and
+- [x] Reconcile `fix/apollo-fft-workspace-buffers` against current main and
       either integrate its unique value with focused gates or prove it obsolete.
 - [ ] Process the remaining stale branches one complete increment at a time;
       keep the board inventory and branch count exact.
@@ -12,6 +12,14 @@
 Evidence: `dd0dad47` changed only `Cargo.toml` and `Cargo.lock` from Hermes 0.5
 to 0.6. Main requires Hermes 0.7 and locks `08306b94`; the superseded local and
 remote `codex/fix-atlas-sha` refs were deleted on 2026-08-27.
+
+Workspace-buffer salvage is PR #150 at `14993ed9`: retained host staging covers
+the four f64/half Leto GPU entry points, and Leto `fb70cb6` initializes final
+Mnemosyne-backed outputs once. Exact-head evidence is locked check, strict
+Clippy, 482/482 Nextest, 2/2 doctests, warning-denied Rustdoc, provider audit,
+223/223 interop patch SemVer, 196/196 FFT minor SemVer, and bounded GPU benchmark
+smoke. The stale local and remote refs are deleted; their Winograd blob remains
+on two separately tracked stale branches.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 

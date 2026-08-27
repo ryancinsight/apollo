@@ -741,7 +741,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1118,7 +1118,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "leto"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#349b21b2efc3a2d8cc1c219ef8cddb09a95e540d"
+source = "git+https://github.com/ryancinsight/leto.git#fb70cb6a12ecb4728ba7ee16978d83734c9172d7"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1130,7 +1130,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#349b21b2efc3a2d8cc1c219ef8cddb09a95e540d"
+source = "git+https://github.com/ryancinsight/leto.git#fb70cb6a12ecb4728ba7ee16978d83734c9172d7"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -2156,7 +2156,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2351,7 +2351,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

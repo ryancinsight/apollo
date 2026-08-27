@@ -14,8 +14,9 @@ pub fn try_array1_from_slice<T: Copy>(
 
 /// Build a one-dimensional Mnemosyne-backed Leto array by moving `values`.
 ///
-/// The vector elements are moved into Mnemosyne storage rather than cloned.
-/// Returns [`None`] when Leto rejects the output shape.
+/// Leto moves the elements into a separate Mnemosyne allocation and releases
+/// the vector allocation; it does not adopt the vector allocation. Returns
+/// [`None`] when Leto rejects the output shape.
 #[must_use]
 #[inline]
 pub fn try_array1_from_vec<T>(

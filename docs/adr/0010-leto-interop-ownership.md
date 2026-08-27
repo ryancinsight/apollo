@@ -4,6 +4,12 @@
 
 Accepted on 2026-07-15.
 
+**Revision 2026-08-27:** Allocation-sensitive generated outputs now call Leto's
+`from_mnemosyne_shape_fn` directly. Leto merge `fb70cb6` initializes final
+Mnemosyne storage once and cleans a partially initialized prefix if generation
+panics. Apollo does not add a default-filled interop constructor around that
+upstream capability.
+
 ## Context
 
 `apollo-fft` is an FFT implementation crate. Its
@@ -22,8 +28,9 @@ structure merely to cross the Leto host-array boundary.
   in Leto logical row-major order;
 - `try_dense_from_array` and `try_dense_from_view` construct dense
   Mnemosyne-backed outputs from arbitrary rank-polymorphic Leto arrays/views;
-  `try_dense_from_slice` is the corresponding computed-slice boundary; and
-  one-dimensional constructors retain their move/copy distinction.
+  `try_dense_from_slice` copies a computed slice, generated outputs call Leto's
+  provider-owned in-place shape generator, and one-dimensional constructors
+  retain their slice/vector distinction.
 
 Every transform calls that crate directly. `apollo-fft` deletes its former
 utility module, and transform-local forwarding wrappers are deleted in the
@@ -40,12 +47,14 @@ sequence, so collecting it produces the same values in owned contiguous
 storage.
 
 For a dense output constructor given source shape `s`, the returned array has
-shape `s` and the same logical element sequence. The contiguous branch copies
-the source slice; the strided branch collects that sequence once before Leto
-checks cardinality. These are proof sketches over Leto's documented slice and
-iterator contracts, not machine-checked proofs. Rank-one strided, rank-two
-strided/transposed, and rank-three output cases are value-semantic regression
-evidence.
+shape `s` and the same logical element sequence. The slice branch copies its
+source; the strided-view branch collects the logical sequence once before Leto
+checks cardinality. Generated outputs pass each C-order coordinate to Leto's
+shape generator, which writes that value directly into final Mnemosyne storage.
+These are proof sketches over Leto's documented slice, storage, and iterator
+contracts, not machine-checked proofs. Rank-one and rank-two strided/transposed
+inputs, rank-three output, and Leto's zero-length, non-Copy drop, and generator
+panic cases are value-semantic regression evidence.
 
 ## Consequences
 

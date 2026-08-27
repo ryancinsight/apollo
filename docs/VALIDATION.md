@@ -273,7 +273,12 @@ property tests against analytical identities and direct references.
   gridding for 1D and 3D against `apollo-nufft` exact and gridded references.
 - `apollo-fft-wgpu` exposes `GpuFft3dBuffers` for repeated 3D dispatch; tests
   verify reusable-buffer forward/inverse execution matches the existing
-  allocating path when a WGPU device is available.
+  allocating path when a WGPU device is available. Leto f64 and half-storage
+  boundaries share the same retained host planes, preserve their addresses
+  across forward/inverse dispatch, and reject buffers from a different plan
+  shape before mutation. The returned arrays use Leto's in-place shape
+  generator, whose provider tests verify single-write final storage and panic
+  cleanup without an intermediate collection.
 - `apollo-ntt-wgpu` exposes `NttGpuBuffers` for repeated direct modular NTT
   dispatch; tests verify reusable-buffer forward/inverse execution matches the
   allocating path and reject mismatched plan/buffer lengths when a WGPU device
