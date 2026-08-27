@@ -19,13 +19,13 @@
   failure-atomic shape tests pass. The stale local and remote refs were deleted.
   Its Winograd blob remains on `cascade/hermes-07` and
   `fix/apollo-large-composite-wiring`; its lockfile was derived state.
-- **Current delivery:** PR #150 is locally green at `14993ed9`: locked checks,
-  strict Clippy, 482/482 Nextest, 2/2 doctests, warning-denied Rustdoc, provider
-  audit, 223/223 interop patch SemVer checks, and 196/196 FFT minor SemVer
-  checks. The 12-case GPU benchmark smoke completes; its single samples are not
-  timing evidence.
+- **Delivered:** PR #150 merged as `0536c9c8`. Its code revision `14993ed9`
+  passed locked checks, strict Clippy, 482/482 Nextest, 2/2 doctests,
+  warning-denied Rustdoc, provider audit, 223/223 interop patch SemVer checks,
+  and 196/196 FFT minor SemVer checks. The 12-case GPU benchmark smoke
+  completed; its single samples are not timing evidence.
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** this item entry and PR #150 through merge collection.
+  **Lease:** this item entry through the next stale-branch selection.
   **Last update:** 2026-08-27.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
