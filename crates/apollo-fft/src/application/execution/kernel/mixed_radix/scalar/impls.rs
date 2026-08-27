@@ -535,6 +535,18 @@ impl MixedRadixScalar for f64 {
         twiddles: &[Self::Complex],
         _s: SizedPoT<S, LOG2>,
     ) {
+        use crate::application::execution::kernel::pot::{
+            one_dimensional_uses_four_step, FourStep, PotRoute,
+        };
+        // Measured pinned on both core types (`codelet::pinned_probe`,
+        // `pot::crossover`): the batched four-step beats this sized Stockham
+        // route from N = 256 upward — 1.5x on a P-core, 5 to 6x on an E-core —
+        // so admissible sizes at or past the crossover leave the sized path.
+        // The f32 impl keeps the incumbent route until measured on its own.
+        if one_dimensional_uses_four_step(data.len()) {
+            FourStep::run::<Self, INVERSE, NORMALIZE>(data, twiddles);
+            return;
+        }
         // const LOG2 drives selection (zero-cost monomorph); for <=64 preserve direct small
         // no-scratch path (memory efficiency + best for 32/64 which have dedicated AVX fixed column);
         // for 128+ (md-worst PoT) use stockham sized path so const LOG2 flows end-to-end to
