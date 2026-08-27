@@ -1,21 +1,22 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Ten stale local branches hold unique patches — in progress
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Nine stale local branches hold unique patches — in progress
 
 - **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
   codex/apollo-arch-006-junk-drawer-rename (2), codex/fix-apollo-package-sources
-  (4), codex/fix-atlas-sha (1), feat/apollo-benchmark-generator (2),
-  fix/apollo-fft-workspace-buffers (1), fix/apollo-large-composite-wiring (3),
+  (4), feat/apollo-benchmark-generator (2), fix/apollo-fft-workspace-buffers (1),
+  fix/apollo-large-composite-wiring (3),
   fix/apollo-sht-thread-local-lint (1), perf/apollo-f32-rader-narrowing (5),
   style/apollo-butterfly-lint-consolidation-217 (1) — unique patch counts in
   parentheses; every branch is takeover material (salvage: rebase onto current
   main, verify, integrate — or prove superseded and delete). Process
-  closest-to-done first, one branch per increment. PR #142
-  (codex/fix-apollo-bench-smoke-runtime, held by the apollo-stockham-throughput
-  lane) is separate live review work.
+  closest-to-done first, one branch per increment.
+- **Reconciled:** `codex/fix-atlas-sha` contained only a Hermes 0.6 manifest and
+  lock advance; main requires Hermes 0.7 and locks `08306b94`, so both local and
+  remote refs were deleted as superseded on 2026-08-27.
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** this item entry and `codex/fix-atlas-sha` through the next verified
-  branch-debt commit. **Last update:** 2026-08-27.
+  **Lease:** this item entry and `fix/apollo-fft-workspace-buffers` through the
+  next verified branch-debt commit. **Last update:** 2026-08-27.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
 
