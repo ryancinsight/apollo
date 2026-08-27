@@ -96,3 +96,23 @@ pub(crate) fn with_3d_y_scratch<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut
 pub(crate) fn with_3d_x_scratch<C: PlanScratch, R>(n: usize, f: impl FnOnce(&mut [C]) -> R) -> R {
     C::with_3d_x_scratch_impl(n, f)
 }
+
+/// Run `f` with rank-disjoint thread-local logical-view staging sized to `n`.
+///
+/// A rank-two transform borrows the 3-D X role, while a rank-three transform
+/// borrows the 2-D role. Neither role is reached by the nested axis passes for
+/// that rank, so staging remains live without adding public trait surface or a
+/// fourth full-volume scratch allocation.
+#[inline]
+pub(crate) fn with_view_staging<C: PlanScratch, const N: usize, R>(
+    n: usize,
+    f: impl FnOnce(&mut [C]) -> R,
+) -> R {
+    match N {
+        2 => C::with_3d_x_scratch_impl(n, f),
+        3 => C::with_2d_scratch_impl(n, f),
+        _ => unreachable!(
+            "invariant: logical-view staging is only used by rank-two and rank-three plans"
+        ),
+    }
+}

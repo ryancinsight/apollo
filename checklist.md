@@ -1,5 +1,29 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
+
+- [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
+      old physical-memory-order behavior with failing value-semantic cases.
+- [x] Reuse rank-disjoint existing plan-scratch roles through one canonical
+      Leto stage/assign helper while preserving the direct C-order slice path
+      and the three-slot scratch-bank bound.
+- [x] Route static and dynamic 2-D/3-D complex view transforms through that
+      boundary; verify forward, normalized inverse, tails, and warm allocation
+      behavior without changing transform arithmetic.
+- [x] Synchronize ADR 0040, Rustdoc, changelog, and provider records; run focused
+      and package gates plus independent architecture review.
+- [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
+
+Evidence at `f413040a`: 443/443 Apollo FFT Nextest cases pass in 6.439
+seconds; warning-denied all-target Clippy, doctests, warning-denied rustdoc,
+provider audit, lock validation, format, and 223/223 SemVer checks pass. The
+five layout cases require bit-for-bit staged-versus-C-order parity. The
+optimized engine census completes its unchanged body in 7.77 seconds and
+observes zero warm allocations for the F-order 2-D and strided 3-D staging
+paths. Independent architecture review passes after its implementation and
+evidence findings were corrected. Shared-cache contention affected compile
+wall time, not the timed body.
+
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 
 - [x] Advance the lock to merged Leto PR #125 (`1e70b27e`) under the standalone
@@ -32,7 +56,7 @@ Delivery: Apollo PR #127 merged as `967e6e84`; implementation commit
       artifact reuse without introducing a separate target cache.
 - [x] Verify the unchanged counterbalanced regression oracle, focused unit
       tests, warning-denied Clippy, and workflow syntax/security checks.
-- [ ] Commit, push, merge, and record exact hosted runtime/regression evidence.
+- [x] Commit, push, merge, and record exact hosted runtime/regression evidence.
 
 Evidence: the focused release build compiles the three consumed binaries in
 1m16s; warning-denied Clippy, 45/45 Apollo-bench/xtask Nextest cases, 428/428
@@ -43,6 +67,8 @@ Independent review passed workflow routing and Bash syntax after three
 picosecond-label/historical-documentation discrepancies were fixed. The full
 workspace rustdoc command exceeded five minutes and is tracked separately as
 `ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME-2026-08-26`.
+
+Delivery: PR #130 merged as `e12d1ce2`; implementation commit `bdc68a89`.
 
 ## ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26 [arch] — Codex
 

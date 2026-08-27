@@ -3,7 +3,16 @@
 - **Status:** Accepted
 - **Date:** 2026-08-26
 - **Class:** [patch] [arch]
-- **Item:** `ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26`
+- **Items:** `ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26`,
+  `ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27`
+
+**Revision 2026-08-27:** The first implementation established Leto ownership
+for internal transpose passes but admitted public mutable views through
+`as_mut_slice_memory_order`. That accessor returns physical order for both C-
+and Fortran-dense layouts, while Apollo's axis kernels require logical C order.
+The corrected boundary executes C-dense views directly and stages every other
+layout once through a rank-disjoint reusable scratch role before assigning the
+result back through Leto.
 
 ## Context
 
@@ -23,14 +32,19 @@ layout policy and its performance tuning.
 
 Apollo owns FFT decomposition, lane scheduling, scratch lifetime, twiddle
 selection, sign, and normalization. Leto owns value-preserving layout movement.
-One private Apollo helper presents each non-contiguous FFT pass as a Leto
-rank-two assignment:
+Two private Apollo helpers enforce that boundary:
 
-1. A row-major source matrix with shape `[rows, columns]` is viewed as a
-   Fortran-contiguous matrix with shape `[columns, rows]`.
-2. A row-major destination view has shape `[columns, rows]`.
-3. Leto assignment writes the transpose into caller-owned scratch without an
-   intermediate allocation.
+1. The public multidimensional view entry exposes a C-dense block directly,
+   including offset C-dense views. Fortran-dense and general strided layouts
+   are assigned into a C-order view backed by a rank-disjoint plan-scratch
+   role. Rank two borrows the otherwise dormant 3-D X role; rank three borrows
+   the otherwise dormant 2-D role. The complete transform runs there before
+   Leto assigns logical indices back to the caller's layout.
+2. Each internal non-contiguous FFT axis pass is presented as a Leto rank-two
+   assignment. A row-major source with shape `[rows, columns]` is viewed as a
+   Fortran-contiguous matrix with shape `[columns, rows]`, then assigned to a
+   row-major destination with that same transposed shape. The destination is
+   caller-owned scratch, so no intermediate allocation occurs.
 
 The two-dimensional plan uses one matrix. The three-dimensional Y pass uses a
 batch of adjacent `[ny, nz]` planes. Its X pass treats the volume as one
@@ -62,6 +76,16 @@ Rejected because Apollo already owns reusable scratch sized for the complete
 plan. A temporary Leto allocation would violate the established zero-allocation
 warm execution contract.
 
+### Execute Fortran-dense views in physical order
+
+Rejected because physical-order chunks do not represent row-major logical
+lanes for a rectangular Fortran layout. The old implementation produced 2-D
+and 3-D errors of `3.10` and `7.38` relative to C-order execution of the same
+plans. The corrected layout tests require bit-for-bit staged-versus-C-order
+parity, so this is a semantic mismatch rather than a floating-point tolerance
+issue. Separate C-order tests retain direct-DFT and normalized round-trip
+coverage for the transform algorithm.
+
 ## Correctness and performance contract
 
 For row-major source element `(r, c)`, the linear offset is
@@ -71,10 +95,13 @@ view to a row-major destination therefore produces the mathematical transpose.
 Repeating the operation with exchanged dimensions restores the original
 ordering.
 
-The helper accepts only exactly sized source and destination slices and checks
-dimension multiplication before constructing views. Empty batches and
-zero-area matrices perform no assignment. Scratch remains caller-owned and is
-reused by the existing plan scratch bank.
+The transpose helper accepts only exactly sized source and destination slices
+and checks dimension multiplication before constructing views. Empty batches
+and zero-area matrices perform no assignment. The entry helper preserves
+logical indices for any valid injective mutable layout. The selected staging
+role is unreachable from that rank's nested axis passes, so it remains live
+without adding another full-volume scratch slot. All scratch remains
+thread-local and reused by the plan scratch bank.
 
 The controlled provider benchmark compares Leto assignment with Apollo's
 superseded loops in one binary at identical addresses. Four of eight
@@ -92,5 +119,8 @@ speedup.
   edge in both orientations.
 - Incorrect axis composition fails static and dynamic two- and
   three-dimensional direct-DFT and round-trip tests.
+- Confusing physical and logical order fails Fortran-dense rectangular cases;
+  rejecting non-dense input fails strided cases; copying C-dense input fails
+  the offset-view pointer-identity case.
 - A temporary allocation fails the warmed allocation census.
 - Provider drift fails the standalone locked build and provider audit.

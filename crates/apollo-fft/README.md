@@ -28,11 +28,13 @@ normalization. The kernel strategy auto-selects radix-2 Cooley-Tukey for
 power-of-two lengths and Bluestein chirp-Z for arbitrary lengths. The direct
 DFT kernel remains a crate-local reference for verification.
 
-2D and 3D plans execute separable axis passes. Contiguous row/depth-axis passes
-operate directly on backing-slice chunks through Moirai, avoiding full-field
-lane-copy vectors and scatter copies. Non-contiguous axes still gather one lane
-buffer per lane before scattering because strided Leto views are not contiguous
-in memory.
+2D and 3D plans execute separable axis passes. C-dense Leto views, including
+offset views, operate directly on their backing block. Fortran-dense and
+general strided views are assigned once into reusable logical C-order staging,
+transformed, and assigned back through Leto; warmed staging allocates nothing.
+Inside the transform, row/depth-axis passes operate directly on chunks through
+Moirai, while non-contiguous axes transpose through Leto into role-separated
+plan scratch.
 
 The 1D real-forward plan surface supports Leto-owned allocation and caller-owned
 slice output paths. Slice execution lets downstream crates reuse existing real

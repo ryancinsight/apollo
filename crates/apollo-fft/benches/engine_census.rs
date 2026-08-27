@@ -85,7 +85,7 @@ use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
-use leto::{Array2, Array3};
+use leto::{Array2, Array3, ArrayViewMut2, ArrayViewMut3, Layout as ArrayLayout};
 use realfft::RealFftPlanner;
 use rustfft::num_complex::Complex as RustComplex;
 use rustfft::{Fft, FftPlanner};
@@ -181,6 +181,38 @@ fn count_allocations<F: FnMut()>(mut f: F) -> (usize, usize) {
         ALLOCS.load(Ordering::Relaxed),
         BYTES.load(Ordering::Relaxed),
     )
+}
+
+/// Verifies the non-C-dense view boundary reuses its staging role after warm-up.
+fn assert_staged_view_allocations() {
+    let plan_2d = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx: 3, ny: 4 });
+    let layout_2d = ArrayLayout::f_contiguous([3, 4]).expect("valid Fortran layout");
+    let mut storage_2d = complex_signal(12);
+    let (allocs_2d, bytes_2d) = count_allocations(|| {
+        let view = ArrayViewMut2::try_new(layout_2d, &mut storage_2d)
+            .expect("2-D staging probe layout fits storage");
+        plan_2d.forward_complex_leto_inplace(view);
+    });
+    assert_eq!(
+        (allocs_2d, bytes_2d),
+        (0, 0),
+        "warmed Fortran-order 2-D execution must reuse view staging"
+    );
+
+    let plan_3d = apollo_fft::StaticFftPlan3D::<f64, 2, 3, 4>::new();
+    let layout_3d =
+        ArrayLayout::try_new([2, 3, 4], [40, 10, 2], 1).expect("valid strided 3-D layout");
+    let mut storage_3d = vec![Complex64::default(); 68];
+    let (allocs_3d, bytes_3d) = count_allocations(|| {
+        let view = ArrayViewMut3::try_new(layout_3d, &mut storage_3d)
+            .expect("3-D staging probe layout fits storage");
+        plan_3d.forward_complex_leto_inplace(view);
+    });
+    assert_eq!(
+        (allocs_3d, bytes_3d),
+        (0, 0),
+        "warmed strided 3-D execution must reuse view staging"
+    );
 }
 
 /// Transposes a `rows x cols` plane into a `cols x rows` one, in tiles.
@@ -502,6 +534,7 @@ fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
     });
     eprintln!("engine_census: 3-D {shape:<10} apollo allocations/call — {allocs} ({bytes} B)");
 
+    assert_staged_view_allocations();
     suite.emit();
     let elapsed = started.elapsed();
     eprintln!("engine_census: completed in {:.2}s", elapsed.as_secs_f64());

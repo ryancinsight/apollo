@@ -1,6 +1,6 @@
 use crate::application::execution::plan::fft::dimension_3d::StaticFftPlan3D;
 use eunomia::Complex64;
-use leto::Array3;
+use leto::{Array3, ArrayView3, ArrayViewMut3, Layout};
 use std::f64::consts::PI;
 
 fn signal<const NX: usize, const NY: usize, const NZ: usize>() -> Array3<Complex64> {
@@ -45,6 +45,78 @@ fn max_err(a: &Array3<Complex64>, b: &Array3<Complex64>) -> f64 {
         .zip(b.iter())
         .map(|(x, y)| (*x - *y).norm())
         .fold(0.0, f64::max)
+}
+
+fn assert_view_matches(
+    label: &str,
+    stage: &str,
+    actual: &ArrayView3<'_, Complex64>,
+    expected: &Array3<Complex64>,
+) {
+    for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+        assert_eq!(
+            actual, expected,
+            "{label} {stage} mismatch at index {index}"
+        );
+    }
+}
+
+fn assert_view_layout<const NX: usize, const NY: usize, const NZ: usize>(
+    label: &str,
+    layout: Layout<3>,
+    storage_len: usize,
+    forward: impl for<'view> Fn(ArrayViewMut3<'view, Complex64>),
+    inverse: impl for<'view> Fn(ArrayViewMut3<'view, Complex64>),
+) {
+    let input = signal::<NX, NY, NZ>();
+    let mut expected = input.clone();
+    forward(expected.view_mut());
+    let mut storage = vec![Complex64::default(); storage_len];
+    ArrayViewMut3::try_new(layout, &mut storage)
+        .expect("test layout fits storage")
+        .assign(&input.view());
+
+    forward(ArrayViewMut3::try_new(layout, &mut storage).expect("test layout fits storage"));
+    let transformed = ArrayView3::try_new(layout, &storage).expect("test layout fits storage");
+    assert_view_matches(label, "forward", &transformed, &expected);
+
+    inverse(expected.view_mut());
+    inverse(ArrayViewMut3::try_new(layout, &mut storage).expect("test layout fits storage"));
+    let recovered = ArrayView3::try_new(layout, &storage).expect("test layout fits storage");
+    assert_view_matches(label, "roundtrip", &recovered, &expected);
+}
+
+fn exercise_nonstandard_layouts(
+    plan_name: &str,
+    forward: impl for<'view> Fn(ArrayViewMut3<'view, Complex64>),
+    inverse: impl for<'view> Fn(ArrayViewMut3<'view, Complex64>),
+) {
+    const NX: usize = 2;
+    const NY: usize = 3;
+    const NZ: usize = 4;
+    let cases = [
+        (
+            "offset C-order",
+            Layout::try_new([NX, NY, NZ], [(NY * NZ) as isize, NZ as isize, 1], 3)
+                .expect("valid offset layout"),
+            NX * NY * NZ + 3,
+        ),
+        (
+            "Fortran-order",
+            Layout::f_contiguous([NX, NY, NZ]).expect("valid Fortran layout"),
+            NX * NY * NZ,
+        ),
+        (
+            "strided",
+            Layout::try_new([NX, NY, NZ], [40, 10, 2], 1).expect("valid strided layout"),
+            68,
+        ),
+    ];
+
+    for (layout_name, layout, storage_len) in cases {
+        let label = format!("{plan_name} {layout_name}");
+        assert_view_layout::<NX, NY, NZ>(&label, layout, storage_len, &forward, &inverse);
+    }
 }
 
 #[test]
@@ -120,4 +192,31 @@ fn axis_passes_compose_to_full_forward_and_roundtrip_per_axis() {
             "axis {axis} roundtrip not identity, err={err:.2e}"
         );
     }
+}
+
+#[test]
+fn static_fft_3d_preserves_logical_view_order() {
+    let plan = StaticFftPlan3D::<f64, 2, 3, 4>::new();
+    exercise_nonstandard_layouts(
+        "static",
+        |view| plan.forward_complex_leto_inplace(view),
+        |view| plan.inverse_complex_leto_inplace(view),
+    );
+}
+
+#[test]
+fn dynamic_fft_3d_preserves_logical_view_order() {
+    use crate::application::execution::plan::fft::dimension_3d::FftPlan3D;
+    use crate::domain::metadata::shape::Shape3D;
+
+    let plan = FftPlan3D::<f64>::new(Shape3D {
+        nx: 2,
+        ny: 3,
+        nz: 4,
+    });
+    exercise_nonstandard_layouts(
+        "dynamic",
+        |view| plan.forward_complex_leto_inplace(view),
+        |view| plan.inverse_complex_leto_inplace(view),
+    );
 }

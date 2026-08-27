@@ -4,7 +4,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::plan::fft::dimension_1d::StaticFftPlan1D;
-use crate::application::execution::plan::fft::layout::transpose_matrices;
+use crate::application::execution::plan::fft::layout::{transpose_matrices, with_c_order_view};
 use core::marker::PhantomData;
 use eunomia::Complex;
 use leto::Array3;
@@ -78,29 +78,39 @@ where
     }
 
     /// Forward transform of a complex Leto view in-place.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
     #[inline]
-    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+    pub fn forward_complex_leto_inplace(&self, data: ArrayViewMut3<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [NX, NY, NZ],
             "static 3D forward shape mismatch"
         );
-        Self::axis2_pass_complex::<true>(data.reborrow());
-        Self::axis1_pass_complex::<true>(data.reborrow());
-        Self::axis0_pass_complex::<true>(data);
+        with_c_order_view(data, |mut contiguous| {
+            Self::axis2_pass_complex::<true>(contiguous.reborrow());
+            Self::axis1_pass_complex::<true>(contiguous.reborrow());
+            Self::axis0_pass_complex::<true>(contiguous);
+        });
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
     #[inline]
-    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+    pub fn inverse_complex_leto_inplace(&self, data: ArrayViewMut3<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [NX, NY, NZ],
             "static 3D inverse shape mismatch"
         );
-        Self::axis0_pass_complex::<false>(data.reborrow());
-        Self::axis1_pass_complex::<false>(data.reborrow());
-        Self::axis2_pass_complex::<false>(data);
+        with_c_order_view(data, |mut contiguous| {
+            Self::axis0_pass_complex::<false>(contiguous.reborrow());
+            Self::axis1_pass_complex::<false>(contiguous.reborrow());
+            Self::axis2_pass_complex::<false>(contiguous);
+        });
     }
 
     fn axis2_pass_complex<const FORWARD: bool>(mut data: ArrayViewMut3<'_, F::Complex>) {
@@ -108,8 +118,8 @@ where
             return;
         }
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         let lane_plan = StaticFftPlan1D::<F, NZ>::new();
         let lane_fn = |lane: &mut [F::Complex]| {
             if FORWARD {
@@ -130,8 +140,8 @@ where
             return;
         }
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         with_3d_y_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
             transpose_matrices(data_slice, scratch, NX, NY, NZ);
 
@@ -158,8 +168,8 @@ where
             return;
         }
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         with_3d_x_scratch::<F::Complex, _>(NX * NY * NZ, |scratch| {
             transpose_matrices(data_slice, scratch, 1, NX, NY * NZ);
 

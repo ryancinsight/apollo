@@ -4,7 +4,7 @@ use crate::application::execution::kernel::mixed_radix::scalar::plan_scratch::{
     with_3d_x_scratch, with_3d_y_scratch, PlanScratch,
 };
 use crate::application::execution::kernel::mixed_radix::{dispatch_inplace, MixedRadixScalar};
-use crate::application::execution::plan::fft::layout::transpose_matrices;
+use crate::application::execution::plan::fft::layout::{transpose_matrices, with_c_order_view};
 use crate::domain::metadata::shape::Shape3D;
 use eunomia::Complex;
 use leto::Array3;
@@ -144,27 +144,37 @@ where
     }
 
     /// Forward transform of a complex Leto view in-place.
-    pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn forward_complex_leto_inplace(&self, data: ArrayViewMut3<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [self.nx, self.ny, self.nz],
             "complex forward shape mismatch"
         );
-        self.axis_pass_complex::<true>(data.reborrow(), 2);
-        self.axis_pass_complex::<true>(data.reborrow(), 1);
-        self.axis_pass_complex::<true>(data, 0);
+        with_c_order_view(data, |mut contiguous| {
+            self.axis_pass_complex::<true>(contiguous.reborrow(), 2);
+            self.axis_pass_complex::<true>(contiguous.reborrow(), 1);
+            self.axis_pass_complex::<true>(contiguous, 0);
+        });
     }
 
     /// Inverse transform of a complex Leto view in-place with FFTW-compatible normalization.
-    pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
+    ///
+    /// C-dense views execute directly. Other valid layouts use reusable
+    /// thread-local staging and preserve the view's logical row-major order.
+    pub fn inverse_complex_leto_inplace(&self, data: ArrayViewMut3<'_, F::Complex>) {
         assert_eq!(
             data.shape(),
             [self.nx, self.ny, self.nz],
             "complex inverse shape mismatch"
         );
-        self.axis_pass_complex::<false>(data.reborrow(), 0);
-        self.axis_pass_complex::<false>(data.reborrow(), 1);
-        self.axis_pass_complex::<false>(data, 2);
+        with_c_order_view(data, |mut contiguous| {
+            self.axis_pass_complex::<false>(contiguous.reborrow(), 0);
+            self.axis_pass_complex::<false>(contiguous.reborrow(), 1);
+            self.axis_pass_complex::<false>(contiguous, 2);
+        });
     }
 
     fn axis_pass_complex<const FORWARD: bool>(
@@ -190,8 +200,8 @@ where
 
     fn axis1_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         with_3d_y_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
             transpose_matrices(data_slice, scratch, self.nx, self.ny, self.nz);
             let lane_fn = |lane: &mut [F::Complex]| match (
@@ -224,8 +234,8 @@ where
 
     fn axis0_pass_complex<const FORWARD: bool>(&self, mut data: ArrayViewMut3<'_, F::Complex>) {
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         with_3d_x_scratch::<F::Complex, _>(self.nx * self.ny * self.nz, |scratch| {
             transpose_matrices(data_slice, scratch, 1, self.nx, self.ny * self.nz);
             let lane_fn = |lane: &mut [F::Complex]| match (
@@ -261,8 +271,8 @@ where
             return;
         }
         let data_slice = data
-            .as_mut_slice_memory_order()
-            .expect("3D complex data must be contiguous");
+            .as_mut_slice()
+            .expect("invariant: 3D axis execution receives C-order data");
         let lane_fn =
             |lane: &mut [F::Complex]| match (FORWARD, &self.twiddle_z_fwd, &self.twiddle_z_inv) {
                 (true, Some(tw), _) => dispatch_inplace::<F, false, false>(lane, Some(tw.as_ref())),

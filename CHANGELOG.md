@@ -102,6 +102,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [arch] Preserve logical row-major order when `apollo-fft` transforms
+  Fortran-contiguous or strided 2-D and 3-D mutable Leto views. C-contiguous
+  views, including offset dense blocks, retain direct execution; other layouts
+  stage once through a rank-disjoint reusable plan-scratch role and assign back
+  through Leto, with zero allocations after warm-up. ADR 0040 records the
+  corrected layout boundary.
+
 - [patch] [arch] Preserve benchmark observations as integer picoseconds instead
   of truncating each operation to integer nanoseconds. The hosted regression
   gate compiles only its three consumed FFT benchmarks, restores compiler
@@ -822,6 +829,7 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 - [arch] **Coeus autograd integration removed from Apollo to break the dependency cycle.** `apollo-fft` no longer exposes the `coeus` feature, the `coeus` module, or the `coeus_core` re-export, and `apollo-wgpu-helpers` drops `WgpuStorage` and its `coeus-core` dependency. FFT autograd now lives solely in `coeus-autograd` (`ops/fft.rs`), which consumes Apollo's public slice API one-way. No Apollo crate depends on Coeus — Apollo is strictly upstream. Supersedes the earlier `[Unreleased]` "Coeus FFT autograd nodes" fix.
 - [major] `RealFftData` drops its `Spectrum` associated type; the spectrum element type is now `Complex<PlanScalar>` directly. All transform methods are canonical default bodies — implementors define only `to_spectrum`/`from_spectrum` boundary conversions. `PlanScratch` moved from the plan workspace module to the kernel scalar layer. Migration: replace `T::Spectrum` with `Complex<T::PlanScalar>`; add `Complex<T::PlanScalar>: PlanScratch` bounds on generic 2D/3D call sites.
 ### Changed
+
 - [patch] Consolidated member dependency requirements onto the workspace SSOT,
   corrected every crate's repository metadata to Apollo, and pinned the CI
   Rust and Python test tools used to reproduce a release tag.
