@@ -29,6 +29,10 @@ pub(crate) mod twiddle_table;
 #[doc(hidden)]
 pub mod benchmark_kernels;
 
+// Owns the test binary's global allocator; allocation attribution needs no
+// pinning, so unlike the pinned probes this is not Windows-gated.
+#[cfg(test)]
+mod retained_footprint;
 #[cfg(test)]
 pub(crate) mod test_utils;
 

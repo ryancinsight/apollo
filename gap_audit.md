@@ -9,6 +9,46 @@ width must return `false` with every input bit unchanged. Cross-target
 verification must not treat runtime-selected native width as a universal host
 property; production routing still requires a separately verified exact-width
 capability before these diagnostics can become a selected path.
+## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
+
+Evidence tier: exact allocation accounting — `kernel/retained_footprint.rs`,
+a windowed counting allocator whose ledger records every allocation of at
+least `n` bytes, one window per acquisition stage; blocks attributed to
+owners by byte signature. Run
+`cargo test --release -p apollo-fft --lib retained_footprint_attribution --
+--ignored --nocapture`. Window sums reproduce the peak census totals
+([above](#peak-working-set)) to the byte at every size.
+
+| n | window | retained | blocks ≥ n bytes |
+| --- | --- | --- | --- |
+| 1024 | twiddle table / plan build / first fwd | 16,916 / 16,916 / 37,840 | 16n / 16n / 20,480 + 2×8,192 |
+| 4096 | same | 65,536 / 65,536 / 120,168 | 16n / 16n / 73,728 + 2×32,768 |
+| 16384 | same | 262,144 / 262,144 / 469,608 | 16n / 16n / 278,528 + 2×131,072 |
+| 65536 | same | 1,048,676 / 1,048,676 / 8,779,908 | 16n / 16n / 16n+16 + 16n + **24×262,144** |
+| 262144 | same | 4,194,304 / 4,194,304 / 7,426,064 | 16n / 16n / 16n+16 + **16n** |
+
+Warm-forward windows retain 0 everywhere (8,192 transient at 262144) — the
+steady-state contract holds; everything below is acquisition-time retention.
+
+Attribution, largest first:
+
+1. **Full-size twiddle tables are retained in duplicate.** One 16n table from
+   `cached_twiddle_fwd`, a second 16n table at plan construction, and at
+   262144 a third during the first forward. At 262144 that is 8.4 MB of the
+   15.8 MB total; at every size ≥ 4096 the duplicate is a quarter to a third
+   of retained bytes. This is the memory cost of the three twiddle builders
+   `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25` records — the dedup lever lives
+   there, and the probe's per-window ledger is its acceptance instrument.
+2. **The 65536 spike is threaded-route worker retention:** 24 blocks of
+   262,144 bytes (6.0 MB) held after the first forward at exactly the
+   `FUSE_THRESHOLD` size — per-worker state of the Moirai four-step, absent
+   at 262144 where the route shape differs. Reduction needs the threaded
+   four-step's buffer-lifetime read; filed as the item's next sub-step.
+3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
+   padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
+   planar halves at four-step sizes — the terms an in-place rewrite would
+   target, confirming the census reading that in-place-DIT is not the lever.
+
 ## Peak working set: Apollo retains 4-10x the references (2026-08-27) <a id="peak-working-set"></a>
 
 Evidence tier: exact allocation accounting — the census's wrapping global

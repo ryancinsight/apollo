@@ -617,7 +617,21 @@
   `ATLAS-APOLLO-ACCURACY-GATE-2026-08-25` should land first so the
   consolidation is covered by the gate it motivated.
 
-## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — todo
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — in progress 2026-08-27
+
+- **Attribution delivered (2026-08-27):** `kernel/retained_footprint.rs` —
+  windowed counting allocator with a per-window ledger of blocks ≥ n bytes;
+  window sums reproduce the peak census to the byte. Findings
+  (`gap_audit.md#retained-attribution`): duplicate full-size twiddle tables
+  (one at `cached_twiddle_fwd`, a second at plan build, a third at 262144's
+  first forward — 8.4 MB of its 15.8 MB) are the dominant avoidable term,
+  and their dedup lever is `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, with this
+  probe as its acceptance instrument; the 65536 spike is 24 x 262,144-byte
+  threaded-four-step worker blocks (6.0 MB) — reduction needs that route's
+  buffer-lifetime read (next sub-step); scratch/planes are minor, closing
+  the in-place-DIT direction again from the attribution side. Integrator:
+  Claude session 5050c72a. Remaining: the reduction phase, sequenced behind
+  TWIDDLE-SSOT for the duplicate-table term.
 
 - **Outcome:** Apollo's retained bytes per size are attributed to their owning
   caches (twiddle planes, four-step planes, threaded arena, scratch) and the
