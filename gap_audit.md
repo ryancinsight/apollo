@@ -258,20 +258,22 @@ the public in-place plans against Fortran-dense or gapped views. Leto's
 `as_mut_slice_memory_order` correctly exposes a dense block in physical order;
 Apollo incorrectly treated that block as logical row-major lanes. Rectangular
 F-order regressions reproduce with 2-D and 3-D maximum errors of `3.10` and
-`7.38`, respectively, against direct-transform bounds below `5e-12`; a strided
-view instead reached the old contiguity panic.
+`7.38`, respectively, relative to C-order execution of the same plans; a
+strided view instead reached the old contiguity panic.
 
 The corrected entry boundary exposes only C-dense views directly. Every other
 valid layout is assigned into a C-order view backed by a rank-disjoint existing
 plan-scratch role: rank two uses the dormant 3-D X role and rank three uses the
 dormant 2-D role. The transformed result is assigned back through Leto. Static
-and dynamic 2-D/3-D tests now cover offset C, Fortran, and gapped strides for
-direct forward parity and normalized round trips. Their tolerances use an
-explicit `gamma(k) = k*u/(1-k*u)` operation model instead of heuristic factors.
-A pointer-identity test guards the direct offset-C path, and the engine census
-observes zero allocations on warmed F-order 2-D and strided 3-D calls. The
-escaped-defect guard is the cross-product of logical layout class and plan
-shape; C-only array tests cannot establish a view API's stride semantics.
+and dynamic 2-D/3-D tests now cover offset C, Fortran, and gapped strides. They
+require bit-for-bit forward and round-trip parity with C-order execution of the
+same plan, isolating the layout boundary from numerical algorithm error. The
+separate C-order plan tests retain direct-DFT forward and normalized round-trip
+coverage. A pointer-identity test guards the direct offset-C path, and the
+engine census observes zero allocations on warmed F-order 2-D and strided 3-D
+calls. The escaped-defect guard is the cross-product of logical layout class
+and plan shape; C-only array tests cannot establish a view API's stride
+semantics.
 
 The same census exposed a separate instrument defect: `cargo test --bench
 engine_census` runs the full timed sweep under the unoptimized test profile and

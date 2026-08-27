@@ -80,8 +80,11 @@ warm execution contract.
 
 Rejected because physical-order chunks do not represent row-major logical
 lanes for a rectangular Fortran layout. The old implementation produced 2-D
-and 3-D errors of `3.10` and `7.38` against direct-transform bounds below
-`5e-12`. This is a semantic mismatch, not a floating-point tolerance issue.
+and 3-D errors of `3.10` and `7.38` relative to C-order execution of the same
+plans. The corrected layout tests require bit-for-bit staged-versus-C-order
+parity, so this is a semantic mismatch rather than a floating-point tolerance
+issue. Separate C-order tests retain direct-DFT and normalized round-trip
+coverage for the transform algorithm.
 
 ## Correctness and performance contract
 
