@@ -11,15 +11,24 @@ impl DwtPlan {
             return Err(WaveletError::LengthMismatch);
         }
         let mut current = signal.to_vec();
+        // One scratch buffer ping-pongs with `current` across the shrinking
+        // levels instead of allocating a fresh approximation per level: the
+        // analysis kernel fully overwrites its outputs, so stale contents
+        // surviving `truncate` never reach the coefficients. Only `detail`,
+        // which the result keeps, is allocated per level.
+        let mut scratch = vec![0.0_f64; current.len() / 2];
         let mut details = Vec::with_capacity(self.levels());
         for _ in 0..self.levels() {
             let half = current.len() / 2;
-            let mut approximation = vec![0.0; half];
-            let mut detail = vec![0.0; half];
-            analysis_stage_into(&current, self.wavelet(), &mut approximation, &mut detail);
+            let mut detail = vec![0.0_f64; half];
+            scratch.truncate(half);
+            analysis_stage_into(&current, self.wavelet(), &mut scratch, &mut detail);
             details.push(detail);
-            current = approximation;
+            std::mem::swap(&mut current, &mut scratch);
         }
+        // The surviving buffer carries ping-pong capacity; return the
+        // approximation at its exact size, as the per-level allocation did.
+        current.shrink_to_fit();
         Ok(DwtCoefficients::new(
             self.len(),
             self.levels(),

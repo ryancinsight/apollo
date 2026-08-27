@@ -21,8 +21,9 @@ impl DctDstPlan {
     ///
     /// # Complexity
     ///
-    /// O(N log N) for N ≥ 16 (2N-point FFT fast path); O(N²) for N < 16 (direct
-    /// analytical kernel).
+    /// DCT-II/III and DST-II/III: O(N log N) for N ≥ 16 (2N-point FFT fast
+    /// path), O(N²) for N < 16 (direct analytical kernel). DCT-I, DCT-IV,
+    /// DST-I, and DST-IV execute the direct O(N²) kernel at every size.
     pub fn inverse(&self, signal: &[f64]) -> DctDstResult<Vec<f64>> {
         let mut output = vec![0.0_f64; self.len()];
         self.inverse_into(signal, &mut output)?;
@@ -201,13 +202,15 @@ impl DctDstPlan {
     /// Returns `LengthMismatch` when either slice length differs from the plan
     /// length.
     ///
-    /// Dispatches to the O(N log N) FFT fast path for N ≥ 16, and to the
-    /// direct O(N²) analytical kernel for N < 16.
+    /// Dispatches DCT-II/III and DST-II/III to the O(N log N) FFT fast path
+    /// for N ≥ 16 and to the direct O(N²) analytical kernel for N < 16;
+    /// DCT-I, DCT-IV, DST-I, and DST-IV always use the direct O(N²) kernel.
     ///
     /// # Complexity
     ///
-    /// O(N log N) for N ≥ 16 (2N-point FFT fast path); O(N²) for N < 16 (direct
-    /// analytical kernel).
+    /// DCT-II/III and DST-II/III: O(N log N) for N ≥ 16 (2N-point FFT fast
+    /// path), O(N²) for N < 16 (direct analytical kernel). DCT-I, DCT-IV,
+    /// DST-I, and DST-IV execute the direct O(N²) kernel at every size.
     pub fn inverse_into(&self, signal: &[f64], output: &mut [f64]) -> DctDstResult<()> {
         if signal.len() != self.len() {
             return Err(DctDstError::LengthMismatch);

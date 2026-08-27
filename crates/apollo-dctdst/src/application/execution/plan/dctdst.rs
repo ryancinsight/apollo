@@ -53,10 +53,12 @@ pub use typed::{RealTransformGpuStorage, RealTransformStorage};
 ///
 /// # Complexity
 ///
-/// O(N log N) for N ≥ 16 (2N-point FFT fast path); O(N²) for N < 16 (direct
-/// analytical kernel). Both paths use O(1) auxiliary storage for caller-owned
-/// `*_into` paths (the fast path allocates a 2N complex buffer internally for
-/// the FFT work area).
+/// DCT-II/III and DST-II/III: O(N log N) for N ≥ 16 (2N-point FFT fast
+/// path), O(N²) for N < 16 (direct analytical kernel). DCT-I, DCT-IV,
+/// DST-I, and DST-IV execute the direct O(N²) kernel at every size. Both
+/// paths use O(1) auxiliary storage for caller-owned `*_into` paths (the
+/// fast path allocates a 2N complex buffer internally for the FFT work
+/// area).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DctDstPlan {
     config: RealTransformConfig,
