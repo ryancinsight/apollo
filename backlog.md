@@ -12,11 +12,113 @@
 - **Lease:**
   `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/{dynamic_impl.rs,static_impl.rs}`,
   `crates/apollo-fft/src/application/execution/kernel/mixed_radix/caches/twiddle.rs`,
+  `crates/apollo-dctdst/src/application/execution/plan/dctdst.rs` and
   `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`
   (docs only),
   `crates/apollo-wavelet/src/application/execution/plan/dwt/forward.rs`, plus
   this entry.
 - **Last update:** 2026-08-27.
+
+## ATLAS-APOLLO-CWT-FFT-CONVOLUTION — Replace direct CWT evaluation with per-scale FFT convolution [minor] — todo
+
+- **Outcome:** `CwtPlan::transform` runs O(scales·n log n) via per-scale FFT
+  convolution through sibling `apollo-fft` instead of the current
+  O(scales·n²) direct evaluation with n transcendental `mother_wavelet`
+  evaluations per coefficient. Interim slice of this item: hoist weight
+  generation out of the shift loop — `fill_cwt_weights` regenerates the whole
+  weight buffer per shift although weights depend only on
+  `(index − shift) / scale`, a slid window of one per-scale evaluation.
+- **Evidence:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`
+  66-87 (per-(scale, shift) `coefficient` calls);
+  `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs` 31-67
+  (`coefficient_hermes` fills weights per shift; `coefficient_scalar`
+  evaluates the mother wavelet per sample per shift).
+
+## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — todo
+
+- **Outcome:** `forward_complex` computes each mode's longitude sum as a DFT
+  bin via FFT along longitude, with the φ-independent P_lm recurrence and
+  normalization computed once per (latitude, mode) instead of n_lon times;
+  inverse mirrors. Currently `spherical_harmonic` is evaluated per
+  (longitude, mode) even though only the `e^{imφ}` factor varies along φ.
+- **Evidence:** `crates/apollo-sht/src/application/execution/plan/sht.rs`
+  90-130; `crates/apollo-sht/src/infrastructure/kernel/quadrature.rs` 60-95.
+
+## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — todo
+
+- **Outcome:** DCT-I routes through a 2(N−1)-point real FFT and DCT-IV,
+  DST-I, DST-IV through half-shift FFT factorizations, so every kind reaches
+  O(N log N) above the threshold; the direct kernels remain as differential
+  oracles. Today types I and IV dispatch to the direct O(N²) kernels in both
+  threshold branches (complexity docs corrected under
+  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27).
+- **Evidence:** `crates/apollo-dctdst/src/infrastructure/kernel/fast.rs`
+  155-158 already cites Makhoul (1980);
+  `crates/apollo-dctdst/src/application/execution/plan/dctdst/forward.rs`
+  214-236 and `inverse.rs` 221-243 route I/IV kinds to direct kernels at
+  every size.
+
+## ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS — Promote kernel-entry guards to release asserts [patch] — todo
+
+- **Outcome:** debug_assert-only length/range guards at safe `pub(crate)`
+  kernel entry boundaries become release asserts — one predictable branch per
+  kernel call ahead of table-driven unchecked writes — and permutation tables
+  gain value-range debug_asserts at build time.
+- **Evidence:**
+  `crates/apollo-fft/src/application/execution/kernel/components/rader/mod.rs`
+  216-257 (`scatter_slice` table-driven writes);
+  `.../components/good_thomas/mod.rs` 115-210 (PFA gather/scatter);
+  `.../components/good_thomas/cook_toom_gt.rs` 34-38 (`dft84`);
+  `crates/apollo-fft/src/application/execution/kernel/twiddle_table.rs`
+  173-208 (`build_twiddle_table` n validation is debug-only).
+
+## ATLAS-APOLLO-SAFETY-COMMENT-RATCHET — Ratchet SAFETY-comment coverage over unsafe sites [patch] — todo
+
+- **Outcome:** every `unsafe` block in apollo-fft carries a `// SAFETY:`
+  comment discharging its obligation, ratcheted per the non-increasing
+  baseline discipline, starting with table-indexed writes.
+- **Evidence (2026-08-27, this revision):** `grep -c unsafe` counts 669
+  occurrences across 75 files vs 32 `// SAFETY:` comments in 14 files.
+  Densest uncommented clusters: good_thomas (33 sites), cook_toom_gt (80),
+  bluestein (23) —
+  `crates/apollo-fft/src/application/execution/kernel/components/rader/bluestein.rs`
+  314-348 fold is sound only via the debug_asserted `p ≥ 2m−1` bound. The
+  twiddle raw-cache derefs were documented under
+  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27.
+
+## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — todo
+
+- **Outcome:** the `ComposeArena` `from_raw_parts_mut`-over-TLS-`UnsafeCell`
+  pattern carries a stated SAFETY invariant note and a miri-covered
+  deepest-composite test; an owned-allocation fallback is specified if
+  nested composites ever become legal.
+- **Evidence:**
+  `crates/apollo-fft/src/application/execution/kernel/components/radix_composite/adaptive.rs`
+  28 and 41 assert against realloc with live inner pointers (currently
+  unreachable — no nested composite constructs one arena twice), and 180-187
+  hand out `from_raw_parts_mut` slices from the TLS arena with no miri
+  coverage.
+
+## ATLAS-APOLLO-LETO-INPLACE-TYPED-ERROR — Migrate leto-inplace panics to typed errors [major] — todo
+
+- **Outcome:** the `*_leto_inplace` `expect("Array must be contiguous")`
+  panics on `FftPlan1D` and `StaticFftPlan1D` become typed `ApolloResult`
+  returns. Breaking: needs the consumer sweep (coeus consumes apollo-fft)
+  and 0.x minor coordination. `# Panics` sections were made honest under
+  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 as the interim contract.
+- **Evidence:**
+  `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/dynamic_impl.rs`
+  and `static_impl.rs` leto entry points.
+
+## ATLAS-APOLLO-SHAPE1D-PRIVACY — Privatize Shape1D.n behind its validating constructor [major] — todo
+
+- **Outcome:** `Shape1D.n` becomes private with an accessor so
+  `Shape1D::new` validation (`n > 0`) is the only construction path;
+  requires a consumer literal-construction sweep first (in-tree sites such
+  as `crates/apollo-fft/tests/twiddle_accuracy_gate.rs` construct
+  `Shape1D { n }` literals, and external consumers may too).
+- **Evidence:** `crates/apollo-fft/src/domain/metadata/shape.rs` 8-11
+  declares `pub n`, bypassing validation.
 
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — in progress
 
