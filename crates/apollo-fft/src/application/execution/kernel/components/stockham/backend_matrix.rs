@@ -27,10 +27,11 @@ use std::time::Instant;
 /// Best-of-blocks per-call cost in nanoseconds, clone-inclusive.
 ///
 /// The input restore sits inside the timed region — the comparison contract
-/// `rustfft_comparison` documents — so it is charged to both backends
-/// identically and cancels in the ratio. Inner-call count scales inversely
-/// with `n` so every size times a block long enough for the 100 ns Windows
-/// timer granularity to vanish.
+/// `rustfft_comparison` documents. An identical additive cost does not cancel
+/// in a ratio; it attenuates the ratio toward 1, so orderings survive and the
+/// reported advantage of the faster arm is understated, never overstated.
+/// Inner-call count scales inversely with `n` so every size times a block
+/// long enough for the 100 ns Windows timer granularity to vanish.
 fn per_call_ns<P: StockhamPrecision>(
     src: &[P::Complex],
     work: &mut [P::Complex],
@@ -68,6 +69,12 @@ fn run_once<P: StockhamPrecision>(
 #[test]
 #[ignore = "measurement probe for the AVX Stockham backend audit"]
 fn stockham_backend_cost_matrix() {
+    // The AVX arm is invoked directly, without the production route's runtime
+    // detection, so the probe itself must gate on the features.
+    if !(std::arch::is_x86_feature_detected!("avx") && std::arch::is_x86_feature_detected!("fma")) {
+        eprintln!("host lacks avx+fma; backend matrix not measurable");
+        return;
+    }
     // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
     for cpu in [2u32, 12] {
         let landed = pin(cpu);

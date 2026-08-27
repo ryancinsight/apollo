@@ -33,18 +33,22 @@ core type (scalar-time over AVX-time; above 1.0 the AVX backend wins):
 | 16384 | 1.58 | 0.41 | 1.38 | 0.54 |
 | 32768 | 1.48 | 0.42 | 2.70 | 0.87 |
 
-The entry ratios match the pinned E-core column, not the P-core one: the
-2026-08-25 comparison ran unpinned and was EcoQoS-scheduled onto E-cores — the
-same confound `pot::core_matrix` was built to remove from the route crossover.
-On a pinned P-core the AVX backend wins nearly everywhere, 1.4–2.9x. The
-correction limits [the profile's](#pot-f64-profile) "hand-written AVX backend
-is slower than the auto-vectorized scalar one" claim to E-core scheduling.
+The entry ratios at 256/512/4096 (0.35/0.55/0.69) sit in the pinned E-core
+band (0.27/0.23/0.34), not the P-core one, and the 1024 entry (1.11) matches
+neither column — consistent with an unpinned thread migrating between core
+types mid-run. E-core (EcoQoS) scheduling is the leading hypothesis for the
+entry numbers (the harnesses differ, so the match is qualitative), and it is
+the same confound `pot::core_matrix` was built to remove from the route
+crossover. On a pinned P-core the AVX backend wins nearly everywhere,
+1.4–2.9x. The correction limits [the profile's](#pot-f64-profile)
+"hand-written AVX backend is slower than the auto-vectorized scalar one"
+claim to unpinned scheduling.
 
 The exception is real and both-core-consistent: f64 N = 256 and 512 are the
 only sizes where the scalar stages meet or beat the AVX stages on **both**
 core types (512: −16% P-core, −77% E-core). Decision and reroute in
-[ADR 0042](adr/0042-avx-stockham-backend-retained.md): backend retained, f64
-256/512 route scalar, f32 unchanged. The reverted "route N = 256/512 to
+[ADR 0042](docs/adr/0042-avx-stockham-backend-retained.md): backend retained,
+f64 256/512 route scalar, f32 unchanged. The reverted "route N = 256/512 to
 the scalar backend" experiment's 2x wins at the changed sizes are consistent
 with this table; its "1.8x regressions at unrelated larger sizes" were also
 measured unpinned, so scheduling noise is the leading hypothesis for them —

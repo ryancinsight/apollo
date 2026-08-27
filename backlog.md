@@ -883,8 +883,9 @@
   artifact. The new same-binary pinned instrument
   (`stockham::backend_matrix`, run `--ignored --nocapture`, release) shows the
   AVX backend winning 1.4–2.9x on a pinned P-core at nearly every size and
-  precision; the entry ratios (0.35x–1.11x scalar/AVX) match the pinned
-  E-core column — the 2026-08-25 comparison was unpinned and EcoQoS-scheduled.
+  precision; the entry ratios at 256/512/4096 sit in the pinned E-core band
+  and the 1024 entry matches neither column — unpinned scheduling (EcoQoS
+  E-core placement) is the leading hypothesis for the entry numbers.
   Full table and correction: `gap_audit.md#stockham-backend-matrix`. The one
   both-core-consistent exception, f64 N = 256/512 (scalar −16%/−77% at 512),
   is now routed to the scalar stages in `StockhamKernel for f64`;

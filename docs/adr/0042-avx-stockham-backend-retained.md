@@ -35,11 +35,16 @@ measures, clone-inclusive per call:
 
 Two conclusions the entry numbers could not show:
 
-1. **The retirement premise was a scheduler artifact.** On a pinned P-core the
-   AVX backend wins nearly everywhere, for both precisions. The entry ratios
-   (0.27–0.69 scalar/AVX) match the pinned E-core column, not the P-core one:
-   the 2026-08-25 measurement ran unpinned and was EcoQoS-scheduled onto
-   E-cores, the exact confound `pot::core_matrix` was later built to remove.
+1. **The retirement premise does not survive pinning.** On a pinned P-core
+   the AVX backend wins nearly everywhere, for both precisions. The entry
+   ratios at 256/512/4096 (0.35/0.55/0.69 scalar/AVX) sit in the pinned
+   E-core band (0.27/0.23/0.34), not the P-core one, and the 1024 entry
+   (1.11) matches neither column — consistent with an unpinned thread
+   migrating between core types mid-run. E-core (EcoQoS) scheduling is the
+   leading hypothesis for the entry numbers, not an established identity:
+   the two instruments differ in harness (clone-inclusive vs not), so the
+   match is qualitative. What is established is that the pinned instrument
+   reverses the entry ordering on the cores where throughput work runs.
 2. **f64 N = 256 and 512 are the exception on both core types.** At those two
    sizes the auto-vectorized scalar stages meet (256, P) or beat (512:
    −16% P, −77% E; 256: −73% E) the AVX stages regardless of where the
@@ -49,8 +54,9 @@ Two conclusions the entry numbers could not show:
 ## Decision
 
 - **Retain the AVX Stockham backend** for both precisions. Retirement is
-  rejected: it would regress every f32 size 1.4–2.9x and every f64 size except
-  256/512 by 1.4–1.6x on P-cores.
+  rejected: at every probed size of the staged route (128–32768) it would
+  regress f32 by 1.4–2.9x and f64 by 1.4–1.6x on P-cores, 256/512 f64
+  excepted.
 - **Route f64 N = 256 and 512 through the scalar stages** in
   `StockhamKernel for f64` (both entry points). `PreciseStockham` becomes
   unconditionally compiled to serve this route. `ReducedStockham` stays
@@ -74,6 +80,20 @@ Two conclusions the entry numbers could not show:
 
 ## Failure modes and limits
 
+- **Probe coverage:** the matrix times the staged route
+  (`transform_sized`) at 128–32768. Unprobed but production-reachable AVX
+  routes: the fixed-length 32/64 leaves (reached standalone and as four-step
+  rows at N = 1024/4096) and the 4096 four-triple special, which production
+  reaches through `dispatch.rs` while the probe bypasses it — the table's
+  4096 row times the staged body, not that special. Neither route is changed
+  by this decision, so the omissions bound the table's claims, not the diff's
+  safety.
+- **Blast radius of the reroute:** the scalar 256/512 branch also serves
+  four-step inner rows (256-rows at N = 65536, 512-rows at N = 262144) and
+  2-D/3-D lane transforms, which the `rustfft_comparison` default sweep
+  (sizes ≤ 512, and standalone 256 routes four-step) cannot witness. The
+  pinned per-call ordering covers those call shapes; the end-to-end check at
+  large N rides the next idle-host census run.
 - The AVX-512 arms (`PreciseStockhamAvx512`) are unmeasurable on this host
   (Arrow Lake has no AVX-512) and are untouched; their evidence remains gated
   on real silicon (hermes HS-429 class).
@@ -91,5 +111,11 @@ Two conclusions the entry numbers could not show:
   `log2 n` stages.
 - Full `apollo-fft` nextest suite green at the change (scalar backend is
   covered by the same value-semantic suite that covers the AVX one).
-- `rustfft_comparison` regenerated after the reroute; acceptance is no size
-  regressed beyond host noise and the f64 512 row improved.
+- A `rustfft_comparison` regeneration was run and rejected as evidence: the
+  host was loaded by a concurrent build and the run's apollo arms reproduce
+  pinned E-core times (f64@128 1857 ns vs pinned E-core AVX 1834 ns). The
+  committed table's f64@512 row (3123 ns) matches the pinned AVX arm
+  (3116–3124 ns); the post-change scalar arm (2582–2614 ns) implies that row
+  moves ~2.7x → ~2.3x, to be confirmed by the next idle-host regeneration.
+  Note the default sweep caps at 512 and standalone 256 routes four-step, so
+  it witnesses only the 512 row of this change either way.
