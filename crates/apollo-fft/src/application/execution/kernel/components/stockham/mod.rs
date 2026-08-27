@@ -130,13 +130,21 @@ impl StockhamKernel for f64 {
         }
         #[cfg(target_arch = "x86_64")]
         {
+            // Pinned backend matrix (`backend_matrix`, 2026-08-27): at N = 256
+            // and 512 the auto-vectorized scalar stages meet or beat the AVX
+            // stages on BOTH core types (512: 2614 vs 3116 ns P-core, 1721 vs
+            // 7464 ns E-core) — the only sizes where the ordering does not
+            // depend on where the scheduler lands the thread. Every other size
+            // keeps the AVX backend, which wins on P-cores.
+            if matches!(n, 256 | 512) {
+                let log2 = n.trailing_zeros();
+                transform_sized::<precision::PreciseStockham>(data, scratch, twiddles, None, log2);
+                return;
+            }
             // If the size is one of our hand-optimized FMA/AVX fixed-length sizes,
             // route to the AVX/FMA path immediately if the CPU supports it,
             // bypassing the generic AVX-512 Stockham loop.
-            if matches!(
-                n,
-                2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 4096 | 32768
-            ) {
+            if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 4096 | 32768) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
                     unsafe { forward64_avx_with_scratch(data, scratch, twiddles) };
@@ -211,10 +219,14 @@ impl StockhamKernel for f64 {
         }
         #[cfg(target_arch = "x86_64")]
         {
-            if matches!(
-                n,
-                2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 4096 | 32768
-            ) {
+            // Same scalar routing as `forward_with_scratch`: pinned backend
+            // matrix puts scalar at or ahead of AVX at N = 256 and 512 on
+            // both core types.
+            if matches!(LOG2, 8 | 9) {
+                transform_sized::<precision::PreciseStockham>(data, scratch, twiddles, None, LOG2);
+                return;
+            }
+            if matches!(n, 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 4096 | 32768) {
                 #[cfg(all(target_feature = "avx", target_feature = "fma"))]
                 {
                     unsafe { forward64_avx_with_scratch_sized::<LOG2>(data, scratch, twiddles) };

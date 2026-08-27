@@ -20,19 +20,14 @@ use super::super::stage::stage_impl;
 #[cfg(target_arch = "x86_64")]
 use super::super::stage::stockham_precise_stage_is_l1_resident;
 
-#[cfg(any(
-    test,
-    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
-))]
 use super::traits::PreciseStockham;
 use super::traits::{private, StockhamPrecision};
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
 use eunomia::Complex64;
 
-#[cfg(any(
-    test,
-    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
-))]
+// Unconditional: production routes f64 N = 256 and 512 through the scalar
+// stages (`StockhamKernel for f64`), where the pinned backend matrix puts
+// them at or ahead of the AVX stages on both core types.
 impl StockhamPrecision for PreciseStockham {
     type Real = f64;
     type Complex = Complex64;
