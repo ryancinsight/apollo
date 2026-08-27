@@ -611,27 +611,58 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
     let (re, im) = flat.split_at_mut(plane);
 
+    // Per-pass attribution instrument, compiled only into test builds; the
+    // release pinned probes run as tests, so they see it, while production
+    // builds carry nothing.
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    macro_rules! sect {
+        ($label:literal, $body:block) => {{
+            let t0 = unsafe { core::arch::x86_64::_rdtsc() };
+            let out = $body;
+            let t1 = unsafe { core::arch::x86_64::_rdtsc() };
+            static SECTIONS: std::sync::LazyLock<bool> =
+                std::sync::LazyLock::new(|| std::env::var_os("RESIDENT_SECTIONS").is_some());
+            if *SECTIONS {
+                eprintln!("BSECT {} {}", $label, t1 - t0);
+            }
+            out
+        }};
+    }
+    #[cfg(not(all(test, windows, target_arch = "x86_64")))]
+    macro_rules! sect {
+        ($label:literal, $body:block) => {
+            $body
+        };
+    }
+
     // The stage set wants bit-reversed rows, so the deinterleave writes each
     // row at its reversed position and the separate permutation pass this
     // replaces is deleted: bit reversal is an involution, so writing to
     // `rev(row)` is exactly the swap list the plan would have applied.
     let row_bits = k / 2;
-    for (row, chunk) in data.chunks_exact(m).enumerate() {
-        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-        for (b, c) in chunk.iter().enumerate() {
-            re[dest * stride + b] = c.re;
-            im[dest * stride + b] = c.im;
+    // The scalar loop stays deliberately: a vectorized sibling built on the
+    // native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
+    // LLVM already auto-vectorizes this loop well (see `boundary`).
+    sect!("deint", {
+        for (row, chunk) in data.chunks_exact(m).enumerate() {
+            let dest = row.reverse_bits() >> (usize::BITS - row_bits);
+            for (b, c) in chunk.iter().enumerate() {
+                re[dest * stride + b] = c.re;
+                im[dest * stride + b] = c.im;
+            }
         }
-    }
+    });
 
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
-    run_batched(re, im, plan.as_ref(), None, m, stride);
+    sect!("stages1", {
+        run_batched(re, im, plan.as_ref(), None, m, stride)
+    });
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
-    transpose_planes(re, im, m, stride);
+    sect!("transpose", { transpose_planes(re, im, m, stride) });
 
     // 3. The `m` transforms along the second axis, with the four-step twiddle
     //    W_N^{b·k1} folded into the first stage's loads — the matrix is
@@ -640,22 +671,37 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     //    transpose produced natural row order, so the bit-reversal pass still
     //    runs; the result lands at `k2 * m + k1`, the natural output index.
     let planes = T::cached_four_step_planes::<INVERSE>(n, m);
-    permute(re, im, &plan.swaps, m, stride);
-    run_batched(
-        re,
-        im,
-        plan.as_ref(),
-        Some((&planes.re, &planes.im)),
-        m,
-        stride,
-    );
+    sect!("permute", { permute(re, im, &plan.swaps, m, stride) });
+    sect!("stages2", {
+        run_batched(
+            re,
+            im,
+            plan.as_ref(),
+            Some((&planes.re, &planes.im)),
+            m,
+            stride,
+        )
+    });
 
-    for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
-        for (b, c) in chunk.iter_mut().enumerate() {
-            *c = Complex::new(re[row * stride + b], im[row * stride + b]);
+    sect!("reint", {
+        let handled = hermes_simd::vectorize(boundary::InterleaveRows {
+            re,
+            im,
+            data: bytemuck::cast_slice_mut(data),
+            m,
+            stride,
+        });
+        if !handled {
+            for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
+                for (b, c) in chunk.iter_mut().enumerate() {
+                    *c = Complex::new(re[row * stride + b], im[row * stride + b]);
+                }
+            }
         }
-    }
+    });
 }
+
+pub(crate) mod boundary;
 
 // Test-gated deliberately: the interleaved in-place kernel is correct and
 // measured — and slower than the planar sibling by 16 to 37% pinned on a

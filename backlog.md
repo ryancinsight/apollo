@@ -161,6 +161,21 @@
 - **Evidence base:** ADR 0041 revision (both register-row shapes measured
   out); RustFFT f64 planner arm read at the locked version; batched
   per-pass attribution is this item's first diagnostic step.
+- **First diagnostic delivered (2026-08-27):** batched per-pass TSC
+  attribution at N = 1024 pinned P-core — deint 1431, stages1 2655,
+  transpose 1659, permute 582, stages2 3259, reint 1252: **45% of the
+  budget is data movement**, and the stage arithmetic alone (5.9k) is
+  already below RustFFT's whole-transform 7.9k, so the RustFFT gap is
+  movement, not butterflies. First harvest: the reinterleave pass
+  vectorized through the native interleave network with capability-hoisted
+  view chunks, 1252 → 900 TSC; the mirrored deinterleave kernel measured
+  slower than its auto-vectorized scalar loop (1431 → 1520) and was
+  deleted. Remaining movement targets, in order: transpose 1659 (needs
+  in-register 4x4 unpack/half-permute primitives upstream in hermes —
+  flat `interleave` composes a 4x4 transpose at 16 shuffles where unpack +
+  half-permute does 8), permute 582 (fold into the transpose), and the
+  fold-side deint. These may close much of the RustFFT gap without the
+  full 128-base construction; re-derive after they land.
 - **Risk / change class:** [arch]; production routing stays on batched
   until all oracles pass.
 
