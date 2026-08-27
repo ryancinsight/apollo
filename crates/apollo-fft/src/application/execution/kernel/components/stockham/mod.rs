@@ -21,6 +21,9 @@
 
 #[cfg(target_arch = "x86_64")]
 pub(crate) mod avx;
+// Windows-gated: pins threads through Win32 to control the hybrid scheduler.
+#[cfg(all(test, target_arch = "x86_64", windows))]
+mod backend_matrix;
 pub(crate) mod butterfly;
 pub(crate) mod precision;
 pub(crate) mod stage;
