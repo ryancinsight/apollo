@@ -1,11 +1,10 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Nine stale local branches hold unique patches — in progress
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — in progress
 
 - **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
   codex/apollo-arch-006-junk-drawer-rename (2), codex/fix-apollo-package-sources
-  (4), feat/apollo-benchmark-generator (2), fix/apollo-fft-workspace-buffers (1),
-  fix/apollo-large-composite-wiring (3),
+  (4), feat/apollo-benchmark-generator (2), fix/apollo-large-composite-wiring (3),
   fix/apollo-sht-thread-local-lint (1), perf/apollo-f32-rader-narrowing (5),
   style/apollo-butterfly-lint-consolidation-217 (1) — unique patch counts in
   parentheses; every branch is takeover material (salvage: rebase onto current
@@ -14,16 +13,20 @@
 - **Reconciled:** `codex/fix-atlas-sha` contained only a Hermes 0.6 manifest and
   lock advance; main requires Hermes 0.7 and locks `08306b94`, so both local and
   remote refs were deleted as superseded on 2026-08-27.
-- **Current salvage:** `fix/apollo-fft-workspace-buffers` contains one valid
-  Leto GPU staging increment plus unrelated Winograd/lock hunks also present on
-  another stale branch. Salvage only the four retained-staging entry points,
-  write completed outputs directly into final Mnemosyne storage, and add
-  real-device parity/address/shape tests. Acceptance is warning-clean affected
-  gates, public SemVer classification, and deletion of the reconciled branch.
-  Winograd and lock reconciliation remain with their owning stale branch.
+- **Reconciled:** `fix/apollo-fft-workspace-buffers` supplied the four retained
+  Leto GPU staging entry points now in PR #150. Merged Leto `fb70cb6` initializes
+  final Mnemosyne output storage once; real-device parity, stable-address, and
+  failure-atomic shape tests pass. The stale local and remote refs were deleted.
+  Its Winograd blob remains on `cascade/hermes-07` and
+  `fix/apollo-large-composite-wiring`; its lockfile was derived state.
+- **Current delivery:** PR #150 is locally green at `14993ed9`: locked checks,
+  strict Clippy, 482/482 Nextest, 2/2 doctests, warning-denied Rustdoc, provider
+  audit, 223/223 interop patch SemVer checks, and 196/196 FFT minor SemVer
+  checks. The 12-case GPU benchmark smoke completes; its single samples are not
+  timing evidence.
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** this item entry and `fix/apollo-fft-workspace-buffers` through the
-  next verified branch-debt commit. **Last update:** 2026-08-27.
+  **Lease:** this item entry and PR #150 through merge collection.
+  **Last update:** 2026-08-27.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
 
