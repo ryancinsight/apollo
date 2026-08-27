@@ -877,16 +877,20 @@
   instantiation coupling should be understood before the rewrite rather than
   discovered during it.
 
-## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — in progress 2026-08-27
+## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — decided 2026-08-27: retained; f64 256/512 route scalar
 
-- **Claim (2026-08-27):** integrator Claude session 5050c72a. Lease:
-  `components/stockham/**` (probe + any retirement diff), `pot/` probe files,
-  and this backlog/gap_audit section. Disjoint from the resident-rows lease
-  (`components/resident/`) and the bench-smoke lane (PR #142). Plan: same-binary
-  pinned scalar-vs-AVX matrix per size and precision (the scalar backends
-  compile under `cfg(test)`, so the table avoids the cross-build codegen
-  coupling that sank the reverted per-size routing), then the recorded decision
-  per route with an ADR.
+- **Verdict (2026-08-27, ADR 0042):** the retirement premise was a scheduler
+  artifact. The new same-binary pinned instrument
+  (`stockham::backend_matrix`, run `--ignored --nocapture`, release) shows the
+  AVX backend winning 1.4–2.9x on a pinned P-core at nearly every size and
+  precision; the entry ratios (0.35x–1.11x scalar/AVX) match the pinned
+  E-core column — the 2026-08-25 comparison was unpinned and EcoQoS-scheduled.
+  Full table and correction: `gap_audit.md#stockham-backend-matrix`. The one
+  both-core-consistent exception, f64 N = 256/512 (scalar −16%/−77% at 512),
+  is now routed to the scalar stages in `StockhamKernel for f64`;
+  `PreciseStockham` compiles unconditionally to serve it. f32 keeps the AVX
+  backend everywhere. AVX-512 arms untouched (no silicon; HS-429 class).
+  Integrator: Claude session 5050c72a.
 - **Outcome:** the AVX Stockham backend either earns its place with measurements
   or is retired, rather than being carried on the assumption that hand-written
   intrinsics are faster than what the optimizer produces.

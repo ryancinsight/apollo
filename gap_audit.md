@@ -9,6 +9,47 @@ width must return `false` with every input bit unchanged. Cross-target
 verification must not treat runtime-selected native width as a universal host
 property; production routing still requires a separately verified exact-width
 capability before these diagnostics can become a selected path.
+## The AVX-Stockham retirement premise was a scheduler artifact (2026-08-27) <a id="stockham-backend-matrix"></a>
+
+Evidence tier: same-binary pinned measurement (`stockham::backend_matrix`,
+release profile), both backends instantiated under `cfg(test)`, interleaved
+per size, thread pinned per core type; numerical agreement between backends
+guarded to rounding-difference growth over `log2 n` stages.
+
+`ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25` entered with scalar/AVX ratios of
+0.35x–1.11x — "the AVX backend is a pessimization at three of four sizes" —
+measured before the pinned instruments existed. Pinned, the table splits by
+core type (scalar-time over AVX-time; above 1.0 the AVX backend wins):
+
+| n | f64 P | f64 E | f32 P | f32 E |
+| --- | --- | --- | --- | --- |
+| 128 | 1.46 | 0.43 | 2.80 | 0.90 |
+| 256 | 0.99 | 0.27 | 1.76 | 0.49 |
+| 512 | 0.84 | 0.23 | 2.18 | 0.61 |
+| 1024 | 1.53 | 0.45 | 2.88 | 0.99 |
+| 2048 | 1.45 | 0.34 | 1.98 | 0.60 |
+| 4096 | 1.41 | 0.34 | 1.40 | 0.51 |
+| 8192 | 1.41 | 0.47 | 1.56 | 0.78 |
+| 16384 | 1.58 | 0.41 | 1.38 | 0.54 |
+| 32768 | 1.48 | 0.42 | 2.70 | 0.87 |
+
+The entry ratios match the pinned E-core column, not the P-core one: the
+2026-08-25 comparison ran unpinned and was EcoQoS-scheduled onto E-cores — the
+same confound `pot::core_matrix` was built to remove from the route crossover.
+On a pinned P-core the AVX backend wins nearly everywhere, 1.4–2.9x. The
+correction limits [the profile's](#pot-f64-profile) "hand-written AVX backend
+is slower than the auto-vectorized scalar one" claim to E-core scheduling.
+
+The exception is real and both-core-consistent: f64 N = 256 and 512 are the
+only sizes where the scalar stages meet or beat the AVX stages on **both**
+core types (512: −16% P-core, −77% E-core). Decision and reroute in
+[ADR 0042](adr/0042-avx-stockham-backend-retained.md): backend retained, f64
+256/512 route scalar, f32 unchanged. The reverted "route N = 256/512 to
+the scalar backend" experiment's 2x wins at the changed sizes are consistent
+with this table; its "1.8x regressions at unrelated larger sizes" were also
+measured unpinned, so scheduling noise is the leading hypothesis for them —
+the post-reroute pinned rerun of this matrix is the check: unchanged AVX arms
+holding their times refutes cross-arm codegen coupling on this diff.
 
 ## Stage fusion pays on the kernel, and the end-to-end census cannot see it (2026-08-26) <a id="stage-fusion"></a>
 
