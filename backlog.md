@@ -161,6 +161,14 @@
 - **Evidence base:** ADR 0041 revision (both register-row shapes measured
   out); RustFFT f64 planner arm read at the locked version; batched
   per-pass attribution is this item's first diagnostic step.
+- **Pinned ladder standing (2026-08-27, `batched::pinned_ladder`, contended
+  host):** P-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
+  1.29x/1.13x/0.95x/0.90x at n = 256/1024/4096/16384 — **the PhastFT bar is
+  met at 4096 and 16384 on P-cores**; residual gaps concentrate at small
+  sizes and on E-cores (up to 3.0x at n = 256), both dominated by fixed
+  per-pass movement costs. Confirms the movement burn-down as the binding
+  work; n = 256 routing itself (four-step vs a straight base butterfly) is
+  in question once the 128-base exists.
 - **First diagnostic delivered (2026-08-27):** batched per-pass TSC
   attribution at N = 1024 pinned P-core — deint 1431, stages1 2655,
   transpose 1659, permute 582, stages2 3259, reint 1252: **45% of the
