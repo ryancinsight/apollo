@@ -42,6 +42,61 @@ fn best_block<F: FnMut()>(mut f: F) -> f64 {
 }
 
 #[test]
+#[ignore = "measurement instrument: interleaved against planar batched kernels"]
+fn interleaved_against_planar_by_core_type() {
+    use crate::application::execution::kernel::components::batched;
+    for cpu in [2u32, 12] {
+        let landed = pin(cpu);
+        for k in [8u32, 10, 12, 14, 16] {
+            let n = 1usize << k;
+            let src: Vec<Complex64> = (0..n)
+                .map(|i| {
+                    let x = i as f64;
+                    Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                })
+                .collect();
+            let mut work = src.clone();
+            let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
+            let blocks = if n <= 4096 { 4096u32 } else { 256 };
+            let planar = {
+                let mut best = f64::INFINITY;
+                for _ in 0..12 {
+                    let t = std::time::Instant::now();
+                    for _ in 0..blocks {
+                        work.copy_from_slice(&src);
+                        batched::four_step_batched::<f64, false>(
+                            std::hint::black_box(&mut work),
+                            &mut scratch,
+                        );
+                    }
+                    best = best.min(t.elapsed().as_nanos() as f64 / f64::from(blocks));
+                }
+                best
+            };
+            let interleaved = {
+                let mut best = f64::INFINITY;
+                for _ in 0..12 {
+                    let t = std::time::Instant::now();
+                    for _ in 0..blocks {
+                        work.copy_from_slice(&src);
+                        batched::interleaved::four_step_interleaved::<f64, false>(
+                            std::hint::black_box(&mut work),
+                        );
+                    }
+                    best = best.min(t.elapsed().as_nanos() as f64 / f64::from(blocks));
+                }
+                best
+            };
+            println!(
+                "IVP cpu={landed:<2} ({}) n={n:<6} planar={planar:>10.1}ns interleaved={interleaved:>10.1}ns ratio={:.2}",
+                if landed < 8 { "P" } else { "E" },
+                interleaved / planar,
+            );
+        }
+    }
+}
+
+#[test]
 #[ignore = "measurement instrument: is the batched four-step the better 128..1024 route"]
 fn mid_sizes_against_the_batched_four_step_by_core_type() {
     use crate::application::execution::kernel::components::batched;
