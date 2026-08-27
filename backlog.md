@@ -111,30 +111,42 @@
   the shape adds 7.9k of data movement. The interleaved butterfly is
   shuffle-port-bound (3 shuffles per complex multiply, one shuffle-port-bound
   chain of ~240 per row) where batched planar arithmetic is FMA-bound.
-  Incremental tuning cannot close this; the winning construction is
-  RustFFT's — planar-register rows with the transposes fused into the row
-  load/store networks. Module stays test-gated; follow-on item below.
+  Incremental tuning cannot close this. The first proposed replacement — a
+  scratch-free planar row with fused in-place transpose stores — failed the
+  dependency and register-layout review recorded in the follow-on item below;
+  the resident module remains test-gated pending a corrected construction.
 
-## ATLAS-APOLLO-FUSED-PLANAR-ROWS — Planar-register rows with fused transposes [arch] — in progress
+## ATLAS-APOLLO-FUSED-PLANAR-ROWS — Respecify the mid-size resident transform [arch] — in progress: design review failed
 
-- **Outcome:** the four-step at N = 1024 with rows held in planar register
-  halves (8 re + 8 im ymm — the same sixteen-register fit) so butterflies are
-  pure FMA traffic with zero shuffles per stage, and the array transposes
-  fused into the row load/store shuffle networks so the transform is two
-  passes over the data, not five. This is the RustFFT AVX construction; its
-  measured 2455 ns (≈7.9k TSC) at N = 1024 P-core is the existence proof and
-  the acceptance bar.
-- **Evidence base:** resident-rows attribution above — rows 13.1k TSC
-  (shuffle-bound), movement passes 7.9k; batched total ~11k; RustFFT ~7.9k.
-- **Acceptance oracle:** pinned four-engine probe at N = 1024 — the fused
-  planar shape at or below batched (3423 ns P-core) to merge as an
-  experiment; at or below RustFFT (2455 ns) to take over the route.
-- **Risk / change class:** [arch] — new kernel shape; falls back to batched
-  for any undispatched width or length.
+- **Independent review (2026-08-27):** ADR 0041 must not enter implementation
+  in its current form. An in-place row transform cannot immediately store its
+  transposed output without overwriting elements needed by every later row;
+  two array touches therefore require a disjoint destination or an explicit
+  staging/permutation proof. Eight real plus eight imaginary YMM registers also
+  consume the complete AVX2 register file, and lane-wise arithmetic alone mixes
+  only the three register-index bits: without lane permutations it computes
+  four independent length-8 transforms, not one length-32 transform.
+- **Reference correction:** locked RustFFT 6.4.1 is not an existence proof for
+  the proposed scratch-free planar construction. Its f64 length-32 butterfly
+  explicitly permits spills, while its N = 1024 AVX plan uses an interleaved
+  length-128 base plus a mixed-radix layer whose in-place contract reserves a
+  full-length scratch region and performs an explicit transpose.
+- **Required respecification:** define the exact bit-reversal and twiddle address
+  map, storage/scratch contract, bounded live set, lane-permutation network, and
+  width gate before mutation. The smallest established candidate is a two-pass
+  out-of-place four-step reusing one caller-owned N-complex scratch buffer; a
+  scratch-free alternative needs a dependency proof rather than an assertion.
+- **Acceptance oracle:** direct-DFT, round-trip, batched differential, untouched
+  decline, and warm-allocation checks; generated assembly establishes the
+  expected permutations and spill bound. A counterbalanced warmed production
+  route benchmark reports median and confidence interval against batched and
+  RustFFT; the minimum-of-blocks diagnostic remains attribution evidence only.
+- **Risk / change class:** [arch] — storage, ordering, and ISA-width contracts
+  change together; production routing remains on batched until all oracles pass.
 - **Integrator:** Claude session d791281c. **ADR:** docs/adr/0041 (Proposed,
-  recommended option: planar-register rows + fused boundary networks).
-  **Last update:** 2026-08-27 — ADR drafted; next increment is the planar row
-  body behind the resident oracle set.
+  revision required before implementation). **Last update:** 2026-08-27 —
+  independent source and dependency analysis rejected the current construction;
+  next increment is the corrected address/storage design and revised ADR.
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
 
