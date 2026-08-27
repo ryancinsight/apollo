@@ -3,6 +3,27 @@
 - Status: Proposed
 - Item: ATLAS-APOLLO-FUSED-PLANAR-ROWS
 - Date: 2026-08-27
+- Revision 2026-08-27: increment one (the planar row body, built behind the
+  full oracle set and measured pinned) **falsifies the planar-register
+  premise**. Planar rows measured ~6.3k TSC per pass against the interleaved
+  kernel's ~5.6k: the boundary deinterleave/interleave networks plus the two
+  in-register stages cost as many shuffle-class ops (~96/row) as the
+  interleaved multiply chain they replace, and the P-core's shuffle
+  throughput means the interleaved form was never shuffle-port-bound. Both
+  register-row shapes pay ~3x a batched streaming pass in arithmetic alone.
+  RustFFT's construction, read from `avx_planner.rs` at the locked version
+  (the f64 impl — an earlier 256-base reading came from the f32 arm, the
+  correction owed to the independent PR #147 review), is
+  `MixedRadix8xnAvx(Butterfly128Avx64)` — a hand-written 128-point
+  interleaved AVX base butterfly composed with an 8xn mixed-radix layer that
+  reserves full-length scratch and performs an explicit transpose. The
+  winning shape is therefore a **large L1-resident interleaved base
+  transform with a short radix chain and honest scratch**, not per-row
+  register residency and not planar streaming past its current form.
+  Decision section superseded accordingly; the planar module stays test-gated
+  as the differential oracle and measurement instrument. Five-engine pinned
+  standing at N = 1024 P-core: batched 3.4-3.7 us, resident 6.7, planar 7.4,
+  RustFFT 2.47, PhastFT 3.25.
 
 ## Context
 
