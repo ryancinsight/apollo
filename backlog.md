@@ -1,5 +1,45 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-INTERLEAVED-CODELETS-2026-08-27 — Interleaved register-resident small-N codelets [arch] — in progress 2026-08-27
+
+- **Integrator:** Claude session `d791281c`. **Lease:** a new
+  `kernel/components/codelet/` leaf module, `pot/` dispatch touch points, and
+  this item's PM entries.
+- **Outcome:** small-N power-of-two transforms (first target N = 16, then 32,
+  64) run register-resident on interleaved data via `hermes_simd::ComplexReg`,
+  closing the range where Apollo sits at 3-8 flops/ns against RustFFT's ~30 —
+  the last structural piece of the reference approach not yet adopted.
+- **Substrate delivered and merged** (hermes `26e2ef15`, PR #73): `ComplexReg`
+  with sample-wise `Mul`/`mul_conj`/`mul_i`/`mul_neg_i`/`splat`/
+  `swap_samples`/`butterfly`, plus the new `swap_pairs` backend primitive.
+  Apollo's lock is advanced to it. The codelets are transform logic and land
+  here, not in hermes — the upstream-ownership split.
+- **Design, worked out and recorded so implementation starts from it:**
+  - Registers hold adjacent samples of the (bit-reversed) sequence; a DIT
+    stage at butterfly distance >= samples-per-register is pure cross-register
+    `butterfly` + twiddle `Mul` — no shuffles at all.
+  - The one intra-register stage (distance 1, AVX2 f64 at 2 samples/reg) is
+    expressible without new primitives:
+    `result = swap_samples(v) + v * SIGN` where `SIGN` is the lane pattern
+    `[1, 1, -1, -1]` repeated — giving `[s0 + s1, s0 - s1]` per register.
+    `SIGN` loads from a const slice truncated to the width, so the codelet
+    stays width-generic; verify the two roundings this introduces against the
+    error bound (it is add of a negated product, exact for the sign flip).
+  - Per-width strategy: monomorphize per arch inside one `LaneKernel`; a
+    width whose intra-register stage set is not yet expressible (AVX-512 f64 at
+    4 samples/reg needs a sample-pair half exchange) falls back to the
+    existing route rather than blocking — the missing granularity op
+    (`swap_halves`) is a follow-up hermes primitive, not a prerequisite.
+  - Twiddles: `ComplexReg::splat` per factor for cross-register stages; the
+    quarter-turn is `mul_i`, no table entry.
+- **Acceptance oracle:** bitwise/1-ULP differential against the existing route
+  per size; the twiddle accuracy gate's ladder stays flat; pinned
+  `core_matrix`-style measurement shows the codelet beating the incumbent
+  sized path on a P-core before any dispatch change; allocations zero.
+- **Non-goals:** N > 64 (four-step owns it), f32 first pass, AVX-512-specific
+  codelets (need the half-exchange primitive first).
+- **Risk / change class:** [arch]; new leaf module plus one dispatch touch.
+
 ## ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26 — Four-step 8x slower in one process than another [arch] — closed 2026-08-26, root-caused: not layout
 
 - **Root cause: the hybrid scheduler.** The host is a Core Ultra 9 285K (8
