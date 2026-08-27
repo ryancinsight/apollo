@@ -38,7 +38,13 @@ declare_cache_store! {
     global_reduced: FOUR_STEP_TW_REDUCED_CACHE,
 }
 
-fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
+/// Builds the `W_N^(j*k)` matrix without touching the caches.
+///
+/// The batched kernel's planar-plane cache builds from this and stores only
+/// its own representation; routing it through [`cached_four_step_twiddles`]
+/// would cache the interleaved matrix as a dead side effect beside the planes
+/// — the doubled-footprint defect the planes' consolidation note recorded.
+pub(crate) fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
     n: usize,
     n1: usize,
     n2: usize,
