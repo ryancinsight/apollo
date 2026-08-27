@@ -20,7 +20,7 @@
   other valid layouts reuse rank-disjoint scratch, and exact layout parity plus
   the warmed census verify logical order with zero transient allocations.
 
-## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — in progress
+## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — done 2026-08-27
 
 - **Outcome:** bench binaries prove they build and execute inside the standard
   test budget without running full timing sweeps under the unoptimized test
@@ -36,10 +36,9 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** `apollo-bench` execution mode, Apollo FFT bench entry points,
-  committed bench-smoke gate, tests, and this item's PM entries through the
-  next verified commit. **Last update:** 2026-08-27.
+- **Delivered:** PR #142 merged as `a8a727a0`; exact-head hosted verification
+  passed the Rust workspace, Python, lock, and executable-identity gates. The
+  seven-binary local smoke completed in about 26 seconds.
 
 ## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 
