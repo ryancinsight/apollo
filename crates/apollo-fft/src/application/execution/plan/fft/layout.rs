@@ -37,67 +37,6 @@ where
     })
 }
 
-#[cfg(test)]
-pub(crate) mod error_bound {
-    const ROUNDED_OPS_PER_COMPLEX_TERM: usize = 8;
-
-    fn gamma(operations: usize) -> f64 {
-        let unit_roundoff = f64::EPSILON / 2.0;
-        let scaled_roundoff = operations as f64 * unit_roundoff;
-        assert!(
-            scaled_roundoff < 1.0,
-            "invariant: floating-point error model requires k * u < 1"
-        );
-        scaled_roundoff / (1.0 - scaled_roundoff)
-    }
-
-    fn transform_factor(dimensions: &[usize]) -> f64 {
-        dimensions.iter().copied().fold(1.0, |factor, terms| {
-            let operations = terms
-                .checked_mul(ROUNDED_OPS_PER_COMPLEX_TERM)
-                .expect("invariant: test transform operation count fits usize");
-            factor * (1.0 + gamma(operations))
-        }) - 1.0
-    }
-
-    fn element_count(dimensions: &[usize]) -> usize {
-        dimensions.iter().copied().fold(1, |count, dimension| {
-            count
-                .checked_mul(dimension)
-                .expect("invariant: test transform element count fits usize")
-        })
-    }
-
-    /// Bound a separable transform against the direct discrete Fourier transform.
-    ///
-    /// The standard model `gamma(k) = k*u/(1-k*u)`, with unit roundoff
-    /// `u = epsilon/2`, bounds a sequence of `k` rounded operations. One
-    /// complex term contributes four real multiplications, two product sums,
-    /// and two accumulator additions, so an `n`-term complex sum uses at most
-    /// `8n` rounded operations. Separable axes compose multiplicatively. The
-    /// direct reference is one sum over the complete input. The triangle
-    /// inequality adds both routes' bounds, and `sqrt(2)` converts component
-    /// error to complex magnitude.
-    pub(crate) fn forward(input_l1: f64, dimensions: &[usize]) -> f64 {
-        let transform = transform_factor(dimensions);
-        let direct_operations = element_count(dimensions)
-            .checked_mul(ROUNDED_OPS_PER_COMPLEX_TERM)
-            .expect("invariant: direct-transform operation count fits usize");
-        f64::sqrt(2.0) * (transform + gamma(direct_operations)) * input_l1
-    }
-
-    /// Bound a normalized forward/inverse separable-transform round trip.
-    ///
-    /// Two transform factors compose multiplicatively and normalization adds
-    /// one rounded multiplication. Scaling by the input one-norm bounds every
-    /// recovered output component by the triangle inequality.
-    pub(crate) fn round_trip(input_l1: f64, dimensions: &[usize]) -> f64 {
-        let transform = transform_factor(dimensions);
-        let composed = (1.0 + transform).powi(2) * (1.0 + gamma(1)) - 1.0;
-        f64::sqrt(2.0) * composed * input_l1
-    }
-}
-
 /// Transpose one or more adjacent row-major matrices through Leto's assignment
 /// kernel.
 ///
