@@ -178,7 +178,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — todo
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: base delivered
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -229,6 +229,29 @@
   full 128-base construction; re-derive after they land.
 - **Risk / change class:** [arch]; production routing stays on batched
   until all oracles pass.
+- **Base butterfly delivered (2026-08-27, `components/base128`):** the
+  128-point mixed-radix 8x16 — a gather-free redistribution whose block-pair
+  concatenations land staging rows already in DIT order (the bit reversal
+  costs nothing), register-resident DIT-16 rows, and a twiddled lane-wise
+  8-point column pass with natural-order contiguous stores. Twiddles ship
+  dup-split so a complex multiply is one shuffle + multiply + fmaddsub
+  instead of three shuffles. Four oracles green (direct DFT both
+  directions, round trip, production-route differential). **Pinned:
+  326 ns P-core / 194 ns E-core** — 2.1x / 9.5x faster than the production
+  n = 128 route (687 / 1843 ns) and ahead of PhastFT (329 / 141);
+  RustFFT (181 / 84) is 1.8x / 2.3x away, phase attribution 130 / 469 / 428
+  TSC (redistribute / rows / columns). Iteration log: checked-slice loads →
+  view chunks (−5%), dup-split twiddles (−12%), hoisted views + fma stage-1
+  (−2%).
+- **Small-size gate standing (`base128::pinned_probe`):** production
+  vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
+  powers route scalar (ADR 0042) and are the worst sizes in the ladder;
+  n = 128 E-core is 22x. **Next increments:** (1) promote the base to the
+  production n = 128 route (immediate 2-9x for that size); (2) tighten the
+  base toward RustFFT's ~580 TSC — the P-core runs it at ~1.5 IPC where the
+  E-core reaches ~2.6, so the next experiment is two-row interleaving to
+  break the DIT chain latency; (3) assemble N = 1024 = 8 x 128 only when
+  the inner reaches ~700 TSC, where the outer arithmetic first pays.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28

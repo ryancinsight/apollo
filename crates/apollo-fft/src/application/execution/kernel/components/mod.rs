@@ -1,3 +1,7 @@
+// Test-gated: the mixed-radix 8x128 experiment and its measurement probe
+// (ATLAS-APOLLO-BASE-BUTTERFLY-128).
+#[cfg(test)]
+mod base128;
 pub(crate) mod batched;
 // Test-gated: correct on every oracle, blocked on a hermes vectorize
 // codegen defect for large kernel bodies (the module doc carries the
