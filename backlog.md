@@ -123,7 +123,7 @@
   RustFFT's — planar-register rows with the transposes fused into the row
   load/store networks. Module stays test-gated; follow-on item below.
 
-## ATLAS-APOLLO-FUSED-PLANAR-ROWS — Planar-register rows with fused transposes [arch] — todo
+## ATLAS-APOLLO-FUSED-PLANAR-ROWS — Planar-register rows with fused transposes [arch] — in progress
 
 - **Outcome:** the four-step at N = 1024 with rows held in planar register
   halves (8 re + 8 im ymm — the same sixteen-register fit) so butterflies are
@@ -139,6 +139,10 @@
   experiment; at or below RustFFT (2455 ns) to take over the route.
 - **Risk / change class:** [arch] — new kernel shape; falls back to batched
   for any undispatched width or length.
+- **Integrator:** Claude session d791281c. **ADR:** docs/adr/0041 (Proposed,
+  recommended option: planar-register rows + fused boundary networks).
+  **Last update:** 2026-08-27 — ADR drafted; next increment is the planar row
+  body behind the resident oracle set.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
