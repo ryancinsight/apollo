@@ -1,44 +1,29 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-INTERLEAVED-CODELETS-2026-08-27 — Interleaved register-resident small-N codelets [arch] — in progress 2026-08-27
+## ATLAS-APOLLO-INTERLEAVED-CODELETS-2026-08-27 — Interleaved register-resident small-N codelets [arch] — done 2026-08-27, measurement redirected the wiring
 
-- **Integrator:** Claude session `d791281c`. **Lease:** a new
-  `kernel/components/codelet/` leaf module, `pot/` dispatch touch points, and
-  this item's PM entries.
-- **Outcome:** small-N power-of-two transforms (first target N = 16, then 32,
-  64) run register-resident on interleaved data via `hermes_simd::ComplexReg`,
-  closing the range where Apollo sits at 3-8 flops/ns against RustFFT's ~30 —
-  the last structural piece of the reference approach not yet adopted.
-- **Substrate delivered and merged** (hermes `26e2ef15`, PR #73): `ComplexReg`
-  with sample-wise `Mul`/`mul_conj`/`mul_i`/`mul_neg_i`/`splat`/
-  `swap_samples`/`butterfly`, plus the new `swap_pairs` backend primitive.
-  Apollo's lock is advanced to it. The codelets are transform logic and land
-  here, not in hermes — the upstream-ownership split.
-- **Design, worked out and recorded so implementation starts from it:**
-  - Registers hold adjacent samples of the (bit-reversed) sequence; a DIT
-    stage at butterfly distance >= samples-per-register is pure cross-register
-    `butterfly` + twiddle `Mul` — no shuffles at all.
-  - The one intra-register stage (distance 1, AVX2 f64 at 2 samples/reg) is
-    expressible without new primitives:
-    `result = swap_samples(v) + v * SIGN` where `SIGN` is the lane pattern
-    `[1, 1, -1, -1]` repeated — giving `[s0 + s1, s0 - s1]` per register.
-    `SIGN` loads from a const slice truncated to the width, so the codelet
-    stays width-generic; verify the two roundings this introduces against the
-    error bound (it is add of a negated product, exact for the sign flip).
-  - Per-width strategy: monomorphize per arch inside one `LaneKernel`; a
-    width whose intra-register stage set is not yet expressible (AVX-512 f64 at
-    4 samples/reg needs a sample-pair half exchange) falls back to the
-    existing route rather than blocking — the missing granularity op
-    (`swap_halves`) is a follow-up hermes primitive, not a prerequisite.
-  - Twiddles: `ComplexReg::splat` per factor for cross-register stages; the
-    quarter-turn is `mul_i`, no table entry.
-- **Acceptance oracle:** bitwise/1-ULP differential against the existing route
-  per size; the twiddle accuracy gate's ladder stays flat; pinned
-  `core_matrix`-style measurement shows the codelet beating the incumbent
-  sized path on a P-core before any dispatch change; allocations zero.
-- **Non-goals:** N > 64 (four-step owns it), f32 first pass, AVX-512-specific
-  codelets (need the half-exchange primitive first).
-- **Risk / change class:** [arch]; new leaf module plus one dispatch touch.
+- **The codelet was built, verified, measured pinned — and declined.** The
+  N = 16 register-resident codelet on `hermes_simd::ComplexReg` passes four
+  oracles (direct DFT forward and inverse, normalized round trip, differential
+  against the incumbent route) but loses to the incumbent sized kernel 1.8x on
+  a P-core and 1.4x on an E-core. The incumbent small codelets are already
+  near roofline (~22 flops/ns at N = 16); the losing term is the stack-buffer
+  bit reversal, whose scalar stores stall the following vector loads. Per the
+  acceptance oracle it ships **unwired**, with the probe that vetoed it
+  committed beside it.
+- **The same probe found the win the item was actually after.** The measured
+  weak range was never <= 64 — it was 128 to 1024. Pinned, the batched
+  four-step beats the sized Stockham route at 256 and 1024 on both core types
+  (1.5x P, 5-6x E), so the f64 sized arms now consult the route predicate and
+  the crossover constant moves to 256 with ADR 0039's fifth revision note.
+  Plan-route timings after wiring match the direct batched path at ratio ~1.0.
+- **Bounds kept honest:** odd log2 (128, 512, 2048) are not admissible square
+  splits and keep the sized route; f32 is unmeasured and does not inherit
+  f64's verdict — both recorded as such, not silently generalized.
+- **Follow-up filed:** `HS-INTERLEAVE-PAIRS` (hermes) — a two-register
+  sample-granularity shuffle so codelet bit reversal can run in registers;
+  with it the codelet family becomes worth re-measuring, and the odd-log2
+  sizes need a non-square decomposition or codelet to leave the slow route.
 
 ## ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY-2026-08-26 — Four-step 8x slower in one process than another [arch] — closed 2026-08-26, root-caused: not layout
 

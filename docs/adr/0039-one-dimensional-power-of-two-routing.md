@@ -271,3 +271,29 @@ sufficient on a contended host: absolute census figures from this machine
 remain unusable while other work runs, and the quiet-host item stands. The
 instruments to run there are `pot::crossover` and `pot::core_matrix`, both
 named here so this figure is falsifiable in a way the original was not.
+
+2026-08-27 (fifth): the crossover moves to 256, now with pinned evidence at the
+sizes themselves rather than extrapolation from 4096. The N = 16 interleaved
+codelet work produced `codelet::pinned_probe`, which measured the batched
+four-step against the sized Stockham route directly:
+
+| pinned | N | sized route | batched four-step |
+| --- | --- | --- | --- |
+| P-core | 256 | 1418 ns | 937 ns (1.5x) |
+| P-core | 1024 | 6303 ns | 4190 ns (1.5x) |
+| E-core | 256 | 3719 ns | 604 ns (6.2x) |
+| E-core | 1024 | 15378 ns | 3065 ns (5.0x) |
+
+This agrees with `pot::crossover`'s in-process ladder, which has had the
+crossover at 256 since it first ran. The f64 sized codelet arms now consult
+`one_dimensional_uses_four_step` before their Stockham path; odd `log2` sizes
+(128, 512, 2048) are not admissible splits and keep the sized route, as does
+f32, which has not been measured on its own and does not inherit f64's
+verdict. The accuracy gate's ladder is flat across the rerouted sizes.
+
+The same probe declined the other candidate: a register-resident N = 16
+codelet on the interleaved vocabulary is correct against a direct-DFT oracle
+but loses to the incumbent sized kernel by 1.8x on a P-core — the incumbent
+small codelets are already near roofline, and the codelet's stack-buffer bit
+reversal pays store-forward stalls the incumbent does not. It ships unwired;
+the in-register permutation it needs is a recorded hermes follow-up.
