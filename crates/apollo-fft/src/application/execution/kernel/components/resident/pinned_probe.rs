@@ -4,26 +4,10 @@
 
 use super::four_step_resident;
 use crate::application::execution::kernel::components::batched;
+use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;
 use std::time::Instant;
-
-#[link(name = "kernel32")]
-unsafe extern "system" {
-    fn SetThreadAffinityMask(thread: isize, mask: usize) -> usize;
-    fn GetCurrentThread() -> isize;
-    fn GetCurrentProcessorNumber() -> u32;
-}
-
-fn pin(cpu: u32) -> u32 {
-    // SAFETY: pins the current thread; both calls are documented Win32.
-    unsafe {
-        SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu);
-    }
-    std::thread::yield_now();
-    // SAFETY: no arguments, no state.
-    unsafe { GetCurrentProcessorNumber() }
-}
 
 fn best_block<F: FnMut()>(mut f: F) -> f64 {
     const CALLS: u32 = 2048;

@@ -11,25 +11,9 @@
 use super::route::{FourStep, PotRoute};
 use super::strategies::StockhamAutosort;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
 use std::time::Instant;
-
-#[link(name = "kernel32")]
-unsafe extern "system" {
-    fn SetThreadAffinityMask(thread: isize, mask: usize) -> usize;
-    fn GetCurrentThread() -> isize;
-    fn GetCurrentProcessorNumber() -> u32;
-}
-
-fn pin(cpu: u32) -> u32 {
-    // SAFETY: pins the current thread; both calls are documented Win32.
-    unsafe {
-        SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu);
-    }
-    std::thread::yield_now();
-    // SAFETY: no arguments, no state.
-    unsafe { GetCurrentProcessorNumber() }
-}
 
 fn best<R: PotRoute>(src: &[Complex64], work: &mut [Complex64], tw: &[Complex64]) -> f64 {
     let mut best = f64::INFINITY;

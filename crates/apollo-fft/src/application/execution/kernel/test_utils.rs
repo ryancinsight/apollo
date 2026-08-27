@@ -31,3 +31,29 @@ pub(crate) fn max_abs_err_32(got: &[Complex32], expected: &[Complex32]) -> f32 {
         .map(|(x, y)| (*x - *y).norm())
         .fold(0.0, f32::max)
 }
+
+/// Thread pinning for the measurement probes, shared so the Win32 shim exists
+/// once. Unpinned bench threads receive EcoQoS from the hybrid scheduler and
+/// report route costs that say more about scheduling than about routes.
+#[cfg(windows)]
+mod pinning {
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn SetThreadAffinityMask(thread: isize, mask: usize) -> usize;
+        fn GetCurrentThread() -> isize;
+        fn GetCurrentProcessorNumber() -> u32;
+    }
+
+    /// Pins the current thread to logical `cpu` and returns where it landed.
+    pub(crate) fn pin(cpu: u32) -> u32 {
+        // SAFETY: pins the current thread; both calls are documented Win32.
+        unsafe {
+            SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu);
+        }
+        std::thread::yield_now();
+        // SAFETY: no arguments, no state.
+        unsafe { GetCurrentProcessorNumber() }
+    }
+}
+#[cfg(windows)]
+pub(crate) use pinning::pin;
