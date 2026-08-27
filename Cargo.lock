@@ -741,7 +741,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1025,7 +1025,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#3c548015a7ac5d3faca26f54d4c8897e636ac3d9"
+source = "git+https://github.com/ryancinsight/hermes.git#9bb99433abd03eb1c6df26ea2ea6b99eb2e533cd"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -1039,7 +1039,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#3c548015a7ac5d3faca26f54d4c8897e636ac3d9"
+source = "git+https://github.com/ryancinsight/hermes.git#9bb99433abd03eb1c6df26ea2ea6b99eb2e533cd"
 dependencies = [
  "bytemuck",
  "eunomia",
@@ -1051,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#3c548015a7ac5d3faca26f54d4c8897e636ac3d9"
+source = "git+https://github.com/ryancinsight/hermes.git#9bb99433abd03eb1c6df26ea2ea6b99eb2e533cd"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -1060,7 +1060,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#3c548015a7ac5d3faca26f54d4c8897e636ac3d9"
+source = "git+https://github.com/ryancinsight/hermes.git#9bb99433abd03eb1c6df26ea2ea6b99eb2e533cd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1070,7 +1070,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/hermes.git#3c548015a7ac5d3faca26f54d4c8897e636ac3d9"
+source = "git+https://github.com/ryancinsight/hermes.git#9bb99433abd03eb1c6df26ea2ea6b99eb2e533cd"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -1118,7 +1118,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "leto"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#fb70cb6a12ecb4728ba7ee16978d83734c9172d7"
+source = "git+https://github.com/ryancinsight/leto.git#d54fe174c835678ce0ea0f44deb1059431e7db97"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -1130,7 +1130,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.42.0"
-source = "git+https://github.com/ryancinsight/leto.git#fb70cb6a12ecb4728ba7ee16978d83734c9172d7"
+source = "git+https://github.com/ryancinsight/leto.git#d54fe174c835678ce0ea0f44deb1059431e7db97"
 dependencies = [
  "eunomia",
  "hermes-simd",
@@ -2156,7 +2156,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2351,7 +2351,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

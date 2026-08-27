@@ -662,7 +662,12 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
 
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
-    sect!("transpose", { transpose_planes(re, im, m, stride) });
+    sect!("transpose", {
+        let handled = hermes_simd::vectorize(boundary::TransposePlanes { re, im, m, stride });
+        if !handled {
+            transpose_planes(re, im, m, stride);
+        }
+    });
 
     // 3. The `m` transforms along the second axis, with the four-step twiddle
     //    W_N^{b·k1} folded into the first stage's loads — the matrix is
