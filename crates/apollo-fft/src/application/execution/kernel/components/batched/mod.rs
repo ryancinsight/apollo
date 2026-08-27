@@ -96,6 +96,10 @@ struct BatchedStages<'a, T> {
     re: &'a mut [T],
     im: &'a mut [T],
     tw: &'a [(T, T)],
+    /// Planar four-step twiddle planes multiplied into the first stage's
+    /// loads, or `None` for a plain stage set. Row-major with row stride
+    /// `batch`, rows in the same bit-reversed order the data rows carry.
+    fold: Option<(&'a [T], &'a [T])>,
     /// Live columns per row — the loop bound.
     batch: usize,
     /// Elements per row including [`ROW_PAD`] — the index multiplier.
@@ -147,21 +151,44 @@ where
                 let (v2r, v2i) = (simd.splat(w2r), simd.splat(w2i));
                 let (v3r, v3i) = (simd.splat(w3r), simd.splat(w3i));
 
+                // The four-step twiddle rides the first stage's loads:
+                // `l == 2` is the pass that reads every element exactly once,
+                // so multiplying there deletes the standalone pass the scalar
+                // transpose multiply used to be.
+                let fold = if l == 2 { self.fold } else { None };
                 for g in 0..groups {
-                    let ia = (g * 2 * l + j) * s;
+                    let row_a = g * 2 * l + j;
+                    let ia = row_a * s;
                     let ib = ia + half * s;
                     let ic = ia + l * s;
                     let id = ic + half * s;
+                    let ta = row_a * b;
+                    let tb = ta + half * b;
+                    let tc = ta + l * b;
+                    let td = tc + half * b;
                     let mut k = 0;
                     while k + lanes <= b {
-                        let ar = load::<T, A>(self.re, ia + k);
-                        let ai = load::<T, A>(self.im, ia + k);
-                        let br = load::<T, A>(self.re, ib + k);
-                        let bi = load::<T, A>(self.im, ib + k);
-                        let cr = load::<T, A>(self.re, ic + k);
-                        let ci = load::<T, A>(self.im, ic + k);
-                        let dr = load::<T, A>(self.re, id + k);
-                        let di = load::<T, A>(self.im, id + k);
+                        let mut ar = load::<T, A>(self.re, ia + k);
+                        let mut ai = load::<T, A>(self.im, ia + k);
+                        let mut br = load::<T, A>(self.re, ib + k);
+                        let mut bi = load::<T, A>(self.im, ib + k);
+                        let mut cr = load::<T, A>(self.re, ic + k);
+                        let mut ci = load::<T, A>(self.im, ic + k);
+                        let mut dr = load::<T, A>(self.re, id + k);
+                        let mut di = load::<T, A>(self.im, id + k);
+                        if let Some((pr, pi)) = fold {
+                            let tw = |r: hermes_simd::Vector<T, A>,
+                                      i: hermes_simd::Vector<T, A>,
+                                      at: usize| {
+                                let wr = load::<T, A>(pr, at + k);
+                                let wi = load::<T, A>(pi, at + k);
+                                (wr.mul_add(r, -(wi * i)), wr.mul_add(i, wi * r))
+                            };
+                            (ar, ai) = tw(ar, ai, ta);
+                            (br, bi) = tw(br, bi, tb);
+                            (cr, ci) = tw(cr, ci, tc);
+                            (dr, di) = tw(dr, di, td);
+                        }
 
                         // Stage `l`: (a,b) and (c,d), both against W_l^j.
                         let tbr = v1r.mul_add(br, -(v1i * bi));
@@ -193,10 +220,20 @@ where
                     }
                     // Scalar remainder when the batch is not a lane multiple.
                     for k in k..b {
-                        let (ar, ai) = (self.re[ia + k], self.im[ia + k]);
-                        let (br, bi) = (self.re[ib + k], self.im[ib + k]);
-                        let (cr, ci) = (self.re[ic + k], self.im[ic + k]);
-                        let (dr, di) = (self.re[id + k], self.im[id + k]);
+                        let (mut ar, mut ai) = (self.re[ia + k], self.im[ia + k]);
+                        let (mut br, mut bi) = (self.re[ib + k], self.im[ib + k]);
+                        let (mut cr, mut ci) = (self.re[ic + k], self.im[ic + k]);
+                        let (mut dr, mut di) = (self.re[id + k], self.im[id + k]);
+                        if let Some((pr, pi)) = fold {
+                            let tw = |r: T, i: T, at: usize| {
+                                let (wr, wi) = (pr[at + k], pi[at + k]);
+                                (wr * r - wi * i, wr * i + wi * r)
+                            };
+                            (ar, ai) = tw(ar, ai, ta);
+                            (br, bi) = tw(br, bi, tb);
+                            (cr, ci) = tw(cr, ci, tc);
+                            (dr, di) = tw(dr, di, td);
+                        }
 
                         let tbr = w1r * br - w1i * bi;
                         let tbi = w1r * bi + w1i * br;
@@ -228,24 +265,40 @@ where
             l <<= 2;
         }
 
-        // One radix-2 stage remains when `log2(len)` is odd.
+        // One radix-2 stage remains when `log2(len)` is odd; when the whole
+        // transform is that single stage, the first-stage fold applies here.
         if l <= self.len {
             let half = l >> 1;
             let groups = self.len / l;
+            let fold = if l == 2 { self.fold } else { None };
             for j in 0..half {
                 let (twr, twi) = self.tw[twx + j];
                 let wr = simd.splat(twr);
                 let wi = simd.splat(twi);
                 for g in 0..groups {
-                    let lo = (g * l + j) * s;
+                    let row_lo = g * l + j;
+                    let lo = row_lo * s;
                     let hi = lo + half * s;
+                    let tlo = row_lo * b;
+                    let thi = tlo + half * b;
                     let mut k = 0;
                     while k + lanes <= b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
-                        let ar = load::<T, A>(self.re, lo_s);
-                        let ai = load::<T, A>(self.im, lo_s);
-                        let br = load::<T, A>(self.re, hi_s);
-                        let bi = load::<T, A>(self.im, hi_s);
+                        let mut ar = load::<T, A>(self.re, lo_s);
+                        let mut ai = load::<T, A>(self.im, lo_s);
+                        let mut br = load::<T, A>(self.re, hi_s);
+                        let mut bi = load::<T, A>(self.im, hi_s);
+                        if let Some((pr, pi)) = fold {
+                            let tw = |r: hermes_simd::Vector<T, A>,
+                                      i: hermes_simd::Vector<T, A>,
+                                      at: usize| {
+                                let vr = load::<T, A>(pr, at + k);
+                                let vi = load::<T, A>(pi, at + k);
+                                (vr.mul_add(r, -(vi * i)), vr.mul_add(i, vi * r))
+                            };
+                            (ar, ai) = tw(ar, ai, tlo);
+                            (br, bi) = tw(br, bi, thi);
+                        }
 
                         let tr = wr.mul_add(br, -(wi * bi));
                         let ti = wr.mul_add(bi, wi * br);
@@ -258,8 +311,16 @@ where
                     }
                     for k in k..b {
                         let (lo_s, hi_s) = (lo + k, hi + k);
-                        let (ar, ai) = (self.re[lo_s], self.im[lo_s]);
-                        let (br, bi) = (self.re[hi_s], self.im[hi_s]);
+                        let (mut ar, mut ai) = (self.re[lo_s], self.im[lo_s]);
+                        let (mut br, mut bi) = (self.re[hi_s], self.im[hi_s]);
+                        if let Some((pr, pi)) = fold {
+                            let tw = |r: T, i: T, at: usize| {
+                                let (vr, vi) = (pr[at + k], pi[at + k]);
+                                (vr * r - vi * i, vr * i + vi * r)
+                            };
+                            (ar, ai) = tw(ar, ai, tlo);
+                            (br, bi) = tw(br, bi, thi);
+                        }
                         let tr = twr * br - twi * bi;
                         let ti = twr * bi + twi * br;
                         self.re[lo_s] = ar + tr;
@@ -348,75 +409,23 @@ pub(crate) const ROW_PAD: usize = 8;
 /// within associativity.
 const TWIDDLE_TRANSPOSE_TILE: usize = 8;
 
-/// Applies the four-step twiddle `W_N^(k1*b)` and transposes both planes, in
-/// one in-place pass.
+/// Transposes both `m x m` planes in place, tiled.
 ///
-/// Fused because the twiddle multiply is elementwise and the transpose already
-/// touches every element: riding one on the other deletes a full pass over the
-/// data. Element `p` is multiplied by `tw[p]` and moved to its mirror, so each
-/// element is twiddled exactly once — at its pre-transpose index, which is the
-/// order the separate pass used.
-fn twiddle_transpose<T>(re: &mut [T], im: &mut [T], tw: &[Complex<T>], m: usize, stride: usize)
-where
-    T: LaneScalar + MixedRadixScalar,
-{
+/// Pure exchange: the four-step twiddle that used to ride this pass as a
+/// scalar multiply — 26% of the driver at N = 256 — now rides stage-set-2's
+/// first-stage vector loads instead, which the twiddle matrix's symmetry
+/// (`W^(j*b)` equals its own transpose) makes exactly equivalent.
+fn transpose_planes<T: Copy>(re: &mut [T], im: &mut [T], m: usize, stride: usize) {
     debug_assert!(stride >= m && re.len() >= m * stride);
-    debug_assert_eq!(tw.len(), m * m);
-
-    /// `p`/`q` index the padded planes; `ptw`/`qtw` index the unpadded twiddle
-    /// matrix for the same two logical elements.
-    fn swap_twiddled<T>(
-        re: &mut [T],
-        im: &mut [T],
-        tw: &[Complex<T>],
-        (p, ptw): (usize, usize),
-        (q, qtw): (usize, usize),
-    ) where
-        T: LaneScalar + MixedRadixScalar,
-    {
-        let (tp, tq) = (tw[ptw], tw[qtw]);
-        let (ar, ai) = (re[p], im[p]);
-        let (br, bi) = (re[q], im[q]);
-        re[p] = br * tq.re - bi * tq.im;
-        im[p] = br * tq.im + bi * tq.re;
-        re[q] = ar * tp.re - ai * tp.im;
-        im[q] = ar * tp.im + ai * tp.re;
-    }
-
     for ib in (0..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
         let ie = (ib + TWIDDLE_TRANSPOSE_TILE).min(m);
         for jb in (ib..m).step_by(TWIDDLE_TRANSPOSE_TILE) {
             let je = (jb + TWIDDLE_TRANSPOSE_TILE).min(m);
-            if jb == ib {
-                // Diagonal tile: fixed points are twiddled in place, and each
-                // off-diagonal pair inside the tile is visited once.
-                for i in ib..ie {
-                    let p = i * stride + i;
-                    let t = tw[i * m + i];
-                    let (a, c) = (re[p], im[p]);
-                    re[p] = a * t.re - c * t.im;
-                    im[p] = a * t.im + c * t.re;
-                    for j in (i + 1)..je {
-                        swap_twiddled(
-                            re,
-                            im,
-                            tw,
-                            (i * stride + j, i * m + j),
-                            (j * stride + i, j * m + i),
-                        );
-                    }
-                }
-            } else {
-                for i in ib..ie {
-                    for j in jb..je {
-                        swap_twiddled(
-                            re,
-                            im,
-                            tw,
-                            (i * stride + j, i * m + j),
-                            (j * stride + i, j * m + i),
-                        );
-                    }
+            for i in ib..ie {
+                let start = if jb == ib { i + 1 } else { jb };
+                for j in start.max(jb)..je {
+                    re.swap(i * stride + j, j * stride + i);
+                    im.swap(i * stride + j, j * stride + i);
                 }
             }
         }
@@ -425,11 +434,46 @@ where
 
 /// Plans keyed by `(length, inverse)`: the two directions carry conjugate
 /// twiddles and cannot share an entry.
+/// Planar, row-permuted four-step twiddle planes.
+///
+/// The interleaved `W_n^(j*b)` matrix cannot feed a vector multiply against
+/// planar data, which is why the transpose's fused multiply was scalar — the
+/// measured 26% of the driver at N = 256. These planes fix the layout
+/// disagreement once, at build: split into real and imaginary planes, with
+/// rows in bit-reversed order so stage-set-2's loads (which run after the row
+/// permutation) index them directly. The matrix is symmetric (`W^(j*b)` is
+/// its own transpose), which is what lets the multiply move to the other side
+/// of the transpose at all.
+pub(crate) struct FourStepPlanes<T> {
+    pub(crate) re: Box<[T]>,
+    pub(crate) im: Box<[T]>,
+}
+
+impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
+    fn new<const INVERSE: bool>(n: usize, m: usize) -> Self {
+        let interleaved = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
+        let bits = m.trailing_zeros();
+        let mut re = vec![T::from_precise(0.0); m * m].into_boxed_slice();
+        let mut im = vec![T::from_precise(0.0); m * m].into_boxed_slice();
+        for row in 0..m {
+            let src = row.reverse_bits() >> (usize::BITS - bits);
+            for col in 0..m {
+                re[row * m + col] = interleaved[src * m + col].re;
+                im[row * m + col] = interleaved[src * m + col].im;
+            }
+        }
+        Self { re, im }
+    }
+}
+
 type PlanCache<T> = RefCell<HashMap<(usize, bool), Arc<BatchedPlan<T>>>>;
+type PlanesCache<T> = RefCell<HashMap<(usize, bool), Arc<FourStepPlanes<T>>>>;
 
 thread_local! {
     static PLAN_CACHE_F64: PlanCache<f64> = RefCell::new(HashMap::new());
     static PLAN_CACHE_F32: PlanCache<f32> = RefCell::new(HashMap::new());
+    static PLANES_CACHE_F64: PlanesCache<f64> = RefCell::new(HashMap::new());
+    static PLANES_CACHE_F32: PlanesCache<f32> = RefCell::new(HashMap::new());
 }
 
 /// Scalars whose batched plans are cached per thread.
@@ -437,10 +481,14 @@ pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
 {
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
+    fn cached_four_step_planes<const INVERSE: bool>(
+        n: usize,
+        m: usize,
+    ) -> Arc<FourStepPlanes<Self>>;
 }
 
 macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident) => {
+    ($t:ty, $cache:ident, $planes:ident) => {
         impl BatchedPlanCache for $t {
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
                 $cache.with(|c| {
@@ -453,25 +501,47 @@ macro_rules! impl_plan_cache {
                     plan
                 })
             }
+
+            fn cached_four_step_planes<const INVERSE: bool>(
+                n: usize,
+                m: usize,
+            ) -> Arc<FourStepPlanes<Self>> {
+                $planes.with(|c| {
+                    let key = (n, INVERSE);
+                    if let Some(planes) = c.borrow().get(&key) {
+                        return Arc::clone(planes);
+                    }
+                    let planes = Arc::new(FourStepPlanes::<$t>::new::<INVERSE>(n, m));
+                    c.borrow_mut().insert(key, Arc::clone(&planes));
+                    planes
+                })
+            }
         }
     };
 }
 
-impl_plan_cache!(f64, PLAN_CACHE_F64);
-impl_plan_cache!(f32, PLAN_CACHE_F32);
+impl_plan_cache!(f64, PLAN_CACHE_F64, PLANES_CACHE_F64);
+impl_plan_cache!(f32, PLAN_CACHE_F32, PLANES_CACHE_F32);
 
 /// Runs the stage set of `batch` transforms of length `plan.len` over planar
 /// `re`/`im`, whose rows the caller has already bit-reversed — either by
 /// [`permute`] or by writing rows to their reversed positions in the first
 /// place, which is how the driver's deinterleave avoids a whole pass.
-fn run_batched<T>(re: &mut [T], im: &mut [T], plan: &BatchedPlan<T>, batch: usize, stride: usize)
-where
+fn run_batched<T>(
+    re: &mut [T],
+    im: &mut [T],
+    plan: &BatchedPlan<T>,
+    fold: Option<(&[T], &[T])>,
+    batch: usize,
+    stride: usize,
+) where
     T: LaneScalar + MixedRadixScalar,
 {
     hermes_simd::vectorize(BatchedStages {
         re,
         im,
         tw: &plan.tw,
+        fold,
         batch,
         stride,
         len: plan.len,
@@ -540,20 +610,28 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
-    run_batched(re, im, plan.as_ref(), m, stride);
+    run_batched(re, im, plan.as_ref(), None, m, stride);
 
-    // 2+3. The four-step twiddle W_N^{b·k1} and the transpose, in one pass.
-    // The matrix is built once when it enters the shared cache, never per
-    // transform; the multiply rides the transpose's traffic, so the separate
-    // elementwise pass this replaces is deleted rather than optimized.
-    let twiddles = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
-    twiddle_transpose(re, im, &twiddles, m, stride);
+    // 2. Transpose so the second axis becomes batch-major. Pure exchange:
+    //    the four-step twiddle now rides stage-set-2's first loads below.
+    transpose_planes(re, im, m, stride);
 
-    // 4. The `m` transforms along the second axis. The transpose produced
-    //    natural row order, so this set still needs its bit-reversal pass; the
-    //    result lands at `k2 * m + k1`, the natural output index.
+    // 3. The `m` transforms along the second axis, with the four-step twiddle
+    //    W_N^{b·k1} folded into the first stage's loads — the matrix is
+    //    symmetric, so applying it after the transpose is identical, and its
+    //    planar row-permuted planes are built once in the shared cache. The
+    //    transpose produced natural row order, so the bit-reversal pass still
+    //    runs; the result lands at `k2 * m + k1`, the natural output index.
+    let planes = T::cached_four_step_planes::<INVERSE>(n, m);
     permute(re, im, &plan.swaps, m, stride);
-    run_batched(re, im, plan.as_ref(), m, stride);
+    run_batched(
+        re,
+        im,
+        plan.as_ref(),
+        Some((&planes.re, &planes.im)),
+        m,
+        stride,
+    );
 
     for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
         for (b, c) in chunk.iter_mut().enumerate() {
