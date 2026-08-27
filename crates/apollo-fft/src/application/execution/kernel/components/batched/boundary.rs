@@ -61,3 +61,76 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
         true
     }
 }
+
+/// In-place square transpose of both padded planes through in-register
+/// `4 x 4` tiles (`Vector::transpose_square`): each off-diagonal tile pair
+/// loads eight vectors, transposes both tiles in registers, and stores them
+/// exchanged; diagonal tiles transpose in place.
+pub(crate) struct TransposePlanes<'a, T> {
+    /// Padded real plane.
+    pub(crate) re: &'a mut [T],
+    /// Padded imaginary plane.
+    pub(crate) im: &'a mut [T],
+    /// Square dimension in lanes.
+    pub(crate) m: usize,
+    /// Padded plane row stride.
+    pub(crate) stride: usize,
+}
+
+impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature                   frame (hermes LaneKernel contract)"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+        if <A as SimdStorage<T>>::LANE_COUNT != 4 || self.m % 4 != 0 || self.stride % 4 != 0 {
+            return false;
+        }
+        let (m, stride) = (self.m, self.stride);
+        for plane in [self.re, self.im] {
+            let mut view = simd.view_mut(plane);
+            for bi in (0..m).step_by(4) {
+                // Diagonal tile: transpose in place.
+                let base = |r: usize, c: usize| (r * stride + c) / 4;
+                let mut tile = [
+                    Vector::from_view_chunk(&view, base(bi, bi)),
+                    Vector::from_view_chunk(&view, base(bi + 1, bi)),
+                    Vector::from_view_chunk(&view, base(bi + 2, bi)),
+                    Vector::from_view_chunk(&view, base(bi + 3, bi)),
+                ];
+                Vector::transpose_square(&mut tile);
+                for (r, row) in tile.into_iter().enumerate() {
+                    row.store_to_view_chunk(&mut view, base(bi + r, bi));
+                }
+                // Off-diagonal pairs: transpose both, store exchanged.
+                for bj in (bi + 4..m).step_by(4) {
+                    let mut upper = [
+                        Vector::from_view_chunk(&view, base(bi, bj)),
+                        Vector::from_view_chunk(&view, base(bi + 1, bj)),
+                        Vector::from_view_chunk(&view, base(bi + 2, bj)),
+                        Vector::from_view_chunk(&view, base(bi + 3, bj)),
+                    ];
+                    let mut lower = [
+                        Vector::from_view_chunk(&view, base(bj, bi)),
+                        Vector::from_view_chunk(&view, base(bj + 1, bi)),
+                        Vector::from_view_chunk(&view, base(bj + 2, bi)),
+                        Vector::from_view_chunk(&view, base(bj + 3, bi)),
+                    ];
+                    Vector::transpose_square(&mut upper);
+                    Vector::transpose_square(&mut lower);
+                    for (r, row) in lower.into_iter().enumerate() {
+                        row.store_to_view_chunk(&mut view, base(bi + r, bj));
+                    }
+                    for (r, row) in upper.into_iter().enumerate() {
+                        row.store_to_view_chunk(&mut view, base(bj + r, bi));
+                    }
+                }
+            }
+        }
+        true
+    }
+}

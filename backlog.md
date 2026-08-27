@@ -171,6 +171,17 @@
 - **Evidence base:** ADR 0041 revision (both register-row shapes measured
   out); RustFFT f64 planner arm read at the locked version; batched
   per-pass attribution is this item's first diagnostic step.
+- **Tiled transpose landed (2026-08-27, hermes `transpose_square` PR #83):**
+  the plane transpose runs through in-register 4x4 tiles — 1659 → 1151 TSC
+  pinned — and the ladder moved: P-core vs PhastFT 1.26/1.08/0.92/0.88 and
+  vs RustFFT 2.10/1.42/1.20/1.10 at n = 256/1024/4096/16384. Movement now
+  ~3.9k TSC at n = 1024 (deint 1431 kept scalar by verdict, transpose 1151,
+  permute 582, reint 900); the permute-fold analysis is closed — the
+  combined transpose-bit-reversal map is order-4, not an involution, and a
+  destination tile scatters across four row blocks, so in-place tile fusion
+  is infeasible without a scratch plane. This architecture's movement is
+  near its floor; the next lever is pass-count reduction (the 128-base
+  construction below) and E-core routing.
 - **Pinned ladder standing (2026-08-27, `batched::pinned_ladder`, contended
   host):** P-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
   1.29x/1.13x/0.95x/0.90x at n = 256/1024/4096/16384 — **the PhastFT bar is
