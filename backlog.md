@@ -23,33 +23,28 @@
   the conversion passes (15%), both artifacts of the planar layout itself —
   which is the successor item's case.
 
-## ATLAS-APOLLO-INTERLEAVED-BATCHED-2026-08-27 — Interleaved batched kernel [arch] — todo
+## ATLAS-APOLLO-INTERLEAVED-BATCHED-2026-08-27 — Interleaved batched kernel [arch] — done 2026-08-27, declined by measurement
 
-- **Outcome:** the batched four-step operates directly on interleaved
-  `Complex<T>` data via `hermes_simd::ComplexReg`, eliminating the planar
-  conversion passes, the planar scratch planes, and the scalar
-  twiddle-transpose multiply in one structural change.
-- **Why, with measured shares:** the planar layout buys shuffle-free
-  butterflies but pays deinterleave + interleave passes (15% of the driver at
-  mid sizes), a transpose whose fused twiddle multiply is scalar (26%), and a
-  scratch requirement of two full planes. Interleaved butterflies pay three
-  shuffles and one alternating FMA per twiddle multiply — RustFFT's own trade,
-  at 35 flops/ns — and shuffle ports are otherwise idle in this kernel.
-- **Memory efficiency is half the case:** planar scratch is `m * (m + 8) * 2`
-  reals; the interleaved kernel transposes `Complex` elements in place and
-  needs no conversion staging, dropping peak transient footprint from about
-  `3n` (data + planes + twiddle matrix) toward `2n`.
-- **Scope:** a sibling stage kernel over `ComplexReg` in `components/batched/`
-  selected by the same plan cache; the twiddle table stays shared. The
-  transpose moves 16-byte `Complex` units with the same 8-row tiling.
-  **Non-goals:** the four-step structure, admission, or thresholds.
-- **Acceptance oracle:** the six existing batched oracles instantiated for the
-  interleaved kernel; pinned probe beats the planar kernel at 256 through
-  65536 on a P-core before any route change; allocation column at zero and
-  scratch requirement reduced.
-- **Risk / change class:** [arch]; the planar kernel is deleted in the same
-  change if the interleaved one dominates at every covered size, else both
-  stay behind the measured selection.
+- **Built, verified, measured pinned — and the planar kernel wins.** The
+  interleaved in-place four-step (no scratch, no conversions, vector twiddle
+  pass) passes five oracles including a differential against the planar
+  kernel, and loses to it 16 to 37% pinned on a P-core at every covered size,
+  256 through 65536; on an E-core it reaches parity only at 16384. The
+  three-shuffles-per-multiply cost of interleaved butterflies outweighs the
+  seams it removes — the planar layout earns its conversions on this
+  hardware.
+- **The verdict is the product.** RustFFT's ~35 flops/ns at these sizes is
+  therefore not explained by its interleaved layout: the remaining structural
+  difference is radix depth per pass (its column butterflies hold 8 registers
+  through 3 stages; our planar fusion holds 2 stages at radix 4). The next
+  lever is deeper fusion in the planar kernel — radix-8 with spill-aware
+  scheduling, or the twiddle multiply folded into stage loads — not a layout
+  change.
+- **Kept as infrastructure:** the kernel is test-gated as the module's
+  independent-implementation differential oracle, with the pinned probe that
+  declined it committed beside it. Its in-place, zero-scratch structure is the
+  starting point if a future ISA (AVX-512 on a server part) shifts the
+  shuffle economics; the probe re-runs in minutes.
 
 ## ATLAS-APOLLO-INTERLEAVED-CODELETS-2026-08-27 — Interleaved register-resident small-N codelets [arch] — done 2026-08-27, measurement redirected the wiring
 
