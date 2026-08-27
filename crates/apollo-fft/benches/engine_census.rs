@@ -83,7 +83,7 @@ use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use eunomia::Complex64;
 use leto::{Array2, Array3, ArrayViewMut2, ArrayViewMut3, Layout as ArrayLayout};
 use realfft::RealFftPlanner;
@@ -324,18 +324,22 @@ fn opt_out_of_power_throttling() {
 #[cfg(not(windows))]
 fn opt_out_of_power_throttling() {}
 
-fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     opt_out_of_power_throttling();
     let started = Instant::now();
-    let config = BenchmarkConfig::try_with_budgets(
-        Duration::from_millis(WARM_UP_MS),
-        Duration::from_millis(MEASUREMENT_MS),
-    )?;
+    let mode = BenchmarkMode::from_environment()?;
+    let config = mode.apply(
+        BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(WARM_UP_MS),
+            Duration::from_millis(MEASUREMENT_MS),
+        )
+        .expect("invariant: benchmark duration constants are non-zero"),
+    );
     let mut suite = BenchmarkSuite::new(config);
     let mut flush = vec![0u8; FLUSH_BYTES];
 
     eprintln!(
-        "engine_census: {} sizes, warm-up {WARM_UP_MS}ms, measurement {MEASUREMENT_MS}ms, \
+        "engine_census: {mode:?} mode, {} sizes, measurement configuration warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms, \
          cache flushed between arms, budget {BUDGET_SECS}s (hard)",
         SIZES.len()
     );

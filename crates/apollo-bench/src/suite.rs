@@ -63,7 +63,7 @@ impl Default for BenchmarkSuite {
 #[cfg(test)]
 mod tests {
     use super::BenchmarkSuite;
-    use crate::{BenchmarkCase, BenchmarkConfig};
+    use crate::{BenchmarkCase, BenchmarkConfig, BenchmarkMode};
     use std::cell::Cell;
     use std::time::Duration;
 
@@ -99,5 +99,21 @@ mod tests {
                     .join(";")
             )
         );
+    }
+
+    #[test]
+    fn smoke_executes_each_production_closure_once() {
+        let config = BenchmarkMode::Smoke.apply(BenchmarkConfig::standard());
+        let executions = Cell::new(0_u32);
+        let mut suite = BenchmarkSuite::new(config);
+        suite.run(BenchmarkCase::new("suite", "smoke", 1), || {
+            executions.set(executions.get() + 1);
+        });
+
+        let record = &suite.records()[0];
+        assert_eq!(executions.get(), 1);
+        assert_eq!(record.sample_count(), 1);
+        assert_eq!(record.iterations_per_sample(), 1);
+        assert_eq!(record.median_confidence_parts_per_million(), 0);
     }
 }

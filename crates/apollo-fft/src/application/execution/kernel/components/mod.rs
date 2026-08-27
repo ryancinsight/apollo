@@ -5,6 +5,8 @@ pub(crate) mod batched;
 pub(crate) mod butterflies;
 #[cfg(test)]
 mod resident;
+#[cfg(test)]
+mod test_support;
 // Test-gated deliberately, not provisionally: the N = 16 codelet is correct
 // against a direct-DFT oracle but measured slower than the incumbent sized
 // kernel pinned on both core types, so it ships as a measurement instrument

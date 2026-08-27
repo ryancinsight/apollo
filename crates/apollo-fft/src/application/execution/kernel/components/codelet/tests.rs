@@ -7,6 +7,7 @@
 //! observed.
 
 use super::try_transform_16;
+use crate::application::execution::kernel::components::test_support::executed_or_declined_untouched;
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
@@ -52,13 +53,13 @@ fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
 }
 
 #[test]
-fn forward_matches_the_direct_transform() {
+fn forward_matches_the_direct_transform_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(
-        try_transform_16::<f64, false, false>(&mut data),
-        "this host's dispatched width must run the codelet"
-    );
+    let executed = try_transform_16::<f64, false, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let expected = dft(&src, false);
     let err = worst(&data, &expected);
     let limit = bound(&src);
@@ -66,10 +67,13 @@ fn forward_matches_the_direct_transform() {
 }
 
 #[test]
-fn inverse_matches_the_direct_transform() {
+fn inverse_matches_the_direct_transform_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(try_transform_16::<f64, true, false>(&mut data));
+    let executed = try_transform_16::<f64, true, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let expected = dft(&src, true);
     let err = worst(&data, &expected);
     let limit = bound(&src);
@@ -77,10 +81,13 @@ fn inverse_matches_the_direct_transform() {
 }
 
 #[test]
-fn normalized_round_trip_recovers_the_input() {
+fn normalized_round_trip_recovers_the_input_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(try_transform_16::<f64, false, false>(&mut data));
+    let executed = try_transform_16::<f64, false, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     assert!(try_transform_16::<f64, true, true>(&mut data));
     let err = worst(&data, &src);
     let limit = 2.0 * bound(&src);
@@ -91,10 +98,13 @@ fn normalized_round_trip_recovers_the_input() {
 }
 
 #[test]
-fn matches_the_incumbent_route_within_rounding() {
+fn matches_the_incumbent_route_when_width_is_supported() {
     let src = signal();
     let mut ours = src.clone();
-    assert!(try_transform_16::<f64, false, false>(&mut ours));
+    let executed = try_transform_16::<f64, false, false>(&mut ours);
+    if !executed_or_declined_untouched(&src, &ours, executed) {
+        return;
+    }
 
     let mut theirs = src.clone();
     crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 16 })

@@ -5,7 +5,7 @@
 
 #![allow(missing_docs)]
 
-use apollo_bench::{BenchmarkCase, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use apollo_fft::{GpuFft3d, GpuFft3dBuffers};
 use leto::Array3;
 use std::hint::black_box;
@@ -111,9 +111,11 @@ fn bench_inverse_3d(suite: &mut BenchmarkSuite) {
     }
 }
 
-fn main() {
-    let mut suite = BenchmarkSuite::default();
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    let config = BenchmarkMode::from_environment()?.apply(BenchmarkConfig::standard());
+    let mut suite = BenchmarkSuite::new(config);
     bench_forward_3d(&mut suite);
     bench_inverse_3d(&mut suite);
     suite.emit();
+    Ok(())
 }

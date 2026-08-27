@@ -44,7 +44,7 @@
 
 use std::time::{Duration, Instant};
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use eunomia::{Complex32, Complex64};
 use rustfft::num_complex::Complex as RustComplex;
 use rustfft::FftPlanner;
@@ -161,18 +161,22 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     );
 }
 
-fn main() -> Result<(), apollo_bench::BenchmarkConfigError> {
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
     let started = Instant::now();
     let lengths = sizes();
     let full = lengths.len() > DEFAULT_SIZES.len();
+    let mode = BenchmarkMode::from_environment()?;
 
-    let config = BenchmarkConfig::try_with_budgets(
-        Duration::from_millis(WARM_UP_MS),
-        Duration::from_millis(MEASUREMENT_MS),
-    )?;
+    let config = mode.apply(
+        BenchmarkConfig::try_with_budgets(
+            Duration::from_millis(WARM_UP_MS),
+            Duration::from_millis(MEASUREMENT_MS),
+        )
+        .expect("invariant: benchmark duration constants are non-zero"),
+    );
 
     eprintln!(
-        "rustfft_comparison: {} sweep, {} sizes, warm-up {WARM_UP_MS}ms, measurement {MEASUREMENT_MS}ms",
+        "rustfft_comparison: {mode:?} mode, {} sweep, {} sizes, measurement configuration warm-up {WARM_UP_MS}ms and measurement {MEASUREMENT_MS}ms",
         if full { "full" } else { "default" },
         lengths.len()
     );

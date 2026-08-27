@@ -89,6 +89,10 @@ jobs:
       #
       - name: Tests
         run: cargo nextest run --locked --workspace --all-features --exclude apollo-python --no-fail-fast
+      - name: Benchmark smoke
+        env:
+          APOLLO_BENCH_MODE: smoke
+        run: timeout 60s cargo test --locked -p apollo-fft --benches --all-features
       - name: Doctests
         run: cargo test --locked --doc --workspace --exclude apollo-python
       - name: Documentation

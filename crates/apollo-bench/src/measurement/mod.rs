@@ -1,7 +1,7 @@
 mod calibration;
 mod sample;
 
-use crate::config::BenchmarkConfig;
+use crate::config::{BenchmarkConfig, BenchmarkMode};
 
 pub(crate) use sample::SampleSummary;
 use std::time::{Duration, Instant};
@@ -9,6 +9,15 @@ use std::time::{Duration, Instant};
 const PICOSECONDS_PER_NANOSECOND: u128 = 1_000;
 
 pub(crate) fn measure(config: BenchmarkConfig, mut operation: impl FnMut()) -> SampleSummary {
+    if config.mode() == BenchmarkMode::Smoke {
+        let sample_start = Instant::now();
+        operation();
+        return SampleSummary::from_single_observation(normalized_picoseconds(
+            sample_start.elapsed(),
+            1,
+        ));
+    }
+
     let warm_up_start = Instant::now();
     let mut warm_up_iterations = 0_u64;
     while warm_up_start.elapsed() < config.warm_up() {

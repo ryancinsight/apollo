@@ -6,10 +6,11 @@ use std::time::Duration;
 
 const SAMPLE_COUNT: NonZeroUsize =
     NonZeroUsize::new(100).expect("invariant: Apollo's fixed benchmark sample count is non-zero");
+const SMOKE_SAMPLE_COUNT: NonZeroUsize =
+    NonZeroUsize::new(1).expect("invariant: smoke executes one observation");
 const BENCHMARK_MODE_ENVIRONMENT: &str = "APOLLO_BENCH_MODE";
 const REGRESSION_WARM_UP: Duration = Duration::from_millis(100);
 const REGRESSION_MEASUREMENT: Duration = Duration::from_millis(400);
-const SMOKE_BUDGET: Duration = Duration::from_nanos(1);
 
 /// Selects full measurement or bounded executable smoke verification.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -18,7 +19,7 @@ pub enum BenchmarkMode {
     /// Execute the configured warm-up and measurement budgets.
     #[default]
     Measurement,
-    /// Execute every case with minimum timing budgets and 100 samples.
+    /// Execute every case once without warm-up or statistical inference.
     Smoke,
 }
 
@@ -38,16 +39,18 @@ impl BenchmarkMode {
         }
     }
 
-    /// Applies this execution mode to a measurement configuration.
+    /// Applies this execution mode without changing the measurement budgets.
     #[must_use]
     pub const fn apply(self, measurement: BenchmarkConfig) -> BenchmarkConfig {
-        match self {
-            Self::Measurement => measurement,
-            Self::Smoke => BenchmarkConfig {
-                warm_up: SMOKE_BUDGET,
-                measurement: SMOKE_BUDGET,
-                sample_count: SAMPLE_COUNT,
-            },
+        let sample_count = match self {
+            Self::Measurement => SAMPLE_COUNT,
+            Self::Smoke => SMOKE_SAMPLE_COUNT,
+        };
+        BenchmarkConfig {
+            warm_up: measurement.warm_up,
+            measurement: measurement.measurement,
+            sample_count,
+            mode: self,
         }
     }
 
@@ -89,6 +92,7 @@ pub struct BenchmarkConfig {
     warm_up: Duration,
     measurement: Duration,
     sample_count: NonZeroUsize,
+    mode: BenchmarkMode,
 }
 
 impl BenchmarkConfig {
@@ -99,6 +103,7 @@ impl BenchmarkConfig {
             warm_up: Duration::from_secs(3),
             measurement: Duration::from_secs(5),
             sample_count: SAMPLE_COUNT,
+            mode: BenchmarkMode::Measurement,
         }
     }
 
@@ -110,6 +115,7 @@ impl BenchmarkConfig {
             warm_up: REGRESSION_WARM_UP,
             measurement: REGRESSION_MEASUREMENT,
             sample_count: SAMPLE_COUNT,
+            mode: BenchmarkMode::Measurement,
         }
     }
 
@@ -133,6 +139,7 @@ impl BenchmarkConfig {
             warm_up,
             measurement,
             sample_count: SAMPLE_COUNT,
+            mode: BenchmarkMode::Measurement,
         })
     }
 
@@ -146,6 +153,10 @@ impl BenchmarkConfig {
 
     pub(crate) const fn sample_count(self) -> NonZeroUsize {
         self.sample_count
+    }
+
+    pub(crate) const fn mode(self) -> BenchmarkMode {
+        self.mode
     }
 }
 
@@ -179,7 +190,9 @@ impl Error for BenchmarkConfigError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{BenchmarkConfig, BenchmarkConfigError, BenchmarkMode, BenchmarkModeError};
+    use super::{
+        BenchmarkConfig, BenchmarkConfigError, BenchmarkMode, BenchmarkModeError, SAMPLE_COUNT,
+    };
     use std::ffi::{OsStr, OsString};
     use std::time::Duration;
 
@@ -214,13 +227,26 @@ mod tests {
     }
 
     #[test]
-    fn smoke_mode_preserves_sample_count_with_minimal_budgets() {
+    fn smoke_mode_executes_one_sample_without_mutating_budgets() {
         let measurement = BenchmarkConfig::standard();
         let smoke = BenchmarkMode::Smoke.apply(measurement);
 
-        assert_eq!(smoke.warm_up(), Duration::from_nanos(1));
-        assert_eq!(smoke.measurement(), Duration::from_nanos(1));
-        assert_eq!(smoke.sample_count().get(), 100);
+        assert_eq!(smoke.warm_up(), measurement.warm_up());
+        assert_eq!(smoke.measurement(), measurement.measurement());
+        assert_eq!(smoke.sample_count().get(), 1);
+        assert_eq!(smoke.mode(), BenchmarkMode::Smoke);
+    }
+
+    #[test]
+    fn measurement_mode_restores_the_canonical_sample_count() {
+        let standard = BenchmarkConfig::standard();
+        let smoke = BenchmarkMode::Smoke.apply(standard);
+        let measurement = BenchmarkMode::Measurement.apply(smoke);
+
+        assert_eq!(measurement.warm_up(), standard.warm_up());
+        assert_eq!(measurement.measurement(), standard.measurement());
+        assert_eq!(measurement.sample_count().get(), SAMPLE_COUNT.get());
+        assert_eq!(measurement.mode(), BenchmarkMode::Measurement);
     }
 
     #[test]

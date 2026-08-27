@@ -11,6 +11,18 @@ pub(crate) struct SampleSummary {
 }
 
 impl SampleSummary {
+    pub(crate) fn from_single_observation(picoseconds: u128) -> Self {
+        Self {
+            minimum_picoseconds: picoseconds,
+            median_picoseconds: picoseconds,
+            median_lower_picoseconds: picoseconds,
+            median_upper_picoseconds: picoseconds,
+            median_confidence_parts_per_million: 0,
+            ordered_samples_picoseconds: Box::new([picoseconds]),
+            iterations_per_sample: 1,
+        }
+    }
+
     pub(crate) fn from_samples(mut samples: Vec<u128>, iterations_per_sample: u64) -> Option<Self> {
         samples.sort_unstable();
         let lower = *samples.get((samples.len().checked_sub(1)?) / 2)?;
@@ -56,6 +68,19 @@ mod tests {
     fn insufficient_samples_do_not_invent_a_timing_summary() {
         assert_eq!(SampleSummary::from_samples(Vec::new(), 1), None);
         assert_eq!(SampleSummary::from_samples(vec![1, 2, 3, 4, 5], 1), None);
+    }
+
+    #[test]
+    fn one_observation_is_explicitly_non_inferential() {
+        let summary = SampleSummary::from_single_observation(17);
+
+        assert_eq!(summary.minimum_picoseconds, 17);
+        assert_eq!(summary.median_picoseconds, 17);
+        assert_eq!(summary.median_lower_picoseconds, 17);
+        assert_eq!(summary.median_upper_picoseconds, 17);
+        assert_eq!(summary.median_confidence_parts_per_million, 0);
+        assert_eq!(&*summary.ordered_samples_picoseconds, &[17]);
+        assert_eq!(summary.iterations_per_sample, 1);
     }
 
     #[test]

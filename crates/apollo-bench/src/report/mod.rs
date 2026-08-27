@@ -55,6 +55,9 @@ impl BenchmarkRecord {
     }
 
     /// Returns the exact median interval coverage in parts per million.
+    ///
+    /// Smoke records return zero because one executable observation does not
+    /// support population-median inference.
     #[must_use]
     pub const fn median_confidence_parts_per_million(&self) -> u32 {
         self.median_confidence_parts_per_million

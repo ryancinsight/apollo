@@ -4,6 +4,7 @@
 //! batched route pins interchangeability behind one gate.
 
 use super::four_step_resident;
+use crate::application::execution::kernel::components::test_support::executed_or_declined_untouched;
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
@@ -45,31 +46,37 @@ fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
 }
 
 #[test]
-fn forward_matches_the_direct_transform() {
+fn forward_matches_the_direct_transform_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(
-        four_step_resident::<f64, false>(&mut data),
-        "this host's dispatched width must run the resident rows"
-    );
+    let executed = four_step_resident::<f64, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let (err, bound) = (worst(&data, &dft(&src, false)), tolerance(&src));
     assert!(err <= bound, "forward differs by {err:.3e} > {bound:.3e}");
 }
 
 #[test]
-fn inverse_matches_the_direct_transform() {
+fn inverse_matches_the_direct_transform_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(four_step_resident::<f64, true>(&mut data));
+    let executed = four_step_resident::<f64, true>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let (err, bound) = (worst(&data, &dft(&src, true)), tolerance(&src));
     assert!(err <= bound, "inverse differs by {err:.3e} > {bound:.3e}");
 }
 
 #[test]
-fn forward_then_inverse_recovers_the_input() {
+fn forward_then_inverse_recovers_the_input_when_width_is_supported() {
     let src = signal();
     let mut data = src.clone();
-    assert!(four_step_resident::<f64, false>(&mut data));
+    let executed = four_step_resident::<f64, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     assert!(four_step_resident::<f64, true>(&mut data));
     let n = 1024.0;
     let bound = tolerance(&src) * n;
@@ -85,11 +92,14 @@ fn forward_then_inverse_recovers_the_input() {
 }
 
 #[test]
-fn matches_the_batched_route_within_rounding() {
+fn matches_the_batched_route_when_width_is_supported() {
     use crate::application::execution::kernel::components::batched;
     let src = signal();
     let mut ours = src.clone();
-    assert!(four_step_resident::<f64, false>(&mut ours));
+    let executed = four_step_resident::<f64, false>(&mut ours);
+    if !executed_or_declined_untouched(&src, &ours, executed) {
+        return;
+    }
 
     let mut theirs = src.clone();
     let mut scratch = vec![Complex64::default(); batched::scratch_len(1024)];

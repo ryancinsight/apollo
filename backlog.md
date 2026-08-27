@@ -14,29 +14,13 @@
   (codex/fix-apollo-bench-smoke-runtime, held by the apollo-stockham-throughput
   lane) is separate live review work.
 
-## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — in progress
+## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
 
-- **Outcome:** two- and three-dimensional complex transforms preserve Leto's
-  logical index order for C-contiguous, Fortran-contiguous, offset, and
-  strided mutable views while retaining the zero-copy C-contiguous path.
-- **Scope / non-goals:** stage only views that cannot expose a C-order slice,
-  reuse Mnemosyne-backed plan scratch, and assign results through Leto. FFT
-  arithmetic, transform conventions, public signatures, and GPU execution do
-  not change.
-- **Acceptance oracle:** dynamic and static rectangular 2-D/3-D forward and
-  normalized-inverse cases agree across C, F, offset, and strided layouts;
-  warmed staged execution allocates zero times; the C-order path remains
-  direct; focused Clippy, Nextest, doctests, rustdoc, provider audit, and an
-  independent architecture review pass.
-- **Risk / change class:** [patch] [arch]. This corrects behavior inside the
-  existing public contract and revises ADR 0040's layout-boundary details.
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** plan scratch, FFT layout helper, 2-D/3-D plan implementations and
-  tests, ADR 0040, changelog, and this item's PM entries through the next
-  verified commit. **Last update:** 2026-08-27; exact-revision architecture
-  review passes at `f413040a`, pending PR #139 delivery.
+- **Delivered:** PR #139 merged as `61c5abdc`; C-order views execute directly,
+  other valid layouts reuse rank-disjoint scratch, and exact layout parity plus
+  the warmed census verify logical order with zero transient allocations.
 
-## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — todo
+## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — in progress
 
 - **Outcome:** bench binaries prove they build and execute inside the standard
   test budget without running full timing sweeps under the unoptimized test
@@ -52,6 +36,11 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `apollo-bench` execution mode, Apollo FFT bench entry points,
+  committed bench-smoke gate, tests, and this item's PM entries through the
+  next verified commit. **Last update:** 2026-08-27.
+
 ## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 
 - **The shape the references have, implemented:** four-step at N = 1024 with
@@ -92,7 +81,7 @@
   RustFFT-parity and the E-core gap are what the resident shape targets once
   the hermes defect is fixed.
 
-## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — filed 2026-08-28
+## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
 - **Defect:** a `LaneKernel` whose `call` body is large (a fully unrolled
   32-sample FFT row pass, ~500 vector ops) is not inlined into the generated
@@ -143,7 +132,6 @@
   recommended option: planar-register rows + fused boundary networks).
   **Last update:** 2026-08-27 — ADR drafted; next increment is the planar row
   body behind the resident oracle set.
-
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
 
