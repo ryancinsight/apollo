@@ -1,18 +1,22 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Ten stale local branches hold unique patches — todo
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Nine stale local branches hold unique patches — in progress
 
 - **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
   codex/apollo-arch-006-junk-drawer-rename (2), codex/fix-apollo-package-sources
-  (4), codex/fix-atlas-sha (1), feat/apollo-benchmark-generator (2),
-  fix/apollo-fft-workspace-buffers (1), fix/apollo-large-composite-wiring (3),
+  (4), feat/apollo-benchmark-generator (2), fix/apollo-fft-workspace-buffers (1),
+  fix/apollo-large-composite-wiring (3),
   fix/apollo-sht-thread-local-lint (1), perf/apollo-f32-rader-narrowing (5),
   style/apollo-butterfly-lint-consolidation-217 (1) — unique patch counts in
   parentheses; every branch is takeover material (salvage: rebase onto current
   main, verify, integrate — or prove superseded and delete). Process
-  closest-to-done first, one branch per increment. PR #142
-  (codex/fix-apollo-bench-smoke-runtime, held by the apollo-stockham-throughput
-  lane) is separate live review work.
+  closest-to-done first, one branch per increment.
+- **Reconciled:** `codex/fix-atlas-sha` contained only a Hermes 0.6 manifest and
+  lock advance; main requires Hermes 0.7 and locks `08306b94`, so both local and
+  remote refs were deleted as superseded on 2026-08-27.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** this item entry and `fix/apollo-fft-workspace-buffers` through the
+  next verified branch-debt commit. **Last update:** 2026-08-27.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — done 2026-08-27
 
@@ -20,7 +24,7 @@
   other valid layouts reuse rank-disjoint scratch, and exact layout parity plus
   the warmed census verify logical order with zero transient allocations.
 
-## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — in progress
+## ATLAS-APOLLO-BENCH-SMOKE-RUNTIME-2026-08-27 — Separate bounded smoke from local timing [patch] — done 2026-08-27
 
 - **Outcome:** bench binaries prove they build and execute inside the standard
   test budget without running full timing sweeps under the unoptimized test
@@ -36,10 +40,9 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** `apollo-bench` execution mode, Apollo FFT bench entry points,
-  committed bench-smoke gate, tests, and this item's PM entries through the
-  next verified commit. **Last update:** 2026-08-27.
+- **Delivered:** PR #142 merged as `a8a727a0`; exact-head hosted verification
+  passed the Rust workspace, Python, lock, and executable-identity gates. The
+  seven-binary local smoke completed in about 26 seconds.
 
 ## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 

@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 [patch] — Codex
+
+- [x] Remove `codex/fix-atlas-sha` after proving its Hermes 0.6 requirement is
+      superseded by main's Hermes 0.7 requirement and `08306b94` lock pin.
+- [ ] Reconcile `fix/apollo-fft-workspace-buffers` against current main and
+      either integrate its unique value with focused gates or prove it obsolete.
+- [ ] Process the remaining stale branches one complete increment at a time;
+      keep the board inventory and branch count exact.
+
+Evidence: `dd0dad47` changed only `Cargo.toml` and `Cargo.lock` from Hermes 0.5
+to 0.6. Main requires Hermes 0.7 and locks `08306b94`; the superseded local and
+remote `codex/fix-atlas-sha` refs were deleted on 2026-08-27.
+
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
 - [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
@@ -37,7 +50,7 @@ Delivery: Apollo PR #139 merged as `61c5abdc`; implementation commits
       retain all value-semantic and allocation checks.
 - [x] Verify bench smoke inside 60 seconds, the unchanged optimized census,
       warning-denied Clippy, Nextest, documentation, and source consistency.
-- [ ] Commit, push, enqueue, merge, and record exact delivery evidence.
+- [x] Commit, push, enqueue, merge, and record exact delivery evidence.
 
 Evidence before delivery: all seven bench binaries passed in 26.8 s after the
 one-time link build; the focused smoke census body completed in 1.93 s; the
@@ -45,6 +58,11 @@ unchanged 100-observation optimized census completed in 5.57 s. After rebasing
 onto PR #141, 505 affected native tests passed with six configured skips in
 9.034 s; affected all-target/all-feature Clippy passed. Independent review
 found and verified the correction of the `Smoke` to `Measurement` transition.
+
+Delivery: Apollo PR #142 merged as `a8a727a0`; implementation `e473b398`;
+cross-ISA diagnostic correction `e4c4c53f`. Exact-head hosted Rust workspace
+passed in 5m37s, Python in 1m29s, and lock integrity in 27s; benchmark
+executables were byte-identical, so sampled timing was inapplicable and skipped.
 
 ## ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26 [arch] — Codex
 
