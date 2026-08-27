@@ -352,38 +352,6 @@ define_pot_executors!(
 /// ZST-wired sized PoT executor helper (monomorphizes the exact LOG2).
 /// The SizedPoT<StockhamAutosort, LOG2> is constructed here for zero-cost
 /// strategy selection through the Stockham autosort path.
-#[inline]
-/// N = 128 through the register-resident base butterfly, falling back to
-/// the sized power-of-two route when the dispatched lane width declines.
-pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
-    plan: &FftPlan1D<F>,
-    slice: &mut [F::Complex],
-) {
-    if !F::base_128_inplace::<false, false>(slice) {
-        exec_pot_forward_sized::<F, 7>(plan, slice);
-    }
-}
-
-/// Normalized inverse companion of [`exec_base128_forward`].
-pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
-    plan: &FftPlan1D<F>,
-    slice: &mut [F::Complex],
-) {
-    if !F::base_128_inplace::<true, true>(slice) {
-        exec_pot_inverse_sized::<F, 7>(plan, slice);
-    }
-}
-
-/// Unnormalized inverse companion of [`exec_base128_forward`].
-pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
-    plan: &FftPlan1D<F>,
-    slice: &mut [F::Complex],
-) {
-    if !F::base_128_inplace::<true, false>(slice) {
-        exec_pot_inverse_unnorm_sized::<F, 7>(plan, slice);
-    }
-}
-
 pub(super) fn exec_pot_forward_sized<F: MixedRadixScalar<Complex = Complex<F>>, const LOG2: u32>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],

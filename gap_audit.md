@@ -35,6 +35,16 @@ exactly the four serialized timestamp pairs owned by the attributed call. The
 remaining production blocker is ownership of the immutable base plan by
 `FftPlan1D`.
 
+PR #154 tested a direct production promotion before that ownership transfer.
+The candidate retained the experiment's thread-local plan, violating ADR 0041,
+and hosted run 33122650730 rejected it independently: all four paired
+comparisons regressed generic-prime N = 31 by 1.81-3.85% and compact N = 96 by
+2.22-6.02%. Normalized instructions for the measured hot functions were
+unchanged while candidate `.text` grew by 400 bytes, so the evidence identifies
+code-placement sensitivity rather than changed arithmetic. The production
+route is withdrawn; the corrected base and its oracles remain test-gated until
+the owning plan stores it and the same comparator clears.
+
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 
 Evidence tier: exact allocation accounting — `kernel/retained_footprint.rs`,

@@ -275,12 +275,21 @@
   complete Apollo FFT suite passes 459/459, strict all-target and all-feature
   Clippy passes, and the standalone lock resolves with 36 first-party Git
   sources. Hosted AVX-512 execution remains PR #153's merge gate.
-- **Small-size gate standing (`base128::pinned_probe`):** production
+- **Rejected route promotion (2026-08-27, PR #154):** the candidate routed
+  N = 128 through the experiment's thread-local plan, contrary to ADR 0041's
+  production-ownership requirement. Hosted run 33122650730 also rejected the
+  candidate: all four paired comparisons regressed generic-prime N = 31 by
+  1.81-3.85% and compact N = 96 by 2.22-6.02%. Normalized instruction streams
+  for the measured hot functions were unchanged while candidate `.text` grew
+  by 400 bytes, identifying placement sensitivity rather than a kernel win.
+  The route is withdrawn; the base and its complete oracle remain test-gated.
+- **Small-size gate standing (`base128::pinned_probe`):** incumbent production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
   n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
-  into `FftPlan1D` and route supported N = 128 calls; (2) tighten the base toward
-  RustFFT after a fresh profile of the now-uninstrumented specialization;
+  into `FftPlan1D`, then admit N = 128 only if the unchanged exact comparator
+  clears; (2) tighten the base toward RustFFT after a fresh profile of the
+  now-uninstrumented specialization;
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
