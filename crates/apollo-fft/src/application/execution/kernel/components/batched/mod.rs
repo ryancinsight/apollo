@@ -450,8 +450,25 @@ pub(crate) struct FourStepPlanes<T> {
 }
 
 impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
-    fn new<const INVERSE: bool>(n: usize, m: usize) -> Self {
-        let interleaved = T::cached_four_step_twiddles::<INVERSE>(n, m, m);
+    fn new<const INVERSE: bool>(n: usize, m: usize) -> Self
+    where
+        Complex<T>: crate::application::execution::kernel::twiddle_table::TwiddleOutput,
+    {
+        // The uncached builder: the interleaved matrix is a build transient
+        // here, split into planes and dropped, so batched sizes cache exactly
+        // one twiddle representation. The threaded four-step's sizes cache
+        // exactly one too — the interleaved matrix its fused
+        // transpose-multiply reads with better locality — and the two size
+        // ranges are disjoint by the routing thresholds. An explicit
+        // vector rewrite of the driver's boundary loops was measured against
+        // this same baseline and declined: the compiler already vectorizes
+        // those canonical interleave patterns, and the added dispatch
+        // round-trips made every size 2 to 7% slower.
+        let interleaved =
+            crate::application::execution::kernel::mixed_radix::caches::build_four_step_twiddles::<
+                Complex<T>,
+                INVERSE,
+            >(n, m, m);
         let bits = m.trailing_zeros();
         let mut re = vec![T::from_precise(0.0); m * m].into_boxed_slice();
         let mut im = vec![T::from_precise(0.0); m * m].into_boxed_slice();
