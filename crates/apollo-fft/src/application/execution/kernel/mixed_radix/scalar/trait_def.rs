@@ -76,6 +76,19 @@ pub trait MixedRadixScalar:
 
     fn complex(re: f64, im: f64) -> Self::Complex;
 
+    /// Runs the register-resident 128-point base butterfly in place when
+    /// this scalar carries one and the dispatched lane width supports it,
+    /// reporting whether it did. `NORMALIZE` folds the `1/128` inverse
+    /// scaling into the same pass. The default has no base and reports
+    /// `false`, so callers fall back to the incumbent power-of-two route.
+    #[inline]
+    fn base_128_inplace<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Self::Complex],
+    ) -> bool {
+        let _ = data;
+        false
+    }
+
     fn cached_twiddle_fwd(n: usize) -> Arc<[Self::Complex]>;
     fn cached_twiddle_inv(n: usize) -> Arc<[Self::Complex]>;
 

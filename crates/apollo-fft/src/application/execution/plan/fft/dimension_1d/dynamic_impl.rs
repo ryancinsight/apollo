@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::executors::{
+    exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm,
     exec_composite_forward, exec_composite_inverse, exec_composite_inverse_unnorm,
     exec_good_thomas_forward, exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm,
     exec_identity, exec_pot_forward_16, exec_pot_forward_2, exec_pot_forward_32,
@@ -316,9 +317,9 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         inverse_unnorm_impl = exec_pot_inverse_unnorm_64::<F>;
                     }
                     7 => {
-                        forward_impl = exec_pot_forward_sized::<F, 7>;
-                        inverse_impl = exec_pot_inverse_sized::<F, 7>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 7>;
+                        forward_impl = exec_base128_forward::<F>;
+                        inverse_impl = exec_base128_inverse::<F>;
+                        inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
                     }
                     8 => {
                         forward_impl = exec_pot_forward_sized::<F, 8>;

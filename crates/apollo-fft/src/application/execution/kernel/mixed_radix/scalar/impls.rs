@@ -47,6 +47,24 @@ impl MixedRadixScalar for f32 {
     type Complex = Complex32;
 
     #[inline]
+    fn base_128_inplace<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Complex32],
+    ) -> bool {
+        use crate::application::execution::kernel::components::base128::butterfly::transform_128;
+        if !transform_128::<Self, INVERSE>(data) {
+            return false;
+        }
+        if INVERSE && NORMALIZE {
+            let scale = 1.0f32 / 128.0;
+            for c in data.iter_mut() {
+                c.re *= scale;
+                c.im *= scale;
+            }
+        }
+        true
+    }
+
+    #[inline]
     fn complex(re: f64, im: f64) -> Complex32 {
         Complex32::new(re as f32, im as f32)
     }
@@ -334,6 +352,24 @@ impl MixedRadixScalar for f64 {
     const BLUESTEIN_NATIVE_PHASE_TRIG: bool = false;
 
     type Complex = Complex64;
+
+    #[inline]
+    fn base_128_inplace<const INVERSE: bool, const NORMALIZE: bool>(
+        data: &mut [Complex64],
+    ) -> bool {
+        use crate::application::execution::kernel::components::base128::butterfly::transform_128;
+        if !transform_128::<Self, INVERSE>(data) {
+            return false;
+        }
+        if INVERSE && NORMALIZE {
+            let scale = 1.0 / 128.0;
+            for c in data.iter_mut() {
+                c.re *= scale;
+                c.im *= scale;
+            }
+        }
+        true
+    }
 
     #[inline]
     fn complex(re: f64, im: f64) -> Complex64 {
