@@ -56,6 +56,14 @@ and transfer. `GpuFft3d::encode_forward_split` and
 buffers and a provider command stream, so downstream composed operations such
 as NUFFT do not acquire a raw device, queue, buffer, or encoder.
 
+Host-returning 3-D Leto calls expose retained-staging variants through
+`GpuFft3dBuffers`. The plan continues to own Hephaestus device storage; the
+caller-owned buffers retain the two N-entry f32 host planes across dispatches.
+Contiguous Leto inputs remain borrowed, and each returned field or spectrum
+is initialized once in its final Mnemosyne storage through Leto's in-place
+shape generator, without default fill, an intermediate result vector, or a
+second element copy.
+
 For dimensions `N_x`, `N_y`, and `N_z`, the provider stream records forward
 axes in Z/Y/X order and inverse axes in X/Y/Z order. The transform convention is
 
@@ -93,4 +101,5 @@ Tests cover analytical small transforms, radix-2 and Bluestein parity against
 direct DFT, inverse roundtrips, typed external-buffer command-stream
 composition, Parseval-style energy checks, linearity,
 caller-owned output paths, slice-level real-forward parity and shape rejection,
-precision profile behavior, and 2D/3D separable axis execution.
+precision profile behavior, Leto retained-staging parity and shape rejection,
+and 2D/3D separable axis execution.

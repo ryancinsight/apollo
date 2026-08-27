@@ -110,8 +110,10 @@ that minimum version from the workspace package contract.
 - Apollo validation uses Leto-native value tests, analytical references, and
   external runtime references where appropriate. It does not reintroduce Rust
   `ndarray` compatibility as an oracle inside Apollo.
-- Mnemosyne-backed owned array constructors for Apollo output boundaries. The
-  migrated transform surfaces return `MnemosyneStorage`-backed Leto arrays.
+- Mnemosyne-backed slice and vector constructors for Apollo output boundaries.
+  Vector construction transfers elements into a separate Mnemosyne allocation;
+  allocation-sensitive generated outputs use Leto's
+  `from_mnemosyne_shape_fn`, which initializes final provider storage once.
 - Dense graph/matrix descriptors that can replace `nalgebra::DMatrix` in
   Apollo domain models. Current migration coverage includes `apollo-gft`
   adjacency validation and combinatorial Laplacian construction; nalgebra

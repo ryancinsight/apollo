@@ -1,8 +1,5 @@
-//! Shared Leto host-array boundaries for Apollo transforms.
-//!
-//! The crate owns the only workspace-wide conversion path between borrowed Leto
-//! views and slice-oriented kernels. Contiguous views remain borrowed; strided
-//! views are materialized exactly once in Leto logical row-major order.
+#![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
 
 mod array;
 mod view;

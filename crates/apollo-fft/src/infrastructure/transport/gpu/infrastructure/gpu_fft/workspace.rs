@@ -6,11 +6,37 @@ use crate::{f16, ApolloError, ApolloResult};
 
 use super::pipeline::GpuFft3d;
 
+trait HostReal: Copy + Default {
+    fn into_device(self) -> f32;
+    fn from_device(value: f32) -> Self;
+}
+
+impl HostReal for f64 {
+    fn into_device(self) -> f32 {
+        self as f32
+    }
+
+    fn from_device(value: f32) -> Self {
+        Self::from(value)
+    }
+}
+
+impl HostReal for f16 {
+    fn into_device(self) -> f32 {
+        self.to_f32()
+    }
+
+    fn from_device(value: f32) -> Self {
+        Self::from_f32(value)
+    }
+}
+
 /// Reusable host buffers for repeated `GpuFft3d` dispatch.
 ///
 /// The shape invariant is `len = nx * ny * nz`; each split component stores
 /// exactly `len` f32 values and each interleaved spectrum stores `2 * len`.
-/// Reuse removes per-call provider allocation and host scratch allocation.
+/// Reuse removes per-call host staging allocation. The plan owns its
+/// Hephaestus device buffers independently.
 pub struct GpuFft3dBuffers {
     nx: usize,
     ny: usize,
@@ -72,15 +98,7 @@ impl GpuFft3d {
         buffers: &mut GpuFft3dBuffers,
     ) -> ApolloResult<()> {
         self.validate_field_shape(field.shape())?;
-        buffers.validate_for(self)?;
-        self.validate_spectrum_len(output.len())?;
-        buffers.imaginary_host.fill(0.0);
-        buffers
-            .real_host
-            .iter_mut()
-            .zip(field.iter().copied())
-            .for_each(|(destination, value)| *destination = value as f32);
-        self.execute_forward(output, buffers)
+        self.forward_values(field.iter().copied(), output, buffers)
     }
 
     /// Forward transform from f16 host storage into an interleaved f32 spectrum.
@@ -99,53 +117,103 @@ impl GpuFft3d {
         buffers: &mut GpuFft3dBuffers,
     ) -> ApolloResult<()> {
         self.validate_field_shape(field.shape())?;
-        buffers.validate_for(self)?;
-        self.validate_spectrum_len(output.len())?;
-        buffers.imaginary_host.fill(0.0);
-        buffers
-            .real_host
-            .iter_mut()
-            .zip(field.iter().copied())
-            .for_each(|(destination, value)| *destination = value.to_f32());
-        self.execute_forward(output, buffers)
+        self.forward_values(field.iter().copied(), output, buffers)
     }
 
     /// Forward transform from a Leto f64 view into Mnemosyne-backed spectrum storage.
+    ///
+    /// This allocating convenience path creates host staging for one dispatch.
+    /// Repeated callers should retain [`GpuFft3dBuffers`] and call
+    /// [`Self::forward_leto_with_buffers`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape or provider execution error.
     pub fn forward_leto(
         &self,
         field: leto::ArrayView3<'_, f64>,
     ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        self.validate_field_shape(field.shape())?;
-        let field = apollo_leto_interop::view_cow(&field);
-        let mut output = vec![0.0; 2 * self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self)?;
-        self.forward_values(&field, &mut output, &mut buffers)?;
-        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| ApolloError::Wgpu {
-            message: "failed to allocate Mnemosyne-backed Leto FFT forward Leto spectrum"
-                .to_owned(),
-        })
+        self.forward_leto_with_buffers(field, &mut buffers)
+    }
+
+    /// Forward transform from a Leto f64 view with caller-retained host staging.
+    ///
+    /// The returned spectrum owns one Mnemosyne allocation. Contiguous input is
+    /// borrowed; only a strided input requires logical-order materialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, reusable-buffer, or provider execution error.
+    pub fn forward_leto_with_buffers(
+        &self,
+        field: leto::ArrayView3<'_, f64>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        self.forward_leto_output(field, buffers)
     }
 
     /// Forward transform from a Leto f16 view into Mnemosyne-backed spectrum storage.
+    ///
+    /// This allocating convenience path creates host staging for one dispatch.
+    /// Repeated callers should retain [`GpuFft3dBuffers`] and call
+    /// [`Self::forward_half_leto_with_buffers`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape or provider execution error.
     pub fn forward_f16_leto(
         &self,
         field: leto::ArrayView3<'_, f16>,
     ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
-        self.validate_field_shape(field.shape())?;
-        let field = apollo_leto_interop::view_cow(&field);
-        let mut output = vec![0.0; 2 * self.element_count()];
         let mut buffers = GpuFft3dBuffers::new(self)?;
-        buffers.imaginary_host.fill(0.0);
-        buffers
-            .real_host
-            .iter_mut()
-            .zip(field.iter().copied())
-            .for_each(|(destination, value)| *destination = value.to_f32());
-        self.execute_forward(&mut output, &mut buffers)?;
-        apollo_leto_interop::try_array1_from_slice(&output).ok_or_else(|| ApolloError::Wgpu {
-            message: "failed to allocate Mnemosyne-backed Leto FFT f16 forward Leto spectrum"
-                .to_owned(),
-        })
+        self.forward_half_leto_with_buffers(field, &mut buffers)
+    }
+
+    /// Forward transform from a Leto half-precision view with retained staging.
+    ///
+    /// The returned spectrum owns one Mnemosyne allocation. Contiguous input is
+    /// borrowed; only a strided input requires logical-order materialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, reusable-buffer, or provider execution error.
+    pub fn forward_half_leto_with_buffers(
+        &self,
+        field: leto::ArrayView3<'_, f16>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        self.forward_leto_output(field, buffers)
+    }
+
+    fn forward_leto_output<T: HostReal>(
+        &self,
+        field: leto::ArrayView3<'_, T>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<f32, leto::MnemosyneStorage<f32>, 1>> {
+        self.validate_field_shape(field.shape())?;
+        buffers.validate_for(self)?;
+        let field = apollo_leto_interop::view_cow(&field);
+        let output_len = self
+            .element_count()
+            .checked_mul(2)
+            .expect("invariant: plan volume is validated before spectrum construction");
+        self.stage_forward_values(field.iter().copied(), buffers)?;
+        let mut real = buffers.real_host.iter().copied();
+        let mut imaginary = buffers.imaginary_host.iter().copied();
+        Ok(leto::Array::from_mnemosyne_shape_fn(
+            [output_len],
+            |[index]| {
+                if index.is_multiple_of(2) {
+                    real.next()
+                        .expect("invariant: spectrum shape matches real staging length")
+                } else {
+                    imaginary
+                        .next()
+                        .expect("invariant: spectrum shape matches imaginary staging length")
+                }
+            },
+        ))
     }
 
     /// Inverse transform from interleaved f32 spectrum into an f64 real field.
@@ -199,45 +267,92 @@ impl GpuFft3d {
     }
 
     /// Inverse transform from Leto spectrum storage into Mnemosyne-backed f64 field storage.
+    ///
+    /// This allocating convenience path creates host staging for one dispatch.
+    /// Repeated callers should retain [`GpuFft3dBuffers`] and call
+    /// [`Self::inverse_leto_with_buffers`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape or provider execution error.
     pub fn inverse_leto(
         &self,
         spectrum: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
-        let spectrum = apollo_leto_interop::view_cow(&spectrum);
-        self.validate_spectrum_len(spectrum.len())?;
         let mut buffers = GpuFft3dBuffers::new(self)?;
-        Self::split_spectrum(&spectrum, &mut buffers);
-        self.execute_inverse(&mut buffers)?;
-        let output: Vec<f64> = buffers.real_host.iter().copied().map(f64::from).collect();
-        apollo_leto_interop::try_dense_from_slice([self.nx, self.ny, self.nz], &output).ok_or_else(
-            || ApolloError::Wgpu {
-                message: "failed to allocate Mnemosyne-backed Leto FFT inverse field".to_owned(),
-            },
-        )
+        self.inverse_leto_with_buffers(spectrum, &mut buffers)
+    }
+
+    /// Inverse transform into an f64 Leto array with retained host staging.
+    ///
+    /// The returned field owns one Mnemosyne allocation. Contiguous spectrum
+    /// input is borrowed; only a strided input is materialized.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, reusable-buffer, or provider execution error.
+    pub fn inverse_leto_with_buffers(
+        &self,
+        spectrum: leto::ArrayView1<'_, f32>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<f64, leto::MnemosyneStorage<f64>, 3>> {
+        self.inverse_leto_output(spectrum, buffers)
     }
 
     /// Inverse transform from Leto spectrum storage into Mnemosyne-backed f16 field storage.
+    ///
+    /// This allocating convenience path creates host staging for one dispatch.
+    /// Repeated callers should retain [`GpuFft3dBuffers`] and call
+    /// [`Self::inverse_half_leto_with_buffers`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape or provider execution error.
     pub fn inverse_f16_leto(
         &self,
         spectrum: leto::ArrayView1<'_, f32>,
     ) -> ApolloResult<leto::Array<f16, leto::MnemosyneStorage<f16>, 3>> {
-        let spectrum = apollo_leto_interop::view_cow(&spectrum);
-        self.validate_spectrum_len(spectrum.len())?;
         let mut buffers = GpuFft3dBuffers::new(self)?;
-        Self::split_spectrum(&spectrum, &mut buffers);
-        self.execute_inverse(&mut buffers)?;
-        let output: Vec<f16> = buffers
-            .real_host
-            .iter()
-            .copied()
-            .map(f16::from_f32)
-            .collect();
-        apollo_leto_interop::try_dense_from_slice([self.nx, self.ny, self.nz], &output).ok_or_else(
-            || ApolloError::Wgpu {
-                message: "failed to allocate Mnemosyne-backed Leto FFT f16 inverse field"
-                    .to_owned(),
+        self.inverse_half_leto_with_buffers(spectrum, &mut buffers)
+    }
+
+    /// Inverse transform into a half-precision Leto array with retained staging.
+    ///
+    /// The returned field owns one Mnemosyne allocation. Contiguous spectrum
+    /// input is borrowed; only a strided input is materialized.
+    ///
+    /// # Errors
+    ///
+    /// Returns a shape, reusable-buffer, or provider execution error.
+    pub fn inverse_half_leto_with_buffers(
+        &self,
+        spectrum: leto::ArrayView1<'_, f32>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<f16, leto::MnemosyneStorage<f16>, 3>> {
+        self.inverse_leto_output(spectrum, buffers)
+    }
+
+    fn inverse_leto_output<T: HostReal>(
+        &self,
+        spectrum: leto::ArrayView1<'_, f32>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<leto::Array<T, leto::MnemosyneStorage<T>, 3>> {
+        self.validate_spectrum_len(spectrum.shape()[0])?;
+        buffers.validate_for(self)?;
+        let spectrum = apollo_leto_interop::view_cow(&spectrum);
+        Self::split_spectrum(&spectrum, buffers);
+        self.execute_inverse(buffers)?;
+        let mut values = buffers.real_host.iter().copied();
+        Ok(leto::Array::from_mnemosyne_shape_fn(
+            [self.nx, self.ny, self.nz],
+            |_| {
+                T::from_device(
+                    values
+                        .next()
+                        .expect("invariant: field shape matches real staging length"),
+                )
             },
-        )
+        ))
     }
 
     fn validate_field_shape(&self, actual: [usize; 3]) -> ApolloResult<()> {
@@ -267,35 +382,14 @@ impl GpuFft3d {
         }
     }
 
-    fn forward_values(
+    fn forward_values<T: HostReal>(
         &self,
-        field: &[f64],
+        field: impl ExactSizeIterator<Item = T>,
         output: &mut [f32],
         buffers: &mut GpuFft3dBuffers,
     ) -> ApolloResult<()> {
-        buffers.validate_for(self)?;
-        if field.len() != buffers.len() {
-            return Err(ApolloError::ShapeMismatch {
-                expected: format!("FFT real field length {}", buffers.len()),
-                actual: format!("FFT real field length {}", field.len()),
-            });
-        }
         self.validate_spectrum_len(output.len())?;
-        buffers.imaginary_host.fill(0.0);
-        buffers
-            .real_host
-            .iter_mut()
-            .zip(field.iter().copied())
-            .for_each(|(destination, value)| *destination = value as f32);
-        self.execute_forward(output, buffers)
-    }
-
-    fn execute_forward(
-        &self,
-        output: &mut [f32],
-        buffers: &mut GpuFft3dBuffers,
-    ) -> ApolloResult<()> {
-        self.execute_forward_in_place(&mut buffers.real_host, &mut buffers.imaginary_host)?;
+        self.stage_forward_values(field, buffers)?;
         for ((real, imaginary), destination) in buffers
             .real_host
             .iter()
@@ -306,6 +400,27 @@ impl GpuFft3d {
             destination[1] = *imaginary;
         }
         Ok(())
+    }
+
+    fn stage_forward_values<T: HostReal>(
+        &self,
+        field: impl ExactSizeIterator<Item = T>,
+        buffers: &mut GpuFft3dBuffers,
+    ) -> ApolloResult<()> {
+        buffers.validate_for(self)?;
+        if field.len() != buffers.len() {
+            return Err(ApolloError::ShapeMismatch {
+                expected: format!("FFT real field length {}", buffers.len()),
+                actual: format!("FFT real field length {}", field.len()),
+            });
+        }
+        buffers.imaginary_host.fill(0.0);
+        buffers
+            .real_host
+            .iter_mut()
+            .zip(field)
+            .for_each(|(destination, value)| *destination = value.into_device());
+        self.execute_forward_in_place(&mut buffers.real_host, &mut buffers.imaginary_host)
     }
 
     fn execute_inverse(&self, buffers: &mut GpuFft3dBuffers) -> ApolloResult<()> {
@@ -319,3 +434,7 @@ impl GpuFft3d {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "verification/workspace.rs"]
+mod verification;

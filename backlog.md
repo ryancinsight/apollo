@@ -14,6 +14,13 @@
 - **Reconciled:** `codex/fix-atlas-sha` contained only a Hermes 0.6 manifest and
   lock advance; main requires Hermes 0.7 and locks `08306b94`, so both local and
   remote refs were deleted as superseded on 2026-08-27.
+- **Current salvage:** `fix/apollo-fft-workspace-buffers` contains one valid
+  Leto GPU staging increment plus unrelated Winograd/lock hunks also present on
+  another stale branch. Salvage only the four retained-staging entry points,
+  write completed outputs directly into final Mnemosyne storage, and add
+  real-device parity/address/shape tests. Acceptance is warning-clean affected
+  gates, public SemVer classification, and deletion of the reconciled branch.
+  Winograd and lock reconciliation remain with their owning stale branch.
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
   **Lease:** this item entry and `fix/apollo-fft-workspace-buffers` through the
   next verified branch-debt commit. **Last update:** 2026-08-27.

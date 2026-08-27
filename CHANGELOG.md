@@ -10,6 +10,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `GpuFft3d` adds caller-retained host staging for forward and inverse
+  3-D Leto execution in f64 and half storage. Contiguous inputs remain borrowed;
+  repeated calls remove the two N-entry f32 staging allocations, while spectra
+  and fields use Leto's in-place shape generator to initialize final
+  Mnemosyne-backed storage once, without default fill, an intermediate result
+  vector, or a second element copy. Real-device tests cover
+  allocating parity, both storage types, stable staging addresses, and
+  mismatched-plan rejection before mutation.
+
 - [minor] Power-of-two transforms at square splits below the threading
   threshold run on a batched layout that holds the transform index in the lane
   position, which removes every cross-lane shuffle from the butterfly and lets

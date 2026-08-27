@@ -13,6 +13,13 @@ Evidence: `dd0dad47` changed only `Cargo.toml` and `Cargo.lock` from Hermes 0.5
 to 0.6. Main requires Hermes 0.7 and locks `08306b94`; the superseded local and
 remote `codex/fix-atlas-sha` refs were deleted on 2026-08-27.
 
+Workspace-buffer salvage in progress: the valid delta is retained host staging
+for the four f64/half Leto GPU entry points. The new path uses Leto's
+single-write shape generator to initialize final Mnemosyne-backed outputs,
+removing the stale branch's default fill, intermediate result vector, and
+second output copy; unrelated Winograd and lock hunks stay out of this
+increment.
+
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
 - [x] Record the C/F/offset/strided multidimensional entry baseline and pin the
