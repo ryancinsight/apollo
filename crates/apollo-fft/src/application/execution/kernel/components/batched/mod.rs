@@ -712,5 +712,9 @@ pub(crate) mod boundary;
 #[cfg(test)]
 pub(crate) mod interleaved;
 
+// Windows-gated: pins threads through Win32 to control the hybrid scheduler.
+#[cfg(all(test, windows))]
+mod pinned_ladder;
+
 #[cfg(test)]
 mod tests;
