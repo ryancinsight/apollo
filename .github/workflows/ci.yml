@@ -89,10 +89,28 @@ jobs:
       #
       - name: Tests
         run: cargo nextest run --locked --workspace --all-features --exclude apollo-python --no-fail-fast
+      - name: Build benchmark smoke
+        run: >-
+          cargo test --locked -p apollo-fft --all-features --no-run
+          --bench rustfft_comparison
+          --bench phastft_comparison
+          --bench engine_census
+          --bench kernel_strategy
+          --bench prime_compose
+          --bench half_cyclic_rader
+          --bench buffer_reuse
       - name: Benchmark smoke
         env:
           APOLLO_BENCH_MODE: smoke
-        run: timeout 60s cargo test --locked -p apollo-fft --benches --all-features
+        run: >-
+          timeout 60s cargo test --locked -p apollo-fft --all-features
+          --bench rustfft_comparison
+          --bench phastft_comparison
+          --bench engine_census
+          --bench kernel_strategy
+          --bench prime_compose
+          --bench half_cyclic_rader
+          --bench buffer_reuse
       - name: Doctests
         run: cargo test --locked --doc --workspace --exclude apollo-python
       - name: Documentation

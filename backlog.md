@@ -54,7 +54,7 @@
   passed the Rust workspace, Python, lock, and executable-identity gates. The
   seven-binary local smoke completed in about 26 seconds.
 
-## ATLAS-APOLLO-BENCH-SMOKE-COLD-COMPILE-2026-08-27 — Keep compilation outside the runtime bound [ci] [patch] — in progress
+## ATLAS-APOLLO-BENCH-SMOKE-COLD-COMPILE-2026-08-27 — Keep compilation outside the runtime bound [ci] [patch] — review
 
 - **Failure:** PR #153 run 33112324749 wrapped cold benchmark compilation and
   execution in one 60-second timeout. Compilation consumed 39.9 seconds and
@@ -67,6 +67,11 @@
 - **Acceptance oracle:** the exact command selects no library-test binary; all
   seven benchmark executables complete in smoke mode within 60 seconds after
   their no-run build; PR #153's Rust workspace job passes.
+- **Local evidence:** the locked no-run command built exactly seven benchmark
+  executables in 40.66 seconds with no library-test binary; the same locked
+  seven-binary smoke then completed in 21.54 seconds. `git diff --check`
+  passes. Hosted workflow parsing and the exact Linux job remain the merge
+  gate.
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
   **Lease:** `.github/workflows/ci.yml` and this item entry through the fix
   commit. **Last update:** 2026-08-27.
