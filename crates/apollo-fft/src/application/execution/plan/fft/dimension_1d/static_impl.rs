@@ -81,18 +81,30 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>, const N: usize> StaticFftPlan1D<
     }
 
     /// Forward transform of a complex slice in-place.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from `N`.
     #[inline]
     pub fn forward_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
         static_fft_dispatch::<F, N, false, false>(slice);
     }
 
     /// Inverse transform of a complex slice in-place with normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from `N`.
     #[inline]
     pub fn inverse_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
         static_fft_dispatch::<F, N, true, true>(slice);
     }
 
     /// Inverse transform of a complex slice in-place without normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from `N`.
     #[inline]
     pub fn inverse_complex_slice_unnorm_inplace(&self, slice: &mut [F::Complex]) {
         static_fft_dispatch::<F, N, true, false>(slice);
