@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
+
+- **Outcome:** public slice entry points validate input length before unchecked
+  dispatch; a length-mismatched slice is rejected at the boundary instead of
+  reaching `get_unchecked` kernels (OOB) or debug-assert-only paths (silent
+  wrong answers). Companion doc corrections: SAFETY comments on the twiddle
+  raw-pointer cache, `# Panics` sections on `*_leto_inplace`, honest DCT/DST
+  complexity claims; plus DWT forward allocation reuse.
+- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Lease:**
+  `crates/apollo-fft/src/application/execution/plan/fft/dimension_1d/{dynamic_impl.rs,static_impl.rs}`,
+  `crates/apollo-fft/src/application/execution/kernel/mixed_radix/caches/twiddle.rs`,
+  `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`
+  (docs only),
+  `crates/apollo-wavelet/src/application/execution/plan/dwt/forward.rs`, plus
+  this entry.
+- **Last update:** 2026-08-27.
+
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Eight stale local branches hold unique patches — in progress
 
 - **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
