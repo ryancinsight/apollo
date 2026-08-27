@@ -58,13 +58,19 @@ steady-state contract holds; everything below is acquisition-time retention.
 
 Attribution, largest first:
 
-1. **Full-size twiddle tables are retained in duplicate.** One 16n table from
-   `cached_twiddle_fwd`, a second 16n table at plan construction, and at
-   262144 a third during the first forward. At 262144 that is 8.4 MB of the
-   15.8 MB total; at every size ≥ 4096 the duplicate is a quarter to a third
-   of retained bytes. This is the memory cost of the three twiddle builders
-   `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25` records — the dedup lever lives
-   there, and the probe's per-window ledger is its acceptance instrument.
+1. **A second full-size twiddle table was retained per size.** The probe's
+   plan-build window isolated it, and the follow-up read identified it: plan
+   construction eagerly built the **inverse** table beside the forward one
+   (`FftPlan1D::new` called both cache directions), a full 16n retained that
+   forward-only consumers never touch — a quarter to a third of retained
+   bytes at every size ≥ 4096, 4 MiB at 262144. **Resolved 2026-08-27**: the
+   inverse table is now acquired lazily on the first inverse execution
+   (`OnceLock` through the global cache); the probe's plan-build window
+   retains 0 at every size post-change. The block at 262144's first forward
+   is the four-step matrix representation for the > `FUSE_THRESHOLD` route —
+   a distinct layout, not a duplicate; its builder now shares the single
+   evaluation authority (`ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, delivered)
+   but its retention is the route's working set, recorded as-is.
 2. **The 65536 spike is threaded-route worker retention:** 24 blocks of
    262,144 bytes (6.0 MB) held after the first forward at exactly the
    `FUSE_THRESHOLD` size — per-worker state of the Moirai four-step, absent

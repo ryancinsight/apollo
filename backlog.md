@@ -689,7 +689,16 @@
   compensated `O(N^2)` oracle stays below N=4096.
 - **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 1.
 
-## ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25 — One twiddle builder [patch] — todo
+## ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25 — One twiddle builder [patch] — done 2026-08-27
+
+- **Delivered (2026-08-27):** `twiddle_table::twiddle_components` is the single
+  evaluation authority — mod-first reduction, one direct `sin_cos`, the
+  canonical association — and the stage-, arm-, and matrix-layout builders
+  delegate to it; exactly one `sin_cos` call site remains in twiddle-building
+  code (the oracle). The four-step matrix builder's association changes by at
+  most one rounding; `twiddle_accuracy_gate` passes with the full suite
+  (459/459). Layouts, caches, and kernels untouched. Integrator: Claude
+  session 5050c72a.
 
 - **Outcome:** one generic twiddle-table entry point replaces the three parallel
   builders in `twiddle_table.rs`, `radix_composite/cache.rs`, and
@@ -721,8 +730,16 @@
   threaded-four-step worker blocks (6.0 MB) — reduction needs that route's
   buffer-lifetime read (next sub-step); scratch/planes are minor, closing
   the in-place-DIT direction again from the attribution side. Integrator:
-  Claude session 5050c72a. Remaining: the reduction phase, sequenced behind
-  TWIDDLE-SSOT for the duplicate-table term.
+  Claude session 5050c72a.
+- **Reduction, first term delivered (2026-08-27):** the plan-build 16n was
+  the eagerly built inverse table; it is now lazy (`OnceLock` through the
+  global cache) and the probe's plan-build window retains 0 at every size —
+  16 KiB to 4 MiB returned per plan size for forward-only consumers.
+  Remaining: the 65536 spike's 24 x 262,144-byte threaded-four-step worker
+  blocks (lead: block count ≈ machine cores, so Moirai pool internals are
+  the suspect — possibly an upstream item) and the four-step matrix
+  representation at > `FUSE_THRESHOLD` sizes (route working set; reduce only
+  with a route redesign).
 
 - **Outcome:** Apollo's retained bytes per size are attributed to their owning
   caches (twiddle planes, four-step planes, threaded arena, scratch) and the

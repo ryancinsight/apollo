@@ -50,11 +50,13 @@ pub(crate) fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
     n2: usize,
 ) -> Vec<C> {
     let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-    let scale = sign * std::f64::consts::TAU / n as f64;
 
-    // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), evaluated
-    // directly. The exponent is reduced modulo `n` first — `j*k` reaches
-    // `(n2-1)*(n1-1)`, just under `n` — so every angle stays inside one period.
+    // Entry (j, k) is W_n^{j*k} = exp(sign * 2πi * j * k / n), through the
+    // shared evaluation authority (`twiddle_table::twiddle_components`):
+    // mod-`n` reduction first, one direct `sin_cos` per entry, and the
+    // canonical association `sign * TAU * e / n` — the last differs from the
+    // superseded local `(sign * TAU / n) * e` by at most one rounding, within
+    // the accuracy gate's derived bound.
     //
     // The superseded form built row 1 by a recurrence over `k` and each later
     // row by multiplying the row above it, so entry (j, k) carried the rounding
@@ -67,8 +69,12 @@ pub(crate) fn build_four_step_twiddles<C: TwiddleOutput, const INVERSE: bool>(
     (0..n2)
         .flat_map(|j| {
             (0..n1).map(move |k| {
-                let reduced = (j * k) % n;
-                let (sin, cos) = (scale * reduced as f64).sin_cos();
+                let (sin, cos) =
+                    crate::application::execution::kernel::twiddle_table::twiddle_components(
+                        sign,
+                        j * k,
+                        n,
+                    );
                 C::from_components(cos, sin)
             })
         })

@@ -196,9 +196,12 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
         // cost of the bound.
         for k in 1..r {
             for j in 0..prev_len {
-                let reduced = (k * j) % stage_len;
-                let angle = sign * std::f64::consts::TAU * reduced as f64 / stage_len as f64;
-                let (sin, cos) = angle.sin_cos();
+                let (sin, cos) =
+                    crate::application::execution::kernel::twiddle_table::twiddle_components(
+                        sign,
+                        k * j,
+                        stage_len,
+                    );
                 unsafe {
                     *all_twiddles.get_unchecked_mut(tw_idx) =
                         Complex::new(F::from_precise(cos), F::from_precise(sin));

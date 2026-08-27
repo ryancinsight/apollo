@@ -170,6 +170,25 @@ impl TwiddleOutput for Complex<f16> {
 ///
 /// - Panics (debug assertion) if `n` is not a power of two.
 /// - Returns an empty `Vec` for n ≤ 1.
+/// Single evaluation authority for every twiddle builder.
+///
+/// Returns `(sin, cos)` of `sign * 2π * exponent / period`, with the exponent
+/// reduced modulo `period` before the angle forms so every argument stays
+/// inside one period, evaluated by one direct `sin_cos` — never a recurrence.
+/// The `O(log N · u)` FFT forward-error bound (Higham, *Accuracy and
+/// Stability of Numerical Algorithms*, 2nd ed., section 24.1) holds only for
+/// accurately computed twiddles; that contract — reduction first, direct
+/// evaluation, the exact association `sign * TAU * e / period` — is stated
+/// here once, and the stage-, arm-, and matrix-layout builders all delegate
+/// to it. The same `O(N · u)` recurrence defect was fixed three times before
+/// this seam existed (`ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`).
+#[inline]
+pub(crate) fn twiddle_components(sign: f64, exponent: usize, period: usize) -> (f64, f64) {
+    let reduced = exponent % period;
+    let angle = sign * std::f64::consts::TAU * reduced as f64 / period as f64;
+    angle.sin_cos()
+}
+
 pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<C> {
     debug_assert!(
         n.is_power_of_two(),
@@ -194,8 +213,7 @@ pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<
         // directly rather than advanced by a recurrence. See the module's
         // accuracy note for why the recurrence is not an option here.
         for j in 0..half {
-            let angle = sign * std::f64::consts::TAU * j as f64 / len as f64;
-            let (sin, cos) = angle.sin_cos();
+            let (sin, cos) = twiddle_components(sign, j, len);
             // SAFETY: cursor + j < total by stage-size invariant.
             unsafe {
                 *table.get_unchecked_mut(cursor + j) = C::from_components(cos, sin);
