@@ -413,7 +413,7 @@
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
-## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — todo
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — in progress
 
 - **Outcome:** `apollo-fft` builds every library and test target warning-free on
   AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks
@@ -427,6 +427,10 @@
   the first provider warnings, the cross-check reaches 75 Apollo diagnostics:
   x86-only Stockham imports/test calls, cfg-unused cache parameters, and
   target-specific dead code.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `apollo-fft` Stockham precision/stage/tests, radix-composite cache
+  helpers, and this item entry through the next commit. **Last update:**
+  2026-08-27.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
