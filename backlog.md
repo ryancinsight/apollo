@@ -38,6 +38,65 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
+## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — built and blocked 2026-08-28
+
+- **The shape the references have, implemented:** four-step at N = 1024 with
+  each 32-sample row transform held entirely in registers — interleaved rows
+  are sixteen AVX2 registers where planar needs thirty-two; DIF ordering makes
+  every stage a whole-register pair except the last (the sample-swap-and-sign
+  step), so no two-register sample shuffle is needed anywhere; both
+  bit-reversals absorb into the rev-baked four-step matrix and one closing
+  in-place involution. Five passes, zero scratch. All five oracles pass:
+  direct DFT both directions, round trip, batched differential,
+  decline-untouched.
+- **Blocked on an upstream codegen defect, localized with asm evidence.** The
+  row kernel runs ~30x its expected cost (5000 cycles per row). Three body
+  shapes — indexed array with loops, closure sequence, sixteen named locals —
+  all slow, differently. Section timers put all the loss in the two row
+  passes; the dispatched symbol in the test binary contains **zero FMA
+  instructions** and re-enters feature detection per operation: the kernel
+  body exceeds the inline budget, falls out of the dispatcher's
+  `#[target_feature]` scope, and compiles at baseline codegen.
+  `#[inline(always)]` on `LaneKernel::call` does not cure it, so the failure
+  sits inside hermes' `vectorize` dispatch machinery for large bodies — filed
+  as `HS-VECTORIZE-LARGE-KERNEL` upstream. The module is test-gated until
+  that lands; every small kernel in the tree (batched, boundary experiments)
+  inlines fine, which is why this class was never seen before.
+- **The probe delivered the turn's most important correction regardless:**
+  the four engines measured in ONE pinned process at N = 1024 —
+
+  | pinned | apollo batched | phastft | rustfft (scratch-planned) |
+  | --- | --- | --- | --- |
+  | P-core | 3423 ns | 3257 | 2455 |
+  | E-core | 2305 ns | 1482 | 1264 |
+
+  Apollo is **within 5% of PhastFT on the P-core** at the centre of the
+  "weak" range, and the true RustFFT gap is 1.4x — not the 2.4x that
+  cross-instrument arithmetic (pinned apollo against unpinned census
+  references, and `process()` versus `process_with_scratch`) had been
+  reporting. Matching PhastFT at mid sizes on P-cores is nearly done;
+  RustFFT-parity and the E-core gap are what the resident shape targets once
+  the hermes defect is fixed.
+
+## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — filed 2026-08-28
+
+- **Defect:** a `LaneKernel` whose `call` body is large (a fully unrolled
+  32-sample FFT row pass, ~500 vector ops) is not inlined into the generated
+  `#[target_feature]` dispatcher; it compiles at baseline codegen — the
+  dispatched symbol shows zero FMA instructions and per-operation
+  `std_detect` re-entry — and runs ~30x slow. `#[inline(always)]` on the
+  impl's `call` does not cure it. Small kernels inline correctly, which is
+  why ADR 016's original evidence never hit this.
+- **Where to fix:** the `#[runtime_dispatch]` expansion in hermes-simd-macros
+  or the `dispatch_backend_kernel` chain — the specialization the dispatcher
+  calls must itself carry the target-feature attribute (so an outlined body
+  keeps the features) rather than relying on inlining into the attributed
+  frame. Apollo's `components/resident` module is the reproducer: build its
+  test binary with `--emit=asm` and grep the dispatched symbol for `vfmadd`.
+- **Acceptance oracle:** the reproducer's row pass drops from ~5000 to the
+  order of 200 cycles per row; apollo's resident probe then re-measures the
+  shape against the references.
+
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
 
 - **Delivered:** `FourStepPlanes` builds from a new uncached
