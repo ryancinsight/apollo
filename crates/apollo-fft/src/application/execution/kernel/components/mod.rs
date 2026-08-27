@@ -1,5 +1,6 @@
-// Test-gated: the mixed-radix 8x128 experiment and its measurement probe
-// (ATLAS-APOLLO-BASE-BUTTERFLY-128).
+// Production: the register-resident 128-point base butterfly and its
+// measurement probes (ATLAS-APOLLO-BASE-BUTTERFLY-128); routed from the
+// power-of-two plan's log2 == 7 arm with incumbent fallback.
 pub(crate) mod base128;
 pub(crate) mod batched;
 // Test-gated: correct on every oracle but slower than the batched route as
