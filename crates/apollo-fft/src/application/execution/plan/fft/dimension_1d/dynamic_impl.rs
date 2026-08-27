@@ -416,6 +416,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     /// Forward transform of a complex Leto view in-place.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from the plan length.
     pub fn forward_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.forward_complex_slice_inplace(
             data.as_mut_slice_memory_order()
@@ -424,6 +429,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     /// Inverse transform of a complex Leto view in-place with normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from the plan length.
     pub fn inverse_complex_leto_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.inverse_complex_slice_inplace(
             data.as_mut_slice_memory_order()
@@ -432,6 +442,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     /// Inverse transform of a complex Leto view in-place without normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the view is not contiguous in memory or if its length
+    /// differs from the plan length.
     pub fn inverse_complex_leto_unnorm_inplace(&self, mut data: ArrayViewMut1<'_, F::Complex>) {
         self.inverse_complex_slice_unnorm_inplace(
             data.as_mut_slice_memory_order()
@@ -439,9 +454,27 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         );
     }
 
-    /// Forward transform of a complex slice in-place.
+    /// Reject slices whose length differs from the plan length.
+    ///
+    /// Dispatch selects length-specialized kernels from `self.n` alone; the
+    /// tiny and small power-of-two kernels index `self.n` elements unchecked,
+    /// so a mismatched slice must never reach them. Mirrors the static plan's
+    /// entry assertion in [`super::executors::static_fft_dispatch`].
     #[inline]
+    #[track_caller]
+    fn assert_plan_length(&self, len: usize) {
+        assert_eq!(len, self.n, "FFT plan length mismatch");
+    }
+
+    /// Forward transform of a complex slice in-place.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from the plan length.
+    #[inline]
+    #[track_caller]
     pub fn forward_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
+        self.assert_plan_length(slice.len());
         if runtime_tiny_direct_dispatch::<F, false, false>(self.n, slice) {
             return;
         }
@@ -449,8 +482,14 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     /// Inverse transform of a complex slice in-place with normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from the plan length.
     #[inline]
+    #[track_caller]
     pub fn inverse_complex_slice_inplace(&self, slice: &mut [F::Complex]) {
+        self.assert_plan_length(slice.len());
         if runtime_tiny_direct_dispatch::<F, true, true>(self.n, slice) {
             return;
         }
@@ -458,8 +497,14 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     }
 
     /// Inverse transform of a complex slice in-place without normalization.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slice.len()` differs from the plan length.
     #[inline]
+    #[track_caller]
     pub fn inverse_complex_slice_unnorm_inplace(&self, slice: &mut [F::Complex]) {
+        self.assert_plan_length(slice.len());
         if runtime_tiny_direct_dispatch::<F, true, false>(self.n, slice) {
             return;
         }

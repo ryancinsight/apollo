@@ -951,3 +951,104 @@ fn planned_new_winograd_composite_sizes_match_direct() {
         assert!(err32 <= 1.0e-3, "f32 size {n} mismatch err={err32:.2e}");
     }
 }
+
+// ── Plan/slice length-mismatch rejection ─────────────────────────────────────
+//
+// Dispatch selects length-specialized kernels from the plan length alone, so
+// the entry assertion must fire before any kernel sees a mismatched slice:
+// without it a short slice reached `get_unchecked` paths (out of bounds) and
+// codelet `try_into` paths silently left the data untouched. Each test pins
+// the dispatch family it exercises via the plan strategy, so the rejection is
+// proven per family, not just once.
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_tiny_direct_plan() {
+    // n = 4 routes through the tiny runtime dispatch ahead of the stored
+    // executor; unchecked it ran `small_pot_inplace_sized::<4>` on 2 elements.
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(4).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::PowerOfTwo { .. }));
+    let mut data = signal64(2);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_pot_plan() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(16).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::PowerOfTwo { .. }));
+    let mut data = signal64(8);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_composite_plan() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(36).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::Composite { .. }));
+    let mut data = signal64(12);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_winograd_plan() {
+    // Codelet executors `try_into` a sized array; before the entry assertion a
+    // mismatched slice failed that conversion and returned unchanged data.
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(12).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::ShortWinograd));
+    let mut data = signal64(6);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_good_thomas_plan() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(511).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::GoodThomas { .. }));
+    let mut data = signal64(100);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_short_slice_on_rader_plan() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(359).expect("shape"));
+    assert!(matches!(plan.strategy, PlanStrategy::Rader));
+    let mut data = signal64(100);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_long_slice() {
+    // A longer slice is rejected too: dispatch would transform only the plan
+    // length prefix and silently return partially transformed data.
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(16).expect("shape"));
+    let mut data = signal64(32);
+    plan.forward_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn inverse_rejects_length_mismatch() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(16).expect("shape"));
+    let mut data = signal64(8);
+    plan.inverse_complex_slice_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn inverse_unnorm_rejects_length_mismatch() {
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(16).expect("shape"));
+    let mut data = signal64(8);
+    plan.inverse_complex_slice_unnorm_inplace(&mut data);
+}
+
+#[test]
+#[should_panic(expected = "FFT plan length mismatch")]
+fn forward_rejects_length_mismatch_f32() {
+    let plan = FftPlan1D::<f32>::new(Shape1D::new(16).expect("shape"));
+    let mut data = signal32(8);
+    plan.forward_complex_slice_inplace(&mut data);
+}

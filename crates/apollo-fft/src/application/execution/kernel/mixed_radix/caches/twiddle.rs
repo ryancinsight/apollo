@@ -32,6 +32,16 @@ thread_local! {
     #[expect(clippy::missing_const_for_thread_local, reason = "Counterbalanced mixed-radix benchmarks favor lazy cache initialization")]
     static TL_INV_REDUCED_POW2: RefCell<[Option<Arc<[Complex32]>>; 32]> = RefCell::new([const { None }; 32]);
 
+    // INVARIANT (raw-cache immortality): every pointer stored in the `_RAW`
+    // caches below is derived from an `Arc<[C]>` allocation that
+    // `cached_twiddle_{fwd,inv}` has already inserted into the corresponding
+    // global `static` map (`TWIDDLE_*_CACHE`). All twiddle caches — the global
+    // maps, the TLS `Arc` maps, and the TLS pow2 arrays — are append-only:
+    // no cache surface exposes remove/clear/eviction, and cached tables are
+    // never mutated after construction. The global map therefore keeps each
+    // pointed-to allocation alive and immutable for the remainder of the
+    // program, so a non-null raw entry can never dangle. Every `unsafe`
+    // dereference of these pointers relies on this invariant.
     static TL_FWD_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
     static TL_INV_PRECISE_POW2_RAW: std::cell::Cell<[*const [Complex64]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
     static TL_FWD_REDUCED_POW2_RAW: std::cell::Cell<[*const [Complex32]; 32]> = const { std::cell::Cell::new([std::ptr::slice_from_raw_parts(std::ptr::null(), 0); 32]) };
@@ -352,10 +362,16 @@ pub(crate) fn with_twiddle_fwd<C: TwiddleStore, R>(n: usize, f: impl FnOnce(&[C]
         if idx < 32 {
             let ptr = C::twiddle_tl_fwd_get_pow2_raw(idx);
             if !ptr.is_null() {
+                // SAFETY: valid because cache entries are never evicted; see
+                // the raw-cache immortality invariant at the `_RAW`
+                // thread-local declarations.
                 return f(unsafe { &*ptr });
             }
         }
     } else if let Some(ptr) = C::twiddle_tl_fwd_get_raw(n) {
+        // SAFETY: valid because cache entries are never evicted; see the
+        // raw-cache immortality invariant at the `_RAW` thread-local
+        // declarations.
         return f(unsafe { &*ptr });
     }
     let tw = cached_twiddle_fwd::<C>(n);
@@ -378,10 +394,16 @@ pub(crate) fn with_twiddle_inv<C: TwiddleStore, R>(n: usize, f: impl FnOnce(&[C]
         if idx < 32 {
             let ptr = C::twiddle_tl_inv_get_pow2_raw(idx);
             if !ptr.is_null() {
+                // SAFETY: valid because cache entries are never evicted; see
+                // the raw-cache immortality invariant at the `_RAW`
+                // thread-local declarations.
                 return f(unsafe { &*ptr });
             }
         }
     } else if let Some(ptr) = C::twiddle_tl_inv_get_raw(n) {
+        // SAFETY: valid because cache entries are never evicted; see the
+        // raw-cache immortality invariant at the `_RAW` thread-local
+        // declarations.
         return f(unsafe { &*ptr });
     }
     let tw = cached_twiddle_inv::<C>(n);
