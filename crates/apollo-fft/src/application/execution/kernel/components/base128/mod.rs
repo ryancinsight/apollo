@@ -6,14 +6,14 @@
 //! stores land in natural output order. Two-and-a-half passes over the data
 //! where the batched four-step pays six.
 //!
-//! The current register map requires four native scalar lanes: f64 on AVX2 and
-//! f32 on NEON. A different widest native width declines without mutation.
+//! The current register map requests exactly four scalar lanes: f64 selects
+//! AVX2 even on AVX-512 hosts, while f32 selects NEON or Hermes' portable
+//! packed backend. A host without that width declines without mutation.
 //! The distribution-free median interval clears the production N = 128 route
-//! on both measured core types. The construction remains test-only until an
-//! exact-width capability is available on every routed host and the immutable
-//! plan moves into production plan ownership. The pinned probe times the
-//! zero-instrumentation specialization; phase attribution runs as a separate
-//! const-specialized pass.
+//! on both measured core types. The construction remains test-only until the
+//! immutable plan moves into production plan ownership. The pinned probe times
+//! the zero-instrumentation specialization; phase attribution runs as a
+//! separate const-specialized pass.
 
 pub(crate) mod butterfly;
 

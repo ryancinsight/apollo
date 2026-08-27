@@ -56,6 +56,7 @@
 //! the register count, which is exactly what must not be generic on a
 //! sixteen-register file.
 
+use crate::application::execution::kernel::components::lane_capability::exact_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
@@ -511,6 +512,11 @@ where
     if data.len() != ROW * ROW {
         return false;
     }
+    // Resolve the exact-width capability before plan construction or the
+    // first in-place transpose. Unsupported hosts leave `data` untouched.
+    if !exact_lanes_supported::<4, T>() {
+        return false;
+    }
     let plan = T::cached_resident_plan::<INVERSE>(ROW * ROW);
 
     #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -534,19 +540,15 @@ where
         };
     }
 
-    // The width check runs on an untouched buffer: the first row pass reports
-    // before mutating only after the transpose, so probe the dispatch first
-    // with a no-op row pass over a stack copy? Cheaper and exact: the row
-    // kernels themselves gate on width, and the transpose that precedes them
-    // is undone if they decline.
     sect!("t1", { transpose_samples(data, ROW) });
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
         if !sect!("rows1", {
-            hermes_simd::vectorize(ResidentRows::<T, false> {
+            hermes_simd::vectorize_lanes::<4, T, _>(ResidentRows::<T, false> {
                 data: flat,
                 plan: plan.as_ref(),
             })
+            .unwrap_or(false)
         }) {
             transpose_samples(data, ROW);
             return false;
@@ -556,12 +558,12 @@ where
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
         let handled = sect!("rows2", {
-            hermes_simd::vectorize(ResidentRows::<T, true> {
+            hermes_simd::vectorize_lanes::<4, T, _>(ResidentRows::<T, true> {
                 data: flat,
                 plan: plan.as_ref(),
             })
         });
-        debug_assert!(handled, "width accepted the first pass");
+        debug_assert_eq!(handled, Some(true), "width accepted the first pass");
     }
     sect!("untangle", { untangle_output(data, ROW) });
     true

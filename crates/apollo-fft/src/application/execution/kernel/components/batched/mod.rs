@@ -663,7 +663,13 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
     sect!("transpose", {
-        let handled = hermes_simd::vectorize(boundary::TransposePlanes { re, im, m, stride });
+        let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::TransposePlanes {
+            re,
+            im,
+            m,
+            stride,
+        })
+        .unwrap_or(false);
         if !handled {
             transpose_planes(re, im, m, stride);
         }
@@ -689,13 +695,14 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     });
 
     sect!("reint", {
-        let handled = hermes_simd::vectorize(boundary::InterleaveRows {
+        let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
             re,
             im,
             data: bytemuck::cast_slice_mut(data),
             m,
             stride,
-        });
+        })
+        .unwrap_or(false);
         if !handled {
             for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
                 for (b, c) in chunk.iter_mut().enumerate() {

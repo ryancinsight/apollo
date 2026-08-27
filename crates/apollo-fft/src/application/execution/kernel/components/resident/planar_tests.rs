@@ -6,16 +6,17 @@
 
 use super::super::tests::{dft, signal, tolerance, worst};
 use super::four_step_planar;
+use crate::application::execution::kernel::components::test_support::executed_or_declined_untouched;
 use eunomia::Complex64;
 
 #[test]
 fn forward_matches_the_direct_transform() {
     let src = signal();
     let mut data = src.clone();
-    assert!(
-        four_step_planar::<f64, false>(&mut data),
-        "this host's dispatched width must run the planar rows"
-    );
+    let executed = four_step_planar::<f64, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let (err, bound) = (worst(&data, &dft(&src, false)), tolerance(&src));
     assert!(err <= bound, "forward differs by {err:.3e} > {bound:.3e}");
 }
@@ -24,7 +25,10 @@ fn forward_matches_the_direct_transform() {
 fn inverse_matches_the_direct_transform() {
     let src = signal();
     let mut data = src.clone();
-    assert!(four_step_planar::<f64, true>(&mut data));
+    let executed = four_step_planar::<f64, true>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     let (err, bound) = (worst(&data, &dft(&src, true)), tolerance(&src));
     assert!(err <= bound, "inverse differs by {err:.3e} > {bound:.3e}");
 }
@@ -33,7 +37,10 @@ fn inverse_matches_the_direct_transform() {
 fn forward_then_inverse_recovers_the_input() {
     let src = signal();
     let mut data = src.clone();
-    assert!(four_step_planar::<f64, false>(&mut data));
+    let executed = four_step_planar::<f64, false>(&mut data);
+    if !executed_or_declined_untouched(&src, &data, executed) {
+        return;
+    }
     assert!(four_step_planar::<f64, true>(&mut data));
     let n = 1024.0;
     let bound = tolerance(&src) * n;
@@ -52,7 +59,10 @@ fn forward_then_inverse_recovers_the_input() {
 fn matches_the_interleaved_resident_kernel_within_rounding() {
     let src = signal();
     let mut planar = src.clone();
-    assert!(four_step_planar::<f64, false>(&mut planar));
+    let executed = four_step_planar::<f64, false>(&mut planar);
+    if !executed_or_declined_untouched(&src, &planar, executed) {
+        return;
+    }
 
     let mut interleaved = src.clone();
     assert!(super::super::four_step_resident::<f64, false>(

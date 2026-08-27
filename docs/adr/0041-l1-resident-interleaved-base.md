@@ -40,11 +40,10 @@ redistribution instead of repeatedly streaming the full transform.
    interleaved complex multiply to one shuffle, one multiply, and one
    alternating FMA.
 2. **Treat lane width as a capability, not an assumption.** The current map
-   requires four native scalar lanes, or two interleaved complex samples. It
-   runs for f64 on AVX2 and f32 on NEON; any other widest native width declines
-   before mutation. Production routing requires either an exact-width Hermes
-   dispatch capability or a separately verified native-width specialization.
-   Until then, the incumbent route remains authoritative on those hosts.
+   requires four scalar lanes, or two interleaved complex samples. Hermes
+   `vectorize_lanes::<4, T, _>` selects f64 AVX2 even on AVX-512 hosts and
+   selects f32 NEON or the portable packed backend. A host without an exact
+   match declines before base/resident plan construction or mutation.
 3. **Keep plans immutable and outside the hot call.** The test-gated experiment
    initializes each direction's 496-lane twiddle table once in a thread-local
    `OnceCell`, stores it as `Box<[T]>`, and borrows it for each call. This
@@ -68,8 +67,9 @@ redistribution instead of repeatedly streaming the full transform.
 ## Failure modes and controls
 
 - A width mismatch could silently run the address map with the wrong number of
-  complex samples per register. The kernel checks `LANE_COUNT == 4` before
-  constructing a view or mutating data, and tests assert clean decline.
+  complex samples per register. Exact-count dispatch filters before invoking
+  the kernel, the kernel retains its local `LANE_COUNT == 4` invariant, and
+  tests assert execution or bit-preserving decline.
 - A benchmark could compare instrumented Apollo code with uninstrumented
   references. Const-specialized timing and attribution paths plus codegen
   inspection prevent that recurrence.
@@ -93,9 +93,9 @@ redistribution instead of repeatedly streaming the full transform.
 - **Copy RustFFT's AVX implementation.** Rejected. Apollo keeps one Hermes
   kernel and implements missing first-party SIMD capabilities upstream rather
   than binding algorithm code to vendor intrinsics.
-- **Route the four-lane experiment immediately.** Rejected until exact-width
-  dispatch, production plan ownership, statistical timing, and every value
-  oracle close together.
+- **Route the four-lane experiment after dispatch alone.** Rejected until
+  production plan ownership, statistical timing, and every value oracle close
+  together.
 
 ## Evidence and limits
 
@@ -104,8 +104,9 @@ differential add independent transform and integration checks. Apollo Bench
 establishes pinned same-process timing with exact median intervals. Serialized
 TSC counters locate phase cost but do not establish wall-clock speedup. Codegen
 inspection establishes absence of probes and attribution instructions, not
-runtime latency. The current measurement host has AVX2 and no AVX-512, so the
-exact-width provider requirement remains open for wider x86 hosts.
+runtime latency. Hermes PR #86 establishes the exact-width provider contract;
+Apollo's hosted AVX-512 execution remains the integration gate for this
+consumer revision.
 
 The corrected 100-sample run completed its measurement body in 11.98 seconds
 and produced 96.4799% exact distribution-free median intervals (nanoseconds):
@@ -129,3 +130,10 @@ inspection finds exactly four `LFENCE`/`RDTSC` pairs. The Windows test binary
 is stripped, so the disassembly cannot provide symbol-level attribution; the
 const-specialized source, counter test, and instruction count jointly support
 the zero-instrumentation claim.
+
+## Revision history
+
+- 2026-08-27: Record merged Hermes PR #86 exact-count dispatch and remove the
+  resolved provider-width blocker. Independent review moved resident
+  capability resolution ahead of plan construction and input permutation;
+  production plan ownership remains open.

@@ -22,6 +22,35 @@ warning-denied Rustdoc, provider audit, 223/223 interop patch SemVer,
 remote refs are deleted; their Winograd blob remains on two separately tracked
 stale branches.
 
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 [arch] — Codex
+
+- [x] Correct the instrumented base timing and record the four-lane provider
+      contract before changing routing.
+- [x] Land exact-count dispatch upstream in Hermes and independently review
+      its width, absence, SemVer, target-feature, and code-generation contract.
+- [x] Pin merged Hermes PRs #86/#87 and migrate every fixed-four-lane base,
+      resident, boundary, and codelet kernel from widest-native probing to an
+      explicit four-lane request.
+- [x] Run the focused failing cases, full Apollo FFT value suite,
+      warning-denied lint/docs, and standalone lock/provider checks.
+- [x] Correct the independent review findings: preflight resident capability
+      before plan allocation or mutation, make planar tests verify supported
+      execution or bit-preserving decline, and reconcile PM state.
+- [x] Consolidate exact-lane preflight and apply it before base-plan
+      initialization so unsupported hosts allocate no experimental plan.
+- [ ] Publish the correction to PR #153, collect hosted verification, then move
+      the immutable base plan into `FftPlan1D` as the next vertical increment.
+
+Evidence: focused base/resident analytical and differential cases pass 16/16;
+the complete Apollo FFT suite passes 459/459 in 7.47 seconds; strict
+all-target/all-feature Clippy, warning-denied rustdoc, doctests, provider audit,
+format, and diff checks pass. The standalone lock pins Hermes `8fc54dfa` and
+Mnemosyne `0cd78e5f` and resolves with 36 first-party Git sources. Independent
+review confirmed the fixed-width call-site closure after requiring pre-mutation
+resident capability checks and conditional planar oracles. Hosted AVX-512
+execution remains the unclaimed evidence tier until PR #153 reruns; full
+AArch64 all-target warning debt is filed separately in the backlog.
+
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
 - [x] Record the C/F/offset/strided multidimensional entry baseline and pin the

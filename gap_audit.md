@@ -1,14 +1,17 @@
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
 
-Hosted verification selected a native width other than the four lanes required
-by the AVX2-shaped codelet and resident-row diagnostics. The kernels correctly
-declined before mutation, but their tests asserted that every host must execute
-the four-lane path. The escaped-defect guard is two-sided: a supported-width
-host runs the complete analytical and differential oracles, while any other
-width must return `false` with every input bit unchanged. Cross-target
-verification must not treat runtime-selected native width as a universal host
-property; production routing still requires a separately verified exact-width
-capability before these diagnostics can become a selected path.
+Hosted verification selected a widest-native width other than the four lanes
+required by the AVX2-shaped codelet and resident-row diagnostics. The kernels
+correctly declined before mutation, but their tests initially asserted that
+every host must execute the widest-selected path. Hermes PR #86 added
+`vectorize_lanes::<4, T, _>`: f64 selects AVX2 even on AVX-512 hosts, while a
+host without an exact match returns `None` without invoking the kernel. Apollo
+now requests that capability explicitly for every fixed-four-lane base,
+resident, boundary, and codelet kernel; the analytical and differential
+oracles execute when it is available, and clean decline remains the contract
+otherwise. Resident drivers resolve the capability before constructing their
+cached plan or applying any in-place permutation; this ordering is pinned by
+the supported-or-bit-preserving-decline tests.
 
 The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
 the compared base executed four timestamp reads, three atomic phase
@@ -29,8 +32,8 @@ the zero-instrumentation const specialization; attribution runs afterward in a
 separate specialization. A regression test requires a normal transform to
 leave every phase counter at zero, and optimized-binary inspection requires
 exactly the four serialized timestamp pairs owned by the attributed call. The
-remaining production blockers are an exact four-lane Hermes dispatch contract
-for wider hosts and ownership of the immutable base plan by `FftPlan1D`.
+remaining production blocker is ownership of the immutable base plan by
+`FftPlan1D`.
 
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 

@@ -87,8 +87,8 @@
   in-place involution. Five passes, zero scratch. All five oracles pass:
   direct DFT both directions, round trip, batched differential,
   decline-untouched.
-- **Blocked on an upstream codegen defect, localized with asm evidence.** The
-  row kernel runs ~30x its expected cost (5000 cycles per row). Three body
+- **Historical codegen blocker, resolved by Hermes PR #78.** The initial row
+  kernel ran ~30x its expected cost (5000 cycles per row). Three body
   shapes — indexed array with loops, closure sequence, sixteen named locals —
   all slow, differently. Section timers put all the loss in the two row
   passes; the dispatched symbol in the test binary contains **zero FMA
@@ -96,10 +96,9 @@
   body exceeds the inline budget, falls out of the dispatcher's
   `#[target_feature]` scope, and compiles at baseline codegen.
   `#[inline(always)]` on `LaneKernel::call` does not cure it, so the failure
-  sits inside hermes' `vectorize` dispatch machinery for large bodies — filed
-  as `HS-VECTORIZE-LARGE-KERNEL` upstream. The module is test-gated until
-  that lands; every small kernel in the tree (batched, boundary experiments)
-  inlines fine, which is why this class was never seen before.
+  sat inside Hermes' `vectorize` dispatch machinery for large bodies and was
+  filed as `HS-VECTORIZE-LARGE-KERNEL` upstream. The post-fix evidence and
+  structural verdict are recorded below.
 - **The probe delivered the turn's most important correction regardless:**
   the four engines measured in ONE pinned process at N = 1024 —
 
@@ -112,9 +111,9 @@
   "weak" range, and the true RustFFT gap is 1.4x — not the 2.4x that
   cross-instrument arithmetic (pinned apollo against unpinned census
   references, and `process()` versus `process_with_scratch`) had been
-  reporting. Matching PhastFT at mid sizes on P-cores is nearly done;
-  RustFFT-parity and the E-core gap are what the resident shape targets once
-  the hermes defect is fixed.
+  reporting. Matching PhastFT at mid sizes on P-cores is nearly done; the
+  post-fix verdict below shows this resident shape cannot close the remaining
+  RustFFT or E-core gaps.
 
 ## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
@@ -178,7 +177,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: Hermes exact-width capability
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: plan ownership
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -252,23 +251,53 @@
   and is build-cost evidence, not runtime evidence. Serialized phase
   attribution, run separately, reports 164/521/452 TSC P-core and
   96/232/300 TSC E-core (redistribution/rows/columns).
-- **Remaining production requirements:** Hermes must dispatch an exact
-  four-scalar-lane capability on wider native-width hosts, or Apollo must add
-  a separately verified native-width kernel. `FftPlan1D` must own the
-  immutable base plan before N = 128 routing changes. ADR 0041 is Accepted
-  and records the address map, failure modes, evidence, and provider boundary.
+- **Provider closure:** Hermes PR #86 merged exact-count dispatch as
+  `5734b85a`; the four-lane f64 kernel now selects AVX2 on AVX-512 hosts, and
+  an unavailable width returns `None` without invoking or mutating the kernel.
+  PR #87 merged the AArch64 all-target import correction as `4f6a1ebb`;
+  Apollo's standalone lock includes that correction through Hermes `8fc54dfa`,
+  whose later delta is CI/PM configuration only.
+- **Remaining production requirement:** move the immutable base plan into
+  `FftPlan1D` before N = 128 routing changes. ADR 0041 is Accepted and
+  records the address map, failure modes, evidence, and provider boundary.
   **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** `components/base128`, ADR 0041, this item entry, and synchronized
-  evidence through the review-correction commit. **Last update:** 2026-08-27.
+  **Lease:** fixed-four-lane kernels under `components/{base128,resident,
+  batched,codelet}`, `components/test_support.rs`, their module comments, the
+  Hermes lock pin, and this item's PM entries through the exact-width adoption
+  commit.
+  **Last update:** 2026-08-27.
+- **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
+  through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
+  before constructing plans or mutating input, and the base shares that
+  preflight so unsupported hosts do not initialize its plan. Independent review confirmed
+  the complete fixed-width call-site set after requiring that ordering and the
+  planar decline oracle. Focused base/resident coverage passes 16/16, the
+  complete Apollo FFT suite passes 459/459, strict all-target and all-feature
+  Clippy passes, and the standalone lock resolves with 36 first-party Git
+  sources. Hosted AVX-512 execution remains PR #153's merge gate.
 - **Small-size gate standing (`base128::pinned_probe`):** production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) implement and verify the
-  exact-width Hermes capability; (2) move the immutable base plan into
-  `FftPlan1D` and route supported N = 128 calls; (3) tighten the base toward
+  n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
+  into `FftPlan1D` and route supported N = 128 calls; (2) tighten the base toward
   RustFFT after a fresh profile of the now-uninstrumented specialization;
-  (4) assemble N = 1024 = 8 x 128 only when the measured inner and outer
+  (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
+
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — todo
+
+- **Outcome:** `apollo-fft` builds every library and test target warning-free on
+  AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks
+  do not leave unused parameters.
+- **Scope/non-goals:** correct cfg ownership in Stockham precision/stage/tests
+  and radix-composite cache helpers; do not alter transform math or suppress
+  diagnostics. **Risk:** patch correctness, broad test-target closure.
+- **Acceptance:** warning-denied AArch64 all-target check passes, host strict
+  Clippy stays green, and the complete Apollo FFT Nextest suite retains all
+  analytical/differential results. Entry evidence: after Moirai PR #170 fixed
+  the first provider warnings, the cross-check reaches 75 Apollo diagnostics:
+  x86-only Stockham imports/test calls, cfg-unused cache parameters, and
+  target-specific dead code.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28

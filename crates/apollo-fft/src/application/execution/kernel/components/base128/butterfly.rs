@@ -26,6 +26,7 @@
 //! production routing must retain its incumbent path until Hermes can select
 //! this exact width or this kernel gains a native-width variant.
 
+use crate::application::execution::kernel::components::lane_capability::exact_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
@@ -381,14 +382,20 @@ where
     Complex<T>: bytemuck::Pod,
 {
     assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
+    if !exact_lanes_supported::<4, T>() {
+        return false;
+    }
     T::with_cached_plan_128::<INVERSE, _>(|plan| {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-        hermes_simd::vectorize(Transform128::<T, INVERSE, MEASURE_PHASES> { data: flat, plan })
+        hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
+            data: flat,
+            plan,
+        })
+        .unwrap_or(false)
     })
 }
 
-/// Runs the 128-point base butterfly if the dispatched width supports it,
-/// reporting whether it did.
+/// Runs the 128-point base butterfly when a four-lane backend is available.
 ///
 /// # Panics
 ///

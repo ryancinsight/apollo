@@ -177,8 +177,7 @@ where
     }
 }
 
-/// Runs the register-resident N = 16 transform if the dispatched width
-/// supports it, reporting whether it did.
+/// Runs the register-resident N = 16 transform when four lanes are available.
 ///
 /// # Panics
 ///
@@ -192,7 +191,8 @@ where
 {
     assert_eq!(data.len(), 16, "the N = 16 codelet requires 16 samples");
     let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-    hermes_simd::vectorize(Transform16::<T, INVERSE, NORMALIZE> { data: flat })
+    hermes_simd::vectorize_lanes::<4, T, _>(Transform16::<T, INVERSE, NORMALIZE> { data: flat })
+        .unwrap_or(false)
 }
 
 // Windows-gated: pins threads through Win32 to control the hybrid scheduler.
