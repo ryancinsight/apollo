@@ -54,6 +54,23 @@
   passed the Rust workspace, Python, lock, and executable-identity gates. The
   seven-binary local smoke completed in about 26 seconds.
 
+## ATLAS-APOLLO-BENCH-SMOKE-COLD-COMPILE-2026-08-27 — Keep compilation outside the runtime bound [ci] [patch] — in progress
+
+- **Failure:** PR #153 run 33112324749 wrapped cold benchmark compilation and
+  execution in one 60-second timeout. Compilation consumed 39.9 seconds and
+  `cargo test --benches` redundantly ran 453 library tests for 16.5 seconds,
+  leaving about 3.6 seconds for seven smoke binaries; the unchanged census
+  timed out at N = 262144.
+- **Outcome:** compile the seven named benchmark targets outside the execution
+  timeout, then run only those targets inside the unchanged 60-second bound.
+  No benchmark input, sample, workload, mode, assertion, or timeout changes.
+- **Acceptance oracle:** the exact command selects no library-test binary; all
+  seven benchmark executables complete in smoke mode within 60 seconds after
+  their no-run build; PR #153's Rust workspace job passes.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `.github/workflows/ci.yml` and this item entry through the fix
+  commit. **Last update:** 2026-08-27.
+
 ## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 
 - **The shape the references have, implemented:** four-step at N = 1024 with
