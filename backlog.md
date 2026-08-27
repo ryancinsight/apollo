@@ -1,5 +1,19 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 — Ten stale local branches hold unique patches — todo
+
+- **Inventory (2026-08-27, `git cherry origin/main`):** cascade/hermes-07 (3),
+  codex/apollo-arch-006-junk-drawer-rename (2), codex/fix-apollo-package-sources
+  (4), codex/fix-atlas-sha (1), feat/apollo-benchmark-generator (2),
+  fix/apollo-fft-workspace-buffers (1), fix/apollo-large-composite-wiring (3),
+  fix/apollo-sht-thread-local-lint (1), perf/apollo-f32-rader-narrowing (5),
+  style/apollo-butterfly-lint-consolidation-217 (1) — unique patch counts in
+  parentheses; every branch is takeover material (salvage: rebase onto current
+  main, verify, integrate — or prove superseded and delete). Process
+  closest-to-done first, one branch per increment. PR #142
+  (codex/fix-apollo-bench-smoke-runtime, held by the apollo-stockham-throughput
+  lane) is separate live review work.
+
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — in progress
 
 - **Outcome:** two- and three-dimensional complex transforms preserve Leto's
@@ -38,7 +52,7 @@
   **Entry evidence:** the full engine census completed its allocation checks
   under `cargo test --bench engine_census` but hit the runtime guard at 103.29
   seconds because the test profile executes every timed arm unoptimized.
-## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — built and blocked 2026-08-28
+## ATLAS-APOLLO-RESIDENT-ROWS-2026-08-28 — Register-resident row transforms [arch] — measured: loses to batched as-built 2026-08-28
 
 - **The shape the references have, implemented:** four-step at N = 1024 with
   each 32-sample row transform held entirely in registers — interleaved rows
@@ -96,6 +110,36 @@
 - **Acceptance oracle:** the reproducer's row pass drops from ~5000 to the
   order of 200 cycles per row; apollo's resident probe then re-measures the
   shape against the references.
+- **Post-fix verdict (hermes PR #78 merged):** the dispatch fix landed and
+  bit — resident 26.5 us → 6.5 us at N = 1024 P-core; row passes now
+  ~171 cycles per 32-point row, near their port-limited bound. Per-pass TSC
+  attribution (`RESIDENT_SECTIONS=1`): rows1 5462, rows2 7659, transposes
+  1369 + 1430, untangle 5086. Structural verdict: the two row passes alone
+  (13.1k) exceed the batched route's entire budget (~11k TSC ≈ 3423 ns), and
+  the shape adds 7.9k of data movement. The interleaved butterfly is
+  shuffle-port-bound (3 shuffles per complex multiply, one shuffle-port-bound
+  chain of ~240 per row) where batched planar arithmetic is FMA-bound.
+  Incremental tuning cannot close this; the winning construction is
+  RustFFT's — planar-register rows with the transposes fused into the row
+  load/store networks. Module stays test-gated; follow-on item below.
+
+## ATLAS-APOLLO-FUSED-PLANAR-ROWS — Planar-register rows with fused transposes [arch] — todo
+
+- **Outcome:** the four-step at N = 1024 with rows held in planar register
+  halves (8 re + 8 im ymm — the same sixteen-register fit) so butterflies are
+  pure FMA traffic with zero shuffles per stage, and the array transposes
+  fused into the row load/store shuffle networks so the transform is two
+  passes over the data, not five. This is the RustFFT AVX construction; its
+  measured 2455 ns (≈7.9k TSC) at N = 1024 P-core is the existence proof and
+  the acceptance bar.
+- **Evidence base:** resident-rows attribution above — rows 13.1k TSC
+  (shuffle-bound), movement passes 7.9k; batched total ~11k; RustFFT ~7.9k.
+- **Acceptance oracle:** pinned four-engine probe at N = 1024 — the fused
+  planar shape at or below batched (3423 ns P-core) to merge as an
+  experiment; at or below RustFFT (2455 ns) to take over the route.
+- **Risk / change class:** [arch] — new kernel shape; falls back to batched
+  for any undispatched width or length.
+
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
 

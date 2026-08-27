@@ -1,17 +1,21 @@
 //! Four-step with register-resident row transforms.
 //!
-//! **Status: correct, measured, blocked on an upstream codegen defect** —
-//! compiled for tests only. All five oracles pass, but the row kernel runs at
-//! about thirty times its expected cost: its fully unrolled body exceeds the
-//! inline budget, falls out of the dispatcher's `#[target_feature]` scope,
-//! and compiles at baseline codegen — the dispatched symbol contains **zero**
-//! FMA instructions and re-enters feature detection per operation.
-//! `#[inline(always)]` on the kernel's `call` does not cure it, so the
-//! failure sits inside the `vectorize` dispatch machinery for large bodies —
-//! filed upstream as the hermes item this module's board entry names. The
-//! same-process probe beside this module is independently valuable: it is the
-//! four-engine pinned comparison that corrected the cross-instrument gap
-//! arithmetic.
+//! **Status: correct, measured at true cost, slower than the batched route**
+//! — compiled for tests only. All five oracles pass. The hermes dispatch
+//! defect this module exposed (large kernel bodies outlined from the
+//! `#[target_feature]` frame to baseline codegen) is fixed upstream, which
+//! took the kernel from ~26.5 us to 6.5 us at N = 1024 pinned; the row
+//! passes now run near their port-limited bound (~171 cycles per 32-point
+//! row). What that reveals is structural: the two row passes alone cost more
+//! TSC cycles than the batched route's entire transform, and the shape pays
+//! ~38% more in the two transposes and the closing involution
+//! (`RESIDENT_SECTIONS=1` prints the per-pass attribution). The interleaved
+//! butterfly is shuffle-port-bound where the batched planar arithmetic is
+//! FMA-bound, so beating batched from this shape needs planar-register rows
+//! and transposes fused into the row load/store networks — the RustFFT
+//! construction — not incremental tuning here. The same-process probe beside
+//! this module is independently valuable: it is the four-engine pinned
+//! comparison that corrected the cross-instrument gap arithmetic.
 //!
 //! The batched kernel streams the array once per fused stage pair; at
 //! N = 1024 that is ten-plus passes, and every alternative inside that shape
@@ -460,32 +464,55 @@ where
     }
     let plan = T::cached_resident_plan::<INVERSE>(ROW * ROW);
 
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    macro_rules! sect {
+        ($label:literal, $body:block) => {{
+            let t0 = unsafe { core::arch::x86_64::_rdtsc() };
+            let out = $body;
+            let t1 = unsafe { core::arch::x86_64::_rdtsc() };
+            if std::env::var_os("RESIDENT_SECTIONS").is_some() {
+                eprintln!("RSECT {} {}", $label, t1 - t0);
+            }
+            out
+        }};
+    }
+    #[cfg(not(all(test, windows, target_arch = "x86_64")))]
+    macro_rules! sect {
+        ($label:literal, $body:block) => {
+            $body
+        };
+    }
+
     // The width check runs on an untouched buffer: the first row pass reports
     // before mutating only after the transpose, so probe the dispatch first
     // with a no-op row pass over a stack copy? Cheaper and exact: the row
     // kernels themselves gate on width, and the transpose that precedes them
     // is undone if they decline.
-    transpose_samples(data, ROW);
+    sect!("t1", { transpose_samples(data, ROW) });
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-        if !hermes_simd::vectorize(ResidentRows::<T, false> {
-            data: flat,
-            plan: plan.as_ref(),
+        if !sect!("rows1", {
+            hermes_simd::vectorize(ResidentRows::<T, false> {
+                data: flat,
+                plan: plan.as_ref(),
+            })
         }) {
             transpose_samples(data, ROW);
             return false;
         }
     }
-    transpose_samples(data, ROW);
+    sect!("t2", { transpose_samples(data, ROW) });
     {
         let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-        let handled = hermes_simd::vectorize(ResidentRows::<T, true> {
-            data: flat,
-            plan: plan.as_ref(),
+        let handled = sect!("rows2", {
+            hermes_simd::vectorize(ResidentRows::<T, true> {
+                data: flat,
+                plan: plan.as_ref(),
+            })
         });
         debug_assert!(handled, "width accepted the first pass");
     }
-    untangle_output(data, ROW);
+    sect!("untangle", { untangle_output(data, ROW) });
     true
 }
 
