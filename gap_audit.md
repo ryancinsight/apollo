@@ -9,6 +9,29 @@ width must return `false` with every input bit unchanged. Cross-target
 verification must not treat runtime-selected native width as a universal host
 property; production routing still requires a separately verified exact-width
 capability before these diagnostics can become a selected path.
+
+The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
+the compared base executed four timestamp reads, three atomic phase
+accumulators, and an atomic call counter per transform while the references did
+not. The corrected instrument monomorphizes timing and attribution separately,
+borrows the immutable thread-local plan without an `Arc` increment, and creates
+vectors from the existing Hermes capability token. Its 100-sample 96.4799%
+exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] P-core and
+146.401 ns [146.364, 146.468] E-core. The incumbent Apollo route is 687.152 ns
+[686.937, 687.564] and 1844.331 ns [1843.457, 1845.866]; PhastFT is 330.019 ns
+[329.688, 330.503] and 148.974 ns [148.899, 149.065]. RustFFT remains faster at
+181.788 ns [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The corrected
+base therefore clears the incumbent route and PhastFT on this AVX2 host, but it
+does not close the RustFFT kernel gap.
+
+The escaped benchmark-defect guard is structural: performance comparisons use
+the zero-instrumentation const specialization; attribution runs afterward in a
+separate specialization. A regression test requires a normal transform to
+leave every phase counter at zero, and optimized-binary inspection requires
+exactly the four serialized timestamp pairs owned by the attributed call. The
+remaining production blockers are an exact four-lane Hermes dispatch contract
+for wider hosts and ownership of the immutable base plan by `FftPlan1D`.
+
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 
 Evidence tier: exact allocation accounting — `kernel/retained_footprint.rs`,

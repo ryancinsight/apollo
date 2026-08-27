@@ -20,19 +20,22 @@
 //!    `W_128^{a * k2}`, a lane-wise 8-point DIF runs across the row index,
 //!    and register `q` stores to output row `rev3(q)` — natural output
 //!    order, 32-byte contiguous stores.
+//!
+//! The register map is defined for four native scalar lanes (two interleaved
+//! complex samples). Other native widths decline before touching the input;
+//! production routing must retain its incumbent path until Hermes can select
+//! this exact width or this kernel gains a native-width variant.
 
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::cell::OnceCell;
 
-/// Per-phase TSC accumulators for the pinned attribution instrument; active
-/// only while the probe raises the flag.
+/// Per-phase TSC accumulators for the separately instantiated attribution
+/// instrument.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 pub(crate) mod phase_meter {
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    pub(crate) static ACTIVE: AtomicBool = AtomicBool::new(false);
+    use std::sync::atomic::{AtomicU64, Ordering};
     pub(crate) static PHASES: [AtomicU64; 3] =
         [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
     pub(crate) static CALLS: AtomicU64 = AtomicU64::new(0);
@@ -42,8 +45,13 @@ pub(crate) mod phase_meter {
     )]
     #[inline(always)]
     pub(crate) fn stamp() -> u64 {
-        // SAFETY: rdtsc has no preconditions on x86_64.
-        unsafe { core::arch::x86_64::_rdtsc() }
+        // SAFETY: x86_64 guarantees SSE2, so LFENCE is available. It orders
+        // prior work before RDTSC; these stamps exist only in the separately
+        // monomorphized attribution variant, never in the comparison kernel.
+        unsafe {
+            core::arch::x86_64::_mm_lfence();
+            core::arch::x86_64::_rdtsc()
+        }
     }
     #[expect(
         clippy::inline_always,
@@ -51,9 +59,7 @@ pub(crate) mod phase_meter {
     )]
     #[inline(always)]
     pub(crate) fn add(phase: usize, dt: u64) {
-        if ACTIVE.load(Ordering::Relaxed) {
-            PHASES[phase].fetch_add(dt, Ordering::Relaxed);
-        }
+        PHASES[phase].fetch_add(dt, Ordering::Relaxed);
     }
 }
 
@@ -71,7 +77,7 @@ const REV3: [usize; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 /// `g = 0..8` at chunk 12.
 pub(crate) struct Plan128<T> {
     /// Dup-split twiddles, 496 lanes (124 chunks).
-    table: Vec<T>,
+    table: Box<[T]>,
     /// `W_8^1` and `W_8^3` as complex values for the column-pass splats.
     col: [[T; 2]; 2],
 }
@@ -106,37 +112,37 @@ impl<T: MixedRadixScalar> Plan128<T> {
             }
         }
         let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
-        Self { table, col }
+        Self {
+            table: table.into_boxed_slice(),
+            col,
+        }
     }
 }
 
-type PlanCell<T> = RefCell<[Option<Arc<Plan128<T>>>; 2]>;
+type PlanCell<T> = [OnceCell<Plan128<T>>; 2];
 
 thread_local! {
-    static PLAN_128_F64: PlanCell<f64> = const { RefCell::new([None, None]) };
-    static PLAN_128_F32: PlanCell<f32> = const { RefCell::new([None, None]) };
+    static PLAN_128_F64: PlanCell<f64> = const { [OnceCell::new(), OnceCell::new()] };
+    static PLAN_128_F32: PlanCell<f32> = const { [OnceCell::new(), OnceCell::new()] };
 }
 
 /// Scalars whose 128-point plans are cached per thread.
 pub(crate) trait Plan128Cache:
     MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
 {
-    fn cached_plan_128<const INVERSE: bool>() -> Arc<Plan128<Self>>;
+    fn with_cached_plan_128<const INVERSE: bool, R>(f: impl FnOnce(&Plan128<Self>) -> R) -> R;
 }
 
 macro_rules! impl_plan_cache {
     ($t:ty, $cell:ident) => {
         impl Plan128Cache for $t {
-            fn cached_plan_128<const INVERSE: bool>() -> Arc<Plan128<Self>> {
+            fn with_cached_plan_128<const INVERSE: bool, R>(
+                f: impl FnOnce(&Plan128<Self>) -> R,
+            ) -> R {
                 $cell.with(|c| {
                     let slot = usize::from(INVERSE);
-                    let mut cell = c.borrow_mut();
-                    if let Some(plan) = &cell[slot] {
-                        return Arc::clone(plan);
-                    }
-                    let plan = Arc::new(Plan128::<$t>::new::<INVERSE>());
-                    cell[slot] = Some(Arc::clone(&plan));
-                    plan
+                    let plan = c[slot].get_or_init(Plan128::<$t>::new::<INVERSE>);
+                    f(plan)
                 })
             }
         }
@@ -147,13 +153,14 @@ impl_plan_cache!(f64, PLAN_128_F64);
 impl_plan_cache!(f32, PLAN_128_F32);
 
 /// The 128-point transform as a lane kernel over interleaved samples.
-pub(crate) struct Transform128<'a, T, const INVERSE: bool> {
+pub(crate) struct Transform128<'a, T, const INVERSE: bool, const MEASURE_PHASES: bool> {
     /// Interleaved samples, 256 lanes.
     pub(crate) data: &'a mut [T],
     pub(crate) plan: &'a Plan128<T>,
 }
 
-impl<T, const INVERSE: bool> LaneKernel<T> for Transform128<'_, T, INVERSE>
+impl<T, const INVERSE: bool, const MEASURE_PHASES: bool> LaneKernel<T>
+    for Transform128<'_, T, INVERSE, MEASURE_PHASES>
 where
     T: LaneScalar + MixedRadixScalar,
 {
@@ -175,10 +182,11 @@ where
         if <A as SimdStorage<T>>::LANE_COUNT != 4 {
             return false;
         }
-        // Views hoist the support probe and bounds reasoning once per call;
-        // every offset below is a multiple of the four-lane width, so chunk
-        // indices are exact. The checked-slice load form spends a visible
-        // share of the transform in bounds checks and Result branches.
+        // The dispatch token proves support before this kernel begins, while
+        // views hoist bounds reasoning once per slice. Every offset below is
+        // a multiple of the four-lane width, so chunk indices are exact. The
+        // checked-slice load form spends a visible share of the transform in
+        // repeated probes, bounds checks, and Result branches.
         let tab_view = simd.view(&self.plan.table);
         // Dup-split complex multiply: one shuffle, one multiply, one
         // alternating FMA (see the plan-layout doc).
@@ -193,14 +201,22 @@ where
         let neg = T::from_precise(-1.0);
         // Sign vector of the in-register sample butterfly and the blend mask
         // selecting the high complex of a register.
-        let sgn = hermes_simd::Vector::<T, A>::load_unaligned_from_slice(&[one, one, neg, neg])
-            .expect("invariant: four-lane constant");
-        let hi_mask =
-            hermes_simd::Vector::<T, A>::load_unaligned_from_slice(&[zero, zero, neg, neg])
-                .expect("invariant: four-lane constant");
+        let constants = [one, one, neg, neg, zero, zero, neg, neg];
+        let constants = simd.view(&constants);
+        let sgn = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 0);
+        let hi_mask = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 1);
+        let zero_complex = ComplexReg::from_interleaved(simd.zero());
+        let complex_splat = |sample: Complex<T>| {
+            let (interleaved, _) = simd.splat(sample.re).interleave(simd.splat(sample.im));
+            ComplexReg::from_interleaved(interleaved)
+        };
 
         #[cfg(all(test, windows, target_arch = "x86_64"))]
-        let t0 = phase_meter::stamp();
+        let t0 = if MEASURE_PHASES {
+            phase_meter::stamp()
+        } else {
+            0
+        };
         // Phase 1: redistribute into DIT-ordered staging rows. Block pair
         // (m, m + 8) yields, per row `a`, the sample pair
         // [x[8m + a], x[8m + 64 + a]] — a DIT-16 first-stage operand pair —
@@ -224,17 +240,19 @@ where
         }
 
         #[cfg(all(test, windows, target_arch = "x86_64"))]
-        let t1 = {
+        let t1 = if MEASURE_PHASES {
             let t = phase_meter::stamp();
             phase_meter::add(0, t - t0);
             t
+        } else {
+            0
         };
         // Phase 2: register-resident DIT-16 per staging row; bit reversal was
         // absorbed by phase 1, so output lands in natural spectral order.
         let mut stg_rows = simd.view_mut(&mut staging);
         for a in 0..8usize {
             let row = a * 8;
-            let mut r = [ComplexReg::<T, A>::zero(); 8];
+            let mut r = [zero_complex; 8];
             for (k, reg) in r.iter_mut().enumerate() {
                 *reg = ComplexReg::from_interleaved(hermes_simd::Vector::from_view_chunk(
                     &stg_rows,
@@ -280,21 +298,21 @@ where
         let _ = stg_rows;
 
         #[cfg(all(test, windows, target_arch = "x86_64"))]
-        let t2m = {
+        let t2m = if MEASURE_PHASES {
             let t = phase_meter::stamp();
             phase_meter::add(1, t - t1);
             t
+        } else {
+            0
         };
         // Phase 3: mixed-radix twiddle and the lane-wise 8-point DIF across
         // rows, one natural column pair per group.
-        let w8_1 =
-            ComplexReg::<T, A>::splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
-        let w8_3 =
-            ComplexReg::<T, A>::splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
+        let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
+        let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
         let stg = simd.view(&staging);
         let mut out = simd.view_mut(self.data);
         for g in 0..8usize {
-            let mut c = [ComplexReg::<T, A>::zero(); 8];
+            let mut c = [zero_complex; 8];
             for (a, reg) in c.iter_mut().enumerate() {
                 *reg = ComplexReg::from_interleaved(hermes_simd::Vector::from_view_chunk(
                     &stg,
@@ -346,15 +364,27 @@ where
             }
         }
         #[cfg(all(test, windows, target_arch = "x86_64"))]
-        {
+        if MEASURE_PHASES {
             let t = phase_meter::stamp();
             phase_meter::add(2, t - t2m);
-            if phase_meter::ACTIVE.load(std::sync::atomic::Ordering::Relaxed) {
-                phase_meter::CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
+            phase_meter::CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         true
     }
+}
+
+fn transform_128_with_measurement<T, const INVERSE: bool, const MEASURE_PHASES: bool>(
+    data: &mut [Complex<T>],
+) -> bool
+where
+    T: Plan128Cache,
+    Complex<T>: bytemuck::Pod,
+{
+    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
+    T::with_cached_plan_128::<INVERSE, _>(|plan| {
+        let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+        hermes_simd::vectorize(Transform128::<T, INVERSE, MEASURE_PHASES> { data: flat, plan })
+    })
 }
 
 /// Runs the 128-point base butterfly if the dispatched width supports it,
@@ -368,11 +398,15 @@ where
     T: Plan128Cache,
     Complex<T>: bytemuck::Pod,
 {
-    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    let plan = T::cached_plan_128::<INVERSE>();
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-    hermes_simd::vectorize(Transform128::<T, INVERSE> {
-        data: flat,
-        plan: plan.as_ref(),
-    })
+    transform_128_with_measurement::<T, INVERSE, false>(data)
+}
+
+/// Runs the phase-attributed variant of the 128-point base butterfly.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) fn transform_128_measured<T, const INVERSE: bool>(data: &mut [Complex<T>]) -> bool
+where
+    T: Plan128Cache,
+    Complex<T>: bytemuck::Pod,
+{
+    transform_128_with_measurement::<T, INVERSE, true>(data)
 }

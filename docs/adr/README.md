@@ -46,5 +46,5 @@
 | [0038](0038-single-scalar-seam-public-fft-api.md) | One scalar seam for the public FFT API | Accepted |
 | [0039](0039-one-dimensional-power-of-two-routing.md) | One-dimensional power-of-two routing | Accepted |
 | [0040](0040-leto-fft-layout-ownership.md) | Leto FFT layout ownership | Accepted |
-| [0041](0041-fused-planar-register-rows.md) | Fused planar-register rows for the mid-size four-step | Proposed |
+| [0041](0041-l1-resident-interleaved-base.md) | L1-resident interleaved base transforms | Accepted |
 | [0042](0042-avx-stockham-backend-retained.md) | The AVX Stockham backend is retained; f64 N = 256/512 route scalar | Accepted |

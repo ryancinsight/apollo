@@ -6,9 +6,14 @@
 //! stores land in natural output order. Two-and-a-half passes over the data
 //! where the batched four-step pays six.
 //!
-//! The construction is measurement-gated: it beats the batched route only if
-//! the inner 128-point transform runs at RustFFT's class (~600 TSC). The
-//! pinned probe beside this module measures that gate first.
+//! The current register map requires four native scalar lanes: f64 on AVX2 and
+//! f32 on NEON. A different widest native width declines without mutation.
+//! The distribution-free median interval clears the production N = 128 route
+//! on both measured core types. The construction remains test-only until an
+//! exact-width capability is available on every routed host and the immutable
+//! plan moves into production plan ownership. The pinned probe times the
+//! zero-instrumentation specialization; phase attribution runs as a separate
+//! const-specialized pass.
 
 pub(crate) mod butterfly;
 

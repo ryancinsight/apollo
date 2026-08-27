@@ -178,7 +178,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: base evidence correction
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: Hermes exact-width capability
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -229,41 +229,46 @@
   full 128-base construction; re-derive after they land.
 - **Risk / change class:** [arch]; production routing stays on batched
   until all oracles pass.
-- **Base butterfly delivered (2026-08-27, `components/base128`):** the
-  128-point mixed-radix 8x16 — a gather-free redistribution whose block-pair
-  concatenations land staging rows already in DIT order (the bit reversal
-  costs nothing), register-resident DIT-16 rows, and a twiddled lane-wise
-  8-point column pass with natural-order contiguous stores. Twiddles ship
-  dup-split so a complex multiply is one shuffle + multiply + fmaddsub
-  instead of three shuffles. Four oracles green (direct DFT both
-  directions, round trip, production-route differential). **Pinned:
-  326 ns P-core / 194 ns E-core** — 2.1x / 9.5x faster than the production
-  n = 128 route (687 / 1843 ns) and ahead of PhastFT (329 / 141);
-  RustFFT (181 / 84) is 1.8x / 2.3x away, phase attribution 130 / 469 / 428
-  TSC (redistribute / rows / columns). Iteration log: checked-slice loads →
-  view chunks (−5%), dup-split twiddles (−12%), hoisted views + fma stage-1
-  (−2%).
-- **Independent review correction:** the first pinned comparison is not valid
-  timing evidence. Test builds execute four `RDTSC` stamps in every base call,
-  and the timed base arm additionally enables three atomic phase accumulators
-  plus a call counter while both references remain uninstrumented. Separate
-  zero-instrumentation timing from const-specialized phase attribution, remove
-  the per-call atomic plan clone and token-internal support reprobes, and state
-  the actual four-lane capability boundary before replacing the measurements.
-  ADR 0041 must also be rewritten from its superseded Proposed decision to the
-  current accepted 128-base direction. **Review integrator:** Codex
-  `01a0253c-6013-7552-99cc-36bbbcf77f6d`. **Lease:**
-  `components/base128`, ADR 0041, this item entry, and synchronized evidence
-  through the review-correction commit. **Last update:** 2026-08-27.
+- **Base butterfly corrected (2026-08-27, `components/base128`):** the
+  128-point mixed-radix 8x16 uses gather-free redistribution, DIT-ordered
+  staging, register-resident DIT-16 rows, and a twiddled lane-wise DIF-8
+  column pass with natural-order contiguous stores. Six oracles pass: direct
+  DFT in both directions, round trip, incumbent differential, f32 execution
+  or clean decline, and zero phase-meter effects in the comparison
+  specialization. Plan storage is one immutable boxed table per direction;
+  calls borrow it from `OnceCell` without allocation or atomic reference-count
+  traffic. Constants use the existing Hermes dispatch token, so internal
+  support probes do not recur.
+- **Corrected pinned evidence:** the first 326/194 ns figures are invalid
+  because they included four timestamp reads and four atomic updates per
+  transform. The 100-sample zero-instrumentation medians and 96.4799% exact
+  intervals are 294.518 ns [294.275, 294.826] P-core and 146.401 ns
+  [146.364, 146.468] E-core. The incumbent route is 687.152 ns
+  [686.937, 687.564] and 1844.331 ns [1843.457, 1845.866], so the base is
+  2.33x and 12.60x faster. PhastFT is 330.019 ns [329.688, 330.503] and
+  148.974 ns [148.899, 149.065], while RustFFT remains faster at 181.788 ns
+  [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The measurement body
+  completes in 11.98 seconds; its optimized test-binary rebuild took 2m15s
+  and is build-cost evidence, not runtime evidence. Serialized phase
+  attribution, run separately, reports 164/521/452 TSC P-core and
+  96/232/300 TSC E-core (redistribution/rows/columns).
+- **Remaining production requirements:** Hermes must dispatch an exact
+  four-scalar-lane capability on wider native-width hosts, or Apollo must add
+  a separately verified native-width kernel. `FftPlan1D` must own the
+  immutable base plan before N = 128 routing changes. ADR 0041 is Accepted
+  and records the address map, failure modes, evidence, and provider boundary.
+  **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `components/base128`, ADR 0041, this item entry, and synchronized
+  evidence through the review-correction commit. **Last update:** 2026-08-27.
 - **Small-size gate standing (`base128::pinned_probe`):** production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) promote the base to the
-  production n = 128 route (immediate 2-9x for that size); (2) tighten the
-  base toward RustFFT's ~580 TSC — the P-core runs it at ~1.5 IPC where the
-  E-core reaches ~2.6, so the next experiment is two-row interleaving to
-  break the DIT chain latency; (3) assemble N = 1024 = 8 x 128 only when
-  the inner reaches ~700 TSC, where the outer arithmetic first pays.
+  n = 128 E-core is 22x. **Next increments:** (1) implement and verify the
+  exact-width Hermes capability; (2) move the immutable base plan into
+  `FftPlan1D` and route supported N = 128 calls; (3) tighten the base toward
+  RustFFT after a fresh profile of the now-uninstrumented specialization;
+  (4) assemble N = 1024 = 8 x 128 only when the measured inner and outer
+  traffic model predicts a complete-transform win.
 
 
 ## ATLAS-APOLLO-TWIDDLE-UNIFY-2026-08-28 — One twiddle representation per size range [patch] — done 2026-08-28
