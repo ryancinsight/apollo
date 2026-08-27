@@ -178,7 +178,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: base delivered
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: base evidence correction
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -243,6 +243,18 @@
   TSC (redistribute / rows / columns). Iteration log: checked-slice loads →
   view chunks (−5%), dup-split twiddles (−12%), hoisted views + fma stage-1
   (−2%).
+- **Independent review correction:** the first pinned comparison is not valid
+  timing evidence. Test builds execute four `RDTSC` stamps in every base call,
+  and the timed base arm additionally enables three atomic phase accumulators
+  plus a call counter while both references remain uninstrumented. Separate
+  zero-instrumentation timing from const-specialized phase attribution, remove
+  the per-call atomic plan clone and token-internal support reprobes, and state
+  the actual four-lane capability boundary before replacing the measurements.
+  ADR 0041 must also be rewritten from its superseded Proposed decision to the
+  current accepted 128-base direction. **Review integrator:** Codex
+  `01a0253c-6013-7552-99cc-36bbbcf77f6d`. **Lease:**
+  `components/base128`, ADR 0041, this item entry, and synchronized evidence
+  through the review-correction commit. **Last update:** 2026-08-27.
 - **Small-size gate standing (`base128::pinned_probe`):** production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
