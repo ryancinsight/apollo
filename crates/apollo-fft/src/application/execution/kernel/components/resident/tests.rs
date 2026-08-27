@@ -8,7 +8,7 @@ use crate::application::execution::kernel::components::test_support::executed_or
 use eunomia::Complex64;
 use std::f64::consts::TAU;
 
-fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
+pub(super) fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
     let n = input.len();
     let sign = if inverse { 1.0 } else { -1.0 };
     (0..n)
@@ -24,7 +24,7 @@ fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
         .collect()
 }
 
-fn signal() -> Vec<Complex64> {
+pub(super) fn signal() -> Vec<Complex64> {
     (0..1024)
         .map(|i| {
             let x = i as f64;
@@ -33,12 +33,12 @@ fn signal() -> Vec<Complex64> {
         .collect()
 }
 
-fn tolerance(input: &[Complex64]) -> f64 {
+pub(super) fn tolerance(input: &[Complex64]) -> f64 {
     let l1: f64 = input.iter().map(|v| v.re.hypot(v.im)).sum();
     16.0 * 10.0 * (f64::EPSILON / 2.0) * l1
 }
 
-fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
+pub(super) fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
     a.iter()
         .zip(b)
         .map(|(x, y)| (x.re - y.re).hypot(x.im - y.im))

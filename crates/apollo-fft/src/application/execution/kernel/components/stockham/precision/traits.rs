@@ -2,10 +2,9 @@ pub(crate) mod private {
     pub trait Sealed {}
 }
 
-#[cfg(any(
-    test,
-    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
-))]
+/// Auto-vectorized scalar f64 backend. Unconditional: beyond serving builds
+/// without AVX/FMA, production routes f64 N = 256 and 512 through it (see
+/// `StockhamKernel for f64` and the pinned backend matrix).
 pub(crate) struct PreciseStockham;
 #[cfg(any(
     test,
@@ -13,10 +12,6 @@ pub(crate) struct PreciseStockham;
 ))]
 pub(crate) struct ReducedStockham;
 
-#[cfg(any(
-    test,
-    not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
-))]
 impl private::Sealed for PreciseStockham {}
 #[cfg(any(
     test,

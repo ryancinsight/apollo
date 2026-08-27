@@ -47,3 +47,4 @@
 | [0039](0039-one-dimensional-power-of-two-routing.md) | One-dimensional power-of-two routing | Accepted |
 | [0040](0040-leto-fft-layout-ownership.md) | Leto FFT layout ownership | Accepted |
 | [0041](0041-fused-planar-register-rows.md) | Fused planar-register rows for the mid-size four-step | Proposed |
+| [0042](0042-avx-stockham-backend-retained.md) | AVX Stockham backend retained; f64 256/512 route scalar | Accepted |

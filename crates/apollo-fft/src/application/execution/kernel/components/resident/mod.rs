@@ -75,6 +75,22 @@ pub(crate) struct ResidentPlan<T> {
     /// Interleaved four-step matrix with the row bit-reversal baked in:
     /// row `p`, column `b` holds `W_n^(rev(p) * b)`.
     matrix: Vec<T>,
+    /// Planar DIF stage twiddle real parts, stage-descending without the
+    /// final two stages: `W_32^{0..16}`, `W_16^{0..8}`, `W_8^{0..4}` — 28
+    /// scalars. Distance 2 is the swap-and-blend step (`w4_im`) and distance
+    /// 1 needs no twiddle, so neither is tabled.
+    stages_re: Vec<T>,
+    /// Planar DIF stage twiddle imaginary parts; layout mirrors `stages_re`.
+    stages_im: Vec<T>,
+    /// Planar four-step matrix real parts, `rev(p)` baked as in `matrix`.
+    matrix_re: Vec<T>,
+    /// Planar four-step matrix imaginary parts.
+    matrix_im: Vec<T>,
+    /// Imaginary part of `W_4^1` — the direction sign (`-1` forward, `+1`
+    /// inverse) the planar distance-2 stage blends with.
+    w4_im: T,
+    /// Negated `w4_im`, precomputed so the kernel needs no scalar negation.
+    w4_im_neg: T,
 }
 
 impl<T: MixedRadixScalar> ResidentPlan<T> {
@@ -105,7 +121,40 @@ impl<T: MixedRadixScalar> ResidentPlan<T> {
                 matrix.push(T::from_precise(s));
             }
         }
-        Self { stages, matrix }
+        let mut stages_re = Vec::with_capacity(m - 4);
+        let mut stages_im = Vec::with_capacity(m - 4);
+        let mut l = m;
+        while l >= 8 {
+            for j in 0..l / 2 {
+                let (s, c) = (sign * core::f64::consts::TAU * j as f64 / l as f64).sin_cos();
+                stages_re.push(T::from_precise(c));
+                stages_im.push(T::from_precise(s));
+            }
+            l >>= 1;
+        }
+
+        let mut matrix_re = Vec::with_capacity(n);
+        let mut matrix_im = Vec::with_capacity(n);
+        for p in 0..m {
+            let k1 = p.reverse_bits() >> (usize::BITS - bits);
+            for b in 0..m {
+                let e = (k1 * b) % n;
+                let (s, c) = (sign * core::f64::consts::TAU * e as f64 / n as f64).sin_cos();
+                matrix_re.push(T::from_precise(c));
+                matrix_im.push(T::from_precise(s));
+            }
+        }
+
+        Self {
+            stages,
+            matrix,
+            stages_re,
+            stages_im,
+            matrix_re,
+            matrix_im,
+            w4_im: T::from_precise(sign),
+            w4_im_neg: T::from_precise(-sign),
+        }
     }
 }
 
@@ -470,7 +519,9 @@ where
             let t0 = unsafe { core::arch::x86_64::_rdtsc() };
             let out = $body;
             let t1 = unsafe { core::arch::x86_64::_rdtsc() };
-            if std::env::var_os("RESIDENT_SECTIONS").is_some() {
+            static SECTIONS: std::sync::LazyLock<bool> =
+                std::sync::LazyLock::new(|| std::env::var_os("RESIDENT_SECTIONS").is_some());
+            if *SECTIONS {
                 eprintln!("RSECT {} {}", $label, t1 - t0);
             }
             out
@@ -516,6 +567,7 @@ where
     true
 }
 
+mod planar;
 // Windows-gated: pins threads through Win32 to control the hybrid scheduler.
 #[cfg(all(test, windows))]
 mod pinned_probe;

@@ -3,27 +3,12 @@
 //! `--ignored --nocapture`.
 
 use super::four_step_resident;
+use super::planar::four_step_planar;
 use crate::application::execution::kernel::components::batched;
+use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;
 use std::time::Instant;
-
-#[link(name = "kernel32")]
-unsafe extern "system" {
-    fn SetThreadAffinityMask(thread: isize, mask: usize) -> usize;
-    fn GetCurrentThread() -> isize;
-    fn GetCurrentProcessorNumber() -> u32;
-}
-
-fn pin(cpu: u32) -> u32 {
-    // SAFETY: pins the current thread; both calls are documented Win32.
-    unsafe {
-        SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu);
-    }
-    std::thread::yield_now();
-    // SAFETY: no arguments, no state.
-    unsafe { GetCurrentProcessorNumber() }
-}
 
 fn best_block<F: FnMut()>(mut f: F) -> f64 {
     const CALLS: u32 = 2048;
@@ -72,6 +57,12 @@ fn resident_against_batched_and_the_references_by_core_type() {
                 &mut work
             )));
         });
+        let planar_ns = best_block(|| {
+            work.copy_from_slice(&src);
+            assert!(four_step_planar::<f64, false>(std::hint::black_box(
+                &mut work
+            )));
+        });
         let mut rust_work = rust_src.clone();
         let rust_ns = best_block(|| {
             rust_work.copy_from_slice(&rust_src);
@@ -89,7 +80,7 @@ fn resident_against_batched_and_the_references_by_core_type() {
             );
         });
         println!(
-            "RES cpu={landed:<2} ({}) batched={batched_ns:>7.1} resident={resident_ns:>7.1} rustfft={rust_ns:>7.1} phastft={phast_ns:>7.1}",
+            "RES cpu={landed:<2} ({}) batched={batched_ns:>7.1} resident={resident_ns:>7.1} planar={planar_ns:>7.1} rustfft={rust_ns:>7.1} phastft={phast_ns:>7.1}",
             if landed < 8 { "P" } else { "E" },
         );
     }
