@@ -877,8 +877,16 @@
   instantiation coupling should be understood before the rewrite rather than
   discovered during it.
 
-## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — todo
+## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — in progress 2026-08-27
 
+- **Claim (2026-08-27):** integrator Claude session 5050c72a. Lease:
+  `components/stockham/**` (probe + any retirement diff), `pot/` probe files,
+  and this backlog/gap_audit section. Disjoint from the resident-rows lease
+  (`components/resident/`) and the bench-smoke lane (PR #142). Plan: same-binary
+  pinned scalar-vs-AVX matrix per size and precision (the scalar backends
+  compile under `cfg(test)`, so the table avoids the cross-build codegen
+  coupling that sank the reverted per-size routing), then the recorded decision
+  per route with an ADR.
 - **Outcome:** the AVX Stockham backend either earns its place with measurements
   or is retired, rather than being carried on the assumption that hand-written
   intrinsics are faster than what the optimizer produces.
