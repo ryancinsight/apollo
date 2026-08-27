@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 — Preserve logical multidimensional view order [patch] [arch] — in progress
+
+- **Outcome:** two- and three-dimensional complex transforms preserve Leto's
+  logical index order for C-contiguous, Fortran-contiguous, offset, and
+  strided mutable views while retaining the zero-copy C-contiguous path.
+- **Scope / non-goals:** stage only views that cannot expose a C-order slice,
+  reuse Mnemosyne-backed plan scratch, and assign results through Leto. FFT
+  arithmetic, transform conventions, public signatures, and GPU execution do
+  not change.
+- **Acceptance oracle:** dynamic and static rectangular 2-D/3-D forward and
+  normalized-inverse cases agree across C, F, offset, and strided layouts;
+  warmed staged execution allocates zero times; the C-order path remains
+  direct; focused Clippy, Nextest, doctests, rustdoc, provider audit, and an
+  independent architecture review pass.
+- **Risk / change class:** [patch] [arch]. This corrects behavior inside the
+  existing public contract and revises ADR 0040's layout-boundary details.
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** plan scratch, FFT layout helper, 2-D/3-D plan implementations and
+  tests, ADR 0040, changelog, and this item's PM entries through the next
+  verified commit. **Last update:** 2026-08-27.
+
 ## ATLAS-APOLLO-PLANAR-RADIX8-2026-08-27 — Deeper stage fusion in the planar batched kernel [arch] — done 2026-08-27: radix-8 declined by both instruments, the twiddle fold delivered instead
 
 - **Radix-8 was implemented and measured honestly, and it loses.** The full
@@ -204,48 +225,12 @@
   ownership decision. Independent architectural review passed with no blocking
   findings; its documentation clarification landed before merge.
 
-## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] [arch] — in progress
+## ATLAS-APOLLO-HOSTED-BENCH-REGRESSION-2026-08-26 — Resolve post-merge small-kernel regressions [patch] [arch] — done 2026-08-27
 
-- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-- **Lease:** `.github/workflows/benchmark-regression.yml`,
-  `crates/apollo-bench/src/measurement`, the affected Apollo FFT dispatch/code
-  boundaries, focused regression tests, and this item's PM/documentation
-  entries through the next verified commit.
-
-- **Outcome:** determine and remove the production or build-layout cause of the
-  six exact-head regressions reported after PR #125, and reduce the benchmark
-  job's roughly twelve-minute duration without weakening its workload,
-  counterbalancing, thresholds, or comparison count.
-- **Scope:** the affected small-kernel codegen, benchmark comparator, build reuse,
-  and workflow topology. **Non-goals:** threshold relaxation, fewer samples, or
-  reclassifying a reproducible regression as noise.
-- **Acceptance oracle:** every affected row passes the unchanged replicated
-  counterbalanced comparison, and the workflow records where its wall time is
-  spent so the binding build or execution component can be reduced.
-- **Risk / change class:** [patch] [arch]. The non-published benchmark schema
-  changes from integer nanoseconds to integer picoseconds, and the experiment
-  moves from one runner timeline to four independent same-runner pairs.
-  **Driver:** hosted default-branch run after Apollo PR #125.
-- **Entry evidence:** the 12m36s hosted job spent 7m11s compiling and 5m04s
-  measuring. It compiled all seven FFT benchmark targets while retaining three,
-  cached dependencies but no compiler artifacts, and normalized samples by
-  truncating per-operation nanoseconds. All six failing rows execute unchanged
-  kernels; exact executable code placement remains the leading production-side
-  hypothesis.
-- **Local evidence:** the release build now compiles only the three consumed
-  benchmark binaries in 1m16s. The benchmark schema preserves integer
-  picoseconds end to end; the bounded comparison binary exercised that output
-  without changing observations, confidence construction, or workloads.
-  Later pinned-core investigation falsified the entry code-placement
-  hypothesis: the observed process difference was Windows hybrid-core
-  scheduling. The rebased gate therefore leaves production FFT routing and
-  kernels unchanged.
-  Warning-denied Clippy, 45/45 focused Nextest cases, 428/428 Apollo FFT cases,
-  doctests, and focused warning-denied rustdoc pass. Independent architecture
-  review validated all workflow scripts, artifact routes, pair orders, and
-  comparator inputs; its three unit-label/documentation findings are resolved.
-  Exact hosted comparison and workflow critical-path runtime remain the merge
-  acceptance evidence.
+- **Delivery:** PR #130 merged as `e12d1ce2`; implementation commit `bdc68a89`.
+- **Outcome:** preserved picosecond samples, reduced release compilation to the
+  three consumed binaries, and attributed the false regressions to hybrid-core
+  scheduling without changing FFT production kernels or regression thresholds.
 
 ## ATLAS-APOLLO-WORKSPACE-RUSTDOC-RUNTIME-2026-08-26 — Bound the workspace documentation gate [patch] — todo
 
