@@ -813,7 +813,10 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
     let n = data.len();
-    assert!(planar_split_applies(n), "requires a planar odd power of two");
+    assert!(
+        planar_split_applies(n),
+        "requires a planar odd power of two"
+    );
     let half = n / 2;
     let plane = scratch_len(half);
     assert!(

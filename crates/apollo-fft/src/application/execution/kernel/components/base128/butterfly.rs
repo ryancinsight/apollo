@@ -99,7 +99,11 @@ const T4_CH: usize = 4;
 
 /// First chunk of the mixed-radix twiddles for a row of `2 * REGS` samples.
 const fn mix_chunk(regs: usize) -> usize {
-    if regs >= 8 { 12 } else { 4 }
+    if regs >= 8 {
+        12
+    } else {
+        4
+    }
 }
 
 /// Lane count of the table for a row of `2 * REGS` samples: the stage
@@ -213,13 +217,13 @@ pub(crate) struct BaseTransform<
 }
 
 impl<
-    T,
-    const INVERSE: bool,
-    const MEASURE_PHASES: bool,
-    const REGS: usize,
-    const LANES: usize,
-    const TABLE_LANES: usize,
-> LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, REGS, LANES, TABLE_LANES>
+        T,
+        const INVERSE: bool,
+        const MEASURE_PHASES: bool,
+        const REGS: usize,
+        const LANES: usize,
+        const TABLE_LANES: usize,
+    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, REGS, LANES, TABLE_LANES>
 where
     T: LaneScalar + MixedRadixScalar,
 {

@@ -1,5 +1,5 @@
 use crate::application::execution::kernel::components::base128::butterfly::{
-    Plan64, Plan128, State64, State128,
+    Plan128, Plan64, State128, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
@@ -11,22 +11,22 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::executors::{
-    exec_base64_forward, exec_base64_inverse, exec_base64_inverse_unnorm, exec_base128_forward,
-    exec_base128_inverse, exec_base128_inverse_unnorm, exec_composite_forward,
+    exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base64_forward,
+    exec_base64_inverse, exec_base64_inverse_unnorm, exec_composite_forward,
     exec_composite_inverse, exec_composite_inverse_unnorm, exec_good_thomas_forward,
-    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_2,
-    exec_pot_forward_4, exec_pot_forward_8, exec_pot_forward_16, exec_pot_forward_32,
-    exec_pot_forward_64, exec_pot_forward_512, exec_pot_forward_generic, exec_pot_forward_sized,
-    exec_pot_inverse_2, exec_pot_inverse_4, exec_pot_inverse_8, exec_pot_inverse_16,
-    exec_pot_inverse_32, exec_pot_inverse_64, exec_pot_inverse_512, exec_pot_inverse_generic,
-    exec_pot_inverse_sized, exec_pot_inverse_unnorm_2, exec_pot_inverse_unnorm_4,
-    exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_32,
-    exec_pot_inverse_unnorm_64, exec_pot_inverse_unnorm_512, exec_pot_inverse_unnorm_generic,
+    exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_16,
+    exec_pot_forward_2, exec_pot_forward_32, exec_pot_forward_4, exec_pot_forward_512,
+    exec_pot_forward_64, exec_pot_forward_8, exec_pot_forward_generic, exec_pot_forward_sized,
+    exec_pot_inverse_16, exec_pot_inverse_2, exec_pot_inverse_32, exec_pot_inverse_4,
+    exec_pot_inverse_512, exec_pot_inverse_64, exec_pot_inverse_8, exec_pot_inverse_generic,
+    exec_pot_inverse_sized, exec_pot_inverse_unnorm_16, exec_pot_inverse_unnorm_2,
+    exec_pot_inverse_unnorm_32, exec_pot_inverse_unnorm_4, exec_pot_inverse_unnorm_512,
+    exec_pot_inverse_unnorm_64, exec_pot_inverse_unnorm_8, exec_pot_inverse_unnorm_generic,
     exec_pot_inverse_unnorm_sized, exec_rader_forward, exec_rader_inverse,
     exec_rader_inverse_unnorm, exec_winograd_forward, exec_winograd_inverse,
     exec_winograd_inverse_unnorm, runtime_tiny_direct_dispatch,
 };
-use super::strategy::{PlanStrategy, arc_to_cow};
+use super::strategy::{arc_to_cow, PlanStrategy};
 
 /// Reusable 1D FFT plan generic over `MixedRadixScalar`.
 pub struct FftPlan1D<F: MixedRadixScalar> {
