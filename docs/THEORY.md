@@ -54,10 +54,10 @@ Apollo FFT paths use a shared normalization convention:
 
 - Roundtrip stability is assessed with relative and absolute tolerances.
 - GPU parity compares against the CPU plan family rather than raw bitwise identity.
-- WGPU backend crates are split by transform domain. Dense FFT GPU kernels live
-  in `apollo-fft-wgpu`; every other `*-wgpu` crate must preserve the owning
-  transform's mathematical contract and prove parity against the CPU
-  implementation before advertising numerical execution support.
+- Dense WGPU FFT kernels live in Hephaestus and consume Leto layout metadata;
+  Apollo transform crates retain only their domain-specific GPU algorithms.
+  Every accelerator path proves parity against its Apollo CPU implementation
+  before advertising numerical execution support.
 
 ## Real-To-Real Transforms
 

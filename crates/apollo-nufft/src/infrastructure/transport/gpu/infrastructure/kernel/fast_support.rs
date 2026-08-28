@@ -1,6 +1,5 @@
 //! Shared typed-buffer preparation and transfer operations for fast NUFFT dispatch.
 
-use apollo_fft::GpuFft3d;
 use eunomia::Complex32;
 use hephaestus_core::{Binding, ComputeDevice, DeviceBuffer, DispatchGrid};
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
@@ -136,49 +135,34 @@ pub(super) fn write_three_type1_buffers(
     Ok(())
 }
 
-pub(super) fn positions_to_complex(positions: &[f32]) -> Vec<Complex32> {
-    positions
-        .iter()
-        .copied()
-        .map(|value| Complex32::new(value, 0.0))
-        .collect()
+pub(super) fn copy_positions_as_complex(output: &mut Vec<Complex32>, positions: &[f32]) {
+    output.clear();
+    output.extend(
+        positions
+            .iter()
+            .copied()
+            .map(|value| Complex32::new(value, 0.0)),
+    );
 }
 
-pub(super) fn positions_to_pod(positions: &[(f32, f32, f32)]) -> Vec<Position3Pod> {
-    positions
-        .iter()
-        .map(|&(x, y, z)| Position3Pod {
-            x,
-            y,
-            z,
-            padding: 0.0,
-        })
-        .collect()
+pub(super) fn copy_positions_as_pod(output: &mut Vec<Position3Pod>, positions: &[(f32, f32, f32)]) {
+    output.clear();
+    output.extend(positions.iter().map(|&(x, y, z)| Position3Pod {
+        x,
+        y,
+        z,
+        padding: 0.0,
+    }));
 }
 
-pub(super) fn real_to_complex(values: &[f32], scale: f32) -> Vec<Complex32> {
-    values
-        .iter()
-        .copied()
-        .map(|value| Complex32::new(value * scale, 0.0))
-        .collect()
-}
-
-pub(super) fn fft_one(device: &WgpuDevice, m: usize) -> NufftWgpuResult<GpuFft3d> {
-    GpuFft3d::new(device.clone(), m, 1, 1).map_err(|_| NufftWgpuError::InvalidPlan {
-        message: "oversampled FFT plan is invalid for provider execution",
-    })
-}
-
-pub(super) fn fft_three(
-    device: &WgpuDevice,
-    oversampled: (usize, usize, usize),
-) -> NufftWgpuResult<GpuFft3d> {
-    GpuFft3d::new(device.clone(), oversampled.0, oversampled.1, oversampled.2).map_err(|_| {
-        NufftWgpuError::InvalidPlan {
-            message: "oversampled 3D FFT plan is invalid for provider execution",
-        }
-    })
+pub(super) fn copy_real_as_complex(output: &mut Vec<Complex32>, values: &[f32], scale: f32) {
+    output.clear();
+    output.extend(
+        values
+            .iter()
+            .copied()
+            .map(|value| Complex32::new(value * scale, 0.0)),
+    );
 }
 
 pub(super) fn product(shape: (usize, usize, usize)) -> NufftWgpuResult<usize> {

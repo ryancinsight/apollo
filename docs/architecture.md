@@ -4,7 +4,8 @@
 
 - `domain` defines the single source of truth for shapes, normalization, capabilities, device descriptors, and error contracts.
 - `application` owns orchestration, cache policy, reusable plans, and zero-allocation execution paths.
-- `infrastructure` owns concrete adapters such as CPU and WGPU.
+- `infrastructure` owns concrete Apollo adapters such as CPU and the shared
+  non-FFT WGPU transform scaffold.
 - Public APIs are exposed from `lib.rs` and narrow facade modules only.
 
 Allowed dependency direction:
@@ -20,7 +21,8 @@ Infrastructure implementations may depend on shared traits and shared data contr
 - Separation of concerns: numerical contracts, execution plans, and backend transport are split into separate modules.
 - Single source of truth: shape metadata, normalization conventions, cache keys, and backend capability descriptors are defined once in `domain`.
 - Single responsibility: each plan type owns exactly one dimensionality and one normalization convention.
-- Dependency inversion: consumers program against `FftBackend`, not against CPU or GPU internals.
+- Dependency inversion: Apollo CPU/CUDA consumers program against `FftBackend`;
+  WGPU consumers program against Hephaestus `FftOps`.
 - Do not repeat yourself: helper constructors and shared validation live centrally and are reused by all crates.
 - Recent (perf pass): introduced kernel/pot/ with ZST PoTStrategy/SizedPoT for monomorphized schedules; butterflies/ placeholder populated (mul_conj shared from rader negacyclic CRT; deep vertical, reduce redundancy across winograd/stockham/good_thomas/rader). Rader: f32 runtime primes (m>=256 +113) bias to Bluestein+Stockham PoT (targets worst bench Rader ratios) via factored prefers_bluestein_for_rader (ordered path synced); rader/bluestein on TL pooled scratch. Selection prefers composite for smooth over slow GT static (dispatch/plan). Stockham has dedicated cases for 128/256. f32 small PoT unified to pooled scratch + shared kernels for memory/stack + perf.
 Cleanup/planning (this cycle): PoT ZSTs marked with rationale (pending wire); shared gather_unroll4 wired to GT/rader + mul_conj already; routing audit + documented next (shared butterflies expansion #1 for dupe/mono, ZST wire, f32 unify for routing safety, more GT/rader opts) with prob/why (bench ratios + math overhead + arch DIP/SoC) in gap_audit. Gates and value-semantic held.
@@ -60,7 +62,7 @@ The table below is the authoritative record of per-crate precision support. Each
 
 | Crate | CPU Backend | GPU Backend (enabled via `wgpu` feature) | Notes |
 |---|---|---|---|
-| apollo-fft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | `native-f16` feature enables native GPU f16 compute |
+| apollo-fft | HIGH_ACCURACY (f64/f32/f16 storage) | Hephaestus-owned f32/native-f16 FFT | Apollo exposes no dense WGPU FFT plan or shader |
 | apollo-czt | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse CZT; f16 promoted at host boundary |
 | apollo-dctdst | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32 storage, f32 compute) | Mixed f16 host path present |
 | apollo-dht | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
@@ -79,20 +81,14 @@ The table below is the authoritative record of per-crate precision support. Each
 | apollo-stft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Forward/inverse FFT-accelerated (Radix-2 DIT); f16 promoted |
 | apollo-wavelet | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 
-### Key: native-f16 GPU (apollo-fft wgpu feature)
+### Key: dense WGPU FFT precision
 
-When the `native-f16` feature is enabled, `GpuFft3dF16Native` requires
-`DeviceFeature::ShaderF16` from `hephaestus_wgpu::WgpuDevice` and executes all
-butterfly arithmetic in `f16` inside the shader. The host boundary converts
-`f32` input to half bit patterns before upload and half output to `f32` after
-readback. Callers acquire the feature-qualified device directly from
-Hephaestus and pass it to `GpuFft3dF16Native::try_from_device`. The sealed FFT
-storage contract reuses the f32 typed descriptor and
-command stream while selecting f16 WGSL and radix-two entries. Twiddle factors
-are computed in `f32` then narrowed to `f16`. Non-power-of-two sizes use the
-Bluestein chirp-Z shader (`chirp_native_f16.wgsl`); the 3×3×3 roundtrip test
-uses the derived `γ_265·‖input‖₁` bound with half unit roundoff `u = 2⁻¹¹`.
-No Apollo-owned WGPU API or provider-acquisition wrapper remains in this path.
+`hephaestus-wgpu::WgpuFftOps` owns dense f32 and native-f16 FFT execution.
+Native half arithmetic requires `DeviceFeature::ShaderF16`; provider
+acquisition, scalar validation, plan preparation, shaders, and dispatch remain
+inside Hephaestus. Apollo consumers pass Leto layouts and typed split-complex
+buffers through `FftOperands` and retain the returned prepared plan. No
+Apollo-owned WGPU FFT API, shader, feature flag, or acquisition wrapper remains.
 
 ### Key: NTT precision contract
 

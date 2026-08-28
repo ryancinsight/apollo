@@ -1,21 +1,23 @@
 # Apollo FFT
 
 `apollo-fft` owns Apollo's dense CPU Fourier transform implementation, shared
-shape contracts, backend abstractions, and cache-backed plan surfaces.
+shape and precision contracts, plan caches, and the generic WGPU transform
+scaffold used by sibling transform crates.
 
 ## Architecture
 
 ```text
 src/
-  domain/          backend, error, and shape contracts
-  application/     FFT plans and plan cache orchestration
-  infrastructure/  CPU backend transport
+  domain/          backend, error, precision, and shape contracts
+  application/     CPU FFT plans, kernels, and cache orchestration
+  infrastructure/  CPU/CUDA transport and generic transform infrastructure
 ```
 
-The dense FFT crate is the single source of truth for 1D, 2D, and 3D uniform
-FFT plans. NUFFT and SFT logic live in their own crates.
+The crate is the single source of truth for Apollo's one-, two-, and
+three-dimensional CPU FFT plans. NUFFT and sparse Fourier logic live in their
+own crates. Dense WGPU FFT algorithms and resources live in Hephaestus.
 
-## Mathematical Contract
+## Mathematical contract
 
 The forward complex FFT computes
 
@@ -23,83 +25,40 @@ The forward complex FFT computes
 X[k] = sum_n x[n] exp(-2*pi*i*k*n/N)
 ```
 
-The inverse computes the conjugate-sign transform and applies Apollo's selected
-normalization. The kernel strategy auto-selects radix-2 Cooley-Tukey for
-power-of-two lengths and Bluestein chirp-Z for arbitrary lengths. The direct
-DFT kernel remains a crate-local reference for verification.
+The inverse uses the positive exponent and applies Apollo's selected
+normalization. The CPU strategy selects radix, mixed-radix, Rader, or
+Bluestein construction from the validated shape. Direct DFT kernels remain
+reference surfaces for verification rather than production fallbacks.
 
-2D and 3D plans execute separable axis passes. C-dense Leto views, including
-offset views, operate directly on their backing block. Fortran-dense and
-general strided views are assigned once into reusable logical C-order staging,
-transformed, and assigned back through Leto; warmed staging allocates nothing.
-Inside the transform, row/depth-axis passes operate directly on chunks through
-Moirai, while non-contiguous axes transpose through Leto into role-separated
-plan scratch.
+Two- and three-dimensional plans execute separable axis passes. C-dense Leto
+views, including offset views, operate on their backing block. Fortran-dense
+and general strided views assign once into reusable logical C-order staging,
+transform, and assign back; warmed staging allocates nothing. Row and
+depth-axis passes operate on chunks through Moirai, while non-contiguous axes
+transpose through Leto into plan-owned scratch.
 
-The 1D real-forward plan surface supports Leto-owned allocation and caller-owned
-slice output paths. Slice execution lets downstream crates reuse existing real
-input slices while still sharing the same real FFT owner kernel. The typed plan
-surface supports `f64` storage with `Complex64` compute, `f32` storage with
-`Complex32` compute, and mixed `f16` storage with `f32` compute. The 3D typed
-`*_into` paths accept caller-owned output and scratch buffers for all three
-precision profiles to avoid repeated spectrum allocation in memory-bound
-workloads.
+The typed CPU plan surface supports f64 storage/compute, f32 storage/compute,
+and mixed f16 storage with f32 compute. Caller-owned output and scratch paths
+avoid repeated result and workspace allocation.
 
-## Hephaestus accelerator contract
+## Accelerator boundary
 
-The `wgpu` feature routes f32 dense-FFT execution through
-`hephaestus_wgpu::WgpuDevice`. Apollo supplies zero-sized descriptors for the
-radix, pack/unpack, and Bluestein stages; Hephaestus owns typed buffers,
-pipeline preparation, binding validation, ordered command streams, submission,
-and transfer. `GpuFft3d::encode_forward_split` and
-`GpuFft3d::encode_inverse_split` accept only provider-typed split-complex
-buffers and a provider command stream, so downstream composed operations such
-as NUFFT do not acquire a raw device, queue, buffer, or encoder.
+Use `hephaestus_wgpu::WgpuFftOps` for dense WGPU FFT execution. Consumers pair
+typed split-complex device buffers with a Leto `Layout<R>` through
+`hephaestus_core::FftOperands`, then retain the returned prepared plan. Apollo
+does not expose a WGPU FFT facade, shaders, staging workspace, or native-f16
+feature.
 
-Host-returning 3-D Leto calls expose retained-staging variants through
-`GpuFft3dBuffers`. The plan continues to own Hephaestus device storage; the
-caller-owned buffers retain the two N-entry f32 host planes across dispatches.
-Contiguous Leto inputs remain borrowed, and each returned field or spectrum
-is initialized once in its final Mnemosyne storage through Leto's in-place
-shape generator, without default fill, an intermediate result vector, or a
-second element copy.
-
-For dimensions `N_x`, `N_y`, and `N_z`, the provider stream records forward
-axes in Z/Y/X order and inverse axes in X/Y/Z order. The transform convention is
-
-```text
-X[k_x, k_y, k_z] = sum_{x,y,z} x[x,y,z]
-  exp(-2*pi*i*(k_x*x/N_x + k_y*y/N_y + k_z*z/N_z))
-```
-
-with inverse positive exponent and `1/(N_x*N_y*N_z)` normalization. Root-of-
-unity orthogonality proves `F^-1(F(x)) = x` in exact arithmetic. This is a
-mathematical proof sketch, not a machine-checked proof. The real-device typed
-stream tests verify a 2x2x2 delta exactly and a 2x3x2 Bluestein delta within
-the documented f32 `gamma_256` rounding bound.
-
-Native f16 shader execution reuses this same typed plan with `u16` physical
-storage and WGSL `array<f16>` declarations. The sealed storage contract selects
-the three shader sources and records radix-four availability, so f32 uses its
-radix-four entries while native half storage selects the source's radix-two
-entries without a parallel dispatcher. `try_new` requires `ShaderF16` through
-`hephaestus_wgpu::WgpuDevice`; adapter selection cannot silently drop the
-capability. Apollo owns only f32↔half conversion and FFT equations, while
-Hephaestus owns allocation, pipeline validation, binding, command encoding,
-submission, and readback for both storage representations.
-
-For the all-Bluestein 3×3×3 reconstruction fixture, the implementation counts
-265 half-rounding sites across input conversion and its three forward and three
-inverse axes. With unit roundoff `u = 2⁻¹¹` and
-`γ_k = ku/(1-ku)`, the value-semantic roundtrip assertion uses
-`γ_265 · ‖input‖₁`. This is an analytical finite-precision bound for the
-fixture, not a machine-checked proof.
+The `wgpu` feature remains because sibling Apollo transform crates share the
+generic `WgpuTransformBackend`, plan, storage, and error contracts from this
+crate. Those contracts do not implement dense FFT arithmetic. The independent
+CUDA plan remains governed by ADR 0030.
 
 ## Verification
 
-Tests cover analytical small transforms, radix-2 and Bluestein parity against
-direct DFT, inverse roundtrips, typed external-buffer command-stream
-composition, Parseval-style energy checks, linearity,
-caller-owned output paths, slice-level real-forward parity and shape rejection,
-precision profile behavior, Leto retained-staging parity and shape rejection,
-and 2D/3D separable axis execution.
+Tests cover analytical transforms, direct-DFT differential equality within
+derived finite-precision bounds, inverse roundtrips, Parseval-style identities,
+linearity, caller-owned output paths, scalar instantiations, Leto layout
+preservation, and separable two- and three-dimensional execution. Accelerator
+FFT conformance and rank coverage are verified in Hephaestus; Apollo validation
+adds a direct Hephaestus-versus-Apollo CPU differential.

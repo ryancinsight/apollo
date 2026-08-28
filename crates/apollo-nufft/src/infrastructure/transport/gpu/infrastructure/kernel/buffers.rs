@@ -1,11 +1,114 @@
 //! Reusable typed accelerator buffers for the fast NUFFT paths.
 
 use eunomia::Complex32;
-use hephaestus_core::ComputeDevice;
-use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
+use hephaestus_core::{
+    ComputeDevice, FftDirection, FftOperands, FftOps, KernelDevice, StridedView,
+};
+use hephaestus_wgpu::{
+    WgpuBuffer, WgpuCommandStream, WgpuDevice, WgpuFftOps, WgpuPrepared, WgpuPreparedFft,
+};
+use leto::Layout;
 
-use super::descriptors::Position3Pod;
+use super::descriptors::{
+    ExtractOne, ExtractThree, FastOneKernel, FastThreeKernel, InterpolateOne, InterpolateThree,
+    LoadOne, LoadThree, Position3Pod, SpreadOne, SpreadThree,
+};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
+
+struct PreparedFftPair<const R: usize> {
+    forward: WgpuPreparedFft<R>,
+    inverse: WgpuPreparedFft<R>,
+}
+
+impl<const R: usize> core::fmt::Debug for PreparedFftPair<R> {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let Self {
+            forward: _,
+            inverse: _,
+        } = self;
+        formatter
+            .debug_struct("PreparedFftPair")
+            .field("forward", &"prepared")
+            .field("inverse", &"prepared")
+            .finish()
+    }
+}
+
+impl<const R: usize> PreparedFftPair<R> {
+    fn new(
+        device: &WgpuDevice,
+        real: &WgpuBuffer<f32>,
+        imaginary: &WgpuBuffer<f32>,
+        shape: [usize; R],
+    ) -> NufftWgpuResult<Self> {
+        let layout = Layout::c_contiguous(shape).map_err(|_| NufftWgpuError::InvalidPlan {
+            message: "oversampled FFT shape cannot form a dense layout",
+        })?;
+        let operands = || FftOperands {
+            real: StridedView::new(real, &layout),
+            imaginary: StridedView::new(imaginary, &layout),
+        };
+        let ops = WgpuFftOps;
+        Ok(Self {
+            forward: ops.prepare_fft(device, operands(), FftDirection::Forward)?,
+            inverse: ops.prepare_fft(device, operands(), FftDirection::Inverse)?,
+        })
+    }
+
+    fn encode_forward(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        Ok(WgpuFftOps.encode_fft(device, &self.forward, stream)?)
+    }
+
+    fn encode_inverse(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        Ok(WgpuFftOps.encode_fft(device, &self.inverse, stream)?)
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct PreparedNufftKernels1D {
+    pub(super) spread: WgpuPrepared<FastOneKernel<SpreadOne>>,
+    pub(super) extract: WgpuPrepared<FastOneKernel<ExtractOne>>,
+    pub(super) load: WgpuPrepared<FastOneKernel<LoadOne>>,
+    pub(super) interpolate: WgpuPrepared<FastOneKernel<InterpolateOne>>,
+}
+
+impl PreparedNufftKernels1D {
+    fn new(device: &WgpuDevice) -> NufftWgpuResult<Self> {
+        Ok(Self {
+            spread: device.prepare(&FastOneKernel::<SpreadOne>::new())?,
+            extract: device.prepare(&FastOneKernel::<ExtractOne>::new())?,
+            load: device.prepare(&FastOneKernel::<LoadOne>::new())?,
+            interpolate: device.prepare(&FastOneKernel::<InterpolateOne>::new())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct PreparedNufftKernels3D {
+    pub(super) spread: WgpuPrepared<FastThreeKernel<SpreadThree>>,
+    pub(super) extract: WgpuPrepared<FastThreeKernel<ExtractThree>>,
+    pub(super) load: WgpuPrepared<FastThreeKernel<LoadThree>>,
+    pub(super) interpolate: WgpuPrepared<FastThreeKernel<InterpolateThree>>,
+}
+
+impl PreparedNufftKernels3D {
+    fn new(device: &WgpuDevice) -> NufftWgpuResult<Self> {
+        Ok(Self {
+            spread: device.prepare(&FastThreeKernel::<SpreadThree>::new())?,
+            extract: device.prepare(&FastThreeKernel::<ExtractThree>::new())?,
+            load: device.prepare(&FastThreeKernel::<LoadThree>::new())?,
+            interpolate: device.prepare(&FastThreeKernel::<InterpolateThree>::new())?,
+        })
+    }
+}
 
 /// Snapshot of a complex grid for diagnostics and value-semantic tests.
 #[cfg(any(test, feature = "diagnostics"))]
@@ -36,7 +139,12 @@ pub struct NufftGpuBuffers1D {
     pub(crate) real_grid: WgpuBuffer<f32>,
     pub(crate) imaginary_grid: WgpuBuffer<f32>,
     pub(crate) output_buffer: WgpuBuffer<Complex32>,
+    pub(crate) coefficient_buffer: WgpuBuffer<Complex32>,
     pub(crate) padding_buffer: WgpuBuffer<Complex32>,
+    pub(super) host_positions: Vec<Complex32>,
+    pub(super) host_deconvolution: Vec<Complex32>,
+    pub(super) kernels: PreparedNufftKernels1D,
+    fft: PreparedFftPair<1>,
     /// Output Fourier-mode count.
     pub(crate) n: usize,
     /// Oversampled grid length.
@@ -46,7 +154,15 @@ pub struct NufftGpuBuffers1D {
 }
 
 impl NufftGpuBuffers1D {
-    /// Allocate all provider buffers for one fast one-dimensional configuration.
+    /// Allocate buffers and prepare every pipeline used by one fast one-dimensional configuration.
+    ///
+    /// Reusing the returned allocation avoids provider-buffer allocation and pipeline preparation
+    /// on warm executions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested layout is invalid or the device cannot allocate a
+    /// buffer or prepare a pipeline.
     pub fn new(
         device: &WgpuDevice,
         n: usize,
@@ -55,18 +171,43 @@ impl NufftGpuBuffers1D {
     ) -> NufftWgpuResult<Self> {
         let sample_capacity = max_samples.max(1);
         let output_capacity = n.max(max_samples).max(1);
+        let real_grid = device.alloc_zeroed(m.max(1))?;
+        let imaginary_grid = device.alloc_zeroed(m.max(1))?;
+        let fft = PreparedFftPair::new(device, &real_grid, &imaginary_grid, [m])?;
+        let kernels = PreparedNufftKernels1D::new(device)?;
         Ok(Self {
             position_buffer: device.alloc_zeroed(sample_capacity)?,
             value_buffer: device.alloc_zeroed(sample_capacity)?,
             deconv_buffer: device.alloc_zeroed(n.max(1))?,
-            real_grid: device.alloc_zeroed(m.max(1))?,
-            imaginary_grid: device.alloc_zeroed(m.max(1))?,
+            real_grid,
+            imaginary_grid,
             output_buffer: device.alloc_zeroed(output_capacity)?,
+            coefficient_buffer: device.alloc_zeroed(n.max(1))?,
             padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
+            host_positions: Vec::with_capacity(sample_capacity),
+            host_deconvolution: Vec::with_capacity(n.max(1)),
+            kernels,
+            fft,
             n,
             m,
             max_samples,
         })
+    }
+
+    pub(crate) fn encode_forward(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        self.fft.encode_forward(device, stream)
+    }
+
+    pub(crate) fn encode_inverse(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        self.fft.encode_inverse(device, stream)
     }
 }
 
@@ -79,7 +220,11 @@ pub struct NufftGpuBuffers3D {
     pub(crate) real_grid: WgpuBuffer<f32>,
     pub(crate) imaginary_grid: WgpuBuffer<f32>,
     pub(crate) output_buffer: WgpuBuffer<Complex32>,
+    pub(crate) coefficient_buffer: WgpuBuffer<Complex32>,
     pub(crate) padding_buffer: WgpuBuffer<Complex32>,
+    pub(super) host_positions: Vec<Position3Pod>,
+    pub(super) kernels: PreparedNufftKernels3D,
+    fft: PreparedFftPair<3>,
     /// Output shape `(nx, ny, nz)`.
     pub(crate) shape: (usize, usize, usize),
     /// Oversampled grid dimensions `(mx, my, mz)`.
@@ -89,7 +234,15 @@ pub struct NufftGpuBuffers3D {
 }
 
 impl NufftGpuBuffers3D {
-    /// Allocate all provider buffers for one fast three-dimensional configuration.
+    /// Allocate buffers and prepare every pipeline used by one fast three-dimensional configuration.
+    ///
+    /// Reusing the returned allocation avoids provider-buffer allocation and pipeline preparation
+    /// on warm executions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a shape product overflows, the requested layout is invalid, or the
+    /// device cannot allocate a buffer or prepare a pipeline.
     pub fn new(
         device: &WgpuDevice,
         shape: (usize, usize, usize),
@@ -119,18 +272,47 @@ impl NufftGpuBuffers3D {
             })?;
         let sample_capacity = max_samples.max(1);
         let output_capacity = mode_len.max(max_samples).max(1);
+        let real_grid = device.alloc_zeroed(grid_len.max(1))?;
+        let imaginary_grid = device.alloc_zeroed(grid_len.max(1))?;
+        let fft = PreparedFftPair::new(
+            device,
+            &real_grid,
+            &imaginary_grid,
+            [oversampled.0, oversampled.1, oversampled.2],
+        )?;
+        let kernels = PreparedNufftKernels3D::new(device)?;
         Ok(Self {
             position_buffer: device.alloc_zeroed(sample_capacity)?,
             value_buffer: device.alloc_zeroed(sample_capacity)?,
             deconv_buffer: device.alloc_zeroed(deconv_len.max(1))?,
-            real_grid: device.alloc_zeroed(grid_len.max(1))?,
-            imaginary_grid: device.alloc_zeroed(grid_len.max(1))?,
+            real_grid,
+            imaginary_grid,
             output_buffer: device.alloc_zeroed(output_capacity)?,
+            coefficient_buffer: device.alloc_zeroed(mode_len.max(1))?,
             padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
+            host_positions: Vec::with_capacity(sample_capacity),
+            kernels,
+            fft,
             shape,
             oversampled,
             max_samples,
         })
+    }
+
+    pub(crate) fn encode_forward(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        self.fft.encode_forward(device, stream)
+    }
+
+    pub(crate) fn encode_inverse(
+        &self,
+        device: &WgpuDevice,
+        stream: &mut WgpuCommandStream<'_>,
+    ) -> NufftWgpuResult<()> {
+        self.fft.encode_inverse(device, stream)
     }
 }
 

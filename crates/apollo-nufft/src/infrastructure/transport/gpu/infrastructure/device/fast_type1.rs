@@ -233,11 +233,11 @@ impl NufftWgpuBackend {
         })
     }
 
-    /// Execute fast gridded Type-1 1D NUFFT with pre-allocated GPU buffers.
+    /// Execute fast gridded Type-1 1D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type1_1d_with_buffers(
         &self,
         plan: &NufftWgpuPlan1D,
-        buffers: &NufftGpuBuffers1D,
+        buffers: &mut NufftGpuBuffers1D,
         positions: &[f32],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex64>> {
@@ -265,11 +265,11 @@ impl NufftWgpuBackend {
             .collect())
     }
 
-    /// Execute fast gridded Type-1 3D NUFFT with pre-allocated GPU buffers.
+    /// Execute fast gridded Type-1 3D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type1_3d_with_buffers(
         &self,
         plan: &NufftWgpuPlan3D,
-        buffers: &NufftGpuBuffers3D,
+        buffers: &mut NufftGpuBuffers3D,
         positions: &[(f32, f32, f32)],
         values: &[Complex32],
     ) -> NufftWgpuResult<Array3<Complex64>> {

@@ -35,8 +35,8 @@ raw device or queue.
 Direct 1D/3D descriptors bind positions, complex source data, complex output,
 and one POD parameter block. Fast descriptors bind the seven canonical
 position/value/deconvolution/grid/output buffers plus parameters. The ordered
-command stream records spread or load, `GpuFft3d` dispatch, then extract or
-interpolate, establishing each device write-before-read dependency. Leto owns
+command stream records spread or load, a prepared Hephaestus FFT, then extract
+or interpolate, establishing each device write-before-read dependency. Leto owns
 the CPU array/view boundary; accelerator storage is typed `f32` or
 `Complex32` and never aliases a Leto allocation.
 

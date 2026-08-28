@@ -8,16 +8,36 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ## [Unreleased]
 
-### Added
+### Breaking
 
-- [minor] `GpuFft3d` adds caller-retained host staging for forward and inverse
-  3-D Leto execution in f64 and half storage. Contiguous inputs remain borrowed;
-  repeated calls remove the two N-entry f32 staging allocations, while spectra
-  and fields use Leto's in-place shape generator to initialize final
-  Mnemosyne-backed storage once, without default fill, an intermediate result
-  vector, or a second element copy. Real-device tests cover
-  allocating parity, both storage types, stable staging addresses, and
-  mismatched-plan rejection before mutation.
+- [major] `apollo-fft` removes its dense WGPU implementation and public
+  `GpuFft3d`, `GpuFft3dBuffers`, `GpuFft3dF16Native`, and `WgpuBackend`
+  surfaces, plus the `native-f16` feature. Accelerator FFT consumers now
+  prepare rank-generic split-complex plans through
+  `hephaestus_wgpu::WgpuFftOps`; Apollo CPU FFT APIs are unchanged. See ADR
+  0006 and `docs/MIGRATION_GPU_FFT.md`.
+- [major] `apollo-nufft` reusable WGPU buffers prepare and retain forward and
+  inverse Hephaestus FFT plans, spread/load/extract/interpolate pipelines, and
+  Type-2 coefficient storage during construction. Reusable execution now takes
+  an exclusive mutable buffer borrow, preventing concurrent calls from
+  interleaving writes to one workspace, and retains host position/deconvolution
+  conversion capacity. Existing buffer constructors can now report typed
+  provider preparation failures before any dispatch; warm execution performs
+  no transient provider-buffer allocation, position/deconvolution conversion
+  allocation, pipeline preparation/compilation, or provider selection. The
+  obsolete `NufftWgpuError::Fft` variant is removed; provider failures now use
+  `NufftWgpuError::Provider(HephaestusError)`.
+
+### Changed
+
+- [patch] NUFFT, STFT, and Radon benchmark executables now apply
+  `APOLLO_BENCH_MODE`; their bounded smoke runs execute each production closure
+  once instead of silently selecting the full measurement budget.
+- [patch] Apollo validation and the CUDA/WGPU differential invoke Hephaestus
+  FFT operations directly. The GPU validation threshold now follows the
+  provider's scale-sensitive f32 conformance bound instead of a fixed epsilon.
+
+### Added
 
 - [minor] Power-of-two transforms at square splits below the threading
   threshold run on a batched layout that holds the transform index in the lane

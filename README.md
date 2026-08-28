@@ -47,14 +47,12 @@ Stage 2 moves Apollo beyond the initial compatibility cut:
 - Each transform crate owns its mathematical kernels and exposes accelerator
   execution through its `wgpu` feature. Hephaestus exclusively owns device,
   queue, buffer, pipeline, command, and transfer mechanics.
-- `apollo-fft` owns the shader-backed 3D FFT algorithm with radix-2 and
-  Bluestein/Chirp-Z axis strategies. Its `native-f16` scope reuses the same
-  typed Hephaestus descriptor and command-stream implementation as f32 while
-  retaining `enable f16;` shader arithmetic and a required `ShaderF16`
-  capability contract.
+- Hephaestus owns rank-generic dense WGPU FFT algorithms, prepared plans, and
+  f32/native-f16 shaders. `apollo-fft` owns only Apollo's CPU dense FFT and the
+  generic non-FFT transform scaffold used by sibling crates.
 - `apollo-nufft` owns exact and Kaiser-Bessel-gridded NUFFT algorithms;
-  direct and fast execution use typed Hephaestus descriptors and compose
-  oversampled FFT stages through the `apollo-fft` provider stream.
+  direct and fast execution use typed Hephaestus descriptors and retain
+  Hephaestus prepared FFT plans with their oversampled grids.
 - `apollo-wavelet` owns discrete and continuous wavelet transform plans for multiresolution analysis.
 - `apollo-validation` emits structured CPU, GPU, NUFFT, benchmark, and external-comparison reports.
 - `apollo-python` exposes FFT, NUFFT, precision selection, and backend capability introspection for Python callers.
@@ -68,10 +66,8 @@ Mixed precision is now a first-class Apollo concept:
   Mixed `f16`-host / `f32`-GPU typed storage paths are available through each
   transform crate's `wgpu` feature except `apollo-ntt`, which uses exact `u32`
   modular residues.
-- `apollo-fft` additionally supports native `f16` GPU arithmetic through its
-  `native-f16` feature (`GpuFft3dF16Native`). Twiddle factors are computed in
-  `f32` then narrowed to `f16`; per-output accumulation error is bounded by
-  `O(log N)·ε_f16·‖input‖₁`, where `ε_f16 ≈ 9.77×10⁻⁴`.
+- Hephaestus provides native-f16 WGPU FFT arithmetic when the acquired device
+  satisfies `ShaderF16`; Apollo defines no parallel feature or plan wrapper.
 - The authoritative per-crate precision surface is documented in `docs/architecture.md` under the Mixed-Precision Capability Table.
 
 ## Crates
@@ -145,10 +141,10 @@ lib.rs -> infrastructure -> application -> domain
 - Sliding DFT: `apollo-sdft`.
 - Mellin transform: `apollo-mellin`.
 - Wavelet transforms: `apollo-wavelet`.
-- GPU FFT: `apollo-fft` with the `wgpu` feature. Radix-2 execution stages bit
-  reversal, butterfly stages, and inverse scaling as typed provider passes.
+- GPU FFT: `hephaestus-wgpu::WgpuFftOps` over Leto layouts and typed
+  split-complex device buffers. It supports ranks one through three.
 - GPU NUFFT: `apollo-nufft` with the `wgpu` feature; its kernels stay outside
-  the dense FFT domain while consuming Apollo's typed FFT provider stream.
+  the dense FFT domain while composing prepared Hephaestus FFT plans.
 - Other GPU transforms: the owning transform crate exposes a `wgpu` feature.
   CPU mathematical definitions remain the SSOT, and GPU implementations carry
   value-semantic CPU differential tests for their supported surfaces.
@@ -215,4 +211,4 @@ runner reports it. Repair with `python3 scripts/lockfile.py --regenerate`.
 - [`docs/architecture.md`](./docs/architecture.md)
 - [`docs/THEORY.md`](./docs/THEORY.md)
 - [`docs/VALIDATION.md`](./docs/VALIDATION.md)
-- [`docs/MIGRATION_KWAVERS.md`](./docs/MIGRATION_KWAVERS.md)
+- [`docs/MIGRATION_GPU_FFT.md`](./docs/MIGRATION_GPU_FFT.md)

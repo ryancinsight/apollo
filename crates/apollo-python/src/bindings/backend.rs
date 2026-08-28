@@ -1,6 +1,6 @@
 //! Backend availability and capability introspection for Python callers.
 
-use apollo_fft::{CpuBackend, FftBackend};
+use apollo_fft::{BackendCapabilities, CpuBackend, FftBackend};
 use hephaestus_core::HephaestusError;
 use hephaestus_wgpu::WgpuDevice;
 use pyo3::exceptions::PyRuntimeError;
@@ -63,9 +63,8 @@ pub(crate) fn backend_capabilities(py: Python<'_>) -> PyResult<Py<PyAny>> {
     backends.set_item("cpu", cpu)?;
 
     let wgpu = PyDict::new(py);
-    if let Some(device) = probe_wgpu_device()? {
-        let backend = apollo_fft::WgpuBackend::new(device);
-        let caps = backend.capabilities();
+    if probe_wgpu_device()?.is_some() {
+        let caps = BackendCapabilities::WGPU;
         wgpu.set_item("available", true)?;
         wgpu.set_item("supports_1d", caps.supports_1d)?;
         wgpu.set_item("supports_2d", caps.supports_2d)?;

@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 [major] [arch] [perf] — Codex
+
+- [x] Delete Apollo's duplicate dense WGPU FFT implementation, shaders,
+      benchmark, feature, and public exports while retaining CUDA FFT.
+- [x] Move all in-repository dense WGPU consumers to prepared rank-generic
+      Hephaestus plans and retain NUFFT plans, buffers, and host capacity.
+- [x] Repair benchmark-mode selection and complete the bounded retained-versus-
+      per-call GPU measurement without reducing statistical observations.
+- [x] Pass the local feature matrix, value-semantic Nextest suites, doctests,
+      warning-denied Rustdoc, residue checks, and SemVer classification.
+- [ ] Commit the exact diff, obtain independent architecture review, merge the
+      provider cutover, and synchronize Apollo/Hephaestus closure records.
+
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
 - [x] Reproduce the pool-warmup retained census at the merged Moirai revision

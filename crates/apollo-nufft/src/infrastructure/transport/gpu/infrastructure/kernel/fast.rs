@@ -1,24 +1,20 @@
 //! Kaiser--Bessel spread/FFT/extract and load/IFFT/interpolate dispatch.
 
 use eunomia::Complex32;
-use hephaestus_core::{CommandStream, ComputeDevice, KernelDevice};
+use hephaestus_core::{CommandStream, KernelDevice};
 use hephaestus_wgpu::WgpuDevice;
 
 use super::{
     buffers::{ensure_sample_capacity, NufftGpuBuffers1D, NufftGpuBuffers3D},
-    descriptors::{
-        ExtractOne, ExtractThree, FastNufftParams, FastNufftParams3D, FastOneKernel,
-        FastThreeKernel, InterpolateOne, InterpolateThree, LoadOne, LoadThree, SpreadOne,
-        SpreadThree,
-    },
+    descriptors::{FastNufftParams, FastNufftParams3D},
     NufftGpuKernel,
 };
 use crate::infrastructure::transport::gpu::domain::error::NufftWgpuResult;
 
 use super::fast_support::{
-    download_prefix, fft_one, fft_three, grid, one_bindings, positions_to_complex,
-    positions_to_pod, product, real_to_complex, three_bindings, write_one_type1_buffers,
-    write_three_type1_buffers, KaiserBesselOne, KaiserBesselThree,
+    copy_positions_as_complex, copy_positions_as_pod, copy_real_as_complex, download_prefix, grid,
+    one_bindings, product, three_bindings, write_one_type1_buffers, write_three_type1_buffers,
+    KaiserBesselOne, KaiserBesselThree,
 };
 
 #[cfg(any(test, feature = "diagnostics"))]
@@ -36,34 +32,54 @@ impl NufftGpuKernel {
         positions: &[f32],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let buffers = NufftGpuBuffers1D::new(device, n, m, positions.len())?;
-        Self::execute_fast_type1_1d_with_buffers(device, &buffers, configuration, positions, values)
+        let mut buffers = NufftGpuBuffers1D::new(device, n, m, positions.len())?;
+        Self::execute_fast_type1_1d_with_buffers(
+            device,
+            &mut buffers,
+            configuration,
+            positions,
+            values,
+        )
     }
 
     pub(crate) fn execute_fast_type1_1d_with_buffers(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers1D,
+        buffers: &mut NufftGpuBuffers1D,
         configuration: KaiserBesselOne<'_>,
         positions: &[f32],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_complex(positions);
-        let deconv = real_to_complex(configuration.deconvolution, 1.0);
-        write_one_type1_buffers(device, buffers, &positions, values, &deconv)?;
+        copy_positions_as_complex(&mut buffers.host_positions, positions);
+        copy_real_as_complex(
+            &mut buffers.host_deconvolution,
+            configuration.deconvolution,
+            1.0,
+        );
+        write_one_type1_buffers(
+            device,
+            buffers,
+            &buffers.host_positions,
+            values,
+            &buffers.host_deconvolution,
+        )?;
         let params =
             FastNufftParams::for_grid(buffers.n, buffers.m, positions.len(), configuration)?;
-        let spread = device.prepare(&FastOneKernel::<SpreadOne>::new())?;
-        let extract = device.prepare(&FastOneKernel::<ExtractOne>::new())?;
         let bindings = one_bindings(buffers, &buffers.padding_buffer);
         let mut stream = device.stream()?;
-        stream.encode(&spread, &bindings, &params, grid(buffers.m)?)?;
-        fft_one(device, buffers.m)?.encode_forward_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
+        stream.encode(
+            &buffers.kernels.spread,
+            &bindings,
+            &params,
+            grid(buffers.m)?,
         )?;
-        stream.encode(&extract, &bindings, &params, grid(buffers.n)?)?;
+        buffers.encode_forward(device, &mut stream)?;
+        stream.encode(
+            &buffers.kernels.extract,
+            &bindings,
+            &params,
+            grid(buffers.n)?,
+        )?;
         stream.submit()?;
         download_prefix(device, &buffers.output_buffer, buffers.n)
     }
@@ -76,10 +92,10 @@ impl NufftGpuKernel {
         coefficients: &[Complex32],
         positions: &[f32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let buffers = NufftGpuBuffers1D::new(device, n, m, positions.len())?;
+        let mut buffers = NufftGpuBuffers1D::new(device, n, m, positions.len())?;
         Self::execute_fast_type2_1d_with_buffers(
             device,
-            &buffers,
+            &mut buffers,
             configuration,
             coefficients,
             positions,
@@ -88,32 +104,35 @@ impl NufftGpuKernel {
 
     pub(crate) fn execute_fast_type2_1d_with_buffers(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers1D,
+        buffers: &mut NufftGpuBuffers1D,
         configuration: KaiserBesselOne<'_>,
         coefficients: &[Complex32],
         positions: &[f32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_complex(positions);
-        let deconv = real_to_complex(configuration.deconvolution, buffers.m as f32);
-        device.write_sub_buffer(&buffers.position_buffer, 0, &positions)?;
-        device.write_sub_buffer(&buffers.deconv_buffer, 0, &deconv)?;
-        let coefficients = device.upload(coefficients)?;
+        copy_positions_as_complex(&mut buffers.host_positions, positions);
+        copy_real_as_complex(
+            &mut buffers.host_deconvolution,
+            configuration.deconvolution,
+            buffers.m as f32,
+        );
+        device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;
+        device.write_sub_buffer(&buffers.deconv_buffer, 0, &buffers.host_deconvolution)?;
+        device.write_sub_buffer(&buffers.coefficient_buffer, 0, coefficients)?;
         let params =
             FastNufftParams::for_grid(buffers.n, buffers.m, positions.len(), configuration)?;
-        let load = device.prepare(&FastOneKernel::<LoadOne>::new())?;
-        let interpolate = device.prepare(&FastOneKernel::<InterpolateOne>::new())?;
-        let load_bindings = one_bindings(buffers, &coefficients);
-        let interpolate_bindings = one_bindings(buffers, &coefficients);
+        let load_bindings = one_bindings(buffers, &buffers.coefficient_buffer);
+        let interpolate_bindings = one_bindings(buffers, &buffers.coefficient_buffer);
         let mut stream = device.stream()?;
-        stream.encode(&load, &load_bindings, &params, grid(buffers.m)?)?;
-        fft_one(device, buffers.m)?.encode_inverse_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
-        )?;
         stream.encode(
-            &interpolate,
+            &buffers.kernels.load,
+            &load_bindings,
+            &params,
+            grid(buffers.m)?,
+        )?;
+        buffers.encode_inverse(device, &mut stream)?;
+        stream.encode(
+            &buffers.kernels.interpolate,
             &interpolate_bindings,
             &params,
             grid(positions.len())?,
@@ -130,23 +149,29 @@ impl NufftGpuKernel {
         positions: &[(f32, f32, f32)],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let buffers = NufftGpuBuffers3D::new(device, shape, oversampled, positions.len())?;
-        Self::execute_fast_type1_3d_with_buffers(device, &buffers, configuration, positions, values)
+        let mut buffers = NufftGpuBuffers3D::new(device, shape, oversampled, positions.len())?;
+        Self::execute_fast_type1_3d_with_buffers(
+            device,
+            &mut buffers,
+            configuration,
+            positions,
+            values,
+        )
     }
 
     pub(crate) fn execute_fast_type1_3d_with_buffers(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers3D,
+        buffers: &mut NufftGpuBuffers3D,
         configuration: KaiserBesselThree<'_>,
         positions: &[(f32, f32, f32)],
         values: &[Complex32],
     ) -> NufftWgpuResult<Vec<Complex32>> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_pod(positions);
+        copy_positions_as_pod(&mut buffers.host_positions, positions);
         write_three_type1_buffers(
             device,
             buffers,
-            &positions,
+            &buffers.host_positions,
             values,
             configuration.deconvolution,
         )?;
@@ -156,19 +181,18 @@ impl NufftGpuKernel {
             positions.len(),
             configuration,
         )?;
-        let spread = device.prepare(&FastThreeKernel::<SpreadThree>::new())?;
-        let extract = device.prepare(&FastThreeKernel::<ExtractThree>::new())?;
         let bindings = three_bindings(buffers, &buffers.padding_buffer);
         let grid_len = product(buffers.oversampled)?;
         let output_len = product(buffers.shape)?;
         let mut stream = device.stream()?;
-        stream.encode(&spread, &bindings, &params, grid(grid_len)?)?;
-        fft_three(device, buffers.oversampled)?.encode_forward_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
+        stream.encode(&buffers.kernels.spread, &bindings, &params, grid(grid_len)?)?;
+        buffers.encode_forward(device, &mut stream)?;
+        stream.encode(
+            &buffers.kernels.extract,
+            &bindings,
+            &params,
+            grid(output_len)?,
         )?;
-        stream.encode(&extract, &bindings, &params, grid(output_len)?)?;
         stream.submit()?;
         download_prefix(device, &buffers.output_buffer, output_len)
     }
@@ -181,40 +205,45 @@ impl NufftGpuKernel {
         modes: &[Complex32],
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex32>> {
-        let buffers = NufftGpuBuffers3D::new(device, shape, oversampled, positions.len())?;
-        Self::execute_fast_type2_3d_with_buffers(device, &buffers, configuration, modes, positions)
+        let mut buffers = NufftGpuBuffers3D::new(device, shape, oversampled, positions.len())?;
+        Self::execute_fast_type2_3d_with_buffers(
+            device,
+            &mut buffers,
+            configuration,
+            modes,
+            positions,
+        )
     }
 
     pub(crate) fn execute_fast_type2_3d_with_buffers(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers3D,
+        buffers: &mut NufftGpuBuffers3D,
         configuration: KaiserBesselThree<'_>,
         modes: &[Complex32],
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<Vec<Complex32>> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_pod(positions);
-        device.write_sub_buffer(&buffers.position_buffer, 0, &positions)?;
+        copy_positions_as_pod(&mut buffers.host_positions, positions);
+        device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;
         device.write_sub_buffer(&buffers.deconv_buffer, 0, configuration.deconvolution)?;
-        let coefficients = device.upload(modes)?;
+        device.write_sub_buffer(&buffers.coefficient_buffer, 0, modes)?;
         let params = FastNufftParams3D::for_grid(
             buffers.shape,
             buffers.oversampled,
             positions.len(),
             configuration,
         )?;
-        let load = device.prepare(&FastThreeKernel::<LoadThree>::new())?;
-        let interpolate = device.prepare(&FastThreeKernel::<InterpolateThree>::new())?;
-        let bindings = three_bindings(buffers, &coefficients);
+        let bindings = three_bindings(buffers, &buffers.coefficient_buffer);
         let grid_len = product(buffers.oversampled)?;
         let mut stream = device.stream()?;
-        stream.encode(&load, &bindings, &params, grid(grid_len)?)?;
-        fft_three(device, buffers.oversampled)?.encode_inverse_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
+        stream.encode(&buffers.kernels.load, &bindings, &params, grid(grid_len)?)?;
+        buffers.encode_inverse(device, &mut stream)?;
+        stream.encode(
+            &buffers.kernels.interpolate,
+            &bindings,
+            &params,
+            grid(positions.len())?,
         )?;
-        stream.encode(&interpolate, &bindings, &params, grid(positions.len())?)?;
         stream.submit()?;
         download_prefix(device, &buffers.output_buffer, positions.len())
     }
@@ -222,36 +251,39 @@ impl NufftGpuKernel {
     #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) fn execute_fast_type2_1d_with_diagnostics(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers1D,
+        buffers: &mut NufftGpuBuffers1D,
         configuration: KaiserBesselOne<'_>,
         coefficients: &[Complex32],
         positions: &[f32],
     ) -> NufftWgpuResult<(Vec<Complex32>, NufftType2GridDiagnostics)> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_complex(positions);
-        let deconv = real_to_complex(configuration.deconvolution, buffers.m as f32);
-        device.write_sub_buffer(&buffers.position_buffer, 0, &positions)?;
-        device.write_sub_buffer(&buffers.deconv_buffer, 0, &deconv)?;
-        let coefficients = device.upload(coefficients)?;
+        copy_positions_as_complex(&mut buffers.host_positions, positions);
+        copy_real_as_complex(
+            &mut buffers.host_deconvolution,
+            configuration.deconvolution,
+            buffers.m as f32,
+        );
+        device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;
+        device.write_sub_buffer(&buffers.deconv_buffer, 0, &buffers.host_deconvolution)?;
+        device.write_sub_buffer(&buffers.coefficient_buffer, 0, coefficients)?;
         let params =
             FastNufftParams::for_grid(buffers.n, buffers.m, positions.len(), configuration)?;
-        let load = device.prepare(&FastOneKernel::<LoadOne>::new())?;
-        let interpolate = device.prepare(&FastOneKernel::<InterpolateOne>::new())?;
-        let bindings = one_bindings(buffers, &coefficients);
+        let bindings = one_bindings(buffers, &buffers.coefficient_buffer);
         let mut stream = device.stream()?;
-        stream.encode(&load, &bindings, &params, grid(buffers.m)?)?;
+        stream.encode(&buffers.kernels.load, &bindings, &params, grid(buffers.m)?)?;
         stream.submit()?;
         let after_load = snapshot_one(device, buffers)?;
         let mut stream = device.stream()?;
-        fft_one(device, buffers.m)?.encode_inverse_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
-        )?;
+        buffers.encode_inverse(device, &mut stream)?;
         stream.submit()?;
         let after_ifft = snapshot_one(device, buffers)?;
         let mut stream = device.stream()?;
-        stream.encode(&interpolate, &bindings, &params, grid(positions.len())?)?;
+        stream.encode(
+            &buffers.kernels.interpolate,
+            &bindings,
+            &params,
+            grid(positions.len())?,
+        )?;
         stream.submit()?;
         Ok((
             download_prefix(device, &buffers.output_buffer, positions.len())?,
@@ -265,40 +297,39 @@ impl NufftGpuKernel {
     #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) fn execute_fast_type2_3d_with_diagnostics(
         device: &WgpuDevice,
-        buffers: &NufftGpuBuffers3D,
+        buffers: &mut NufftGpuBuffers3D,
         configuration: KaiserBesselThree<'_>,
         modes: &[Complex32],
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<(Vec<Complex32>, NufftType2GridDiagnostics)> {
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
-        let positions = positions_to_pod(positions);
-        device.write_sub_buffer(&buffers.position_buffer, 0, &positions)?;
+        copy_positions_as_pod(&mut buffers.host_positions, positions);
+        device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;
         device.write_sub_buffer(&buffers.deconv_buffer, 0, configuration.deconvolution)?;
-        let coefficients = device.upload(modes)?;
+        device.write_sub_buffer(&buffers.coefficient_buffer, 0, modes)?;
         let params = FastNufftParams3D::for_grid(
             buffers.shape,
             buffers.oversampled,
             positions.len(),
             configuration,
         )?;
-        let load = device.prepare(&FastThreeKernel::<LoadThree>::new())?;
-        let interpolate = device.prepare(&FastThreeKernel::<InterpolateThree>::new())?;
-        let bindings = three_bindings(buffers, &coefficients);
+        let bindings = three_bindings(buffers, &buffers.coefficient_buffer);
         let grid_len = product(buffers.oversampled)?;
         let mut stream = device.stream()?;
-        stream.encode(&load, &bindings, &params, grid(grid_len)?)?;
+        stream.encode(&buffers.kernels.load, &bindings, &params, grid(grid_len)?)?;
         stream.submit()?;
         let after_load = snapshot_three(device, buffers)?;
         let mut stream = device.stream()?;
-        fft_three(device, buffers.oversampled)?.encode_inverse_split(
-            &mut stream,
-            &buffers.real_grid,
-            &buffers.imaginary_grid,
-        )?;
+        buffers.encode_inverse(device, &mut stream)?;
         stream.submit()?;
         let after_ifft = snapshot_three(device, buffers)?;
         let mut stream = device.stream()?;
-        stream.encode(&interpolate, &bindings, &params, grid(positions.len())?)?;
+        stream.encode(
+            &buffers.kernels.interpolate,
+            &bindings,
+            &params,
+            grid(positions.len())?,
+        )?;
         stream.submit()?;
         Ok((
             download_prefix(device, &buffers.output_buffer, positions.len())?,

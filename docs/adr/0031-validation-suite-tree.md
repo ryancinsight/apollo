@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-16
+- Revised: 2026-08-28
 - Change class: internal architecture refactor
 
 ## Context
@@ -41,3 +42,7 @@ No new tolerance, fallback, or provider wrapper is introduced.
 - The refactor preserves value-semantic tests and warning-clean API docs; the
   validation package passes 10/10 Nextest tests, all-targets Clippy, and
   rustdoc.
+- The 2026-08-28 provider cutover makes the GPU leaf prepare Hephaestus
+  rank-three operands directly and replaces its fixed epsilon with the
+  provider conformance bound. The report schema and Apollo CPU oracle remain
+  unchanged.

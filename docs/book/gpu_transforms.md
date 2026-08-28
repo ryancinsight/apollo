@@ -1,57 +1,63 @@
 # GPU Transforms
 
-Apollo's `apollo-fft` provides a GPU transform backend based on wgpu,
-exposing the same API surface as the CPU backend.
+Apollo owns transform-domain mathematics. Hephaestus owns accelerator devices,
+typed buffers, prepared pipelines, command streams, and dense WGPU FFT
+algorithms. Leto supplies the shape and stride metadata shared by CPU and GPU
+operands.
 
-## `WgpuTransformBackend`
+## Dense FFT
 
-`WgpuTransformBackend` wraps a Hephaestus wgpu device and implements FFT
-dispatch through WGSL compute shaders:
+A dense accelerator FFT is prepared through Hephaestus rather than an Apollo
+backend wrapper. The rank is encoded by `Layout<R>` and `FftOperands`:
 
-```rust,ignore
-use apollo_fft::WgpuTransformBackend;
+```rust,no_run
+use hephaestus_core::{
+    ComputeDevice, FftDirection, FftOperands, FftOps, StridedView,
+};
+use hephaestus_wgpu::{WgpuDevice, WgpuFftOps};
+use leto::Layout;
 
-let backend = WgpuTransformBackend::new(&wgpu_device)?;
-let plan = backend.plan_1d(4096, PrecisionProfile::default())?;
-backend.execute(&plan, &mut input, &mut output)?;
+# fn run(device: &WgpuDevice) -> Result<(), Box<dyn std::error::Error>> {
+let real = device.upload(&[1.0_f32, 0.0, -1.0, 0.0])?;
+let imaginary = device.alloc_zeroed(4)?;
+let layout = Layout::c_contiguous([4])?;
+let plan = WgpuFftOps.prepare_fft(
+    device,
+    FftOperands {
+        real: StridedView::new(&real, &layout),
+        imaginary: StridedView::new(&imaginary, &layout),
+    },
+    FftDirection::Forward,
+)?;
+WgpuFftOps.dispatch_fft(device, &plan)?;
+# Ok(())
+# }
 ```
 
-## Shared Validation Helpers
+Preparation validates shape, strides, aliasing, scalar capability, and device
+ownership before mutation. It also compiles and binds the required radix or
+Bluestein pipelines. Retain the prepared plan with its fixed buffers; repeated
+dispatch then performs no plan allocation or compilation.
 
-`WgpuTransformBackend` exposes three validation helpers consumed by
-`apollo-fft`, `apollo-gft`, and `apollo-validation`:
+Ranks one through three use the same API. The buffer scalar selects f32 or
+native-f16 arithmetic; native f16 requires a `ShaderF16`-qualified device.
 
-| Helper | Description |
-|--------|-------------|
-| `validate_plan(plan)` | Rejects empty or missing plans |
-| `require_len(buf, n)` | Asserts buffer length == n |
-| `validate_storage_profile(profile)` | Validates tier and precision |
+## Composition
 
-## `GpuTransformExecutor` and `GpuTransformPlanner`
+`FftOps::encode_fft` records a prepared transform into an existing Hephaestus
+command stream. Apollo NUFFT uses this boundary to order spread/load, FFT, and
+extract/interpolate passes without an intermediate submission or host copy.
+Forward and inverse plans live beside the reusable oversampled grids.
 
-`GpuTransformPlanner` creates and caches `WgpuTransformPlan` instances.
-The cache key is `(shape, PrecisionProfile, direction)`. Once compiled,
-a plan can be executed many times without re-compiling the WGSL shader.
+## Domain-specific transforms
 
-`GpuTransformExecutor` drives the dispatch loop: it binds input/output
-buffers, dispatches the compute shader, and handles the synchronization
-fence.
+Apollo's `WgpuTransformBackend<K>` remains the shared scaffold for non-FFT
+transform kernels. A transform crate supplies its own zero-sized planner and
+executor implementation, while the scaffold centralizes typed storage,
+capability reporting, validation, and provider errors. It is not a dense FFT
+backend and does not duplicate Hephaestus `FftOps`.
 
-## `PrecisionProfile`
-
-Controls the floating-point precision and normalization applied during
-GPU transforms:
-
-| Field | Description |
-|-------|-------------|
-| `compute` | On-chip computation precision |
-| `storage` | Buffer storage precision |
-| `normalization` | `Forward` / `Backward` / `Ortho` |
-| `mode` | `PrecisionMode` (e.g., `Mixed`, `Full`) |
-
-## Integration with Apollo GFT
-
-`apollo-gft` (Graph Fourier Transform) uses `WgpuTransformBackend`
-for GPU-accelerated spectral graph transforms. It adds
-`validate_basis_len` for its graph-basis shape validation while
-delegating generic error-validation to the shared helpers.
+Accelerator implementations are verified against the corresponding Apollo CPU
+operator under a derived finite-precision bound. Provider absence is reported
+at acquisition; a present provider failure is never converted into a silent CPU
+fallback.

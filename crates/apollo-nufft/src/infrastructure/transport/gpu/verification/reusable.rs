@@ -9,7 +9,7 @@ use crate::{
     UniformDomain1D, UniformGrid3D,
 };
 
-use super::support::{assert_input_length_mismatch, backend};
+use super::support::{assert_input_length_mismatch, backend, grid3d, modes3d, positions3d};
 
 #[test]
 fn type1_rejects_input_length_mismatch() {
@@ -29,12 +29,12 @@ fn fast_type1_reusable_1d_rejects_sample_capacity_overflow() {
         return;
     };
     let plan = NufftWgpuPlan1D::new(UniformDomain1D::new(8, 0.25).expect("domain"), 2, 6);
-    let buffers =
+    let mut buffers =
         NufftGpuBuffers1D::new(backend.device(), 8, 16, 1).expect("provider buffer allocation");
     let error = backend
         .execute_fast_type1_1d_with_buffers(
             &plan,
-            &buffers,
+            &mut buffers,
             &[0.0, 0.25],
             &[Complex32::new(1.0, 0.0), Complex32::new(0.5, -0.25)],
         )
@@ -64,10 +64,10 @@ fn fast_type2_reusable_1d_supports_more_samples_than_modes() {
     let expected = backend
         .execute_fast_type2_1d(&plan, &coefficients, &positions)
         .expect("non-reusable fast type2");
-    let buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, positions.len())
+    let mut buffers = NufftGpuBuffers1D::new(backend.device(), 8, 16, positions.len())
         .expect("provider buffer allocation");
     let actual = backend
-        .execute_fast_type2_1d_with_buffers(&plan, &buffers, &coefficients, &positions)
+        .execute_fast_type2_1d_with_buffers(&plan, &mut buffers, &coefficients, &positions)
         .expect("reusable fast type2");
     assert_eq!(actual, expected);
 }
@@ -79,15 +79,40 @@ fn fast_type1_reusable_3d_rejects_sample_capacity_overflow() {
     };
     let grid = UniformGrid3D::new(3, 2, 2, 0.5, 0.75, 1.0).expect("grid");
     let plan = NufftWgpuPlan3D::new(grid, 2, 6);
-    let buffers = NufftGpuBuffers3D::new(backend.device(), (3, 2, 2), (16, 16, 16), 1)
+    let mut buffers = NufftGpuBuffers3D::new(backend.device(), (3, 2, 2), (16, 16, 16), 1)
         .expect("provider buffer allocation");
     let error = backend
         .execute_fast_type1_3d_with_buffers(
             &plan,
-            &buffers,
+            &mut buffers,
             &[(0.0_f32, 0.0, 0.0), (0.35, 0.7, 0.5)],
             &[Complex32::new(1.0, 0.0), Complex32::new(-0.25, 0.5)],
         )
         .expect_err("sample capacity overflow must fail");
     assert_input_length_mismatch(error, 1, 2);
+}
+
+#[test]
+fn fast_type2_reusable_3d_matches_per_call_execution() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    let grid = grid3d();
+    let plan = NufftWgpuPlan3D::new(grid, 2, 6);
+    let modes = modes3d(grid);
+    let positions = positions3d();
+    let expected = backend
+        .execute_fast_type2_3d(&plan, &modes, &positions)
+        .expect("per-call fast type2");
+    let mut buffers = NufftGpuBuffers3D::new(
+        backend.device(),
+        (grid.nx, grid.ny, grid.nz),
+        (16, 16, 16),
+        positions.len(),
+    )
+    .expect("provider buffer allocation");
+    let actual = backend
+        .execute_fast_type2_3d_with_buffers(&plan, &mut buffers, &modes, &positions)
+        .expect("reusable fast type2");
+    assert_eq!(actual, expected);
 }

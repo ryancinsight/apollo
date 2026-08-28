@@ -2,7 +2,7 @@
 // - Type-1 path: forward FFT on oversampled grid, then extract/deconvolve.
 //   The forward FFT is unnormalized (no 1/N factor).
 // - Type-2 path: load/deconvolve onto grid, then inverse FFT.
-//   The inverse FFT applied by GpuFft3d::encode_inverse_split divides by m
+//   The prepared inverse FFT encoded by Hephaestus WgpuFftOps divides by m
 //   (the oversampled length) per axis. The CPU path compensates by multiplying
 //   by m after the IFFT. On the GPU, the host pre-scales deconv values by m
 //   so the normalized IFFT output equals the unnormalized IDFT expected by

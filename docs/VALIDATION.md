@@ -8,7 +8,8 @@ Apollo validation is structured as named suites that can run independently or as
 
 `apollo-validation` exposes a multi-crate API so callers can select only the validation surfaces they
 need. The top-level crate exports the suite entry points, while the internal application module
-composes the reports from Apollo FFT, Apollo NUFFT, Apollo FFT WGPU, Apollo NUFFT WGPU, and optional external reference providers.
+composes reports from Apollo CPU FFT, Apollo NUFFT, Hephaestus WGPU FFT,
+Apollo NUFFT WGPU, and optional external reference providers.
 
 The primary entry points are:
 
@@ -78,7 +79,7 @@ Apollo stores mixed-precision validation thresholds centrally in the validation 
 - CPU `low_precision`: relative error target below `1e-5`.
 - CPU `mixed_precision`: relative error target below `1e-2`.
 - WGPU `low_precision`: current forward/inverse parity envelope against the Apollo CPU reference.
-- WGPU `mixed_precision`: FFT-WGPU 3D, NUFFT-WGPU direct/fast Type-1/Type-2 1D/3D,
+- WGPU `mixed_precision`: Hephaestus FFT ranks 1/2/3, NUFFT-WGPU direct/fast Type-1/Type-2 1D/3D,
   DHT-WGPU, FWHT-WGPU, CZT-WGPU, DCTDST-WGPU, FrFT-WGPU, GFT-WGPU,
   Hilbert-WGPU, Mellin-WGPU, QFT-WGPU, Radon-WGPU, SDFT-WGPU, SFT-WGPU,
   SHT-WGPU, STFT-WGPU, and Wavelet-WGPU use typed host storage with `f32`
@@ -87,8 +88,9 @@ Apollo stores mixed-precision validation thresholds centrally in the validation 
   is exact modular integer arithmetic. It instead exposes exact quantized `u32`
   residue storage for the current 32-bit WGPU modulus surface.
 
-The current CPU and FFT-WGPU `mixed_precision` FFT path means `half::f16` storage with `f32`
-compute. Shader-level `f16` remains a separate hardware-feature-gated extension.
+Apollo CPU `mixed_precision` means `half::f16` storage with `f32` compute.
+Hephaestus separately exposes native-f16 WGPU FFT arithmetic on devices with
+`ShaderF16`.
 
 ## Adversarial Coverage
 
@@ -171,9 +173,9 @@ and NUFFT literature:
 
 - Keep NUFFT spreading cache-aware by reordering points and improving locality.
 - Reduce transient allocation in hot loops so bandwidth is spent on useful arithmetic.
-- Treat GPU FFT throughput as a kernel-orchestration problem: host-device traffic and per-stage
-  launches dominate small and medium transforms, so future Apollo WGPU work should keep axis data
-  resident on device and fuse more stages.
+- Treat GPU FFT throughput as a kernel-orchestration problem: host-device
+  traffic and per-stage launches dominate small and medium transforms, so
+  Hephaestus keeps axis data resident and owns stage fusion.
 - Prefer in-place contiguous axis execution before adding new backend variants. Current GPU FFT
   benchmark literature reports throughput in effective memory bandwidth, so removing avoidable
   full-field copies is a first-order optimization even before shader fusion.
@@ -267,18 +269,16 @@ property tests against analytical identities and direct references.
   machine-precision truncation rather than low-order polynomial coefficients.
 - Wavelet Morlet validation includes a zero-mean admissibility check for the
   DC-corrected real Morlet mother wavelet.
-- WGPU backend validation is split by transform domain: `apollo-fft-wgpu`
-  owns dense FFT device and shader checks, while `apollo-nufft-wgpu` now
+- WGPU backend validation is split by transform domain: Hephaestus owns dense
+  FFT device and shader checks, while `apollo-nufft --features wgpu` now
   validates exact direct Type-1 and Type-2 execution plus fast Kaiser-Bessel
   gridding for 1D and 3D against `apollo-nufft` exact and gridded references.
-- `apollo-fft-wgpu` exposes `GpuFft3dBuffers` for repeated 3D dispatch; tests
-  verify reusable-buffer forward/inverse execution matches the existing
-  allocating path when a WGPU device is available. Leto f64 and half-storage
-  boundaries share the same retained host planes, preserve their addresses
-  across forward/inverse dispatch, and reject buffers from a different plan
-  shape before mutation. The returned arrays use Leto's in-place shape
-  generator, whose provider tests verify single-write final storage and panic
-  cleanup without an intermediate collection.
+- Hephaestus exposes prepared rank-generic FFT plans bound to fixed
+  split-complex buffers. Apollo validation compares rank-three forward and
+  inverse execution directly with the Apollo CPU/Leto oracle, while NUFFT
+  retains rank-one and rank-three forward/inverse plans with its reusable
+  grids. Plan construction binds the layout and buffers once, making a later
+  cross-shape dispatch unrepresentable through the retained buffer object.
 - `apollo-ntt-wgpu` exposes `NttGpuBuffers` for repeated direct modular NTT
   dispatch; tests verify reusable-buffer forward/inverse execution matches the
   allocating path and reject mismatched plan/buffer lengths when a WGPU device
@@ -286,10 +286,9 @@ property tests against analytical identities and direct references.
 - `apollo-ntt-wgpu` also routes exact quantized `u32` residue execution through
   caller-owned `NttGpuBuffers`; tests verify reusable-buffer forward/inverse
   parity against the allocating quantized path when a WGPU device is available.
-- `apollo-fft-wgpu` exposes mixed-precision 3D helpers for `f16` host storage
-  with `f32` GPU compute; tests verify forward parity against the represented
-  input path and inverse recovery after quantization back to `f16`.
-- `apollo-nufft-wgpu` exposes typed mixed-storage direct and fast Type-1/Type-2 1D/3D
+- Hephaestus verifies f32 and native-f16 dense FFT scalars across ranks one
+  through three; Apollo owns no duplicate mixed-precision GPU helper.
+- `apollo-nufft --features wgpu` exposes typed mixed-storage direct and fast Type-1/Type-2 1D/3D
   execution wrappers. Tests validate `[f16; 2]` inputs and caller-owned outputs
   against the represented `Complex32` GPU path.
 - `apollo-dht --features wgpu` exposes typed mixed-storage forward/inverse
@@ -306,7 +305,7 @@ property tests against analytical identities and direct references.
   Wavelet-WGPU expose typed mixed-storage wrappers over their existing `f32`
   GPU kernels. Tests validate profile mismatch rejection and represented-`f32`
   parity for the implemented transform surface.
-- `apollo-nufft-wgpu` exposes debug-gated fast Type-2 grid diagnostics through
+- `apollo-nufft --features wgpu` exposes debug-gated fast Type-2 grid diagnostics through
   `NufftGridSnapshot` and `NufftType2GridDiagnostics`; tests verify 1D and 3D
   after-load and after-IFFT snapshots are finite, nonzero, shape-correct, and
   preserve standard fast-path output values.
@@ -367,7 +366,7 @@ property tests against analytical identities and direct references.
   impulse oracle, and the Hartley involution. Leto results download directly
   into Mnemosyne storage, and the capability report covers only the implemented
   `f32` kernel surface.
-- `apollo-nufft-wgpu` now validates exact direct Type-1 and Type-2 summations
+- `apollo-nufft --features wgpu` validates exact direct Type-1 and Type-2 summations
   for 1D and 3D against `apollo-nufft` exact reference functions and reports
   support for those direct GPU surfaces.
 - Transform WGPU crates report execution support only for implemented kernels
@@ -421,8 +420,8 @@ property tests against analytical identities and direct references.
   represented-input parity, Type-2 output parity, shape rejection, and
   profile/storage mismatch rejection against the owner Kaiser-Bessel
   spreading/interpolation, Apollo FFT, and deconvolution paths.
-- FFT-WGPU now exposes `LOW_PRECISION_F32` and `MIXED_PRECISION_F16_F32`
-  capability records for 3D dense FFT execution. NUFFT-WGPU exposes mixed
+- Hephaestus WGPU FFT exposes f32 and native-f16 prepared plans for ranks one
+  through three. NUFFT-WGPU exposes mixed
   precision for the verified direct and fast Type-1/Type-2 1D/3D typed storage
   paths. CZT-WGPU, DCTDST-WGPU, DHT-WGPU, FrFT-WGPU, FWHT-WGPU, GFT-WGPU,
   Hilbert-WGPU, Mellin-WGPU, QFT-WGPU, Radon-WGPU, SDFT-WGPU, SFT-WGPU,

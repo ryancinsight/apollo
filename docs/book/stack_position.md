@@ -4,14 +4,15 @@
 
 Apollo is the Atlas spectral transform layer. It owns:
 
-- **FFT** — 1D/2D/3D real/complex transforms, plan cache, GPU backend
+- **FFT** — 1D/2D/3D CPU real/complex transforms and plan cache
 - **STFT** — short-time Fourier transform and inverse
 - **Wavelet transforms** — DWT (Haar, Daubechies) and CWT (Ricker, Morlet)
 - **NTT** — number theoretic transform over finite fields
 - **DHT** — discrete Hartley transform
 - **Frequency grids** — sample-frequency axis construction
 - **Parseval normalization contracts** — energy conservation across transforms
-- **GPU transform backend** — wgpu-based FFT dispatch
+- **GPU transform algorithms** — domain-specific non-FFT kernels composed with
+  Hephaestus device and dense-FFT operations
 
 Apollo does **not** own acoustic physics (kwavers), MR imaging (ritk),
 dose computation (helios), tensor algebra (coeus), or memory allocation.

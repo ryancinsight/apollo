@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted on 2026-07-15.
+Accepted on 2026-07-15. Revised on 2026-08-28 under
+`APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28`.
 
 ## Context
 
@@ -22,14 +23,49 @@ Leto remains the CPU array/view boundary and does not model device storage.
 every direct and fast 1D/3D operation. Direct descriptors bind positions,
 complex input, complex output, and one POD parameter block. Fast descriptors
 bind the canonical seven position/value/deconvolution/grid/output buffers plus
-parameters. The ordered stream records spread or load, typed `GpuFft3d`, then
-extract or interpolate; stream order is the write-before-read contract.
+parameters. The ordered stream records spread or load, a prepared rank-generic
+Hephaestus FFT, then extract or interpolate; stream order is the
+write-before-read contract.
 
-`NufftGpuBuffers1D` and `NufftGpuBuffers3D` own typed provider storage. Type-2
-output capacity is `max(mode_count, sample_capacity)`, so reusable execution
-cannot underallocate when samples outnumber modes. The public accelerator
-boundary accepts and returns `hephaestus_wgpu::WgpuDevice`; it exposes no raw
-device, queue, encoder, or helper wrapper.
+`NufftGpuBuffers1D` and `NufftGpuBuffers3D` own typed provider storage,
+including Type-2 coefficient buffers, plus forward and inverse
+`WgpuPreparedFft` plans bound to their oversampled grids. Reusable execution
+requires an exclusive mutable buffer borrow, so safe callers cannot interleave
+host writes or dispatches against one workspace. The buffers also retain host
+position and deconvolution conversion capacity.
+Construction performs FFT validation, capability selection, allocation, and
+all spread/load/extract/interpolate and FFT pipeline preparation once.
+Repeated execution only overwrites fixed provider buffers and encodes the
+retained plans; it performs no transient provider-buffer allocation,
+position/deconvolution conversion allocation, pipeline preparation/compilation,
+or provider selection. Output allocation, non-contiguous 3D mode
+materialization, and host-device transfers remain explicit. Type-2 output
+capacity is `max(mode_count, sample_capacity)`, so
+reusable execution cannot underallocate when samples outnumber modes. The
+public accelerator boundary accepts and returns
+`hephaestus_wgpu::WgpuDevice`; it exposes no raw device, queue, encoder, or
+helper wrapper.
+
+## Performance evidence
+
+The 2026-08-28 reference run used Windows on an Intel Core Ultra 9 285K with
+an NVIDIA GeForce RTX 5080 (driver 610.47). The optimized `bench-quick`
+`buffer_reuse` suite completed in approximately 162 seconds and retained 100
+observations per arm. Values are median milliseconds with the exact 96.4799%
+distribution-free median interval in brackets.
+
+| Operation | Per-call construction | Retained buffers | Median ratio |
+| --- | ---: | ---: | ---: |
+| Type-1 1D, n=256 | 319.778 [318.795, 320.885] | 0.160293 [0.158407, 0.161098] | 1,995.0x |
+| Type-2 1D, n=256 | 302.337 [301.849, 303.463] | 0.183750 [0.182199, 0.184924] | 1,645.4x |
+| Type-1 3D, 8x8x8 | 478.156 [476.766, 480.485] | 0.125589 [0.124939, 0.126387] | 3,807.3x |
+| Type-2 3D, 8x8x8 | 477.974 [476.574, 479.433] | 1.45644 [1.45257, 1.46109] | 328.2x |
+
+The per-call arm constructs all provider buffers and prepared pipelines; the
+retained arm performs the same host writes, dispatch, readback, and output
+construction. The result isolates plan/pipeline construction from warm NUFFT
+execution. It does not establish transfer-free throughput or performance on a
+different adapter.
 
 ## Mathematical contract
 
@@ -67,6 +103,11 @@ capabilities, buffers, and `NufftWgpuBackend` directly from the
 Verification remains private test infrastructure and has no runtime
 replacement.
 
+The 2026-08-28 provider cutover also removes `NufftWgpuError::Fft`. The WGPU
+path no longer invokes Apollo's CPU/dense-FFT error domain; Hephaestus
+preparation, dispatch, allocation, and transfer failures enter through
+`NufftWgpuError::Provider`.
+
 ## Consequences
 
 The release has no compatibility shim or duplicate transport surface. The
@@ -74,5 +115,11 @@ single root export path retains typed Hephaestus ownership, while Leto remains
 the host-array boundary. `NufftWgpuBackend::try_default` remains only because
 NuFFT must request its transform-specific seven-storage-buffer lower bound
 through the provider; it does not implement a device API. `cargo
-semver-checks` classifies the removed public paths as breaking pre-1.0 changes;
-finite-precision test evidence does not constitute a machine-checked proof.
+semver-checks` classifies the removed `Fft` variant as the one expected
+`apollo-nufft` major incompatibility; finite-precision test evidence does not
+constitute a machine-checked proof.
+
+The 2026-08-28 revision removes the last dependency on Apollo's former dense
+WGPU FFT facade. Hephaestus now owns both the accelerator FFT algorithm and its
+prepared resources; Apollo retains NUFFT-specific spread, interpolation,
+deconvolution, and host-array semantics.
