@@ -5,13 +5,14 @@
 //! Extracted from `dimension_1d.rs` to honour SRP and keep the plan module
 //! focused on data structures and construction logic.
 
-use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 use eunomia::Complex;
 
 use super::FftPlan1D;
+use crate::application::execution::kernel::components::base128::butterfly::transform_64;
 use crate::application::execution::kernel::components::base128::transform_via_base_128;
 
 // ── Static dispatch (used by StaticFftPlan1D) ────────────────────────────────
@@ -285,6 +286,40 @@ pub(super) fn exec_winograd_inverse_unnorm<F, const N: usize>(
 }
 
 // 3. PowerOfTwo small sizes
+/// N = 64 through the 64-point base butterfly.
+pub(super) fn exec_base64_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_64::<F, false>(slice, plan.base64_forward_plan()),
+        "invariant: the selected base-64 capability remains available"
+    );
+}
+
+/// Normalized inverse companion of [`exec_base64_forward`].
+pub(super) fn exec_base64_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_64::<F, true>(slice, plan.base64_inverse_plan()),
+        "invariant: the selected base-64 capability remains available"
+    );
+    F::normalize(slice, 64);
+}
+
+/// Unnormalized inverse companion of [`exec_base64_forward`].
+pub(super) fn exec_base64_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_64::<F, true>(slice, plan.base64_inverse_plan()),
+        "invariant: the selected base-64 capability remains available"
+    );
+}
+
 pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],

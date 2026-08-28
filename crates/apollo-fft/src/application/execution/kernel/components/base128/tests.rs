@@ -1,7 +1,7 @@
-//! Correctness for the 128-point base butterfly. The direct DFT is the
-//! analytical authority.
+//! Correctness for the 64- and 128-point base butterflies. The direct DFT is
+//! the analytical authority.
 
-use super::butterfly::{transform_128, Plan128};
+use super::butterfly::{Plan64, Plan128, transform_64, transform_128};
 use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 
@@ -21,8 +21,8 @@ fn dft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
         .collect()
 }
 
-fn signal() -> Vec<Complex64> {
-    (0..128)
+fn signal(n: usize) -> Vec<Complex64> {
+    (0..n)
         .map(|i| {
             let x = i as f64;
             Complex64::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
@@ -33,10 +33,10 @@ fn signal() -> Vec<Complex64> {
 fn tolerance(input: &[Complex64]) -> f64 {
     let l1: f64 = input.iter().map(|v| v.re.hypot(v.im)).sum();
     // The direct oracle performs at most eight rounded scalar operations per
-    // input term; the radix-2 FFT performs at most sixteen per one of seven
-    // stages. Higham's gamma_k = ku / (1 - ku), u = epsilon/2, bounds their
-    // combined first-order error against the input L1 norm.
-    let operations = 8.0 * input.len() as f64 + 16.0 * 7.0;
+    // input term; the radix-2 FFT performs at most sixteen per stage.
+    // Higham's gamma_k = ku / (1 - ku), u = epsilon/2, bounds their combined
+    // first-order error against the input L1 norm.
+    let operations = 8.0 * input.len() as f64 + 16.0 * f64::from(input.len().ilog2());
     let scaled_epsilon = operations * (f64::EPSILON / 2.0);
     scaled_epsilon / (1.0 - scaled_epsilon) * l1
 }
@@ -67,14 +67,138 @@ fn dft_reduced(input: &[Complex32], inverse: bool) -> Vec<Complex32> {
 
 fn reduced_tolerance(input: &[Complex32]) -> f32 {
     let l1: f32 = input.iter().map(|value| value.re.hypot(value.im)).sum();
-    let operations = 8.0 * input.len() as f32 + 16.0 * 7.0;
+    let operations = 8.0 * input.len() as f32 + 16.0 * input.len().ilog2() as f32;
     let scaled_epsilon = operations * (f32::EPSILON / 2.0);
     scaled_epsilon / (1.0 - scaled_epsilon) * l1
 }
 
+fn assert_base64_matches_direct<const INVERSE: bool>() {
+    let source = signal(64);
+    let mut actual = source.clone();
+    let Some(plan) = Plan64::<f64>::new_if_supported::<INVERSE>() else {
+        assert_eq!(actual, source, "a width decline must not mutate the input");
+        return;
+    };
+
+    assert!(transform_64::<f64, INVERSE>(&mut actual, &plan));
+    let expected = dft(&source, INVERSE);
+    let error = worst(&actual, &expected);
+    let bound = tolerance(&source);
+    assert!(
+        error <= bound,
+        "base-64 transform differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn base64_forward_matches_the_direct_transform() {
+    assert_base64_matches_direct::<false>();
+}
+
+#[test]
+fn base64_inverse_matches_the_direct_transform() {
+    assert_base64_matches_direct::<true>();
+}
+
+#[test]
+fn base64_forward_then_inverse_recovers_the_input() {
+    let source = signal(64);
+    let mut actual = source.clone();
+    let Some(forward) = Plan64::<f64>::new_if_supported::<false>() else {
+        assert_eq!(actual, source, "a width decline must not mutate the input");
+        return;
+    };
+    let inverse = Plan64::<f64>::new_if_supported::<true>()
+        .expect("the same exact-width capability serves both directions");
+
+    assert!(transform_64::<f64, false>(&mut actual, &forward));
+    assert!(transform_64::<f64, true>(&mut actual, &inverse));
+    let scale = 64.0;
+    let error = actual
+        .iter()
+        .zip(&source)
+        .map(|(value, reference)| {
+            (value.re - scale * reference.re).hypot(value.im - scale * reference.im)
+        })
+        .fold(0.0_f64, f64::max);
+    let bound = 2.0 * scale * tolerance(&source);
+    assert!(
+        error <= bound,
+        "base-64 round trip differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn base64_reduced_precision_matches_the_direct_transform() {
+    let source: Vec<Complex32> = (0..64)
+        .map(|index| {
+            let x = index as f32;
+            Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
+        })
+        .collect();
+    let mut actual = source.clone();
+    let Some(plan) = Plan64::<f32>::new_if_supported::<false>() else {
+        assert_eq!(actual, source, "a width decline must not mutate the input");
+        return;
+    };
+
+    assert!(transform_64::<f32, false>(&mut actual, &plan));
+    let expected = dft_reduced(&source, false);
+    let error = actual
+        .iter()
+        .zip(&expected)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "reduced base-64 transform differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
+#[test]
+fn dynamic_base64_plan_owns_only_the_selected_route() {
+    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 64 });
+    let Some(base) = plan.base64.as_ref() else {
+        assert!(
+            plan.twiddle_fwd.is_some(),
+            "the incumbent route retains its forward twiddles"
+        );
+        return;
+    };
+
+    assert!(plan.base128.is_none());
+    assert!(
+        plan.twiddle_fwd.is_none(),
+        "the selected base route must not retain incumbent twiddles"
+    );
+    assert!(!base.inverse_is_initialized());
+    let clone = plan.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        base,
+        clone
+            .base64
+            .as_ref()
+            .expect("a clone preserves the selected route")
+    ));
+
+    let source = signal(64);
+    let mut actual = source.clone();
+    plan.forward_complex_slice_inplace(&mut actual);
+    assert!(!base.inverse_is_initialized());
+    plan.inverse_complex_slice_inplace(&mut actual);
+    assert!(base.inverse_is_initialized());
+    let error = worst(&actual, &source);
+    let bound = 2.0 * tolerance(&source);
+    assert!(
+        error <= bound,
+        "dynamic base-64 round trip differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
 #[test]
 fn forward_matches_the_direct_transform() {
-    let src = signal();
+    let src = signal(128);
     let mut data = src.clone();
     let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
@@ -87,7 +211,7 @@ fn forward_matches_the_direct_transform() {
 
 #[test]
 fn inverse_matches_the_direct_transform() {
-    let src = signal();
+    let src = signal(128);
     let mut data = src.clone();
     let Some(plan) = Plan128::<f64>::new_if_supported::<true>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
@@ -100,7 +224,7 @@ fn inverse_matches_the_direct_transform() {
 
 #[test]
 fn forward_then_inverse_recovers_the_input() {
-    let src = signal();
+    let src = signal(128);
     let mut data = src.clone();
     let Some(forward_plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
@@ -128,7 +252,7 @@ fn forward_then_inverse_recovers_the_input() {
 
 #[test]
 fn matches_the_static_incumbent_route_within_rounding() {
-    let src = signal();
+    let src = signal(128);
     let mut ours = src.clone();
     let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(ours, src, "a width decline must not mutate the input");
@@ -183,7 +307,7 @@ fn comparison_specialization_does_not_record_phases() {
         phase.store(0, Ordering::Relaxed);
     }
 
-    let source = signal();
+    let source = signal(128);
     let mut data = source.clone();
     let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, source, "a width decline must not mutate the input");
@@ -221,7 +345,7 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
             .expect("a clone preserves the selected route")
     ));
 
-    let source = signal();
+    let source = signal(128);
     let mut data = source.clone();
     plan.forward_complex_slice_inplace(&mut data);
     assert!(
@@ -243,7 +367,7 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 #[test]
 fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
     let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
-    let first_input = signal();
+    let first_input = signal(128);
     let mut second_input = first_input.clone();
     second_input.rotate_left(17);
     let first_expected: Vec<_> = dft(&first_input, true)

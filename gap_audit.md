@@ -1,3 +1,43 @@
+## The base kernel generalizes over row length; `reverse_bits` does not (2026-08-28) <a id="base-row-length"></a>
+
+The 128-point base is eight rows of sixteen. A 64-point transform is the
+same construction at eight rows of eight — its decimation-in-time row
+transform is the sixteen-sample one **without the last stage**, and its
+column pass is identical — so the kernel was made generic over the row
+length rather than copied, and `n = 64` now has a base where it previously
+ran six ping-pong Stockham passes over 1 KB.
+
+| | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| n = 64, P-core | 158.2 ns | **128.8** | 1.90x -> **1.54x** |
+| n = 64, E-core | 108.3 | **65.3** | 2.71x -> **1.67x** |
+| n = 128 | 278.4 | 277.8 | unchanged |
+| n = 256 | 726.2 | 733.0 | unchanged |
+| n = 512 | 1910.6 | 1906.7 | unchanged |
+
+### The detour worth recording
+
+The first generic version measured **5% slower at 128, 256 and 512**, which
+looked like the cost of const generics — and three earlier experiments on
+this kernel had already been read that way. Two further measurements said
+otherwise. Disabling the 64-point route left the regression in place, so it
+was not a second kernel competing for cache. Writing the two kernels out
+fully concrete, with no const parameters at all, *also* left it in place.
+
+The phase counters then localized it exactly: `redistribute` had gone from
+106 to 171 TSC while the row and column passes were unchanged. The generic
+rewrite had replaced a four-entry table lookup with
+`m.reverse_bits() >> (usize::BITS - bits)`. **x86 has no bit-reverse
+instruction**; `usize::reverse_bits` lowers to a shift-and-mask sequence, and
+eight of them per transform cost that phase 60%. Restoring the table
+returned every size to baseline and left the generalization free.
+
+The lesson generalizes past this kernel: a 5% shift across several sizes is
+the signature of *both* code placement and a small change in a hot loop, and
+the phase counters separate them in one run. Three prior sessions attributed
+similar shifts to const parameters or layout without that check; this one is
+the first with an attributed cause.
+
 ## Eliminating the split's gather does not pay (2026-08-28) <a id="strided-base-source"></a>
 
 The small-size split gathers each 128-sample subsequence into scratch before
