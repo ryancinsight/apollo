@@ -1,5 +1,37 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
+
+- **Measured, not estimated** (`git rev-list --count origin/main..<branch>`,
+  with each branch's last commit date), after deleting the three that were
+  fully merged:
+
+  | branch | commits ahead | last commit |
+  | --- | --- | --- |
+  | `codex/fix-apollo-package-sources` | 8 | 4 weeks |
+  | `perf/apollo-f32-rader-narrowing` | 5 | 2 weeks |
+  | `feat/apollo-benchmark-generator` | 3 | 13 days |
+  | `fix/apollo-large-composite-wiring` | 3 | 11 days |
+  | `cascade/hermes-07` | 3 | 11 days |
+  | `codex/apollo-arch-006-junk-drawer-rename` | 2 | 4 weeks |
+  | `style/apollo-butterfly-lint-consolidation-217` | 1 | 9 days |
+  | `fix/apollo-sht-thread-local-lint` | 1 | 4 weeks |
+
+  Every one is past the stale-claim interval by days or weeks, so all are
+  takeover material rather than peer-held. Two more are live and excluded:
+  `perf/apollo-base128-arith` (the shared tree's current branch) and
+  `perf/apollo-base-generic`.
+- **Not one sweep item.** Each branch is its own increment, worked
+  closest-to-done first: diff it against `origin/main`, and either it holds
+  a unique delta — rebase onto a current base, verify, integrate — or it
+  does not, and it is deleted in the same cycle. Filing the inventory is
+  what makes that ordering possible; it is not a licence to defer the
+  branches behind a single ticket.
+- **Why it accumulates:** three of the fourteen were already fully merged
+  and simply never deleted, which is one branch of debt per merge that
+  nobody collects. Branch deletion belongs to the merge, not to a later
+  audit.
+
 ## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
 
 - **Evidence** (`gap_audit.md#benchmark-gate-noise`): the gate held the
