@@ -1,3 +1,63 @@
+## Splitting the 128-base kernel works; the layout still cannot be cashed (2026-08-28) <a id="base128-split"></a>
+
+The restore trigger from [the across-instance validation](#base128-across-instance)
+was executed: the transform was split into two `LaneKernel`s — an
+across-instance row pass and the column pass — each entering its own
+target-feature scope through its own `vectorize_lanes` call, with the phase
+stamps moved out of the kernels into the driver so the attributed and
+comparison builds share identical bodies. All nine oracles pass in every
+variant below.
+
+**The split does what it was predicted to do.** The untouched column pass
+returns from 1771 TSC to **467**, against its 455 baseline. That confirms
+the previous session's diagnosis: the degradation was a single kernel body
+outgrowing its `#[target_feature]` frame, not register pressure leaking
+across phases.
+
+**The layout still loses.** P-core minima, baseline 293.9 ns, RustFFT at its
+own baseline in every run:
+
+| variant | rows (TSC) | columns (TSC) | transform |
+| --- | --- | --- | --- |
+| shipped, one kernel, sample-major | 688 | 455 | 293.9 ns |
+| split, sample-major rows | 606 | 468 | 299.1 ns |
+| split, across-instance rows, staged | 813 | 467 | 357.0 ns |
+| split, across-instance rows, in registers | 1774 | 466 | 615.2 ns |
+| one kernel, across-instance rows | 513* | 1771 | 610.0 ns |
+
+\* measured while the rest of the function was degraded, which is why it
+looked like a win.
+
+Two readings follow. The split by itself costs about 2% on the P-core and
+3.5% on the E-core once normalized against RustFFT — two dispatches and the
+loss of cross-phase optimization — so it is not worth shipping on its own,
+but it is available and validated for any future work that needs it.
+
+And the across-instance row layout cannot be cashed in this expression. Its
+arithmetic advantage is real and was verified: 16 row multiplies against 64,
+matching the reference exactly. But a 16-point transform across instances
+needs sixteen live registers, which is the entire AVX2 file, and every way
+of carrying that working set costs more than the multiplies it saves —
+holding it in registers measures 1774 TSC, staging it through a 512-byte
+plane measures 813, and the sample-major form that needs only eight live
+values measures 606.
+
+### What separates this from the reference
+
+`Butterfly128Avx64` runs the same sixteen-register working set on the same
+ISA and does not pay this. Its butterfly16 differs in two ways this
+implementation does not yet reproduce: it takes load and store *closures* so
+each value is materialized at first use and written at last use rather than
+all sixteen being live across the stage boundary, and it operates on raw
+`__m256d` arrays rather than a wrapper type. The next diagnostic is
+therefore an assembly inspection of the split rows kernel to establish
+whether the sixteen values are actually spilling and, if so, whether the
+`ComplexReg` aggregate or the eager group construction is responsible —
+a question that reaches into the provider, not only this kernel.
+
+Until that is answered, the sample-major layout stays: it is the only form
+measured whose working set fits.
+
 ## The across-instance row layout pays, and outgrows one kernel body (2026-08-28) <a id="base128-across-instance"></a>
 
 Lever 3 of [the arithmetic comparison](#base128-arithmetic-count) was built:

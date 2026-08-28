@@ -311,6 +311,28 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Split executed, layout restored, both measured (2026-08-28,
+  `gap_audit.md#base128-split`):** the transform was split into per-phase
+  kernels with their own target-feature scopes and the across-instance rows
+  restored inside. **The split works** — the untouched column pass returns
+  1771 -> 467 TSC against its 455 baseline, confirming the outlining
+  diagnosis — but costs ~2% (P) / ~3.5% (E) normalized, from two dispatches
+  and lost cross-phase optimization, so it does not ship alone. **The layout
+  still loses:** 357 ns staged and 615 in registers against the 294 ns
+  baseline. Its 4x multiply reduction is real and verified; it cannot be
+  cashed because a 16-point transform across instances needs sixteen live
+  registers — the whole AVX2 file — and every way of carrying that costs
+  more than the multiplies saved (registers 1774 TSC, staged 813,
+  sample-major 606). All nine oracles pass in every variant.
+- **Next diagnostic:** assembly inspection of the split rows kernel, to
+  establish whether the sixteen values spill and whether the `ComplexReg`
+  aggregate or the eager group construction is responsible. The reference
+  runs the same working set on the same ISA without paying this, differing
+  in that its butterfly16 takes load/store closures so values materialize at
+  first use, and that it operates on raw vectors rather than a wrapper — a
+  question that reaches the provider, not only this kernel. Until it is
+  answered the sample-major layout stays, being the only form measured whose
+  working set fits.
 - **Across-instance rows built and validated (2026-08-28,
   `gap_audit.md#base128-across-instance`):** lever 3 implemented, correct on
   the first attempt — all nine oracles pass. Registers hold two FFT
