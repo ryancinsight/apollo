@@ -133,8 +133,10 @@ Attribution, largest first:
    but its retention is the route's working set, recorded as-is.
 2. **The 65536 spike is Moirai pool startup, not transform buffers —
    discriminated 2026-08-27.** A trivial parallel warmup ahead of the ladder
-   captures 24 per-worker blocks of 65,536 bytes each (1.5 MiB subtotal). The
-   65536 first-forward window then retains only its scratch and route matrix
+   captures 24 per-worker blocks of 65,536 bytes each (1,572,864 bytes,
+   1.5 MiB) within 1,857,224 retained bytes; the remaining 284,360 bytes are
+   allocations below the 65,536-byte ledger floor. The 65536 first-forward
+   window then retains only its scratch and route matrix
    (2.19 MB): the blocks belong to the pool's one-time startup, charged to
    the FFT in the original run only because the FFT was the process's first
    parallel user. Two further facts from the discrimination: the per-worker
