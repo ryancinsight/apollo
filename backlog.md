@@ -311,6 +311,32 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Across-instance rows built and validated (2026-08-28,
+  `gap_audit.md#base128-across-instance`):** lever 3 implemented, correct on
+  the first attempt — all nine oracles pass. Registers hold two FFT
+  instances, so the redistribution pass folds into a contiguous source load,
+  every row twiddle becomes a broadcast (radix-4's only internal twiddle is
+  a rotation; `W_16^2`/`W_16^6` reduce to the `sqrt(2)/2` identity), and the
+  4 x 4 decomposition needs no bit reversal. **Row multiplies 64 -> 16,
+  matching the reference; the fused load-and-rows pass measures 513 TSC
+  against the baseline's 688 (-25%).**
+- **Blocked on kernel-body structure, not arithmetic.** Whole-transform
+  reads 610 against 294 ns because the *untouched* column pass degrades
+  455 -> 1771 TSC (P) and 301 -> 3729 (E) — unchanged code slowing 4-12x,
+  worse on the narrower core, is the `HS-VECTORIZE-LARGE-KERNEL` signature
+  reached by body size rather than by the dispatcher. Hoisting the radix-4
+  helpers from closures into `#[inline(always)]` free functions moved the
+  row pass 2285 -> 513 TSC and left the column pass unchanged, confirming
+  inlining as the mechanism. The reference is structured against exactly
+  this: `Butterfly128Avx64` splits into two separate `#[target_feature]`
+  methods and its 16-point butterfly takes load/store closures so data
+  materializes only when needed.
+- **Next increment (re-open trigger for the preserved work):** split the
+  transform into per-phase kernels, each entering its own target-feature
+  scope through its own `vectorize` call, then restore the layout from
+  `docs/experiments/base128-across-instance-rows.rs.txt` inside that shape
+  and re-measure. The layout is validated; only the enclosing structure
+  blocks it.
 - **Arithmetic-count comparison delivered (2026-08-28,
   `gap_audit.md#base128-arithmetic-count`):** both kernels factor 128 as
   8 x 16 and both spend exactly 56 complex multiplies on the four-step

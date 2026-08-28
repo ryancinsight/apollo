@@ -1,3 +1,62 @@
+## The across-instance row layout pays, and outgrows one kernel body (2026-08-28) <a id="base128-across-instance"></a>
+
+Lever 3 of [the arithmetic comparison](#base128-arithmetic-count) was built:
+the 16-point row transforms rewritten to hold two FFT *instances* per
+register instead of two samples of one. The derivation is clean and the
+implementation is correct on the first attempt — all nine oracles pass,
+including the direct-DFT and incumbent-differential checks.
+
+Three consequences follow from the layout, exactly as predicted:
+
+- A register becomes `[x[8b + a], x[8b + a + 1]]`, which is **one contiguous
+  source load**, so the separate redistribution pass disappears.
+- Every row twiddle becomes a broadcast scalar, so the trivial ones stay
+  trivial: the radix-4 step's only internal twiddle is a rotation, and
+  `W_16^2` / `W_16^6` reduce to the `sqrt(2)/2` identity — a rotation, a
+  butterfly half, and one *real* multiply.
+- The 16 = 4 x 4 decomposition takes natural order in and out, so the bit
+  reversal the sample-major form needed is gone as well.
+
+Row multiplies fall from 64 to 16, matching the reference exactly, and the
+fused load-and-rows pass measures **513 TSC against the baseline's 688**
+(170 redistribute plus 518 rows) — a 25% saving on the phase this item has
+been trying to move since the schedule experiments failed.
+
+### It does not fit in one kernel body
+
+The whole-transform number is nonetheless 610 ns against 294. The cost is
+not in the new code: the **untouched** column pass degrades from 455 to
+1771 TSC on the P-core and from 301 to 3729 on the E-core. Unchanged code
+running four to twelve times slower, worse on the narrower core, is the
+signature of a body that has fallen out of its `#[target_feature]` frame —
+the `HS-VECTORIZE-LARGE-KERNEL` failure class, reached this time by the size
+of a single kernel rather than by the dispatcher.
+
+Two observations support it over register pressure. First, hoisting the
+radix-4 and rotation helpers out of in-body closures into free
+`#[inline(always)]` functions moved the row pass from 2285 to 513 TSC while
+leaving the column pass untouched at ~1770 — so inlining is decisively the
+mechanism, and some of it is still not happening. Second, an earlier variant
+that held all sixteen twiddled values in registers measured 4x the baseline
+across *both* phases, which is the same uniform degradation rather than a
+localized spill.
+
+**The reference already solved this structurally.** `Butterfly128Avx64` is
+not one function: `column_butterflies_and_transpose` and `row_butterflies`
+are separate `#[target_feature(enable = "avx", enable = "fma")]` methods,
+each entered once per transform, and its 16-point butterfly takes load and
+store *closures* precisely so data is materialized only when needed — its
+source says so directly. Apollo's kernel is a single `LaneKernel` body
+carrying all three phases, and the across-instance rows push it past what
+that shape supports.
+
+The next increment is therefore structural, not arithmetic: split the
+transform into per-phase kernels, each entering its own target-feature scope
+through its own `vectorize` call, and re-measure the layout above inside
+that shape. The layout itself is validated — correct, and 25% faster on the
+phase it targets — and the working implementation is preserved for that
+increment.
+
 ## The 128-base gap is a multiply count, set by register layout (2026-08-28) <a id="base128-arithmetic-count"></a>
 
 Three schedule changes refused to move the base-128 row pass
