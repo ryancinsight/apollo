@@ -5,7 +5,8 @@
 - [x] Confirm Apollo does not call the removed Moirai queue-capacity APIs.
 - [x] Regenerate the standalone lockfile at the merged Moirai provider revision.
 - [x] Pass provider-audit, affected all-target checks, and value-semantic tests.
-- [ ] Commit, publish, merge, and record exact provider/consumer revisions.
+- [x] Commit and merge Apollo PR #160 at `65e6dbd0`; record Moirai
+      `fff36331`, Mnemosyne `12e5b090`, and Themis `9fd113fd`.
 
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 [patch] — Codex
 
