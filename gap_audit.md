@@ -16,8 +16,8 @@ the supported-or-bit-preserving-decline tests.
 The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
 the compared base executed four timestamp reads, three atomic phase
 accumulators, and an atomic call counter per transform while the references did
-not. The corrected instrument monomorphizes timing and attribution separately,
-borrows the immutable thread-local plan without an `Arc` increment, and creates
+not. The corrected entry instrument monomorphizes timing and attribution
+separately, borrows an immutable plan without an `Arc` increment, and creates
 vectors from the existing Hermes capability token. Its 100-sample 96.4799%
 exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] P-core and
 146.401 ns [146.364, 146.468] E-core. The incumbent Apollo route is 687.152 ns
@@ -31,9 +31,19 @@ The escaped benchmark-defect guard is structural: performance comparisons use
 the zero-instrumentation const specialization; attribution runs afterward in a
 separate specialization. A regression test requires a normal transform to
 leave every phase counter at zero, and optimized-binary inspection requires
-exactly the four serialized timestamp pairs owned by the attributed call. The
-remaining production blocker is ownership of the immutable base plan by
-`FftPlan1D`.
+exactly the four serialized timestamp pairs owned by the attributed call.
+
+The production candidate now gives `FftPlan1D` plan ownership: one shared base
+state initializes forward data at construction, initializes inverse data on
+first inverse execution, shares both across plan clones, and replaces rather
+than co-retains the incumbent forward-twiddle table. Its local production
+median is 295.117 ns [294.899, 295.304] P-core and 163.529 ns [163.502,
+163.558] E-core, versus the same-run direct base at 294.865 ns [294.573,
+295.022] and 152.550 ns [152.520, 152.581]. The E-core wrapper retains an
+11.0 ns dispatch cost, but the production route is 11.28x faster than the
+1844.331 ns incumbent entry baseline. The unchanged hosted replicated
+counterbalanced comparator remains the merge gate for unrelated-case placement
+effects.
 
 PR #154 tested a direct production promotion before that ownership transfer.
 The candidate retained the experiment's thread-local plan, violating ADR 0041,
@@ -41,9 +51,10 @@ and hosted run 33122650730 rejected it independently: all four paired
 comparisons regressed generic-prime N = 31 by 1.81-3.85% and compact N = 96 by
 2.22-6.02%. Normalized instructions for the measured hot functions were
 unchanged while candidate `.text` grew by 400 bytes, so the evidence identifies
-code-placement sensitivity rather than changed arithmetic. The production
-route is withdrawn; the corrected base and its oracles remain test-gated until
-the owning plan stores it and the same comparator clears.
+code-placement sensitivity rather than changed arithmetic. That production
+route was withdrawn. The plan-owned replacement retains the same mathematical
+kernel and oracles while correcting the ownership defect; it remains a
+candidate until the same comparator clears.
 
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 

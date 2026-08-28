@@ -7,7 +7,11 @@ use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;
 
-fn phase_attribution(src: &[Complex64], work: &mut [Complex64]) -> [u64; 3] {
+fn phase_attribution(
+    src: &[Complex64],
+    work: &mut [Complex64],
+    plan: &super::butterfly::Plan128<f64>,
+) -> [u64; 3] {
     use std::sync::atomic::Ordering;
 
     const CALLS: u64 = 8_192;
@@ -18,7 +22,8 @@ fn phase_attribution(src: &[Complex64], work: &mut [Complex64]) -> [u64; 3] {
     for _ in 0..CALLS {
         work.copy_from_slice(src);
         assert!(super::butterfly::transform_128_measured::<f64, false>(
-            std::hint::black_box(work)
+            std::hint::black_box(work),
+            plan,
         ));
     }
     let calls = super::butterfly::phase_meter::CALLS
@@ -63,18 +68,21 @@ fn small_sizes_against_the_references_by_core_type() {
                 plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
             });
             if n == 128 {
+                let base_plan = super::butterfly::Plan128::<f64>::new_if_supported::<false>()
+                    .expect("the pinned host must provide the four-lane base capability");
                 work.copy_from_slice(&src);
                 assert!(
-                    super::butterfly::transform_128::<f64, false>(&mut work),
+                    super::butterfly::transform_128::<f64, false>(&mut work, &base_plan),
                     "the pinned host must provide the four-lane base capability"
                 );
                 suite.run(BenchmarkCase::new(core, "base-128", n), || {
                     work.copy_from_slice(&src);
                     std::hint::black_box(super::butterfly::transform_128::<f64, false>(
                         std::hint::black_box(&mut work),
+                        &base_plan,
                     ));
                 });
-                let phases = phase_attribution(&src, &mut work);
+                let phases = phase_attribution(&src, &mut work, &base_plan);
                 println!(
                     "B128 phases: redistribute={} rows16={} columns8={}",
                     phases[0], phases[1], phases[2]

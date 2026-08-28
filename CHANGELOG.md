@@ -111,6 +111,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [arch] Dynamic 128-point complex FFT plans select the exact-four-lane
+  interleaved base when supported, own its immutable forward state, initialize
+  inverse state on first use, and share both across plan clones. The selected
+  route no longer retains the incumbent Stockham forward-twiddle table; hosts
+  without the exact capability retain the existing Stockham route.
+
 - [patch] Keep x86 Stockham precision kernels and AVX2 composite-pass hooks
   out of non-x86 library and test graphs. AArch64 retains the existing scalar
   composite route while the complete workspace now compiles all targets with

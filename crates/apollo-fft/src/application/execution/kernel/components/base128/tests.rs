@@ -1,7 +1,7 @@
 //! Correctness for the 128-point base butterfly. The direct DFT is the
 //! analytical authority.
 
-use super::butterfly::transform_128;
+use super::butterfly::{transform_128, Plan128};
 use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 
@@ -75,10 +75,11 @@ fn reduced_tolerance(input: &[Complex32]) -> f32 {
 fn forward_matches_the_direct_transform() {
     let src = signal();
     let mut data = src.clone();
-    if !transform_128::<f64, false>(&mut data) {
+    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
-    }
+    };
+    assert!(transform_128::<f64, false>(&mut data, &plan));
     let (err, bound) = (worst(&data, &dft(&src, false)), tolerance(&src));
     assert!(err <= bound, "forward differs by {err:.3e} > {bound:.3e}");
 }
@@ -87,10 +88,11 @@ fn forward_matches_the_direct_transform() {
 fn inverse_matches_the_direct_transform() {
     let src = signal();
     let mut data = src.clone();
-    if !transform_128::<f64, true>(&mut data) {
+    let Some(plan) = Plan128::<f64>::new_if_supported::<true>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
-    }
+    };
+    assert!(transform_128::<f64, true>(&mut data, &plan));
     let (err, bound) = (worst(&data, &dft(&src, true)), tolerance(&src));
     assert!(err <= bound, "inverse differs by {err:.3e} > {bound:.3e}");
 }
@@ -99,12 +101,15 @@ fn inverse_matches_the_direct_transform() {
 fn forward_then_inverse_recovers_the_input() {
     let src = signal();
     let mut data = src.clone();
-    if !transform_128::<f64, false>(&mut data) {
+    let Some(forward_plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
-    }
+    };
+    let inverse_plan = Plan128::<f64>::new_if_supported::<true>()
+        .expect("the same exact-width capability serves both directions");
+    assert!(transform_128::<f64, false>(&mut data, &forward_plan));
     assert!(
-        transform_128::<f64, true>(&mut data),
+        transform_128::<f64, true>(&mut data, &inverse_plan),
         "one direction cannot decline after the same width ran forward"
     );
     let n = 128.0;
@@ -121,17 +126,17 @@ fn forward_then_inverse_recovers_the_input() {
 }
 
 #[test]
-fn matches_the_production_route_within_rounding() {
+fn matches_the_static_incumbent_route_within_rounding() {
     let src = signal();
     let mut ours = src.clone();
-    if !transform_128::<f64, false>(&mut ours) {
+    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(ours, src, "a width decline must not mutate the input");
         return;
-    }
+    };
+    assert!(transform_128::<f64, false>(&mut ours, &plan));
 
     let mut theirs = src.clone();
-    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
-    plan.forward_complex_slice_inplace(&mut theirs);
+    crate::StaticFftPlan1D::<f64, 128>::new().forward_complex_slice_inplace(&mut theirs);
 
     let bound = 2.0 * tolerance(&src);
     let err = worst(&ours, &theirs);
@@ -147,10 +152,11 @@ fn reduced_precision_computes_or_declines_without_mutation() {
         })
         .collect();
     let mut data = src.clone();
-    if !transform_128::<f32, false>(&mut data) {
+    let Some(plan) = Plan128::<f32>::new_if_supported::<false>() else {
         assert_eq!(data, src, "a width decline must not mutate the input");
         return;
-    }
+    };
+    assert!(transform_128::<f32, false>(&mut data, &plan));
 
     let expected = dft_reduced(&src);
     let error = data
@@ -178,11 +184,57 @@ fn comparison_specialization_does_not_record_phases() {
 
     let source = signal();
     let mut data = source.clone();
-    if !transform_128::<f64, false>(&mut data) {
+    let Some(plan) = Plan128::<f64>::new_if_supported::<false>() else {
         assert_eq!(data, source, "a width decline must not mutate the input");
-    }
+        return;
+    };
+    assert!(transform_128::<f64, false>(&mut data, &plan));
 
     assert_eq!(CALLS.load(Ordering::Relaxed), 0);
     let recorded = std::array::from_fn(|index| PHASES[index].load(Ordering::Relaxed));
     assert_eq!(recorded, [0; 3]);
+}
+
+#[test]
+fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
+    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
+    let Some(base) = plan.base128.as_ref() else {
+        assert!(
+            plan.twiddle_fwd.is_some(),
+            "the incumbent route retains its forward twiddles"
+        );
+        return;
+    };
+
+    assert!(
+        plan.twiddle_fwd.is_none(),
+        "the selected base route must not retain incumbent twiddles"
+    );
+    assert!(!base.inverse_is_initialized());
+    let clone = plan.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        base,
+        clone
+            .base128
+            .as_ref()
+            .expect("a clone preserves the selected route")
+    ));
+
+    let source = signal();
+    let mut data = source.clone();
+    plan.forward_complex_slice_inplace(&mut data);
+    assert!(
+        !base.inverse_is_initialized(),
+        "forward execution must not initialize inverse state"
+    );
+    plan.inverse_complex_slice_inplace(&mut data);
+    assert!(base.inverse_is_initialized());
+    let clone = plan.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        base,
+        clone
+            .base128
+            .as_ref()
+            .expect("a clone preserves initialized inverse state")
+    ));
 }

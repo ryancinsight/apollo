@@ -12,6 +12,7 @@ use crate::with_pot_zst;
 use eunomia::Complex;
 
 use super::FftPlan1D;
+use crate::application::execution::kernel::components::base128::butterfly::transform_128;
 
 // ── Static dispatch (used by StaticFftPlan1D) ────────────────────────────────
 
@@ -284,6 +285,37 @@ pub(super) fn exec_winograd_inverse_unnorm<F, const N: usize>(
 }
 
 // 3. PowerOfTwo small sizes
+pub(super) fn exec_base128_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_128::<F, false>(slice, plan.base128_forward_plan()),
+        "invariant: the selected base-128 capability remains available"
+    );
+}
+
+pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_128::<F, true>(slice, plan.base128_inverse_plan()),
+        "invariant: the selected base-128 capability remains available"
+    );
+    F::normalize(slice, 128);
+}
+
+pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    plan: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    assert!(
+        transform_128::<F, true>(slice, plan.base128_inverse_plan()),
+        "invariant: the selected base-128 capability remains available"
+    );
+}
+
 macro_rules! define_pot_executors {
     ($size:expr, $fwd:ident, $inv:ident, $inv_un:ident) => {
         pub(super) fn $fwd<F: MixedRadixScalar<Complex = Complex<F>>>(

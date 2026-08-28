@@ -1,6 +1,4 @@
-// Test-gated: the mixed-radix 8x128 experiment and its measurement probe
-// (ATLAS-APOLLO-BASE-BUTTERFLY-128).
-#[cfg(test)]
+// The production-owned mixed-radix 8x16 base and its test-only probe.
 pub(crate) mod base128;
 pub(crate) mod batched;
 // Test-gated: correct on every oracle but slower than the batched route as
@@ -20,7 +18,6 @@ mod test_support;
 mod codelet;
 pub(crate) mod four_step;
 pub(crate) mod good_thomas;
-#[cfg(test)]
 mod lane_capability;
 pub(crate) mod rader;
 pub(crate) mod radix_composite;
