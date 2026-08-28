@@ -159,6 +159,19 @@ fn window<R>(label: &str, floor: usize, f: impl FnOnce() -> R) -> R {
 #[test]
 #[ignore = "measurement probe for retained-footprint attribution"]
 fn retained_footprint_attribution() {
+    // Pool discrimination: the threaded four-step's first call at N = 65536
+    // retained 24 x 262,144-byte blocks, one per logical core. A trivial
+    // parallel op ahead of the ladder decides their owner: blocks landing in
+    // this window belong to the Moirai pool's startup state; blocks still
+    // landing in the 65536 first-forward window belong to the transform.
+    let mut warmup = vec![Complex64::new(0.0, 0.0); 65536];
+    window("pool warmup", 65536, || {
+        moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(&mut warmup, 256, |row| {
+            std::hint::black_box(row);
+        });
+    });
+    drop(warmup);
+
     for n in [1024usize, 4096, 16384, 65536, 262144] {
         println!("n = {n} (signal 16n = {} bytes; ledger floor n)", n * 16);
         let mut signal: Vec<Complex64> = (0..n)

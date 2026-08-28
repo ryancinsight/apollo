@@ -870,11 +870,16 @@
   the eagerly built inverse table; it is now lazy (`OnceLock` through the
   global cache) and the probe's plan-build window retains 0 at every size —
   16 KiB to 4 MiB returned per plan size for forward-only consumers.
-  Remaining: the 65536 spike's 24 x 262,144-byte threaded-four-step worker
-  blocks (lead: block count ≈ machine cores, so Moirai pool internals are
-  the suspect — possibly an upstream item) and the four-step matrix
-  representation at > `FUSE_THRESHOLD` sizes (route working set; reduce only
-  with a route redesign).
+  Remaining apollo-side: only the four-step matrix representation at
+  > `FUSE_THRESHOLD` sizes (route working set; reduce only with a route
+  redesign).
+- **Worker-block term discriminated and rehomed (2026-08-27):** a trivial
+  parallel warmup window proves the 24 per-worker blocks are Moirai pool
+  startup state, not transform buffers — sized by the first workload's shape
+  (64-256 KiB/worker), never grown by the FFT afterward. Evidence and queue
+  arithmetic: `gap_audit.md#retained-attribution`. Filed upstream as moirai
+  `MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27`; apollo's account closes with
+  the transform-owned cold footprint at ~2.1x signal at 65536.
 
 - **Outcome:** Apollo's retained bytes per size are attributed to their owning
   caches (twiddle planes, four-step planes, threaded arena, scratch) and the
