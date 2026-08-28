@@ -1,5 +1,39 @@
 # Apollo Backlog
 
+<<<<<<< HEAD
+=======
+## ATLAS-APOLLO-BASE-64-2026-08-28 — Generalize the base kernel; add the 64-point route [perf] — done 2026-08-28
+
+- **Delivered:** the base kernel is now generic over its row length
+  (`REGS` chunks per staging row), because a 64-point transform is the same
+  construction at eight rows of eight — the row DIT is the sixteen-sample
+  one without its last stage, the column pass identical. The cold plan
+  builder generalizes with it; `n = 64` gains a base route where it ran six
+  ping-pong Stockham passes.
+- **Measured pinned:** n = 64 **158.2 -> 128.8 ns P-core (1.90x -> 1.54x
+  RustFFT)** and **108.3 -> 65.3 E-core (2.71x -> 1.67x)**; 128, 256 and 512
+  unchanged. 1083 workspace tests green.
+- **Detour recorded (`gap_audit.md#base-row-length`):** the first generic
+  version measured 5% slower at three sizes, which looked like the cost of
+  const generics — the reading three earlier experiments had also taken.
+  Disabling the 64-point route did not restore it, and writing both kernels
+  out fully concrete did not either. The phase counters localized it to
+  `redistribute` (106 -> 171 TSC, other phases unchanged): the rewrite had
+  replaced a table lookup with `usize::reverse_bits`, which on x86 lowers to
+  a shift-and-mask sequence. Restoring the table made the generalization
+  free. **Phase attribution separates a hot-loop change from code placement
+  in one run; earlier sessions guessed between them.**
+
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 — Delete consumer-owned WGPU FFT [major] [arch] [perf] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`; last update 2026-08-28.
+- **Lease:** `crates/apollo-fft/src/infrastructure/transport/gpu/`, Apollo dense-WGPU FFT callers and manifests, `crates/apollo-nufft/src/infrastructure/transport/gpu/infrastructure/kernel/{buffers,fast,fast_support}.rs`, ADR 0006, and this item's PM/release regions through the next verified commit.
+- **Outcome:** Apollo retains CPU Fourier arithmetic over Leto storage while Hephaestus becomes the only dense WGPU FFT implementation. NUFFT and validation consume the prepared Hephaestus split-complex seam directly; no Apollo WGPU FFT plan, shader, dispatcher, workspace, acquisition wrapper, or compatibility export remains. Apollo's independent CUDA surface remains governed by ADR 0030.
+- **Scope / non-goals:** migrate all in-repository `GpuFft3d` consumers, preprepare NUFFT forward/inverse plans with its reusable grids, remove the superseded dense-WGPU implementation and benchmark, revise ADR 0006 and public docs, and classify the public removal. CUDA FFT and the shared non-FFT WGPU transform scaffold remain unchanged.
+- **Acceptance:** residue scans find no `GpuFft3d`, `GpuFft3dBuffers`, dense FFT shader, or Apollo `WgpuBackend`; Apollo/Leto-to-Hephaestus differential and inverse-roundtrip cases pass across ranks one through three; repeated NUFFT execution exclusively borrows its workspace and reuses prepared plans, fixed grids, coefficient storage, and host conversion capacity without FFT preparation in the dispatch path; warning-denied checks, configured Nextest, doctests, Rustdoc, SemVer, independent architecture review, and exact hosted provider/consumer gates pass.
+- **Dependencies:** Hephaestus PR #227 merged native f32/f16 rank-generic FFT parity at `2a785d8`; Kwavers PR #663 already selects Leto or Hephaestus and owns no private FFT kernel. This item closes Apollo's remaining consumer-owned implementation under Hephaestus ADR 0053.
+
+>>>>>>> d1762f18 (perf(apollo-fft): Generalize the base kernel over row length; add base-64)
 ## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
 
 - **Standing after the split and routing work (pinned, P-core, vs RustFFT):**

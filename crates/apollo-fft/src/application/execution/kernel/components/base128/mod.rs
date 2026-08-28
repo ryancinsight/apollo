@@ -45,8 +45,8 @@ pub(crate) fn transform_via_base_128<F, const INVERSE: bool>(
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
+            Complex = eunomia::Complex<F>,
+        >,
     eunomia::Complex<F>: bytemuck::Pod,
 {
     let n = data.len();
