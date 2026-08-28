@@ -149,9 +149,12 @@ Attribution, largest first:
    comparisons show no statistically significant retained-worker throughput
    regression; focused Miri passes 9/9 inline-job cases, release Loom passes
    6/6, and exact hosted provider-head run `33163333077` plus merged-head run
-   `33163390162` are green. Apollo-side, this term remains outside the FFT's
-   transform-owned account; the census's original 10.4x cold reading at 65536
-   included it and reads as 2.1x transform-owned after separation.
+   `33163390162` are green. Apollo PR #162 / merge `e27e2890` pins that provider;
+   exact merged-head run `33164426704` passes the Rust workspace, Python,
+   lock-integrity, benchmark-smoke, documentation, and provider-audit gates.
+   Apollo-side, this term remains outside the FFT's transform-owned account;
+   the census's original 10.4x cold reading at 65536 included it and reads as
+   2.1x transform-owned after separation.
 3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
    padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
    planar halves at four-step sizes — the terms an in-place rewrite would

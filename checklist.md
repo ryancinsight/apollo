@@ -7,7 +7,7 @@
       committed provider revision.
 - [x] Pass exact-lock provider audit, focused Nextest, warning-denied Clippy,
       and independent lock-diff review.
-- [ ] Merge the consumer pin and record provider/consumer revisions.
+- [x] Merge the consumer pin and record provider/consumer revisions.
 
 ## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 [patch] — Codex
 

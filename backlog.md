@@ -6,33 +6,11 @@
 - **Evidence:** standalone lock audit reports 36 first-party Git sources; local provider audit, warning-denied all-target/all-feature Clippy, and workspace Nextest 1309/1309 pass. Hosted exact-Git-lock run `33158652496` passes lock integrity, Python, and Rust workspace; benchmark run `33158651767` passes identity/regression and correctly skips timing pairs for the lock-only delta. Independent review: GREEN.
 - **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
-## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — in progress
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — done 2026-08-28
 
-- **Provider resolution:** Moirai PR #184, merge `b42ec745`, removes forced
-  64-byte alignment from `InlineJob` while preserving its 14-word payload and
-  routing over-aligned captures through the boxed representation. The queued
-  `(Priority, ScheduledJob)` is 17 words and an MPMC slot is 18 words; queue
-  capacities, admission, wakeups, and sequence protocol are unchanged.
-- **Consumer evidence (`gap_audit.md#retained-attribution`):** the exact locked
-  release probe retains 1,169,112 bytes after pool warmup with no allocation at
-  or above 65,536 bytes, versus 1,857,224 bytes and 24 x 65,536-byte blocks at
-  entry — a 688,112-byte (37.1%) reduction. The same revision passes 13/13
-  batched analytical and round-trip cases, warning-denied all-target/all-feature
-  Clippy, provider audit, and standalone lock validation with 36 first-party
-  Git sources. Independent consumer lock-and-evidence review: GREEN.
-- **Provider evidence:** corrected same-address Criterion comparisons show no
-  statistically significant retained-worker regression; focused Miri passes
-  9/9 inline-job cases and release Loom passes 6/6. Exact hosted provider-head
-  run `33163333077` and merged-head run `33163390162` pass workspace, Rustdoc,
-  doctest, Loom, fuzz, supply-chain, and lockfile gates.
-- **Acceptance oracle:** merge the Apollo lock pin to `b42ec745`, collect its
-  exact hosted gate, and record provider and consumer revisions.
-- **Risk / change class:** [perf]; a queue-layout change is lock-free-adjacent
-  and keeps the existing loom suite as its gate.
-- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** `Cargo.lock`, this item block, `gap_audit.md` retained-attribution
-  closure, and the matching checklist section through the consumer-pin commit;
-  last update 2026-08-28.
+- **Delivered:** Moirai PR #184 / merge `b42ec745` removes forced inline-job alignment; Apollo PR #162 / commit `bfeca7fc` / merge `e27e2890` advances all 13 Moirai lock entries.
+- **Evidence:** retained pool bytes fall from 1,857,224 to 1,169,112 (688,112 bytes, 37.1%) with no block at or above 65,536 bytes; provider merged-head run `33163390162` and Apollo exact merged-head run `33164426704` pass, and independent provider and consumer reviews are GREEN.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
 
