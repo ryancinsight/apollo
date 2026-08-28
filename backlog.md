@@ -1,40 +1,22 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-ODD-POWER-FUSION-2026-08-28 — Fuse the radix-2 decimation into the planar boundary [perf] — in-progress
+## ATLAS-APOLLO-ODD-POWER-FUSION-2026-08-28 — Fuse the radix-2 decimation into the planar boundary [perf] — done 2026-08-28
 
-- **Integrator:** claude/base128-campaign. **Lease:** `kernel/components/four_step/mod.rs`, `kernel/components/batched/{mod.rs,boundary.rs}`.
-- **Outcome:** odd powers of two stop paying for a free-standing radix-2
-  decimation. Acceptance: n = 8192 and n = 2048 improve against the
-  measured baselines below with n = 4096 and n = 16384 unchanged, every
-  oracle still passing, and peak scratch no higher than today.
-- **Why now** (`gap_audit.md#reference-standing`): the fresh ladder
-  separates two causes. Below 1024 the deficit is the base kernel's
-  arithmetic, measured to its end and blocked on register width. At and
-  above 1024 the even powers converge on parity — 1.32 at 1024, 1.14 at
-  4096, 1.05 at 16384 — and only the odd powers break the trend, because
-  they alone take a radix-2 decimation before two planar halves.
-  Subtracting the halves' own measured times gives the decimation's cost
-  directly: 1394 ns at 2048 and 5989 ns at 8192. **At 8192 that is the
-  entire deficit** — the two halves cost 28425 against RustFFT's 27034,
-  the same 1.05 the even powers reach.
-- **The cost is movement, not arithmetic:** the decimation materializes
-  the even and odd subsequences into scratch, each half then deinterleaves
-  *again* into its own planes, each reinterleaves its result, and only then
-  does the combine run. Three passes over n exist solely because the halves
-  are transformed as if they were free-standing inputs.
-- **Approach:** give the planar driver a strided source and a paired sink,
-  so a half deinterleaves directly from the parent at stride two and the
-  two halves' reinterleave and butterfly combine become one pass. The
-  square driver is otherwise untouched — it is the proven one, and this is
-  a parameterization of its boundary passes, not a second copy.
-- **Rejected for now:** rectangularizing the planar four-step so odd
-  powers need no decimation at all. Structurally the better answer, and it
-  would delete `radix2_split` outright, but it breaks the symmetric-twiddle
-  identity the driver folds into stage set two and needs that re-derived.
-  Recorded as the follow-on if fusion leaves a gap.
-- **Baselines (P-core, pinned, min of twelve blocks, this revision):**
-  2048 = 8133.8 ns, 8192 = 34413.9 ns; controls 4096 = 14212.7 ns,
-  16384 = 62119.7 ns.
+- **Delivered** (`gap_audit.md#odd-power-fusion`): the planar driver's
+  boundary passes carry `STEP`/`OFFSET`, so each half of an odd power
+  deinterleaves straight out of `data` at stride two, and the two halves'
+  reinterleave and butterfly combine are one pass. Three passes over `n`
+  removed; peak scratch lower than the unfused route.
+- **Measured pinned, controls in the same run:** 2048 8133.8 -> 7568.4 ns
+  (-7.0%, ratio 1.44 -> 1.34) and 8192 34413.9 -> 31402.5 (-8.8%, 1.27 ->
+  1.16) on a P-core; -18.0% and -19.2% on an E-core. Controls 4096, 16384,
+  1024, 512, 256, 128 all flat. The const parameters cost the sequential
+  path nothing, which was the live risk after the strided base source paid
+  5% for the same shape.
+- **Residual:** half the decimation cost remains (930 ns at 2048, 3001 at
+  8192). Each half traverses every cache line of `data`, so the pair reads
+  the input twice; one pass filling both plane sets together would halve
+  it. Continues as ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28.
 
 ## ATLAS-APOLLO-WIDER-ISA-2026-08-28 — The AVX-512 path for the base kernel [arch] — blocked: no AVX-512 hardware
 

@@ -148,6 +148,12 @@ pub(crate) fn four_step_fft<
     // the final stage of the existing twiddle table -- `W_N^j` for
     // `j < N/2` already sits at `N/2 - 1`, so no table is added
     // (gap_audit.md#odd-power-routing).
+    //
+    // This is the unfused form, and it is now the fallback rather than the
+    // route: where both halves are themselves planar the call above takes
+    // them fused, reading each subsequence out of `data` at stride two
+    // instead of gathering it here. What is left for this path is the sizes
+    // whose halves exceed the planar threshold and thread their rows.
     if n.trailing_zeros() % 2 == 1 && n >= 512 {
         radix2_split::<F, INVERSE>(data);
         return;
