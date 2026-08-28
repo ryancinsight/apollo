@@ -1,3 +1,48 @@
+## The paired decimation pass, and why it bought less than the model said (2026-08-28) <a id="split-single-pass"></a>
+
+[Fusing the decimation](#odd-power-fusion) left half its cost, and the
+shape looked obvious: each half deinterleaved from `data` at stride two, so
+each traversed every cache line of the input and the pair read the array
+twice. One pass taking the adjacent pair together would read each line once
+and halve the remainder.
+
+Built, and the direction is right but the size is not:
+
+| n | strided pair | single pass | change |
+| --- | --- | --- | --- |
+| 2048 (P) | 7568.4 ns | **7473.0** | -1.3% |
+| 8192 (P) | 31402.5 | **30927.9** | -1.5% |
+| 2048 (E) | 5317.6 | **5123.0** | -3.7% |
+| 8192 (E) | 22756.6 | **22449.2** | -1.4% |
+
+The residual decimation cost at 8192 fell from 3001 to 2594 ns — 14%, not
+the 50% the traffic model predicted, and the ratio against RustFFT moved
+1.16 to 1.13.
+
+**The model counted misses that were not there.** At these sizes the second
+traversal is not going to memory: 8192 complex is 128 KB, over L1 but well
+inside L2, so the strided re-read of an array the first half just walked
+was already being served a level down. The pass that was removed cost about
+what an L2 hit costs, which is real but is not what a redundant DRAM
+traversal costs. The saving should widen with `n` — at 131072 the array
+exceeds L2 — but that size decimates into halves above the planar
+threshold, so it takes the threaded route and never reaches here.
+
+Kept nonetheless, because the traffic argument is sound in the direction it
+points and the code that expresses it is smaller: the `STEP`/`OFFSET` const
+parameters are gone, the deinterleave has one definition per shape rather
+than one parameterized over both, and the plane geometry and buffer split
+that three call sites had open-coded are named functions.
+
+**Where the remaining 2594 ns sits.** It is now two pieces, and neither is
+another pass to remove: the paired deinterleave writes four plane streams
+where the square route writes two, and the combine reads two planes to
+write one array. Both are the minimum work for a decimation in this layout.
+Getting past it means not decimating at all — the rectangular four-step,
+recorded against [the standing measurement](#reference-standing) as the
+follow-on and still blocked on re-deriving the symmetric-twiddle identity
+the driver folds into stage set two.
+
 ## Fusing the odd-power decimation into the planar boundary (2026-08-28) <a id="odd-power-fusion"></a>
 
 The [standing measurement](#reference-standing) isolated the odd-power

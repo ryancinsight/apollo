@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#split-single-pass`): the two halves of an odd
+  power deinterleave in one pass over `data` rather than two strided ones,
+  so each cache line is read once for both. The `STEP`/`OFFSET` const
+  parameters introduced by the fusion are gone with it, and the plane
+  geometry and buffer split are named functions rather than open-coded at
+  three call sites.
+- **Measured pinned:** 2048 7568.4 -> 7473.0 ns and 8192 31402.5 -> 30927.9
+  on a P-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
+  on an E-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
+- **Less than the model predicted, and the reason is recorded:** 8192 is
+  128 KB, over L1 but inside L2, so the strided re-read the pass removes
+  was being served from L2 rather than memory. The residual decimation cost
+  fell 14%, not the 50% a redundant-traversal model implies.
+- **Residual:** 2594 ns at 8192, and it is no longer passes — four plane
+  write streams against the square route's two, plus a combine reading two
+  planes. That is the minimum for a decimation in this layout; getting past
+  it means not decimating, which is the rectangular four-step.
+
 ## ATLAS-APOLLO-ODD-POWER-FUSION-2026-08-28 — Fuse the radix-2 decimation into the planar boundary [perf] — done 2026-08-28
 
 - **Delivered** (`gap_audit.md#odd-power-fusion`): the planar driver's

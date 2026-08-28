@@ -642,72 +642,113 @@ macro_rules! sect {
     };
 }
 
-/// Transforms one length-`n` subsequence of `src` into the padded planes of
-/// `scratch`, leaving the result there rather than interleaving it back.
-///
-/// `STEP` and `OFFSET` select the subsequence: `STEP = 1, OFFSET = 0` reads
-/// `src` whole, and `STEP = 2` reads the even or odd half of a radix-2
-/// decimation directly out of the caller's buffer. Reading the parent in
-/// place is the point — it is what lets [`super::four_step::four_step_fft`]
-/// decimate an odd power of two without first materializing the two
-/// subsequences (`gap_audit.md#reference-standing`).
-///
-/// Returns the plane geometry `(m, stride)` the result is addressed by:
-/// element `j` of the transform is at plane index `(j / m) * stride + j % m`.
+/// Plane geometry for a length-`n` planar transform: the square edge `m` and
+/// the padded row stride. Element `j` of a transform lands at plane index
+/// `(j / m) * stride + j % m`.
 ///
 /// # Panics
 ///
-/// Panics if the subsequence length is not an even power of two of at least
-/// four, if `src` cannot supply it at the given step and offset, or if
-/// `scratch` is shorter than [`scratch_len`].
-pub(crate) fn four_step_planes<T, const INVERSE: bool, const STEP: usize, const OFFSET: usize>(
-    src: &[Complex<T>],
-    scratch: &mut [Complex<T>],
-) -> (usize, usize)
-where
-    T: BatchedPlanCache<Complex = Complex<T>>,
-{
-    let n = src.len() / STEP;
+/// Panics if `n` is not an even power of two of at least four.
+fn plane_geometry(n: usize) -> (usize, usize) {
     let k = n.trailing_zeros();
     assert!(
         n.is_power_of_two() && k % 2 == 0 && n >= 4,
         "requires an even power of two of at least 4"
     );
-    assert!(OFFSET < STEP && src.len() >= n * STEP, "subsequence bounds");
     let m = 1usize << (k / 2);
-    let stride = m + ROW_PAD;
-    let plane = scratch_len(n);
-    // One complex scratch element is two reals, so `m * stride` complexes hold
-    // the two padded planes. The pad breaks the power-of-two row stride that
-    // makes every plane row alias to one L1 set (see [`ROW_PAD`]).
+    (m, m + ROW_PAD)
+}
+
+/// Splits a plane buffer into its real and imaginary halves.
+///
+/// One complex scratch element is two reals, so `m * stride` complexes hold
+/// the two padded planes. The pad breaks the power-of-two row stride that
+/// makes every plane row alias to one L1 set (see [`ROW_PAD`]).
+///
+/// # Panics
+///
+/// Panics if `scratch` is shorter than `plane`.
+fn split_plane<T>(scratch: &mut [Complex<T>], plane: usize) -> (&mut [T], &mut [T])
+where
+    T: bytemuck::Pod,
+    Complex<T>: bytemuck::Pod,
+{
     assert!(
         scratch.len() >= plane,
         "scratch must hold two padded planes"
     );
     let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
-    let (re, im) = flat.split_at_mut(plane);
+    flat.split_at_mut(plane)
+}
 
-    // The stage set wants bit-reversed rows, so the deinterleave writes each
-    // row at its reversed position and the separate permutation pass this
-    // replaces is deleted: bit reversal is an involution, so writing to
-    // `rev(row)` is exactly the swap list the plan would have applied.
-    let row_bits = k / 2;
-    // The scalar loop stays deliberately: a vectorized sibling built on the
-    // native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
-    // LLVM already auto-vectorizes this loop well (see `boundary`).
-    // Chunking by `m * STEP` keeps the inner index provably in range, so the
-    // strided read costs no bounds check the sequential one did not.
-    sect!("deint", {
-        for (row, chunk) in src.chunks_exact(m * STEP).enumerate().take(m) {
-            let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-            for b in 0..m {
-                let c = chunk[b * STEP + OFFSET];
-                re[dest * stride + b] = c.re;
-                im[dest * stride + b] = c.im;
-            }
+/// Writes `src` into the padded planes in bit-reversed row order.
+///
+/// The stage set wants bit-reversed rows, so the deinterleave writes each row
+/// at its reversed position and the separate permutation pass this replaces
+/// is deleted: bit reversal is an involution, so writing to `rev(row)` is
+/// exactly the swap list the plan would have applied.
+///
+/// The scalar loop stays deliberately: a vectorized sibling built on the
+/// native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
+/// LLVM already auto-vectorizes this loop well (see [`boundary`]).
+fn deinterleave_rows<T: Copy>(
+    src: &[Complex<T>],
+    re: &mut [T],
+    im: &mut [T],
+    m: usize,
+    stride: usize,
+) {
+    let row_bits = m.trailing_zeros();
+    for (row, chunk) in src.chunks_exact(m).enumerate().take(m) {
+        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
+        for (b, c) in chunk.iter().enumerate() {
+            re[dest * stride + b] = c.re;
+            im[dest * stride + b] = c.im;
         }
-    });
+    }
+}
 
+/// Writes both halves of a radix-2 decimation into their planes in one pass.
+///
+/// The alternative is [`deinterleave_rows`] twice over a strided view, which
+/// reads every cache line of `src` once per half. Taking the adjacent pair
+/// together reads each line once for both, which is why this exists rather
+/// than a step parameter on the sequential form
+/// (`gap_audit.md#odd-power-fusion`).
+fn deinterleave_decimated_rows<T: Copy>(
+    src: &[Complex<T>],
+    even: (&mut [T], &mut [T]),
+    odd: (&mut [T], &mut [T]),
+    m: usize,
+    stride: usize,
+) {
+    let (e_re, e_im) = even;
+    let (o_re, o_im) = odd;
+    let row_bits = m.trailing_zeros();
+    for (row, chunk) in src.chunks_exact(2 * m).enumerate().take(m) {
+        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
+        let base = dest * stride;
+        for b in 0..m {
+            let e = chunk[2 * b];
+            let o = chunk[2 * b + 1];
+            e_re[base + b] = e.re;
+            e_im[base + b] = e.im;
+            o_re[base + b] = o.re;
+            o_im[base + b] = o.im;
+        }
+    }
+}
+
+/// Runs both four-step stage sets over planes already in bit-reversed rows.
+fn planar_stages<T, const INVERSE: bool>(
+    re: &mut [T],
+    im: &mut [T],
+    n: usize,
+    m: usize,
+    stride: usize,
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
@@ -748,8 +789,6 @@ where
             stride,
         )
     });
-
-    (m, stride)
 }
 
 /// In-place four-step FFT over the padded planar layout.
@@ -764,10 +803,12 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
 ) where
     T: BatchedPlanCache<Complex = Complex<T>>,
 {
-    let (m, stride) = four_step_planes::<T, INVERSE, 1, 0>(data, scratch);
-    let plane = scratch_len(data.len());
-    let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
-    let (re, im) = flat.split_at_mut(plane);
+    let n = data.len();
+    let (m, stride) = plane_geometry(n);
+    let plane = scratch_len(n);
+    let (re, im) = split_plane(scratch, plane);
+    sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
+    planar_stages::<T, INVERSE>(re, im, n, m, stride);
 
     sect!("reint", {
         let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
@@ -832,9 +873,21 @@ pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
     };
     let combine = &twiddles[half - 1..n - 1];
 
+    let (m, stride) = plane_geometry(half);
     let (even, odd) = scratch.split_at_mut(plane);
-    let (m, stride) = four_step_planes::<T, INVERSE, 2, 0>(data, even);
-    four_step_planes::<T, INVERSE, 2, 1>(data, odd);
+    sect!("deint", {
+        let (e_re, e_im) = split_plane(even, plane);
+        let (o_re, o_im) = split_plane(odd, plane);
+        deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride);
+    });
+    {
+        let (re, im) = split_plane(even, plane);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+    }
+    {
+        let (re, im) = split_plane(odd, plane);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+    }
     combine_planar_halves(data, even, odd, m, stride, combine);
 }
 
