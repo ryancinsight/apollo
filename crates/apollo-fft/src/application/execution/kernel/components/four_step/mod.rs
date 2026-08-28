@@ -85,6 +85,45 @@ pub(crate) fn try_four_step<
 }
 
 /// In-place four-step FFT for large power-of-two lengths.
+/// One radix-2 decimation in time, delegating both halves to the route above.
+///
+/// `X[k] = E[k] + W_N^k O[k]` and `X[k + N/2] = E[k] - W_N^k O[k]`, with `E`
+/// and `O` the transforms of the even- and odd-indexed samples. Both halves
+/// are even powers of two, which is exactly the shape the batched planar
+/// kernel wants, so an odd power pays one gather, two fast halves, and one
+/// combining pass rather than falling to a slower route entirely.
+fn radix2_split<F: MixedRadixScalar<Complex = eunomia::Complex<F>>, const INVERSE: bool>(
+    data: &mut [F::Complex],
+) {
+    let n = data.len();
+    let half = n / 2;
+    let twiddles = if INVERSE {
+        F::cached_twiddle_inv(n)
+    } else {
+        F::cached_twiddle_fwd(n)
+    };
+    // The stage-major table ends with the length-`n` stage, whose `n / 2`
+    // entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1` slots.
+    let combine = &twiddles[half - 1..n - 1];
+
+    <F as MixedRadixScalar>::with_scratch(n, |scratch| {
+        for (j, pair) in data.chunks_exact(2).enumerate() {
+            scratch[j] = pair[0];
+            scratch[half + j] = pair[1];
+        }
+        let (even, odd) = scratch.split_at_mut(half);
+        four_step_fft::<F, INVERSE>(even);
+        four_step_fft::<F, INVERSE>(odd);
+
+        let (low, high) = data.split_at_mut(half);
+        for j in 0..half {
+            let rotated = odd[j] * combine[j];
+            low[j] = even[j] + rotated;
+            high[j] = even[j] - rotated;
+        }
+    });
+}
+
 pub(crate) fn four_step_fft<
     F: MixedRadixScalar<Complex = eunomia::Complex<F>>,
     const INVERSE: bool,
@@ -98,6 +137,19 @@ pub(crate) fn four_step_fft<
     // removes every cross-lane shuffle from the butterfly. It covers the square
     // splits below the threading threshold; everything else continues below.
     if F::try_four_step_batched::<INVERSE>(data) {
+        return;
+    }
+
+    // An odd `log2` has no square split, and the asymmetric one measured
+    // badly: the generic path streams a full N-element twiddle matrix, which
+    // at N = 8192 cost more than the square route spends on N = 16384. One
+    // radix-2 decimation instead leaves two halves that are *even* powers,
+    // so each takes the batched planar route above, and the combine reuses
+    // the final stage of the existing twiddle table -- `W_N^j` for
+    // `j < N/2` already sits at `N/2 - 1`, so no table is added
+    // (gap_audit.md#odd-power-routing).
+    if n.trailing_zeros() % 2 == 1 && n >= 512 {
+        radix2_split::<F, INVERSE>(data);
         return;
     }
 
