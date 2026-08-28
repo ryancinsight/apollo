@@ -1,5 +1,27 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-ODD-POWER-ROUTING-2026-08-28 — Odd powers of two took the slow route [patch] — done 2026-08-28
+
+- **Delivered:** `FourStep::admits` excluded odd `log2` ("cost never
+  measured"), leaving half of all power-of-two sizes on the Stockham route at
+  ~2.5x RustFFT beside even neighbours at 1.05-1.34x — so badly that n = 2048
+  cost more than n = 4096 and n = 8192 more than n = 16384. Admitting the
+  asymmetric split alone is not the fix (it helps at 2048, hurts at 8192,
+  because the generic path streams a full N-element twiddle matrix). The
+  route now takes **one radix-2 decimation**, whose halves are even powers
+  and therefore hit the batched planar kernel, and combines using the
+  `W_N^j` entries already sitting in the last stage of the cached twiddle
+  table — no new table, no new allocation class.
+- **Measured pinned, P-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
+  2048 14140 -> **8055** (2.56x -> **1.43x**), 8192 68117 -> **34660**
+  (2.49x -> **1.27x**); even powers unchanged. Cost is monotone in size
+  again. Evidence: `gap_audit.md#odd-power-routing`.
+- **Instrument:** `batched::pinned_ladder` extended through the odd powers
+  and retargeted from `four_step_batched` to `FftPlan1D`, so it measures the
+  production route rather than one component — which is why this was
+  invisible. The selection oracle moved to the new contract with the
+  measurement as its justification.
+
 ## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 — Advance the Moirai provider revision [patch] — done 2026-08-28
 
 - **Delivered:** Apollo PR #160 / merge `65e6dbd0` advances all 13 Moirai packages to `fff36331`, all nine Mnemosyne packages to `12e5b090`, and Themis to `9fd113fd`; Apollo uses none of Moirai's removed queue-capacity APIs.

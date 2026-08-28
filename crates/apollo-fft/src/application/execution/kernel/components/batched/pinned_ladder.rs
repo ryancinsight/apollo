@@ -1,8 +1,8 @@
-//! Pinned measurement: the batched route against the reference engines
+//! Pinned measurement: the production power-of-two route against the
+//! reference engines
 //! across the power-of-two ladder, by core type. Asserts nothing; run with
 //! `--ignored --nocapture`.
 
-use super::{four_step_batched, scratch_len};
 use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;

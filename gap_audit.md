@@ -1,3 +1,62 @@
+## Odd powers of two were routed off the fast path entirely (2026-08-28) <a id="odd-power-routing"></a>
+
+`FourStep::admits` required `trailing_zeros() % 2 == 0`, its comment
+recording the reason: "an odd `log2` would need an asymmetric split, whose
+cost this route has never been measured at." Extending the pinned ladder
+through the odd powers measured it, and the exclusion was expensive well
+past a tuning margin — pinned, P-core, against RustFFT:
+
+| n | log2 | before |
+| --- | --- | --- |
+| 256 | 8 | 2.00x |
+| **512** | **9** | **2.51x** |
+| 1024 | 10 | 1.34x |
+| **2048** | **11** | **2.56x** |
+| 4096 | 12 | 1.14x |
+| **8192** | **13** | **2.49x** |
+| 16384 | 14 | 1.05x |
+
+The pathology is visible without a reference at all: **n = 2048 cost more
+than n = 4096, and n = 8192 more than n = 16384**. Half of every
+power-of-two size ran about 2.4x slower than its neighbours.
+
+### Admitting the asymmetric split is not the fix
+
+Allowing odd powers reaches `four_step_fft`'s existing `k1 = k/2`,
+`k2 = k - k1` path. That helps at 2048 (2.56x -> 1.76x) and *hurts* at 8192
+(2.49x -> 2.79x, and 8.67x on an E-core), because the generic path streams a
+full N-element cached twiddle matrix through step 3 where the batched planar
+route folds its twiddles into stage loads. The asymmetric split is real, but
+it lands on the slower of the two implementations.
+
+### One radix-2 decimation does fix it
+
+An odd power splits as `2 x 2^(k-1)`, and `2^(k-1)` is an **even** power —
+precisely the shape the batched planar kernel wants. So the route now takes
+one decimation in time, delegates both halves to itself (where they hit the
+batched route), and combines:
+`X[k] = E[k] + W_N^k O[k]`, `X[k + N/2] = E[k] - W_N^k O[k]`.
+
+The combine needs no new table. The stage-major twiddle table already ends
+with the length-`N` stage, whose `N/2` entries are `W_N^j` in order at
+offset `N/2 - 1`, so the split reads what the Stockham route had already
+cached.
+
+| n | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| 512 | 2623 ns | **2117** | 2.51x -> **2.02x** |
+| 2048 | 14 140 | **8055** | 2.56x -> **1.43x** |
+| 8192 | 68 117 | **34 660** | 2.49x -> **1.27x** |
+
+n = 8192 is 1.97x faster and n = 2048 1.76x faster than before; even powers
+are untouched (256 1.96x, 1024 1.35x, 4096 1.13x, 16384 1.06x). The ordering
+anomaly is gone: cost is monotone in size again.
+
+The ladder instrument was extended to the odd powers and retargeted from
+`four_step_batched` to `FftPlan1D`, so it now measures what production
+actually routes rather than one component of it — which is why this was
+invisible for so long.
+
 ## Checked view access, not register pressure, dominated the 128-base (2026-08-28) <a id="base128-bounds"></a>
 
 The assembly diagnostic named on the item was run. It answers the question
