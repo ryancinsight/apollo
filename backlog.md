@@ -939,10 +939,12 @@
 
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — in progress 2026-08-27
 
-- **Current increment:** stale-claim takeover by Codex session
-  `01a0253c-6013-7552-99cc-36bbbcf77f6d` for PR #158; lease:
-  `gap_audit.md` retained-attribution units, this item block, and PR metadata;
-  last update 2026-08-28.
+- **Current increment:** resumed by Codex session
+  `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
+  `perf/apollo-retained-footprint`; lease:
+  `kernel/retained_footprint.rs`, allocation owners identified by that probe,
+  `gap_audit.md#retained-attribution`, this item block, and the matching
+  checklist through the next verified commit; last update 2026-08-28.
 - **Attribution delivered (2026-08-27):** `kernel/retained_footprint.rs` —
   windowed counting allocator with a per-window ledger of blocks ≥ n bytes;
   window sums reproduce the peak census to the byte. Findings

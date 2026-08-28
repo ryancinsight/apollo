@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
+
+- [ ] Reproduce the pool-warmup retained census at the merged Moirai revision
+      and reconcile it with the 24 by 65,536-byte pre-fix ledger.
+- [ ] Attribute every retained size class below the 65,536-byte ledger floor to
+      its Apollo, Moirai, allocator, or driver owner without changing workloads.
+- [ ] Remove the largest avoidable production-owned term while preserving the
+      zero-allocation warm-call contract and value-semantic FFT oracles.
+- [ ] Pass focused warning-denied checks, Nextest, exact retained-memory census,
+      timing-census regression checks, independent review, and merge.
+
 ## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
 - [x] Advance Apollo's standalone lockfile to Moirai merge `b42ec745`.
