@@ -1,3 +1,40 @@
+## The 128-base multiply count cannot be converted into time (2026-08-28) <a id="base128-root2"></a>
+
+[The arithmetic comparison](#base128-arithmetic-count) put Apollo at 136
+complex multiplies against the reference's 72 and named three levers. All
+three have now been measured, and the count gap does not convert.
+
+| component | Apollo | RustFFT | outcome |
+| --- | --- | --- | --- |
+| eight 16-point row transforms | 64 | 16 | needs the across-instance layout — built, measured, [spills](#base128-split) |
+| four-step twiddle layer | 56 | 56 | already at parity |
+| eight 8-point column transforms | 16 | 0 | **removable, and measured slower** |
+
+The column lever is the one that looked free. `W_8^1` and `W_8^3` need no
+complex multiply: `x * W_8^1 = (rot(x) + x)/sqrt(2)` and
+`x * W_8^3 = (rot(x) - x)/sqrt(2)`, which is what the reference does. That
+is one shuffle where the general interleaved product needs three, and it
+also retires the two twiddle registers the splats held.
+
+Implemented, correct on every oracle, and **2.6% slower**: n = 128 went
+277.8 to 285.1 ns with RustFFT at its baseline in the same run, and the
+column phase 455 to 478 TSC. Two variants were measured — taking one half of
+a butterfly, then an explicit single add or subtract — and neither moved it.
+
+The arithmetic explains why. The general product is one shuffle, one
+multiply and one alternating FMA: **four operations**. The identity is a
+rotation (a shuffle and a sign flip), one add, and one multiply: also four,
+with a longer dependency chain. The three-shuffle count that made this look
+promising was the wrong model — the shuffles are not the bottleneck here,
+which agrees with the earlier finding that this P-core is not
+shuffle-port-bound.
+
+**So the multiply-count gap is real and unconvertible in this layout.** The
+56 that match the reference are already optimal, the 16 that could go cost
+the same operations either way, and the 64 that could fall to 16 need a
+register working set this ISA cannot hold. The remaining distance at 128 is
+not arithmetic and not schedule; both have now been measured to their end.
+
 ## The base kernel generalizes over row length; `reverse_bits` does not (2026-08-28) <a id="base-row-length"></a>
 
 The 128-point base is eight rows of sixteen. A 64-point transform is the
