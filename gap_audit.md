@@ -1,3 +1,67 @@
+## Where we actually stand against the references (2026-08-28) <a id="reference-standing"></a>
+
+The ladder began at n = 256, so it could not see the two sizes the base
+kernel serves directly, and no single record stated the standing across the
+whole range. Both are fixed: the instrument now starts at n = 64, and this
+is what it reports, pinned, P-core, min-of-twelve-blocks, all three engines
+in the same run on the same core.
+
+| n | apollo | RustFFT | PhastFT | vs RustFFT | route |
+| --- | --- | --- | --- | --- | --- |
+| 64 | 129.6 ns | 82.7 | 162.1 | **1.57** | 64-base |
+| 128 | 277.4 | 180.6 | 328.9 | **1.54** | 128-base |
+| 256 | 736.7 | 413.0 | 688.5 | **1.78** | 128-base split |
+| 512 | 1928.8 | 1043.7 | 1472.8 | **1.85** | 128-base split x2 |
+| 1024 | 3369.7 | 2553.9 | 3311.6 | 1.32 | planar 32x32 |
+| 2048 | 8133.8 | 5656.4 | 7047.3 | **1.44** | radix-2 split |
+| 4096 | 14212.7 | 12501.2 | 15854.5 | 1.14 | planar 64x64 |
+| 8192 | 34413.9 | 27034.4 | 33379.5 | **1.27** | radix-2 split |
+| 16384 | 62119.7 | 58923.0 | 71370.5 | 1.05 | planar 128x128 |
+
+We are ahead of PhastFT at the smallest sizes and at 4096 and 16384, and
+level with or behind it in between.
+Against RustFFT we are behind everywhere, and the shape of the deficit is
+the useful part, because it is two separate causes rather than one:
+
+**Below 1024 the base kernel's arithmetic is the deficit.** 1.54 at n = 128
+is close to the multiply ratio the [arithmetic comparison](#base128-arithmetic-count)
+found, and that line is [measured to its end](#base128-root2) and blocked on
+register width (#wider-isa). The split sizes inherit it and add to it: two
+128-bases are 555 ns of the 736 at n = 256, four are 1110 ns of the 1929 at
+n = 512. Even with the split made free, n = 512 could not reach RustFFT's
+1044 -- the four base transforms alone exceed it. **Nothing below n = 1024
+is reachable without the wider ISA.**
+
+**At and above 1024 the deficit is structural and unblocked.** Read the
+even powers alone and the route is converging on parity: 1.32 at 1024, 1.14
+at 4096, 1.05 at 16384 -- fixed overheads amortizing against a route that
+is otherwise sound. The odd powers break that trend, and they are exactly
+the sizes that do not get it: an odd `log2` has no square split, so it takes
+[one radix-2 decimation](#odd-power-routing) and two planar halves.
+
+The cost of that decimation is measurable by subtraction, since the halves'
+own times are on the same table:
+
+| n | total | two halves | decimation | RustFFT |
+| --- | --- | --- | --- | --- |
+| 2048 | 8133.8 ns | 2 x 3369.7 = 6739.4 | **1394.4** | 5656.4 |
+| 8192 | 34413.9 | 2 x 14212.7 = 28425.4 | **5988.5** | 27034.4 |
+
+**At n = 8192 the decimation is the entire deficit.** The two halves cost
+28425 against RustFFT's 27034 -- 1.05, the same parity the even powers
+reach. Every nanosecond of the 1.27 is the split. At 2048 it is most of it:
+without the split we would be at 1.19 rather than 1.44.
+
+That is where the next work goes. The decimation is not arithmetic, it is
+movement: it materializes the even and odd subsequences into scratch, runs
+two independent planar transforms that each deinterleave *again* into their
+planes, reinterleaves each result, and only then combines. Three of those
+passes over n exist solely because the halves are transformed as if they
+were free-standing inputs. Fusing the decimation into the planar
+deinterleave and the combine into the reinterleave removes them, and
+lowers the peak scratch as well: the fused form holds two half-planes
+where the present one holds a full n-element split buffer plus a half-plane.
+
 ## What a wider ISA would buy, and what stands in its way (2026-08-28) <a id="wider-isa"></a>
 
 [The arithmetic line closed](#base128-root2) by saying that further gain at
