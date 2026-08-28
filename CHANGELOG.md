@@ -111,6 +111,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Keep x86 Stockham precision kernels and AVX2 composite-pass hooks
+  out of non-x86 library and test graphs. AArch64 retains the existing scalar
+  composite route while the complete workspace now compiles all targets with
+  warnings denied.
+
 - [patch] `apollo-fft` plans acquire inverse power-of-two twiddle tables on
   first inverse execution instead of retaining them for forward-only use,
   returning one 16N-byte table per plan size. Stage, composite-arm, and

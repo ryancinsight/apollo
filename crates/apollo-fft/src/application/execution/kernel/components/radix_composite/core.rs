@@ -203,6 +203,7 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: b
         // Per-stage dispatch: try AVX2 for r=3 and r=4 (amortizes #[target_feature]
         // overhead across all g_count groups; O(1) overhead per stage vs O(g_count)).
         // Falls back to the scalar per-group loop when AVX2 is unavailable.
+        #[cfg(target_arch = "x86_64")]
         let avx2_handled = match r {
             2 => {
                 if src_is_data {
@@ -321,6 +322,8 @@ fn flat_stockham_fused<F: CompositeCache + ShortWinogradScalar, const INVERSE: b
             }
             _ => false,
         };
+        #[cfg(not(target_arch = "x86_64"))]
+        let avx2_handled = false;
         if avx2_handled {
             src_is_data = !src_is_data;
             prev_len = stage_chunk;

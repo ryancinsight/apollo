@@ -2,6 +2,7 @@
 
 #![allow(clippy::many_single_char_names)]
 
+#[cfg(target_arch = "x86_64")]
 use eunomia::{Complex32, Complex64};
 
 #[cfg(target_arch = "x86_64")]

@@ -31,9 +31,8 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
     /// the `#[target_feature]` function-call overhead across the entire stage.
     /// Returns `true` if the pass was handled; `false` if scalar fallback is needed.
     ///
-    /// Default: returns `false` (scalar path).
-    #[allow(unused_variables)]
-    #[inline]
+    /// The scalar path is selected structurally on non-x86 targets.
+    #[cfg(target_arch = "x86_64")]
     fn try_flat_pass_r4<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -42,16 +41,13 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool {
-        false
-    }
+    ) -> bool;
 
     /// Attempt an AVX2-accelerated flat Stockham pass for radix-3.
     ///
     /// Same amortization contract as `try_flat_pass_r4`.
-    /// Default: returns `false` (scalar path).
-    #[allow(unused_variables)]
-    #[inline]
+    /// The scalar path is selected structurally on non-x86 targets.
+    #[cfg(target_arch = "x86_64")]
     fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -60,18 +56,15 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool {
-        false
-    }
+    ) -> bool;
 
     /// Attempt an AVX2-accelerated flat Stockham pass for radix-5.
     ///
     /// Same amortization contract as `try_flat_pass_r4`. Vectorizes the
     /// radix-5 stage (previously scalar) shared by every composite with a
     /// factor of 5 (e.g. N=15, 25, 100, 180, 1000).
-    /// Default: returns `false` (scalar path).
-    #[allow(unused_variables)]
-    #[inline]
+    /// The scalar path is selected structurally on non-x86 targets.
+    #[cfg(target_arch = "x86_64")]
     fn try_flat_pass_r5<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -80,17 +73,14 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool {
-        false
-    }
+    ) -> bool;
 
     /// Attempt an AVX2-accelerated flat Stockham pass for radix-7.
     ///
     /// Same amortization contract; vectorizes the radix-7 stage (previously
-    /// scalar) shared by every composite with a factor of 7.
-    /// Default: returns `false` (scalar path).
-    #[allow(unused_variables)]
-    #[inline]
+    /// scalar) shared by every composite with a factor of 7. The scalar path
+    /// is selected structurally on non-x86 targets.
+    #[cfg(target_arch = "x86_64")]
     fn try_flat_pass_r7<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -99,16 +89,14 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool {
-        false
-    }
+    ) -> bool;
 
     /// Attempt an AVX2-accelerated flat Stockham pass for radix-2.
     ///
     /// Vectorizes the trailing radix-2 stage of odd-power-of-two
-    /// decompositions (previously scalar). Default: returns `false`.
-    #[allow(unused_variables)]
-    #[inline]
+    /// decompositions (previously scalar). The scalar path is selected
+    /// structurally on non-x86 targets.
+    #[cfg(target_arch = "x86_64")]
     fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<Self>],
         dst: &mut [Complex<Self>],
@@ -117,9 +105,7 @@ pub trait CompositeCache: WinogradScalar + ShortWinogradScalar {
         stage_chunk: usize,
         tw: &[Complex<Self>],
         pointwise: Option<&[Complex<Self>]>,
-    ) -> bool {
-        false
-    }
+    ) -> bool;
 }
 
 thread_local! {
@@ -218,6 +204,7 @@ fn build_composite_twiddles<F: WinogradScalar, const INVERSE: bool>(
 
 impl CompositeCache for f64 {
     /// AVX2+FMA flat pass for radix-2 f64 (trailing stage of odd powers of two).
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<f64>],
@@ -254,6 +241,7 @@ impl CompositeCache for f64 {
     }
 
     /// AVX2+FMA flat pass for radix-7 f64. Checked once per stage (not per group).
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r7<const INVERSE: bool>(
         src: &[Complex<f64>],
@@ -284,6 +272,7 @@ impl CompositeCache for f64 {
     }
 
     /// AVX2+FMA flat pass for radix-5 f64. Checked once per stage (not per group).
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r5<const INVERSE: bool>(
         src: &[Complex<f64>],
@@ -314,6 +303,7 @@ impl CompositeCache for f64 {
     }
 
     /// AVX2+FMA flat pass for radix-4 f64. Checked once per stage (not per group).
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r4<const INVERSE: bool>(
         src: &[Complex<f64>],
@@ -344,6 +334,7 @@ impl CompositeCache for f64 {
     }
 
     /// AVX2+FMA flat pass for radix-3 f64.
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<f64>],
@@ -431,6 +422,7 @@ impl CompositeCache for f64 {
 
 impl CompositeCache for f32 {
     /// AVX2+FMA flat pass for radix-2 f32 (trailing stage of odd powers of two).
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r2<const INVERSE: bool>(
         src: &[Complex<f32>],
@@ -466,6 +458,7 @@ impl CompositeCache for f32 {
     }
 
     /// AVX2+FMA flat pass for radix-7 f32. Processes 4 complex per __m256 register.
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r7<const INVERSE: bool>(
         src: &[Complex<f32>],
@@ -496,6 +489,7 @@ impl CompositeCache for f32 {
     }
 
     /// AVX2+FMA flat pass for radix-5 f32. Processes 4 complex per __m256 register.
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r5<const INVERSE: bool>(
         src: &[Complex<f32>],
@@ -526,6 +520,7 @@ impl CompositeCache for f32 {
     }
 
     /// AVX2+FMA flat pass for radix-4 f32. Processes 4 complex per __m256 register.
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r4<const INVERSE: bool>(
         src: &[Complex<f32>],
@@ -556,6 +551,7 @@ impl CompositeCache for f32 {
     }
 
     /// AVX2+FMA flat pass for radix-3 f32.
+    #[cfg(target_arch = "x86_64")]
     #[inline]
     fn try_flat_pass_r3<const INVERSE: bool>(
         src: &[Complex<f32>],
