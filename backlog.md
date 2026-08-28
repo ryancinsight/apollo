@@ -68,25 +68,43 @@
   set one for identical butterflies, which is the four-step twiddle fold
   and is real arithmetic; and the permute pass at 4.9-6.2% is pure repair.
 
-## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — todo
+## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — ready
 
 - **Outcome:** the permute pass disappears. Acceptance: 1024 and 4096
-  improve against the attribution table with every oracle passing and the
-  odd powers, which run the route twice, improving proportionately.
-- **Why:** the deinterleave gets bit-reversed rows for free by writing each
-  row to `rev(row)`; the transpose destroys that order, so a whole pass
-  runs to restore it before stage set two. It is the one pass whose entire
-  content is undoing the pass before it — 11756 TSC at 16384, on the order
-  of the transpose itself, and 4.9-6.2% of the route everywhere.
-- **Two candidate shapes, and the second looks likelier:** fold the row
-  reversal into the transpose, which needs care because transpose and
-  bit-reversal are each involutions but their composition is not, so the
-  in-place tiled form no longer decomposes into pair swaps; or teach stage
-  set two's first stage to read permuted rows, the way it already reads
-  folded twiddles — the plan carries the swap list, and the fold seam
-  exists.
+  improve against the attribution table with every oracle passing, and the
+  odd powers, which run the route twice, improve proportionately.
+- **Why** (`gap_audit.md#planar-pass-attribution`): the deinterleave gets
+  bit-reversed rows for free by writing each row to `rev(row)`; the
+  transpose destroys that order, so a whole pass restores it before stage
+  set two. It is the one pass whose entire content is undoing the pass
+  before it — 11756 TSC at 16384, on the order of the transpose itself, and
+  4.9-6.2% of the route everywhere. Since the boundary passes are the whole
+  deficit at the large even powers (butterflies are already ahead of the
+  reference), removing it is what takes 16384 below 1.0.
+- **The design is decided, not open.** `BatchedPlan::new` builds `swaps` as
+  exactly `rev(i)` over `log2(len)` bits, so the pass is the plain DIT
+  bit-reversal — which settles the two shapes that were open:
+  - *Fold it into the transpose* is rejected. The composite map is
+    `(r, c) -> (rev(c), r)`, a bit-permutation of the flat index whose
+    cycles do not decompose into tile-pair swaps, so the in-place tiled
+    transpose stops being tileable and becomes cycle-following. That trades
+    a 5% pass for a slower 6.5% one.
+  - *Run stage set two as decimation-in-frequency* is the answer. DIF takes
+    natural-order input — which is exactly what the transpose leaves — and
+    produces bit-reversed output, and the sink absorbs that reversal for
+    free by reading `rev(row)`, the same trick the deinterleave already uses
+    on the source side. `InterleaveRows` absorbs it on the square route and
+    `combine_planar_halves` on the split route; both are index changes at a
+    pass that already exists.
+- **What it costs to build:** `BatchedStages` fuses two stages per pass with
+  `l` doubling from 2; the DIF form halves `l` from `len`, and the twiddle
+  table is the same values in the reverse stage order. The risk to watch is
+  the one this repository has already paid twice: a const parameter over
+  decimation direction may perturb the sequential path's code placement, so
+  build it as a sibling kernel and keep the controls in the same run.
 - **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** permute
   517 at 1024, 3014 at 4096, 11756 at 16384; totals 10645, 48700, 215660.
+  Ladder ratios to beat: 1.34 at 1024, 1.14 at 4096, 1.05 at 16384.
 
 ## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
 
