@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-WIDER-ISA-2026-08-28 — The AVX-512 path for the base kernel [arch] — blocked: no AVX-512 hardware
+
+- **The blocker is a fact about the machine, not a dependency:** this host
+  is an Arrow Lake Core Ultra 9 285K and reports `avx512f: false`, probed
+  rather than assumed. The path can be built and proven correct here; it
+  cannot be proven faster. **Re-open trigger:** access to an AVX-512 host,
+  or a decision to merge on SDE correctness plus the arithmetic case.
+- **Why it is the live lever** (`gap_audit.md#wider-isa`): eight f64 lanes
+  are four complex per register, and thirty-two registers rather than
+  sixteen — an eightfold change in headroom for a working set measured in
+  rows. That is the quantity that defeated the across-instance layout,
+  which wants sixteen live values on AVX2 and spills (1774 against 518 TSC)
+  but only eight of thirty-two at the wider width. Its advantage, 16 row
+  multiplies against our 64, is built and preserved under
+  `docs/experiments/`.
+- **What blocks it in our own code:** the kernels *require* four lanes at
+  seventeen sites across six modules — `exact_lanes_supported::<4>`,
+  `vectorize_lanes::<4>`, and a `LANE_COUNT != 4` early return in the base
+  kernel, the batched boundary, the N=16 codelet, and both resident row
+  kernels — because every address map is written in chunks of two complex
+  samples. An AVX-512 host therefore selects AVX2 everywhere and runs at
+  half width, so the wider ISA buys nothing rather than something.
+- **The provider side is ready:** hermes #98 closed the last permute gap,
+  so a width-generic kernel would not fall to a stack-capture default at
+  the wider width.
+- **Order if pursued:** parameterize over complex-per-register holding
+  four-lane behaviour byte-identical and confirm on this host that it is
+  free (the row-length precedent says it can be); restore the
+  across-instance layout at eight lanes; measure elsewhere.
+
 ## ATLAS-APOLLO-BASE128-ARITHMETIC-2026-08-28 — Close the 128-base arithmetic line [perf] — done 2026-08-28
 
 - **All three levers from the arithmetic comparison are now measured**
