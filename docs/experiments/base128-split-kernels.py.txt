@@ -1,0 +1,210 @@
+# PRESERVED EXPERIMENT — not run by any gate. See gap_audit.md#base128-split.
+#
+# Rebuilds butterfly.rs as two per-phase LaneKernels (across-instance rows,
+# then the column pass), each entering its own target-feature scope through
+# its own vectorize_lanes call, with the phase stamps moved into the driver.
+# Applied against docs/experiments/base128-across-instance-rows.rs.txt.
+#
+# Measured: the split restores the untouched column pass from 1771 to 467
+# TSC, confirming the outlining diagnosis, but costs ~2% overall and the
+# across-instance rows still lose (357 ns staged, 615 register-resident,
+# against the 294 ns baseline). Restore when the assembly diagnostic named
+# on the item explains the sixteen-register working set.
+
+import io
+
+src = io.open('docs/experiments/base128-across-instance-rows.rs.txt', encoding='utf-8').read()
+
+# --- slice the preserved file ---
+pre_start = src.index('use crate::application::execution::kernel::components::lane_capability')
+pre_end = src.index('/// The 128-point transform as a lane kernel over interleaved samples.')
+preamble = src[pre_start:pre_end]
+
+rows_start = src.index('        // Phases 1 and 2, across FFT instances.')
+rows_end = src.index('        // Counter 0 now carries the fused load-and-rows pass;')
+rows_body = src[rows_start:rows_end].rstrip() + '\n'
+
+cols_start = src.index('        // Phase 3: mixed-radix twiddle and the lane-wise 8-point DIF across')
+cols_end = src.index('        #[cfg(all(test, windows, target_arch = "x86_64"))]\n        if MEASURE_PHASES {')
+cols_body = src[cols_start:cols_end].rstrip() + '\n'
+
+tail_start = src.index('/// Runs the 128-point base butterfly when a four-lane backend is available.')
+tail = src[tail_start:]
+
+# --- adapt bodies to their owning kernel's fields ---
+rows_body = rows_body.replace(
+    "        let mut staging = [T::from_precise(0.0); 256];\n        {\n"
+    "            let data_view = simd.view(&*self.data);\n"
+    "            let mut stg = simd.view_mut(&mut staging);\n",
+    "        {\n"
+    "            let data_view = simd.view(self.data);\n"
+    "            let mut stg = simd.view_mut(self.staging);\n",
+    1,
+)
+assert 'let mut staging' not in rows_body, 'rows still owns staging'
+cols_body = cols_body.replace('let stg = simd.view(&staging);', 'let stg = simd.view(self.staging);', 1)
+assert 'view(&staging)' not in cols_body, 'cols still reads local staging'
+
+ROWS = '''/// Phase one: the across-instance row transforms, source to staging.
+///
+/// Split from the column pass so each enters its own `#[target_feature]`
+/// scope through its own dispatch. Carrying both in one `LaneKernel` body
+/// pushed it past what the inliner would keep in that scope, and the
+/// column pass — untouched — degraded four to twelve times
+/// (gap_audit.md#base128-across-instance). The reference splits for the
+/// same reason.
+pub(crate) struct RowsAcross<'a, T, const INVERSE: bool> {
+    /// Interleaved source samples, 256 lanes.
+    pub(crate) data: &'a [T],
+    /// Interleaved staging plane, 256 lanes.
+    pub(crate) staging: &'a mut [T],
+    pub(crate) plan: &'a Plan128<T>,
+}
+
+impl<T, const INVERSE: bool> LaneKernel<T> for RowsAcross<'_, T, INVERSE>
+where
+    T: LaneScalar + MixedRadixScalar,
+{
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature \\
+                  frame (hermes LaneKernel contract for large bodies)"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+        if <A as SimdStorage<T>>::LANE_COUNT != 4 {
+            return false;
+        }
+        // The dispatch token proves support before this kernel begins, while
+        // views hoist bounds reasoning once per slice. Every offset below is
+        // a multiple of the four-lane width, so chunk indices are exact.
+        let tab_view = simd.view(&self.plan.table);
+        // Dup-split complex multiply: one shuffle, one multiply, one
+        // alternating FMA (see the plan-layout doc).
+        let cmul = |v: ComplexReg<T, A>, ch: usize| {
+            let wr = hermes_simd::Vector::from_view_chunk(&tab_view, ch);
+            let wi = hermes_simd::Vector::from_view_chunk(&tab_view, ch + 1);
+            let vi = v.into_interleaved();
+            ComplexReg::from_interleaved(vi.fmaddsub(wr, vi.swap_adjacent() * wi))
+        };
+        let zero = T::from_precise(0.0);
+        let neg = T::from_precise(-1.0);
+        // Blend mask selecting the high complex sample of a register.
+        let constants = [zero, zero, neg, neg];
+        let constants = simd.view(&constants);
+        let hi_mask = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 0);
+
+''' + rows_body + '''        true
+    }
+}
+
+'''
+
+COLS = '''/// Phase two: the mixed-radix twiddle layer and the lane-wise eight-point
+/// DIF across rows, staging to output.
+pub(crate) struct ColumnsDif8<'a, T, const INVERSE: bool> {
+    /// Interleaved staging plane, 256 lanes.
+    pub(crate) staging: &'a [T],
+    /// Interleaved output samples, 256 lanes.
+    pub(crate) data: &'a mut [T],
+    pub(crate) plan: &'a Plan128<T>,
+}
+
+impl<T, const INVERSE: bool> LaneKernel<T> for ColumnsDif8<'_, T, INVERSE>
+where
+    T: LaneScalar + MixedRadixScalar,
+{
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature \\
+                  frame (hermes LaneKernel contract for large bodies)"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+        if <A as SimdStorage<T>>::LANE_COUNT != 4 {
+            return false;
+        }
+        let tab_view = simd.view(&self.plan.table);
+        let cmul = |v: ComplexReg<T, A>, ch: usize| {
+            let wr = hermes_simd::Vector::from_view_chunk(&tab_view, ch);
+            let wi = hermes_simd::Vector::from_view_chunk(&tab_view, ch + 1);
+            let vi = v.into_interleaved();
+            ComplexReg::from_interleaved(vi.fmaddsub(wr, vi.swap_adjacent() * wi))
+        };
+        let zero_complex = ComplexReg::from_interleaved(simd.zero());
+        let complex_splat = |sample: Complex<T>| {
+            let (interleaved, _) = simd.splat(sample.re).interleave(simd.splat(sample.im));
+            ComplexReg::from_interleaved(interleaved)
+        };
+
+''' + cols_body + '''        true
+    }
+}
+
+'''
+
+DRIVER = '''/// Runs both phases, each in its own target-feature scope, with the phase
+/// stamps outside the kernels so the attributed build and the comparison
+/// build share identical kernel bodies.
+fn transform_128_with_measurement<T, const INVERSE: bool, const MEASURE_PHASES: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan128<T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: bytemuck::Pod,
+{
+    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
+    let mut staging = [T::from_precise(0.0); 256];
+    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t0 = if MEASURE_PHASES {
+        phase_meter::stamp()
+    } else {
+        0
+    };
+    if !hermes_simd::vectorize_lanes::<4, T, _>(RowsAcross::<T, INVERSE> {
+        data: &*flat,
+        staging: &mut staging,
+        plan,
+    })
+    .unwrap_or(false)
+    {
+        return false;
+    }
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    let t1 = if MEASURE_PHASES {
+        let t = phase_meter::stamp();
+        phase_meter::add(0, t - t0);
+        t
+    } else {
+        0
+    };
+    let handled = hermes_simd::vectorize_lanes::<4, T, _>(ColumnsDif8::<T, INVERSE> {
+        staging: &staging,
+        data: flat,
+        plan,
+    })
+    .unwrap_or(false);
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
+    if MEASURE_PHASES {
+        let t = phase_meter::stamp();
+        phase_meter::add(2, t - t1);
+        phase_meter::CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    handled
+}
+
+'''
+
+out = preamble + ROWS + COLS + DRIVER + tail
+io.open('crates/apollo-fft/src/application/execution/kernel/components/base128/butterfly.rs',
+        'w', encoding='utf-8', newline='\n').write(out)
+print('split kernels written:', len(out), 'bytes')
