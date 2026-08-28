@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 — Delete consumer-owned accelerator FFT [major] [arch] [perf] — in progress
+
+- **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`; last update 2026-08-28.
+- **Lease:** `crates/apollo-fft/src/infrastructure/transport/gpu/`, Apollo dense-WGPU FFT callers and manifests, `crates/apollo-nufft/src/infrastructure/transport/gpu/infrastructure/kernel/{buffers,fast,fast_support}.rs`, ADR 0006, and this item's PM/release regions through the next verified commit.
+- **Outcome:** Apollo retains CPU Fourier arithmetic over Leto storage while Hephaestus becomes the only dense accelerator FFT implementation. NUFFT and validation consume the prepared Hephaestus split-complex seam directly; no Apollo WGPU FFT plan, shader, dispatcher, workspace, acquisition wrapper, or compatibility export remains.
+- **Scope / non-goals:** migrate all in-repository `GpuFft3d` consumers, preprepare NUFFT forward/inverse plans with its reusable grids, remove the superseded dense-WGPU implementation and benchmark, revise ADR 0006 and public docs, and classify the public removal. CUDA FFT and the shared non-FFT WGPU transform scaffold remain unchanged.
+- **Acceptance:** residue scans find no `GpuFft3d`, `GpuFft3dBuffers`, dense FFT shader, or Apollo `WgpuBackend`; Apollo/Leto-to-Hephaestus differential and inverse-roundtrip cases pass across ranks one through three; repeated NUFFT execution reuses prepared plans and fixed grids without FFT preparation in the dispatch path; warning-denied checks, configured Nextest, doctests, Rustdoc, SemVer, independent architecture review, and exact hosted provider/consumer gates pass.
+- **Dependencies:** Hephaestus PR #227 merged native f32/f16 rank-generic FFT parity at `2a785d8`; Kwavers PR #663 already selects Leto or Hephaestus and owns no private FFT kernel. This item closes Apollo's remaining consumer-owned implementation under Hephaestus ADR 0053.
+
 ## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
 
 - **Standing after the split and routing work (pinned, P-core, vs RustFFT):**

@@ -1,5 +1,13 @@
 # Apollo Checklist
 
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 [major] [arch] [perf] — Codex
+
+- [ ] Revise ADR 0006 to make Hephaestus the sole accelerator FFT algorithm and resource owner; document the public migration and no-fallback contract.
+- [ ] Move Apollo validation and NUFFT composition to Hephaestus's prepared rank-generic split-complex seam, retaining analytical/differential value oracles.
+- [ ] Store forward and inverse prepared FFTs with NUFFT's reusable grids so warm dispatch performs no FFT preparation, allocation, compilation, transfer, or provider selection.
+- [ ] Delete Apollo's dense WGPU plan, shaders, workspace, benchmark, public exports, native-f16 feature, and every in-repository caller without a compatibility layer.
+- [ ] Pass focused/full warning-denied checks, configured Nextest, doctests, Rustdoc, SemVer, residue scans, exact performance/allocation instruments, independent review, and hosted provider/consumer CI.
+
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
 - [x] Reproduce the pool-warmup retained census at the merged Moirai revision
