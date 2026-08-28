@@ -1,3 +1,42 @@
+## The 128-base row pass is register-bound, not latency-bound (2026-08-27) <a id="base128-row-ilp"></a>
+
+The 128-point base's row pass (`components/base128`) is its largest phase, and
+the standing hypothesis was chain latency: four strictly dependent DIT-16
+stages whose four butterflies cannot fill the FMA and shuffle pipelines while
+each waits on the one before. The prescribed cure was two-row interleaving —
+process staging rows in pairs so every stage carries eight independent
+butterflies instead of four, sharing each stage's twiddle loads.
+
+**Measured, and falsified.** Pinned, with both in-run controls confirming a
+quiet machine (`columns8` 453 TSC identical to baseline; RustFFT 182.4 ns
+against baseline 181.7 ns):
+
+| | rows16 (TSC) | whole kernel (P-core) |
+| --- | --- | --- |
+| one row at a time | 517 | 295.9 ns |
+| two rows interleaved | **940** | **416.4 ns** |
+
+Sixteen live interleaved `ComplexReg` values are the entire AVX2 register
+file, before the sign vector, blend mask, and each `cmul`'s two twiddle
+loads. The allocator spills, and the spill traffic costs more than the
+latency it was meant to hide: +82% on the phase, +41% on the transform. The
+row pass is not short of independent work — it is short of registers, and any
+future ILP increase at this size must come from a form that does not raise
+the live set (deeper software pipelining across the existing eight, or a
+narrower per-row register map).
+
+**Method finding, applicable to every phase comparison here.** The phase
+meter accumulates a sum and reports a per-call average, which is
+contention-sensitive: across three runs of *identical* code the unchanged
+column pass read 450, 535, and 608 TSC — a 35% spread that swamps any 10-20%
+kernel difference. Attribution runs must therefore either carry an in-run
+control (the unchanged phase, as above) or report a per-call minimum rather
+than an average; the whole-kernel harness beside it is already minimum- and
+median-based and did not show that spread. A follow-on experiment fusing the
+redistribution into the row pass, to remove its 64 stores and the
+store-to-load forwarding dependency, produced numbers inside that noise band
+and is recorded as unresolved rather than as a verdict.
+
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
 
 Hosted verification selected a widest-native width other than the four lanes
