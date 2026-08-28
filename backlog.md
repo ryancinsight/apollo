@@ -381,10 +381,9 @@
   `FftPlan1D` before N = 128 routing changes. ADR 0041 is Accepted and
   records the address map, failure modes, evidence, and provider boundary.
   **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** fixed-four-lane kernels under `components/{base128,resident,
-  batched,codelet}`, `components/test_support.rs`, their module comments, the
-  Hermes lock pin, and this item's PM entries through the exact-width adoption
-  commit.
+  **Lease:** Codex `components/base128`, `components/mod.rs`, dynamic
+  `FftPlan1D` construction/executors/tests, ADR 0041, and this item's PM entries
+  through the production-plan ownership decision commit.
   **Last update:** 2026-08-27.
 - **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
   through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
@@ -413,7 +412,7 @@
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
-## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — review
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — done 2026-08-27 (PR #156, merge `b3925141`)
 
 - **Outcome:** `apollo-fft` builds every library and test target warning-free on
   AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks
