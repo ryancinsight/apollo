@@ -1,3 +1,69 @@
+## What a wider ISA would buy, and what stands in its way (2026-08-28) <a id="wider-isa"></a>
+
+[The arithmetic line closed](#base128-root2) by saying that further gain at
+n = 128 needs a register working set the AVX2 file cannot hold, so the next
+lever is a wider ISA rather than a better arrangement of this one. That is
+now worked out, and the state of the path recorded.
+
+**This host cannot measure it.** The development machine is an Arrow Lake
+Core Ultra 9 285K, and it reports `avx512f: false` — probed, not assumed.
+Everything below is arithmetic and capability work. No AVX-512 timing
+exists, and none can be produced here.
+
+### What the width is worth
+
+An AVX-512 register holds eight f64 lanes, so **four interleaved complex
+samples** where AVX2 holds two. Three consequences follow directly:
+
+- a sixteen-sample row occupies **four registers instead of eight**;
+- the file holds **thirty-two registers instead of sixteen**;
+- together, an **eightfold change in headroom** for a working set measured
+  in rows.
+
+That is exactly the quantity that defeated the across-instance layout. That
+layout wants sixteen live values on AVX2 — the entire register file — and
+[spills accordingly](#base128-split), at 1774 TSC against the shipped
+kernel's 518 for the same phase. At eight lanes it wants **eight of
+thirty-two**. The blocked lever and the wider ISA are one subject: the
+layout was never wrong, it was too wide for the file it was written
+against, and the advantage it was built for — 16 row multiplies rather than
+our 64, matching the reference exactly — is preserved and waiting in
+`docs/experiments/base128-across-instance-rows.rs.txt`.
+
+### What stands in the way, concretely
+
+Apollo's kernels do not prefer four lanes, they **require** them, at
+seventeen sites across six modules: `exact_lanes_supported::<4, T>()` gates
+plan construction, `vectorize_lanes::<4, T, _>` pins dispatch, and each
+kernel body opens with a `LANE_COUNT != 4` early return. The base kernel,
+the batched boundary, the N=16 codelet, and both resident row kernels all
+do it. On an AVX-512 host every one of them selects the AVX2 backend and
+runs at half width, so the wider ISA today buys **nothing at all** rather
+than something.
+
+Closing that is not a flag or a threshold. Each kernel's address map is
+written in chunks of two complex samples: phase one's block-pair
+concatenation, the staging row stride, the mixed-radix chunk index, and the
+output row permutation all assume it. A width-generic kernel needs those
+parameterized over complex-per-register — the same generalization the
+[row-length work](#base-row-length) performed for one dimension, which
+measured free once the tabled bit-reversal was restored.
+
+### The order of work, if it is pursued
+
+1. The provider surface is ready: with `HS-AVX512-TRANSPOSE` merged, every
+   permute these kernels use has an AVX-512 override, so a width-generic
+   kernel would not silently fall to a stack-capture default at the wider
+   width.
+2. Parameterize over complex-per-register, holding four-lane behaviour
+   byte-identical, and confirm on this host that it costs nothing. The
+   row-length precedent says it can be free, and the phase counters will
+   say whether it is.
+3. Restore the across-instance layout at eight lanes, where the working set
+   fits.
+4. Measure on an AVX-512 host. Steps 1-3 can be proven correct here and
+   under SDE; none of them can be proven faster here.
+
 ## The 128-base multiply count cannot be converted into time (2026-08-28) <a id="base128-root2"></a>
 
 [The arithmetic comparison](#base128-arithmetic-count) put Apollo at 136
