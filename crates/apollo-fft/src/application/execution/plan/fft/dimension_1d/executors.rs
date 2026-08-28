@@ -5,8 +5,8 @@
 //! Extracted from `dimension_1d.rs` to honour SRP and keep the plan module
 //! focused on data structures and construction logic.
 
-use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
+use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::application::execution::kernel::pot::StockhamAutosort;
 use crate::with_pot_zst;
 use eunomia::Complex;
