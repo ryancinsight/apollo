@@ -111,6 +111,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Advance all 13 Moirai lock entries to PR #184 merge `b42ec745`.
+  Moirai's naturally aligned inline jobs retain the existing 14-word payload
+  while removing 688,112 bytes (37.1%) from Apollo's 24-worker pool warmup;
+  the exact allocation ledger reports no remaining block at or above 64 KiB.
+
 - [patch] [arch] Dynamic 128-point complex FFT plans select the exact-four-lane
   interleaved base when supported, own its immutable forward state, initialize
   inverse state on first use, and share both across plan clones. The selected
