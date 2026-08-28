@@ -111,6 +111,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Parallel four-step row transforms reuse corresponding rows in the
+  inactive full-size plane as Stockham scratch instead of growing a retained
+  thread-local buffer in each participating Moirai worker. The no-floor
+  pointer ledger retains only one 4/8 KiB row-twiddle table on first use and
+  zero bytes on warm forwards; complex 1-D and measured 2-D/3-D calls remain
+  allocation-free after warm-up.
+
 - [patch] Advance all 13 Moirai lock entries to PR #184 merge `b42ec745`.
   Moirai's naturally aligned inline jobs retain the existing 14-word payload
   while removing 688,112 bytes (37.1%) from Apollo's 24-worker pool warmup;

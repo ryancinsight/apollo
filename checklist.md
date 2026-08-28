@@ -1,5 +1,28 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
+
+- [x] Reproduce the pool-warmup retained census at the merged Moirai revision
+      and reconcile it with the 24 by 65,536-byte pre-fix ledger.
+- [x] Attribute the remaining 87,768 global warmup bytes and the variable
+      large-size warm survivors without changing workloads.
+- [x] Remove the largest avoidable production-owned term while preserving the
+      non-increasing warm-call allocation bound and value-semantic FFT oracles.
+- [ ] Pass focused warning-denied checks, Nextest, exact retained-memory census,
+      timing-census regression checks, independent review, and merge.
+
+The corrected global pointer ledger measures 1,169,112 live requested bytes.
+The direct Mnemosyne pointer ledger independently measures 96 local-deque
+payload allocations of 32,768 bytes, totaling 3,145,728 bytes and exactly
+matching the 24-worker source model. The concurrent 210,763,776-byte process
+mapping delta is virtual address space, not resident or live-payload evidence.
+The 87,768-byte remainder is 83,914 bytes of source-attributed Moirai control
+state plus 3,854 bytes at the standard-library thread-spawn boundary. The
+4,096- and 8,192-byte FFT survivors were worker-local row scratch allocated
+through Mnemosyne's globally allocated `AlignedVec`, not queue payload. Paired
+active/inactive four-step planes remove that scratch; the exact candidate
+retains one row-twiddle block on first use and zero bytes on every warm forward.
+
 ## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
 - [x] Advance Apollo's standalone lockfile to Moirai merge `b42ec745`.

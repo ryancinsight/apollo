@@ -181,14 +181,16 @@ pub(crate) fn four_step_fft<
         F::transpose_matrix(data, scratch, n1, n2);
 
         // Step 2: N2 independent FFTs of length N1 on contiguous rows of scratch.
-        // After step 1, scratch holds the N2×N1 transposed layout.
-        // Each row i is scratch[i*n1..(i+1)*n1].  Uses data rows as inner scratch.
+        // The corresponding rows in data are inactive and provide Stockham scratch.
         if parallel {
-            moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(scratch, n1, |row| {
-                <F as MixedRadixScalar>::with_scratch(n1, |ts| {
-                    F::stockham_forward(row, ts, tw1.as_ref());
-                });
-            });
+            moirai::for_each_chunk_pair_mut_enumerated_with::<moirai::Parallel, _, _, _>(
+                scratch,
+                data,
+                n1,
+                |_, row, row_scratch| {
+                    F::stockham_forward(row, row_scratch, tw1.as_ref());
+                },
+            );
         } else {
             for (i, row) in scratch.chunks_exact_mut(n1).enumerate() {
                 let row_scratch = &mut data[i * n1..(i + 1) * n1];
@@ -218,13 +220,16 @@ pub(crate) fn four_step_fft<
         }
 
         // Step 4: N1 independent FFTs of length N2 on contiguous rows of data.
-        // After step 3, data holds N1 rows of N2 elements: row k at data[k*n2..].
+        // The corresponding rows in scratch are inactive and provide Stockham scratch.
         if parallel {
-            moirai::for_each_chunk_mut_with::<moirai::Parallel, _, _>(data, n2, |row| {
-                <F as MixedRadixScalar>::with_scratch(n2, |ts| {
-                    F::stockham_forward(row, ts, tw2.as_ref());
-                });
-            });
+            moirai::for_each_chunk_pair_mut_enumerated_with::<moirai::Parallel, _, _, _>(
+                data,
+                scratch,
+                n2,
+                |_, row, row_scratch| {
+                    F::stockham_forward(row, row_scratch, tw2.as_ref());
+                },
+            );
         } else {
             for (i, row) in data.chunks_exact_mut(n2).enumerate() {
                 let row_scratch = &mut scratch[i * n2..(i + 1) * n2];

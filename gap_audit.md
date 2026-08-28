@@ -481,24 +481,31 @@ candidate until the same comparator clears.
 
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 
-Evidence tier: exact allocation accounting — `kernel/retained_footprint.rs`,
-a windowed counting allocator whose ledger records every allocation of at
-least `n` bytes, one window per acquisition stage; blocks attributed to
-owners by byte signature. Run
-`cargo test --release -p apollo-fft --lib retained_footprint_attribution --
---ignored --nocapture`. Window sums reproduce the peak census totals
-([above](#peak-working-set)) to the byte at every size.
+Evidence tier: allocation-call accounting — `kernel/retained_footprint.rs`
+uses pointer-identity ledgers for every successful global-allocator call and
+every direct Mnemosyne call, then lists every live requested block. Run it as
+the only selected test in its process:
+`cargo nextest run --offline -p apollo-fft --release --lib --run-ignored
+ignored-only -E "test(retained_footprint_attribution)" --no-capture`.
+The global ledger is exact for calls reaching the installed global allocator;
+the Mnemosyne ledger is exact for direct calls reaching Mnemosyne's process-wide
+hooks. Neither is a resident-set measurement. The adjacent Mnemosyne snapshot
+reports process-wide mapped address space, while its live-allocation and
+size-class fields describe only the calling thread.
 
-| n | window | retained | blocks ≥ n bytes |
+| n | window | global-hook retained bytes | blocks ≥ n bytes |
 | --- | --- | --- | --- |
-| 1024 | twiddle table / plan build / first fwd | 16,916 / 16,916 / 37,840 | 16n / 16n / 20,480 + 2×8,192 |
-| 4096 | same | 65,536 / 65,536 / 120,168 | 16n / 16n / 73,728 + 2×32,768 |
-| 16384 | same | 262,144 / 262,144 / 469,608 | 16n / 16n / 278,528 + 2×131,072 |
-| 65536 | same | 1,048,676 / 1,048,676 / 8,779,908 | 16n / 16n / 16n+16 + 16n + **24×262,144** |
-| 262144 | same | 4,194,304 / 4,194,304 / 7,426,064 | 16n / 16n / 16n+16 + **16n** |
+| 1024 | twiddle / plan / first / warm | 16,916 / 0 / 37,840 / 0 | 16n / — / 20,480 + 2×8,192 / — |
+| 4096 | same | 65,536 / 0 / 140,648 / 0 | 16n / — / 73,728 + 2×32,768 / — |
+| 16384 | same | 262,144 / 0 / 543,336 / 0 | 16n / — / 278,528 + 2×131,072 / — |
+| 65536 | same | 1,048,792 / 0 / 2,101,692 / 0 | 16n / — / 16n+16 + 16n + 4,096 / — |
+| 262144 | same | 4,194,304 / 0 / 8,396,816 / 0 | 16n / — / 16n+16 + 16n + 8,192 / — |
 
-Warm-forward windows retain 0 everywhere (8,192 transient at 262144) — the
-steady-state contract holds; everything below is acquisition-time retention.
+These numbers are the 2026-08-28 no-floor pointer-ledger run against Moirai
+merge `b42ec745` after the paired-plane correction below. Warm transforms are
+allocation-free at every measured size. The one 4,096- or 8,192-byte block in
+each large first-forward window is the cached twiddle table for the 256- or
+512-element row transform, not row scratch.
 
 Attribution, largest first:
 
@@ -515,20 +522,25 @@ Attribution, largest first:
    a distinct layout, not a duplicate; its builder now shares the single
    evaluation authority (`ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, delivered)
    but its retention is the route's working set, recorded as-is.
-2. **The 65536 spike is Moirai pool startup, not transform buffers — resolved
-   2026-08-28.** The entry probe captured 24 per-worker blocks of 65,536 bytes
-   each (1,572,864 bytes) within 1,857,224 retained bytes; 284,360 bytes were
-   below the ledger floor. The FFT subsequently used that smaller warm pool
-   without growing it, proving first-touch shape rather than transform need.
+2. **The 65536 spike is Moirai pool startup, not transform buffers — partially
+   resolved 2026-08-28.** The entry probe captured 24 per-worker blocks of
+   65,536 bytes each (1,572,864 bytes) within 1,857,224 globally retained
+   bytes. The FFT subsequently used that pool without another block of the
+   same size, proving first-touch ownership rather than transform need.
    Moirai PR #184, merge `b42ec745`, removes `InlineJob`'s forced 64-byte
    alignment while retaining its 14-word inline payload and routing
    over-aligned captures through the boxed representation. The resulting
    `(Priority, ScheduledJob)` is 17 words and an MPMC slot is 18 words.
 
    Apollo's exact locked release probe at the merged provider revision reports
-   936 allocations, a 1,173,366-byte peak, and 1,169,112 retained bytes after
-   pool warmup, with no allocation at or above the 65,536-byte ledger floor.
-   Retention therefore drops by 688,112 bytes (37.1%) without changing queue
+   936 global allocations and 1,169,112 global requested bytes live after pool
+   warmup. The complete global survivor ledger includes
+   24×36,864-byte injector buffers and 96×2,048-byte local-deque generation
+   arrays. Source-layout attribution accounts for another 83,914 bytes in
+   Moirai control objects; the remaining 3,854 bytes follow its 24
+   `std::thread::Builder::spawn` calls into standard-library thread metadata,
+   packet, and name storage. The ledger total equals the live-byte balance.
+   The global portion drops by 688,112 bytes (37.1%) without changing queue
    capacity or FFT arithmetic. Moirai's corrected same-address Criterion
    comparisons show no statistically significant retained-worker throughput
    regression; focused Miri passes 9/9 inline-job cases, release Loom passes
@@ -536,22 +548,76 @@ Attribution, largest first:
    `33163390162` are green. Apollo PR #162 / merge `e27e2890` pins that provider;
    exact merged-head run `33164426704` passes the Rust workspace, Python,
    lock-integrity, benchmark-smoke, documentation, and provider-audit gates.
-   Apollo-side, this term remains outside the FFT's transform-owned account;
-   the census's original 10.4x cold reading at 65536 included it and reads as
-   2.1x transform-owned after separation.
-3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
-   padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
-   planar halves at four-step sizes — the terms an in-place rewrite would
-   target, confirming the census reading that in-place-DIT is not the lever.
+   The global hook is not the complete pool footprint. Every worker also owns
+   four `ChaseLevDeque<ScheduledJob>` payload arrays allocated directly through
+   Mnemosyne. The direct hook records 96 live allocations of 32,768 bytes,
+   totaling 3,145,728 requested bytes. This independently matches the source
+   model: on x86-64 `ScheduledJob` is 128 bytes and the default 256-slot policy
+   requests `24 × 4 × 256 × 128 = 3,145,728` bytes. Mnemosyne's process mapping
+   grew by 210,763,776 bytes in the same window, but that is reserved address
+   space rather than resident or live-payload bytes; its public per-class
+   occupancy is caller-thread-local and was empty for these worker-owned
+   allocations. Process resident-set size remains unmeasured. Apollo excludes
+   this startup state from the FFT-owned account but does not relabel it as
+   eliminated.
 
-## Peak working set: Apollo retains 4-10x the references (2026-08-27) <a id="peak-working-set"></a>
+   | global block class | bytes | retained owner |
+   | --- | ---: | --- |
+   | 36,864×24 | 884,736 | per-worker MPMC injector buffers |
+   | 2,048×96 | 196,608 | four 256-entry deque generation arrays per worker |
+   | 1,536×1 | 1,536 | `Arc<SchedulerInner>` |
+   | 768×24 | 18,432 | `Arc<WorkerQueues>` |
+   | 576×1 | 576 | 24-entry `Vec<JoinHandle<()>>` backing allocation |
+   | 512×96 | 49,152 | `Arc<ChaseLevInner>` |
+   | 384×25 | 9,600 | 24 `Arc<WorkerState>` plus NUMA assignments |
+   | 216×1 | 216 | process-global `Arc<HybridExecutor>` |
+   | 192×1 | 192 | boxed worker-state pointer slice |
+   | 128×1 | 128 | cache-aligned idle bitset |
+   | 120×1 | 120 | `Arc<ExecutorMetrics>` |
+   | 96×24 | 2,304 | standard-library thread metadata |
+   | 56×1 | 56 | `Arc<Mutex<TaskRegistry>>` |
+   | 48×24 | 1,152 | standard-library spawn packet storage |
+   | 40×96 | 3,840 | boxed deque `Array<ScheduledJob>` descriptors |
+   | 24×1 | 24 | `Arc<AtomicBool>` shutdown signal |
+   | 17×14 | 238 | standard-library two-digit worker-name storage |
+   | 16×11 | 176 | ten one-digit worker names plus lifetime-owner box |
+   | 13×2 | 26 | configured and scheduler-owned thread-name prefixes |
 
-Evidence tier: exact allocation accounting — the census's wrapping global
+   The exact Moirai layout owners above are verified at provider revision
+   `e1d14f5e`; the 3,854 standard-library bytes are attributed to the spawn
+   boundary by their 24-worker counts and name lengths. Naming their private
+   standard-library types would require allocation stacks or the matching
+   toolchain source and is not claimed here.
+3. **Parallel four-step row scratch duplicated an inactive plane — resolved
+   2026-08-28.** The parallel row stages acquired scratch through
+   `MixedRadixScalar::with_scratch` inside each Moirai worker. At n = 65536,
+   the entry run retained 26 blocks of 4,096 bytes: one cached 256-element row
+   twiddle table, up to 24 workers' first thread-local scratch slots, and the
+   caller's nested scratch slot. The participating-worker count varied by run;
+   n = 262144 similarly retained variable 8,192-byte scratch blocks, including
+   five on a warm call in the recorded entry run. These allocations passed
+   through the global allocator because Mnemosyne's `ScratchPool` stores its
+   buffers in `AlignedVec`, whose allocation path uses the Rust global
+   allocator; zero direct-Mnemosyne events therefore did not imply non-runtime
+   ownership.
+
+   `four_step_fft` already owns two distinct N-element mutable planes. Each row
+   stage now traverses them with Moirai's paired mutable-chunk operation and
+   uses the corresponding inactive-plane row as Stockham scratch, matching the
+   sequential path. The candidate pointer ledger retains only the one row
+   twiddle block and reports zero warm allocation at both large sizes. The
+   unchanged full census remains zero-allocation for warm complex 1-D and all
+   measured 2-D/3-D calls; real-full retains its one caller-owned 16N output.
+
+## Global-allocator peak working set (2026-08-28) <a id="peak-working-set"></a>
+
+Evidence tier: allocation-call accounting — the census's wrapping global
 allocator extended with a live-bytes balance and high-water mark, measured in
 explicit windows (`engine_census::peak_working_set_census`, run
 `APOLLO_PEAK_WORKING_SET_ONLY=1 cargo bench -p apollo-fft --bench
-engine_census`). Counts are exact regardless of host load; this section,
-unlike the timing census, needs no quiet machine.
+engine_census`). Counts are exact for calls reaching that allocator, but do not
+include direct Mnemosyne allocation or resident memory. This section, unlike
+the timing census, needs no quiet machine.
 
 `ATLAS-APOLLO-PEAK-MEMORY-2026-08-25` asked whether the self-sorting
 Stockham's second buffer costs Apollo anything against PhastFT's in-place
@@ -563,31 +629,37 @@ engine's contract and excluded (16 bytes/element in each layout).
 
 | n | signal (16n) | apollo cold peak | apollo retained | rustfft retained | phastft retained | apollo warm | rustfft warm | phastft warm |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1024 | 16,384 | 87,892 | 71,672 | 16,448 | 15,552 | 0 | 16,384 | 0 |
-| 4096 | 65,536 | 316,728 | 251,240 | 65,536 | 64,896 | 0 | 65,536 | 0 |
-| 16384 | 262,144 | 1,255,992 | 993,896 | 262,240 | 261,504 | 0 | 262,144 | 0 |
-| 65536 | 1,048,576 | 10,873,164 | 10,873,164 | 1,048,960 | 1,048,320 | 4,096 | 1,048,576 | 0 |
-| 262144 | 4,194,304 | 16,785,424 | 15,802,384 | 4,194,624 | 4,194,048 | 20,480 | 4,194,304 | 0 |
+| 1024 | 16,384 | 70,976 | 54,756 | 16,448 | 15,552 | 0 | 16,384 | 0 |
+| 4096 | 65,536 | 251,192 | 185,704 | 65,536 | 64,896 | 0 | 65,536 | 0 |
+| 16384 | 262,144 | 993,848 | 731,752 | 262,240 | 261,504 | 0 | 262,144 | 0 |
+| 65536 | 1,048,576 | 4,323,796 | 4,319,480 | 1,048,960 | 1,048,320 | 0 | 1,048,576 | 0 |
+| 262144 | 4,194,304 | 12,591,120 | 11,542,544 | 4,194,624 | 4,194,048 | 0 | 4,194,304 | 0 |
 
 Readings:
 
-- **The zero-allocation steady state holds** — Apollo's warm-call peak is 0
-  at cache-resident sizes (4-20 KiB past the threading threshold), while
-  RustFFT's `process` allocates a full 16n scratch every call. On transient
-  traffic Apollo is the best of the three.
-- **The retained working set is the cost.** Apollo holds 3.8-4.4x the signal
-  size at most sizes, against ~1.0x for both references (PhastFT: in-place
-  plus a twiddle plane; RustFFT: plan tables plus per-call scratch). The
-  Stockham scratch itself (16n) is a minor term; twiddle planes and
-  process-global caches dominate.
-- **N = 65536 spikes to 10.4x** (10.87 MB retained for a 1 MB signal) —
-  exactly the `FUSE_THRESHOLD` where the threaded four-step arena pre-grows
-  to 2 x `FUSE_THRESHOLD` x lane width (`tuning.rs`), plus that route's
-  twiddle planes. The spike is the follow-on item's first attribution
-  target (`ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27`).
+- **Warm complex transforms are allocation-free across the ladder.** Reusing
+  the inactive four-step plane removes the variable worker-local row scratch;
+  RustFFT's `process` still allocates a full 16n scratch every call.
+- **The global-allocator retained set remains the larger cost.** Apollo holds
+  2.75-4.12x the signal size, against ~1.0x for both references (PhastFT:
+  in-place plus a twiddle plane; RustFFT: plan tables plus per-call scratch).
+  These ratios exclude the 3,145,728 direct Mnemosyne queue-payload bytes and
+  are not process RSS.
+- **The former n = 65536 10.4x spike was runtime startup plus alignment
+  padding.** Moirai PR #184 reduces the same global-allocator census to 4.2x.
+  The pointer-ledger and direct-Mnemosyne attribution above separate queue
+  payloads from Apollo's twiddle, scratch, and four-step planes.
 - PhastFT's "up to 50% less memory than RustFFT" claim does not reproduce as
   retained state (both ~16n); it is about RustFFT's per-call scratch, which
   Apollo already avoids.
+
+The same-binary candidate timing run completed in 5.42 seconds. Its Apollo
+complex medians were 567.150 us at n = 65536 (95% confidence interval
+533.900-616.950 us) and 2.15935 ms at n = 262144 (2.05980-2.21930 ms). The
+immediate pre-change n = 262144 interval was 2.01380-2.21660 ms and overlaps;
+the n = 65536 result remains inside the previously recorded 512.950-718.100 us
+host-noise band. This is no-regression evidence, not a speedup claim; the byte
+counts above are independent of host timing noise.
 
 The in-place-DIT [arch] question this measurement gates: an in-place
 formulation would remove the 16n scratch — the smallest of Apollo's retained
