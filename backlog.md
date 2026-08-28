@@ -311,6 +311,18 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Row-pass tightening closed (2026-08-28, quiet machine, all controls at
+  baseline):** three structural changes measured, none shipped — two rows in
+  flight 940 TSC (spills), cross-row rotation 522 (no effect), redistribution
+  fused into the rows 633 combined (neutral). A twiddle-free diagnostic put
+  the multiply chain at 29% of the phase (366 against 518 TSC), so the
+  remaining 71% is butterflies and memory that does not respond to
+  rescheduling. `gap_audit.md#base128-row-ilp` carries the table and the
+  method controls. **Next lever is the decomposition, not the schedule:** at
+  8.0 cycles per point against RustFFT's ~5.0, this kernel spends ~120
+  complex multiplies across seven radix-2 stages; a radix-8-shaped 128
+  carries materially fewer non-trivial twiddles. The next increment is an
+  arithmetic-count comparison against the reference stage structure.
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
   permitted per the reference's own butterfly) composed with an 8xn
