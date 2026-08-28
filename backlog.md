@@ -311,6 +311,29 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Arithmetic-count comparison delivered (2026-08-28,
+  `gap_audit.md#base128-arithmetic-count`):** both kernels factor 128 as
+  8 x 16 and both spend exactly 56 complex multiplies on the four-step
+  twiddle layer — the decomposition is not the difference. The
+  sub-transforms are: Apollo 136 complex multiplies against RustFFT's 72
+  (1.89x) for a 1.62x wall-clock gap, so Apollo's per-multiply cost is
+  already the better of the two and the count is what it cannot afford.
+  Root cause is register layout: RustFFT holds two FFT *instances* per
+  register so every twiddle is a broadcast and trivial twiddles stay
+  trivial (radix-4 steps cost zero multiplies, `half_root2` makes radix-8
+  free), while Apollo holds two consecutive *samples* of one FFT so each
+  twiddle register mixes a trivial value with a non-trivial one and both
+  take a general multiply — 8 per 16-point FFT against 2. This is why the
+  three schedule experiments could not move the phase.
+- **Next increments, ranked, with savings derived from the measured
+  2.4 TSC per row multiply:** (1) `half_root2` for the column pass's 16
+  `W8^{1,3}` products, which currently use the three-shuffle `ComplexReg`
+  form — local, no layout change; (2) radix-4 row stages, recovering part
+  of the 4x; (3) across-instance row layout, which closes it — the form
+  the column pass already uses. The residual beyond the multiply count is
+  Apollo's extra memory pass (3R/3W against 2R/2W); folding the
+  redistribution into the column pass's store, as the reference does, is
+  the untried form.
 - **Row-pass tightening closed (2026-08-28, quiet machine, all controls at
   baseline):** three structural changes measured, none shipped — two rows in
   flight 940 TSC (spills), cross-row rotation 522 (no effect), redistribution
