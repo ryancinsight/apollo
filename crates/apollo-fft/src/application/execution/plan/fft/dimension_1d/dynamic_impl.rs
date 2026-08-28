@@ -1,3 +1,6 @@
+use crate::application::execution::kernel::components::base128::butterfly::{
+    Plan128, Plan128State,
+};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;
 use core::marker::PhantomData;
@@ -8,6 +11,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::executors::{
+    exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm,
     exec_composite_forward, exec_composite_inverse, exec_composite_inverse_unnorm,
     exec_good_thomas_forward, exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm,
     exec_identity, exec_pot_forward_16, exec_pot_forward_2, exec_pot_forward_32,
@@ -39,6 +43,7 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     /// inverse build as a full 16n retained per plan size that forward-only
     /// consumers never touch (`gap_audit.md#retained-attribution`).
     pub(crate) twiddle_inv: std::sync::OnceLock<Arc<[F::Complex]>>,
+    pub(crate) base128: Option<Arc<Plan128State<F>>>,
 
     // Function pointers for execution routing:
     pub(crate) forward_impl: fn(&Self, &mut [F::Complex]),
@@ -57,6 +62,7 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             radices: self.radices.clone(),
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
+            base128: self.base128.clone(),
             // `OnceLock: Clone` clones the initialized state, so a clone of a
             // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
@@ -85,16 +91,37 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             .get_or_init(|| F::cached_twiddle_inv(self.n))
     }
 
+    #[inline]
+    pub(super) fn base128_forward_plan(&self) -> &Plan128<F> {
+        self.base128
+            .as_deref()
+            .expect("invariant: base-128 executor requires its plan state")
+            .forward()
+    }
+
+    #[inline]
+    pub(super) fn base128_inverse_plan(&self) -> &Plan128<F> {
+        self.base128
+            .as_deref()
+            .expect("invariant: base-128 executor requires its plan state")
+            .inverse()
+    }
+
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
         let n = shape.n;
+        let base128 = if n == 128 {
+            Plan128State::new_if_supported().map(Arc::new)
+        } else {
+            None
+        };
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
         } else if n.is_power_of_two() {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
-                twiddle_fwd: F::cached_twiddle_fwd(n),
+                twiddle_fwd: base128.is_none().then(|| F::cached_twiddle_fwd(n)),
                 log2,
                 pot: PhantomData,
             }
@@ -283,7 +310,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 log2,
                 pot: _,
             } => {
-                twiddle_fwd = Some(fwd.clone());
+                twiddle_fwd.clone_from(fwd);
                 match *log2 {
                     1 => {
                         forward_impl = exec_pot_forward_2::<F>;
@@ -316,9 +343,15 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         inverse_unnorm_impl = exec_pot_inverse_unnorm_64::<F>;
                     }
                     7 => {
-                        forward_impl = exec_pot_forward_sized::<F, 7>;
-                        inverse_impl = exec_pot_inverse_sized::<F, 7>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 7>;
+                        if base128.is_some() {
+                            forward_impl = exec_base128_forward::<F>;
+                            inverse_impl = exec_base128_inverse::<F>;
+                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                        } else {
+                            forward_impl = exec_pot_forward_sized::<F, 7>;
+                            inverse_impl = exec_pot_inverse_sized::<F, 7>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 7>;
+                        }
                     }
                     8 => {
                         forward_impl = exec_pot_forward_sized::<F, 8>;
@@ -374,6 +407,7 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             radices: radices_field,
             twiddle_fwd,
             twiddle_inv,
+            base128,
             forward_impl,
             inverse_impl,
             inverse_unnorm_impl,

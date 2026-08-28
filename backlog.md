@@ -1,5 +1,41 @@
 # Apollo Backlog
 
+## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 — Advance the Moirai provider revision [patch] — done 2026-08-28
+
+- **Delivered:** Apollo PR #160 / merge `65e6dbd0` advances all 13 Moirai packages to `fff36331`, all nine Mnemosyne packages to `12e5b090`, and Themis to `9fd113fd`; Apollo uses none of Moirai's removed queue-capacity APIs.
+- **Evidence:** standalone lock audit reports 36 first-party Git sources; local provider audit, warning-denied all-target/all-feature Clippy, and workspace Nextest 1309/1309 pass. Hosted exact-Git-lock run `33158652496` passes lock integrity, Python, and Rust workspace; benchmark run `33158651767` passes identity/regression and correctly skips timing pairs for the lock-only delta. Independent review: GREEN.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
+
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — todo
+
+- **Evidence (apollo `gap_audit.md#retained-attribution`, exact allocation
+  accounting):** starting the pool retains 24 per-worker blocks on a 24-core
+  host — 64 KiB/worker when a trivial `for_each_chunk_mut_with` initializes
+  it, 256 KiB/worker when apollo's threaded four-step at N = 65536 does —
+  1.5-6 MB of process-lifetime state. The consumer workload never grows the
+  smaller state afterward, so the larger sizing is first-touch shape, not
+  need. Reproducer: apollo `retained_footprint_attribution` probe ("pool
+  warmup" window), `--ignored --nocapture`, release.
+- **Static reading:** `DEFAULT_GLOBAL_QUEUE_CAPACITY = 8192` partitions to
+  256-slot per-worker injectors (`partition_global_queue`), beside 256-slot
+  local queues; each `LockFreeQueue` slot carries a sequence word plus
+  `Option<(Priority, ScheduledJob)>` where `InlineJob` is
+  `#[repr(C, align(64))]` with 14 inline words — ~256 B/slot, of which the
+  cache-line alignment inside a slot array is padding, not contention
+  isolation (slots interleave sequence words regardless).
+- **Outcome:** the per-worker retained footprint is derived from need rather
+  than padding and first-touch shape — candidates: drop `align(64)` on the
+  queued job representation (measure steal-path contention before/after),
+  size inline storage from the measured job-size distribution, or lazily
+  allocate injector arrays. The 4x first-touch variance is diagnosed (what
+  allocates workload-shaped per-worker state) and either fixed or recorded
+  as design.
+- **Acceptance oracle:** apollo's pool-warmup window retained drops
+  proportionally with no regression in the executor's own throughput and
+  contention benches; loom coverage holds for any queue-layout change.
+- **Risk / change class:** [perf]; a queue-layout change is lock-free-adjacent
+  and keeps the existing loom suite as its gate.
+
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
 
 - **Outcome:** public slice entry points validate input length before unchecked
@@ -297,7 +333,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: plan ownership
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -354,10 +390,12 @@
   column pass with natural-order contiguous stores. Six oracles pass: direct
   DFT in both directions, round trip, incumbent differential, f32 execution
   or clean decline, and zero phase-meter effects in the comparison
-  specialization. Plan storage is one immutable boxed table per direction;
-  calls borrow it from `OnceCell` without allocation or atomic reference-count
-  traffic. Constants use the existing Hermes dispatch token, so internal
-  support probes do not recur.
+  specialization. A selected dynamic plan owns one shared state: forward data
+  is eager, inverse data initializes on first inverse execution, clones share
+  both directions, and calls borrow the table without allocation or an atomic
+  increment. The route does not retain the incumbent forward-twiddle table.
+  Constants use the existing Hermes dispatch token, so internal support probes
+  do not recur.
 - **Corrected pinned evidence:** the first 326/194 ns figures are invalid
   because they included four timestamp reads and four atomic updates per
   transform. The 100-sample zero-instrumentation medians and 96.4799% exact
@@ -377,14 +415,24 @@
   PR #87 merged the AArch64 all-target import correction as `4f6a1ebb`;
   Apollo's standalone lock includes that correction through Hermes `8fc54dfa`,
   whose later delta is CI/PM configuration only.
-- **Remaining production requirement:** move the immutable base plan into
-  `FftPlan1D` before N = 128 routing changes. ADR 0041 is Accepted and
-  records the address map, failure modes, evidence, and provider boundary.
+- **Plan ownership candidate:** `FftPlan1D` now owns an `Arc`-shared base state
+  for supported N = 128 plans, lazily initializes inverse state, and retains no
+  duplicate Stockham forward table. Structural tests assert shared state and
+  forward-only retention; concurrent f32/f64 clone execution matches normalized
+  inverse direct-DFT values, and both dynamic inverse modes plus zero/singleton
+  identity plans have value-semantic coverage. Local production medians are
+  295.117 ns
+  [294.899, 295.304] P-core and 163.529 ns [163.502, 163.558] E-core; the
+  same-run direct base is 294.865 ns [294.573, 295.022] and 152.550 ns
+  [152.520, 152.581]. The E-core wrapper has an 11.0 ns residual dispatch cost,
+  while production is 11.28x faster than the incumbent entry baseline. The
+  remaining merge requirement is a green unchanged hosted replicated
+  counterbalanced comparator. ADR 0041 records the ownership and evidence.
   **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** fixed-four-lane kernels under `components/{base128,resident,
-  batched,codelet}`, `components/test_support.rs`, their module comments, the
-  Hermes lock pin, and this item's PM entries through the exact-width adoption
-  commit.
+  **Lease:** Codex `components/base128`, `components/mod.rs`, dynamic
+  `FftPlan1D` construction/executors/tests, the sealed `MixedRadixScalar`
+  capability bound, ADR 0041, and this item's PM entries through the
+  production-plan ownership decision commit.
   **Last update:** 2026-08-27.
 - **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
   through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
@@ -403,17 +451,17 @@
   for the measured hot functions were unchanged while candidate `.text` grew
   by 400 bytes, identifying placement sensitivity rather than a kernel win.
   The route is withdrawn; the base and its complete oracle remain test-gated.
-- **Small-size gate standing (`base128::pinned_probe`):** incumbent production
+- **Small-size gate standing (`base128::pinned_probe`):** entry production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
-  into `FftPlan1D`, then admit N = 128 only if the unchanged exact comparator
-  clears; (2) tighten the base toward RustFFT after a fresh profile of the
+  n = 128 E-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
+  route only if the unchanged exact comparator clears; (2) tighten the base
+  toward RustFFT after a fresh profile of the
   now-uninstrumented specialization;
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
-## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — review
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — done 2026-08-27 (PR #156, merge `b3925141`)
 
 - **Outcome:** `apollo-fft` builds every library and test target warning-free on
   AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks

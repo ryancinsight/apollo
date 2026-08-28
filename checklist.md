@@ -1,5 +1,13 @@
 # Apollo Checklist
 
+## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 [patch] — Codex
+
+- [x] Confirm Apollo does not call the removed Moirai queue-capacity APIs.
+- [x] Regenerate the standalone lockfile at the merged Moirai provider revision.
+- [x] Pass provider-audit, affected all-target checks, and value-semantic tests.
+- [x] Commit and merge Apollo PR #160 at `65e6dbd0`; record Moirai
+      `fff36331`, Mnemosyne `12e5b090`, and Themis `9fd113fd`.
+
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 [patch] — Codex
 
 - [x] Remove `codex/fix-atlas-sha` after proving its Hermes 0.6 requirement is
@@ -38,8 +46,11 @@ stale branches.
       execution or bit-preserving decline, and reconcile PM state.
 - [x] Consolidate exact-lane preflight and apply it before base-plan
       initialization so unsupported hosts allocate no experimental plan.
-- [ ] Publish the correction to PR #153, collect hosted verification, then move
-      the immutable base plan into `FftPlan1D` as the next vertical increment.
+- [x] Move the immutable base plan into `FftPlan1D` with shared lazy inverse
+      state and no duplicate incumbent forward table.
+- [x] Cover concurrent cloned execution for f32/f64, both dynamic inverse
+      modes, and zero/singleton identity plans with value-semantic assertions.
+- [ ] Collect PR #157 hosted comparator verification before route promotion.
 
 Evidence: focused base/resident analytical and differential cases pass 16/16;
 the complete Apollo FFT suite passes 459/459 in 7.47 seconds; strict
@@ -47,9 +58,9 @@ all-target/all-feature Clippy, warning-denied rustdoc, doctests, provider audit,
 format, and diff checks pass. The standalone lock pins Hermes `8fc54dfa` and
 Mnemosyne `0cd78e5f` and resolves with 36 first-party Git sources. Independent
 review confirmed the fixed-width call-site closure after requiring pre-mutation
-resident capability checks and conditional planar oracles. Hosted AVX-512
-execution remains the unclaimed evidence tier until PR #153 reruns; full
-AArch64 all-target warning debt is filed separately in the backlog.
+resident capability checks and conditional planar oracles. The PR #157 review
+follow-up passes the 69 focused base/plan tests with all features in debug and
+release. Hosted comparator verification remains the route-promotion gate.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 

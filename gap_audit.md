@@ -1,3 +1,42 @@
+## The 128-base row pass is register-bound, not latency-bound (2026-08-27) <a id="base128-row-ilp"></a>
+
+The 128-point base's row pass (`components/base128`) is its largest phase, and
+the standing hypothesis was chain latency: four strictly dependent DIT-16
+stages whose four butterflies cannot fill the FMA and shuffle pipelines while
+each waits on the one before. The prescribed cure was two-row interleaving —
+process staging rows in pairs so every stage carries eight independent
+butterflies instead of four, sharing each stage's twiddle loads.
+
+**Measured, and falsified.** Pinned, with both in-run controls confirming a
+quiet machine (`columns8` 453 TSC identical to baseline; RustFFT 182.4 ns
+against baseline 181.7 ns):
+
+| | rows16 (TSC) | whole kernel (P-core) |
+| --- | --- | --- |
+| one row at a time | 517 | 295.9 ns |
+| two rows interleaved | **940** | **416.4 ns** |
+
+Sixteen live interleaved `ComplexReg` values are the entire AVX2 register
+file, before the sign vector, blend mask, and each `cmul`'s two twiddle
+loads. The allocator spills, and the spill traffic costs more than the
+latency it was meant to hide: +82% on the phase, +41% on the transform. The
+row pass is not short of independent work — it is short of registers, and any
+future ILP increase at this size must come from a form that does not raise
+the live set (deeper software pipelining across the existing eight, or a
+narrower per-row register map).
+
+**Method finding, applicable to every phase comparison here.** The phase
+meter accumulates a sum and reports a per-call average, which is
+contention-sensitive: across three runs of *identical* code the unchanged
+column pass read 450, 535, and 608 TSC — a 35% spread that swamps any 10-20%
+kernel difference. Attribution runs must therefore either carry an in-run
+control (the unchanged phase, as above) or report a per-call minimum rather
+than an average; the whole-kernel harness beside it is already minimum- and
+median-based and did not show that spread. A follow-on experiment fusing the
+redistribution into the row pass, to remove its 64 stores and the
+store-to-load forwarding dependency, produced numbers inside that noise band
+and is recorded as unresolved rather than as a verdict.
+
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
 
 Hosted verification selected a widest-native width other than the four lanes
@@ -16,8 +55,8 @@ the supported-or-bit-preserving-decline tests.
 The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
 the compared base executed four timestamp reads, three atomic phase
 accumulators, and an atomic call counter per transform while the references did
-not. The corrected instrument monomorphizes timing and attribution separately,
-borrows the immutable thread-local plan without an `Arc` increment, and creates
+not. The corrected entry instrument monomorphizes timing and attribution
+separately, borrows an immutable plan without an `Arc` increment, and creates
 vectors from the existing Hermes capability token. Its 100-sample 96.4799%
 exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] P-core and
 146.401 ns [146.364, 146.468] E-core. The incumbent Apollo route is 687.152 ns
@@ -31,9 +70,19 @@ The escaped benchmark-defect guard is structural: performance comparisons use
 the zero-instrumentation const specialization; attribution runs afterward in a
 separate specialization. A regression test requires a normal transform to
 leave every phase counter at zero, and optimized-binary inspection requires
-exactly the four serialized timestamp pairs owned by the attributed call. The
-remaining production blocker is ownership of the immutable base plan by
-`FftPlan1D`.
+exactly the four serialized timestamp pairs owned by the attributed call.
+
+The production candidate now gives `FftPlan1D` plan ownership: one shared base
+state initializes forward data at construction, initializes inverse data on
+first inverse execution, shares both across plan clones, and replaces rather
+than co-retains the incumbent forward-twiddle table. Its local production
+median is 295.117 ns [294.899, 295.304] P-core and 163.529 ns [163.502,
+163.558] E-core, versus the same-run direct base at 294.865 ns [294.573,
+295.022] and 152.550 ns [152.520, 152.581]. The E-core wrapper retains an
+11.0 ns dispatch cost, but the production route is 11.28x faster than the
+1844.331 ns incumbent entry baseline. The unchanged hosted replicated
+counterbalanced comparator remains the merge gate for unrelated-case placement
+effects.
 
 PR #154 tested a direct production promotion before that ownership transfer.
 The candidate retained the experiment's thread-local plan, violating ADR 0041,
@@ -41,9 +90,10 @@ and hosted run 33122650730 rejected it independently: all four paired
 comparisons regressed generic-prime N = 31 by 1.81-3.85% and compact N = 96 by
 2.22-6.02%. Normalized instructions for the measured hot functions were
 unchanged while candidate `.text` grew by 400 bytes, so the evidence identifies
-code-placement sensitivity rather than changed arithmetic. The production
-route is withdrawn; the corrected base and its oracles remain test-gated until
-the owning plan stores it and the same comparator clears.
+code-placement sensitivity rather than changed arithmetic. That production
+route was withdrawn. The plan-owned replacement retains the same mathematical
+kernel and oracles while correcting the ownership defect; it remains a
+candidate until the same comparator clears.
 
 ## Retained-footprint attribution: duplicate twiddle tables and worker retention (2026-08-27) <a id="retained-attribution"></a>
 

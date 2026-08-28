@@ -13,6 +13,11 @@
   kept the experiment's thread-local plan instead of moving ownership into
   `FftPlan1D`. The unchanged exact comparator found repeatable unrelated-case
   regressions, so production remains on the incumbent route.
+- Revision 2026-08-27: moves base ownership into `FftPlan1D`, shares it across
+  plan clones, initializes inverse state on first use, and removes the
+  incumbent forward-twiddle table when the base route is selected. The local
+  pinned instrument clears the incumbent; the unchanged hosted paired
+  comparator remains the merge oracle for placement effects.
 
 ## Context
 
@@ -48,25 +53,26 @@ redistribution instead of repeatedly streaming the full transform.
    `vectorize_lanes::<4, T, _>` selects f64 AVX2 even on AVX-512 hosts and
    selects f32 NEON or the portable packed backend. A host without an exact
    match declines before base/resident plan construction or mutation.
-3. **Keep plans immutable and outside the hot call.** The test-gated experiment
-   initializes each direction's 496-lane twiddle table once in a thread-local
-   `OnceCell`, stores it as `Box<[T]>`, and borrows it for each call. This
-   removes the previous per-transform `Arc` atomic increment and extra plan
-   allocation. Production integration moves the same immutable plan into the
-   owning FFT plan; thread-local ownership is an experiment boundary, not the
-   final route contract.
+3. **Keep plans immutable and outside the hot call.** A selected dynamic
+   `FftPlan1D` owns one `Arc`-shared base state. Construction initializes the
+   immutable forward table, first inverse execution initializes the inverse
+   table through `OnceLock`, and plan clones share both directions. Calls
+   borrow the selected table without an `Arc` increment. The selected base does
+   not retain the incumbent Stockham forward-twiddle table.
 4. **Measure the comparison without attribution code.** The pinned instrument
    uses Apollo Bench's 100 ordered samples and exact distribution-free median
    interval. Its timed base specialization contains no TSC stamps or atomic
    counters. A distinct const specialization performs serialized TSC phase
    attribution after the comparison; compile-time elimination, followed by
    codegen inspection, is the zero-instrumentation acceptance oracle.
-5. **Route only on complete evidence.** The base may remain test-gated when its
-   median interval clears the batched route. It replaces the production N = 128
-   route only after forward, inverse, round-trip, incumbent differential,
-   supported-width, and clean-decline contracts pass and its interval clears
-   that route. The 8-by-128 N = 1024 composition begins only after the corrected
-   base measurement makes its outer redistribution budget viable.
+5. **Route only on complete evidence.** The dynamic N = 128 plan selects the
+   base only after exact-width capability resolution. Forward, inverse,
+   round-trip, independent static-incumbent differential, supported-width,
+   clean-decline, ownership, and lazy-initialization contracts must pass. The
+   unchanged hosted replicated counterbalanced comparator must find no
+   candidate-caused regression before merge. The 8-by-128 N = 1024 composition
+   begins only after the corrected base measurement makes its outer
+   redistribution budget viable.
 
 ## Failure modes and controls
 
@@ -81,8 +87,9 @@ redistribution instead of repeatedly streaming the full transform.
   views and token-scoped zero/splat constructors provide all constants and
   loads after one dispatch.
 - A per-call plan handle could add atomic and allocator traffic at N = 128.
-  Immutable cached borrowing removes both from the experiment; plan ownership
-  is explicit in the production integration requirement.
+  `FftPlan1D` owns the state and executors borrow it; only cloning the outer
+  plan increments the shared-state count. Forward-only plans never initialize
+  inverse state or retain the incumbent forward table.
 - The direct DFT oracle and FFT may differ by expected rounding order. Bounds
   use `gamma_k = ku / (1 - ku)` with operation counts for both computations;
   bitwise equality is not claimed.
@@ -97,9 +104,9 @@ redistribution instead of repeatedly streaming the full transform.
 - **Copy RustFFT's AVX implementation.** Rejected. Apollo keeps one Hermes
   kernel and implements missing first-party SIMD capabilities upstream rather
   than binding algorithm code to vendor intrinsics.
-- **Route the four-lane experiment after dispatch alone.** Rejected until
-  production plan ownership, statistical timing, and every value oracle close
-  together.
+- **Retain thread-local base plans.** Rejected. Ownership belongs to the
+  operation plan so clones share state, construction and retention are
+  attributable, and the hot call only borrows immutable data.
 
 ## Evidence and limits
 
@@ -145,8 +152,28 @@ retained the experiment's thread-local plan, contrary to Decision 3. The route
 was therefore withdrawn while the base and its value oracles remained
 test-gated.
 
+The plan-owned candidate removes that rejected ownership discrepancy. A local
+100-sample run completed its measurement body in 12.40 seconds and produced
+96.4799% exact median intervals (nanoseconds):
+
+| core | production Apollo | direct base | RustFFT | PhastFT |
+| --- | ---: | ---: | ---: | ---: |
+| P | 295.117 [294.899, 295.304] | 294.865 [294.573, 295.022] | 182.040 [181.755, 182.189] | 330.547 [330.206, 331.105] |
+| E | 163.529 [163.502, 163.558] | 152.550 [152.520, 152.581] | 86.319 [86.300, 86.352] | 152.588 [152.558, 152.639] |
+
+Production and direct-base intervals overlap on the P-core. The E-core public
+dispatch wrapper retains an 11.0 ns cost over the direct call, but production
+is 11.28x faster than the 1844.331 ns incumbent entry baseline. RustFFT remains
+1.62x and 1.89x faster than production on the measured core types. These local
+measurements establish the selected case only; the hosted replicated
+counterbalanced comparison remains authoritative for unrelated-case placement
+regressions.
+
 ## Revision history
 
+- 2026-08-27: Move immutable base state into `FftPlan1D`, make inverse state
+  lazy and clone-shared, remove duplicate incumbent forward twiddles, and
+  retain the hosted exact comparator as the placement gate.
 - 2026-08-27: Reject the premature thread-local production route after the
   exact benchmark comparator found repeatable unrelated-case regressions;
   retain plan ownership and comparator clearance as production requirements.
