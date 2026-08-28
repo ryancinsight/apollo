@@ -311,6 +311,14 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Same fix carried to the production route (2026-08-28).** `batched`'s
+  boundary kernels had the identical defect at runtime sizes, where the type
+  cannot hold the length; they take one entry `assert!` plus proof-carrying
+  raw chunk helpers instead, matching the stage kernel beside them.
+  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder P-core moves to
+  1.99/1.32/1.18/1.06 against RustFFT and 1.19/**0.98**/0.90/0.87 against
+  PhastFT at n = 256/1024/4096/16384 — **apollo now leads PhastFT at 1024 as
+  well as above it, and trails RustFFT by 6% at 16384.**
 - **Assembly diagnostic run; it answered the question and found a larger one
   (2026-08-28, `gap_audit.md#base128-bounds`).** The sixteen values do spill:
   113 stores and 112 reloads per iteration in a 1624-byte frame, closing the

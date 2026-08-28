@@ -16,6 +16,49 @@
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
 
+/// Loads chunk `index` (a `LANE_COUNT`-lane group) from `data`.
+///
+/// The checked `SimdView` accessor asserts `offset + LANE_COUNT <= len()`
+/// on every touch, and these planes arrive as runtime-sized slices, so no
+/// such check can fold: the transpose and reinterleave passes carried a
+/// compare and a branch to a panic block around each vector moved
+/// (gap_audit.md#base128-bounds). Every caller below derives its chunk index
+/// from `m` and `stride` with the plane's own extent, which the wrapping
+/// kernel asserts once on entry.
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope"
+)]
+#[inline(always)]
+fn chunk<T, A>(data: &[T], index: usize) -> Vector<T, A>
+where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    let at = index * <A as SimdStorage<T>>::LANE_COUNT;
+    debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
+    // SAFETY: the kernel asserted the plane holds every chunk its loops
+    // address before entering them, and `A` is proven by the dispatch token.
+    unsafe { Vector::<T, A>::load_unaligned(data.as_ptr().add(at)) }
+}
+
+/// Stores `v` into chunk `index` of `data`; the counterpart of [`chunk`].
+#[expect(
+    clippy::inline_always,
+    reason = "must fold into the caller's target-feature scope"
+)]
+#[inline(always)]
+fn put_chunk<T, A>(v: Vector<T, A>, data: &mut [T], index: usize)
+where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    let at = index * <A as SimdStorage<T>>::LANE_COUNT;
+    debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
+    // SAFETY: as `chunk` above.
+    unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
+}
+
 /// Padded planar planes back into interleaved rows, natural order.
 pub(crate) struct InterleaveRows<'a, T> {
     /// Padded real plane.
@@ -40,22 +83,28 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
                   frame (hermes LaneKernel contract)"
     )]
     #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+    fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         if <A as SimdStorage<T>>::LANE_COUNT != 4 || self.m % 4 != 0 || self.stride % 4 != 0 {
             return false;
         }
-        let re_view = simd.view(self.re);
-        let im_view = simd.view(self.im);
-        let mut data_view = simd.view_mut(self.data);
+        // One bound for the whole pass, so the per-chunk compares vanish.
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        assert!(
+            self.re.len() >= self.m * self.stride
+                && self.im.len() >= self.m * self.stride
+                && self.data.len() >= 2 * self.m * self.m
+                && self.m * self.stride % lanes == 0,
+            "invariant: both planes hold m padded rows and the output 2m^2 lanes"
+        );
         for row in 0..self.m {
             let src_c = row * self.stride / 4;
             let dst_c = row * self.m / 2;
             for r in 0..self.m / 4 {
-                let e = Vector::from_view_chunk(&re_view, src_c + r);
-                let o = Vector::from_view_chunk(&im_view, src_c + r);
+                let e = chunk::<T, A>(self.re, src_c + r);
+                let o = chunk::<T, A>(self.im, src_c + r);
                 let (lo, hi) = e.interleave(o);
-                lo.store_to_view_chunk(&mut data_view, dst_c + 2 * r);
-                hi.store_to_view_chunk(&mut data_view, dst_c + 2 * r + 1);
+                put_chunk(lo, self.data, dst_c + 2 * r);
+                put_chunk(hi, self.data, dst_c + 2 * r + 1);
             }
         }
         true
@@ -86,47 +135,51 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
         reason = "the body must inline into the dispatcher's target-feature                   frame (hermes LaneKernel contract)"
     )]
     #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
+    fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
         if <A as SimdStorage<T>>::LANE_COUNT != 4 || self.m % 4 != 0 || self.stride % 4 != 0 {
             return false;
         }
         let (m, stride) = (self.m, self.stride);
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        assert!(
+            self.re.len() >= m * stride && self.im.len() >= m * stride && m * stride % lanes == 0,
+            "invariant: both planes hold m padded rows"
+        );
         for plane in [self.re, self.im] {
-            let mut view = simd.view_mut(plane);
             for bi in (0..m).step_by(4) {
                 // Diagonal tile: transpose in place.
                 let base = |r: usize, c: usize| (r * stride + c) / 4;
                 let mut tile = [
-                    Vector::from_view_chunk(&view, base(bi, bi)),
-                    Vector::from_view_chunk(&view, base(bi + 1, bi)),
-                    Vector::from_view_chunk(&view, base(bi + 2, bi)),
-                    Vector::from_view_chunk(&view, base(bi + 3, bi)),
+                    chunk::<T, A>(plane, base(bi, bi)),
+                    chunk::<T, A>(plane, base(bi + 1, bi)),
+                    chunk::<T, A>(plane, base(bi + 2, bi)),
+                    chunk::<T, A>(plane, base(bi + 3, bi)),
                 ];
                 Vector::transpose_square(&mut tile);
                 for (r, row) in tile.into_iter().enumerate() {
-                    row.store_to_view_chunk(&mut view, base(bi + r, bi));
+                    put_chunk(row, plane, base(bi + r, bi));
                 }
                 // Off-diagonal pairs: transpose both, store exchanged.
                 for bj in (bi + 4..m).step_by(4) {
                     let mut upper = [
-                        Vector::from_view_chunk(&view, base(bi, bj)),
-                        Vector::from_view_chunk(&view, base(bi + 1, bj)),
-                        Vector::from_view_chunk(&view, base(bi + 2, bj)),
-                        Vector::from_view_chunk(&view, base(bi + 3, bj)),
+                        chunk::<T, A>(plane, base(bi, bj)),
+                        chunk::<T, A>(plane, base(bi + 1, bj)),
+                        chunk::<T, A>(plane, base(bi + 2, bj)),
+                        chunk::<T, A>(plane, base(bi + 3, bj)),
                     ];
                     let mut lower = [
-                        Vector::from_view_chunk(&view, base(bj, bi)),
-                        Vector::from_view_chunk(&view, base(bj + 1, bi)),
-                        Vector::from_view_chunk(&view, base(bj + 2, bi)),
-                        Vector::from_view_chunk(&view, base(bj + 3, bi)),
+                        chunk::<T, A>(plane, base(bj, bi)),
+                        chunk::<T, A>(plane, base(bj + 1, bi)),
+                        chunk::<T, A>(plane, base(bj + 2, bi)),
+                        chunk::<T, A>(plane, base(bj + 3, bi)),
                     ];
                     Vector::transpose_square(&mut upper);
                     Vector::transpose_square(&mut lower);
                     for (r, row) in lower.into_iter().enumerate() {
-                        row.store_to_view_chunk(&mut view, base(bi + r, bj));
+                        put_chunk(row, plane, base(bi + r, bj));
                     }
                     for (r, row) in upper.into_iter().enumerate() {
-                        row.store_to_view_chunk(&mut view, base(bj + r, bi));
+                        put_chunk(row, plane, base(bj + r, bi));
                     }
                 }
             }
