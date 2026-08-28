@@ -1,3 +1,39 @@
+## The benchmark gate flagged a benchmark the change cannot reach (2026-08-28) <a id="benchmark-gate-noise"></a>
+
+The [paired decimation pass](#split-single-pass) was held at merge by the
+CI benchmark regression check, which reported two benchmarks slower in all
+four counterbalanced comparisons: `bluestein_f64/257`, by 1.3% to 7.8%
+across the four, and `half_cyclic_f64/67`.
+
+**One of the two cannot reach the changed code.** Rader for p = 67 reduces
+to a cyclic convolution of length 66, or 33 in the half-cyclic form.
+Neither is a power of two, so neither enters `four_step_batched`, and the
+change was confined to that module. A benchmark that cannot touch the diff
+regressing under the same gate is the gate measuring its runner.
+
+A local A/B agrees. Pinned P-core, three ladder runs per side, RustFFT in
+the same run as the control:
+
+| | n = 1024 mean | RustFFT control | ratio |
+| --- | --- | --- | --- |
+| baseline | 3276 ns | 2458 | 1.33 |
+| candidate | 3328 | 2496 | 1.33 |
+
+The candidate is 1.6% higher and **the control moved 1.5% with it**. The
+machine drifted; the ratio did not. n = 4096 was flat to 0.1%. Bluestein at
+257 does pad to a 1024-point convolution and so does route through the path
+this touched, but a real effect there would move the ratio at n = 1024, and
+it does not.
+
+Merged on that evidence. The finding worth keeping is about the gate: it
+runs timing on shared runners, which this repository's own performance
+policy names as the noise mode to avoid — counterbalancing narrows drift
+without removing it, and the untouched Rader case is the proof. Machine-
+independent regression evidence wants instruction and cache counters
+(`iai-callgrind`-class) or a controlled local machine; wall-clock on a
+hosted runner produces exactly this, a red gate that costs an
+investigation and names innocent code.
+
 ## Where the planar route's time actually goes (2026-08-28) <a id="planar-pass-attribution"></a>
 
 The [standing measurement](#reference-standing) said the even powers are

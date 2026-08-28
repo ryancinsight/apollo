@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
+
+- **Evidence** (`gap_audit.md#benchmark-gate-noise`): the gate held the
+  paired-decimation merge over two benchmarks, one of which — Rader at
+  p = 67, a length-66 cyclic convolution — cannot reach the changed
+  power-of-two module at all. A local pinned A/B with an in-run control
+  showed the ratio unchanged and the machine drifted 1.5%.
+- **Why it matters beyond one merge:** every such flag costs an
+  investigation and names innocent code, and a gate that cries wolf gets
+  read as noise, which is worse than not having it.
+- **Options, in preference order:** move the regression evidence to
+  machine-independent counters (`iai-callgrind`-class instruction and
+  cache counts, which a shared runner reports honestly); or keep wall-clock
+  but demote the job to advisory and require a pinned local baseline
+  comparison on the PR, which is what the performance policy asks for
+  anyway; or widen the counterbalancing until drift of this size cannot
+  trip it, which trades queue time for a weaker gate.
+- **Not in scope here:** the four benchmark-pair jobs plus artifact builds
+  are a large share of this repository's per-PR CI, so whichever option is
+  taken should account for that as well.
+
 ## ATLAS-APOLLO-PLANAR-ATTRIBUTION-2026-08-28 — Make the planar route's passes measurable [patch] — done 2026-08-28
 
 - **Delivered** (`gap_audit.md#planar-pass-attribution`): the driver's
