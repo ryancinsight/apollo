@@ -111,11 +111,16 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
         let n = shape.n;
-        let base128 = if n == 128 {
-            Plan128State::new_if_supported().map(Arc::new)
-        } else {
-            None
-        };
+        // 256 and 512 decimate down to the same base rather than paying the
+        // four-step's six passes at a size where they dominate the transform.
+        let base128 =
+            if crate::application::execution::kernel::components::base128::BASE_SPLIT_LENGTHS
+                .contains(&n)
+            {
+                Plan128State::new_if_supported().map(Arc::new)
+            } else {
+                None
+            };
         let strategy: PlanStrategy<F> = if n <= 1 {
             PlanStrategy::Identity
         } else if n.is_power_of_two() {
@@ -354,14 +359,26 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                         }
                     }
                     8 => {
-                        forward_impl = exec_pot_forward_sized::<F, 8>;
-                        inverse_impl = exec_pot_inverse_sized::<F, 8>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 8>;
+                        if base128.is_some() {
+                            forward_impl = exec_base128_forward::<F>;
+                            inverse_impl = exec_base128_inverse::<F>;
+                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                        } else {
+                            forward_impl = exec_pot_forward_sized::<F, 8>;
+                            inverse_impl = exec_pot_inverse_sized::<F, 8>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_sized::<F, 8>;
+                        }
                     }
                     9 => {
-                        forward_impl = exec_pot_forward_512::<F>;
-                        inverse_impl = exec_pot_inverse_512::<F>;
-                        inverse_unnorm_impl = exec_pot_inverse_unnorm_512::<F>;
+                        if base128.is_some() {
+                            forward_impl = exec_base128_forward::<F>;
+                            inverse_impl = exec_base128_inverse::<F>;
+                            inverse_unnorm_impl = exec_base128_inverse_unnorm::<F>;
+                        } else {
+                            forward_impl = exec_pot_forward_512::<F>;
+                            inverse_impl = exec_pot_inverse_512::<F>;
+                            inverse_unnorm_impl = exec_pot_inverse_unnorm_512::<F>;
+                        }
                     }
                     10 => {
                         forward_impl = exec_pot_forward_sized::<F, 10>;

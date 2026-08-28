@@ -1,3 +1,43 @@
+## Small sizes paid the four-step's fixed passes (2026-08-28) <a id="small-size-splitting"></a>
+
+After the odd-power fix the worst sizes on the ladder were n = 256 and
+n = 512, both about 2x RustFFT while their neighbours ran 1.05x to 1.35x.
+The cause shows without a reference: **n = 256 cost 2.96x n = 128** where
+the arithmetic asks for about 2.3x. The four-step route pays six passes over
+the array whatever the size, and at 4 KB those passes are the transform.
+
+n = 128 is the exception because it does not take that route — it runs the
+register-resident base butterfly at 1.53x, the best ratio at the small end.
+
+**Fix: decimate down to that base instead.** 256 and 512 are now built from
+the 128-point kernel by one and two radix-2 decimations, each combining with
+`X[k] = E[k] + W_N^k O[k]`. The plan builds the base state for all three
+lengths, so the kernel stays plan-owned as ADR 0041 requires, and the
+combine reads `W_N^j` from the final stage of the already-cached twiddle
+table — no new table and no new allocation class.
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 820.8 ns | **726.5** | 1.99x -> **1.76x** | 1.19x -> **1.05x** |
+| 512 | 2110.9 | **1901.3** | 2.01x -> **1.83x** | 1.44x -> **1.30x** |
+
+E-cores move with them (256 to 1.98x, 512 to 2.20x). Nothing else changes.
+
+### What the remaining overhead is, and what it is not
+
+At n = 256 the two base transforms are 2 x 277 = 554 ns of the 726, so the
+split's own passes cost about 170 ns: one gather into scratch and one
+combining pass, roughly four passes over 4 KB.
+
+A hand-vectorized combining kernel was written and measured at 728.9 ns
+against 725.2 — no effect, so the compiler was already doing that, and it
+was removed rather than kept as unmeasured machinery. The gather is the
+remaining candidate: the even and odd samples of a 256-point transform
+interleave within every source register, so the base kernel could take them
+through the deinterleave network it already uses at its own boundary,
+eliminating that pass rather than optimizing it. That is the next increment
+and it is worth roughly 60 to 80 ns at this size.
+
 ## Odd powers of two were routed off the fast path entirely (2026-08-28) <a id="odd-power-routing"></a>
 
 `FourStep::admits` required `trailing_zeros() % 2 == 0`, its comment
