@@ -9,7 +9,11 @@
 ## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — done 2026-08-28
 
 - **Delivered:** Moirai PR #184 / merge `b42ec745` removes forced inline-job alignment; Apollo PR #162 / commit `bfeca7fc` / merge `e27e2890` advances all 13 Moirai lock entries.
-- **Evidence:** retained pool bytes fall from 1,857,224 to 1,169,112 (688,112 bytes, 37.1%) with no block at or above 65,536 bytes; provider merged-head run `33163390162` and Apollo exact merged-head run `33164426704` pass, and independent provider and consumer reviews are GREEN.
+- **Evidence:** global-hook live requested bytes observed during pool warmup fall
+  from 1,857,224 to 1,169,112 (688,112 bytes, 37.1%), with no global block at
+  or above 65,536 bytes; direct Mnemosyne payload is accounted separately.
+  Provider merged-head run `33163390162` and Apollo exact merged-head run
+  `33164426704` pass, and independent provider and consumer reviews are GREEN.
 - **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
@@ -942,21 +946,32 @@
 - **Current increment:** resumed by Codex session
   `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
   `perf/apollo-retained-footprint`; lease:
-  `kernel/retained_footprint.rs`, allocation owners identified by that probe,
-  `gap_audit.md#retained-attribution`, this item block, and the matching
-  checklist through the next verified commit; last update 2026-08-28.
-- **Attribution delivered (2026-08-27):** `kernel/retained_footprint.rs` —
-  windowed counting allocator with a per-window ledger of blocks ≥ n bytes;
-  window sums reproduce the peak census to the byte. Findings
-  (`gap_audit.md#retained-attribution`): duplicate full-size twiddle tables
-  (one at `cached_twiddle_fwd`, a second at plan build, a third at 262144's
-  first forward — 8.4 MB of its 15.8 MB) are the dominant avoidable term,
-  and their dedup lever is `ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, with this
-  probe as its acceptance instrument; the 65536 spike is 24 x 262,144-byte
-  threaded-four-step worker blocks (6.0 MB) — reduction needs that route's
-  buffer-lifetime read (next sub-step); scratch/planes are minor, closing
-  the in-place-DIT direction again from the attribution side. Integrator:
-  Claude session 5050c72a.
+  `kernel/retained_footprint.rs`, `components/four_step/mod.rs`, allocation
+  owners identified by that probe, `gap_audit.md#retained-attribution`, this
+  item block, and the matching checklist through the next verified commit;
+  last update 2026-08-28.
+- **Corrected attribution (2026-08-28):** the pointer-identity ledger records
+  all global allocations and proves 1,169,112 global requested bytes are live
+  after pool warmup. The previous size-only ledger could consume a same-sized
+  pre-window free and did not see Moirai's direct Mnemosyne allocations. A
+  second pointer ledger on Mnemosyne's process-wide hooks directly records 96
+  live 32,768-byte allocations, totaling 3,145,728 requested bytes in 24
+  workers' four 256-slot local `ScheduledJob` deques. This matches the source
+  layout exactly. The concurrent Mnemosyne snapshot records 210,763,776 mapped
+  address-space bytes, not resident or live-payload bytes; process RSS remains
+  unmeasured. The owning provider increment can now tune initial capacity
+  against scheduler throughput with an exact requested-byte baseline.
+- **Attribution delivered (2026-08-27; corrected 2026-08-28):**
+  `kernel/retained_footprint.rs` now uses a pointer-identity ledger for every
+  global allocation in each acquisition window. It identifies the eager
+  inverse twiddle table, four-step planes, scratch, and Moirai's globally
+  allocated injector and generation-state arrays without mistaking a
+  same-sized pre-window free for a survivor. The instrument also installs
+  Mnemosyne's process-wide allocation hooks so direct queue payloads are
+  measured without production hot-path counters. Process RSS remains outside
+  both ledgers; `gap_audit.md#retained-attribution` states those evidence
+  boundaries. Integrator: Claude session 5050c72a; correction: Codex session
+  `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
 - **Reduction, first term delivered (2026-08-27):** the plan-build 16n was
   the eagerly built inverse table; it is now lazy (`OnceLock` through the
   global cache) and the probe's plan-build window retains 0 at every size —
@@ -964,31 +979,44 @@
   Remaining apollo-side: only the four-step matrix representation at
   > `FUSE_THRESHOLD` sizes (route working set; reduce only with a route
   redesign).
-- **Worker-block term discriminated and rehomed (2026-08-27):** a trivial
-  parallel warmup window proves the 24 per-worker blocks are Moirai pool
-  startup state, not transform buffers — sized by the first workload's shape
-  (64-256 KiB/worker), never grown by the FFT afterward. Evidence and queue
-  arithmetic: `gap_audit.md#retained-attribution`. Filed upstream as moirai
-  `MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27`; apollo's account closes with
-  the transform-owned cold footprint at ~2.1x signal at 65536.
+- **Worker term rehomed, not closed (2026-08-28):** the parallel warmup proves
+  first-touch ownership is Moirai rather than the transform. Moirai PR #184
+  reduces the global injector slot size, but four local 256-slot
+  `ScheduledJob` payload arrays per worker bypass the global allocator through
+  direct Mnemosyne allocation. Apollo's direct hook measures their exact
+  requested bytes; throughput-controlled capacity tuning remains open in the
+  provider. Apollo records the boundary without claiming that pool storage was
+  eliminated.
+- **Apollo row scratch resolved (2026-08-28):** the large-size 4,096- and
+  8,192-byte survivors were worker-local `ScratchPool` buffers allocated by
+  the parallel four-step row stages, not scheduler queue storage. Both row
+  stages now pair the active and inactive full-size planes and use each
+  inactive row as Stockham scratch, as the sequential path already did. The
+  exact pointer ledger retains only one row-twiddle block on first use and zero
+  bytes on every measured warm forward. The whole-engine census preserves
+  zero warm complex, 2-D, and 3-D allocations and the real-full 16N output
+  allocation contract.
 
-- **Outcome:** Apollo's retained bytes per size are attributed to their owning
-  caches (twiddle planes, four-step planes, threaded arena, scratch) and the
-  avoidable terms are reduced, with the peak census as the regression
+- **Outcome:** Apollo-owned retained bytes per size and Moirai-owned queue
+  payload bytes are separated by allocator boundary. Avoidable Apollo row
+  scratch is eliminated; Moirai's direct queue payload remains explicit for
+  the provider increment, with the no-floor pointer ledger as the regression
   instrument.
 - **Evidence:** `gap_audit.md#peak-working-set` — retained working set is
-  3.8-4.4x the signal (references: ~1.0x), spiking to 10.4x at N = 65536
-  (10.87 MB for a 1 MB signal), where the threaded four-step arena pre-grows
-  to 2 x `FUSE_THRESHOLD` lanes (`tuning.rs`) and that route's twiddle planes
-  land. The Stockham ping-pong scratch (16n) is a minor term, so the
-  in-place-DIT rewrite is not the indicated lever.
+  2.75-4.12x the signal through the global allocator (references: ~1.0x) after
+  Moirai PR #184, excluding 3,145,728 bytes of direct Mnemosyne queue payload.
+  The former 10.4x n = 65536 aggregate included Moirai first-touch queue
+  startup and alignment padding and was not transform-only retention. The
+  Stockham ping-pong scratch (16n) remains a minor term, so the in-place-DIT
+  rewrite is not the indicated lever.
 - **Scope:** attribution first (per-cache byte accounting through the census
-  windows), then reduction of the avoidable terms — arena growth policy,
-  plane lifetime, cache eviction. **Non-goals:** trading warm-call
-  allocations back in; the zero-allocation steady state is the contract.
+  windows), then reduction of the avoidable terms — plane reuse and cache
+  lifetime. **Non-goals:** trading warm-call
+  allocations back in; warm-call allocation must remain bounded and must not
+  grow with the retained-pool reduction.
 - **Acceptance oracle:** per-cache attribution recorded; any reduction shows
-  the peak census retained column shrinking with warm peaks still zero and
-  no timing-census regression.
+  the pointer-ledger retained columns shrinking with warm peaks non-increasing
+  and no timing-census regression.
 - **Risk / change class:** [perf]; attribution is [patch].
 
 ## ATLAS-APOLLO-PEAK-MEMORY-2026-08-25 — Measure peak working set against PhastFT [patch] — done 2026-08-27
@@ -998,9 +1026,9 @@
   cold (plan + first call), retained, and warm-call peaks per engine across
   the PoT ladder, exact under host load. Table and readings:
   `gap_audit.md#peak-working-set`. Answer to the item's question: the
-  Stockham second buffer is a minor term; Apollo's warm transient is the best
-  of the three engines (0 vs RustFFT's per-call 16n), but retained caches run
-  3.8-10.4x the signal — filed as
+  Stockham second buffer is a minor term; Apollo's warm global allocation is
+  0 through n = 65536 versus RustFFT's per-call 16n, but retained global state
+  runs 2.8-4.2x the signal after the provider correction — filed as
   `ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27`. The in-place-DIT [arch]
   question closes on memory grounds: the rewrite would remove the smallest
   retained term. Integrator: Claude session 5050c72a.
