@@ -1,3 +1,51 @@
+## Eliminating the split's gather does not pay (2026-08-28) <a id="strided-base-source"></a>
+
+The small-size split gathers each 128-sample subsequence into scratch before
+transforming it. The gather looked removable rather than tunable: a power of
+two `128 * 2^d` decimates into `2^d` subsequences at stride `2^d`, and in
+register terms a subsequence chunk is **one blend of two parent chunks** —
+the same network phase 1 already runs — so the base kernel can read the
+parent directly.
+
+It was built that way. `Transform128` gained a compile-time source mode
+(in place, strided-low, strided-high), the split became a flat decimation
+with bit-reversed offsets feeding `d` in-place combining stages, and all 479
+tests passed, including the direct-DFT and incumbent oracles at every
+affected size.
+
+**Measured, it is a wash that costs the common size.** P-core minima:
+
+| n | shipped | strided | change |
+| --- | --- | --- | --- |
+| 128 | 278.4 ns | 292.9 | **+5.2%** |
+| 256 | 726.2 | 741.0 | +2.0% |
+| 512 | 1910.6 | **1712.6** | **-10.4%** |
+
+Two effects, both real and reproducible (reverting restores 278.4 / 726.2 /
+1910.6 exactly):
+
+- **At 256 the strided read costs what the gather cost.** It doubles phase
+  one's loads — two parent chunks per subsequence chunk — and adds a blend
+  to each. One level of decimation trades a pass for that arithmetic and
+  comes out level. At 512, where the recursive form paid *two* gathers, the
+  flat decimation removes both and wins 10%.
+- **The kernel machinery costs the in-place path 5%**, which no arrangement
+  recovered: separating the readers, then writing the two phase-one loops
+  out in full under the const so the in-place monomorphization is
+  byte-identical, both still measured 291-293. What remains is the const
+  parameter and the wider kernel value themselves — the code-placement
+  sensitivity this repository has already recorded once, where 400 bytes of
+  `.text` moved unrelated sizes by 2-6%.
+
+n = 128 is the most common of the three and the base for the other two, so
+paying 5% there to gain 10% at 512 is not a trade worth making. Reverted.
+
+Isolating the gain would need the strided source in a **separate kernel
+struct**, leaving the in-place one untouched, with phases two and three
+factored into shared inlined functions. That buys 10% at a single size for a
+second kernel and a refactor of the one that feeds three, so it is recorded
+rather than done.
+
 ## Small sizes paid the four-step's fixed passes (2026-08-28) <a id="small-size-splitting"></a>
 
 After the odd-power fix the worst sizes on the ladder were n = 256 and

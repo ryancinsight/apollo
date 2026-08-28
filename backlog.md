@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
+
+- **Standing after the split and routing work (pinned, P-core, vs RustFFT):**
+  64 **1.90x**, 128 1.53x, 256 1.76x, 512 1.83x, 1024 1.33x, 2048 1.48x,
+  4096 1.14x, 8192 1.29x, 16384 **1.05x**. Odd powers now inherit their
+  halves' ratios plus combine overhead, which is structurally right.
+- **Ranked next increments.** (1) **n = 64 is the worst ratio and has no
+  base kernel** — it runs the sized Stockham autosort, six ping-pong passes
+  over 1 KB, where the reference uses a register-resident 8x8. The base-128
+  construction is the template: 8 rows of 8, three DIT stages per row, the
+  same DIF-8 column pass. Expect ~1.5x, i.e. 158 -> ~125 ns. It duplicates
+  the base-128 shape at a different size, so it should be weighed against
+  generalizing that kernel over its row length rather than copying it.
+  (2) **base-128 itself drives 128, 256 and 512 together** and is the higher
+  leverage target, but is blocked on the multiply-count/register findings
+  (`gap_audit.md#base128-arithmetic-count`, `#base128-split`).
+  (3) The split's remaining overhead is measured and not worth removing as
+  the kernel stands (`gap_audit.md#strided-base-source`).
+- **Checked-view sweep is complete for production code:** only test-gated
+  modules (`batched/interleaved`, `codelet`, `resident`) still use the
+  checked accessors; every shipping kernel takes fixed-size references or
+  proof-carrying raw helpers.
+
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28
 
 - **Delivered:** the four-step's six fixed passes dominate at 4 KB — n = 256
