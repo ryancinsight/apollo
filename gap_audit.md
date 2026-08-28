@@ -1,4 +1,4 @@
-## The 128-base row pass is register-bound, not latency-bound (2026-08-27) <a id="base128-row-ilp"></a>
+## The 128-base row pass is at a structural plateau (2026-08-27, extended 2026-08-28) <a id="base128-row-ilp"></a>
 
 The 128-point base's row pass (`components/base128`) is its largest phase, and
 the standing hypothesis was chain latency: four strictly dependent DIT-16
@@ -36,6 +36,52 @@ median-based and did not show that spread. A follow-on experiment fusing the
 redistribution into the row pass, to remove its 64 stores and the
 store-to-load forwarding dependency, produced numbers inside that noise band
 and is recorded as unresolved rather than as a verdict.
+
+### Three hypotheses, three refusals (2026-08-28, quiet machine)
+
+The machine reproduced the baseline exactly — `columns8` 456 TSC, `rows16`
+518, RustFFT 181.7 ns — so the day's measurements resolve differences the
+earlier contended session could not. Baseline: 293.9 ns min P-core,
+145.2 ns E-core.
+
+| change | rows16 | kernel (P min) | verdict |
+| --- | --- | --- | --- |
+| baseline | 518 | 293.9 ns | — |
+| two rows in flight | 940 | 416.4 ns | spills; rejected |
+| cross-row rotation | 522 | 294.2 ns | no effect |
+| redistribution fused into rows | 633 (+88 stamp gap) | 292.4 ns | neutral |
+
+The **cross-row rotation** stored each row's result and refilled that exact
+register with the next row's operand, deepening load-to-use distance at a
+constant live set of eight. Two runs bracketed the baseline (294.2 and
+295.6 ns min): the scheduler already extracts whatever overlap exists across
+the row boundary, so the phase does not stall on cross-row load latency.
+
+The **fusion** built each row's operands in registers straight from the
+source, deleting the redistribution's 64 stores and the row pass's 64 loads
+at the cost of re-reading the source (128 loads for 64 distinct chunks). It
+measured neutral within the 0.6% run spread, on both core types, with all
+four reference arms at baseline. Removing the staging round trip buys
+nothing: the phase is not store-to-load-forwarding bound either — the saved
+stores and the added loads cancel.
+
+### Where the time actually is
+
+A diagnostic variant with the stage-3 and stage-4 twiddle multiplies deleted
+(wrong results by construction, never committed, run only for the phase
+counter) put `rows16` at **366 TSC against 518**. The whole
+shuffle -> mul -> fmaddsub chain is therefore 29% of the phase; the other
+71% is butterflies and memory that three independent restructurings could
+not move. The row pass sits where loads, stores, and dependency height trade
+against one another one for one.
+
+That bounds what micro-scheduling can return here and redirects the
+remaining RustFFT gap (294 vs 182 ns, about 8.0 against 5.0 cycles per
+point) to the decomposition itself: this kernel spends roughly 120 complex
+multiplies across seven radix-2 stages, and a radix-8-shaped 128 carries
+materially fewer non-trivial twiddles. The next increment on this item is an
+arithmetic-count comparison against the reference's stage structure, not
+another schedule of the current one.
 
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
 
