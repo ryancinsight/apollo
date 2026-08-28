@@ -382,8 +382,9 @@
   records the address map, failure modes, evidence, and provider boundary.
   **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
   **Lease:** Codex `components/base128`, `components/mod.rs`, dynamic
-  `FftPlan1D` construction/executors/tests, ADR 0041, and this item's PM entries
-  through the production-plan ownership decision commit.
+  `FftPlan1D` construction/executors/tests, the sealed `MixedRadixScalar`
+  capability bound, ADR 0041, and this item's PM entries through the
+  production-plan ownership decision commit.
   **Last update:** 2026-08-27.
 - **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
   through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
