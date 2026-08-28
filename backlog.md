@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — todo
+
+- **Evidence (apollo `gap_audit.md#retained-attribution`, exact allocation
+  accounting):** starting the pool retains 24 per-worker blocks on a 24-core
+  host — 64 KiB/worker when a trivial `for_each_chunk_mut_with` initializes
+  it, 256 KiB/worker when apollo's threaded four-step at N = 65536 does —
+  1.5-6 MB of process-lifetime state. The consumer workload never grows the
+  smaller state afterward, so the larger sizing is first-touch shape, not
+  need. Reproducer: apollo `retained_footprint_attribution` probe ("pool
+  warmup" window), `--ignored --nocapture`, release.
+- **Static reading:** `DEFAULT_GLOBAL_QUEUE_CAPACITY = 8192` partitions to
+  256-slot per-worker injectors (`partition_global_queue`), beside 256-slot
+  local queues; each `LockFreeQueue` slot carries a sequence word plus
+  `Option<(Priority, ScheduledJob)>` where `InlineJob` is
+  `#[repr(C, align(64))]` with 14 inline words — ~256 B/slot, of which the
+  cache-line alignment inside a slot array is padding, not contention
+  isolation (slots interleave sequence words regardless).
+- **Outcome:** the per-worker retained footprint is derived from need rather
+  than padding and first-touch shape — candidates: drop `align(64)` on the
+  queued job representation (measure steal-path contention before/after),
+  size inline storage from the measured job-size distribution, or lazily
+  allocate injector arrays. The 4x first-touch variance is diagnosed (what
+  allocates workload-shaped per-worker state) and either fixed or recorded
+  as design.
+- **Acceptance oracle:** apollo's pool-warmup window retained drops
+  proportionally with no regression in the executor's own throughput and
+  contention benches; loom coverage holds for any queue-layout change.
+- **Risk / change class:** [perf]; a queue-layout change is lock-free-adjacent
+  and keeps the existing loom suite as its gate.
+
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
 
 - **Outcome:** public slice entry points validate input length before unchecked
