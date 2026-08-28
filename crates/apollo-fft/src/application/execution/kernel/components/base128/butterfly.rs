@@ -78,10 +78,18 @@ const REV3: [usize; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 /// `g = 0..8` at chunk 12.
 pub(crate) struct Plan128<T> {
     /// Dup-split twiddles, 496 lanes (124 chunks).
-    table: Box<[T]>,
+    ///
+    /// Boxed as a fixed-size array rather than a slice for the same reason
+    /// the sample buffer is: the length reaches the kernel in the type, so
+    /// the chunk-access bounds discharge at compile time instead of costing
+    /// a compare and a branch on each of the transform's ~144 twiddle loads.
+    table: Box<[T; TABLE_LANES]>,
     /// `W_8^1` and `W_8^3` as complex values for the column-pass splats.
     col: [[T; 2]; 2],
 }
+
+/// Lane count of [`Plan128::table`].
+const TABLE_LANES: usize = 496;
 
 /// Chunk offsets into [`Plan128::table`].
 const T3_CH: usize = 0;
@@ -119,7 +127,10 @@ impl<T: MixedRadixScalar> Plan128<T> {
         }
         let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
         Self {
-            table: table.into_boxed_slice(),
+            table: table
+                .into_boxed_slice()
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("the builder pushes exactly TABLE_LANES lanes")),
             col,
         }
     }
@@ -158,8 +169,15 @@ impl<T: MixedRadixScalar> Plan128State<T> {
 
 /// The 128-point transform as a lane kernel over interleaved samples.
 pub(crate) struct Transform128<'a, T, const INVERSE: bool, const MEASURE_PHASES: bool> {
-    /// Interleaved samples, 256 lanes.
-    pub(crate) data: &'a mut [T],
+    /// Interleaved samples, exactly 256 lanes.
+    ///
+    /// The fixed-size reference is load-bearing, not decoration. `SimdView`
+    /// chunk access asserts `offset + LANE_COUNT <= len()`, and against a
+    /// `&mut [T]` that length is opaque, so every one of the kernel's ~130
+    /// accesses emitted a compare and a branch to a panic block — which also
+    /// kept the register arrays pinned to the stack. With the length in the
+    /// type the compiler discharges every bound at compile time.
+    pub(crate) data: &'a mut [T; 256],
     pub(crate) plan: &'a Plan128<T>,
 }
 
@@ -191,7 +209,7 @@ where
         // a multiple of the four-lane width, so chunk indices are exact. The
         // checked-slice load form spends a visible share of the transform in
         // repeated probes, bounds checks, and Result branches.
-        let tab_view = simd.view(&self.plan.table);
+        let tab_view = simd.view(self.plan.table.as_slice());
         // Dup-split complex multiply: one shuffle, one multiply, one
         // alternating FMA (see the plan-layout doc).
         let cmul = |v: ComplexReg<T, A>, ch: usize| {
@@ -227,7 +245,7 @@ where
         // stored at position rev3(m) of row `a`.
         let mut staging = [T::from_precise(0.0); 256];
         {
-            let data_view = simd.view(&*self.data);
+            let data_view = simd.view(self.data.as_slice());
             let mut stg = simd.view_mut(&mut staging);
             for m in 0..8usize {
                 let dst = REV3[m];
@@ -314,7 +332,7 @@ where
         let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
         let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
         let stg = simd.view(&staging);
-        let mut out = simd.view_mut(self.data);
+        let mut out = simd.view_mut(self.data.as_mut_slice());
         for g in 0..8usize {
             let mut c = [zero_complex; 8];
             for (a, reg) in c.iter_mut().enumerate() {
@@ -386,7 +404,9 @@ where
     Complex<T>: bytemuck::Pod,
 {
     assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
+        .try_into()
+        .expect("invariant: 128 complex samples are exactly 256 lanes");
     hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
         data: flat,
         plan,

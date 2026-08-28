@@ -16,7 +16,7 @@ fn signal(n: usize) -> Vec<Complex64> {
 }
 
 #[test]
-fn selection_starts_at_the_even_power_threshold() {
+fn selection_starts_at_the_threshold_for_either_split() {
     let mut below = signal(1_024);
     let original = below.clone();
     assert!(!try_four_step::<f64, false, false>(
@@ -28,16 +28,15 @@ fn selection_starts_at_the_even_power_threshold() {
         "a rejected route must not mutate its input"
     );
 
+    // Asymmetric splits are admitted. They were excluded while their cost
+    // was unmeasured; measuring it showed the exclusion left odd powers at
+    // about 2.5x RustFFT beside even neighbours at 1.05x to 1.34x, so badly
+    // that n = 2048 cost more than n = 4096 (gap_audit.md#odd-power-routing).
     let mut asymmetric = signal(8_192);
-    let original = asymmetric.clone();
-    assert!(!try_four_step::<f64, false, false>(
+    assert!(try_four_step::<f64, false, false>(
         &mut asymmetric,
         FOUR_STEP_THRESHOLD
     ));
-    assert_eq!(
-        asymmetric, original,
-        "an asymmetric split must remain on the Stockham route"
-    );
 
     let mut selected = signal(4_096);
     assert!(try_four_step::<f64, false, false>(

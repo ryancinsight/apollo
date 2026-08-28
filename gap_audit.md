@@ -1,3 +1,200 @@
+## Odd powers of two were routed off the fast path entirely (2026-08-28) <a id="odd-power-routing"></a>
+
+`FourStep::admits` required `trailing_zeros() % 2 == 0`, its comment
+recording the reason: "an odd `log2` would need an asymmetric split, whose
+cost this route has never been measured at." Extending the pinned ladder
+through the odd powers measured it, and the exclusion was expensive well
+past a tuning margin — pinned, P-core, against RustFFT:
+
+| n | log2 | before |
+| --- | --- | --- |
+| 256 | 8 | 2.00x |
+| **512** | **9** | **2.51x** |
+| 1024 | 10 | 1.34x |
+| **2048** | **11** | **2.56x** |
+| 4096 | 12 | 1.14x |
+| **8192** | **13** | **2.49x** |
+| 16384 | 14 | 1.05x |
+
+The pathology is visible without a reference at all: **n = 2048 cost more
+than n = 4096, and n = 8192 more than n = 16384**. Half of every
+power-of-two size ran about 2.4x slower than its neighbours.
+
+### Admitting the asymmetric split is not the fix
+
+Allowing odd powers reaches `four_step_fft`'s existing `k1 = k/2`,
+`k2 = k - k1` path. That helps at 2048 (2.56x -> 1.76x) and *hurts* at 8192
+(2.49x -> 2.79x, and 8.67x on an E-core), because the generic path streams a
+full N-element cached twiddle matrix through step 3 where the batched planar
+route folds its twiddles into stage loads. The asymmetric split is real, but
+it lands on the slower of the two implementations.
+
+### One radix-2 decimation does fix it
+
+An odd power splits as `2 x 2^(k-1)`, and `2^(k-1)` is an **even** power —
+precisely the shape the batched planar kernel wants. So the route now takes
+one decimation in time, delegates both halves to itself (where they hit the
+batched route), and combines:
+`X[k] = E[k] + W_N^k O[k]`, `X[k + N/2] = E[k] - W_N^k O[k]`.
+
+The combine needs no new table. The stage-major twiddle table already ends
+with the length-`N` stage, whose `N/2` entries are `W_N^j` in order at
+offset `N/2 - 1`, so the split reads what the Stockham route had already
+cached.
+
+| n | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| 512 | 2623 ns | **2117** | 2.51x -> **2.02x** |
+| 2048 | 14 140 | **8055** | 2.56x -> **1.43x** |
+| 8192 | 68 117 | **34 660** | 2.49x -> **1.27x** |
+
+n = 8192 is 1.97x faster and n = 2048 1.76x faster than before; even powers
+are untouched (256 1.96x, 1024 1.35x, 4096 1.13x, 16384 1.06x). The ordering
+anomaly is gone: cost is monotone in size again.
+
+The ladder instrument was extended to the odd powers and retargeted from
+`four_step_batched` to `FftPlan1D`, so it now measures what production
+actually routes rather than one component of it — which is why this was
+invisible for so long.
+
+## Checked view access, not register pressure, dominated the 128-base (2026-08-28) <a id="base128-bounds"></a>
+
+The assembly diagnostic named on the item was run. It answers the question
+it was asked and finds something larger.
+
+**The sixteen values do spill.** The register-resident across-instance rows
+compile to 113 vector stores and 112 reloads against the stack per loop
+iteration, in a 1624-byte frame. That closes
+[the across-instance question](#base128-split): the layout's arithmetic
+advantage is real and unreachable in that form.
+
+**But the shipped kernel's dominant cost was elsewhere, and visible in the
+same listing.** Every `SimdView` chunk access asserts
+`offset + LANE_COUNT <= len()`, and against a `&[T]` that length is opaque,
+so no check folds. The emitted pattern around each three-instruction complex
+multiply was:
+
+```
+leaq  244(%rax), %rcx     ; bound
+cmpq  %rdi, %rcx          ;  compare
+ja    .LBB54_2            ;  branch to panic
+vshufpd / vmulpd / vfmaddsub231pd
+vmovapd %ymm5, 576(%rsp)  ; result parked on the stack
+```
+
+roughly 130 such sequences per kernel, and the branchy shape also kept the
+register arrays pinned to memory. The lengths involved are all fixed —
+128 complex samples, a 496-lane twiddle table — but they reached the kernel
+as slices, so the compiler could not know that.
+
+**Fix: put the lengths in the types.** `data: &'a mut [T; 256]` and
+`table: Box<[T; 496]>`. The kernel's bounds branches go from ~130 to
+**zero**, verified in the re-emitted assembly, and the transform measures:
+
+| | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| P-core | 293.9 ns | **278.9** | 1.62x -> 1.53x |
+| E-core | 145.2 ns | **135.3** | 1.61x -> 1.50x |
+
+The source-reading phase alone fell from 170 to 106 TSC. No unsafe, no
+algorithmic change, no measurement caveats: the checks were simply
+unprovable and are now discharged at compile time.
+
+### The general lesson for this provider
+
+`SimdView` chunk access is safe and correct, and free only when the callee
+can see the length. A kernel taking `&[T]` pays a compare and a branch on
+every vector touched. Two remedies exist and both are already in the tree:
+fixed-size array references where the size is a constant (this fix), and the
+raw-load helper with a documented proof where it is not — which is what
+`batched`'s stage kernel does, its SAFETY note recording that the checked
+wrapper had measured 45% of that kernel's time. `batched`'s **boundary**
+kernels used the checked path at runtime sizes, and were converted in the
+same increment.
+
+### The production route, same defect
+
+The `batched` route is what actually runs, and its transpose and
+reinterleave passes carried the identical pattern — but their planes are
+sized at runtime, so the type cannot hold the length. They take the other
+remedy instead: one `assert!` per kernel entry establishing the plane
+extent, then proof-carrying raw chunk helpers, exactly as the stage kernel
+beside them already does.
+
+The transpose pass falls from **1151 to 658 TSC (-43%)**; reinterleave is
+unchanged at ~900, its accesses having been provable already. End to end,
+pinned, P-core:
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 866 ns | 822 | 2.10 -> 1.99 | 1.26 -> 1.19 |
+| 1024 | 3512 | **3304** | 1.42 -> **1.32** | 1.08 -> **0.98** |
+| 4096 | 14 748 | 14 444 | 1.20 -> 1.18 | 0.92 -> 0.90 |
+| 16384 | 65 148 | 62 854 | 1.10 -> **1.06** | 0.88 -> 0.87 |
+
+Apollo now leads PhastFT at N = 1024 on the P-core as well as at the two
+larger sizes, and trails RustFFT by 6% at 16384.
+
+## Splitting the 128-base kernel works; the layout still cannot be cashed (2026-08-28) <a id="base128-split"></a>
+
+The restore trigger from [the across-instance validation](#base128-across-instance)
+was executed: the transform was split into two `LaneKernel`s — an
+across-instance row pass and the column pass — each entering its own
+target-feature scope through its own `vectorize_lanes` call, with the phase
+stamps moved out of the kernels into the driver so the attributed and
+comparison builds share identical bodies. All nine oracles pass in every
+variant below.
+
+**The split does what it was predicted to do.** The untouched column pass
+returns from 1771 TSC to **467**, against its 455 baseline. That confirms
+the previous session's diagnosis: the degradation was a single kernel body
+outgrowing its `#[target_feature]` frame, not register pressure leaking
+across phases.
+
+**The layout still loses.** P-core minima, baseline 293.9 ns, RustFFT at its
+own baseline in every run:
+
+| variant | rows (TSC) | columns (TSC) | transform |
+| --- | --- | --- | --- |
+| shipped, one kernel, sample-major | 688 | 455 | 293.9 ns |
+| split, sample-major rows | 606 | 468 | 299.1 ns |
+| split, across-instance rows, staged | 813 | 467 | 357.0 ns |
+| split, across-instance rows, in registers | 1774 | 466 | 615.2 ns |
+| one kernel, across-instance rows | 513* | 1771 | 610.0 ns |
+
+\* measured while the rest of the function was degraded, which is why it
+looked like a win.
+
+Two readings follow. The split by itself costs about 2% on the P-core and
+3.5% on the E-core once normalized against RustFFT — two dispatches and the
+loss of cross-phase optimization — so it is not worth shipping on its own,
+but it is available and validated for any future work that needs it.
+
+And the across-instance row layout cannot be cashed in this expression. Its
+arithmetic advantage is real and was verified: 16 row multiplies against 64,
+matching the reference exactly. But a 16-point transform across instances
+needs sixteen live registers, which is the entire AVX2 file, and every way
+of carrying that working set costs more than the multiplies it saves —
+holding it in registers measures 1774 TSC, staging it through a 512-byte
+plane measures 813, and the sample-major form that needs only eight live
+values measures 606.
+
+### What separates this from the reference
+
+`Butterfly128Avx64` runs the same sixteen-register working set on the same
+ISA and does not pay this. Its butterfly16 differs in two ways this
+implementation does not yet reproduce: it takes load and store *closures* so
+each value is materialized at first use and written at last use rather than
+all sixteen being live across the stage boundary, and it operates on raw
+`__m256d` arrays rather than a wrapper type. The next diagnostic is
+therefore an assembly inspection of the split rows kernel to establish
+whether the sixteen values are actually spilling and, if so, whether the
+`ComplexReg` aggregate or the eager group construction is responsible —
+a question that reaches into the provider, not only this kernel.
+
+Until that is answered, the sample-major layout stays: it is the only form
+measured whose working set fits.
+
 ## The across-instance row layout pays, and outgrows one kernel body (2026-08-28) <a id="base128-across-instance"></a>
 
 Lever 3 of [the arithmetic comparison](#base128-arithmetic-count) was built:

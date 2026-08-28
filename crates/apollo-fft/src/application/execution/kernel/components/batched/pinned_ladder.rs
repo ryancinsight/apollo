@@ -1,8 +1,8 @@
-//! Pinned measurement: the batched route against the reference engines
+//! Pinned measurement: the production power-of-two route against the
+//! reference engines
 //! across the power-of-two ladder, by core type. Asserts nothing; run with
 //! `--ignored --nocapture`.
 
-use super::{four_step_batched, scratch_len};
 use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;
@@ -26,7 +26,7 @@ fn best_block<F: FnMut()>(calls: u32, mut f: F) -> f64 {
 fn batched_against_the_references_across_the_ladder() {
     for cpu in [2u32, 12] {
         let landed = pin(cpu);
-        for exp in [8u32, 10, 12, 14] {
+        for exp in [8u32, 9, 10, 11, 12, 13, 14] {
             let n = 1usize << exp;
             // Keep each block near one millisecond so twelve blocks resist
             // scheduler noise without inflating the suite budget.
@@ -46,10 +46,10 @@ fn batched_against_the_references_across_the_ladder() {
             let phast = phastft::planner::PlannerDit64::new(n);
 
             let mut work = src.clone();
-            let mut scratch = vec![Complex64::default(); scratch_len(n)];
+            let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
             let batched_ns = best_block(calls, || {
                 work.copy_from_slice(&src);
-                four_step_batched::<f64, false>(std::hint::black_box(&mut work), &mut scratch);
+                plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
             });
             let mut rust_work = rust_src.clone();
             let rust_ns = best_block(calls, || {

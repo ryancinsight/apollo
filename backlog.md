@@ -1,5 +1,27 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-ODD-POWER-ROUTING-2026-08-28 — Odd powers of two took the slow route [patch] — done 2026-08-28
+
+- **Delivered:** `FourStep::admits` excluded odd `log2` ("cost never
+  measured"), leaving half of all power-of-two sizes on the Stockham route at
+  ~2.5x RustFFT beside even neighbours at 1.05-1.34x — so badly that n = 2048
+  cost more than n = 4096 and n = 8192 more than n = 16384. Admitting the
+  asymmetric split alone is not the fix (it helps at 2048, hurts at 8192,
+  because the generic path streams a full N-element twiddle matrix). The
+  route now takes **one radix-2 decimation**, whose halves are even powers
+  and therefore hit the batched planar kernel, and combines using the
+  `W_N^j` entries already sitting in the last stage of the cached twiddle
+  table — no new table, no new allocation class.
+- **Measured pinned, P-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
+  2048 14140 -> **8055** (2.56x -> **1.43x**), 8192 68117 -> **34660**
+  (2.49x -> **1.27x**); even powers unchanged. Cost is monotone in size
+  again. Evidence: `gap_audit.md#odd-power-routing`.
+- **Instrument:** `batched::pinned_ladder` extended through the odd powers
+  and retargeted from `four_step_batched` to `FftPlan1D`, so it measures the
+  production route rather than one component — which is why this was
+  invisible. The selection oracle moved to the new contract with the
+  measurement as its justification.
+
 ## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 — Advance the Moirai provider revision [patch] — done 2026-08-28
 
 - **Delivered:** Apollo PR #160 / merge `65e6dbd0` advances all 13 Moirai packages to `fff36331`, all nine Mnemosyne packages to `12e5b090`, and Themis to `9fd113fd`; Apollo uses none of Moirai's removed queue-capacity APIs.
@@ -315,6 +337,49 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Same fix carried to the production route (2026-08-28).** `batched`'s
+  boundary kernels had the identical defect at runtime sizes, where the type
+  cannot hold the length; they take one entry `assert!` plus proof-carrying
+  raw chunk helpers instead, matching the stage kernel beside them.
+  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder P-core moves to
+  1.99/1.32/1.18/1.06 against RustFFT and 1.19/**0.98**/0.90/0.87 against
+  PhastFT at n = 256/1024/4096/16384 — **apollo now leads PhastFT at 1024 as
+  well as above it, and trails RustFFT by 6% at 16384.**
+- **Assembly diagnostic run; it answered the question and found a larger one
+  (2026-08-28, `gap_audit.md#base128-bounds`).** The sixteen values do spill:
+  113 stores and 112 reloads per iteration in a 1624-byte frame, closing the
+  across-instance question. But the same listing showed the shipped kernel's
+  dominant cost was **checked view access** — every `SimdView` chunk access
+  asserts against a slice length the kernel cannot see, emitting a compare
+  and a branch to a panic block around each three-instruction multiply, ~130
+  per kernel, and keeping the register arrays pinned to memory. **Fix: put
+  the lengths in the types** (`&mut [T; 256]`, `Box<[T; 496]>`). Bounds
+  branches ~130 -> **zero**, verified in re-emitted assembly. **278.9 ns
+  P-core against 293.9 (-5.1%) and 135.3 against 145.2 E-core (-6.8%);
+  RustFFT ratio 1.62x -> 1.53x and 1.61x -> 1.50x.** No unsafe, no
+  algorithmic change.
+- **Split executed, layout restored, both measured (2026-08-28,
+  `gap_audit.md#base128-split`):** the transform was split into per-phase
+  kernels with their own target-feature scopes and the across-instance rows
+  restored inside. **The split works** — the untouched column pass returns
+  1771 -> 467 TSC against its 455 baseline, confirming the outlining
+  diagnosis — but costs ~2% (P) / ~3.5% (E) normalized, from two dispatches
+  and lost cross-phase optimization, so it does not ship alone. **The layout
+  still loses:** 357 ns staged and 615 in registers against the 294 ns
+  baseline. Its 4x multiply reduction is real and verified; it cannot be
+  cashed because a 16-point transform across instances needs sixteen live
+  registers — the whole AVX2 file — and every way of carrying that costs
+  more than the multiplies saved (registers 1774 TSC, staged 813,
+  sample-major 606). All nine oracles pass in every variant.
+- **Next diagnostic:** assembly inspection of the split rows kernel, to
+  establish whether the sixteen values spill and whether the `ComplexReg`
+  aggregate or the eager group construction is responsible. The reference
+  runs the same working set on the same ISA without paying this, differing
+  in that its butterfly16 takes load/store closures so values materialize at
+  first use, and that it operates on raw vectors rather than a wrapper — a
+  question that reaches the provider, not only this kernel. Until it is
+  answered the sample-major layout stays, being the only form measured whose
+  working set fits.
 - **Across-instance rows built and validated (2026-08-28,
   `gap_audit.md#base128-across-instance`):** lever 3 implemented, correct on
   the first attempt — all nine oracles pass. Registers hold two FFT
