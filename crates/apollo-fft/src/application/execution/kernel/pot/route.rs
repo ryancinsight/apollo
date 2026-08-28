@@ -84,10 +84,18 @@ pub(crate) struct FourStep;
 impl PoTStrategy for FourStep {}
 
 impl PotRoute for FourStep {
-    /// Square splits only. An odd `log2` would need an asymmetric split, whose
-    /// cost this route has never been measured at.
+    /// Every power of two at or above four, square or not.
+    ///
+    /// The square restriction was provisional — an odd `log2` needs the
+    /// asymmetric split `n = 2^(k/2) * 2^(k - k/2)`, which
+    /// [`four_step_fft`](crate::application::execution::kernel::components::four_step)
+    /// has always computed, and whose cost had simply never been measured.
+    /// Measuring it settled the question: excluding odd powers left them on
+    /// the Stockham route at about 2.5x RustFFT while their even neighbours
+    /// ran at 1.05x to 1.34x, so badly that n = 2048 cost more than n = 4096
+    /// and n = 8192 more than n = 16384 (gap_audit.md#odd-power-routing).
     fn admits(n: usize) -> bool {
-        n.is_power_of_two() && n >= 4 && n.trailing_zeros() % 2 == 0
+        n.is_power_of_two() && n >= 4
     }
 
     fn run<F, const INVERSE: bool, const NORMALIZE: bool>(
