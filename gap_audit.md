@@ -131,11 +131,25 @@ Attribution, largest first:
    a distinct layout, not a duplicate; its builder now shares the single
    evaluation authority (`ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, delivered)
    but its retention is the route's working set, recorded as-is.
-2. **The 65536 spike is threaded-route worker retention:** 24 blocks of
-   262,144 bytes (6.0 MB) held after the first forward at exactly the
-   `FUSE_THRESHOLD` size — per-worker state of the Moirai four-step, absent
-   at 262144 where the route shape differs. Reduction needs the threaded
-   four-step's buffer-lifetime read; filed as the item's next sub-step.
+2. **The 65536 spike is Moirai pool startup, not transform buffers —
+   discriminated 2026-08-27.** A trivial parallel warmup ahead of the ladder
+   captures 24 per-worker blocks of 65,536 bytes each (1,572,864 bytes,
+   1.5 MiB) within 1,857,224 retained bytes; the remaining 284,360 bytes are
+   allocations below the 65,536-byte ledger floor. The 65536 first-forward
+   window then retains only its scratch and route matrix
+   (2.19 MB): the blocks belong to the pool's one-time startup, charged to
+   the FFT in the original run only because the FFT was the process's first
+   parallel user. Two further facts from the discrimination: the per-worker
+   size varied with the initializing workload (256 KiB when the FFT started
+   the pool, 64 KiB after the trivial warmup) and the FFT ran on the smaller
+   state without growing it — first-touch shape, not need. Static reading
+   puts the floor at the queue defaults: 8192-task global queue partitioned
+   to 256-slot per-worker injectors plus 256-slot local queues, each slot
+   carrying a 64-byte-aligned 128-byte inline job inside
+   `Option<(Priority, ScheduledJob)>` (~256 B/slot). Upstream item filed:
+   moirai `MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27`. Apollo-side, this
+   term leaves the FFT's own account; the census's 10.4x cold reading at
+   65536 included it and reads as 2.1x transform-owned after separation.
 3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
    padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
    planar halves at four-step sizes — the terms an in-place rewrite would
