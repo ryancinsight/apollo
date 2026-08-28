@@ -28,6 +28,8 @@ pub trait MixedRadixScalar:
     + Sized
     + Copy
     + 'static
+    + hermes_simd::LaneScalar
+    + bytemuck::Pod
     + ShortWinogradScalar
     + CompositeCache
     + BluesteinStore<Cpx = Self::Complex>

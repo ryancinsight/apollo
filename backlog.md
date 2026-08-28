@@ -297,7 +297,7 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: plan ownership
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
 - **Outcome:** the RustFFT-class construction for mid-size powers of two:
   a hand-tuned interleaved 128-point base transform (L1-resident; spills
@@ -354,10 +354,12 @@
   column pass with natural-order contiguous stores. Six oracles pass: direct
   DFT in both directions, round trip, incumbent differential, f32 execution
   or clean decline, and zero phase-meter effects in the comparison
-  specialization. Plan storage is one immutable boxed table per direction;
-  calls borrow it from `OnceCell` without allocation or atomic reference-count
-  traffic. Constants use the existing Hermes dispatch token, so internal
-  support probes do not recur.
+  specialization. A selected dynamic plan owns one shared state: forward data
+  is eager, inverse data initializes on first inverse execution, clones share
+  both directions, and calls borrow the table without allocation or an atomic
+  increment. The route does not retain the incumbent forward-twiddle table.
+  Constants use the existing Hermes dispatch token, so internal support probes
+  do not recur.
 - **Corrected pinned evidence:** the first 326/194 ns figures are invalid
   because they included four timestamp reads and four atomic updates per
   transform. The 100-sample zero-instrumentation medians and 96.4799% exact
@@ -377,14 +379,24 @@
   PR #87 merged the AArch64 all-target import correction as `4f6a1ebb`;
   Apollo's standalone lock includes that correction through Hermes `8fc54dfa`,
   whose later delta is CI/PM configuration only.
-- **Remaining production requirement:** move the immutable base plan into
-  `FftPlan1D` before N = 128 routing changes. ADR 0041 is Accepted and
-  records the address map, failure modes, evidence, and provider boundary.
+- **Plan ownership candidate:** `FftPlan1D` now owns an `Arc`-shared base state
+  for supported N = 128 plans, lazily initializes inverse state, and retains no
+  duplicate Stockham forward table. Structural tests assert shared state and
+  forward-only retention; concurrent f32/f64 clone execution matches normalized
+  inverse direct-DFT values, and both dynamic inverse modes plus zero/singleton
+  identity plans have value-semantic coverage. Local production medians are
+  295.117 ns
+  [294.899, 295.304] P-core and 163.529 ns [163.502, 163.558] E-core; the
+  same-run direct base is 294.865 ns [294.573, 295.022] and 152.550 ns
+  [152.520, 152.581]. The E-core wrapper has an 11.0 ns residual dispatch cost,
+  while production is 11.28x faster than the incumbent entry baseline. The
+  remaining merge requirement is a green unchanged hosted replicated
+  counterbalanced comparator. ADR 0041 records the ownership and evidence.
   **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-  **Lease:** fixed-four-lane kernels under `components/{base128,resident,
-  batched,codelet}`, `components/test_support.rs`, their module comments, the
-  Hermes lock pin, and this item's PM entries through the exact-width adoption
-  commit.
+  **Lease:** Codex `components/base128`, `components/mod.rs`, dynamic
+  `FftPlan1D` construction/executors/tests, the sealed `MixedRadixScalar`
+  capability bound, ADR 0041, and this item's PM entries through the
+  production-plan ownership decision commit.
   **Last update:** 2026-08-27.
 - **Exact-width adoption evidence:** every fixed-four-lane kernel now enters
   through `vectorize_lanes::<4, T, _>`; resident drivers resolve capability
@@ -403,17 +415,17 @@
   for the measured hot functions were unchanged while candidate `.text` grew
   by 400 bytes, identifying placement sensitivity rather than a kernel win.
   The route is withdrawn; the base and its complete oracle remain test-gated.
-- **Small-size gate standing (`base128::pinned_probe`):** incumbent production
+- **Small-size gate standing (`base128::pinned_probe`):** entry production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
-  into `FftPlan1D`, then admit N = 128 only if the unchanged exact comparator
-  clears; (2) tighten the base toward RustFFT after a fresh profile of the
+  n = 128 E-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
+  route only if the unchanged exact comparator clears; (2) tighten the base
+  toward RustFFT after a fresh profile of the
   now-uninstrumented specialization;
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
-## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — review
+## ATLAS-APOLLO-AARCH64-ALL-TARGETS-2026-08-27 — warning-clean non-x86 test graph [patch] — done 2026-08-27 (PR #156, merge `b3925141`)
 
 - **Outcome:** `apollo-fft` builds every library and test target warning-free on
   AArch64; x86-only Stockham probes are cfg-complete and scalar cache fallbacks

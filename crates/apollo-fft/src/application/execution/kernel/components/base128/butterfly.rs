@@ -30,7 +30,7 @@ use crate::application::execution::kernel::components::lane_capability::exact_la
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -89,6 +89,11 @@ const T4_CH: usize = 4;
 const MIX_CH: usize = 12;
 
 impl<T: MixedRadixScalar> Plan128<T> {
+    /// Builds the immutable plan when the exact four-lane capability exists.
+    pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
+        exact_lanes_supported::<4, T>().then(Self::new::<INVERSE>)
+    }
+
     fn new<const INVERSE: bool>() -> Self {
         let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         let w = |j: usize, n: usize| -> [f64; 2] {
@@ -120,38 +125,36 @@ impl<T: MixedRadixScalar> Plan128<T> {
     }
 }
 
-type PlanCell<T> = [OnceCell<Plan128<T>>; 2];
-
-thread_local! {
-    static PLAN_128_F64: PlanCell<f64> = const { [OnceCell::new(), OnceCell::new()] };
-    static PLAN_128_F32: PlanCell<f32> = const { [OnceCell::new(), OnceCell::new()] };
+/// Plan-owned directional state for the selected 128-point route.
+pub(crate) struct Plan128State<T> {
+    forward: Plan128<T>,
+    inverse: OnceLock<Plan128<T>>,
 }
 
-/// Scalars whose 128-point plans are cached per thread.
-pub(crate) trait Plan128Cache:
-    MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
-{
-    fn with_cached_plan_128<const INVERSE: bool, R>(f: impl FnOnce(&Plan128<Self>) -> R) -> R;
-}
+impl<T: MixedRadixScalar> Plan128State<T> {
+    /// Builds the forward plan when the exact-width route is available.
+    pub(crate) fn new_if_supported() -> Option<Self> {
+        Plan128::new_if_supported::<false>().map(|forward| Self {
+            forward,
+            inverse: OnceLock::new(),
+        })
+    }
 
-macro_rules! impl_plan_cache {
-    ($t:ty, $cell:ident) => {
-        impl Plan128Cache for $t {
-            fn with_cached_plan_128<const INVERSE: bool, R>(
-                f: impl FnOnce(&Plan128<Self>) -> R,
-            ) -> R {
-                $cell.with(|c| {
-                    let slot = usize::from(INVERSE);
-                    let plan = c[slot].get_or_init(Plan128::<$t>::new::<INVERSE>);
-                    f(plan)
-                })
-            }
-        }
-    };
-}
+    /// Borrows the immutable forward plan.
+    pub(crate) fn forward(&self) -> &Plan128<T> {
+        &self.forward
+    }
 
-impl_plan_cache!(f64, PLAN_128_F64);
-impl_plan_cache!(f32, PLAN_128_F32);
+    /// Borrows the immutable inverse plan, initializing it once across clones.
+    pub(crate) fn inverse(&self) -> &Plan128<T> {
+        self.inverse.get_or_init(Plan128::new::<true>)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inverse_is_initialized(&self) -> bool {
+        self.inverse.get().is_some()
+    }
+}
 
 /// The 128-point transform as a lane kernel over interleaved samples.
 pub(crate) struct Transform128<'a, T, const INVERSE: bool, const MEASURE_PHASES: bool> {
@@ -376,23 +379,19 @@ where
 
 fn transform_128_with_measurement<T, const INVERSE: bool, const MEASURE_PHASES: bool>(
     data: &mut [Complex<T>],
+    plan: &Plan128<T>,
 ) -> bool
 where
-    T: Plan128Cache,
+    T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
     assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    if !exact_lanes_supported::<4, T>() {
-        return false;
-    }
-    T::with_cached_plan_128::<INVERSE, _>(|plan| {
-        let flat: &mut [T] = bytemuck::cast_slice_mut(data);
-        hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
-            data: flat,
-            plan,
-        })
-        .unwrap_or(false)
+    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
+        data: flat,
+        plan,
     })
+    .unwrap_or(false)
 }
 
 /// Runs the 128-point base butterfly when a four-lane backend is available.
@@ -400,20 +399,26 @@ where
 /// # Panics
 ///
 /// If `data` is not exactly 128 samples.
-pub(crate) fn transform_128<T, const INVERSE: bool>(data: &mut [Complex<T>]) -> bool
+pub(crate) fn transform_128<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan128<T>,
+) -> bool
 where
-    T: Plan128Cache,
+    T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
-    transform_128_with_measurement::<T, INVERSE, false>(data)
+    transform_128_with_measurement::<T, INVERSE, false>(data, plan)
 }
 
 /// Runs the phase-attributed variant of the 128-point base butterfly.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) fn transform_128_measured<T, const INVERSE: bool>(data: &mut [Complex<T>]) -> bool
+pub(crate) fn transform_128_measured<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan128<T>,
+) -> bool
 where
-    T: Plan128Cache,
+    T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
-    transform_128_with_measurement::<T, INVERSE, true>(data)
+    transform_128_with_measurement::<T, INVERSE, true>(data, plan)
 }

@@ -16,7 +16,7 @@ pub(crate) enum PlanStrategy<F: MixedRadixScalar> {
     Identity,
     ShortWinograd,
     PowerOfTwo {
-        twiddle_fwd: Arc<[F::Complex]>,
+        twiddle_fwd: Option<Arc<[F::Complex]>>,
         log2: u32,
         pot: PhantomData<SizedPoT<StockhamAutosort, 0>>,
     },
