@@ -311,6 +311,19 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Assembly diagnostic run; it answered the question and found a larger one
+  (2026-08-28, `gap_audit.md#base128-bounds`).** The sixteen values do spill:
+  113 stores and 112 reloads per iteration in a 1624-byte frame, closing the
+  across-instance question. But the same listing showed the shipped kernel's
+  dominant cost was **checked view access** — every `SimdView` chunk access
+  asserts against a slice length the kernel cannot see, emitting a compare
+  and a branch to a panic block around each three-instruction multiply, ~130
+  per kernel, and keeping the register arrays pinned to memory. **Fix: put
+  the lengths in the types** (`&mut [T; 256]`, `Box<[T; 496]>`). Bounds
+  branches ~130 -> **zero**, verified in re-emitted assembly. **278.9 ns
+  P-core against 293.9 (-5.1%) and 135.3 against 145.2 E-core (-6.8%);
+  RustFFT ratio 1.62x -> 1.53x and 1.61x -> 1.50x.** No unsafe, no
+  algorithmic change.
 - **Split executed, layout restored, both measured (2026-08-28,
   `gap_audit.md#base128-split`):** the transform was split into per-phase
   kernels with their own target-feature scopes and the across-instance rows
