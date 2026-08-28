@@ -120,6 +120,118 @@ fn tiny_runtime_and_static_n3_match_direct() {
     }
 }
 
+#[test]
+fn dynamic_f64_inverse_modes_match_direct() {
+    let n = 128;
+    let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
+    let input = signal64(n);
+    let expected_normalized = dft_inverse(&input);
+    let expected_unnormalized: Vec<_> = expected_normalized
+        .iter()
+        .map(|value| Complex64::new(value.re * n as f64, value.im * n as f64))
+        .collect();
+    let mut normalized = input.clone();
+    let mut unnormalized = input;
+
+    plan.inverse_complex_slice_inplace(&mut normalized);
+    plan.inverse_complex_slice_unnorm_inplace(&mut unnormalized);
+
+    let normalized_tolerance = 1.0e-10;
+    let unnormalized_tolerance = normalized_tolerance * n as f64;
+    for ((actual_normalized, actual_unnormalized), (direct_normalized, direct_unnormalized)) in
+        normalized
+            .iter()
+            .zip(&unnormalized)
+            .zip(expected_normalized.iter().zip(&expected_unnormalized))
+    {
+        let normalized_error = (*actual_normalized - *direct_normalized).norm();
+        let unnormalized_error = (*actual_unnormalized - *direct_unnormalized).norm();
+        assert!(
+            normalized_error <= normalized_tolerance,
+            "dynamic f64 normalized inverse differs by {normalized_error:.3e} > {normalized_tolerance:.3e}"
+        );
+        assert!(
+            unnormalized_error <= unnormalized_tolerance,
+            "dynamic f64 unnormalized inverse differs by {unnormalized_error:.3e} > {unnormalized_tolerance:.3e}"
+        );
+    }
+}
+
+#[test]
+fn dynamic_f32_inverse_modes_match_direct() {
+    let n = 128;
+    let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
+    let input = signal32(n);
+    let expected_normalized = dft_inverse(&input);
+    let expected_unnormalized: Vec<_> = expected_normalized
+        .iter()
+        .map(|value| Complex32::new(value.re * n as f32, value.im * n as f32))
+        .collect();
+    let mut normalized = input.clone();
+    let mut unnormalized = input;
+
+    plan.inverse_complex_slice_inplace(&mut normalized);
+    plan.inverse_complex_slice_unnorm_inplace(&mut unnormalized);
+
+    let normalized_tolerance = 2.0e-4_f32;
+    let unnormalized_tolerance = normalized_tolerance * n as f32;
+    for ((actual_normalized, actual_unnormalized), (direct_normalized, direct_unnormalized)) in
+        normalized
+            .iter()
+            .zip(&unnormalized)
+            .zip(expected_normalized.iter().zip(&expected_unnormalized))
+    {
+        let normalized_error = (*actual_normalized - *direct_normalized).norm();
+        let unnormalized_error = (*actual_unnormalized - *direct_unnormalized).norm();
+        assert!(
+            normalized_error <= normalized_tolerance,
+            "dynamic f32 normalized inverse differs by {normalized_error:.3e} > {normalized_tolerance:.3e}"
+        );
+        assert!(
+            unnormalized_error <= unnormalized_tolerance,
+            "dynamic f32 unnormalized inverse differs by {unnormalized_error:.3e} > {unnormalized_tolerance:.3e}"
+        );
+    }
+}
+
+#[test]
+fn dynamic_zero_length_plans_preserve_empty_slices() {
+    let plan64 = FftPlan1D::<f64>::new(Shape1D { n: 0 });
+    let expected64 = Vec::<Complex64>::new();
+    let mut actual64 = expected64.clone();
+    plan64.forward_complex_slice_inplace(&mut actual64);
+    plan64.inverse_complex_slice_inplace(&mut actual64);
+    plan64.inverse_complex_slice_unnorm_inplace(&mut actual64);
+    assert_eq!(actual64, expected64);
+
+    let plan32 = FftPlan1D::<f32>::new(Shape1D { n: 0 });
+    let expected32 = Vec::<Complex32>::new();
+    let mut actual32 = expected32.clone();
+    plan32.forward_complex_slice_inplace(&mut actual32);
+    plan32.inverse_complex_slice_inplace(&mut actual32);
+    plan32.inverse_complex_slice_unnorm_inplace(&mut actual32);
+    assert_eq!(actual32, expected32);
+}
+
+#[test]
+fn dynamic_one_length_plans_preserve_singletons() {
+    let plan64 = FftPlan1D::<f64>::new(Shape1D::new(1).expect("shape"));
+    let expected64 = vec![Complex64::new(-0.75, 0.3125)];
+    let mut actual64 = expected64.clone();
+    plan64.forward_complex_slice_inplace(&mut actual64);
+    plan64.inverse_complex_slice_inplace(&mut actual64);
+    plan64.inverse_complex_slice_unnorm_inplace(&mut actual64);
+    assert_eq!(actual64, expected64);
+
+    let plan32 = FftPlan1D::<f32>::new(Shape1D::new(1).expect("shape"));
+    let expected32 = vec![Complex32::new(0.625, -0.1875)];
+    let mut actual32 = expected32.clone();
+    plan32.forward_complex_slice_inplace(&mut actual32);
+    plan32.inverse_complex_slice_inplace(&mut actual32);
+    plan32.inverse_complex_slice_unnorm_inplace(&mut actual32);
+    assert_eq!(actual32, expected32);
+}
+
 fn assert_planned_f32_forward_matches_direct(n: usize, tolerance: f64) {
     let plan = FftPlan1D::<f32>::new(Shape1D::new(n).expect("shape"));
     let input = signal32(n);

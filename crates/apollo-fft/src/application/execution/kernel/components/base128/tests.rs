@@ -48,13 +48,14 @@ fn worst(a: &[Complex64], b: &[Complex64]) -> f64 {
         .fold(0.0f64, f64::max)
 }
 
-fn dft_reduced(input: &[Complex32]) -> Vec<Complex32> {
+fn dft_reduced(input: &[Complex32], inverse: bool) -> Vec<Complex32> {
     let n = input.len();
+    let sign = if inverse { 1.0_f32 } else { -1.0_f32 };
     (0..n)
         .map(|k| {
             let (mut re, mut im) = (0.0_f32, 0.0_f32);
             for (t, value) in input.iter().enumerate() {
-                let angle = -std::f32::consts::TAU * ((k * t) % n) as f32 / n as f32;
+                let angle = sign * std::f32::consts::TAU * ((k * t) % n) as f32 / n as f32;
                 let (sine, cosine) = angle.sin_cos();
                 re += value.re * cosine - value.im * sine;
                 im += value.re * sine + value.im * cosine;
@@ -158,7 +159,7 @@ fn reduced_precision_computes_or_declines_without_mutation() {
     };
     assert!(transform_128::<f32, false>(&mut data, &plan));
 
-    let expected = dft_reduced(&src);
+    let expected = dft_reduced(&src, false);
     let error = data
         .iter()
         .zip(&expected)
@@ -237,4 +238,141 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
             .as_ref()
             .expect("a clone preserves initialized inverse state")
     ));
+}
+
+#[test]
+fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
+    let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
+    if plan.base128.is_none() {
+        assert!(
+            plan.twiddle_fwd.is_some(),
+            "the incumbent route retains its forward twiddles"
+        );
+        return;
+    }
+
+    let first_input = signal();
+    let mut second_input = first_input.clone();
+    second_input.rotate_left(17);
+    let first_expected: Vec<_> = dft(&first_input, true)
+        .into_iter()
+        .map(|value| Complex64::new(value.re / 128.0, value.im / 128.0))
+        .collect();
+    let second_expected: Vec<_> = dft(&second_input, true)
+        .into_iter()
+        .map(|value| Complex64::new(value.re / 128.0, value.im / 128.0))
+        .collect();
+    let first_bound = 2.0 * tolerance(&first_input) / 128.0;
+    let second_bound = 2.0 * tolerance(&second_input) / 128.0;
+    let barrier = std::sync::Barrier::new(3);
+    let first_plan = plan.clone();
+    let second_plan = plan.clone();
+
+    let (first_actual, second_actual) = std::thread::scope(|scope| {
+        let first_barrier = &barrier;
+        let first = scope.spawn(move || {
+            let mut actual = first_input;
+            first_barrier.wait();
+            first_plan.inverse_complex_slice_inplace(&mut actual);
+            actual
+        });
+        let second_barrier = &barrier;
+        let second = scope.spawn(move || {
+            let mut actual = second_input;
+            second_barrier.wait();
+            second_plan.inverse_complex_slice_inplace(&mut actual);
+            actual
+        });
+        barrier.wait();
+        (
+            first.join().expect("first clone execution must complete"),
+            second.join().expect("second clone execution must complete"),
+        )
+    });
+
+    let first_error = worst(&first_actual, &first_expected);
+    let second_error = worst(&second_actual, &second_expected);
+    assert!(
+        first_error <= first_bound,
+        "first concurrent clone differs by {first_error:.3e} > {first_bound:.3e}"
+    );
+    assert!(
+        second_error <= second_bound,
+        "second concurrent clone differs by {second_error:.3e} > {second_bound:.3e}"
+    );
+}
+
+#[test]
+fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
+    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n: 128 });
+    if plan.base128.is_none() {
+        assert!(
+            plan.twiddle_fwd.is_some(),
+            "the incumbent route retains its forward twiddles"
+        );
+        return;
+    }
+
+    let first_input: Vec<_> = (0..128)
+        .map(|index| {
+            let x = index as f32;
+            Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
+        })
+        .collect();
+    let mut second_input = first_input.clone();
+    second_input.rotate_right(23);
+    let first_expected: Vec<_> = dft_reduced(&first_input, true)
+        .into_iter()
+        .map(|value| Complex32::new(value.re / 128.0, value.im / 128.0))
+        .collect();
+    let second_expected: Vec<_> = dft_reduced(&second_input, true)
+        .into_iter()
+        .map(|value| Complex32::new(value.re / 128.0, value.im / 128.0))
+        .collect();
+    let first_bound = 2.0 * reduced_tolerance(&first_input) / 128.0;
+    let second_bound = 2.0 * reduced_tolerance(&second_input) / 128.0;
+    let barrier = std::sync::Barrier::new(3);
+    let first_plan = plan.clone();
+    let second_plan = plan.clone();
+
+    let (first_actual, second_actual) = std::thread::scope(|scope| {
+        let first_barrier = &barrier;
+        let first = scope.spawn(move || {
+            let mut actual = first_input;
+            first_barrier.wait();
+            first_plan.inverse_complex_slice_inplace(&mut actual);
+            actual
+        });
+        let second_barrier = &barrier;
+        let second = scope.spawn(move || {
+            let mut actual = second_input;
+            second_barrier.wait();
+            second_plan.inverse_complex_slice_inplace(&mut actual);
+            actual
+        });
+        barrier.wait();
+        (
+            first.join().expect("first clone execution must complete"),
+            second.join().expect("second clone execution must complete"),
+        )
+    });
+
+    let first_error = first_actual
+        .iter()
+        .zip(&first_expected)
+        .map(|(actual, expected)| (actual.re - expected.re).hypot(actual.im - expected.im))
+        .fold(0.0_f32, f32::max);
+    let second_error = second_actual
+        .iter()
+        .zip(&second_expected)
+        .map(|(actual, expected)| (actual.re - expected.re).hypot(actual.im - expected.im))
+        .fold(0.0_f32, f32::max);
+    assert!(
+        first_error <= first_bound,
+        "first concurrent clone differs by {first_error:.3e} > {first_bound:.3e}"
+    );
+    assert!(
+        second_error <= second_bound,
+        "second concurrent clone differs by {second_error:.3e} > {second_bound:.3e}"
+    );
 }

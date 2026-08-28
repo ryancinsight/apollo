@@ -381,8 +381,11 @@
   whose later delta is CI/PM configuration only.
 - **Plan ownership candidate:** `FftPlan1D` now owns an `Arc`-shared base state
   for supported N = 128 plans, lazily initializes inverse state, and retains no
-  duplicate Stockham forward table. Ownership, clone sharing, and forward-only
-  retention have value-semantic tests. Local production medians are 295.117 ns
+  duplicate Stockham forward table. Structural tests assert shared state and
+  forward-only retention; concurrent f32/f64 clone execution matches normalized
+  inverse direct-DFT values, and both dynamic inverse modes plus zero/singleton
+  identity plans have value-semantic coverage. Local production medians are
+  295.117 ns
   [294.899, 295.304] P-core and 163.529 ns [163.502, 163.558] E-core; the
   same-run direct base is 294.865 ns [294.573, 295.022] and 152.550 ns
   [152.520, 152.581]. The E-core wrapper has an 11.0 ns residual dispatch cost,
