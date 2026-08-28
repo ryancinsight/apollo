@@ -1,3 +1,50 @@
+## Where the planar route's time actually goes (2026-08-28) <a id="planar-pass-attribution"></a>
+
+The [standing measurement](#reference-standing) said the even powers are
+converging on parity and left it there, because nothing said *why* they are
+behind at all. The driver had a per-pass instrument, but it printed a line
+per pass per call, so a size worth measuring — thousands of calls — could
+not be measured with it without the printing becoming the measurement. It
+now accumulates per label and a probe drains the totals.
+
+Pinned, P-core, 200 calls per size, TSC per call:
+
+| n | deint | stages1 | transpose | permute | stages2 | reint/combine | total |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1024 | 1223 | 3301 | 724 | 517 | 4056 | 824 | 10645 |
+| 2048 | 2986 | 6740 | 1436 | 1081 | 8440 | 4361 | 25044 |
+| 4096 | 5122 | 15240 | 3524 | 3014 | 18075 | 3726 | 48700 |
+| 8192 | 10665 | 30208 | 6800 | 6019 | 36127 | 15086 | 104905 |
+| 16384 | 20155 | 71855 | 13982 | 11756 | 83061 | 14850 | 215660 |
+
+Three readings, and the third is the one to act on.
+
+**The butterflies are about 70% and the movement about 30%,** stable across
+the range (69.1% at 1024, 71.8% at 16384). That is the planar layout's
+bargain stated numerically: it buys butterflies with no cross-lane shuffle
+and pays a deinterleave in and an interleave out. The bargain is a good one
+— at 16384 we are at 1.05 against RustFFT *while* paying it, which means our
+stage sets are materially faster than its — but it is also the reason the
+smaller even powers lag: the same 30% is a larger share of a shorter
+transform's total advantage.
+
+**Stage set two costs about 15% more than stage set one** for identical
+butterfly work (4056 against 3301 at 1024; 83061 against 71855 at 16384).
+The difference is the four-step twiddle folded into its first loads. That is
+real arithmetic — `N` complex multiplies — and it is already riding a pass
+that had to happen, so there is nothing obviously to remove.
+
+**The permute pass is 4.9-6.2% and is pure repair.** The deinterleave gets
+bit-reversed rows for free by writing each row to `rev(row)`; the transpose
+then destroys that order, so a separate pass restores it before stage set
+two. It is the one pass in the pipeline whose entire content is undoing what
+the pass before it did — 11756 TSC at 16384, on the order of the whole
+transpose. Folding the reversal into the transpose, or teaching stage set
+two's first stage to read permuted rows the way it already reads folded
+twiddles, would remove it outright.
+
+That is the next item. The measurement to beat is in the table.
+
 ## The paired decimation pass, and why it bought less than the model said (2026-08-28) <a id="split-single-pass"></a>
 
 [Fusing the decimation](#odd-power-fusion) left half its cost, and the

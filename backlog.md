@@ -1,5 +1,40 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-PLANAR-ATTRIBUTION-2026-08-28 — Make the planar route's passes measurable [patch] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#planar-pass-attribution`): the driver's
+  per-pass instrument accumulates per label instead of printing a line per
+  pass per call, and `pinned_sections` drains the totals for the sizes the
+  planar route serves. The old form could not measure a size worth
+  measuring — thousands of calls — because the printing became the
+  measurement.
+- **Also here:** a stale doc block describing `four_step_batched` was
+  sitting above `scratch_len`, which has its own.
+- **What it found:** butterflies about 70% of the route and movement about
+  30%, stable across the range; stage set two about 15% dearer than stage
+  set one for identical butterflies, which is the four-step twiddle fold
+  and is real arithmetic; and the permute pass at 4.9-6.2% is pure repair.
+
+## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — todo
+
+- **Outcome:** the permute pass disappears. Acceptance: 1024 and 4096
+  improve against the attribution table with every oracle passing and the
+  odd powers, which run the route twice, improving proportionately.
+- **Why:** the deinterleave gets bit-reversed rows for free by writing each
+  row to `rev(row)`; the transpose destroys that order, so a whole pass
+  runs to restore it before stage set two. It is the one pass whose entire
+  content is undoing the pass before it — 11756 TSC at 16384, on the order
+  of the transpose itself, and 4.9-6.2% of the route everywhere.
+- **Two candidate shapes, and the second looks likelier:** fold the row
+  reversal into the transpose, which needs care because transpose and
+  bit-reversal are each involutions but their composition is not, so the
+  in-place tiled form no longer decomposes into pair swaps; or teach stage
+  set two's first stage to read permuted rows, the way it already reads
+  folded twiddles — the plan carries the swap list, and the fold seam
+  exists.
+- **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** permute
+  517 at 1024, 3014 at 4096, 11756 at 16384; totals 10645, 48700, 215660.
+
 ## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
 
 - **Delivered** (`gap_audit.md#split-single-pass`): the two halves of an odd

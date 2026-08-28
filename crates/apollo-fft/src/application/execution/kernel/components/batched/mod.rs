@@ -565,17 +565,6 @@ fn run_batched<T>(
     });
 }
 
-/// Four-step power-of-two transform over the batched layout.
-///
-/// Requires a square split, which is what the four-step dispatch gate admits,
-/// so the middle transpose is in place and the scratch requirement matches the
-/// Stockham path it replaces: one `N`-element complex buffer, reinterpreted as
-/// two `N`-element real planes.
-///
-/// # Panics
-///
-/// Panics if `data.len()` is not an even power of two, or if `scratch` is
-/// shorter than `data`.
 /// Scratch length, in complex elements, that [`four_step_batched`] requires
 /// for a transform of length `n`.
 ///
@@ -618,20 +607,49 @@ pub(crate) fn split_scratch_len(n: usize) -> usize {
     2 * scratch_len(n / 2)
 }
 
-/// Per-pass attribution instrument, compiled only into test builds; the
-/// release pinned probes run as tests, so they see it, while production
-/// builds carry nothing.
+/// Per-pass cycle attribution for the planar driver, compiled only into test
+/// builds; the release pinned probes run as tests, so they see it, while
+/// production builds carry nothing.
+///
+/// Totals accumulate per label rather than printing per pass. A transform
+/// worth measuring runs thousands of times, and a line of stderr per pass
+/// per call is not a measurement — it is a cost large enough to change the
+/// thing being measured. [`sections::take`] drains the totals.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) mod sections {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static TOTALS: RefCell<Vec<(&'static str, u64, u64)>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// Adds one pass's cycle count to its label's running total.
+    pub(crate) fn record(label: &'static str, cycles: u64) {
+        TOTALS.with_borrow_mut(|totals| {
+            if let Some(entry) = totals.iter_mut().find(|(name, _, _)| *name == label) {
+                entry.1 += cycles;
+                entry.2 += 1;
+            } else {
+                totals.push((label, cycles, 1));
+            }
+        });
+    }
+
+    /// Drains the accumulated totals as `(label, cycles, passes)`, in the
+    /// order the labels were first seen — which is the order the driver runs
+    /// them, so a caller can print the pipeline as a pipeline.
+    pub(crate) fn take() -> Vec<(&'static str, u64, u64)> {
+        TOTALS.with_borrow_mut(std::mem::take)
+    }
+}
+
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 macro_rules! sect {
     ($label:literal, $body:block) => {{
         let t0 = unsafe { core::arch::x86_64::_rdtsc() };
         let out = $body;
         let t1 = unsafe { core::arch::x86_64::_rdtsc() };
-        static SECTIONS: std::sync::LazyLock<bool> =
-            std::sync::LazyLock::new(|| std::env::var_os("RESIDENT_SECTIONS").is_some());
-        if *SECTIONS {
-            eprintln!("BSECT {} {}", $label, t1 - t0);
-        }
+        sections::record($label, t1 - t0);
         out
     }};
 }
@@ -951,6 +969,10 @@ pub(crate) mod interleaved;
 // Windows-gated: pins threads through Win32 to control the hybrid scheduler.
 #[cfg(all(test, windows))]
 mod pinned_ladder;
+
+// Additionally x86-gated: the pass totals come from `_rdtsc`.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+mod pinned_sections;
 
 #[cfg(test)]
 mod tests;
