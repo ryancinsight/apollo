@@ -1,3 +1,85 @@
+## The 128-base gap is a multiply count, set by register layout (2026-08-28) <a id="base128-arithmetic-count"></a>
+
+Three schedule changes refused to move the base-128 row pass
+([above](#base128-row-ilp)), so the remaining 1.62x against RustFFT
+(294 against 182 ns pinned) was taken to the arithmetic. Both kernels were
+counted from source: Apollo's `components/base128/butterfly.rs` and
+RustFFT 6.4.1's `Butterfly128Avx64` with the `avx_vector` helpers it calls.
+
+**They choose the same decomposition.** Both factor 128 as 8 x 16, both run
+the eight-point transforms first with the four-step twiddles applied between
+the passes, and both spend exactly 56 complex multiplies on that twiddle
+layer -- 7 per group across 8 groups, matching RustFFT's `twiddles:
+[__m256d; 56]` declaration. The decomposition is not the difference.
+
+**The sub-transforms are.**
+
+| component | Apollo | RustFFT | ratio |
+| --- | --- | --- | --- |
+| eight 16-point sub-transforms | 64 | 16 | 4.0x |
+| four-step twiddle layer | 56 | 56 | 1.0x |
+| eight 8-point sub-transforms | 16 | 0 | — |
+| **complex multiplies per transform** | **136** | **72** | **1.89x** |
+
+Apollo runs 1.89x the complex multiplies and 1.62x the wall clock, so its
+per-multiply cost is already the better of the two -- the dup-split form
+costs one shuffle where the general interleaved multiply costs three. The
+count is what it cannot afford.
+
+### Why the count differs: registers hold different things
+
+RustFFT's registers hold **two different FFT instances at the same sample
+index** (`load_complex(columnset * 2 + index * 8)` -- consecutive elements of
+the scratch are different columns). Every twiddle is therefore a broadcast
+scalar, and a trivial twiddle stays trivial: `column_butterfly4`'s only
+internal twiddle is `rotate90`, a shuffle and a sign flip, so a radix-4 step
+costs **zero** complex multiplies. `column_butterfly8` adds only the
+`half_root2` identity for `W8^{1,3}` -- `(rotate90(x) +- x) * (sqrt(2)/2)`,
+one rotation, one add, one *real* broadcast multiply -- so a radix-8 step is
+also multiply-free. Its 16-point butterfly is four radix-4 steps plus four
+general twiddles, giving 4 multiplies per call, and each call transforms two
+instances: **2 complex multiplies per 16-point FFT**.
+
+Apollo's row registers hold **two consecutive samples of one FFT**
+(`from_view_chunk(&stg_rows, row + k)`). A twiddle register must then carry
+two *different* twiddle values, so a register pairing `W8^0 = 1` with
+`W8^1`, or `W8^2 = -i` with `W8^3`, cannot exploit either trivial half: the
+whole register takes a general multiply. Four radix-2 stages need 8 such
+multiplies per 16-point FFT against RustFFT's 2. The same effect costs the
+column pass its 16 `W8^{1,3}` multiplies, which RustFFT gets for free from
+`half_root2`.
+
+This is why the schedule experiments could not move anything. The row pass is
+not mis-scheduled; it is executing four times the necessary multiplies, and
+no arrangement of them removes work that the layout mandates.
+
+### Ranked levers, with derived savings
+
+The twiddle-free diagnostic priced the row multiplies directly: removing all
+64 took the phase from 518 to 366 TSC, so a row multiply costs **2.4 TSC**.
+
+1. **`half_root2` for the column pass's `W8^{1,3}`** (16 multiplies, and
+   these use the three-shuffle `ComplexReg` product rather than the
+   dup-split form). Local, no layout change, no risk to the address map.
+2. **Radix-4 row stages** — fuse the four radix-2 stages into two radix-4
+   steps so the `W4` twiddles become rotations. Recovers part of the 4x, but
+   the `W16` stage still needs per-sample twiddles under this layout.
+3. **Across-instance row layout** — the full fix, and the one that closes the
+   4x: transpose so each register holds one sample of two rows, making every
+   row twiddle a broadcast. It is the same change RustFFT already made, and
+   Apollo's column pass is *already* in that form, which is why the column
+   pass exploits its rotations and the row pass cannot.
+
+Lever 3 also bears on the residual: at 2.4 TSC per multiply, cutting the row
+pass from 64 to 16 saves about 115 of the 1143 TSC this kernel spends, and
+the remainder is the extra memory pass Apollo makes -- three reads and three
+writes of the array against RustFFT's two, since Apollo's redistribution is
+its own pass while RustFFT folds the equivalent transpose into the store of
+its first butterfly. Fusing that pass measured neutral in its naive form
+([above](#base128-row-ilp)) because it traded 64 sequential loads for 128
+strided ones; folding it into the column pass's store, as the reference
+does, is the form that has not been tried.
+
 ## The 128-base row pass is at a structural plateau (2026-08-27, extended 2026-08-28) <a id="base128-row-ilp"></a>
 
 The 128-point base's row pass (`components/base128`) is its largest phase, and
