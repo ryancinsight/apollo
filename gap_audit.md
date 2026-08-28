@@ -1,3 +1,81 @@
+## Checked view access, not register pressure, dominated the 128-base (2026-08-28) <a id="base128-bounds"></a>
+
+The assembly diagnostic named on the item was run. It answers the question
+it was asked and finds something larger.
+
+**The sixteen values do spill.** The register-resident across-instance rows
+compile to 113 vector stores and 112 reloads against the stack per loop
+iteration, in a 1624-byte frame. That closes
+[the across-instance question](#base128-split): the layout's arithmetic
+advantage is real and unreachable in that form.
+
+**But the shipped kernel's dominant cost was elsewhere, and visible in the
+same listing.** Every `SimdView` chunk access asserts
+`offset + LANE_COUNT <= len()`, and against a `&[T]` that length is opaque,
+so no check folds. The emitted pattern around each three-instruction complex
+multiply was:
+
+```
+leaq  244(%rax), %rcx     ; bound
+cmpq  %rdi, %rcx          ;  compare
+ja    .LBB54_2            ;  branch to panic
+vshufpd / vmulpd / vfmaddsub231pd
+vmovapd %ymm5, 576(%rsp)  ; result parked on the stack
+```
+
+roughly 130 such sequences per kernel, and the branchy shape also kept the
+register arrays pinned to memory. The lengths involved are all fixed —
+128 complex samples, a 496-lane twiddle table — but they reached the kernel
+as slices, so the compiler could not know that.
+
+**Fix: put the lengths in the types.** `data: &'a mut [T; 256]` and
+`table: Box<[T; 496]>`. The kernel's bounds branches go from ~130 to
+**zero**, verified in the re-emitted assembly, and the transform measures:
+
+| | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| P-core | 293.9 ns | **278.9** | 1.62x -> 1.53x |
+| E-core | 145.2 ns | **135.3** | 1.61x -> 1.50x |
+
+The source-reading phase alone fell from 170 to 106 TSC. No unsafe, no
+algorithmic change, no measurement caveats: the checks were simply
+unprovable and are now discharged at compile time.
+
+### The general lesson for this provider
+
+`SimdView` chunk access is safe and correct, and free only when the callee
+can see the length. A kernel taking `&[T]` pays a compare and a branch on
+every vector touched. Two remedies exist and both are already in the tree:
+fixed-size array references where the size is a constant (this fix), and the
+raw-load helper with a documented proof where it is not — which is what
+`batched`'s stage kernel does, its SAFETY note recording that the checked
+wrapper had measured 45% of that kernel's time. `batched`'s **boundary**
+kernels used the checked path at runtime sizes, and were converted in the
+same increment.
+
+### The production route, same defect
+
+The `batched` route is what actually runs, and its transpose and
+reinterleave passes carried the identical pattern — but their planes are
+sized at runtime, so the type cannot hold the length. They take the other
+remedy instead: one `assert!` per kernel entry establishing the plane
+extent, then proof-carrying raw chunk helpers, exactly as the stage kernel
+beside them already does.
+
+The transpose pass falls from **1151 to 658 TSC (-43%)**; reinterleave is
+unchanged at ~900, its accesses having been provable already. End to end,
+pinned, P-core:
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 866 ns | 822 | 2.10 -> 1.99 | 1.26 -> 1.19 |
+| 1024 | 3512 | **3304** | 1.42 -> **1.32** | 1.08 -> **0.98** |
+| 4096 | 14 748 | 14 444 | 1.20 -> 1.18 | 0.92 -> 0.90 |
+| 16384 | 65 148 | 62 854 | 1.10 -> **1.06** | 0.88 -> 0.87 |
+
+Apollo now leads PhastFT at N = 1024 on the P-core as well as at the two
+larger sizes, and trails RustFFT by 6% at 16384.
+
 ## Splitting the 128-base kernel works; the layout still cannot be cashed (2026-08-28) <a id="base128-split"></a>
 
 The restore trigger from [the across-instance validation](#base128-across-instance)

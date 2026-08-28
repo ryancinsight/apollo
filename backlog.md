@@ -311,6 +311,27 @@
 
 ## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
 
+- **Same fix carried to the production route (2026-08-28).** `batched`'s
+  boundary kernels had the identical defect at runtime sizes, where the type
+  cannot hold the length; they take one entry `assert!` plus proof-carrying
+  raw chunk helpers instead, matching the stage kernel beside them.
+  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder P-core moves to
+  1.99/1.32/1.18/1.06 against RustFFT and 1.19/**0.98**/0.90/0.87 against
+  PhastFT at n = 256/1024/4096/16384 — **apollo now leads PhastFT at 1024 as
+  well as above it, and trails RustFFT by 6% at 16384.**
+- **Assembly diagnostic run; it answered the question and found a larger one
+  (2026-08-28, `gap_audit.md#base128-bounds`).** The sixteen values do spill:
+  113 stores and 112 reloads per iteration in a 1624-byte frame, closing the
+  across-instance question. But the same listing showed the shipped kernel's
+  dominant cost was **checked view access** — every `SimdView` chunk access
+  asserts against a slice length the kernel cannot see, emitting a compare
+  and a branch to a panic block around each three-instruction multiply, ~130
+  per kernel, and keeping the register arrays pinned to memory. **Fix: put
+  the lengths in the types** (`&mut [T; 256]`, `Box<[T; 496]>`). Bounds
+  branches ~130 -> **zero**, verified in re-emitted assembly. **278.9 ns
+  P-core against 293.9 (-5.1%) and 135.3 against 145.2 E-core (-6.8%);
+  RustFFT ratio 1.62x -> 1.53x and 1.61x -> 1.50x.** No unsafe, no
+  algorithmic change.
 - **Split executed, layout restored, both measured (2026-08-28,
   `gap_audit.md#base128-split`):** the transform was split into per-phase
   kernels with their own target-feature scopes and the across-instance rows
