@@ -1,5 +1,12 @@
 # Apollo Checklist
 
+## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 [patch] — Codex
+
+- [x] Confirm Apollo does not call the removed Moirai queue-capacity APIs.
+- [x] Regenerate the standalone lockfile at the merged Moirai provider revision.
+- [x] Pass provider-audit, affected all-target checks, and value-semantic tests.
+- [ ] Commit, publish, merge, and record exact provider/consumer revisions.
+
 ## ATLAS-APOLLO-BRANCH-DEBT-2026-08-27 [patch] — Codex
 
 - [x] Remove `codex/fix-atlas-sha` after proving its Hermes 0.6 requirement is
