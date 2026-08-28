@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28
+
+- **Delivered:** the four-step's six fixed passes dominate at 4 KB — n = 256
+  cost 2.96x n = 128 where the arithmetic asks 2.3x, and n = 128 was the
+  small end's *best* ratio precisely because it takes the register-resident
+  base instead. 256 and 512 now decimate down to that base (one and two
+  radix-2 splits), with the plan building the base state for all three
+  lengths so ownership stays as ADR 0041 requires, and the combine reading
+  `W_N^j` from the final stage of the already-cached twiddle table.
+- **Measured pinned, P-core:** 256 820.8 -> **726.5** ns (1.99x -> **1.76x**
+  RustFFT, 1.19x -> **1.05x** PhastFT); 512 2110.9 -> **1901.3**
+  (2.01x -> **1.83x**, 1.44x -> **1.30x**). E-cores move with them.
+  Evidence: `gap_audit.md#small-size-splitting`.
+- **Declined:** a hand-vectorized combining kernel measured 728.9 against
+  725.2 ns — no effect, so it was removed rather than kept.
+- **Next:** the split's ~170 ns at n = 256 is one gather plus one combining
+  pass. The gather is removable rather than optimizable — the even and odd
+  samples interleave within every source register, so the base kernel can
+  take them through the deinterleave network it already runs at its
+  boundary. Worth roughly 60-80 ns at this size.
+
 ## ATLAS-APOLLO-ODD-POWER-ROUTING-2026-08-28 — Odd powers of two took the slow route [patch] — done 2026-08-28
 
 - **Delivered:** `FourStep::admits` excluded odd `log2` ("cost never
