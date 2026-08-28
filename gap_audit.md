@@ -1,3 +1,51 @@
+## Fusing the odd-power decimation into the planar boundary (2026-08-28) <a id="odd-power-fusion"></a>
+
+The [standing measurement](#reference-standing) isolated the odd-power
+deficit to movement rather than arithmetic: the decimation materialized the
+even and odd subsequences into scratch, each half then deinterleaved *again*
+into its own planes, each reinterleaved its result, and only then did the
+combine run. Three passes over `n` existed solely because the halves were
+transformed as if they were free-standing inputs.
+
+They are now read in place. The planar driver's boundary passes carry
+`STEP`/`OFFSET` const parameters, so a half deinterleaves straight out of
+`data` at stride two, and the two halves' reinterleave and butterfly combine
+became one pass writing `data`.
+
+**Measured, pinned, min of twelve blocks, controls in the same run:**
+
+| n | before | after | change | vs RustFFT |
+| --- | --- | --- | --- | --- |
+| 2048 (P) | 8133.8 ns | **7568.4** | **-7.0%** | 1.44 -> **1.34** |
+| 8192 (P) | 34413.9 | **31402.5** | **-8.8%** | 1.27 -> **1.16** |
+| 2048 (E) | 6481.4 | **5317.6** | **-18.0%** | 2.12 -> **1.83** |
+| 8192 (E) | 28148.4 | **22756.6** | **-19.2%** | 1.81 -> **1.36** |
+| 4096 (P) | 14212.7 | 14200.8 | control | 1.14 |
+| 16384 (P) | 62119.7 | 61970.5 | control | 1.05 |
+| 128 (P) | 277.4 | 279.3 | control | 1.54 |
+
+The decimation's residual cost, still by subtraction against the halves'
+own measured times, fell from 1394 to 930 ns at 2048 and from 5989 to 3001
+at 8192 — **half of it removed**.
+
+Two things worth recording beyond the number:
+
+- **The const parameters cost the sequential path nothing.** That was the
+  live risk, because the [strided base source](#strided-base-source) paid 5%
+  on its common path for exactly this kind of parameterization and had to be
+  reverted. Here every control is flat. The difference is plausibly size:
+  the planar driver is a large function whose code placement the two extra
+  parameters do not perturb, where the base kernel is small and dense.
+- **Peak scratch fell.** The fused route holds two half-planes; the unfused
+  one held a full `n`-element decimation buffer with a half-plane nested
+  inside it.
+
+**What remains.** Half the decimation cost is still there, and its shape is
+now visible: each half reads `data` at stride two, so each traverses every
+cache line of the input and the pair reads the whole array twice. One pass
+filling both plane sets together would halve that traffic. The combine's own
+pass is irreducible — it is the butterfly.
+
 ## Where we actually stand against the references (2026-08-28) <a id="reference-standing"></a>
 
 The ladder began at n = 256, so it could not see the two sizes the base
