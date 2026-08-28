@@ -1,15 +1,10 @@
 # Apollo Backlog
 
-## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 — Advance the Moirai provider revision [patch] — in-progress
+## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 — Advance the Moirai provider revision [patch] — done 2026-08-28
 
-- **Outcome:** Apollo's standalone lockfile resolves the merged Moirai local-queue initial-capacity contract without retaining an obsolete provider revision or using a local path override.
-- **Scope / non-goals:** update `Cargo.lock`, verify Apollo's existing Moirai API usage and provider graph, and run affected compile/value gates; do not change transform algorithms or queue policy.
-- **Acceptance oracle:** every resolved Moirai package uses the current merged Git revision, the provider audit passes, no removed queue-capacity symbol remains in Apollo, and affected all-target plus value tests pass under the standalone lock.
-- **Dependency:** Moirai PR #182 / `7272d78` and documentation closure PR #183 / `fff3633` are merged.
-- **Risk / change class:** [patch] dependency integration; Moirai's provider API break is outside Apollo's used surface.
-- **Evidence:** the standalone lock resolves all 13 Moirai packages at `fff36331`, all nine Mnemosyne packages at `12e5b090`, and Themis at `9fd113fd`, with 36 first-party Git sources. Provider audit passes; warning-denied workspace all-target/all-feature Clippy passes in 63 seconds; workspace Nextest passes 1309/1309 in 85.355 seconds with ten configured skips. Local value gates use the Atlas overlay at those exact provider heads; hosted CI remains the exact standalone-Git-lock oracle.
-- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-- **Lease:** `Cargo.lock`, this item block, and the matching owner section in `checklist.md`; last update 2026-08-28.
+- **Delivered:** Apollo PR #160 / merge `65e6dbd0` advances all 13 Moirai packages to `fff36331`, all nine Mnemosyne packages to `12e5b090`, and Themis to `9fd113fd`; Apollo uses none of Moirai's removed queue-capacity APIs.
+- **Evidence:** standalone lock audit reports 36 first-party Git sources; local provider audit, warning-denied all-target/all-feature Clippy, and workspace Nextest 1309/1309 pass. Hosted exact-Git-lock run `33158652496` passes lock integrity, Python, and Rust workspace; benchmark run `33158651767` passes identity/regression and correctly skips timing pairs for the lock-only delta. Independent review: GREEN.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
 ## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — todo
 
