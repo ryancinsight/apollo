@@ -16,6 +16,7 @@ use crate::application::execution::kernel::pot::{PoTStrategy, SizedPoT};
 #[cfg(test)]
 pub(crate) const SPECIAL_TRANSFORM_SIZES: &[usize] = &[4096, 32768]; // 128/256 have dedicated cases in transform (delegated for tw correctness; unroll stubs cleaned)
 
+#[cfg(target_arch = "x86_64")]
 pub(crate) fn transform<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],
@@ -352,6 +353,7 @@ pub(crate) fn transform_len32768<P: StockhamPrecision>(
 
 #[cfg_attr(debug_assertions, inline(never))]
 #[cfg_attr(not(debug_assertions), inline)]
+#[cfg(target_arch = "x86_64")]
 pub(crate) fn transform_len4096_four_triples<P: StockhamPrecision>(
     data: &mut [P::Complex],
     scratch: &mut [P::Complex],

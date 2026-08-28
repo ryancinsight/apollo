@@ -17,12 +17,14 @@ use super::super::butterfly::{stage_pair_impl, stage_quad_impl, stage_triple_imp
 use super::super::stage::stage_impl;
 #[cfg(target_arch = "x86_64")]
 use super::super::stage::stockham_reduced_stage_is_l1_resident;
+#[cfg(target_arch = "x86_64")]
+use super::traits::private;
 #[cfg(any(
     test,
     not(all(target_arch = "x86_64", target_feature = "avx", target_feature = "fma"))
 ))]
 use super::traits::ReducedStockham;
-use super::traits::{private, StockhamPrecision};
+use super::traits::StockhamPrecision;
 use crate::application::execution::kernel::radix_stage::normalize_inplace;
 use eunomia::Complex32;
 

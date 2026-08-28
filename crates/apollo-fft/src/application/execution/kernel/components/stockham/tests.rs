@@ -394,6 +394,7 @@ fn precise_avx_schedule_roundtrip_holds_for_n8192() {
 }
 
 #[test]
+#[cfg(target_arch = "x86_64")]
 fn test_small_sizes_correctness() {
     // We will test sizes 2, 4, 8, 16 for both f32 (reduced) and f64 (precise)
     // against a simple scalar DFT.
