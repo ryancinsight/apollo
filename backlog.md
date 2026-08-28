@@ -6,35 +6,33 @@
 - **Evidence:** standalone lock audit reports 36 first-party Git sources; local provider audit, warning-denied all-target/all-feature Clippy, and workspace Nextest 1309/1309 pass. Hosted exact-Git-lock run `33158652496` passes lock integrity, Python, and Rust workspace; benchmark run `33158651767` passes identity/regression and correctly skips timing pairs for the lock-only delta. Independent review: GREEN.
 - **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
-## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — todo
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — in progress
 
-- **Evidence (apollo `gap_audit.md#retained-attribution`, exact allocation
-  accounting):** starting the pool retains 24 per-worker blocks on a 24-core
-  host — 64 KiB/worker when a trivial `for_each_chunk_mut_with` initializes
-  it, 256 KiB/worker when apollo's threaded four-step at N = 65536 does —
-  1.5-6 MB of process-lifetime state. The consumer workload never grows the
-  smaller state afterward, so the larger sizing is first-touch shape, not
-  need. Reproducer: apollo `retained_footprint_attribution` probe ("pool
-  warmup" window), `--ignored --nocapture`, release.
-- **Static reading:** `DEFAULT_GLOBAL_QUEUE_CAPACITY = 8192` partitions to
-  256-slot per-worker injectors (`partition_global_queue`), beside 256-slot
-  local queues; each `LockFreeQueue` slot carries a sequence word plus
-  `Option<(Priority, ScheduledJob)>` where `InlineJob` is
-  `#[repr(C, align(64))]` with 14 inline words — ~256 B/slot, of which the
-  cache-line alignment inside a slot array is padding, not contention
-  isolation (slots interleave sequence words regardless).
-- **Outcome:** the per-worker retained footprint is derived from need rather
-  than padding and first-touch shape — candidates: drop `align(64)` on the
-  queued job representation (measure steal-path contention before/after),
-  size inline storage from the measured job-size distribution, or lazily
-  allocate injector arrays. The 4x first-touch variance is diagnosed (what
-  allocates workload-shaped per-worker state) and either fixed or recorded
-  as design.
-- **Acceptance oracle:** apollo's pool-warmup window retained drops
-  proportionally with no regression in the executor's own throughput and
-  contention benches; loom coverage holds for any queue-layout change.
+- **Provider resolution:** Moirai PR #184, merge `b42ec745`, removes forced
+  64-byte alignment from `InlineJob` while preserving its 14-word payload and
+  routing over-aligned captures through the boxed representation. The queued
+  `(Priority, ScheduledJob)` is 17 words and an MPMC slot is 18 words; queue
+  capacities, admission, wakeups, and sequence protocol are unchanged.
+- **Consumer evidence (`gap_audit.md#retained-attribution`):** the exact locked
+  release probe retains 1,169,112 bytes after pool warmup with no allocation at
+  or above 65,536 bytes, versus 1,857,224 bytes and 24 x 65,536-byte blocks at
+  entry — a 688,112-byte (37.1%) reduction. The same revision passes 13/13
+  batched analytical and round-trip cases, warning-denied all-target/all-feature
+  Clippy, provider audit, and standalone lock validation with 36 first-party
+  Git sources. Independent consumer lock-and-evidence review: GREEN.
+- **Provider evidence:** corrected same-address Criterion comparisons show no
+  statistically significant retained-worker regression; focused Miri passes
+  9/9 inline-job cases and release Loom passes 6/6. Exact hosted provider-head
+  run `33163333077` and merged-head run `33163390162` pass workspace, Rustdoc,
+  doctest, Loom, fuzz, supply-chain, and lockfile gates.
+- **Acceptance oracle:** merge the Apollo lock pin to `b42ec745`, collect its
+  exact hosted gate, and record provider and consumer revisions.
 - **Risk / change class:** [perf]; a queue-layout change is lock-free-adjacent
   and keeps the existing loom suite as its gate.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `Cargo.lock`, this item block, `gap_audit.md` retained-attribution
+  closure, and the matching checklist section through the consumer-pin commit;
+  last update 2026-08-28.
 
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
 

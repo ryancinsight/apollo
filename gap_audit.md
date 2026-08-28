@@ -131,25 +131,27 @@ Attribution, largest first:
    a distinct layout, not a duplicate; its builder now shares the single
    evaluation authority (`ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25`, delivered)
    but its retention is the route's working set, recorded as-is.
-2. **The 65536 spike is Moirai pool startup, not transform buffers —
-   discriminated 2026-08-27.** A trivial parallel warmup ahead of the ladder
-   captures 24 per-worker blocks of 65,536 bytes each (1,572,864 bytes,
-   1.5 MiB) within 1,857,224 retained bytes; the remaining 284,360 bytes are
-   allocations below the 65,536-byte ledger floor. The 65536 first-forward
-   window then retains only its scratch and route matrix
-   (2.19 MB): the blocks belong to the pool's one-time startup, charged to
-   the FFT in the original run only because the FFT was the process's first
-   parallel user. Two further facts from the discrimination: the per-worker
-   size varied with the initializing workload (256 KiB when the FFT started
-   the pool, 64 KiB after the trivial warmup) and the FFT ran on the smaller
-   state without growing it — first-touch shape, not need. Static reading
-   puts the floor at the queue defaults: 8192-task global queue partitioned
-   to 256-slot per-worker injectors plus 256-slot local queues, each slot
-   carrying a 64-byte-aligned 128-byte inline job inside
-   `Option<(Priority, ScheduledJob)>` (~256 B/slot). Upstream item filed:
-   moirai `MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27`. Apollo-side, this
-   term leaves the FFT's own account; the census's 10.4x cold reading at
-   65536 included it and reads as 2.1x transform-owned after separation.
+2. **The 65536 spike is Moirai pool startup, not transform buffers — resolved
+   2026-08-28.** The entry probe captured 24 per-worker blocks of 65,536 bytes
+   each (1,572,864 bytes) within 1,857,224 retained bytes; 284,360 bytes were
+   below the ledger floor. The FFT subsequently used that smaller warm pool
+   without growing it, proving first-touch shape rather than transform need.
+   Moirai PR #184, merge `b42ec745`, removes `InlineJob`'s forced 64-byte
+   alignment while retaining its 14-word inline payload and routing
+   over-aligned captures through the boxed representation. The resulting
+   `(Priority, ScheduledJob)` is 17 words and an MPMC slot is 18 words.
+
+   Apollo's exact locked release probe at the merged provider revision reports
+   936 allocations, a 1,173,366-byte peak, and 1,169,112 retained bytes after
+   pool warmup, with no allocation at or above the 65,536-byte ledger floor.
+   Retention therefore drops by 688,112 bytes (37.1%) without changing queue
+   capacity or FFT arithmetic. Moirai's corrected same-address Criterion
+   comparisons show no statistically significant retained-worker throughput
+   regression; focused Miri passes 9/9 inline-job cases, release Loom passes
+   6/6, and exact hosted provider-head run `33163333077` plus merged-head run
+   `33163390162` are green. Apollo-side, this term remains outside the FFT's
+   transform-owned account; the census's original 10.4x cold reading at 65536
+   included it and reads as 2.1x transform-owned after separation.
 3. **Scratch and batched planes are minor:** one 16n(+16) scratch, the
    padded batched plane (32 x 40 x 16 = 20,480 at n = 1024), and two 8n
    planar halves at four-step sizes — the terms an in-place rewrite would
