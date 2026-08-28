@@ -28,6 +28,33 @@ fn signal32(n: usize) -> Vec<Complex32> {
         .collect()
 }
 
+fn inverse_bounds64(input: &[Complex64]) -> (f64, f64) {
+    let n = input.len();
+    assert!(n.is_power_of_two(), "the radix-stage bound requires N=2^k");
+    let l1: f64 = input.iter().map(|value| value.re.hypot(value.im)).sum();
+    // The direct oracle performs at most eight rounded scalar operations per
+    // input term; the radix-2 inverse performs at most sixteen per stage.
+    // Higham's gamma_k = ku / (1 - ku), u = epsilon/2, bounds their combined
+    // first-order error against the input L1 norm.
+    let operations = 8.0 * n as f64 + 16.0 * f64::from(n.ilog2());
+    let scaled_epsilon = operations * (f64::EPSILON / 2.0);
+    let unnormalized = scaled_epsilon / (1.0 - scaled_epsilon) * l1;
+    // Power-of-two normalization is exact for these finite normal-range values.
+    (unnormalized / n as f64, unnormalized)
+}
+
+fn inverse_bounds32(input: &[Complex32]) -> (f32, f32) {
+    let n = input.len();
+    assert!(n.is_power_of_two(), "the radix-stage bound requires N=2^k");
+    let l1: f32 = input.iter().map(|value| value.re.hypot(value.im)).sum();
+    // Applying the f32 unit roundoff to the direct oracle is conservative: its
+    // internal sums use f64 and quantize only the final result.
+    let operations = 8.0 * n as f32 + 16.0 * n.ilog2() as f32;
+    let scaled_epsilon = operations * (f32::EPSILON / 2.0);
+    let unnormalized = scaled_epsilon / (1.0 - scaled_epsilon) * l1;
+    (unnormalized / n as f32, unnormalized)
+}
+
 fn assert_planned_f64_forward_matches_direct(n: usize, tolerance: f64) {
     let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
     let input = signal64(n);
@@ -130,14 +157,13 @@ fn dynamic_f64_inverse_modes_match_direct() {
         .iter()
         .map(|value| Complex64::new(value.re * n as f64, value.im * n as f64))
         .collect();
+    let (normalized_tolerance, unnormalized_tolerance) = inverse_bounds64(&input);
     let mut normalized = input.clone();
     let mut unnormalized = input;
 
     plan.inverse_complex_slice_inplace(&mut normalized);
     plan.inverse_complex_slice_unnorm_inplace(&mut unnormalized);
 
-    let normalized_tolerance = 1.0e-10;
-    let unnormalized_tolerance = normalized_tolerance * n as f64;
     for ((actual_normalized, actual_unnormalized), (direct_normalized, direct_unnormalized)) in
         normalized
             .iter()
@@ -167,14 +193,13 @@ fn dynamic_f32_inverse_modes_match_direct() {
         .iter()
         .map(|value| Complex32::new(value.re * n as f32, value.im * n as f32))
         .collect();
+    let (normalized_tolerance, unnormalized_tolerance) = inverse_bounds32(&input);
     let mut normalized = input.clone();
     let mut unnormalized = input;
 
     plan.inverse_complex_slice_inplace(&mut normalized);
     plan.inverse_complex_slice_unnorm_inplace(&mut unnormalized);
 
-    let normalized_tolerance = 2.0e-4_f32;
-    let unnormalized_tolerance = normalized_tolerance * n as f32;
     for ((actual_normalized, actual_unnormalized), (direct_normalized, direct_unnormalized)) in
         normalized
             .iter()
@@ -198,38 +223,66 @@ fn dynamic_f32_inverse_modes_match_direct() {
 fn dynamic_zero_length_plans_preserve_empty_slices() {
     let plan64 = FftPlan1D::<f64>::new(Shape1D { n: 0 });
     let expected64 = Vec::<Complex64>::new();
-    let mut actual64 = expected64.clone();
-    plan64.forward_complex_slice_inplace(&mut actual64);
-    plan64.inverse_complex_slice_inplace(&mut actual64);
-    plan64.inverse_complex_slice_unnorm_inplace(&mut actual64);
-    assert_eq!(actual64, expected64);
+    let mut forward64 = expected64.clone();
+    plan64.forward_complex_slice_inplace(&mut forward64);
+    assert_eq!(forward64, expected64, "f64 zero-length forward identity");
+    let mut inverse64 = expected64.clone();
+    plan64.inverse_complex_slice_inplace(&mut inverse64);
+    assert_eq!(inverse64, expected64, "f64 zero-length inverse identity");
+    let mut inverse_unnorm64 = expected64.clone();
+    plan64.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm64);
+    assert_eq!(
+        inverse_unnorm64, expected64,
+        "f64 zero-length unnormalized inverse identity"
+    );
 
     let plan32 = FftPlan1D::<f32>::new(Shape1D { n: 0 });
     let expected32 = Vec::<Complex32>::new();
-    let mut actual32 = expected32.clone();
-    plan32.forward_complex_slice_inplace(&mut actual32);
-    plan32.inverse_complex_slice_inplace(&mut actual32);
-    plan32.inverse_complex_slice_unnorm_inplace(&mut actual32);
-    assert_eq!(actual32, expected32);
+    let mut forward32 = expected32.clone();
+    plan32.forward_complex_slice_inplace(&mut forward32);
+    assert_eq!(forward32, expected32, "f32 zero-length forward identity");
+    let mut inverse32 = expected32.clone();
+    plan32.inverse_complex_slice_inplace(&mut inverse32);
+    assert_eq!(inverse32, expected32, "f32 zero-length inverse identity");
+    let mut inverse_unnorm32 = expected32.clone();
+    plan32.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm32);
+    assert_eq!(
+        inverse_unnorm32, expected32,
+        "f32 zero-length unnormalized inverse identity"
+    );
 }
 
 #[test]
 fn dynamic_one_length_plans_preserve_singletons() {
     let plan64 = FftPlan1D::<f64>::new(Shape1D::new(1).expect("shape"));
     let expected64 = vec![Complex64::new(-0.75, 0.3125)];
-    let mut actual64 = expected64.clone();
-    plan64.forward_complex_slice_inplace(&mut actual64);
-    plan64.inverse_complex_slice_inplace(&mut actual64);
-    plan64.inverse_complex_slice_unnorm_inplace(&mut actual64);
-    assert_eq!(actual64, expected64);
+    let mut forward64 = expected64.clone();
+    plan64.forward_complex_slice_inplace(&mut forward64);
+    assert_eq!(forward64, expected64, "f64 singleton forward identity");
+    let mut inverse64 = expected64.clone();
+    plan64.inverse_complex_slice_inplace(&mut inverse64);
+    assert_eq!(inverse64, expected64, "f64 singleton inverse identity");
+    let mut inverse_unnorm64 = expected64.clone();
+    plan64.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm64);
+    assert_eq!(
+        inverse_unnorm64, expected64,
+        "f64 singleton unnormalized inverse identity"
+    );
 
     let plan32 = FftPlan1D::<f32>::new(Shape1D::new(1).expect("shape"));
     let expected32 = vec![Complex32::new(0.625, -0.1875)];
-    let mut actual32 = expected32.clone();
-    plan32.forward_complex_slice_inplace(&mut actual32);
-    plan32.inverse_complex_slice_inplace(&mut actual32);
-    plan32.inverse_complex_slice_unnorm_inplace(&mut actual32);
-    assert_eq!(actual32, expected32);
+    let mut forward32 = expected32.clone();
+    plan32.forward_complex_slice_inplace(&mut forward32);
+    assert_eq!(forward32, expected32, "f32 singleton forward identity");
+    let mut inverse32 = expected32.clone();
+    plan32.inverse_complex_slice_inplace(&mut inverse32);
+    assert_eq!(inverse32, expected32, "f32 singleton inverse identity");
+    let mut inverse_unnorm32 = expected32.clone();
+    plan32.inverse_complex_slice_unnorm_inplace(&mut inverse_unnorm32);
+    assert_eq!(
+        inverse_unnorm32, expected32,
+        "f32 singleton unnormalized inverse identity"
+    );
 }
 
 fn assert_planned_f32_forward_matches_direct(n: usize, tolerance: f64) {

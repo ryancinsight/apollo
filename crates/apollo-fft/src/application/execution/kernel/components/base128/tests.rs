@@ -243,14 +243,6 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 #[test]
 fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
     let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
-    if plan.base128.is_none() {
-        assert!(
-            plan.twiddle_fwd.is_some(),
-            "the incumbent route retains its forward twiddles"
-        );
-        return;
-    }
-
     let first_input = signal();
     let mut second_input = first_input.clone();
     second_input.rotate_left(17);
@@ -262,8 +254,8 @@ fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
         .into_iter()
         .map(|value| Complex64::new(value.re / 128.0, value.im / 128.0))
         .collect();
-    let first_bound = 2.0 * tolerance(&first_input) / 128.0;
-    let second_bound = 2.0 * tolerance(&second_input) / 128.0;
+    let first_bound = tolerance(&first_input) / 128.0;
+    let second_bound = tolerance(&second_input) / 128.0;
     let barrier = std::sync::Barrier::new(3);
     let first_plan = plan.clone();
     let second_plan = plan.clone();
@@ -305,14 +297,6 @@ fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
 #[test]
 fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
     let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n: 128 });
-    if plan.base128.is_none() {
-        assert!(
-            plan.twiddle_fwd.is_some(),
-            "the incumbent route retains its forward twiddles"
-        );
-        return;
-    }
-
     let first_input: Vec<_> = (0..128)
         .map(|index| {
             let x = index as f32;
@@ -329,8 +313,8 @@ fn f32_dynamic_plan_clones_execute_inverse_concurrently() {
         .into_iter()
         .map(|value| Complex32::new(value.re / 128.0, value.im / 128.0))
         .collect();
-    let first_bound = 2.0 * reduced_tolerance(&first_input) / 128.0;
-    let second_bound = 2.0 * reduced_tolerance(&second_input) / 128.0;
+    let first_bound = reduced_tolerance(&first_input) / 128.0;
+    let second_bound = reduced_tolerance(&second_input) / 128.0;
     let barrier = std::sync::Barrier::new(3);
     let first_plan = plan.clone();
     let second_plan = plan.clone();
