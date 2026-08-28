@@ -395,12 +395,21 @@
   complete Apollo FFT suite passes 459/459, strict all-target and all-feature
   Clippy passes, and the standalone lock resolves with 36 first-party Git
   sources. Hosted AVX-512 execution remains PR #153's merge gate.
-- **Small-size gate standing (`base128::pinned_probe`):** production
+- **Rejected route promotion (2026-08-27, PR #154):** the candidate routed
+  N = 128 through the experiment's thread-local plan, contrary to ADR 0041's
+  production-ownership requirement. Hosted run 33122650730 also rejected the
+  candidate: all four paired comparisons regressed generic-prime N = 31 by
+  1.81-3.85% and compact N = 96 by 2.22-6.02%. Normalized instruction streams
+  for the measured hot functions were unchanged while candidate `.text` grew
+  by 400 bytes, identifying placement sensitivity rather than a kernel win.
+  The route is withdrawn; the base and its complete oracle remain test-gated.
+- **Small-size gate standing (`base128::pinned_probe`):** incumbent production
   vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
   n = 128 E-core is 22x. **Next increments:** (1) move the immutable base plan
-  into `FftPlan1D` and route supported N = 128 calls; (2) tighten the base toward
-  RustFFT after a fresh profile of the now-uninstrumented specialization;
+  into `FftPlan1D`, then admit N = 128 only if the unchanged exact comparator
+  clears; (2) tighten the base toward RustFFT after a fresh profile of the
+  now-uninstrumented specialization;
   (3) assemble N = 1024 = 8 x 128 only when the measured inner and outer
   traffic model predicts a complete-transform win.
 
@@ -809,7 +818,16 @@
   compensated `O(N^2)` oracle stays below N=4096.
 - **Driver:** `gap_audit.md#phastft-2026-08-25`, Finding 1.
 
-## ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25 — One twiddle builder [patch] — todo
+## ATLAS-APOLLO-TWIDDLE-SSOT-2026-08-25 — One twiddle builder [patch] — done 2026-08-27
+
+- **Delivered (2026-08-27):** `twiddle_table::twiddle_components` is the single
+  evaluation authority — mod-first reduction, one direct `sin_cos`, the
+  canonical association — and the stage-, arm-, and matrix-layout builders
+  delegate to it; exactly one `sin_cos` call site remains in twiddle-building
+  code (the oracle). The four-step matrix builder's association changes by at
+  most one rounding; `twiddle_accuracy_gate` passes with the full suite
+  (459/459). Layouts, caches, and kernels untouched. Integrator: Claude
+  session 5050c72a.
 
 - **Outcome:** one generic twiddle-table entry point replaces the three parallel
   builders in `twiddle_table.rs`, `radix_composite/cache.rs`, and
@@ -841,8 +859,16 @@
   threaded-four-step worker blocks (6.0 MB) — reduction needs that route's
   buffer-lifetime read (next sub-step); scratch/planes are minor, closing
   the in-place-DIT direction again from the attribution side. Integrator:
-  Claude session 5050c72a. Remaining: the reduction phase, sequenced behind
-  TWIDDLE-SSOT for the duplicate-table term.
+  Claude session 5050c72a.
+- **Reduction, first term delivered (2026-08-27):** the plan-build 16n was
+  the eagerly built inverse table; it is now lazy (`OnceLock` through the
+  global cache) and the probe's plan-build window retains 0 at every size —
+  16 KiB to 4 MiB returned per plan size for forward-only consumers.
+  Remaining: the 65536 spike's 24 x 262,144-byte threaded-four-step worker
+  blocks (lead: block count ≈ machine cores, so Moirai pool internals are
+  the suspect — possibly an upstream item) and the four-step matrix
+  representation at > `FUSE_THRESHOLD` sizes (route working set; reduce only
+  with a route redesign).
 
 - **Outcome:** Apollo's retained bytes per size are attributed to their owning
   caches (twiddle planes, four-step planes, threaded arena, scratch) and the

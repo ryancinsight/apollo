@@ -111,6 +111,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft` plans acquire inverse power-of-two twiddle tables on
+  first inverse execution instead of retaining them for forward-only use,
+  returning one 16N-byte table per plan size. Stage, composite-arm, and
+  four-step matrix builders now share one twiddle-component evaluation
+  authority without changing their storage layouts or kernel arithmetic.
+
 - [patch] Apollo's native benchmark smoke mode executes every unchanged case
   exactly once without warm-up or inferential statistics. All seven custom
   `apollo-fft` bench binaries honor the mode, and the main verification workflow

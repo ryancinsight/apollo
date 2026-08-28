@@ -273,8 +273,15 @@ impl FftPrecision for Complex<f16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::execution::kernel::direct::dft_forward;
+    use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
     use crate::application::execution::kernel::test_utils::{max_abs_err_32, max_abs_err_64};
+
+    #[derive(Clone, Copy)]
+    enum CompactTransform {
+        Forward,
+        Inverse,
+        InverseUnnormalized,
+    }
 
     fn sig64(n: usize) -> Vec<Complex64> {
         (0..n)
@@ -307,6 +314,61 @@ mod tests {
             .fold(0.0f32, f32::max)
     }
 
+    fn assert_compact_transform_matches_direct(transform: CompactTransform) {
+        let n = 96usize;
+        let input: Vec<Complex<f16>> = sig32(n)
+            .into_iter()
+            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .collect();
+        let promoted: Vec<Complex32> = input
+            .iter()
+            .map(|value| Complex32::new(value.re.to_f32(), value.im.to_f32()))
+            .collect();
+
+        let (expected, transform_scale) = match transform {
+            CompactTransform::Forward => (dft_forward(&promoted), 1.0_f32),
+            CompactTransform::Inverse => (dft_inverse(&promoted), 1.0 / n as f32),
+            CompactTransform::InverseUnnormalized => {
+                let mut expected = dft_inverse(&promoted);
+                expected.iter_mut().for_each(|value| {
+                    value.re *= n as f32;
+                    value.im *= n as f32;
+                });
+                (expected, 1.0)
+            }
+        };
+        let expected: Vec<Complex<f16>> = expected
+            .into_iter()
+            .map(|value| Complex::new(f16::from_f32(value.re), f16::from_f32(value.im)))
+            .collect();
+
+        let input_l1 = promoted
+            .iter()
+            .map(|value| value.re.abs() + value.im.abs())
+            .sum::<f32>();
+        let unit_roundoff = f16::EPSILON.to_f32() * 0.5;
+        // Each direct output has at most N accumulated terms. The two storage
+        // roundings contribute 2u_half; f32 arithmetic contributes at most N*u_f32.
+        let compute_roundoff = n as f32 * f32::EPSILON;
+        let error_bound = std::f32::consts::SQRT_2
+            * input_l1
+            * transform_scale
+            * (2.0 * unit_roundoff + compute_roundoff);
+
+        let mut actual = input;
+        match transform {
+            CompactTransform::Forward => fft_forward(&mut actual),
+            CompactTransform::Inverse => fft_inverse(&mut actual),
+            CompactTransform::InverseUnnormalized => fft_inverse_unnorm(&mut actual),
+        }
+
+        let error = max_abs_err_half(&actual, &expected);
+        assert!(
+            error <= error_bound,
+            "compact codelet error {error} exceeds derived bound {error_bound}"
+        );
+    }
+
     #[test]
     fn unified_api_forward_64_matches_direct_and_typed() {
         let n = 45usize;
@@ -332,19 +394,9 @@ mod tests {
     }
 
     #[test]
-    fn unified_api_forward_half_matches_typed() {
-        let n = 45usize;
-        let input: Vec<Complex<f16>> = sig32(n)
-            .into_iter()
-            .map(|c| Complex::new(f16::from_f32(c.re), f16::from_f32(c.im)))
-            .collect();
-
-        let mut generic = input.clone();
-        fft_forward(&mut generic);
-
-        let mut typed = input;
-        fft_forward(&mut typed);
-
-        assert!(max_abs_err_half(&generic, &typed) < 2e-3);
+    fn unified_api_fixed_compact_transforms_match_promoted_direct() {
+        assert_compact_transform_matches_direct(CompactTransform::Forward);
+        assert_compact_transform_matches_direct(CompactTransform::Inverse);
+        assert_compact_transform_matches_direct(CompactTransform::InverseUnnormalized);
     }
 }

@@ -352,7 +352,6 @@ define_pot_executors!(
 /// ZST-wired sized PoT executor helper (monomorphizes the exact LOG2).
 /// The SizedPoT<StockhamAutosort, LOG2> is constructed here for zero-cost
 /// strategy selection through the Stockham autosort path.
-#[inline]
 pub(super) fn exec_pot_forward_sized<F: MixedRadixScalar<Complex = Complex<F>>, const LOG2: u32>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
@@ -368,10 +367,9 @@ pub(super) fn exec_pot_inverse_sized<F: MixedRadixScalar<Complex = Complex<F>>, 
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
+    let tw = plan.inverse_twiddles();
     with_pot_zst!(LOG2, _s, {
-        if let Some(tw) = &plan.twiddle_inv {
-            F::pot_inplace_sized::<true, true, StockhamAutosort, LOG2>(slice, tw, _s);
-        }
+        F::pot_inplace_sized::<true, true, StockhamAutosort, LOG2>(slice, tw, _s);
     });
 }
 
@@ -382,10 +380,9 @@ pub(super) fn exec_pot_inverse_unnorm_sized<
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
+    let tw = plan.inverse_twiddles();
     with_pot_zst!(LOG2, _s, {
-        if let Some(tw) = &plan.twiddle_inv {
-            F::pot_inplace_sized::<true, false, StockhamAutosort, LOG2>(slice, tw, _s);
-        }
+        F::pot_inplace_sized::<true, false, StockhamAutosort, LOG2>(slice, tw, _s);
     });
 }
 
@@ -422,17 +419,13 @@ pub(super) fn exec_pot_inverse_generic<F: MixedRadixScalar<Complex = Complex<F>>
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(tw) = &plan.twiddle_inv {
-        F::pot_inplace::<true, true>(slice, tw);
-    }
+    F::pot_inplace::<true, true>(slice, plan.inverse_twiddles());
 }
 pub(super) fn exec_pot_inverse_unnorm_generic<F: MixedRadixScalar<Complex = Complex<F>>>(
     plan: &FftPlan1D<F>,
     slice: &mut [F::Complex],
 ) {
-    if let Some(tw) = &plan.twiddle_inv {
-        F::pot_inplace::<true, false>(slice, tw);
-    }
+    F::pot_inplace::<true, false>(slice, plan.inverse_twiddles());
 }
 
 // 5. Good-Thomas (Static or Generic)

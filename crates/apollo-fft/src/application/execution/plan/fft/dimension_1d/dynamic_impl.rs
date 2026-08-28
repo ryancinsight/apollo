@@ -34,7 +34,11 @@ pub struct FftPlan1D<F: MixedRadixScalar> {
     pub(crate) n2: usize,
     pub(crate) radices: Option<Cow<'static, [usize]>>,
     pub(crate) twiddle_fwd: Option<Arc<[F::Complex]>>,
-    pub(crate) twiddle_inv: Option<Arc<[F::Complex]>>,
+    /// Inverse table, built on the first inverse execution rather than at
+    /// construction: the retained-footprint attribution measured the eager
+    /// inverse build as a full 16n retained per plan size that forward-only
+    /// consumers never touch (`gap_audit.md#retained-attribution`).
+    pub(crate) twiddle_inv: std::sync::OnceLock<Arc<[F::Complex]>>,
 
     // Function pointers for execution routing:
     pub(crate) forward_impl: fn(&Self, &mut [F::Complex]),
@@ -53,6 +57,8 @@ impl<F: MixedRadixScalar> Clone for FftPlan1D<F> {
             radices: self.radices.clone(),
             twiddle_fwd: self.twiddle_fwd.clone(),
             twiddle_inv: self.twiddle_inv.clone(),
+            // `OnceLock: Clone` clones the initialized state, so a clone of a
+            // plan that has run an inverse keeps the table handle.
             forward_impl: self.forward_impl,
             inverse_impl: self.inverse_impl,
             inverse_unnorm_impl: self.inverse_unnorm_impl,
@@ -67,6 +73,18 @@ impl<F: MixedRadixScalar> std::fmt::Debug for FftPlan1D<F> {
 }
 
 impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
+    /// Inverse twiddle table, built through the global cache on first use.
+    ///
+    /// The first inverse execution on a plan pays one cache acquisition (a
+    /// build on the process-wide first touch of `(n, inverse)`, a map hit and
+    /// `Arc` clone thereafter); every later call reads the initialized
+    /// `OnceLock` with no synchronization beyond its acquire load.
+    #[inline]
+    pub(crate) fn inverse_twiddles(&self) -> &Arc<[F::Complex]> {
+        self.twiddle_inv
+            .get_or_init(|| F::cached_twiddle_inv(self.n))
+    }
+
     /// Create a new 1D plan.
     #[must_use]
     pub fn new(shape: Shape1D) -> Self {
@@ -77,7 +95,6 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             let log2 = n.trailing_zeros();
             PlanStrategy::PowerOfTwo {
                 twiddle_fwd: F::cached_twiddle_fwd(n),
-                twiddle_inv: F::cached_twiddle_inv(n),
                 log2,
                 pot: PhantomData,
             }
@@ -156,7 +173,8 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         let mut n2 = 0;
         let mut radices_field = None;
         let mut twiddle_fwd = None;
-        let mut twiddle_inv = None;
+        // Lazy: no strategy populates the inverse table at construction.
+        let twiddle_inv = std::sync::OnceLock::new();
 
         let mut forward_impl: fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
         let mut inverse_impl: fn(&Self, &mut [F::Complex]) = exec_identity::<F>;
@@ -262,12 +280,10 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
             }
             PlanStrategy::PowerOfTwo {
                 twiddle_fwd: fwd,
-                twiddle_inv: inv,
                 log2,
                 pot: _,
             } => {
                 twiddle_fwd = Some(fwd.clone());
-                twiddle_inv = Some(inv.clone());
                 match *log2 {
                     1 => {
                         forward_impl = exec_pot_forward_2::<F>;

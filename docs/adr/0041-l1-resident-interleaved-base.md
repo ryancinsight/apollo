@@ -9,6 +9,10 @@
   Proposed decision beside contrary evidence. This revision makes the current
   decision authoritative and separates admissible comparison timing from
   diagnostic phase instrumentation.
+- Revision 2026-08-27: records rejection of a premature production route that
+  kept the experiment's thread-local plan instead of moving ownership into
+  `FftPlan1D`. The unchanged exact comparator found repeatable unrelated-case
+  regressions, so production remains on the incumbent route.
 
 ## Context
 
@@ -131,8 +135,21 @@ is stripped, so the disassembly cannot provide symbol-level attribution; the
 const-specialized source, counter test, and instruction count jointly support
 the zero-instrumentation claim.
 
+A later direct-routing candidate did not satisfy this decision. Hosted run
+33122650730 found regressions in all four paired comparisons for generic-prime
+N = 31 (1.81-3.85%) and compact N = 96 (2.22-6.02%). Normalized instruction
+streams for the measured hot functions were unchanged while candidate `.text`
+grew by 400 bytes. This evidence is consistent with placement sensitivity, not
+a changed kernel, and does not override the comparator. The candidate also
+retained the experiment's thread-local plan, contrary to Decision 3. The route
+was therefore withdrawn while the base and its value oracles remained
+test-gated.
+
 ## Revision history
 
+- 2026-08-27: Reject the premature thread-local production route after the
+  exact benchmark comparator found repeatable unrelated-case regressions;
+  retain plan ownership and comparator clearance as production requirements.
 - 2026-08-27: Record merged Hermes PR #86 exact-count dispatch and remove the
   resolved provider-width blocker. Independent review moved resident
   capability resolution ahead of plan construction and input permutation;
