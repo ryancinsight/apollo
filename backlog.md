@@ -6,7 +6,7 @@
 - **Evidence:** standalone lock audit reports 36 first-party Git sources; local provider audit, warning-denied all-target/all-feature Clippy, and workspace Nextest 1309/1309 pass. Hosted exact-Git-lock run `33158652496` passes lock integrity, Python, and Rust workspace; benchmark run `33158651767` passes identity/regression and correctly skips timing pairs for the lock-only delta. Independent review: GREEN.
 - **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; lease: none.
 
-## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — todo
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 — Per-worker queue retention is sized by alignment padding and first-touch shape [perf] — in progress
 
 - **Evidence (apollo `gap_audit.md#retained-attribution`, exact allocation
   accounting):** starting the pool retains 24 per-worker blocks on a 24-core
@@ -35,6 +35,10 @@
   contention benches; loom coverage holds for any queue-layout change.
 - **Risk / change class:** [perf]; a queue-layout change is lock-free-adjacent
   and keeps the existing loom suite as its gate.
+- **Integrator:** Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+  **Lease:** `Cargo.lock`, this item block, `gap_audit.md` retained-attribution
+  closure, and the matching checklist section through the consumer-pin commit;
+  last update 2026-08-28.
 
 ## ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27 — Validate slice length at FftPlan1D entry [patch] — in-progress
 

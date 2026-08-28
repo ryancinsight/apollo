@@ -1,5 +1,14 @@
 # Apollo Checklist
 
+## MOIRAI-POOL-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
+
+- [ ] Advance Apollo's standalone lockfile to Moirai merge `b42ec745`.
+- [ ] Re-run the exact pool-warmup attribution and value oracles against the
+      committed provider revision.
+- [ ] Pass exact-lock provider audit, focused Nextest, warning-denied Clippy,
+      and independent lock-diff review.
+- [ ] Merge the consumer pin and record provider/consumer revisions.
+
 ## APOLLO-MOIRAI-LOCAL-QUEUE-PIN-2026-08-28 [patch] — Codex
 
 - [x] Confirm Apollo does not call the removed Moirai queue-capacity APIs.
