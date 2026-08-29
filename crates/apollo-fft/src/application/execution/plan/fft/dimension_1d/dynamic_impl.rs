@@ -222,6 +222,32 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else if let Some((n1, n2)) = crate::application::execution::kernel::mixed_radix::caches::cached_coprime_factors(n) {
             PlanStrategy::GoodThomas { n1, n2 }
         } else {
+            // Rader's algorithm is valid only for prime n: it maps the
+            // transform onto the multiplicative group modulo n, which is
+            // cyclic of order n - 1 exactly when n is prime. `rader` documents
+            // that contract and guards it with `debug_assert!(is_prime(n))` —
+            // which compiles out of release builds, so a composite length
+            // reaching this fallback produced a silently wrong result instead
+            // of failing.
+            //
+            // Non-smooth composite lengths do reach here: a length divisible
+            // by the square of a prime above the supported radix set (361 =
+            // 19^2, 841 = 29^2, 961 = 31^2, ...) is rejected by
+            // `factorize_composite` and has no coprime split, so every earlier
+            // arm declines it. Serving those needs a general Bluestein
+            // strategy or a composite path carrying Rader sub-transforms;
+            // apollo has neither today (its `bluestein` module is Rader's
+            // internal convolution, not a standalone transform), so until one
+            // exists this fails loudly at plan construction rather than
+            // returning corrupt output from a published transform.
+            assert!(
+                crate::application::execution::kernel::radix_shape::is_prime(n),
+                "apollo-fft has no correct route for length {n}: it is neither \
+                 a power of two, nor smooth over the supported radices, nor \
+                 splittable into coprime factors, and Rader's algorithm \
+                 requires a prime length. Tracked as \
+                 ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28."
+            );
             PlanStrategy::Rader
         };
 

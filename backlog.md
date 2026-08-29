@@ -1,5 +1,38 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — in progress (silent corruption stopped; correct routing still owed)
+
+- **Root cause, traced 2026-08-28 by the integrator (session 03d80d33).** The
+  strategy chain in `dimension_1d/dynamic_impl.rs` ends in an unconditional
+  `PlanStrategy::Rader` fallback. Rader's algorithm maps the transform onto the
+  multiplicative group modulo `n`, which is cyclic of order `n - 1` **only when
+  `n` is prime** — `components/rader/mod.rs` documents exactly that and guards
+  it with `debug_assert!(is_prime(n))`. A `debug_assert` compiles out of
+  release builds, so every composite length reaching that fallback returned
+  corrupt output instead of failing. That is the whole mechanism: it is a
+  precondition guarded only in debug on an input-dependent public path.
+- **Why those particular lengths:** a length divisible by the square of a prime
+  above the supported radix set (361 = 19^2, 841 = 29^2, 961 = 31^2,
+  1369 = 37^2) is rejected by `factorize_composite`, has no coprime split for
+  Good-Thomas, and matches no special case — so every earlier arm declines and
+  it lands on Rader. Multiples such as 722, 1083 and 1444 reach it through a
+  Good-Thomas split whose sub-transform is the affected square.
+- **Stopped bleeding, did not fix routing.** Plan construction now asserts
+  primality before selecting Rader, so an unroutable length fails loudly at
+  construction with a message naming this item, instead of a published
+  transform returning corrupt output. Regression tests pin both halves: 361 is
+  rejected, and 359/360/362 still round-trip. **This is a stop-gap.** The
+  lengths remain unserved.
+- **What a real fix needs** (unclaimed, and the reason this stayed filed rather
+  than being finished): apollo has no standalone Bluestein — its `bluestein`
+  module is Rader's *internal* convolution over `n - 1`, not a transform for
+  arbitrary `n`. Serving these lengths needs either a general Bluestein
+  strategy, or a composite path that carries Rader sub-transforms so
+  `361 = 19 x 19` decomposes into two prime-length stages. Both land in
+  `components/`, which is leased by `perf/apollo-base128-arith`.
+- **Do not resolve with a hand-kept list of good lengths** — that is defect
+  masking. Either the length is computed correctly or plan construction
+  rejects it.
 ## ATLAS-APOLLO-SMALL-SIZE-FALSIFIED-2026-08-28 — Two small-size hypotheses, both falsified [perf] — done 2026-08-28
 
 - **Rerouting 256/512 to the planar four-step:** measured 10 to 12% slower
@@ -19,7 +52,6 @@
   1.54, measured to the end of its arithmetic and blocked on register
   width.
 
-## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [patch] — todo
 
 - **Severity: shipped wrong answers, not a slow path.** `DctDstPlan::new(361,
   DctII).forward_into` returns a result with relative error 0.997 against the
