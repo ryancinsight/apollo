@@ -3,7 +3,8 @@ use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
 use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
 use crate::infrastructure::kernel::fast::{
-    dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
+    dct1_fast, dct2_fast, dct3_fast, dct4_fast, dst1_fast, dst2_fast, dst3_fast, dst4_fast,
+    FAST_THRESHOLD,
 };
 use leto::{Array, Array2, Array3, MnemosyneStorage, Storage, StorageMut};
 
@@ -15,9 +16,10 @@ impl DctDstPlan {
     ///
     /// # Complexity
     ///
-    /// DCT-II/III and DST-II/III: O(N log N) for N ≥ 16 (2N-point FFT fast
-    /// path), O(N²) for N < 16 (direct analytical kernel). DCT-I, DCT-IV,
-    /// DST-I, and DST-IV execute the direct O(N²) kernel at every size.
+    /// Every kind is O(N log N) for N ≥ 16 and O(N²) below it, where the
+    /// direct analytical kernel is faster than the transform it would set up.
+    /// The FFT length depends on the kind: 2N for Types II, III and IV,
+    /// 2(N−1) for DCT-I, and 2(N+1) for DST-I.
     pub fn forward(&self, signal: &[f64]) -> DctDstResult<Vec<f64>> {
         let mut output = vec![0.0_f64; self.len()];
         self.forward_into(signal, &mut output)?;
@@ -205,9 +207,10 @@ impl DctDstPlan {
     ///
     /// # Complexity
     ///
-    /// DCT-II/III and DST-II/III: O(N log N) for N ≥ 16 (2N-point FFT fast
-    /// path), O(N²) for N < 16 (direct analytical kernel). DCT-I, DCT-IV,
-    /// DST-I, and DST-IV execute the direct O(N²) kernel at every size.
+    /// Every kind is O(N log N) for N ≥ 16 and O(N²) below it, where the
+    /// direct analytical kernel is faster than the transform it would set up.
+    /// The FFT length depends on the kind: 2N for Types II, III and IV,
+    /// 2(N−1) for DCT-I, and 2(N+1) for DST-I.
     pub fn forward_into(&self, signal: &[f64], output: &mut [f64]) -> DctDstResult<()> {
         if signal.len() != self.len() || output.len() != self.len() {
             return Err(DctDstError::LengthMismatch);
@@ -220,10 +223,10 @@ impl DctDstPlan {
                 RealTransformKind::DctIII => dct3_fast(signal, output),
                 RealTransformKind::DstII => dst2_fast(signal, output),
                 RealTransformKind::DstIII => dst3_fast(signal, output),
-                RealTransformKind::DctI => dct1(signal, output),
-                RealTransformKind::DctIV => dct4(signal, output),
-                RealTransformKind::DstI => dst1(signal, output),
-                RealTransformKind::DstIV => dst4(signal, output),
+                RealTransformKind::DctI => dct1_fast(signal, output),
+                RealTransformKind::DctIV => dct4_fast(signal, output),
+                RealTransformKind::DstI => dst1_fast(signal, output),
+                RealTransformKind::DstIV => dst4_fast(signal, output),
             }
         } else {
             match self.kind() {

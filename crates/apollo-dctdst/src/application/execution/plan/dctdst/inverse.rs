@@ -3,7 +3,8 @@ use crate::domain::contracts::error::{DctDstError, DctDstResult};
 use crate::domain::metadata::kind::RealTransformKind;
 use crate::infrastructure::kernel::direct::{dct1, dct2, dct3, dct4, dst1, dst2, dst3, dst4};
 use crate::infrastructure::kernel::fast::{
-    dct2_fast, dct3_fast, dst2_fast, dst3_fast, FAST_THRESHOLD,
+    dct1_fast, dct2_fast, dct3_fast, dct4_fast, dst1_fast, dst2_fast, dst3_fast, dst4_fast,
+    FAST_THRESHOLD,
 };
 use leto::{Array, Array2, Array3, MnemosyneStorage, Storage, StorageMut};
 
@@ -227,10 +228,10 @@ impl DctDstPlan {
                 RealTransformKind::DstII => dst3_fast(signal, &mut raw),
                 RealTransformKind::DctIII => dct2_fast(signal, &mut raw),
                 RealTransformKind::DstIII => dst2_fast(signal, &mut raw),
-                RealTransformKind::DctI => dct1(signal, &mut raw),
-                RealTransformKind::DctIV => dct4(signal, &mut raw),
-                RealTransformKind::DstI => dst1(signal, &mut raw),
-                RealTransformKind::DstIV => dst4(signal, &mut raw),
+                RealTransformKind::DctI => dct1_fast(signal, &mut raw),
+                RealTransformKind::DctIV => dct4_fast(signal, &mut raw),
+                RealTransformKind::DstI => dst1_fast(signal, &mut raw),
+                RealTransformKind::DstIV => dst4_fast(signal, &mut raw),
             }
         } else {
             match self.kind() {
