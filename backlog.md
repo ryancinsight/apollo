@@ -177,7 +177,7 @@
 - **Acceptance oracle:** the census sweep reports zero wrong lengths and zero
   panics over `2..=8200`, committed as a test so the set cannot regrow.
 
-## ATLAS-APOLLO-TRANSFORM-ALGOS-2026-08-28 — CWT FFT convolution and fast DCT/DST kinds [minor] — in-progress
+## ATLAS-APOLLO-TRANSFORM-ALGOS-2026-08-28 — CWT FFT convolution and fast DCT/DST kinds [minor] — done 2026-08-29
 
 - **Outcome:** the two filed O(N²)→O(N log N) transform items land as separate
   atomic increments on `perf/apollo-transform-algorithms`:
@@ -190,8 +190,9 @@
   the constant 128 rather than by its own length, so `n = 256` came back
   doubled and `n = 512` quadrupled. `ATLAS-APOLLO-DCTDST-FAST-KINDS` is
   delivered too, once the composite-radix fix cleared its blocker.
-- **Integrator:** claude-fable session 03d80d33 subagent.
-- **Lease:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`,
+- Both children are delivered: `ATLAS-APOLLO-CWT-FFT-CONVOLUTION` (PR merged
+  2026-08-28) and `ATLAS-APOLLO-DCTDST-FAST-KINDS` (PR #197, 2026-08-29).
+- **Lease released.** Was: `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`,
   `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs`,
   `crates/apollo-wavelet/Cargo.toml`, `crates/apollo-wavelet/benches/`,
   `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`,
@@ -596,7 +597,7 @@
 - **Evidence:** `crates/apollo-sht/src/application/execution/plan/sht.rs`
   90-130; `crates/apollo-sht/src/infrastructure/kernel/quadrature.rs` 60-95.
 
-## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — review
+## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — done 2026-08-29 (PR #197)
 
 - **Delivered.** All four kinds now reach O(N log N) above `FAST_THRESHOLD`:
   DCT-I through a 2(N-1)-point FFT of the whole-sample-symmetric extension,
