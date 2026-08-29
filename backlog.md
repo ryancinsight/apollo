@@ -1,5 +1,21 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — in-progress
+
+- **Outcome:** the longitude sum in both SHT directions is computed as a DFT
+  bin over φ via `apollo-fft`, so the φ-independent `associated_legendre`
+  recurrence and normalization are evaluated once per (latitude, mode) rather
+  than `n_lon` times. The existing direct sum stays reachable as the
+  differential oracle and as the fallback for `n_lon` values `apollo-fft`
+  cannot route.
+- **Delivers** `ATLAS-APOLLO-SHT-FFT-FACTORIZATION`.
+- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Lease:** `crates/apollo-sht/src/application/execution/plan/sht/**`,
+  `crates/apollo-sht/src/infrastructure/kernel/spherical_harmonic.rs`,
+  `crates/apollo-sht/tests/**`, `crates/apollo-sht/Cargo.toml`.
+- **Tree:** `D:/atlas/worktrees/apollo-sht` on `perf/apollo-sht-factorization`.
+- **Last update:** 2026-08-29.
+
 ## ATLAS-APOLLO-BASE-PROBES-2026-08-29 — The base kernel re-probed the CPU inside its body [perf] — done 2026-08-29
 
 - **Finding** (`gap_audit.md#base-kernel-probes`): the 128-point base kernel
