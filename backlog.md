@@ -1,5 +1,24 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-TRANSFORM-ALGOS-2026-08-28 — CWT FFT convolution and fast DCT/DST kinds [minor] — in-progress
+
+- **Outcome:** the two filed O(N²)→O(N log N) transform items land as separate
+  atomic increments on `perf/apollo-transform-algorithms`:
+  `ATLAS-APOLLO-CWT-FFT-CONVOLUTION` (per-scale FFT cross-correlation in
+  `CwtPlan::transform`, direct kernel retained as the differential oracle) and,
+  if the first completes, `ATLAS-APOLLO-DCTDST-FAST-KINDS` (Makhoul
+  factorizations for DCT-I/IV and DST-I/IV).
+- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Lease:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`,
+  `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs`,
+  `crates/apollo-wavelet/Cargo.toml`, `crates/apollo-wavelet/benches/`,
+  `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`,
+  `crates/apollo-dctdst/src/infrastructure/kernel/fast.rs`, plus this entry.
+  Explicitly not leased: `.github/`, `Cargo.lock`, and everything under
+  `crates/apollo-fft/src/application/execution/kernel/components/` (peer-held
+  by `perf/apollo-base128-arith` in the main tree).
+- **Last update:** 2026-08-28.
+
 ## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
 
 - **Measured, not estimated** (`git rev-list --count origin/main..<branch>`,
