@@ -5,7 +5,7 @@
 
 #![allow(missing_docs)]
 
-use apollo_bench::{BenchmarkCase, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use apollo_stft::{FramePlan, FramedExecution};
 use apollo_stft::{StftWgpuBackend, StftWgpuPlan};
 use std::hint::black_box;
@@ -185,11 +185,13 @@ fn bench_inverse_reuse(suite: &mut BenchmarkSuite) {
     }
 }
 
-fn main() {
-    let mut suite = BenchmarkSuite::default();
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    let mode = BenchmarkMode::from_environment()?;
+    let mut suite = BenchmarkSuite::new(mode.apply(BenchmarkConfig::standard()));
     bench_forward_fft(&mut suite);
     bench_inverse_fft(&mut suite);
     bench_forward_reuse(&mut suite);
     bench_inverse_reuse(&mut suite);
     suite.emit();
+    Ok(())
 }

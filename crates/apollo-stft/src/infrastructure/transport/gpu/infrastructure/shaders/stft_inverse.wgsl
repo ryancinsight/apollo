@@ -4,13 +4,14 @@
 //   y[n] = Σ_m frame_data[m·N + (n − start_m)] / Σ_m w[n − start_m]²
 // where start_m = m·hop_len − N/2, terms outside [0, N) are skipped.
 //
-// frame_data is produced by stft_inverse_fft.wgsl (Closure XI+).
+// frame_data is produced after Hephaestus's normalized inverse FFT by the
+// STFT-domain synthesis-window kernel.
 // Formal basis: WOLA identity (Allen–Rabiner 1977, Theorem 1).
 //
 // Binding layout:
-//   @binding(0): read-only storage  — frame_data f32 values
-//   @binding(1): read_write storage — output signal f32 values
-//   @binding(2): uniform            — StftParams (16 bytes; layout matches Rust StftParams)
+//   group 0 binding 0: read-only storage  — frame_data f32 values
+//   group 0 binding 1: read_write storage — output signal f32 values
+//   group 1 binding 0: uniform            — StftParams (16 bytes)
 
 // StftParams must be 16 bytes to satisfy WGPU uniform alignment.
 // Field order matches the Rust #[repr(C)] StftParams struct byte-for-byte.
@@ -23,7 +24,7 @@ struct StftParams {
 
 @group(0) @binding(0) var<storage, read>       input_data:  array<f32>;
 @group(0) @binding(1) var<storage, read_write> output_data: array<f32>;
-@group(0) @binding(2) var<uniform>             params:      StftParams;
+@group(1) @binding(0) var<uniform>             params:      StftParams;
 
 const TAU: f32 = 6.28318530717958647692;
 
@@ -39,7 +40,7 @@ fn hann(j: u32, frame_len: u32) -> f32 {
 // Pass: weighted overlap-add reconstruction.
 //
 // Each invocation handles one output sample n ∈ [0, signal_len).
-// input_data holds frame_data produced by stft_inverse_fft.wgsl.
+// input_data holds the synthesis-windowed frame plane.
 @compute @workgroup_size(64, 1, 1)
 fn stft_inverse_ola(@builtin(global_invocation_id) gid: vec3<u32>) {
     let n: u32 = gid.x;

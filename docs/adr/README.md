@@ -11,7 +11,7 @@
 | [0003](0003-hephaestus-kernel-dispatch.md) | Hephaestus-owned GPU kernel dispatch | Accepted |
 | [0004](0004-sdft-hephaestus-dispatch.md) | SDFT typed Hephaestus dispatch | Accepted |
 | [0005](0005-sht-hephaestus-dispatch.md) | SHT dispatch through Hephaestus | Accepted |
-| [0006](0006-fft-hephaestus-dispatch.md) | Dense FFT dispatch through Hephaestus | Accepted |
+| [0006](0006-fft-hephaestus-dispatch.md) | Dense WGPU FFT ownership in Hephaestus | Accepted |
 | [0007](0007-radon-hephaestus-dispatch.md) | Radon dispatch through Hephaestus | Accepted |
 | [0008](0008-stft-hephaestus-dispatch.md) | STFT dispatch through Hephaestus | Accepted |
 | [0009](0009-nufft-hephaestus-dispatch.md) | NUFFT dispatch through Hephaestus | Accepted |
@@ -33,13 +33,10 @@
 | [0025](0025-root-verification-boundaries.md) | Root verification boundaries | Accepted |
 | [0026](0026-provider-acquisition-forwarders.md) | Provider acquisition forwarders | Accepted |
 | [0027](0027-limited-device-requirements.md) | Transform device-limit requirements | Accepted |
-| [0028](0028-fft-provider-acquisition.md) | FFT provider acquisition boundary | Accepted |
-| [0029](0029-native-f16-provider-acquisition.md) | Native-f16 FFT provider acquisition boundary | Accepted |
 | [0030](0030-cuda-fft-provider.md) | CUDA FFT through the Hephaestus provider boundary | Accepted |
 | [0031](0031-validation-suite-tree.md) | Validation suite concern tree | Accepted |
 | [0032](0032-direct-leto-output-construction.md) | Direct Leto output construction | Accepted |
 | [0033](0033-remove-unused-cpu-marker-aliases.md) | Remove unused CPU marker aliases | Accepted |
-| [0034](0034-gpu-dispatch-verification-tree.md) | Dense FFT dispatch verification tree | Accepted |
 | [0035](0035-remove-radix-policy-wrapper.md) | Remove the Apollo radix-policy wrapper | Accepted |
 | [0036](0036-native-benchmark-regression-oracle.md) | Native benchmark regression oracle | Accepted |
 | [0037](0037-generic-transform-execution-scaffold.md) | Generic transform execution scaffold in apollo-fft | Accepted |

@@ -182,17 +182,19 @@ fn stft_wgpu_inverse_non_pot() {
             .map(|&value| f64::from(value))
             .collect::<Vec<_>>(),
     );
-    let cpu_spectrum = cpu_plan.forward(&signal_f64).expect("CPU Chirp-Z forward");
+    let cpu_spectrum = cpu_plan
+        .forward(&signal_f64)
+        .expect("CPU non-power-of-two forward");
     let spectrum = cpu_spectrum
         .iter()
         .map(|value| Complex32::new(value.re as f32, value.im as f32))
         .collect::<Vec<_>>();
     let actual = backend
         .execute_inverse(&plan, &spectrum, signal.len())
-        .expect("GPU Chirp-Z inverse");
+        .expect("GPU non-power-of-two inverse");
     let expected = cpu_plan
         .inverse(&cpu_spectrum, signal.len())
-        .expect("CPU Chirp-Z inverse");
+        .expect("CPU non-power-of-two inverse");
 
     assert_eq!(actual.len(), expected.size());
     // This preserves the established f32 inverse CPU-differential bound.
@@ -200,7 +202,7 @@ fn stft_wgpu_inverse_non_pot() {
     for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
         assert!(
             (actual - *expected as f32).abs() < TOL,
-            "Chirp-Z inverse mismatch at {index}: actual={actual:?}, expected={expected:?}"
+            "non-power-of-two inverse mismatch at {index}: actual={actual:?}, expected={expected:?}"
         );
     }
 }
@@ -253,7 +255,7 @@ fn stft_wgpu_inverse_large_frame() {
 }
 
 #[test]
-fn stft_wgpu_inverse_chirpz_400() {
+fn stft_wgpu_inverse_non_power_of_two_400() {
     let Some(backend) = backend() else {
         return;
     };
@@ -281,7 +283,7 @@ fn stft_wgpu_inverse_chirpz_400() {
 
     let recovered = backend
         .execute_inverse(&plan, &spectrum_f32, SIGNAL_LEN)
-        .expect("GPU inverse Chirp-Z");
+        .expect("GPU non-power-of-two inverse");
 
     assert_eq!(recovered.len(), SIGNAL_LEN);
 

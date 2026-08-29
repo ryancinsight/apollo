@@ -67,7 +67,7 @@ fn stft_wgpu_forward_non_pot() {
     let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let actual = backend
         .execute_forward(&plan, &signal)
-        .expect("GPU Chirp-Z forward");
+        .expect("GPU non-power-of-two forward");
     let cpu_plan = crate::StftPlan::new(6, 3).expect("CPU plan");
     let expected = cpu_plan
         .forward(&Array1::from(
@@ -76,7 +76,7 @@ fn stft_wgpu_forward_non_pot() {
                 .map(|&value| f64::from(value))
                 .collect::<Vec<_>>(),
         ))
-        .expect("CPU Chirp-Z forward");
+        .expect("CPU non-power-of-two forward");
 
     assert_eq!(actual.len(), expected.size());
     // This preserves the established f32 CPU-differential bound for small frames.
@@ -85,7 +85,7 @@ fn stft_wgpu_forward_non_pot() {
         assert!(
             (actual.re - expected.re as f32).abs() < TOL
                 && (actual.im - expected.im as f32).abs() < TOL,
-            "Chirp-Z forward mismatch at {index}: actual={actual:?}, expected={expected:?}"
+            "non-power-of-two forward mismatch at {index}: actual={actual:?}, expected={expected:?}"
         );
     }
 }
@@ -139,7 +139,7 @@ fn stft_wgpu_forward_large_frame() {
 }
 
 #[test]
-fn stft_wgpu_forward_chirpz_400() {
+fn stft_wgpu_forward_non_power_of_two_400() {
     let Some(backend) = backend() else {
         return;
     };
@@ -159,7 +159,7 @@ fn stft_wgpu_forward_chirpz_400() {
     let gpu_plan = StftWgpuPlan::new(FramePlan::new(FRAME_LEN, HOP_LEN));
     let gpu_out = backend
         .execute_forward(&gpu_plan, &signal_f32)
-        .expect("GPU forward Chirp-Z");
+        .expect("GPU non-power-of-two forward");
 
     let cpu_plan = StftPlan::new(FRAME_LEN, HOP_LEN).expect("CPU plan");
     let cpu_out = cpu_plan.forward(&signal_f64).expect("CPU forward STFT");
@@ -184,6 +184,6 @@ fn stft_wgpu_forward_chirpz_400() {
 
     assert!(
         max_err < TOL,
-        "max Chirp-Z forward error {max_err:.2e} exceeds tolerance {TOL:.2e}"
+        "maximum non-power-of-two forward error {max_err:.2e} exceeds tolerance {TOL:.2e}"
     );
 }

@@ -3,8 +3,29 @@
 use crate::infrastructure::transport::gpu::StftWgpuPlan;
 use eunomia::Complex32;
 
+use super::oracle::{
+    forward, frame_count as reference_frame_count, inverse, operation_bound, spectrum,
+};
 use super::support::backend;
-use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution};
+use crate::infrastructure::transport::gpu::infrastructure::buffers::StftGpuBuffers;
+use crate::infrastructure::transport::gpu::{FramePlan, FramedExecution, StftWgpuBackend};
+
+fn host_storage_identity(buffers: &StftGpuBuffers) -> [(*const (), usize); 3] {
+    [
+        (
+            buffers.forward_host.as_ptr().cast::<()>(),
+            buffers.forward_host.capacity(),
+        ),
+        (
+            buffers.spectrum_host.as_ptr().cast::<()>(),
+            buffers.spectrum_host.capacity(),
+        ),
+        (
+            buffers.inverse_host.as_ptr().cast::<()>(),
+            buffers.inverse_host.capacity(),
+        ),
+    ]
+}
 
 #[test]
 fn stft_wgpu_reusable_buffers() {
@@ -106,7 +127,7 @@ fn stft_wgpu_non_pot_structural() {
     let plan = StftWgpuPlan::new(FramePlan::new(6, 3));
     let output = backend
         .execute_forward(&plan, &signal)
-        .expect("GPU Chirp-Z structural forward");
+        .expect("selected-axis non-power-of-two forward");
     let frame_count = 1 + signal.len().div_ceil(plan.payload().hop_len());
     assert_eq!(output.len(), frame_count * plan.payload().frame_len());
     assert_eq!(output, vec![Complex32::new(0.0, 0.0); output.len()]);
@@ -232,4 +253,121 @@ fn stft_wgpu_inverse_buffers_400() {
             err
         );
     }
+}
+
+fn assert_forward_matches_direct(
+    actual: &[Complex32],
+    signal: &[f32],
+    frame_len: usize,
+    hop_len: usize,
+) {
+    let expected = forward(signal, frame_len, hop_len);
+    let scale = signal.iter().map(|value| f64::from(value.abs())).sum();
+    let bound = operation_bound(frame_len, scale);
+    assert_eq!(actual.len(), expected.len());
+    for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+        let error = (f64::from(actual.re) - expected.re).hypot(f64::from(actual.im) - expected.im);
+        assert!(
+            error <= bound,
+            "forward bin {index}: error {error:.3e} exceeds {bound:.3e}"
+        );
+    }
+}
+
+fn assert_inverse_matches_direct(
+    actual: &[f32],
+    input: &[Complex32],
+    signal_len: usize,
+    frame_len: usize,
+    hop_len: usize,
+) {
+    let expected = inverse(input, signal_len, frame_len, hop_len);
+    let scale = input
+        .iter()
+        .map(|value| f64::from(value.re).hypot(f64::from(value.im)))
+        .sum();
+    let bound = operation_bound(frame_len, scale);
+    assert_eq!(actual.len(), expected.len());
+    for (sample, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+        let error = (f64::from(*actual) - expected).abs();
+        assert!(
+            error <= bound,
+            "inverse sample {sample}: error {error:.3e} exceeds {bound:.3e}"
+        );
+    }
+}
+
+fn assert_two_input_reuse(
+    backend: &StftWgpuBackend,
+    frame_len: usize,
+    hop_len: usize,
+    signal_len: usize,
+) {
+    let plan = StftWgpuPlan::new(FramePlan::new(frame_len, hop_len));
+    let mut buffers = backend.make_buffers(&plan, signal_len).expect("buffers");
+    let retained_host_storage = host_storage_identity(&buffers);
+    let first_signal = (0..signal_len)
+        .map(|index| (index as f32 * 0.23).sin() - 0.01 * index as f32)
+        .collect::<Vec<_>>();
+    let second_signal = (0..signal_len)
+        .map(|index| (index as f32 * 0.41).cos() + 0.02 * index as f32)
+        .collect::<Vec<_>>();
+    backend
+        .execute_forward_with_buffers(&plan, &first_signal, &mut buffers)
+        .expect("first forward");
+    assert_forward_matches_direct(buffers.fwd_output(), &first_signal, frame_len, hop_len);
+    let first_forward = buffers.fwd_output().to_vec();
+    backend
+        .execute_forward_with_buffers(&plan, &second_signal, &mut buffers)
+        .expect("second forward");
+    assert_forward_matches_direct(buffers.fwd_output(), &second_signal, frame_len, hop_len);
+    assert_ne!(
+        buffers.fwd_output(),
+        first_forward,
+        "second input reused stale output"
+    );
+
+    let frames = reference_frame_count(signal_len, hop_len);
+    let first_spectrum = spectrum(frames, frame_len, 1);
+    let second_spectrum = spectrum(frames, frame_len, 4);
+    backend
+        .execute_inverse_with_buffers(&plan, &first_spectrum, signal_len, &mut buffers)
+        .expect("first inverse");
+    assert_inverse_matches_direct(
+        buffers.inv_output(),
+        &first_spectrum,
+        signal_len,
+        frame_len,
+        hop_len,
+    );
+    let first_inverse = buffers.inv_output().to_vec();
+    backend
+        .execute_inverse_with_buffers(&plan, &second_spectrum, signal_len, &mut buffers)
+        .expect("second inverse");
+    assert_inverse_matches_direct(
+        buffers.inv_output(),
+        &second_spectrum,
+        signal_len,
+        frame_len,
+        hop_len,
+    );
+    assert_ne!(
+        buffers.inv_output(),
+        first_inverse,
+        "second spectrum reused stale output"
+    );
+    assert_eq!(
+        host_storage_identity(&buffers),
+        retained_host_storage,
+        "repeated dispatch replaced or resized retained host workspace"
+    );
+}
+
+#[test]
+fn retained_selected_axis_buffers_replace_every_input() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    assert_two_input_reuse(&backend, 8, 4, 17);
+    assert_two_input_reuse(&backend, 6, 3, 14);
 }

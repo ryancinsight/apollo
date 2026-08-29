@@ -1,3 +1,98 @@
+## The small-size split gathered once per level (2026-08-28) <a id="flat-base-split"></a>
+
+n = 512 was the worst size on the ladder, 1.83 against RustFFT where 1024
+sat at 1.22. The route decimates down to the 128-point base, and it did so
+by recursion: 512 halved into two 256s, each of which halved again. Every
+level gathered, so 512 paid three gathers and two nested scratch
+acquisitions.
+
+`2^d` subsequences at stride `2^d` are exactly what `d` levels of halving
+produce, so one gather covers every level. Subsequence `b` starts at offset
+`rev(b)` over `d` bits — bit reversal being what repeated even/odd splitting
+does to the block index. The combining stages then run over contiguous
+blocks, all but the last in place in scratch, the last writing `data` so no
+pass exists only to copy the result back.
+
+**Pinned, three clean runs, controls matching history:**
+
+| n | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| 512 | 1907.4 ns | **1714.4 / 1709.3 / 1714.7** | 1.83 -> **1.63 / 1.62 / 1.64** |
+| 256 | 730.1 | **717.8 / 719.1 / 711.4** | 1.77 -> **1.73** |
+| 128 | 277.3 | 281.5 / 281.5 / 280.8 | 1.54 -> **1.54 / 1.56** |
+| 64 | 131.4 | 130.6 / 131.6 | 1.57 -> 1.57 |
+
+**n = 128 did not pay for it, and that is the point.** This gain was found
+once before and given up: the [strided base source](#strided-base-source)
+reached 1712.6 ns at 512 — within 2 ns of what this reaches — but it bought
+that by teaching the base kernel a compile-time source mode, which cost the
+in-place path 5% at n = 128, the most common of the three sizes and the base
+for the other two. The record closed by saying the gain would need "the
+strided source in a separate kernel struct", and judged that too much for
+one size.
+
+It needed neither. The gather was never the thing to change: the *number of
+gathers* was. Flattening the recursion is a change to the split, and the
+kernel it calls is untouched — byte-identical, so n = 128 cannot move.
+
+n = 256 was already flat, one gather and one combine, so it gains only what
+the shared combining helpers and the removed recursion give it: about 2%.
+
+## The sink's permutation is cheaper on the write side (2026-08-28) <a id="sink-permutation"></a>
+
+[Decimating stage set two in frequency](#dif-stage-set) moved the route's
+bit-reversal into the sink, and the sink got dearer for it — the split
+route's combine most of all. What was not separated was *which* part of the
+sink's work the increase belonged to: the reversed read, or the fact that
+the combine reads two planes where the square route's sink reads one.
+
+Three variants of the combine, pinned, TSC per call. The middle one is
+incorrect and exists only to bound the question:
+
+| variant | n = 2048 | n = 8192 |
+| --- | --- | --- |
+| reversed read (as merged) | 5504.6 | 21281.1 |
+| **no permutation at all** (wrong results, floor) | 3988.3 | 15014.6 |
+| reversed write | **4869.7** | **18195.7** |
+
+**The two-plane read is not the cause.** The unpermuted floor, 3988 and
+15015, sits within 9% of what the combine cost *before* the stage set
+changed at all — 4361 and 15086 — and that earlier version already read two
+planes. Essentially the whole increase is the permutation.
+
+**And the permutation is 40% cheaper carried on the store side.** Plane row
+`p` holds output row `rev(p)`, bit reversal being an involution, so the loop
+can walk the planes in order and scatter its writes instead of gathering its
+reads. That turns four scattered read streams into four sequential ones and
+two sequential writes into two scattered ones — three permuted streams
+instead of four, and the three that remain are stores, which retire into a
+buffer rather than stalling the pipeline the way a load does.
+
+Applied to both sinks, since the square route's reinterleave had the same
+shape:
+
+| | before | after |
+| --- | --- | --- |
+| combine, n = 2048 | 5504.6 | **5051.8** |
+| combine, n = 8192 | 21281.1 | **18378.8** |
+| reinterleave, n = 4096 | 4294.3 | **3894.6** |
+| reinterleave, n = 16384 | 16624.7 | **15139.5** |
+
+End to end, pinned, on a run whose in-run RustFFT control matches history
+within 3%:
+
+| n | vs RustFFT before | vs RustFFT after |
+| --- | --- | --- |
+| 1024 | 1.22 | **1.20** |
+| 2048 | 1.27 | **1.24** |
+| 4096 | 1.06 | 1.06 |
+| 8192 | 1.09 | **1.08** |
+| 16384 | 0.97 | **0.93** |
+
+Half the permutation's cost is still there, and it is not obviously
+removable: something has to carry the reversal, and the store side is the
+cheaper of the two places to put it.
+
 ## Apollo is faster than RustFFT at n = 16384 (2026-08-28) <a id="dif-stage-set"></a>
 
 The [pass attribution](#planar-pass-attribution) found one pass whose entire

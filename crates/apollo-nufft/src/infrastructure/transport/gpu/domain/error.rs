@@ -12,9 +12,6 @@ pub enum NufftWgpuError {
     /// Provider acquisition, allocation, dispatch, or transfer failed.
     #[error(transparent)]
     Provider(#[from] HephaestusError),
-    /// Composed dense-FFT stream construction or encoding failed.
-    #[error(transparent)]
-    Fft(#[from] apollo_fft::ApolloError),
     /// Plan parameters are invalid for WGPU execution.
     #[error("invalid NUFFT WGPU plan: reason={message}")]
     InvalidPlan {

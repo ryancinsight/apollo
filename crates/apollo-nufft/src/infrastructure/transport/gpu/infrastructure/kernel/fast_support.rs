@@ -1,12 +1,12 @@
 //! Shared typed-buffer preparation and transfer operations for fast NUFFT dispatch.
 
-use apollo_fft::GpuFft3d;
 use eunomia::Complex32;
-use hephaestus_core::{Binding, ComputeDevice, DeviceBuffer, DispatchGrid};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, DispatchGrid};
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 
 use super::{
     buffers::{NufftGpuBuffers1D, NufftGpuBuffers3D},
+    configuration::{FastConfiguration1D, FastConfiguration3D},
     descriptors::{FastNufftParams, FastNufftParams3D, Position3Pod, WORKGROUP_SIZE},
 };
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -14,32 +14,12 @@ use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, Nufft
 #[cfg(any(test, feature = "diagnostics"))]
 use super::buffers::NufftGridSnapshot;
 
-/// One-dimensional Kaiser--Bessel parameters and deconvolution factors.
-#[derive(Clone, Copy)]
-pub(crate) struct KaiserBesselOne<'a> {
-    pub(crate) kernel_width: usize,
-    pub(crate) length: f32,
-    pub(crate) beta: f32,
-    pub(crate) i0_beta: f32,
-    pub(crate) deconvolution: &'a [f32],
-}
-
-/// Three-dimensional Kaiser--Bessel parameters and deconvolution factors.
-#[derive(Clone, Copy)]
-pub(crate) struct KaiserBesselThree<'a> {
-    pub(crate) kernel_width: usize,
-    pub(crate) lengths: (f32, f32, f32),
-    pub(crate) beta: f32,
-    pub(crate) i0_beta: f32,
-    pub(crate) deconvolution: &'a [f32],
-}
-
 impl FastNufftParams {
     pub(super) fn for_grid(
         n: usize,
         m: usize,
         sample_count: usize,
-        configuration: KaiserBesselOne<'_>,
+        configuration: &FastConfiguration1D,
     ) -> NufftWgpuResult<Self> {
         Ok(Self {
             n: dimension(n, "mode count")?,
@@ -59,7 +39,7 @@ impl FastNufftParams3D {
         shape: (usize, usize, usize),
         oversampled: (usize, usize, usize),
         sample_count: usize,
-        configuration: KaiserBesselThree<'_>,
+        configuration: &FastConfiguration3D,
     ) -> NufftWgpuResult<Self> {
         Ok(Self {
             nx: dimension(shape.0, "x mode count")?,
@@ -78,36 +58,6 @@ impl FastNufftParams3D {
             padding: [0.0; 3],
         })
     }
-}
-
-pub(super) fn one_bindings<'a>(
-    buffers: &'a NufftGpuBuffers1D,
-    coefficients: &'a WgpuBuffer<Complex32>,
-) -> [Binding<'a, WgpuDevice>; 7] {
-    [
-        Binding::read(&buffers.position_buffer),
-        Binding::read(&buffers.value_buffer),
-        Binding::read_write(&buffers.real_grid),
-        Binding::read_write(&buffers.imaginary_grid),
-        Binding::read(&buffers.deconv_buffer),
-        Binding::read_write(&buffers.output_buffer),
-        Binding::read(coefficients),
-    ]
-}
-
-pub(super) fn three_bindings<'a>(
-    buffers: &'a NufftGpuBuffers3D,
-    coefficients: &'a WgpuBuffer<Complex32>,
-) -> [Binding<'a, WgpuDevice>; 7] {
-    [
-        Binding::read(&buffers.position_buffer),
-        Binding::read(&buffers.value_buffer),
-        Binding::read_write(&buffers.real_grid),
-        Binding::read_write(&buffers.imaginary_grid),
-        Binding::read(&buffers.deconv_buffer),
-        Binding::read_write(&buffers.output_buffer),
-        Binding::read(coefficients),
-    ]
 }
 
 pub(super) fn write_one_type1_buffers(
@@ -136,51 +86,37 @@ pub(super) fn write_three_type1_buffers(
     Ok(())
 }
 
-pub(super) fn positions_to_complex(positions: &[f32]) -> Vec<Complex32> {
-    positions
-        .iter()
-        .copied()
-        .map(|value| Complex32::new(value, 0.0))
-        .collect()
+pub(super) fn copy_positions_as_complex(output: &mut Vec<Complex32>, positions: &[f32]) {
+    output.clear();
+    output.extend(
+        positions
+            .iter()
+            .copied()
+            .map(|value| Complex32::new(value, 0.0)),
+    );
 }
 
-pub(super) fn positions_to_pod(positions: &[(f32, f32, f32)]) -> Vec<Position3Pod> {
-    positions
-        .iter()
-        .map(|&(x, y, z)| Position3Pod {
-            x,
-            y,
-            z,
-            padding: 0.0,
-        })
-        .collect()
+pub(super) fn copy_positions_as_pod(output: &mut Vec<Position3Pod>, positions: &[(f32, f32, f32)]) {
+    output.clear();
+    output.extend(positions.iter().map(|&(x, y, z)| Position3Pod {
+        x,
+        y,
+        z,
+        padding: 0.0,
+    }));
 }
 
-pub(super) fn real_to_complex(values: &[f32], scale: f32) -> Vec<Complex32> {
-    values
-        .iter()
-        .copied()
-        .map(|value| Complex32::new(value * scale, 0.0))
-        .collect()
+pub(super) fn copy_real_as_complex(output: &mut Vec<Complex32>, values: &[f32], scale: f32) {
+    output.clear();
+    output.extend(
+        values
+            .iter()
+            .copied()
+            .map(|value| Complex32::new(value * scale, 0.0)),
+    );
 }
 
-pub(super) fn fft_one(device: &WgpuDevice, m: usize) -> NufftWgpuResult<GpuFft3d> {
-    GpuFft3d::new(device.clone(), m, 1, 1).map_err(|_| NufftWgpuError::InvalidPlan {
-        message: "oversampled FFT plan is invalid for provider execution",
-    })
-}
-
-pub(super) fn fft_three(
-    device: &WgpuDevice,
-    oversampled: (usize, usize, usize),
-) -> NufftWgpuResult<GpuFft3d> {
-    GpuFft3d::new(device.clone(), oversampled.0, oversampled.1, oversampled.2).map_err(|_| {
-        NufftWgpuError::InvalidPlan {
-            message: "oversampled 3D FFT plan is invalid for provider execution",
-        }
-    })
-}
-
+#[cfg(any(test, feature = "diagnostics"))]
 pub(super) fn product(shape: (usize, usize, usize)) -> NufftWgpuResult<usize> {
     shape
         .0
@@ -198,21 +134,19 @@ pub(super) fn grid(elements: usize) -> NufftWgpuResult<DispatchGrid> {
     )?)
 }
 
-pub(super) fn download_prefix(
+pub(super) fn download(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<Complex32>,
-    len: usize,
-) -> NufftWgpuResult<Vec<Complex32>> {
-    if len > buffer.len() {
+    output: &mut [Complex32],
+) -> NufftWgpuResult<()> {
+    if output.len() != buffer.len() {
         return Err(NufftWgpuError::InputLengthMismatch {
             expected: buffer.len(),
-            actual: len,
+            actual: output.len(),
         });
     }
-    let mut values = vec![Complex32::new(0.0, 0.0); buffer.len()];
-    device.download(buffer, &mut values)?;
-    values.truncate(len);
-    Ok(values)
+    device.download(buffer, output)?;
+    Ok(())
 }
 
 #[cfg(any(test, feature = "diagnostics"))]
@@ -259,4 +193,68 @@ fn snapshot(
 
 fn dimension(value: usize, name: &'static str) -> NufftWgpuResult<u32> {
     u32::try_from(value).map_err(|_| NufftWgpuError::InvalidPlan { message: name })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{copy_positions_as_complex, copy_positions_as_pod, copy_real_as_complex};
+    use crate::infrastructure::transport::gpu::verification::count_allocations;
+    use eunomia::Complex32;
+
+    #[test]
+    fn retained_host_conversions_allocate_nothing() {
+        let mut one_positions = Vec::with_capacity(4);
+        copy_positions_as_complex(&mut one_positions, &[0.0, 0.25, 0.5, 0.75]);
+        let one_pointer = one_positions.as_ptr();
+        let one_capacity = one_positions.capacity();
+
+        let mut three_positions = Vec::with_capacity(3);
+        copy_positions_as_pod(
+            &mut three_positions,
+            &[(0.0, 0.25, 0.5), (0.75, 1.0, 1.25), (1.5, 1.75, 2.0)],
+        );
+        let three_pointer = three_positions.as_ptr();
+        let three_capacity = three_positions.capacity();
+
+        let mut deconvolution = Vec::with_capacity(4);
+        copy_real_as_complex(&mut deconvolution, &[1.0, 2.0, 3.0, 4.0], 1.0);
+        let deconvolution_pointer = deconvolution.as_ptr();
+        let deconvolution_capacity = deconvolution.capacity();
+
+        let ((), allocations) = count_allocations(|| {
+            copy_positions_as_complex(&mut one_positions, &[0.125, 0.625]);
+            copy_positions_as_pod(
+                &mut three_positions,
+                &[(0.125, 0.375, 0.625), (0.875, 1.125, 1.375)],
+            );
+            copy_real_as_complex(&mut deconvolution, &[1.5, 2.5, 3.5], 2.0);
+        });
+
+        assert_eq!(allocations, 0, "retained host conversion allocated");
+        assert_eq!(
+            one_positions,
+            [Complex32::new(0.125, 0.0), Complex32::new(0.625, 0.0)]
+        );
+        assert_eq!(three_positions.len(), 2);
+        assert_eq!(three_positions[0].x, 0.125);
+        assert_eq!(three_positions[0].y, 0.375);
+        assert_eq!(three_positions[0].z, 0.625);
+        assert_eq!(three_positions[1].x, 0.875);
+        assert_eq!(three_positions[1].y, 1.125);
+        assert_eq!(three_positions[1].z, 1.375);
+        assert_eq!(
+            deconvolution,
+            [
+                Complex32::new(3.0, 0.0),
+                Complex32::new(5.0, 0.0),
+                Complex32::new(7.0, 0.0)
+            ]
+        );
+        assert_eq!(one_positions.as_ptr(), one_pointer);
+        assert_eq!(one_positions.capacity(), one_capacity);
+        assert_eq!(three_positions.as_ptr(), three_pointer);
+        assert_eq!(three_positions.capacity(), three_capacity);
+        assert_eq!(deconvolution.as_ptr(), deconvolution_pointer);
+        assert_eq!(deconvolution.capacity(), deconvolution_capacity);
+    }
 }

@@ -345,7 +345,7 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
     // The base-128 route serves n = 128, 256, and 512 (log2n 7, 8, 9 in
     // `FftPlan1D::new`), so the IDFT scale is 1/n and not the route's base:
     // the constant 128 left n = 256 doubled and n = 512 quadrupled.
-    F::normalize(slice, slice.len());
+    F::normalize(slice, plan.len());
 }
 
 pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(

@@ -12,7 +12,13 @@ mod inverse;
 #[cfg(test)]
 mod metadata;
 #[cfg(test)]
+mod oracle;
+#[cfg(test)]
+mod rejection;
+#[cfg(test)]
 mod reusable;
+#[cfg(test)]
+mod selected_axis;
 #[cfg(test)]
 mod support;
 #[cfg(test)]

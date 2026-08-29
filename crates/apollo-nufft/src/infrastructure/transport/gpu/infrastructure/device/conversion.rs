@@ -1,27 +1,9 @@
-use crate::infrastructure::kernel::kaiser_bessel::{fft_signed_index, i0, kb_kernel_ft};
-use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::NufftComplexStorage;
 use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use leto::Array3;
 use std::borrow::Cow;
-pub(crate) struct Fast1DMetadata {
-    pub(crate) oversampled_len: usize,
-    pub(crate) beta: f64,
-    pub(crate) i0_beta: f64,
-    pub(crate) deconv: Vec<f32>,
-}
-
-pub(crate) struct Fast3DMetadata {
-    pub(crate) mx: usize,
-    pub(crate) my: usize,
-    pub(crate) mz: usize,
-    pub(crate) beta: f64,
-    pub(crate) i0_beta: f64,
-    pub(crate) deconv_xyz: Vec<f32>,
-}
-
 pub(crate) fn validate_pair_lengths(expected: usize, actual: usize) -> NufftWgpuResult<()> {
     if expected != actual {
         return Err(NufftWgpuError::InputLengthMismatch { expected, actual });
@@ -68,6 +50,12 @@ pub(crate) fn write_typed_output<T: NufftComplexStorage>(source: &[Complex64], t
     }
 }
 
+pub(crate) fn write_complex_output(source: &[Complex32], target: &mut [Complex64]) {
+    for (slot, value) in target.iter_mut().zip(source.iter().copied()) {
+        *slot = Complex64::new(value.re as f64, value.im as f64);
+    }
+}
+
 pub(crate) fn validate_usize_to_u32(value: usize) -> NufftWgpuResult<()> {
     if value > u32::MAX as usize {
         return Err(NufftWgpuError::InvalidPlan {
@@ -75,149 +63,6 @@ pub(crate) fn validate_usize_to_u32(value: usize) -> NufftWgpuResult<()> {
         });
     }
     Ok(())
-}
-
-pub(crate) fn validate_fast_1d_plan(plan: &NufftWgpuPlan1D) -> NufftWgpuResult<()> {
-    if plan.oversampling() < 2 {
-        return Err(NufftWgpuError::InvalidPlan {
-            message: "fast 1D NUFFT oversampling factor must be >= 2",
-        });
-    }
-    if plan.kernel_width() < 2 {
-        return Err(NufftWgpuError::InvalidPlan {
-            message: "fast 1D NUFFT kernel width must be >= 2",
-        });
-    }
-    validate_usize_to_u32(plan.domain().n)?;
-    let Some(oversampled_len) = plan.domain().n.checked_mul(plan.oversampling()) else {
-        return Err(NufftWgpuError::InvalidPlan {
-            message: "fast 1D NUFFT oversampled length overflow",
-        });
-    };
-    validate_usize_to_u32(oversampled_len)
-}
-
-pub(crate) fn fast_1d_metadata(plan: &NufftWgpuPlan1D) -> NufftWgpuResult<Fast1DMetadata> {
-    validate_fast_1d_plan(plan)?;
-    let oversampled_len =
-        plan.domain()
-            .n
-            .checked_mul(plan.oversampling())
-            .ok_or(NufftWgpuError::InvalidPlan {
-                message: "fast 1D NUFFT oversampled length overflow",
-            })?;
-    let beta = std::f64::consts::PI
-        * (1.0 - 1.0 / (2.0 * plan.oversampling() as f64))
-        * (2 * plan.kernel_width()) as f64;
-    let i0_beta = i0(beta);
-    let deconv = (0..plan.domain().n)
-        .map(|k| {
-            let xi = fft_signed_index(k, plan.domain().n) as f64 / oversampled_len as f64;
-            (1.0 / kb_kernel_ft(xi, plan.kernel_width(), beta, i0_beta)) as f32
-        })
-        .collect();
-    Ok(Fast1DMetadata {
-        oversampled_len,
-        beta,
-        i0_beta,
-        deconv,
-    })
-}
-
-pub(crate) fn fast_3d_metadata(plan: &NufftWgpuPlan3D) -> NufftWgpuResult<Fast3DMetadata> {
-    let grid = plan.grid();
-    let sigma = plan.oversampling();
-    let w = plan.kernel_width();
-    if sigma < 2 {
-        return Err(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT oversampling factor must be >= 2",
-        });
-    }
-    if w < 2 {
-        return Err(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT kernel width must be >= 2",
-        });
-    }
-    let mx_raw = grid
-        .nx
-        .checked_mul(sigma)
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT mx overflow",
-        })?
-        .max(2 * w + 1);
-    let my_raw = grid
-        .ny
-        .checked_mul(sigma)
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT my overflow",
-        })?
-        .max(2 * w + 1);
-    let mz_raw = grid
-        .nz
-        .checked_mul(sigma)
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT mz overflow",
-        })?
-        .max(2 * w + 1);
-    let mx = mx_raw
-        .checked_next_power_of_two()
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT mx radix-2 length overflow",
-        })?;
-    let my = my_raw
-        .checked_next_power_of_two()
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT my radix-2 length overflow",
-        })?;
-    let mz = mz_raw
-        .checked_next_power_of_two()
-        .ok_or(NufftWgpuError::InvalidPlan {
-            message: "fast 3D NUFFT mz radix-2 length overflow",
-        })?;
-    validate_usize_to_u32(mx)?;
-    validate_usize_to_u32(my)?;
-    validate_usize_to_u32(mz)?;
-    validate_usize_to_u32(
-        mx.checked_mul(my)
-            .and_then(|v| v.checked_mul(mz))
-            .unwrap_or(usize::MAX),
-    )?;
-
-    let beta = std::f64::consts::PI * (1.0 - 1.0 / (2.0 * sigma as f64)) * (2 * w) as f64;
-    let i0_beta = i0(beta);
-
-    let deconv_x: Vec<f32> = (0..grid.nx)
-        .map(|k| {
-            let xi = fft_signed_index(k, grid.nx) as f64 / mx as f64;
-            (1.0 / kb_kernel_ft(xi, w, beta, i0_beta)) as f32
-        })
-        .collect();
-    let deconv_y: Vec<f32> = (0..grid.ny)
-        .map(|k| {
-            let xi = fft_signed_index(k, grid.ny) as f64 / my as f64;
-            (1.0 / kb_kernel_ft(xi, w, beta, i0_beta)) as f32
-        })
-        .collect();
-    let deconv_z: Vec<f32> = (0..grid.nz)
-        .map(|k| {
-            let xi = fft_signed_index(k, grid.nz) as f64 / mz as f64;
-            (1.0 / kb_kernel_ft(xi, w, beta, i0_beta)) as f32
-        })
-        .collect();
-
-    let mut deconv_xyz = Vec::with_capacity(grid.nx + grid.ny + grid.nz);
-    deconv_xyz.extend_from_slice(&deconv_x);
-    deconv_xyz.extend_from_slice(&deconv_y);
-    deconv_xyz.extend_from_slice(&deconv_z);
-
-    Ok(Fast3DMetadata {
-        mx,
-        my,
-        mz,
-        beta,
-        i0_beta,
-        deconv_xyz,
-    })
 }
 
 pub(crate) fn positions3_from_leto_view(

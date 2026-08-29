@@ -6,33 +6,36 @@ frames and applies a windowed FFT to each, producing a time-frequency representa
 ## `StftPlan`
 
 ```rust,ignore
-use apollo_stft::{StftPlan, stft, istft};
+use apollo_stft::StftPlan;
 
-let plan = StftPlan::new(
-    window_length: 512,
-    hop_size:      256,
-    fft_size:      512,   // must be >= window_length
-    window:        Window::Hann,
-)?;
+let plan = StftPlan::new(512, 256)?;
 ```
 
 ## Forward Transform
 
 ```rust,ignore
-// signal: [T]  ->  spectrum: [frames, fft_size/2+1] complex
-let spectrum = stft(&signal, &plan)?;
+// signal: [f64] -> frame_count * frame_len complex bins
+let spectrum = plan.forward(&signal)?;
 ```
 
 ## Inverse Transform
 
 ```rust,ignore
-// spectrum: [frames, fft_size/2+1]  ->  signal: [T]
-let reconstructed = istft(&spectrum, &plan)?;
+let reconstructed = plan.inverse(&spectrum, signal.len())?;
 ```
 
 The inverse uses the overlap-add method for reconstruction. Perfect
 reconstruction holds when the window satisfies the COLA constraint
 (constant overlap-add).
+
+## GPU execution
+
+With the `wgpu` feature, `StftWgpuBackend` composes Apollo framing and Hann/WOLA
+kernels around two retained Hephaestus plans. The dense frame plane has shape
+`[frame_count, frame_len]`; only axis 1 is transformed, so rows remain
+independent. Both radix and non-power-of-two lengths use the same provider
+surface. Reuse one `StftBuffers` value for repeated calls of the same geometry
+to retain GPU preparation and host transfer capacity.
 
 ## Leto Overloads
 

@@ -9,7 +9,7 @@
 //! - Type-1 path: forward FFT on oversampled grid, then extract/deconvolve.
 //!   The forward FFT is unnormalized (no 1/N factor).
 //! - Type-2 path: load/deconvolve onto grid, then inverse FFT. The inverse
-//!   FFT applied by GpuFft3d::encode_inverse_split divides by the oversampled
+//!   FFT encoded from the prepared Hephaestus plan divides by the oversampled
 //!   length per axis (mx, my, mz), producing a normalized IDFT. The 3D path
 //!   uses the normalized IFFT output directly (no pre-scaling needed) because
 //!   the CPU 3D type-2 path also works with normalized IDFT values.
@@ -58,7 +58,7 @@ var<storage, read_write> output_values: array<Complex32>;
 @group(0) @binding(6)
 var<storage, read> coefficients: array<Complex32>;
 
-@group(0) @binding(7)
+@group(1) @binding(0)
 var<uniform> params: FastNufftParams3D;
 
 // Modified Bessel function I_0(x) via convergent series.

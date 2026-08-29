@@ -1,10 +1,10 @@
 //! Forward and inverse real FFT round-trip through Apollo.
 //!
-//! A real signal of length `N` forward-transforms to a half-spectrum of
-//! length `N/2 + 1` (Apollo follows the NumPy/SciPy convention).  The
-//! inverse FFT reconstructs the original signal up to floating-point
-//! rounding.  This example verifies the round-trip for a known analytical
-//! signal and shows how to read back spectral magnitude.
+//! A real signal of length `N` forward-transforms to a full, conjugate-
+//! symmetric spectrum of length `N`. The inverse FFT reconstructs the
+//! original signal up to floating-point rounding. This example verifies the
+//! round-trip for a known analytical signal and shows how to read back
+//! spectral magnitude.
 
 extern crate apollo_fft;
 extern crate leto;
@@ -37,7 +37,7 @@ fn main() {
     // ── Forward FFT ──
     let spectrum = fft_1d_array(&signal);
     println!("signal length    : {}", signal.size());
-    println!("spectrum length  : {}", spectrum.size()); // n/2 + 1
+    println!("spectrum length  : {}", spectrum.size());
 
     // Frequency grid for the full complex spectrum; only positive half shown.
     let freqs = fftfreq(n, dt);
@@ -61,7 +61,8 @@ fn main() {
     // 100 Hz should be the dominant component.
     assert!(
         (peak_freq - 100.0).abs() < 5.0,
-        "expected dominant frequency near 100 Hz, got {peak_freq:.1}"
+        "expected dominant frequency near 100 Hz, got {:.1}",
+        peak_freq
     );
 
     // ── Inverse FFT round-trip ──
@@ -74,7 +75,9 @@ fn main() {
     println!("max round-trip error: {max_err:.3e} (tolerance {ROUND_TRIP_TOL:.0e})");
     assert!(
         max_err < ROUND_TRIP_TOL,
-        "round-trip error {max_err:.3e} exceeds tolerance {ROUND_TRIP_TOL:.0e}"
+        "round-trip error {:.3e} exceeds tolerance {:.0e}",
+        max_err,
+        ROUND_TRIP_TOL
     );
 
     println!("FFT round-trip assertions passed");

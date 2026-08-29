@@ -47,6 +47,23 @@
   `crates/apollo-fft/src/application/execution/kernel/components/` (peer-held
   by `perf/apollo-base128-arith` in the main tree).
 - **Last update:** 2026-08-28.
+## ATLAS-APOLLO-FLAT-BASE-SPLIT-2026-08-28 — Gather once for the whole small-size split [perf] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#flat-base-split`): the decimation down to the
+  128-point base is flat rather than recursive. `2^d` subsequences at stride
+  `2^d` are what `d` levels of halving produce, so one gather covers every
+  level, with subsequence `b` at offset `rev(b)`. Combining stages run over
+  contiguous blocks, all but the last in place, the last writing `data`.
+- **Measured pinned, three clean runs:** 512 1907.4 -> 1714.4 ns
+  (1.83 -> **1.63** against RustFFT), 256 730.1 -> 717.8 (1.77 -> 1.73),
+  **128 unchanged** at 281 (1.54), 64 unchanged.
+- **This gain was given up once before and did not need to be.** The
+  strided base source reached 1712.6 ns at 512 — within 2 ns of this — but
+  bought it with a compile-time source mode on the base kernel that cost
+  the in-place path 5% at n = 128, so it was reverted, and the record
+  judged a separate kernel struct too much for one size. The gather was
+  never what needed changing; the number of gathers was. The kernel here is
+  byte-identical.
 
 ## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
 
@@ -136,6 +153,29 @@
 - **Cost:** the split route's combine rose 24 to 33%, since it reads two
   planes in bit-reversed row order, so the odd powers gain less than the
   even ones.
+
+## ATLAS-APOLLO-SINK-PERMUTATION-2026-08-28 — Carry the sink's reversal on the write side [perf] — done 2026-08-28
+
+- **The question this answers** (`gap_audit.md#sink-permutation`): the DIF
+  stage set moved the route's bit-reversal into the sink and the sink got
+  dearer; it was not separated whether that belonged to the reversed read
+  or to the combine's two-plane read.
+- **Separated by an unpermuted floor** — incorrect results, timing only:
+  the floor sits within 9% of what the combine cost before the stage set
+  changed at all, and that version already read two planes. The two-plane
+  read is not the cause; essentially the whole increase is the permutation.
+- **Delivered:** plane row `p` holds output row `rev(p)`, bit reversal
+  being an involution, so both sinks now walk the planes in order and
+  scatter their writes. Four scattered read streams become four sequential
+  ones; two sequential writes become two scattered ones — and stores retire
+  into a buffer where loads stall.
+- **Measured pinned:** combine 5504.6 -> 5051.8 TSC at 2048 and
+  21281.1 -> 18378.8 at 8192; reinterleave 4294.3 -> 3894.6 at 4096 and
+  16624.7 -> 15139.5 at 16384. End to end against RustFFT: 1024 1.22 ->
+  1.20, 2048 1.27 -> 1.24, 8192 1.09 -> 1.08, 16384 0.97 -> **0.93**.
+- **Residual:** about half the permutation's cost remains and is not
+  obviously removable — something must carry the reversal, and the store
+  side is the cheaper of the two places to put it.
 
 ## ATLAS-APOLLO-PLANAR-MOVEMENT-2026-08-28 — What is left of the planar route's movement [perf] — todo
 
@@ -265,11 +305,14 @@
 ## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 — Delete consumer-owned WGPU FFT [major] [arch] [perf] — in progress
 
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`; last update 2026-08-28.
-- **Lease:** `crates/apollo-fft/src/infrastructure/transport/gpu/`, Apollo dense-WGPU FFT callers and manifests, `crates/apollo-nufft/src/infrastructure/transport/gpu/infrastructure/kernel/{buffers,fast,fast_support}.rs`, the NUFFT/STFT/Radon benchmark entry points needed to restore bounded smoke execution, ADRs 0006/0036, and this item's PM/release regions through the next verified commit.
+- **Lease:** closure integration owns this item's PM/release records and PR delivery; source fix-forward `f981908f` and documentation correction `7c063e27` passed independent review.
 - **Outcome:** Apollo retains CPU Fourier arithmetic over Leto storage while Hephaestus becomes the only dense WGPU FFT implementation. NUFFT and validation consume the prepared Hephaestus split-complex seam directly; no Apollo WGPU FFT plan, shader, dispatcher, workspace, acquisition wrapper, or compatibility export remains. Apollo's independent CUDA surface remains governed by ADR 0030.
 - **Scope / non-goals:** migrate all in-repository `GpuFft3d` consumers, preprepare NUFFT forward/inverse plans with its reusable grids, remove the superseded dense-WGPU implementation and benchmark, revise ADR 0006 and public docs, and classify the public removal. CUDA FFT and the shared non-FFT WGPU transform scaffold remain unchanged.
 - **Acceptance:** residue scans find no `GpuFft3d`, `GpuFft3dBuffers`, dense FFT shader, or Apollo `WgpuBackend`; Apollo/Leto-to-Hephaestus differential and inverse-roundtrip cases pass across ranks one through three; repeated NUFFT execution exclusively borrows its workspace and reuses prepared plans, fixed grids, coefficient storage, and host conversion capacity without FFT preparation in the dispatch path; warning-denied checks, configured Nextest, doctests, Rustdoc, SemVer, independent architecture review, and exact hosted provider/consumer gates pass.
-- **Dependencies:** Hephaestus PR #227 merged native f32/f16 rank-generic FFT parity at `2a785d8`; Kwavers PR #663 already selects Leto or Hephaestus and owns no private FFT kernel. This item closes Apollo's remaining consumer-owned implementation under Hephaestus ADR 0053.
+- **Dependencies:** Hephaestus PR #227 merged native f32/f16 rank-generic FFT parity at `2a785d8`; PR #234 merged mutable retained grouped-parameter updates at `44754cd1`, with independent GREEN review of provider candidate `e6218da`. Kwavers PR #663 already selects Leto or Hephaestus and owns no private FFT kernel.
+- **Candidate evidence:** Apollo `fcb924bb` corrects every finding from review of `9094166a`: STFT uses selected-axis prepared Hephaestus plans; NUFFT retains readback, non-contiguous coefficient staging, four domain-stage pipelines/bind groups/parameter buffers, fixed grids, and host conversion capacity; obsolete Apollo WGPU error surfaces and ownership claims are removed. Apollo-owned warm host conversion/staging allocations are zero. Review of that revision found foreign-device workspaces reached device writes before provider ownership validation. Fix-forward `f981908f` preflights all 1-D/3-D Type-1/Type-2 public and kernel paths and structurally verifies the typed error plus unchanged output. It also corrects base-128 split inverse normalization at lengths 256 and 512 and assigns NUFFT benchmark smoke to its owning package. Documentation correction `7c063e27` records the reproduced 6.661e-16 Windows/MSVC round-trip observation as bounded finite-precision evidence. Independent exact-revision review is GREEN. Warning-denied all-target/all-feature Clippy passes for Apollo FFT and NUFFT; Apollo FFT Nextest passes 492/492, focused foreign-device execution passes 1/1, bounded FFT/NUFFT smoke completes in 7.8/5.9 seconds, doctests and warning-denied Rustdoc pass, and the standalone lock resolves 36 first-party Git sources. Focused SemVer reports exactly the intended constructor-arity and `NufftWgpuError::Fft` major breaks.
+- **Performance evidence:** the unchanged 100-observation retained instrument measures Type-1 1-D 0.151293 ms, Type-2 1-D 0.172448 ms, Type-1 3-D 0.120422 ms, and Type-2 3-D 1.37592 ms: 4.11% to 6.15% below the entry retained medians with disjoint confidence intervals. Per-call/retained ratios are 2,374.6x, 1,860.6x, 4,728.4x, and 370.0x. These measurements cover Apollo-managed preparation and dispatch only; WGPU/driver internals are not allocation-instrumented.
+- **Remaining closure:** PR #176 hosted gates, merge, and lease discharge.
 
 ## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
 
