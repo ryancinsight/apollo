@@ -95,8 +95,22 @@ fn check(n: usize) -> Outcome {
     }
 }
 
-#[test]
-fn every_length_either_agrees_with_the_oracle_or_refuses() {
+/// Number of shards the swept range is split across.
+///
+/// The sweep costs `sum of n^2` over the range, about 2.9e9 terms. That is one
+/// test's worth of work only on a fast machine: unsharded it ran 3.4s locally
+/// and 58.9s on a CI runner, against a 60s termination bound. nextest applies
+/// its budget per test, so splitting the range is what brings each piece
+/// inside it — the total work is unchanged, and the shards run concurrently.
+///
+/// Sharding by residue rather than by sub-range is what makes the split even:
+/// consecutive sub-ranges differ in cost by more than an order of magnitude at
+/// these sizes, since the term count grows as `n^2`, while every residue class
+/// draws uniformly from the whole range.
+const SHARDS: usize = 4;
+
+/// Sweep the lengths in one residue class and report what fails.
+fn sweep_shard(shard: usize) {
     // Panics are an expected outcome here; the default hook would print a
     // backtrace for each one and bury the report.
     let hook = std::panic::take_hook();
@@ -104,7 +118,7 @@ fn every_length_either_agrees_with_the_oracle_or_refuses() {
 
     let mut wrong: Vec<(usize, f64)> = Vec::new();
     let mut refused: Vec<usize> = Vec::new();
-    for n in 2..=2048 {
+    for n in (2..=2048).filter(|n| n % SHARDS == shard) {
         match check(n) {
             Outcome::Agrees => {}
             Outcome::Refused => refused.push(n),
@@ -116,9 +130,7 @@ fn every_length_either_agrees_with_the_oracle_or_refuses() {
 
     assert!(
         wrong.is_empty(),
-        "{} length(s) returned a spectrum that disagrees with the naive DFT \
-         beyond {TOL:e}. A wrong answer from a published transform is worse \
-         than a refusal: {:?}{}",
+        "{} length(s) returned a spectrum that disagrees with the naive DFT          beyond {TOL:e}. A wrong answer from a published transform is worse          than a refusal: {:?}{}",
         wrong.len(),
         &wrong[..wrong.len().min(12)],
         if wrong.len() > 12 { " ..." } else { "" }
@@ -126,16 +138,58 @@ fn every_length_either_agrees_with_the_oracle_or_refuses() {
 
     // Refusals are recorded, not asserted away: they are the honest failure
     // mode for a length with no correct route, and their count is the size of
-    // the coverage gap that a general Bluestein strategy would close.
+    // the coverage gap that a general route would close.
     if !refused.is_empty() {
         eprintln!(
-            "{} length(s) have no correct route and refuse at plan \
-             construction: {:?}{}",
+            "{} length(s) have no correct route and refuse at plan              construction: {:?}{}",
             refused.len(),
             &refused[..refused.len().min(24)],
             if refused.len() > 24 { " ..." } else { "" }
         );
     }
+}
+
+// The four shards partition `2..=2048`: every length is swept by exactly one.
+// `shards_cover_the_swept_range` is what holds that claim to account.
+
+#[test]
+fn every_length_agrees_with_the_oracle_shard_0() {
+    sweep_shard(0);
+}
+
+#[test]
+fn every_length_agrees_with_the_oracle_shard_1() {
+    sweep_shard(1);
+}
+
+#[test]
+fn every_length_agrees_with_the_oracle_shard_2() {
+    sweep_shard(2);
+}
+
+#[test]
+fn every_length_agrees_with_the_oracle_shard_3() {
+    sweep_shard(3);
+}
+
+/// The shards must partition the range, or the sweep silently covers less than
+/// it claims.
+///
+/// A sharded sweep fails open: drop a shard, or misalign the residues, and the
+/// remaining tests still pass while the lengths in the gap go unchecked. This
+/// asserts the partition directly rather than trusting the arithmetic.
+#[test]
+fn shards_cover_the_swept_range() {
+    let mut seen = vec![0usize; 2049];
+    for shard in 0..SHARDS {
+        for n in (2..=2048usize).filter(|n| n % SHARDS == shard) {
+            seen[n] += 1;
+        }
+    }
+    let missed: Vec<usize> = (2..=2048).filter(|&n| seen[n] == 0).collect();
+    let doubled: Vec<usize> = (2..=2048).filter(|&n| seen[n] > 1).collect();
+    assert!(missed.is_empty(), "lengths no shard sweeps: {missed:?}");
+    assert!(doubled.is_empty(), "lengths swept twice: {doubled:?}");
 }
 
 /// The same check above the swept range, at the lengths the tracked defect
