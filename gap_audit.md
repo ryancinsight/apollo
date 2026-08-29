@@ -1,3 +1,70 @@
+## What the base kernel spends, instruction by instruction (2026-08-29) <a id="base-kernel-ops"></a>
+
+With [the CPU re-probing removed](#base-kernel-probes) the kernel is worth
+modelling properly, because every earlier measurement of it was taken
+against a body inflated 70% by spill traffic. Read out of the emitted
+assembly rather than estimated.
+
+The body is 442 lines holding 411 vector instructions and exactly **two
+loops**, each of eight trips — the row pass and the column pass. Everything
+else, including all of phase one, is straight-line:
+
+| region | static | trips | dynamic | measured TSC |
+| --- | --- | --- | --- | --- |
+| phase 1 + prologue | 206 | 1 | 206 | 108 |
+| row pass (loop A) | 103 | 8 | 824 | 548 |
+| column pass (loop B) | 82 | 8 | 656 | 341 |
+| **total** | | | **1686** | **997** |
+
+**1686 vector instructions in 997 TSC is 1.69 vector IPC.** The kernel is
+throughput-bound, not latency-bound and not memory-bound: only op count
+moves it now.
+
+Composition of the 1686: **49% arithmetic** (832), **25% memory** (422),
+**19% shuffles** (320), the rest blends and sign work.
+
+Three things that had looked like levers, and are not:
+
+- **The row pass's twiddle loads are already hoisted.** Stage three and four
+  use the same twiddles for all eight rows, so 128 loads looked removable.
+  The loop contains exactly **one** non-stack load: LLVM had already lifted
+  them. Hoisting them by hand produced byte-identical codegen.
+- **The lane-crossing shuffles are not on a critical path.** The row loop
+  runs eight `vpermpd` per trip — three-cycle lane-crossing permutes,
+  implementing the distance-one butterfly's `swap_pairs`. At 1.69 IPC the
+  kernel is throughput-limited, so their latency is hidden; replacing them
+  with in-lane shuffles would not change the count.
+- **Planar format for the batch of four at n = 512 is slower.** A complex
+  multiply costs three ops per two samples interleaved and four per four
+  samples planar, so planar should be a third cheaper. Measured, gather
+  included: **1055.7 ns interleaved against 1196.9 planar, 13% worse.** The
+  format advantage is real and the multiply *count* outweighs it — the
+  planar batched stage set is radix-2 with a twiddle per butterfly, roughly
+  448 complex multiplies for a 128-point transform, where the 8x16 four-step
+  the base kernel uses needs 272. A cheaper multiply performed 1.6 times as
+  often is not cheaper.
+
+### What is actually left
+
+The [multiply count](#base128-arithmetic-count) is still the residual: 136
+register-multiplies against the reference's 72, of which 64 are the row
+transforms, 56 the four-step layer, and 16 the column transforms. At three
+ops each they are 408 of the 1686 — a quarter of the kernel.
+
+The across-instance layout would cut the row transforms from 64 to 16,
+which is 48 fewer multiplies and **144 fewer ops, 8.5%**. It needs sixteen
+live registers, which is the whole AVX2 file, and
+[spills](#base128-split). On a thirty-two-register file it fits with room
+for the twiddles beside it.
+
+Worth stating plainly: 8.5% would take n = 128 from 1.40 against RustFFT to
+about 1.29. **The wider ISA does not close this gap on its own** — it
+removes the largest single item, and the rest is spread thin across a
+phase-one reorganization pass, the shuffles the interleaved format costs at
+every complex multiply, and a four-step layer whose 56 multiplies both
+implementations pay alike. That is a more useful thing to know than another
+round of arrangement experiments would have produced.
+
 ## The base kernel was not arithmetic-bound; it was re-probing the CPU (2026-08-29) <a id="base-kernel-probes"></a>
 
 The base kernel was [recorded as measured to the end of its

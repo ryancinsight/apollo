@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BASE-OPS-2026-08-29 — Instruction model for the base kernel [perf] — done 2026-08-29
+
+- **Model** (`gap_audit.md#base-kernel-ops`): 411 static vector
+  instructions in two eight-trip loops plus straight-line phase one, so
+  **1686 dynamic vector instructions in 997 TSC — 1.69 vector IPC**. The
+  kernel is throughput-bound; only op count moves it. Composition: 49%
+  arithmetic, 25% memory, 19% shuffles.
+- **Three non-levers, measured rather than assumed:** the row pass's
+  loop-invariant twiddle loads are already hoisted by LLVM (hand-hoisting
+  gave byte-identical codegen); the eight lane-crossing `vpermpd` per row
+  are not on a critical path at this IPC; and planar format for the batch
+  of four at n = 512 measured **13% slower** (1055.7 vs 1196.9 ns) because
+  the planar batched stage set is radix-2 and needs roughly 448 complex
+  multiplies where the four-step needs 272 — a cheaper multiply done 1.6
+  times as often.
+- **What is left:** the 136-versus-72 register-multiply count, 408 of the
+  1686 ops. The across-instance layout removes 48 of them, **144 ops or
+  8.5%**, and needs sixteen live registers — the whole AVX2 file. That
+  would take n = 128 from 1.40 to about 1.29, so **the wider ISA does not
+  close this gap alone**; the remainder is spread across phase one's
+  reorganization, the shuffles the interleaved format costs per multiply,
+  and a four-step layer both implementations pay alike.
+
 ## ATLAS-APOLLO-COMPOSITE-RADIX-STILL-SILENT-2026-08-29 — 92 of the 109 broken FFT lengths still return wrong answers silently [major] — todo
 
 - **Finding.** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28` is
