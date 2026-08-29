@@ -27,15 +27,26 @@ mod pinned_probe;
 /// 256 and 512 by repeated radix-2 decimation.
 pub(crate) const BASE_SPLIT_LENGTHS: [usize; 3] = [128, 256, 512];
 
+/// Length of the base transform every split bottoms out in.
+const BASE: usize = 128;
+
 /// Transforms `data` by decimating down to the 128-point base.
 ///
 /// The four-step route pays six passes over the array regardless of size,
 /// which at these lengths costs more than the transform: n = 256 measured
-/// 2.96x the cost of n = 128 where the arithmetic asks for about 2.3x. One
-/// radix-2 decimation per level instead leaves halves that reach the base
-/// kernel directly, and the combine reads `W_N^j` from the final stage of
-/// the twiddle table the Stockham route already caches
+/// 2.96x the cost of n = 128 where the arithmetic asks for about 2.3x.
+/// Radix-2 decimation instead leaves subsequences that reach the base kernel
+/// directly, and the combines read `W_N^j` from the final stage of the
+/// twiddle tables the Stockham route already caches
 /// (gap_audit.md#small-size-splitting).
+///
+/// The decimation is flat rather than recursive. Halving at every level
+/// gathers at every level: n = 512 paid three gathers and two nested scratch
+/// acquisitions where one gather suffices, because `2^d` subsequences at
+/// stride `2^d` are exactly what `d` levels of halving produce. Subsequence
+/// `b` starts at offset `rev(b)` over `d` bits, bit reversal being what
+/// repeated even/odd splitting does to the block index
+/// (gap_audit.md#flat-base-split).
 ///
 /// Reports whether the dispatched width ran it, matching
 /// [`butterfly::transform_128`].
@@ -51,43 +62,97 @@ where
 {
     let n = data.len();
     debug_assert!(BASE_SPLIT_LENGTHS.contains(&n));
-    if n == 128 {
+    if n == BASE {
         return butterfly::transform_128::<F, INVERSE>(data, plan);
     }
 
-    let half = n / 2;
-    let twiddles = if INVERSE {
-        F::cached_twiddle_inv(n)
-    } else {
-        F::cached_twiddle_fwd(n)
-    };
-    // The stage-major table ends with the length-`n` stage, whose `n / 2`
-    // entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1` slots.
-    let combine = &twiddles[half - 1..n - 1];
-
+    let blocks = n / BASE;
+    let bits = blocks.trailing_zeros();
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         n,
         |scratch| {
-            for (j, pair) in data.chunks_exact(2).enumerate() {
-                scratch[j] = pair[0];
-                scratch[half + j] = pair[1];
+            // One gather covering every level.
+            for (b, block) in scratch.chunks_exact_mut(BASE).enumerate().take(blocks) {
+                let offset = b.reverse_bits() >> (usize::BITS - bits);
+                for (j, slot) in block.iter_mut().enumerate() {
+                    *slot = data[j * blocks + offset];
+                }
             }
-            let (even, odd) = scratch.split_at_mut(half);
-            if !transform_via_base_128::<F, INVERSE>(even, plan)
-                || !transform_via_base_128::<F, INVERSE>(odd, plan)
-            {
-                return false;
+            for block in scratch.chunks_exact_mut(BASE).take(blocks) {
+                if !butterfly::transform_128::<F, INVERSE>(block, plan) {
+                    return false;
+                }
             }
-            let (low, high) = data.split_at_mut(half);
-            // The combining loop stays scalar: a hand-vectorized sibling
-            // measured 728.9 ns against 725.2 at n = 256, so the compiler is
-            // already doing what it would have done.
-            for j in 0..half {
-                let rotated = odd[j] * combine[j];
-                low[j] = even[j] + rotated;
-                high[j] = even[j] - rotated;
+
+            // Combining stages, each doubling the transform length. All but
+            // the last run in place in scratch; the last writes `data`, so no
+            // pass exists only to copy the result back.
+            let mut len = BASE;
+            while len * 2 < n {
+                combine_stage::<F, INVERSE>(scratch, len);
+                len *= 2;
             }
+            combine_final::<F, INVERSE>(data, scratch, len);
             true
         },
     )
+}
+
+/// `W_(2 * len)^j` for `j < len`, from the final stage of the cached
+/// stage-major table: that stage holds `len` entries in order, and the earlier
+/// stages occupy the `len - 1` slots before it.
+fn combine_twiddles<F, const INVERSE: bool>(len: usize) -> std::sync::Arc<[F::Complex]>
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+{
+    if INVERSE {
+        F::cached_twiddle_inv(2 * len)
+    } else {
+        F::cached_twiddle_fwd(2 * len)
+    }
+}
+
+/// One in-place combining stage, pairing adjacent length-`len` transforms into
+/// length-`2 * len` ones.
+fn combine_stage<F, const INVERSE: bool>(data: &mut [F::Complex], len: usize)
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+{
+    let twiddles = combine_twiddles::<F, INVERSE>(len);
+    let combine = &twiddles[len - 1..2 * len - 1];
+    for pair in data.chunks_exact_mut(2 * len) {
+        let (low, high) = pair.split_at_mut(len);
+        for j in 0..len {
+            let rotated = high[j] * combine[j];
+            let even = low[j];
+            low[j] = even + rotated;
+            high[j] = even - rotated;
+        }
+    }
+}
+
+/// The last combining stage, reading `scratch` and writing `out`.
+///
+/// The combining loop stays scalar: a hand-vectorized sibling measured
+/// 728.9 ns against 725.2 at n = 256, so the compiler is already doing what it
+/// would have done.
+fn combine_final<F, const INVERSE: bool>(out: &mut [F::Complex], scratch: &[F::Complex], len: usize)
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+{
+    let twiddles = combine_twiddles::<F, INVERSE>(len);
+    let combine = &twiddles[len - 1..2 * len - 1];
+    let (even, odd) = scratch.split_at(len);
+    let (low, high) = out.split_at_mut(len);
+    for j in 0..len {
+        let rotated = odd[j] * combine[j];
+        low[j] = even[j] + rotated;
+        high[j] = even[j] - rotated;
+    }
 }

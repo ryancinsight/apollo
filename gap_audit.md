@@ -1,3 +1,43 @@
+## The small-size split gathered once per level (2026-08-28) <a id="flat-base-split"></a>
+
+n = 512 was the worst size on the ladder, 1.83 against RustFFT where 1024
+sat at 1.22. The route decimates down to the 128-point base, and it did so
+by recursion: 512 halved into two 256s, each of which halved again. Every
+level gathered, so 512 paid three gathers and two nested scratch
+acquisitions.
+
+`2^d` subsequences at stride `2^d` are exactly what `d` levels of halving
+produce, so one gather covers every level. Subsequence `b` starts at offset
+`rev(b)` over `d` bits — bit reversal being what repeated even/odd splitting
+does to the block index. The combining stages then run over contiguous
+blocks, all but the last in place in scratch, the last writing `data` so no
+pass exists only to copy the result back.
+
+**Pinned, three clean runs, controls matching history:**
+
+| n | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| 512 | 1907.4 ns | **1714.4 / 1709.3 / 1714.7** | 1.83 -> **1.63 / 1.62 / 1.64** |
+| 256 | 730.1 | **717.8 / 719.1 / 711.4** | 1.77 -> **1.73** |
+| 128 | 277.3 | 281.5 / 281.5 / 280.8 | 1.54 -> **1.54 / 1.56** |
+| 64 | 131.4 | 130.6 / 131.6 | 1.57 -> 1.57 |
+
+**n = 128 did not pay for it, and that is the point.** This gain was found
+once before and given up: the [strided base source](#strided-base-source)
+reached 1712.6 ns at 512 — within 2 ns of what this reaches — but it bought
+that by teaching the base kernel a compile-time source mode, which cost the
+in-place path 5% at n = 128, the most common of the three sizes and the base
+for the other two. The record closed by saying the gain would need "the
+strided source in a separate kernel struct", and judged that too much for
+one size.
+
+It needed neither. The gather was never the thing to change: the *number of
+gathers* was. Flattening the recursion is a change to the split, and the
+kernel it calls is untouched — byte-identical, so n = 128 cannot move.
+
+n = 256 was already flat, one gather and one combine, so it gains only what
+the shared combining helpers and the removed recursion give it: about 2%.
+
 ## The sink's permutation is cheaper on the write side (2026-08-28) <a id="sink-permutation"></a>
 
 [Decimating stage set two in frequency](#dif-stage-set) moved the route's

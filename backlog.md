@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-FLAT-BASE-SPLIT-2026-08-28 — Gather once for the whole small-size split [perf] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#flat-base-split`): the decimation down to the
+  128-point base is flat rather than recursive. `2^d` subsequences at stride
+  `2^d` are what `d` levels of halving produce, so one gather covers every
+  level, with subsequence `b` at offset `rev(b)`. Combining stages run over
+  contiguous blocks, all but the last in place, the last writing `data`.
+- **Measured pinned, three clean runs:** 512 1907.4 -> 1714.4 ns
+  (1.83 -> **1.63** against RustFFT), 256 730.1 -> 717.8 (1.77 -> 1.73),
+  **128 unchanged** at 281 (1.54), 64 unchanged.
+- **This gain was given up once before and did not need to be.** The
+  strided base source reached 1712.6 ns at 512 — within 2 ns of this — but
+  bought it with a compile-time source mode on the base kernel that cost
+  the in-place path 5% at n = 128, so it was reverted, and the record
+  judged a separate kernel struct too much for one size. The gather was
+  never what needed changing; the number of gathers was. The kernel here is
+  byte-identical.
+
 ## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
 
 - **Measured, not estimated** (`git rev-list --count origin/main..<branch>`,
