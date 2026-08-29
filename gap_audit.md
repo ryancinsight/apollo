@@ -1,3 +1,80 @@
+## The base kernel was not arithmetic-bound; it was re-probing the CPU (2026-08-29) <a id="base-kernel-probes"></a>
+
+The base kernel was [recorded as measured to the end of its
+arithmetic](#base128-root2), 136 complex multiplies against the reference's
+72, with the gap declared unconvertible in the AVX2 layout and blocked on
+register width. That conclusion was wrong, and the way it was wrong is worth
+keeping: every experiment had varied the *arrangement* and none had looked at
+what the compiler actually emitted.
+
+Fresh phase attribution said the column pass cost 458 TSC against the row
+pass's 524 while doing fewer multiplies — disproportionate enough to be worth
+disassembling. The emitted kernel:
+
+| | instructions |
+| --- | --- |
+| total vector | 978 |
+| `vmovapd` touching the stack | **494** |
+| calls to `std_detect::detect::cache::detect_and_initialize` | **28** |
+
+**Over half the kernel's vector instructions were spill traffic, and the
+kernel was calling runtime CPU feature detection twenty-eight times inside
+its own body** — after the dispatcher had already proved the capability and
+entered a `#[target_feature]` scope.
+
+The CodeView inline-site records name the chain exactly: `butterfly.rs` ->
+`ComplexReg::mul_neg_i` -> `Vector::zero` -> `try_zero` ->
+`runtime_support_result` -> `Avx2::is_runtime_supported` -> `std_detect`.
+`ComplexReg::mul_i` and `mul_neg_i` built their operands with
+`Vector::zero()`, a *public* constructor, so it asks whether the host
+supports the architecture before handing one out. Inside a method taking
+`self` that question is already answered — a `ComplexReg` cannot exist
+without a `Vector`, and a `Vector` cannot exist without proof.
+
+The redundancy was not the cost. The probe is a **call**, so the register
+allocator spilled every live vector around it, and these rotations sit in the
+inner butterfly loops of both the row and column passes.
+
+Fixed upstream (`HS-COMPLEXREG-ZERO-PROBE-2026-08-29`). The same kernel now:
+
+| | before | after |
+| --- | --- | --- |
+| total vector instructions | 978 | **411** |
+| stack `vmovapd` | 494 | **10** |
+| feature-detection calls | 28 | **0** |
+
+**Measured, pinned, two runs, controls matching history:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 64 | 130.6 ns | **116.1 / 116.0** | 1.57 -> **1.38 / 1.40** | 0.80 -> **0.71** |
+| 128 | 281.5 | **253.5 / 252.7** | 1.54 -> **1.40** | 0.85 -> **0.78** |
+| 256 | 717.8 | **659.4 / 660.7** | 1.73 -> **1.60** | 1.04 -> **0.96** |
+| 512 | 1714.4 | **1579.2 / 1594.7** | 1.63 -> **1.51 / 1.53** | 1.16 -> **1.08** |
+
+Eight to twelve percent at every size the base kernel serves, and the phase
+attribution puts it where the rotations are: the column pass fell 458 to 341
+TSC, a 26% drop in the pass that runs the radix-8 network.
+
+The sizes above 512 do not use this kernel and did not move beyond run
+noise. Apollo is now ahead of PhastFT at every power of two on the ladder
+except 512.
+
+**What this costs the earlier conclusion.** The 136-versus-72 multiply count
+is still true, and the across-instance layout that would close it still
+spills on AVX2. What is no longer true is that the count *explained the
+time*: a third of the kernel's instructions were answering a question the
+dispatcher had answered, so the multiply ratio was being compared against a
+kernel that was not spending its time on multiplies. The arithmetic line is
+open again, and the next measurement of it should start from the current
+411-instruction body rather than from the 978-instruction one every earlier
+experiment was run against.
+
+**The method is the transferable part.** Six experiments varied the
+arrangement and measured the result; none disassembled the kernel. A phase
+that costs disproportionately to its arithmetic is a signal to read the
+emitted code, and the emitted code named the defect in one pass.
+
 ## Two small-size hypotheses, both falsified (2026-08-28) <a id="small-size-falsified"></a>
 
 With [the flat split](#flat-base-split) landed, n = 256 became the worst

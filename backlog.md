@@ -1,5 +1,31 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BASE-PROBES-2026-08-29 — The base kernel re-probed the CPU inside its body [perf] — done 2026-08-29
+
+- **Finding** (`gap_audit.md#base-kernel-probes`): the 128-point base kernel
+  disassembled to 978 vector instructions of which **494 were stack moves**,
+  around **28 calls to runtime CPU feature detection** inside a body the
+  dispatcher had already entered under `#[target_feature]`. The chain, read
+  from the CodeView inline-site records: `ComplexReg::mul_i`/`mul_neg_i`
+  built operands with the *public* `Vector::zero()`, which probes before
+  handing one out. The probe is a call, so every live vector spilled around
+  it — in the inner butterfly loops of both passes.
+- **Fixed upstream** (`HS-COMPLEXREG-ZERO-PROBE-2026-08-29`). Kernel now 411
+  vector instructions, 10 stack moves, 0 probes.
+- **Measured pinned, two runs:** 64 130.6 -> 116.1 ns (1.57 -> **1.38**),
+  128 281.5 -> 253.5 (1.54 -> **1.40**), 256 717.8 -> 659.4 (1.73 ->
+  **1.60**), 512 1714.4 -> 1579.2 (1.63 -> **1.51**). Column pass 458 -> 341
+  TSC. Sizes above 512 do not use this kernel and did not move.
+- **It reopens the arithmetic line.** The 136-versus-72 multiply count is
+  still true and the across-instance layout still spills, but the count was
+  never explaining the time: a third of the instructions were answering a
+  question already answered. Any further arithmetic work starts from the
+  411-instruction body, not the 978-instruction one every earlier experiment
+  ran against.
+- **Method note:** six experiments varied the arrangement and measured; none
+  disassembled. A phase costing disproportionately to its arithmetic is a
+  signal to read the emitted code.
+
 ## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — in progress (silent corruption stopped; correct routing still owed)
 
 - **Root cause, traced 2026-08-28 by the integrator (session 03d80d33).** The
