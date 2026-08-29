@@ -106,6 +106,19 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   that no longer exists, so it could only ever answer `true`. Both were added
   after 0.26.0 and never appeared in a release, so no published API changes.
 
+### Changed
+
+- [patch] The register-resident 8x8 base route at N = 64 is now selected per
+  scalar rather than universally. It is built on four-lane vectors, which fills
+  a whole vector register for an eight-byte scalar and half of one for a
+  four-byte scalar, where the generic sized-Stockham route uses the full width
+  and is faster. Measured interleaved in one process, best of 200 blocks of 100
+  transforms: a four-byte scalar at N = 64 falls from 252 ns to 126 ns, and the
+  RustFFT comparison sweep independently moves 264 ns to 134 ns (ratio 12.93x
+  to 4.68x). The eight-byte path is unchanged at 40 ns and keeps the route. The
+  wider 8x16 route serving 128, 256 and 512 is profitable for both and is not
+  gated.
+
 ### Added
 
 - [minor] `apollo-dctdst` computes DCT-I, DCT-IV, DST-I and DST-IV in

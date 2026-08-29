@@ -172,6 +172,15 @@ impl<T: MixedRadixScalar, const REGS: usize, const TABLE_LANES: usize>
 {
     /// Builds the forward plan when the exact-width route is available.
     pub(crate) fn new_if_supported() -> Option<Self> {
+        // The 8x8 route is selected per scalar, not universally. Its four
+        // lanes fill a whole vector register for a scalar whose widest
+        // supported width is four, and half of one otherwise -- where the
+        // generic route, which uses the full width, is the faster of the two.
+        // `USE_BASE_64` carries that measurement per scalar; the wider 8x16
+        // route (REGS = 8) is profitable regardless and is not gated.
+        if REGS == 4 && !T::USE_BASE_64 {
+            return None;
+        }
         BasePlan::new_if_supported::<false>().map(|forward| Self {
             forward,
             inverse: OnceLock::new(),

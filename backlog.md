@@ -482,28 +482,66 @@
   no `GpuFft3d` or `GpuFft3dBuffers` reference remains in `crates/`. Lease
   released.
 
-## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
+## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — updated 2026-08-29 on fresh measurement
 
-- **Standing after the split and routing work (pinned, P-core, vs RustFFT):**
-  64 **1.90x**, 128 1.53x, 256 1.76x, 512 1.83x, 1024 1.33x, 2048 1.48x,
-  4096 1.14x, 8192 1.29x, 16384 **1.05x**. Odd powers now inherit their
-  halves' ratios plus combine overhead, which is structurally right.
-- **Ranked next increments.** (1) **n = 64 is the worst ratio and has no
-  base kernel** — it runs the sized Stockham autosort, six ping-pong passes
-  over 1 KB, where the reference uses a register-resident 8x8. The base-128
-  construction is the template: 8 rows of 8, three DIT stages per row, the
-  same DIF-8 column pass. Expect ~1.5x, i.e. 158 -> ~125 ns. It duplicates
-  the base-128 shape at a different size, so it should be weighed against
-  generalizing that kernel over its row length rather than copying it.
-  (2) **base-128 itself drives 128, 256 and 512 together** and is the higher
-  leverage target, but is blocked on the multiply-count/register findings
-  (`gap_audit.md#base128-arithmetic-count`, `#base128-split`).
-  (3) The split's remaining overhead is measured and not worth removing as
-  the kernel stands (`gap_audit.md#strided-base-source`).
+- **The 2026-08-28 standing below is stale and its top-ranked increment is
+  already delivered.** That entry read "n = 64 is the worst ratio and has no
+  base kernel" at 1.90x. The base-64 kernel landed, and n = 64 in f64 now runs
+  **0.735x** — Apollo faster than RustFFT, the best power-of-two ratio in the
+  sweep. Increment (1) is closed by delivery, not by this note.
+- **Fresh standing** (`docs/benchmark_results.md`, regenerated 2026-08-29;
+  Apollo/RustFFT, lower is better):
+
+  | n | f64 | f32 |
+  |---|---|---|
+  | 64 | 0.735x | 4.678x |
+  | 128 | 0.974x | 9.327x |
+  | 256 | 1.415x | 11.201x |
+  | 512 | 1.480x | 10.489x |
+
+- **The gap is now precision, not size.** f64 is at or near parity through 128
+  and 1.4-1.5x at 256/512; f32 is 4.7-11.2x. This was invisible while the
+  ranking was written against f64 sizes alone.
+- **Next increments, re-ranked.** (1) `ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH`
+  — the base kernel is built on four lanes, which is a whole vector register
+  for an eight-byte scalar and half of one for a four-byte scalar. This is the
+  single largest remaining lever and explains most of the f32 column.
+  (2) f64 at 256/512 (1.4-1.5x) is the next f64 target, still driven by the
+  base-128 route's combine.
 - **Checked-view sweep is complete for production code:** only test-gated
-  modules (`batched/interleaved`, `codelet`, `resident`) still use the
-  checked accessors; every shipping kernel takes fixed-size references or
+  modules (`batched/interleaved`, `codelet`, `resident`) still use the checked
+  accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
+
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half register width [perf] — todo
+
+- **Finding.** `BasePlan` is built on `exact_lanes_supported::<4, T>()`. Four
+  lanes fills a 256-bit register for an eight-byte scalar and half of one for a
+  four-byte scalar, which supports eight. The kernel therefore issues the same
+  instruction count for both while moving half the data in the narrow case, so
+  a four-byte scalar gets no width advantage at all from a route designed
+  around it.
+- **Measured** (interleaved in one process, best of 200 blocks of 100
+  transforms, so both precisions see identical core and thermal state):
+
+  | n | 8-byte | 4-byte | ratio |
+  |---|---|---|---|
+  | 64 | 40 ns | 126 ns | 3.15x |
+  | 128 | 89 ns | 653 ns | 7.34x |
+  | 256 | 292 ns | 1434 ns | 4.91x |
+  | 512 | 758 ns | 2802 ns | 3.70x |
+
+  A four-byte scalar should be *faster* at equal length — half the memory
+  traffic and twice the available lanes — so this is the wrong sign, not a
+  small shortfall.
+- **Outcome.** Parameterize the base kernel over its lane count so each scalar
+  takes the widest width its target supports, rather than a fixed four. The
+  8x8 route's per-scalar switch (`USE_BASE_64`) exists because of this and
+  should fall out once the width is right.
+- **Acceptance.** The four-byte column at 128/256/512 improves against the
+  recorded figures above with value parity unchanged; `USE_BASE_64` is
+  re-measured and removed if the width fix subsumes it.
+
 
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28
 
