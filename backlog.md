@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [patch] — todo
+
+- **Severity: shipped wrong answers, not a slow path.** `DctDstPlan::new(361,
+  DctII).forward_into` returns a result with relative error 0.997 against the
+  direct DCT-II definition — the fast path routes through a 2N = 722-point FFT,
+  and length 722 is one of the broken ones. Every consumer that lands on an
+  affected length is silently wrong today.
+- **Census** (measured this revision, forward-then-normalized-inverse round
+  trip over every length in `2..=8200`, `catch_unwind` per length): **74
+  lengths return wrong results, 35 panic**, 109 in total. First wrong: 361,
+  722, 841, 961, 1083, 1153, 1369, 1444. First panic: 2622, 3306, 3496, 3534.
+  67 of the 74 wrong lengths are divisible by `p²` for a prime `p` in 19..97
+  (361 = 19², 841 = 29², 961 = 31², 1369 = 37², …), so the dominant class is
+  composite lengths carrying a squared prime factor at or above 19; 1153 is
+  prime, so at least one second class exists. The panic message is
+  `unreachable: unsupported radix 19` from
+  `crates/apollo-fft/src/application/execution/kernel/components/radix_composite/arity.rs:436`.
+- **Not claimed here.** The fault sits under
+  `crates/apollo-fft/src/application/execution/kernel/components/`, which is
+  leased by `perf/apollo-base128-arith` in the main tree. Filed rather than
+  fixed; the census above is the reproduction.
+- **Acceptance oracle:** the census sweep reports zero wrong lengths and zero
+  panics over `2..=8200`, committed as a test so the set cannot regrow.
+
 ## ATLAS-APOLLO-TRANSFORM-ALGOS-2026-08-28 — CWT FFT convolution and fast DCT/DST kinds [minor] — in-progress
 
 - **Outcome:** the two filed O(N²)→O(N log N) transform items land as separate
@@ -8,6 +32,11 @@
   `CwtPlan::transform`, direct kernel retained as the differential oracle) and,
   if the first completes, `ATLAS-APOLLO-DCTDST-FAST-KINDS` (Makhoul
   factorizations for DCT-I/IV and DST-I/IV).
+- **Status:** `ATLAS-APOLLO-CWT-FFT-CONVOLUTION` is delivered. It uncovered and
+  carried a prerequisite fix: the base-128 route's normalized inverse scaled by
+  the constant 128 rather than by its own length, so `n = 256` came back
+  doubled and `n = 512` quadrupled. `ATLAS-APOLLO-DCTDST-FAST-KINDS` is blocked
+  — see its entry.
 - **Integrator:** claude-fable session 03d80d33 subagent.
 - **Lease:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`,
   `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs`,
@@ -343,20 +372,18 @@
   this entry.
 - **Last update:** 2026-08-27.
 
-## ATLAS-APOLLO-CWT-FFT-CONVOLUTION — Replace direct CWT evaluation with per-scale FFT convolution [minor] — todo
+## ATLAS-APOLLO-CWT-FFT-CONVOLUTION — Replace direct CWT evaluation with per-scale FFT convolution [minor] — review
 
-- **Outcome:** `CwtPlan::transform` runs O(scales·n log n) via per-scale FFT
-  convolution through sibling `apollo-fft` instead of the current
-  O(scales·n²) direct evaluation with n transcendental `mother_wavelet`
-  evaluations per coefficient. Interim slice of this item: hoist weight
-  generation out of the shift loop — `fill_cwt_weights` regenerates the whole
-  weight buffer per shift although weights depend only on
-  `(index − shift) / scale`, a slid window of one per-scale evaluation.
-- **Evidence:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`
-  66-87 (per-(scale, shift) `coefficient` calls);
-  `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs` 31-67
-  (`coefficient_hermes` fills weights per shift; `coefficient_scalar`
-  evaluates the mother wavelet per sample per shift).
+- Delivered on `perf/apollo-transform-algorithms` (`e2f7ed21`). Each scale row
+  is one circular cross-correlation through `apollo-fft`; the signal spectrum
+  is built once and shared across rows.
+- Measured: `mother_wavelet` evaluations for a 4096-sample transform over 32
+  scales fall from 536 870 912 to 262 112 (2048x), instrumented rather than
+  derived. Pinned wall clock, scale row: 432 us → 5.58 us at n = 256, 10.30 ms
+  → 31.7 us at n = 1024.
+- The direct kernel stays as the specification, the differential oracle, and
+  the sub-threshold path; `FFT_CWT_LEN_THRESHOLD = 8` is the measured
+  single-scale crossover.
 
 ## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — todo
 
@@ -368,7 +395,7 @@
 - **Evidence:** `crates/apollo-sht/src/application/execution/plan/sht.rs`
   90-130; `crates/apollo-sht/src/infrastructure/kernel/quadrature.rs` 60-95.
 
-## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — todo
+## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — blocked
 
 - **Outcome:** DCT-I routes through a 2(N−1)-point real FFT and DCT-IV,
   DST-I, DST-IV through half-shift FFT factorizations, so every kind reaches
@@ -381,6 +408,22 @@
   `crates/apollo-dctdst/src/application/execution/plan/dctdst/forward.rs`
   214-236 and `inverse.rs` 221-243 route I/IV kinds to direct kernels at
   every size.
+- **Blocker:** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`. The
+  factorizations need FFTs of length 2(N−1), 2(N+1), and 2N, which for general
+  N are not powers of two and so land on the 109 lengths that currently return
+  wrong results or panic. Moving these kinds onto that route would convert a
+  slow-but-correct kernel into a silently-wrong one at those sizes — the
+  existing DCT-II fast path already demonstrates the failure (N = 361 →
+  2N = 722, relative error 0.997). Gating the new fast path on a hand-kept
+  list of good lengths would be defect masking, so the dependency is real
+  rather than a sequencing preference.
+- **Re-open trigger:** the composite-radix census passes clean, at which point
+  the derivations are ready to implement: DCT-I is `Re(DFT_{2(N−1)}(y))[k]` on
+  the whole-sample-symmetric extension `y`; DST-I is
+  `−½·Im(DFT_{2(N+1)}(y))[k+1]` on the antisymmetric extension; DCT-IV and
+  DST-IV share one 2N-point FFT of the pre-twiddled `u[n] = x[n]·e^{−iπn/(2N)}`
+  as `Re` and `−Im` of `e^{−iπ(2k+1)/(4N)}·F[k]`, mirroring the existing
+  `dct2_dst2_fast` shared-FFT structure.
 
 ## ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS — Promote kernel-entry guards to release asserts [patch] — todo
 
