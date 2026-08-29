@@ -13,7 +13,6 @@ pub mod freq;
 pub mod icfft;
 pub mod irfft;
 pub mod rfft;
-pub mod routing;
 pub mod shift;
 
 pub use rfft::{
@@ -51,5 +50,3 @@ pub use icfft::{
 
 pub use freq::{fftfreq, rfftfreq};
 pub use shift::{fftshift, fftshift_inplace, ifftshift, ifftshift_inplace};
-
-pub use routing::supports_length;

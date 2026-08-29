@@ -28,6 +28,9 @@ pub(crate) enum PlanStrategy<F: MixedRadixScalar> {
         radices: Cow<'static, [usize]>,
     },
     Rader,
+    /// Chirp-z. Serves any length, so it is the terminal route for lengths no
+    /// shaped strategy accepts.
+    Bluestein,
 }
 
 impl<F: MixedRadixScalar> Clone for PlanStrategy<F> {
@@ -49,6 +52,7 @@ impl<F: MixedRadixScalar> Clone for PlanStrategy<F> {
                 radices: Cow::clone(radices),
             },
             Self::Rader => Self::Rader,
+            Self::Bluestein => Self::Bluestein,
         }
     }
 }

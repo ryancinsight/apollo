@@ -121,16 +121,16 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         324 => Some(&[4, 3, 3, 3, 3]),    // 2²×3⁴
         360 => Some(&[4, 2, 3, 3, 5]),    // 2³×3²×5
         384 => Some(&[4, 4, 4, 2, 3]),    // 2⁷×3 = 128×3 = 384
-        432 => Some(&[4, 4, 2, 3, 3, 3]), // 2⁴×3³
+        432 => Some(&[4, 4, 3, 3, 3]),    // 2⁴×3³
         480 => Some(&[4, 4, 2, 3, 5]),    // 2⁵×3×5 = 32×15 = 480
         504 => Some(&[4, 2, 3, 3, 7]),    // 2³×3²×7
         512 => Some(&[4, 4, 4, 4, 2]),    // 2⁹
-        576 => Some(&[4, 4, 4, 4, 3, 3]), // 2⁶×3²
+        576 => Some(&[4, 4, 4, 3, 3]),    // 2⁶×3²
         648 => Some(&[4, 2, 3, 3, 3, 3]), // 2³×3⁴
         720 => Some(&[4, 4, 3, 3, 5]),    // 2⁴×3²×5
-        768 => Some(&[4, 4, 4, 4, 4, 3]), // 2⁸×3
+        768 => Some(&[4, 4, 4, 4, 3]),    // 2⁸×3
         864 => Some(&[4, 4, 2, 3, 3, 3]), // 2⁵×3³ = 32×27 = 864
-        960 => Some(&[4, 4, 4, 4, 3, 5]), // 2⁶×3×5
+        960 => Some(&[4, 4, 4, 3, 5]),    // 2⁶×3×5
         972 => Some(&[4, 3, 3, 3, 3, 3]), // 2²×3⁵
         1008 => Some(&[4, 4, 3, 3, 7]),   // 2⁴×3²×7
         1024 => Some(&[4, 4, 4, 4, 4]),   // 2¹⁰
@@ -157,7 +157,6 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         105 => Some(&[3, 5, 7]),          // 3×5×7
         110 => Some(&[2, 5, 11]),         // 2×5×11
         112 => Some(&[4, 4, 7]),          // 2⁴×7
-        114 => Some(&[2, 3, 19]),         // 2×3×19
         115 => Some(&[5, 23]),            // 5×23
         117 => Some(&[3, 3, 13]),         // 3²×13
         119 => Some(&[7, 17]),            // 7×17
@@ -169,7 +168,6 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         140 => Some(&[4, 5, 7]),          // 2²×5×7
         147 => Some(&[3, 7, 7]),          // 3×7²
         150 => Some(&[2, 3, 5, 5]),       // 2×3×5²
-        152 => Some(&[4, 2, 19]),         // 2³×19
         153 => Some(&[3, 3, 17]),         // 3²×17
         154 => Some(&[2, 7, 11]),         // 2×7×11
         156 => Some(&[4, 3, 13]),         // 2²×3×13
@@ -177,7 +175,6 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         165 => Some(&[3, 5, 11]),         // 3×5×11
         168 => Some(&[4, 2, 3, 7]),       // 2³×3×7
         169 => Some(&[13, 13]),           // 13²
-        171 => Some(&[3, 3, 19]),         // 3²×19
         175 => Some(&[5, 5, 7]),          // 5²×7
         176 => Some(&[4, 4, 11]),         // 2⁴×11
         182 => Some(&[2, 7, 13]),         // 2×7×13
@@ -188,7 +185,6 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         204 => Some(&[4, 3, 17]),         // 2²×3×17
         207 => Some(&[3, 3, 23]),         // 3²×23
         208 => Some(&[4, 4, 13]),         // 2⁴×13
-        209 => Some(&[11, 19]),           // 11×19
         210 => Some(&[2, 3, 5, 7]),       // 2×3×5×7
         220 => Some(&[4, 5, 11]),         // 2²×5×11
         224 => Some(&[4, 4, 2, 7]),       // 2⁵×7
@@ -204,18 +200,15 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         255 => Some(&[3, 5, 17]),         // 3×5×17
         260 => Some(&[4, 5, 13]),         // 2²×5×13
         264 => Some(&[4, 2, 3, 11]),      // 2³×3×11
-        266 => Some(&[2, 7, 19]),         // 2×7×19
         272 => Some(&[4, 4, 17]),         // 2⁴×17
         273 => Some(&[3, 7, 13]),         // 3×7×13
         275 => Some(&[5, 5, 11]),         // 5²×11
         276 => Some(&[4, 3, 23]),         // 2²×3×23
         280 => Some(&[4, 2, 5, 7]),       // 2³×5×7
-        285 => Some(&[3, 5, 19]),         // 3×5×19
         286 => Some(&[2, 11, 13]),        // 2×11×13
         294 => Some(&[2, 3, 7, 7]),       // 2×3×7²
         297 => Some(&[3, 3, 3, 11]),      // 3³×11
         300 => Some(&[4, 3, 5, 5]),       // 2²×3×5²
-        304 => Some(&[4, 4, 19]),         // 2⁴×19
         308 => Some(&[4, 7, 11]),         // 2²×7×11
         312 => Some(&[4, 2, 3, 13]),      // 2³×3×13
         315 => Some(&[3, 3, 5, 7]),       // 3²×5×7
@@ -236,12 +229,10 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         368 => Some(&[4, 4, 23]),         // 2⁴×23
         375 => Some(&[3, 5, 5, 5]),       // 3×5³
         378 => Some(&[2, 3, 3, 3, 7]),    // 2×3³×7
-        380 => Some(&[4, 5, 19]),         // 2²×5×19
         385 => Some(&[5, 7, 11]),         // 5×7×11
         390 => Some(&[2, 3, 5, 13]),      // 2×3×5×13
         392 => Some(&[4, 2, 7, 7]),       // 2³×7²
         396 => Some(&[4, 3, 3, 11]),      // 2²×3²×11
-        399 => Some(&[3, 7, 19]),         // 3×7×19
         400 => Some(&[4, 4, 5, 5]),       // 2⁴×5²
         405 => Some(&[3, 3, 3, 3, 5]),    // 3⁴×5
         408 => Some(&[4, 2, 3, 17]),      // 2³×3×17
@@ -255,11 +246,9 @@ fn static_prime23_radices(n: usize) -> Option<&'static [usize]> {
         448 => Some(&[4, 4, 4, 7]),       // 2⁶×7
         450 => Some(&[2, 3, 3, 5, 5]),    // 2×3²×5²
         455 => Some(&[5, 7, 13]),         // 5×7×13
-        456 => Some(&[4, 2, 3, 19]),      // 2³×3×19
         459 => Some(&[3, 3, 3, 17]),      // 3³×17
         462 => Some(&[2, 3, 7, 11]),      // 2×3×7×11
         468 => Some(&[4, 3, 3, 13]),      // 2²×3²×13
-        475 => Some(&[5, 5, 19]),         // 5²×19
         476 => Some(&[4, 7, 17]),         // 2²×7×17
         483 => Some(&[3, 7, 23]),         // 3×7×23
         484 => Some(&[4, 11, 11]),        // 2²×11²
@@ -356,7 +345,23 @@ pub(crate) fn dispatch_inplace<
         if INVERSE && NORMALIZE {
             F::normalize(data, n);
         }
+        return;
     }
+
+    // Every shaped strategy has declined: `n` is composite, not smooth over
+    // the supported radices, and has no coprime split. Reaching the end of
+    // this function used to mean returning with `data` untouched — the
+    // identity, presented as a transform, with no diagnostic. Lengths of the
+    // form `p^2` for a prime `p` outside the radix set (361, 841, 961, ...)
+    // land here, and so did every composite built from them, because
+    // Good-Thomas routes its row transforms back through this dispatcher.
+    // Bluestein serves any length, so the terminal case is now a correct
+    // transform rather than a silent no-op.
+    crate::application::execution::kernel::components::bluestein::bluestein_fft::<
+        F,
+        INVERSE,
+        NORMALIZE,
+    >(data);
 }
 
 #[inline]
@@ -533,4 +538,63 @@ fn dispatch_compact_storage<S: Complex32Bridge, const INVERSE: bool, const NORMA
     run_via_complex32(data, |buf| {
         dispatch_inplace::<f32, INVERSE, NORMALIZE>(buf, None);
     });
+}
+
+#[cfg(test)]
+mod static_radix_table {
+    use super::static_prime23_radices;
+
+    /// Every static entry must factor the length it is keyed by.
+    ///
+    /// The table is hand-maintained, and an entry whose radices multiply to
+    /// something other than its key is not a slow path — it is a wrong
+    /// transform, because the composite kernel runs the stages it is given.
+    /// A single arithmetic slip is invisible on inspection (`[4, 4, 4, 4, 3, 3]`
+    /// reads like `2^6 * 3^2` until it is multiplied out) and reaches only the
+    /// one length it is keyed by, so nothing but this check covers it.
+    #[test]
+    fn every_entry_multiplies_to_its_key() {
+        let mut wrong = Vec::new();
+        for n in 0..100_000usize {
+            if let Some(radices) = static_prime23_radices(n) {
+                let product: usize = radices.iter().product();
+                if product != n {
+                    wrong.push((n, radices, product));
+                }
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "static radix entries that do not factor their key \
+             (length, radices, product): {wrong:?}"
+        );
+    }
+
+    /// Every static entry must use radices the composite kernel can execute.
+    ///
+    /// `radix_composite::arity` dispatches a closed set and ends in
+    /// `unreachable!("unsupported radix")`. `factorize_composite` never emits a
+    /// radix outside that set, so the runtime factorizer cannot reach the
+    /// panic — but this hand-written table bypasses the factorizer, and an
+    /// entry naming an unsupported radix turns that `unreachable!` into a
+    /// reachable panic. It is reached indirectly: a length whose own plan
+    /// avoids the table still lands here when it appears as a Good-Thomas
+    /// sub-transform.
+    #[test]
+    fn every_entry_uses_an_executable_radix() {
+        // Mirrors the match arms in `radix_composite::arity::dispatch_stage`.
+        const EXECUTABLE: [usize; 11] = [2, 3, 4, 5, 7, 8, 11, 13, 16, 17, 23];
+        let mut wrong = Vec::new();
+        for n in 0..100_000usize {
+            if let Some(radices) = static_prime23_radices(n) {
+                if let Some(&bad) = radices.iter().find(|r| !EXECUTABLE.contains(r)) {
+                    wrong.push((n, radices, bad));
+                }
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "static radix entries naming a radix the composite kernel cannot              execute (length, radices, offending radix): {wrong:?}"
+        );
+    }
 }
