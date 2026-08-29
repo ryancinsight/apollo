@@ -6,12 +6,21 @@
       benchmark, feature, and public exports while retaining CUDA FFT.
 - [x] Move all in-repository dense WGPU consumers to prepared rank-generic
       Hephaestus plans and retain NUFFT plans, buffers, and host capacity.
+- [x] Prepare and bind all four reusable NUFFT domain stages once, update only
+      retained parameter buffers, and encode each operation as one grouped
+      Hephaestus sequence with a retained fixed-capacity interpolation grid.
+- [x] Prove value correctness when one workspace executes maximum-capacity then
+      shorter logical-sample requests across 1-D/3-D Type-1/Type-2 paths.
+- [x] Prove zero Apollo-owned warm allocations for host conversion, readback,
+      and non-contiguous 3-D coefficient staging while preserving capacity.
 - [x] Repair benchmark-mode selection and complete the bounded retained-versus-
       per-call GPU measurement without reducing statistical observations.
 - [x] Pass the local feature matrix, value-semantic Nextest suites, doctests,
       warning-denied Rustdoc, residue checks, and SemVer classification.
-- [ ] Commit the exact diff, obtain independent architecture review, merge the
-      provider cutover, and synchronize Apollo/Hephaestus closure records.
+- [x] Commit exact Apollo candidate `fcb924bb`; provider PR #234 is merged at
+      `44754cd1` and its independent review is GREEN.
+- [ ] Obtain independent review of `fcb924bb`, deliver PR #176 through hosted
+      gates, merge, synchronize closure revisions, and discharge the lease.
 
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
