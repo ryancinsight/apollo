@@ -41,15 +41,23 @@ use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel
 /// alias in L1 once `m * 16` bytes reaches the set period.
 const TRANSPOSE_TILE: usize = 8;
 
-/// Swaps whole rows of `m` samples per the plan's bit-reversal list.
-fn permute_rows<T>(data: &mut [Complex<T>], swaps: &[(u32, u32)], m: usize)
+/// Swaps whole rows of `m` samples into bit-reversed order.
+///
+/// Derived here rather than read from the plan. This module is the
+/// independent-implementation oracle for the planar driver, and an oracle
+/// that shares the implementation's tables checks less than one that does
+/// not.
+fn permute_rows<T>(data: &mut [Complex<T>], rows: usize, m: usize)
 where
     T: Copy,
 {
-    for &(i, j) in swaps {
-        let (i, j) = (i as usize * m, j as usize * m);
-        let (low, high) = data.split_at_mut(j);
-        low[i..i + m].swap_with_slice(&mut high[..m]);
+    let bits = rows.trailing_zeros();
+    for i in 0..rows {
+        let j = i.reverse_bits() >> (usize::BITS - bits);
+        if j > i {
+            let (low, high) = data.split_at_mut(j * m);
+            low[i * m..i * m + m].swap_with_slice(&mut high[..m]);
+        }
     }
 }
 
@@ -302,7 +310,7 @@ where
 
     // 1. First axis: bit-reverse rows, then the stage set. The input is
     //    already batch-major for this direction.
-    permute_rows(data, &plan.swaps, m);
+    permute_rows(data, m, m);
     run_stages(data, plan.as_ref());
 
     // 2. Four-step twiddle W_n^{b*k1}: the cached matrix is interleaved like
@@ -318,7 +326,7 @@ where
     // 3. Transpose so the second axis becomes batch-major, then its stage set;
     //    the result lands at the natural output index.
     transpose_samples(data, m);
-    permute_rows(data, &plan.swaps, m);
+    permute_rows(data, m, m);
     run_stages(data, plan.as_ref());
 }
 

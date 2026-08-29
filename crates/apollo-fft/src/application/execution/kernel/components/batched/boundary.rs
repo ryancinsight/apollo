@@ -96,8 +96,13 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
                 && self.m * self.stride % lanes == 0,
             "invariant: both planes hold m padded rows and the output 2m^2 lanes"
         );
+        // The stage set that produced these planes is decimated in
+        // frequency, so its output rows are bit-reversed. Reading `rev(row)`
+        // here is the whole of the permutation the route used to spend a
+        // separate pass on.
+        let bits = self.m.trailing_zeros();
         for row in 0..self.m {
-            let src_c = row * self.stride / 4;
+            let src_c = (row.reverse_bits() >> (usize::BITS - bits)) * self.stride / 4;
             let dst_c = row * self.m / 2;
             for r in 0..self.m / 4 {
                 let e = chunk::<T, A>(self.re, src_c + r);

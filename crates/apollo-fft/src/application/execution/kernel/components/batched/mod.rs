@@ -41,16 +41,17 @@ use std::sync::Arc;
 
 /// Tile side for the in-place transpose, in elements.
 ///
-/// Per-length batched-transform plan: the decimation-in-time twiddle table and
-/// the bit-reversal permutation, both build-time cost.
+/// Per-length batched-transform plan: the stage-major twiddle table, a
+/// build-time cost.
+///
+/// Both stage sets read this one table. The time-decimated set walks its
+/// stages upward and the frequency-decimated set downward, over the same
+/// values.
 pub(crate) struct BatchedPlan<T> {
     len: usize,
     /// Stage-major twiddles: stage `s` (sub-transform length `2^(s+1)`) occupies
     /// `2^s` entries, so the table totals `len - 1`.
     tw: Vec<(T, T)>,
-    /// Index pairs to exchange for the bit-reversal permutation, `i < j` only,
-    /// so applying them once performs the permutation.
-    swaps: Vec<(u32, u32)>,
 }
 
 impl<T: MixedRadixScalar> BatchedPlan<T> {
@@ -59,17 +60,6 @@ impl<T: MixedRadixScalar> BatchedPlan<T> {
             len.is_power_of_two(),
             "batched plan requires a power of two"
         );
-        let logn = len.trailing_zeros();
-        let swaps = (0..len)
-            .filter_map(|i| {
-                let j = ((i as u32).reverse_bits() >> (32 - logn)) as usize;
-                (j > i).then_some((
-                    u32::try_from(i).expect("index fits u32"),
-                    u32::try_from(j).expect("index fits u32"),
-                ))
-            })
-            .collect();
-
         let sign = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         let mut tw = Vec::with_capacity(len.saturating_sub(1));
         let mut l = 2usize;
@@ -83,7 +73,7 @@ impl<T: MixedRadixScalar> BatchedPlan<T> {
             }
             l <<= 1;
         }
-        Self { len, tw, swaps }
+        Self { len, tw }
     }
 }
 
@@ -340,7 +330,7 @@ where
     reason = "must fold into the caller's target-feature scope; an out-of-line               call here reintroduces the ADR 009 penalty this kernel exists to avoid"
 )]
 #[inline(always)]
-fn load<T, A>(data: &[T], at: usize) -> Vector<T, A>
+pub(super) fn load<T, A>(data: &[T], at: usize) -> Vector<T, A>
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
@@ -360,7 +350,7 @@ where
     reason = "must fold into the caller's target-feature scope; an out-of-line               call here reintroduces the ADR 009 penalty this kernel exists to avoid"
 )]
 #[inline(always)]
-fn store<T, A>(v: Vector<T, A>, data: &mut [T], at: usize)
+pub(super) fn store<T, A>(v: Vector<T, A>, data: &mut [T], at: usize)
 where
     T: LaneScalar,
     A: SimdArch + SimdKernel<T>,
@@ -368,21 +358,6 @@ where
     debug_assert!(at + <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: as `load` above.
     unsafe { v.store_unaligned(data.as_mut_ptr().add(at)) }
-}
-
-/// Applies the bit-reversal permutation across every transform in the batch.
-fn permute<T: Copy>(re: &mut [T], im: &mut [T], swaps: &[(u32, u32)], batch: usize, stride: usize) {
-    // Whole-row exchanges rather than element swaps: `swap_with_slice` lowers
-    // to block copies the compiler vectorizes, where the element loop issued
-    // two scalar swaps per lane. The plan's swap list guarantees `i < j`, so
-    // splitting at `j`'s row start yields the two disjoint rows safely.
-    for &(i, j) in swaps {
-        let (i, j) = (i as usize * stride, j as usize * stride);
-        let (re_low, re_high) = re.split_at_mut(j);
-        re_low[i..i + batch].swap_with_slice(&mut re_high[..batch]);
-        let (im_low, im_high) = im.split_at_mut(j);
-        im_low[i..i + batch].swap_with_slice(&mut im_high[..batch]);
-    }
 }
 
 /// Square in-place transpose of an `m x m` plane, tiled for locality.
@@ -469,14 +444,16 @@ impl<T: MixedRadixScalar<Complex = Complex<T>>> FourStepPlanes<T> {
                 Complex<T>,
                 INVERSE,
             >(n, m, m);
-        let bits = m.trailing_zeros();
+        // Rows in natural order, because the stage set that folds these
+        // consumes natural order: it is decimated in frequency. The planes
+        // were row-permuted while that set was decimated in time and its
+        // input arrived bit-reversed.
         let mut re = vec![T::from_precise(0.0); m * m].into_boxed_slice();
         let mut im = vec![T::from_precise(0.0); m * m].into_boxed_slice();
-        for row in 0..m {
-            let src = row.reverse_bits() >> (usize::BITS - bits);
-            for col in 0..m {
-                re[row * m + col] = interleaved[src * m + col].re;
-                im[row * m + col] = interleaved[src * m + col].im;
+        for (row, chunk) in interleaved.chunks_exact(m).enumerate().take(m) {
+            for (col, value) in chunk.iter().enumerate() {
+                re[row * m + col] = value.re;
+                im[row * m + col] = value.im;
             }
         }
         Self { re, im }
@@ -541,9 +518,9 @@ impl_plan_cache!(f64, PLAN_CACHE_F64, PLANES_CACHE_F64);
 impl_plan_cache!(f32, PLAN_CACHE_F32, PLANES_CACHE_F32);
 
 /// Runs the stage set of `batch` transforms of length `plan.len` over planar
-/// `re`/`im`, whose rows the caller has already bit-reversed — either by
-/// [`permute`] or by writing rows to their reversed positions in the first
-/// place, which is how the driver's deinterleave avoids a whole pass.
+/// `re`/`im`, whose rows the caller has already bit-reversed — which the
+/// driver's deinterleave does for free by writing each row to its reversed
+/// position.
 fn run_batched<T>(
     re: &mut [T],
     im: &mut [T],
@@ -555,6 +532,31 @@ fn run_batched<T>(
     T: LaneScalar + MixedRadixScalar,
 {
     hermes_simd::vectorize(BatchedStages {
+        re,
+        im,
+        tw: &plan.tw,
+        fold,
+        batch,
+        stride,
+        len: plan.len,
+    });
+}
+
+/// Runs the same stage set decimated in frequency: rows arrive in natural
+/// order and leave bit-reversed, which is the pairing that lets the sink
+/// absorb the permutation the time-decimated set needed a whole pass to
+/// repair (see [`dif`]).
+fn run_batched_dif<T>(
+    re: &mut [T],
+    im: &mut [T],
+    plan: &BatchedPlan<T>,
+    fold: Option<(&[T], &[T])>,
+    batch: usize,
+    stride: usize,
+) where
+    T: LaneScalar + MixedRadixScalar,
+{
+    hermes_simd::vectorize(dif::BatchedStagesDif {
         re,
         im,
         tw: &plan.tw,
@@ -792,13 +794,17 @@ fn planar_stages<T, const INVERSE: bool>(
     // 3. The `m` transforms along the second axis, with the four-step twiddle
     //    W_N^{b·k1} folded into the first stage's loads — the matrix is
     //    symmetric, so applying it after the transpose is identical, and its
-    //    planar row-permuted planes are built once in the shared cache. The
-    //    transpose produced natural row order, so the bit-reversal pass still
-    //    runs; the result lands at `k2 * m + k1`, the natural output index.
+    //    planar planes are built once in the shared cache.
+    //
+    //    This set is decimated in frequency, and that is what deletes the
+    //    repair pass that used to sit here. The transpose leaves natural row
+    //    order, which is what DIF consumes; it leaves its output
+    //    bit-reversed, which the sink absorbs by reading `rev(row)` — the
+    //    mirror of the deinterleave's free permutation on the source side.
+    //    The result still lands at `k2 * m + k1` once the sink has read it.
     let planes = T::cached_four_step_planes::<INVERSE>(n, m);
-    sect!("permute", { permute(re, im, &plan.swaps, m, stride) });
     sect!("stages2", {
-        run_batched(
+        run_batched_dif(
             re,
             im,
             plan.as_ref(),
@@ -828,6 +834,10 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
     planar_stages::<T, INVERSE>(re, im, n, m, stride);
 
+    // The stage set left its rows bit-reversed, so the sink reads
+    // `rev(row)`. That is the permutation the route used to spend a pass on,
+    // and here it is an index computation on a pass that had to happen.
+    let bits = m.trailing_zeros();
     sect!("reint", {
         let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
             re,
@@ -839,8 +849,9 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         .unwrap_or(false);
         if !handled {
             for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
+                let src = (row.reverse_bits() >> (usize::BITS - bits)) * stride;
                 for (b, c) in chunk.iter_mut().enumerate() {
-                    *c = Complex::new(re[row * stride + b], im[row * stride + b]);
+                    *c = Complex::new(re[src + b], im[src + b]);
                 }
             }
         }
@@ -940,9 +951,12 @@ pub(crate) fn combine_planar_halves<T>(
     let (o_re, o_im) = bytemuck::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
     let (low, high) = data.split_at_mut(half);
 
+    // As the square route's sink: the stage set left bit-reversed rows, so
+    // the read side carries the permutation.
+    let bits = m.trailing_zeros();
     sect!("combine", {
         for row in 0..m {
-            let base = row * stride;
+            let base = (row.reverse_bits() >> (usize::BITS - bits)) * stride;
             for b in 0..m {
                 let j = row * m + b;
                 let e = Complex::new(e_re[base + b], e_im[base + b]);
@@ -956,6 +970,7 @@ pub(crate) fn combine_planar_halves<T>(
 }
 
 pub(crate) mod boundary;
+mod dif;
 
 // Test-gated deliberately: the interleaved in-place kernel is correct and
 // measured — and slower than the planar sibling by 16 to 37% pinned on a

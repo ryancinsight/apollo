@@ -68,43 +68,41 @@
   set one for identical butterflies, which is the four-step twiddle fold
   and is real arithmetic; and the permute pass at 4.9-6.2% is pure repair.
 
-## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — ready
+## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — done 2026-08-28
 
-- **Outcome:** the permute pass disappears. Acceptance: 1024 and 4096
-  improve against the attribution table with every oracle passing, and the
-  odd powers, which run the route twice, improve proportionately.
-- **Why** (`gap_audit.md#planar-pass-attribution`): the deinterleave gets
-  bit-reversed rows for free by writing each row to `rev(row)`; the
-  transpose destroys that order, so a whole pass restores it before stage
-  set two. It is the one pass whose entire content is undoing the pass
-  before it — 11756 TSC at 16384, on the order of the transpose itself, and
-  4.9-6.2% of the route everywhere. Since the boundary passes are the whole
-  deficit at the large even powers (butterflies are already ahead of the
-  reference), removing it is what takes 16384 below 1.0.
-- **The design is decided, not open.** `BatchedPlan::new` builds `swaps` as
-  exactly `rev(i)` over `log2(len)` bits, so the pass is the plain DIT
-  bit-reversal — which settles the two shapes that were open:
-  - *Fold it into the transpose* is rejected. The composite map is
-    `(r, c) -> (rev(c), r)`, a bit-permutation of the flat index whose
-    cycles do not decompose into tile-pair swaps, so the in-place tiled
-    transpose stops being tileable and becomes cycle-following. That trades
-    a 5% pass for a slower 6.5% one.
-  - *Run stage set two as decimation-in-frequency* is the answer. DIF takes
-    natural-order input — which is exactly what the transpose leaves — and
-    produces bit-reversed output, and the sink absorbs that reversal for
-    free by reading `rev(row)`, the same trick the deinterleave already uses
-    on the source side. `InterleaveRows` absorbs it on the square route and
-    `combine_planar_halves` on the split route; both are index changes at a
-    pass that already exists.
-- **What it costs to build:** `BatchedStages` fuses two stages per pass with
-  `l` doubling from 2; the DIF form halves `l` from `len`, and the twiddle
-  table is the same values in the reverse stage order. The risk to watch is
-  the one this repository has already paid twice: a const parameter over
-  decimation direction may perturb the sequential path's code placement, so
-  build it as a sibling kernel and keep the controls in the same run.
-- **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** permute
-  517 at 1024, 3014 at 4096, 11756 at 16384; totals 10645, 48700, 215660.
-  Ladder ratios to beat: 1.34 at 1024, 1.14 at 4096, 1.05 at 16384.
+- **Delivered** (`gap_audit.md#dif-stage-set`): stage set two runs decimated
+  in frequency, so it consumes the natural row order the transpose leaves
+  and emits bit-reversed order the sink absorbs by reading `rev(row)`. The
+  repair pass is gone, along with the plan's bit-reversal swap list.
+- **Measured pinned, two clean runs, each validated by its in-run RustFFT
+  control:** 1024 3325.3 -> 3046.6 ns (1.34 -> 1.22), 2048 7473.0 -> 7119.1
+  (1.36 -> 1.27), 4096 14166.8 -> 13210.7 (1.14 -> 1.06), 8192 30927.9 ->
+  29668.0 (1.13 -> 1.09), 16384 61944.3 -> 57547.5 (1.05 -> **0.97**).
+  Controls below 1024 unchanged.
+- **We are ahead of RustFFT at n = 16384 and ahead of PhastFT everywhere
+  the planar route serves.** First crossing in this campaign.
+- **Unlooked-for:** stage set two itself fell 9.6% at 16384 for identical
+  butterfly work, beyond the pass removal. Hypothesis recorded, not
+  measured: the fold planes are now stored in natural row order to match
+  the data rows.
+- **Cost:** the split route's combine rose 24 to 33%, since it reads two
+  planes in bit-reversed row order, so the odd powers gain less than the
+  even ones.
+
+## ATLAS-APOLLO-PLANAR-MOVEMENT-2026-08-28 — What is left of the planar route's movement [perf] — todo
+
+- **State:** movement is about 26% of the route, down from 30%, and none of
+  it is repair — deinterleave, transpose, and sink each move data the
+  algorithm needs moved (`gap_audit.md#dif-stage-set`). The next gain at
+  these sizes is not another pass to delete, so this item is open for a
+  measurement-first look rather than a named fix.
+- **Where to start:** the sink's cost rose with the bit-reversed read, most
+  sharply on the split route's combine (4361 -> 5404 TSC at 2048,
+  15086 -> 19999 at 8192). Whether that is the reversal or the two-plane
+  read is not yet separated, and separating it is the first increment.
+- **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** totals
+  9545 at 1024, 23224 at 2048, 45455 at 4096, 100475 at 8192, 198694 at
+  16384.
 
 ## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
 

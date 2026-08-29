@@ -1,3 +1,71 @@
+## Apollo is faster than RustFFT at n = 16384 (2026-08-28) <a id="dif-stage-set"></a>
+
+The [pass attribution](#planar-pass-attribution) found one pass whose entire
+content was undoing the pass before it: the deinterleave earns bit-reversed
+rows for free, the transpose destroys that order, and a repair pass restored
+it before stage set two. [Reading how the swap list is built](#planar-pass-attribution)
+showed the pass is plain bit-reversal, which ruled out folding it into the
+transpose and left one answer — run stage set two decimated in frequency,
+which consumes natural order and emits bit-reversed, so the sink absorbs the
+permutation by reading `rev(row)`.
+
+Built as a sibling kernel, because DIT and DIF are different algorithms
+rather than two settings of one: DIT multiplies the odd operand before the
+butterfly and DIF multiplies the difference after it. They share the twiddle
+table exactly — stage sub-length `l` at offset `l / 2 - 1` — walked upward
+by one and downward by the other.
+
+**Pinned, P-core, two clean runs, each validated by its own in-run RustFFT
+control matching history to within 3%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 1024 | 3325.3 ns | **3046.6 / 3106.9** | 1.34 -> **1.22 / 1.26** | 0.90 / 0.95 |
+| 2048 | 7473.0 | **7119.1 / 7227.9** | 1.36 -> **1.27 / 1.30** | 0.99 / 1.01 |
+| 4096 | 14166.8 | **13210.7 / 13374.6** | 1.14 -> **1.06 / 1.07** | 0.83 / 0.85 |
+| 8192 | 30927.9 | **29668.0 / 29836.1** | 1.13 -> **1.09 / 1.10** | 0.86 / 0.88 |
+| 16384 | 61944.3 | **57547.5 / 57811.5** | 1.05 -> **0.97 / 0.95** | 0.75 / 0.79 |
+
+**At n = 16384 we are ahead of RustFFT**, and ahead of PhastFT at every size
+the planar route serves. That crossing is the first in this campaign. The
+sizes below 1024 are untouched controls and read 1.57, 1.53, 1.77, 1.82
+against 1.57, 1.55, 1.78, 1.85 before.
+
+The pass totals say where it came from:
+
+| n | permute (gone) | stages2 before | stages2 after | total before | total after |
+| --- | --- | --- | --- | --- | --- |
+| 1024 | 517 | 4056 | 3374 | 10645 | **9545** |
+| 4096 | 3014 | 18075 | 16868 | 48700 | **45455** |
+| 16384 | 11756 | 83061 | 75094 | 215660 | **198694** |
+
+**Stage set two also got cheaper, which was not the point and is worth
+recording.** Removing the pass accounts for the permute column; the rest is
+stage set two itself falling 9.6% at 16384 for identical butterfly work.
+The plausible cause is the fold: its planes are now stored in natural row
+order to match the data, where they were bit-reversed before, so the pass
+that reads them walks two arrays in step instead of one against a permuted
+one. That is a hypothesis from the layout change, not a measured cause.
+
+**What it cost.** The sinks now read `rev(row)`, and on the split route that
+is not free — the combine rose 4361 to 5404 TSC at 2048 and 15086 to 19999
+at 8192, because it reads two planes in bit-reversed row order. The odd
+powers still come out ahead, by less than the even ones: 1.36 to 1.27 where
+4096 went 1.14 to 1.06.
+
+**And what it deleted.** The plan no longer carries a bit-reversal swap list
+at all — that was up to `len / 2` index pairs cached per size, per
+direction, per scalar type. The interleaved differential oracle derives its
+own permutation now, which also makes it a better oracle: one that shares
+the implementation's tables checks less than one that does not.
+
+### Where the route stands now
+
+Movement is down to about 26% from 30%, and the remaining pieces are
+deinterleave, transpose, and sink. None of them is repair — each moves data
+the algorithm genuinely needs moved. The next gain at these sizes is not
+another pass to delete.
+
 ## The benchmark gate flagged a benchmark the change cannot reach (2026-08-28) <a id="benchmark-gate-noise"></a>
 
 The [paired decimation pass](#split-single-pass) was held at merge by the

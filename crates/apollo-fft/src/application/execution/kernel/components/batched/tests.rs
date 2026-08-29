@@ -50,24 +50,30 @@ fn transpose_is_its_own_inverse_and_never_touches_the_pad() {
     }
 }
 
+/// The planes must match the interleaved matrix row for row.
+///
+/// They were row-permuted while the stage set that folds them was decimated
+/// in time and so took bit-reversed input. That set is now decimated in
+/// frequency and takes natural order, so the planes follow the data rows
+/// (`gap_audit.md#planar-pass-attribution`). This asserts the layout the
+/// fold actually indexes; the transform-level oracles below assert that the
+/// pairing is right.
 #[test]
-fn four_step_planes_are_the_row_permuted_split_of_the_interleaved_matrix() {
+fn four_step_planes_are_the_row_faithful_split_of_the_interleaved_matrix() {
     use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
     let (n, m) = (256usize, 16usize);
     let planes = <f64 as BatchedPlanCache>::cached_four_step_planes::<false>(n, m);
     let interleaved = <f64 as MixedRadixScalar>::cached_four_step_twiddles::<false>(n, m, m);
-    let bits = m.trailing_zeros();
     for row in 0..m {
-        let src = row.reverse_bits() >> (usize::BITS - bits);
         for col in 0..m {
             assert_eq!(
                 planes.re[row * m + col].to_bits(),
-                interleaved[src * m + col].re.to_bits(),
+                interleaved[row * m + col].re.to_bits(),
                 "re ({row},{col})"
             );
             assert_eq!(
                 planes.im[row * m + col].to_bits(),
-                interleaved[src * m + col].im.to_bits(),
+                interleaved[row * m + col].im.to_bits(),
                 "im ({row},{col})"
             );
         }
