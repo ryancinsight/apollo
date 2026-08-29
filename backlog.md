@@ -81,7 +81,7 @@
   disassembled. A phase costing disproportionately to its arithmetic is a
   signal to read the emitted code.
 
-## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — in progress (silent corruption stopped; correct routing still owed)
+## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — in progress (MOST CORRUPTION IS STILL SILENT — earlier claim corrected)
 
 - **Root cause, traced 2026-08-28 by the integrator (session 03d80d33).** The
   strategy chain in `dimension_1d/dynamic_impl.rs` ends in an unconditional
@@ -98,6 +98,28 @@
   Good-Thomas, and matches no special case — so every earlier arm declines and
   it lands on Rader. Multiples such as 722, 1083 and 1444 reach it through a
   Good-Thomas split whose sub-transform is the affected square.
+- **CORRECTION 2026-08-29 — the guard covers far less than claimed.** The entry
+  below said "silent corruption stopped". That is wrong, and the examples this
+  item itself cites are among the ones still broken. Re-measured on
+  `origin/main` with a forward/inverse round trip: **361 panics loudly**, but
+  **722, 1083, 1444 and 1153 still return silent wrong answers** with maximum
+  errors of 2.080e1, 2.079e1, 2.080e1 and 8.904e1 against inputs of order 1.
+  Of the 109 affected lengths only **17** assert at plan construction; the rest
+  assert during execution (1153, 2306, 6726) or corrupt silently (722, 1083,
+  1444, 6727, 6728).
+- **Why the guard misses them:** the assertion sits on the *terminal* Rader arm
+  of the top-level plan. A length with a coprime split (722 = 2·361,
+  1083 = 3·361, 1444 = 4·361) is routed by Good-Thomas, and its sub-transform
+  reaches Rader through its own path, which the top-level assertion never sees.
+  1153 is prime and fails for a distinct reason, so at least two mechanisms are
+  in play.
+- **Consequence for anyone building on this:** a "probe by catching the panic"
+  fallback looks correct and ships wrong answers. `apollo_fft::supports_length`
+  (added 2026-08-29) exists because of this — it runs one transform against a
+  closed-form oracle rather than shadowing the strategy chain, which is exact
+  for all three failure modes. The failure set has no arithmetic
+  characterization to shortcut with: 23² is correct while 19² is not, 19·23 is
+  correct while 6·437 is not.
 - **Stopped bleeding, did not fix routing.** Plan construction now asserts
   primality before selecting Rader, so an unroutable length fails loudly at
   construction with a message naming this item, instead of a published
