@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 use super::executors::{
     exec_base128_forward, exec_base128_inverse, exec_base128_inverse_unnorm, exec_base64_forward,
-    exec_base64_inverse, exec_base64_inverse_unnorm, exec_composite_forward,
+    exec_base64_inverse, exec_base64_inverse_unnorm, exec_bluestein_forward,
+    exec_bluestein_inverse, exec_bluestein_inverse_unnorm, exec_composite_forward,
     exec_composite_inverse, exec_composite_inverse_unnorm, exec_good_thomas_forward,
     exec_good_thomas_inverse, exec_good_thomas_inverse_unnorm, exec_identity, exec_pot_forward_16,
     exec_pot_forward_2, exec_pot_forward_32, exec_pot_forward_4, exec_pot_forward_512,
@@ -224,31 +225,21 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
         } else {
             // Rader's algorithm is valid only for prime n: it maps the
             // transform onto the multiplicative group modulo n, which is
-            // cyclic of order n - 1 exactly when n is prime. `rader` documents
-            // that contract and guards it with `debug_assert!(is_prime(n))` —
-            // which compiles out of release builds, so a composite length
-            // reaching this fallback produced a silently wrong result instead
-            // of failing.
+            // cyclic of order n - 1 exactly when n is prime. A composite
+            // length reaching here would be transformed by a method whose
+            // precondition it fails.
             //
-            // Non-smooth composite lengths do reach here: a length divisible
-            // by the square of a prime above the supported radix set (361 =
-            // 19^2, 841 = 29^2, 961 = 31^2, ...) is rejected by
-            // `factorize_composite` and has no coprime split, so every earlier
-            // arm declines it. Serving those needs a general Bluestein
-            // strategy or a composite path carrying Rader sub-transforms;
-            // apollo has neither today (its `bluestein` module is Rader's
-            // internal convolution, not a standalone transform), so until one
-            // exists this fails loudly at plan construction rather than
-            // returning corrupt output from a published transform.
-            assert!(
-                crate::application::execution::kernel::radix_shape::is_prime(n),
-                "apollo-fft has no correct route for length {n}: it is neither \
-                 a power of two, nor smooth over the supported radices, nor \
-                 splittable into coprime factors, and Rader's algorithm \
-                 requires a prime length. Tracked as \
-                 ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28."
-            );
-            PlanStrategy::Rader
+            // Composite lengths do reach here. A length divisible by the
+            // square of a prime above the supported radix set (361 = 19^2,
+            // 841 = 29^2, 961 = 31^2, ...) is rejected by
+            // `factorize_composite` and has no coprime split, so every
+            // earlier arm declines it. Bluestein needs no shape at all, so it
+            // serves exactly the lengths that reach the end of this chain.
+            if crate::application::execution::kernel::radix_shape::is_prime(n) {
+                PlanStrategy::Rader
+            } else {
+                PlanStrategy::Bluestein
+            }
         };
 
         // Cache parameters and assign specialized function pointers
@@ -469,6 +460,11 @@ impl<F: MixedRadixScalar<Complex = Complex<F>>> FftPlan1D<F> {
                 forward_impl = exec_rader_forward::<F>;
                 inverse_impl = exec_rader_inverse::<F>;
                 inverse_unnorm_impl = exec_rader_inverse_unnorm::<F>;
+            }
+            PlanStrategy::Bluestein => {
+                forward_impl = exec_bluestein_forward::<F>;
+                inverse_impl = exec_bluestein_inverse::<F>;
+                inverse_unnorm_impl = exec_bluestein_inverse_unnorm::<F>;
             }
         }
 

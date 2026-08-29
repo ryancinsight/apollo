@@ -45,11 +45,13 @@
 //!
 //! # Routability
 //!
-//! `n_lon` is chosen by the caller, and `apollo-fft` has lengths for which the
-//! transform asserts or returns a wrong answer. [`longitude_route_available`]
-//! asks `apollo-fft` whether this particular length is one of them; when it is,
-//! the caller keeps the direct sum. See
-//! `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`.
+//! `n_lon` is chosen by the caller, so this path is only usable if
+//! `apollo-fft` transforms every width. It once did not — see
+//! `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`, which is why this
+//! module carried a direct-sum fallback and a routability probe. Bluestein now
+//! serves the lengths no shaped strategy accepts, so the factored path is
+//! unconditional and the fallback is gone; the direct sums remain as the
+//! differential oracle the tests check against.
 
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::{FftPlan1D, PlanCacheProvider, Shape1D};
@@ -63,16 +65,6 @@ thread_local! {
     pub(super) static SHT_LONGITUDE_SCRATCH: ScratchPool<Complex64> = const { ScratchPool::new() };
 }
 
-/// Report whether the longitude transform of this width computes the DFT.
-///
-/// Delegates to `apollo-fft`, which owns the routing and probes it directly.
-/// A `false` here is a capability gap in the transform library, not in the
-/// grid: the caller falls back to the direct sum, which is slower but correct
-/// at every width.
-pub(super) fn longitude_route_available(n_lon: usize) -> bool {
-    apollo_fft::supports_length(n_lon)
-}
-
 /// Retrieve the cached longitude plan.
 ///
 /// The cache is thread-local inside `apollo-fft`, so each worker in the
@@ -80,8 +72,7 @@ pub(super) fn longitude_route_available(n_lon: usize) -> bool {
 ///
 /// # Panics
 ///
-/// Panics if `n_lon` is zero, which the grid specification forbids, or if
-/// `n_lon` has no correct route — call [`longitude_route_available`] first.
+/// Panics if `n_lon` is zero, which the grid specification forbids.
 pub(super) fn longitude_plan(n_lon: usize) -> Arc<FftPlan1D<f64>> {
     <f64 as PlanCacheProvider>::get_1d_plan(
         Shape1D::new(n_lon).expect("grid specification rejects a zero longitude count"),

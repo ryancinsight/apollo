@@ -3,6 +3,7 @@
 use super::ShtPlan;
 use crate::domain::contracts::error::{ShtError, ShtResult};
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
+#[cfg(test)]
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
@@ -10,6 +11,13 @@ use leto::Array2;
 use mnemosyne::scratch::ScratchPool;
 
 /// Below this reduction length, scalar accumulation avoids Hermes dispatch and scratch setup.
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) const SHT_HERMES_DOT_LEN_THRESHOLD: usize = 256;
 
 thread_local! {
@@ -57,6 +65,13 @@ pub(super) fn write_complex_array<T: super::typed::ShtComplexStorage>(
     }
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn sht_forward_mode_sum(
     samples: &[Complex64],
     degree: usize,
@@ -74,6 +89,13 @@ pub(super) fn sht_forward_mode_sum(
         .sum()
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn sht_forward_mode_sum_hermes(
     sample_lanes: &[f64],
     degree: usize,
@@ -94,6 +116,13 @@ pub(super) fn sht_forward_mode_sum_hermes(
     })
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn sht_inverse_sample(
     coefficients: &SphericalHarmonicCoefficients,
     all_modes: &[(usize, isize)],
@@ -108,6 +137,13 @@ pub(super) fn sht_inverse_sample(
         .sum()
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn sht_inverse_sample_hermes(
     coefficient_lanes: &[f64],
     all_modes: &[(usize, isize)],
@@ -128,6 +164,13 @@ pub(super) fn sht_inverse_sample_hermes(
 }
 
 #[inline]
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn interleaved_lanes(values: &[Complex64]) -> &[f64] {
     bytemuck::cast_slice(values)
 }
@@ -146,6 +189,13 @@ pub(super) fn coefficient_lanes(
     lanes
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn fill_forward_weight_lanes(
     lanes: &mut [f64],
     degree: usize,
@@ -161,6 +211,13 @@ pub(super) fn fill_forward_weight_lanes(
     }
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn fill_inverse_weight_lanes(
     lanes: &mut [f64],
     all_modes: &[(usize, isize)],
@@ -174,6 +231,13 @@ pub(super) fn fill_inverse_weight_lanes(
     }
 }
 
+/// Test-only: the direct-sum reference the factored path is checked against.
+///
+/// The plan itself has routed every width through the longitude DFT since
+/// apollo-fft gained a general route, so nothing in production evaluates these
+/// sums. They are kept because a differential test needs an oracle that shares
+/// no code with the implementation it judges.
+#[cfg(test)]
 pub(super) fn phi_for_longitude(longitude_index: usize, n_lon: usize) -> f64 {
     std::f64::consts::TAU * longitude_index as f64 / n_lon as f64
 }

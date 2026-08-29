@@ -9,15 +9,16 @@
 
 use super::super::quadrature::{sht_forward_mode_sum, sht_inverse_sample};
 use super::super::ShtPlan;
-use super::longitude_route_available;
 use crate::domain::spectrum::coefficients::SphericalHarmonicCoefficients;
 use crate::infrastructure::kernel::spherical_harmonic::spherical_harmonic;
 use eunomia::Complex64;
 use leto::Array2;
 
-/// A length `apollo-fft` cannot route, so the plan must fall back to the
-/// direct sums. `361 = 19²` asserts during plan construction.
-const UNROUTABLE_LONGITUDES: usize = 361;
+/// `361 = 19²` had no route through `apollo-fft` at all: it asserted during
+/// plan construction, and before that guard existed it returned a silently
+/// wrong spectrum. Bluestein serves it now, so it is carried here as a
+/// regression case — a width that the factored path must keep getting right.
+const FORMERLY_UNROUTABLE_LONGITUDES: usize = 361;
 
 fn all_modes(max_degree: usize) -> Vec<(usize, isize)> {
     (0..=max_degree)
@@ -128,7 +129,7 @@ const GRIDS: [(usize, usize, usize); 7] = [
     (12, 17, 5),
     (9, 320, 4),
     (6, 512, 4),
-    (5, UNROUTABLE_LONGITUDES, 3),
+    (5, FORMERLY_UNROUTABLE_LONGITUDES, 3),
 ];
 
 #[test]
@@ -171,39 +172,6 @@ fn inverse_matches_the_direct_mode_sums() {
             "inverse at {n_lat}x{n_lon} lmax={max_degree}: error {error:.3e} exceeds {tolerance:.3e}"
         );
     }
-}
-
-#[test]
-fn unroutable_longitude_count_falls_back_instead_of_panicking() {
-    assert!(
-        !longitude_route_available(UNROUTABLE_LONGITUDES),
-        "this test is only meaningful while {UNROUTABLE_LONGITUDES} has no route; \
-         if apollo-fft gained one, pick another width or delete the fallback"
-    );
-    let plan = ShtPlan::new(5, UNROUTABLE_LONGITUDES, 3).expect("valid grid");
-    let samples = sample_field(&plan);
-    let coefficients = plan.forward_complex(&samples).expect("forward");
-    let reference = direct_forward(&plan, &samples);
-    let scale = max_abs(reference.values().iter().copied());
-    let error = max_abs(
-        coefficients
-            .values()
-            .iter()
-            .zip(reference.values().iter())
-            .map(|(a, b)| a - b),
-    );
-    // Both sides evaluate the same harmonics per longitude, so no phase or
-    // transform term enters. What remains is the summation order: this width
-    // is above `SHT_HERMES_DOT_LEN_THRESHOLD`, so the plan reduces the
-    // longitude sum through the Hermes lanes while the reference accumulates
-    // sequentially. That is the accumulation term of the shared bound and
-    // nothing else.
-    let tolerance = differential_tolerance(&plan, scale);
-    assert!(
-        error <= tolerance,
-        "fallback path diverged from the direct sums by {error:.3e}, \
-         bound {tolerance:.3e} (scale {scale:.3e})"
-    );
 }
 
 /// Orthonormality: `∫ Y_lm conj(Y_l'm') dΩ = δ`. Sampling one basis function

@@ -72,6 +72,40 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   FFT operations directly. The GPU validation threshold now follows the
   provider's scale-sensitive f32 conformance bound instead of a fixed epsilon.
 
+### Fixed
+
+- [patch] Every 1-D transform length now computes the DFT. `apollo-fft` had
+  109 lengths in `2..=8200` that either asserted or returned a spectrum
+  uncorrelated with the truth
+  (`ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`). Three independent
+  faults produced them. (1) The length dispatcher ran off the end of its
+  strategy chain for a composite that is neither smooth over the supported
+  radices nor coprime-splittable — `p^2` for a prime `p` outside the radix set,
+  and every composite reaching one as a Good-Thomas sub-transform — returning
+  the input untransformed, the identity presented as a transform with no
+  diagnostic. Bluestein's chirp-z transform now terminates that chain; it needs
+  no factorization, so it serves any length. (2) Four entries in the static
+  radix table did not factor their key: 432, 576, 768, and 960 each carried one
+  radix too many and multiplied to 864, 2304, 3072, and 3840. The error was
+  invisible where a length used the table for both its forward and inverse
+  passes, and produced a wrong answer at `n = 1153`, whose Rader half-cyclic
+  convolution takes its forward factorization from the runtime factorizer and
+  its inverse from this table. (3) Eleven entries named radix 19, which
+  `factorize_composite` never emits and the composite kernel cannot execute, so
+  a length reaching one through a sub-transform hit an `unreachable!` — the
+  panic at `n = 6726`. The table is now covered by two structural tests, one
+  per fault class, and a sweep checks every length in `2..=2048` plus the
+  tracked lengths above it against a naive DFT that shares no code with the
+  planner.
+- [patch] `apollo-sht` drops the direct-sum fallback and the routability probe
+  guarding it in both the forward and inverse paths. Both existed because
+  `apollo-fft` could not transform every longitude count; it can now, so the
+  factored path is unconditional. The direct sums remain as the differential
+  oracle the tests check the factored path against. `apollo_fft::supports_length`
+  and its `routing` module go with them: the probe reported a capability gap
+  that no longer exists, so it could only ever answer `true`. Both were added
+  after 0.26.0 and never appeared in a release, so no published API changes.
+
 ### Added
 
 - [minor] Power-of-two transforms at square splits below the threading

@@ -23,25 +23,32 @@
   reorganization, the shuffles the interleaved format costs per multiply,
   and a four-step layer both implementations pay alike.
 
-## ATLAS-APOLLO-COMPOSITE-RADIX-STILL-SILENT-2026-08-29 — 92 of the 109 broken FFT lengths still return wrong answers silently [major] — todo
+## ATLAS-APOLLO-COMPOSITE-RADIX-STILL-SILENT-2026-08-29 — 92 of the 109 broken FFT lengths still return wrong answers silently [major] — done
 
-- **Finding.** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28` is
-  recorded as "silent corruption stopped". Measured against a direct DFT over
-  every length in `2..=8200`, it is not: **109** lengths are still wrong, and
-  only 17 of them assert during plan construction. The rest either assert
-  during *execution* (1153, 2306, 6726) or return 100% relative error with no
-  diagnostic at all (722, 1083, 1444, 6727, 6728).
-- **Mechanism.** The assertion added to the terminal strategy arm guards only
-  the top-level plan. A Good-Thomas coprime split delegates a sub-transform
-  that reaches Rader by its own path, so `722 = 2 · 19²` plans happily and
-  computes garbage. The guard needs to cover sub-plan construction.
-- **The set has no arithmetic characterization.** `23² = 529` is correct while
-  `19² = 361` is not; `19 · 23 = 437` is correct while `6 · 437 = 2622` is not;
-  the prime `1153` fails along with every multiple of it. Any predicate written
-  by reasoning about radices will be wrong.
-- **Evidence:** `crates/apollo-fft/src/api/routing/routing_tests.rs` pins eight
-  of these against the direct DFT. `apollo_fft::supports_length` is the
-  interim guard for callers with a length they do not choose.
+- Closed with `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`; see that
+  entry for the three faults and the evidence. A naive-DFT sweep over every
+  length in `2..=2048`, plus the tracked lengths above it, now passes with no
+  wrong answers and no refusals.
+
+## ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE-2026-08-29 — cargo-semver-checks cannot build the released baseline [patch] — todo
+
+- **Finding.** `cargo semver-checks check-release -p apollo-fft --baseline-rev
+  crate-apollo-fft-v0.26.0` fails before producing any verdict: the released
+  manifest requires `hermes-simd = "^0.6.0"` and the git source now publishes
+  only 0.7.0, so resolving the baseline errors out. The gate cannot run at all
+  for this crate, which means public-surface changes ship unchecked.
+- **Why it matters here.** This session removed `pub fn supports_length` and
+  `pub mod routing`. The removal is safe — neither symbol exists in the
+  v0.26.0 tree, confirmed by `git grep supports_length crate-apollo-fft-v0.26.0`
+  returning nothing — but that is a hand check standing in for the gate, and a
+  hand check does not scale to the next removal.
+- **Acceptance.** `cargo semver-checks` runs to a verdict against the newest
+  release tag. Options: publish the baseline from a registry version rather
+  than a git rev, or pin the baseline's first-party git deps to revisions that
+  still resolve.
+- **Scope note.** Fleet-wide, only 2 of 25 members gate semver at all
+  (`ATLAS-SEMVER-GATE-FLEETWIDE`); this is the apollo-specific blocker that
+  would keep apollo failing even once that item lands.
 
 ## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — todo
 
@@ -104,61 +111,30 @@
   disassembled. A phase costing disproportionately to its arithmetic is a
   signal to read the emitted code.
 
-## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — in progress (MOST CORRUPTION IS STILL SILENT — earlier claim corrected)
+## ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28 — 109 FFT lengths return wrong results or panic [major] — done
 
-- **Root cause, traced 2026-08-28 by the integrator (session 03d80d33).** The
-  strategy chain in `dimension_1d/dynamic_impl.rs` ends in an unconditional
-  `PlanStrategy::Rader` fallback. Rader's algorithm maps the transform onto the
-  multiplicative group modulo `n`, which is cyclic of order `n - 1` **only when
-  `n` is prime** — `components/rader/mod.rs` documents exactly that and guards
-  it with `debug_assert!(is_prime(n))`. A `debug_assert` compiles out of
-  release builds, so every composite length reaching that fallback returned
-  corrupt output instead of failing. That is the whole mechanism: it is a
-  precondition guarded only in debug on an input-dependent public path.
-- **Why those particular lengths:** a length divisible by the square of a prime
-  above the supported radix set (361 = 19^2, 841 = 29^2, 961 = 31^2,
-  1369 = 37^2) is rejected by `factorize_composite`, has no coprime split for
-  Good-Thomas, and matches no special case — so every earlier arm declines and
-  it lands on Rader. Multiples such as 722, 1083 and 1444 reach it through a
-  Good-Thomas split whose sub-transform is the affected square.
-- **CORRECTION 2026-08-29 — the guard covers far less than claimed.** The entry
-  below said "silent corruption stopped". That is wrong, and the examples this
-  item itself cites are among the ones still broken. Re-measured on
-  `origin/main` with a forward/inverse round trip: **361 panics loudly**, but
-  **722, 1083, 1444 and 1153 still return silent wrong answers** with maximum
-  errors of 2.080e1, 2.079e1, 2.080e1 and 8.904e1 against inputs of order 1.
-  Of the 109 affected lengths only **17** assert at plan construction; the rest
-  assert during execution (1153, 2306, 6726) or corrupt silently (722, 1083,
-  1444, 6727, 6728).
-- **Why the guard misses them:** the assertion sits on the *terminal* Rader arm
-  of the top-level plan. A length with a coprime split (722 = 2·361,
-  1083 = 3·361, 1444 = 4·361) is routed by Good-Thomas, and its sub-transform
-  reaches Rader through its own path, which the top-level assertion never sees.
-  1153 is prime and fails for a distinct reason, so at least two mechanisms are
-  in play.
-- **Consequence for anyone building on this:** a "probe by catching the panic"
-  fallback looks correct and ships wrong answers. `apollo_fft::supports_length`
-  (added 2026-08-29) exists because of this — it runs one transform against a
-  closed-form oracle rather than shadowing the strategy chain, which is exact
-  for all three failure modes. The failure set has no arithmetic
-  characterization to shortcut with: 23² is correct while 19² is not, 19·23 is
-  correct while 6·437 is not.
-- **Stopped bleeding, did not fix routing.** Plan construction now asserts
-  primality before selecting Rader, so an unroutable length fails loudly at
-  construction with a message naming this item, instead of a published
-  transform returning corrupt output. Regression tests pin both halves: 361 is
-  rejected, and 359/360/362 still round-trip. **This is a stop-gap.** The
-  lengths remain unserved.
-- **What a real fix needs** (unclaimed, and the reason this stayed filed rather
-  than being finished): apollo has no standalone Bluestein — its `bluestein`
-  module is Rader's *internal* convolution over `n - 1`, not a transform for
-  arbitrary `n`. Serving these lengths needs either a general Bluestein
-  strategy, or a composite path that carries Rader sub-transforms so
-  `361 = 19 x 19` decomposes into two prime-length stages. Both land in
-  `components/`, which is leased by `perf/apollo-base128-arith`.
-- **Do not resolve with a hand-kept list of good lengths** — that is defect
-  masking. Either the length is computed correctly or plan construction
-  rejects it.
+- **Three faults, not one.** The board previously attributed all 109 lengths to
+  Rader's debug-only primality precondition. That was one contributing path,
+  not the mechanism. Measured: (1) `dispatch_inplace` ran off the end of its
+  strategy chain and returned the input untransformed for a composite that is
+  neither smooth over the supported radices nor coprime-splittable; (2) four
+  static radix entries did not factor their key — 432, 576, 768, 960 each
+  carried one extra radix and multiplied to 864, 2304, 3072, 3840, which is
+  what made `n = 1153` wrong, since its half-cyclic convolution takes its
+  forward factorization from the runtime factorizer and its inverse from this
+  table; (3) eleven static entries named radix 19, which the factorizer never
+  emits and the composite kernel cannot execute, giving the `unreachable!`
+  panic at `n = 6726`.
+- **Fix.** Bluestein's chirp-z transform terminates the strategy chain (it needs
+  no factorization, so it serves any length); the four mis-factored entries are
+  corrected and the eleven radix-19 entries removed.
+- **Evidence.** `crates/apollo-fft/tests/dft_oracle_sweep.rs` checks every
+  length in `2..=2048` and the tracked lengths above it against a naive DFT
+  sharing no code with the planner: no wrong answers, no refusals. Two
+  structural tests in `mixed_radix/dispatch.rs` cover the table, one per fault
+  class — neither could have been found by reading, since `[4, 4, 4, 4, 3, 3]`
+  reads as `2^6 * 3^2` until it is multiplied out.
+
 ## ATLAS-APOLLO-SMALL-SIZE-FALSIFIED-2026-08-28 — Two small-size hypotheses, both falsified [perf] — done 2026-08-28
 
 - **Rerouting 256/512 to the planar four-step:** measured 10 to 12% slower
@@ -633,15 +609,11 @@
   `crates/apollo-dctdst/src/application/execution/plan/dctdst/forward.rs`
   214-236 and `inverse.rs` 221-243 route I/IV kinds to direct kernels at
   every size.
-- **Blocker:** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`. The
-  factorizations need FFTs of length 2(N−1), 2(N+1), and 2N, which for general
-  N are not powers of two and so land on the 109 lengths that currently return
-  wrong results or panic. Moving these kinds onto that route would convert a
-  slow-but-correct kernel into a silently-wrong one at those sizes — the
-  existing DCT-II fast path already demonstrates the failure (N = 361 →
-  2N = 722, relative error 0.997). Gating the new fast path on a hand-kept
-  list of good lengths would be defect masking, so the dependency is real
-  rather than a sequencing preference.
+- **Blocker CLEARED 2026-08-29.** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`
+  is done: every length routes correctly, so the FFTs of length 2(N−1),
+  2(N+1), and 2N that these factorizations need are safe at any N. The failure
+  this item cited (N = 361 → 2N = 722, relative error 0.997) is covered by the
+  oracle sweep and no longer reproduces. Ready to claim.
 - **Re-open trigger:** the composite-radix census passes clean, at which point
   the derivations are ready to implement: DCT-I is `Re(DFT_{2(N−1)}(y))[k]` on
   the whole-sample-symmetric extension `y`; DST-I is

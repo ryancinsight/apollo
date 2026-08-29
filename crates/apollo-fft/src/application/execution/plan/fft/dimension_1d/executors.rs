@@ -579,3 +579,30 @@ pub(super) fn exec_rader_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>
 ) {
     crate::application::execution::kernel::components::rader::rader_fft::<F, true>(slice);
 }
+
+pub(super) fn exec_bluestein_forward<F: MixedRadixScalar<Complex = Complex<F>>>(
+    _: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, false, false>(
+        slice,
+    );
+}
+
+pub(super) fn exec_bluestein_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
+    _: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, true, true>(
+        slice,
+    );
+}
+
+pub(super) fn exec_bluestein_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(
+    _: &FftPlan1D<F>,
+    slice: &mut [F::Complex],
+) {
+    crate::application::execution::kernel::components::bluestein::bluestein_fft::<F, true, false>(
+        slice,
+    );
+}
