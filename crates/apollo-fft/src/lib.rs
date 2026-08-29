@@ -80,6 +80,7 @@ pub use api::freq::*;
 pub use api::icfft::*;
 pub use api::irfft::*;
 pub use api::rfft::*;
+pub use api::routing::*;
 pub use api::shift::*;
 
 #[cfg(feature = "cuda")]

@@ -6,6 +6,7 @@
 //! quadrature. Inverse transforms evaluate
 //! `f(theta, phi) = sum_l sum_m a_lm Y_lm(theta, phi)` on the same grid.
 
+mod longitude;
 mod quadrature;
 #[cfg(test)]
 mod tests;
@@ -20,6 +21,10 @@ use crate::infrastructure::kernel::spherical_harmonic::gauss_legendre_nodes_weig
 use apollo_fft::PrecisionProfile;
 use eunomia::Complex64;
 use leto::Array2;
+use longitude::{
+    harmonic_amplitude, longitude_plan, longitude_route_available, longitude_spectrum,
+    longitude_synthesis, order_bin, SHT_LONGITUDE_SCRATCH,
+};
 use quadrature::{
     array2_from_leto_view, coefficients_from_leto_view, interleaved_lanes, sht_forward_mode_sum,
     sht_forward_mode_sum_hermes, sht_inverse_sample, sht_inverse_sample_hermes,
@@ -112,6 +117,11 @@ impl ShtPlan {
         let samples_flat = samples
             .as_slice()
             .expect("samples are contiguous after materialization");
+        // The longitude sum is a DFT bin (see the `longitude` module), which
+        // removes the `n_lon` factor from the harmonic evaluation count. It is
+        // available only where apollo-fft has a correct route for this exact
+        // width; elsewhere the direct sum stays in service.
+        let factored = longitude_route_available(n_lon);
         moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
             &mut flat_contributions,
             num_modes,
@@ -119,6 +129,21 @@ impl ShtPlan {
                 let theta = self.theta(lat);
                 let weight = self.theta_weights[lat];
                 let row = &samples_flat[lat * n_lon..lat * n_lon + n_lon];
+                let quadrature_weight = weight * longitude_weight;
+                if factored {
+                    SHT_LONGITUDE_SCRATCH.with(|pool| {
+                        pool.with_scratch(n_lon, |spectrum| {
+                            longitude_spectrum(&longitude_plan(n_lon), row, spectrum);
+                            for (mode_idx, &(degree, order)) in all_modes.iter().enumerate() {
+                                let amplitude = harmonic_amplitude(degree, order, theta).conj();
+                                row_contrib[mode_idx] = amplitude
+                                    * spectrum[order_bin(order, n_lon)]
+                                    * quadrature_weight;
+                            }
+                        });
+                    });
+                    return;
+                }
                 let sample_lanes =
                     (n_lon >= SHT_HERMES_DOT_LEN_THRESHOLD).then(|| interleaved_lanes(row));
                 for (mode_idx, &(degree, order)) in all_modes.iter().enumerate() {
@@ -128,7 +153,7 @@ impl ShtPlan {
                         }
                         None => sht_forward_mode_sum(row, degree, order, theta, n_lon),
                     };
-                    row_contrib[mode_idx] = lon_sum * (weight * longitude_weight);
+                    row_contrib[mode_idx] = lon_sum * quadrature_weight;
                 }
             },
         );
@@ -193,6 +218,42 @@ impl ShtPlan {
             .collect();
 
         let mut samples = Array2::<Complex64>::zeros([n_lat, n_lon]);
+
+        // Synthesis is the same factorization read backwards: accumulate each
+        // mode into the DFT bin its order occupies, then one inverse transform
+        // produces the whole latitude row.
+        if longitude_route_available(n_lon) {
+            let synthesize = |lat: usize, row: &mut [Complex64]| {
+                let theta = self.theta(lat);
+                SHT_LONGITUDE_SCRATCH.with(|pool| {
+                    pool.with_scratch(n_lon, |orders| {
+                        orders.fill(Complex64::new(0.0, 0.0));
+                        for &(degree, order) in &all_modes {
+                            orders[order_bin(order, n_lon)] += coefficients.get(degree, order)
+                                * harmonic_amplitude(degree, order, theta);
+                        }
+                        longitude_synthesis(&longitude_plan(n_lon), orders);
+                        row.copy_from_slice(orders);
+                    });
+                });
+            };
+            if let Some(flat_samples) = samples.as_slice_mut() {
+                moirai::for_each_chunk_mut_enumerated_with::<moirai::Adaptive, _, _>(
+                    flat_samples,
+                    n_lon,
+                    synthesize,
+                );
+            } else {
+                let mut row = vec![Complex64::new(0.0, 0.0); n_lon];
+                for lat in 0..n_lat {
+                    synthesize(lat, &mut row);
+                    for (lon, &value) in row.iter().enumerate() {
+                        samples[[lat, lon]] = value;
+                    }
+                }
+            }
+            return Ok(samples);
+        }
 
         let mut run_inverse = |coefficient_lanes: Option<&[f64]>| {
             if let Some(flat_samples) = samples.as_slice_mut() {

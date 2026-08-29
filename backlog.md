@@ -1,5 +1,60 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COMPOSITE-RADIX-STILL-SILENT-2026-08-29 — 92 of the 109 broken FFT lengths still return wrong answers silently [major] — todo
+
+- **Finding.** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28` is
+  recorded as "silent corruption stopped". Measured against a direct DFT over
+  every length in `2..=8200`, it is not: **109** lengths are still wrong, and
+  only 17 of them assert during plan construction. The rest either assert
+  during *execution* (1153, 2306, 6726) or return 100% relative error with no
+  diagnostic at all (722, 1083, 1444, 6727, 6728).
+- **Mechanism.** The assertion added to the terminal strategy arm guards only
+  the top-level plan. A Good-Thomas coprime split delegates a sub-transform
+  that reaches Rader by its own path, so `722 = 2 · 19²` plans happily and
+  computes garbage. The guard needs to cover sub-plan construction.
+- **The set has no arithmetic characterization.** `23² = 529` is correct while
+  `19² = 361` is not; `19 · 23 = 437` is correct while `6 · 437 = 2622` is not;
+  the prime `1153` fails along with every multiple of it. Any predicate written
+  by reasoning about radices will be wrong.
+- **Evidence:** `crates/apollo-fft/src/api/routing/routing_tests.rs` pins eight
+  of these against the direct DFT. `apollo_fft::supports_length` is the
+  interim guard for callers with a length they do not choose.
+
+## ATLAS-APOLLO-WAVELET-DOC-LINKS-2026-08-29 — Three unresolved intra-doc links in apollo-wavelet [patch] — todo
+
+- **Finding.** `RUSTDOCFLAGS="-D warnings" cargo doc` fails on
+  `apollo-wavelet`: unresolved links to `coefficient`, `convolution`, and
+  `super::coefficient`. CI runs `cargo doc` without `-D warnings`, so they
+  land as warnings and main stays green.
+- **Origin:** commit `e2f7ed21`, outside this session's lease. Left for the
+  owner rather than fixed in an unrelated PR.
+
+## ATLAS-APOLLO-SHT-FFT-2026-08-29 — SHT longitude FFT factorization [minor] — in-progress
+
+- **Outcome:** the longitude sum in both SHT directions is computed as a DFT
+  bin over φ via `apollo-fft`, so the φ-independent `associated_legendre`
+  recurrence and normalization are evaluated once per (latitude, mode) rather
+  than `n_lon` times. The existing direct sum stays reachable as the
+  differential oracle and as the fallback for `n_lon` values `apollo-fft`
+  cannot route.
+- **Delivers** `ATLAS-APOLLO-SHT-FFT-FACTORIZATION`.
+- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Lease:** `crates/apollo-sht/src/application/execution/plan/sht/**`,
+  `crates/apollo-sht/src/infrastructure/kernel/spherical_harmonic.rs`,
+  `crates/apollo-sht/tests/**`, `crates/apollo-sht/Cargo.toml`.
+- **Tree:** `D:/atlas/worktrees/apollo-sht` on `perf/apollo-sht-factorization`.
+- **Measured pinned** (CPUs 0-7, high priority, release, 200 warm-up + 200
+  timed iterations, median; forward+inverse round trip). Primary signal is the
+  `associated_legendre` evaluation count, which is machine-independent and came
+  out at exactly `n_lon` in every case, as derived. Wall clock corroborates
+  against the pre-change dispatch, Hermes lanes included above the threshold:
+  16x64/l8 64.0x fewer evaluations, 2.88 -> 0.107 ms (27x); 16x128/l8 128.0x,
+  5.82 -> 0.109 (53x); 24x256/l12 256.0x, 51.6 -> 0.346 (149x); 32x512/l12
+  512.0x, 134.3 -> 0.462 (291x); 32x1024/l12 1024.0x, 263.8 -> 0.837 (315x).
+  Timings on the hybrid 285K host carry that host's spread; every ratio is two
+  orders above the 1.5x resolution floor, so the verdict does not rest on it.
+- **Last update:** 2026-08-29.
+
 ## ATLAS-APOLLO-BASE-PROBES-2026-08-29 — The base kernel re-probed the CPU inside its body [perf] — done 2026-08-29
 
 - **Finding** (`gap_audit.md#base-kernel-probes`): the 128-point base kernel
@@ -505,7 +560,12 @@
   the sub-threshold path; `FFT_CWT_LEN_THRESHOLD = 8` is the measured
   single-scale crossover.
 
-## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — todo
+## ATLAS-APOLLO-SHT-FFT-FACTORIZATION — Factor SHT longitude sums through FFT [minor] — review
+
+- **Delivered by** `ATLAS-APOLLO-SHT-FFT-2026-08-29`; closes when that PR lands.
+- **Correction:** the evidence line below cites
+  `infrastructure/kernel/quadrature.rs`, which does not exist. The longitude
+  sums live in `application/execution/plan/sht/quadrature.rs`.
 
 - **Outcome:** `forward_complex` computes each mode's longitude sum as a DFT
   bin via FFT along longitude, with the φ-independent P_lm recurrence and
