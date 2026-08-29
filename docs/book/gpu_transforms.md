@@ -49,13 +49,22 @@ command stream. Apollo NUFFT uses this boundary to order spread/load, FFT, and
 extract/interpolate passes without an intermediate submission or host copy.
 Forward and inverse plans live beside the reusable oversampled grids.
 
+Apollo STFT prepares a rank-two frame plane with shape
+`[frame_count, frame_len]` and active axis `[1]`. `prepare_fft_axes` retains
+the frame axis as a batch dimension, so every row is transformed independently.
+Apollo encodes its Hann pack/interleave or deinterleave/window/overlap-add
+kernels around the retained Hephaestus plan in one grouped command stream.
+Power-of-two and non-power-of-two frame lengths share this path; Bluestein
+state remains inside Hephaestus.
+
 ## Domain-specific transforms
 
-Apollo's `WgpuTransformBackend<K>` remains the shared scaffold for non-FFT
-transform kernels. A transform crate supplies its own zero-sized planner and
-executor implementation, while the scaffold centralizes typed storage,
-capability reporting, validation, and provider errors. It is not a dense FFT
-backend and does not duplicate Hephaestus `FftOps`.
+Apollo's `apollo-fft::WgpuTransformBackend<K>` remains the shared scaffold for
+non-FFT transform kernels. A transform crate supplies its own zero-sized
+planner and executor implementation, while this Apollo scaffold centralizes
+typed storage, capability reporting, validation, and provider errors. It is
+not a Hephaestus API or a dense FFT backend and does not duplicate Hephaestus
+`FftOps`.
 
 Accelerator implementations are verified against the corresponding Apollo CPU
 operator under a derived finite-precision bound. Provider absence is reported

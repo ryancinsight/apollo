@@ -38,12 +38,6 @@ pub enum ApolloError {
         /// Backend identifier.
         backend: String,
     },
-    /// A WGPU-specific backend failure occurred.
-    #[error("wgpu backend error: {message}")]
-    Wgpu {
-        /// Error message propagated from the backend.
-        message: String,
-    },
     /// A CUDA-specific provider failure occurred.
     #[error("cuda backend error: {message}")]
     Cuda {

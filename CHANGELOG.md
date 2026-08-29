@@ -16,6 +16,11 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   prepare rank-generic split-complex plans through
   `hephaestus_wgpu::WgpuFftOps`; Apollo CPU FFT APIs are unchanged. See ADR
   0006 and `docs/MIGRATION_GPU_FFT.md`.
+- [major] `apollo-fft` removes the unused `ApolloError::Wgpu` variant with its
+  deleted dense WGPU producer. Dense accelerator failures now remain typed
+  `HephaestusError` values at the provider boundary; Apollo's non-FFT transform
+  scaffold continues to use its separate `WgpuError` contract. See
+  `docs/MIGRATION_GPU_FFT.md`.
 - [major] `apollo-nufft` reusable WGPU buffers prepare and retain forward and
   inverse Hephaestus FFT plans, spread/load/extract/interpolate pipelines, and
   Type-2 coefficient storage during construction. Reusable execution now takes
@@ -30,6 +35,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [arch] `apollo-stft` removes its private radix-2 and Bluestein
+  descriptors, shaders, and chirp workspace. One retained
+  `[frame_count, frame_len]` Hephaestus plan per direction transforms only axis
+  1; Apollo retains framing, Hann conversion, and weighted overlap-add. Both
+  power-of-two classes share one prepared path and one submission per forward
+  or inverse call. Reusable workspaces retain host upload/readback capacity and
+  two-input tests pin value correctness and storage identity. See ADR 0008.
 - [patch] NUFFT, STFT, and Radon benchmark executables now apply
   `APOLLO_BENCH_MODE`; their bounded smoke runs execute each production closure
   once instead of silently selecting the full measurement budget.

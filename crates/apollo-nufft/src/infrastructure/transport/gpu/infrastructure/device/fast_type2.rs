@@ -2,18 +2,16 @@ use crate::NufftComplexStorage;
 use apollo_fft::PrecisionProfile;
 use eunomia::{Complex32, Complex64};
 use leto::Array3;
-use std::borrow::Cow;
 
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::conversion::{
-    array3_from_leto_view, fast_1d_metadata, fast_3d_metadata, host_array_error,
-    positions3_from_leto_view, typed_to_complex32, validate_fast_1d_plan, validate_typed_profile,
-    validate_usize_to_u32, write_typed_output,
+    array3_from_leto_view, host_array_error, positions3_from_leto_view, typed_to_complex32,
+    validate_typed_profile, validate_usize_to_u32, write_complex_output, write_typed_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
-    KaiserBesselOne, KaiserBesselThree, NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel,
+    NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel,
 };
 
 impl NufftWgpuBackend {
@@ -30,28 +28,16 @@ impl NufftWgpuBackend {
                 actual: fourier_coeffs.len(),
             });
         }
-        validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_1d_metadata(plan)?;
-        let configuration = KaiserBesselOne {
-            kernel_width: plan.kernel_width(),
-            length: plan.domain().length() as f32,
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv,
-        };
-        let output = NufftGpuKernel::execute_fast_type2_1d(
-            &self.device,
-            plan.domain().n,
-            fast.oversampled_len,
-            configuration,
+        let mut buffers = NufftGpuBuffers1D::new(&self.device, plan, positions.len())?;
+        let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
+        self.execute_fast_type2_1d_with_buffers(
+            &mut buffers,
             fourier_coeffs,
             positions,
+            &mut output,
         )?;
-        Ok(output
-            .into_iter()
-            .map(|value| Complex64::new(value.re as f64, value.im as f64))
-            .collect())
+        Ok(output)
     }
 
     /// Execute fast gridded Type-2 1D NUFFT with caller-owned typed storage.
@@ -128,36 +114,24 @@ impl NufftWgpuBackend {
                 actual: fourier_coeffs.len(),
             });
         }
-        validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_1d_metadata(plan)?;
         let mut buffers = crate::infrastructure::transport::gpu::NufftGpuBuffers1D::new(
             &self.device,
-            plan.domain().n,
-            fast.oversampled_len,
+            plan,
             positions.len(),
         )?;
-        let configuration = KaiserBesselOne {
-            kernel_width: plan.kernel_width(),
-            length: plan.domain().length() as f32,
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv,
-        };
-        let (output, diagnostics) = NufftGpuKernel::execute_fast_type2_1d_with_diagnostics(
+        buffers.write_coefficients(&self.device, fourier_coeffs)?;
+        let diagnostics = NufftGpuKernel::execute_fast_type2_1d_with_diagnostics(
             &self.device,
             &mut buffers,
-            configuration,
-            fourier_coeffs,
             positions,
         )?;
-        Ok((
-            output
-                .into_iter()
-                .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect::<Vec<_>>(),
-            diagnostics,
-        ))
+        let output = buffers
+            .readback_prefix(positions.len())?
+            .iter()
+            .map(|value| Complex64::new(value.re as f64, value.im as f64))
+            .collect();
+        Ok((output, diagnostics))
     }
 
     /// Execute fast gridded Type-2 3D NUFFT on WGPU.
@@ -177,28 +151,10 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(grid.ny)?;
         validate_usize_to_u32(grid.nz)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_3d_metadata(plan)?;
-        let (lx, ly, lz) = grid.lengths();
-        let flat_modes: Vec<Complex32> = modes.iter().copied().collect();
-        let configuration = KaiserBesselThree {
-            kernel_width: plan.kernel_width(),
-            lengths: (lx as f32, ly as f32, lz as f32),
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv_xyz,
-        };
-        let output = NufftGpuKernel::execute_fast_type2_3d(
-            &self.device,
-            (grid.nx, grid.ny, grid.nz),
-            (fast.mx, fast.my, fast.mz),
-            configuration,
-            &flat_modes,
-            positions,
-        )?;
-        Ok(output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect())
+        let mut buffers = NufftGpuBuffers3D::new(&self.device, plan, positions.len())?;
+        let mut output = vec![Complex64::new(0.0, 0.0); positions.len()];
+        self.execute_fast_type2_3d_with_buffers(&mut buffers, modes, positions, &mut output)?;
+        Ok(output)
     }
 
     /// Execute fast gridded Type-2 3D NUFFT with caller-owned typed storage.
@@ -275,119 +231,75 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(grid.ny)?;
         validate_usize_to_u32(grid.nz)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_3d_metadata(plan)?;
-        let (lx, ly, lz) = grid.lengths();
-        let flat_modes = modes.as_slice().map_or_else(
-            || Cow::Owned(modes.iter().copied().collect()),
-            Cow::Borrowed,
-        );
         let mut buffers = crate::infrastructure::transport::gpu::NufftGpuBuffers3D::new(
             &self.device,
-            (grid.nx, grid.ny, grid.nz),
-            (fast.mx, fast.my, fast.mz),
+            plan,
             positions.len(),
         )?;
-        let configuration = KaiserBesselThree {
-            kernel_width: plan.kernel_width(),
-            lengths: (lx as f32, ly as f32, lz as f32),
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv_xyz,
-        };
-        let (output, diagnostics) = NufftGpuKernel::execute_fast_type2_3d_with_diagnostics(
+        buffers.write_coefficients(&self.device, modes)?;
+        let diagnostics = NufftGpuKernel::execute_fast_type2_3d_with_diagnostics(
             &self.device,
             &mut buffers,
-            configuration,
-            flat_modes.as_ref(),
             positions,
         )?;
-        Ok((
-            output
-                .into_iter()
-                .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect::<Vec<_>>(),
-            diagnostics,
-        ))
+        let output = buffers
+            .readback_prefix(positions.len())?
+            .iter()
+            .map(|value| Complex64::new(value.re as f64, value.im as f64))
+            .collect();
+        Ok((output, diagnostics))
     }
 
     /// Execute fast gridded Type-2 1D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type2_1d_with_buffers(
         &self,
-        plan: &NufftWgpuPlan1D,
         buffers: &mut NufftGpuBuffers1D,
         fourier_coeffs: &[Complex32],
         positions: &[f32],
-    ) -> NufftWgpuResult<Vec<Complex64>> {
-        if fourier_coeffs.len() != plan.domain().n {
+        output: &mut [Complex64],
+    ) -> NufftWgpuResult<()> {
+        if fourier_coeffs.len() != buffers.n {
             return Err(NufftWgpuError::InputLengthMismatch {
-                expected: plan.domain().n,
+                expected: buffers.n,
                 actual: fourier_coeffs.len(),
             });
         }
-        validate_fast_1d_plan(plan)?;
+        if output.len() != positions.len() {
+            return Err(NufftWgpuError::InputLengthMismatch {
+                expected: positions.len(),
+                actual: output.len(),
+            });
+        }
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_1d_metadata(plan)?;
-        let configuration = KaiserBesselOne {
-            kernel_width: plan.kernel_width(),
-            length: plan.domain().length() as f32,
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv,
-        };
-        let output = NufftGpuKernel::execute_fast_type2_1d_with_buffers(
-            &self.device,
-            buffers,
-            configuration,
-            fourier_coeffs,
-            positions,
-        )?;
-        Ok(output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect())
+        buffers.write_coefficients(&self.device, fourier_coeffs)?;
+        NufftGpuKernel::execute_fast_type2_1d_with_buffers(&self.device, buffers, positions)?;
+        write_complex_output(buffers.readback_prefix(output.len())?, output);
+        Ok(())
     }
 
     /// Execute fast gridded Type-2 3D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type2_3d_with_buffers(
         &self,
-        plan: &NufftWgpuPlan3D,
         buffers: &mut NufftGpuBuffers3D,
         modes: &Array3<Complex32>,
         positions: &[(f32, f32, f32)],
-    ) -> NufftWgpuResult<Vec<Complex64>> {
-        let grid = plan.grid();
-        if modes.shape() != [grid.nx, grid.ny, grid.nz] {
+        output: &mut [Complex64],
+    ) -> NufftWgpuResult<()> {
+        if modes.shape() != [buffers.shape.0, buffers.shape.1, buffers.shape.2] {
             return Err(NufftWgpuError::InvalidPlan {
-                message: "mode shape must match 3D plan grid dimensions",
+                message: "mode shape must match reusable 3D buffer dimensions",
             });
         }
-        validate_usize_to_u32(grid.nx)?;
-        validate_usize_to_u32(grid.ny)?;
-        validate_usize_to_u32(grid.nz)?;
+        if output.len() != positions.len() {
+            return Err(NufftWgpuError::InputLengthMismatch {
+                expected: positions.len(),
+                actual: output.len(),
+            });
+        }
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_3d_metadata(plan)?;
-        let (lx, ly, lz) = grid.lengths();
-        let flat_modes = modes.as_slice().map_or_else(
-            || Cow::Owned(modes.iter().copied().collect()),
-            Cow::Borrowed,
-        );
-        let configuration = KaiserBesselThree {
-            kernel_width: plan.kernel_width(),
-            lengths: (lx as f32, ly as f32, lz as f32),
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv_xyz,
-        };
-        let output = NufftGpuKernel::execute_fast_type2_3d_with_buffers(
-            &self.device,
-            buffers,
-            configuration,
-            flat_modes.as_ref(),
-            positions,
-        )?;
-        Ok(output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect())
+        buffers.write_coefficients(&self.device, modes)?;
+        NufftGpuKernel::execute_fast_type2_3d_with_buffers(&self.device, buffers, positions)?;
+        write_complex_output(buffers.readback_prefix(output.len())?, output);
+        Ok(())
     }
 }

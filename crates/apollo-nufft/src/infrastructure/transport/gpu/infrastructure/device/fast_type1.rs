@@ -6,13 +6,12 @@ use leto::{Array1, Array3};
 use crate::infrastructure::transport::gpu::application::plan::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::infrastructure::device::conversion::{
-    fast_1d_metadata, fast_3d_metadata, host_array_error, positions3_from_leto_view,
-    typed_to_complex32, validate_fast_1d_plan, validate_pair_lengths, validate_typed_profile,
-    validate_usize_to_u32,
+    host_array_error, positions3_from_leto_view, typed_to_complex32, validate_pair_lengths,
+    validate_typed_profile, validate_usize_to_u32, write_complex_output,
 };
 use crate::infrastructure::transport::gpu::infrastructure::device::NufftWgpuBackend;
 use crate::infrastructure::transport::gpu::infrastructure::kernel::{
-    KaiserBesselOne, KaiserBesselThree, NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel,
+    NufftGpuBuffers1D, NufftGpuBuffers3D, NufftGpuKernel,
 };
 
 impl NufftWgpuBackend {
@@ -24,30 +23,11 @@ impl NufftWgpuBackend {
         values: &[Complex32],
     ) -> NufftWgpuResult<Array1<Complex64>> {
         validate_pair_lengths(positions.len(), values.len())?;
-        validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_1d_metadata(plan)?;
-        let configuration = KaiserBesselOne {
-            kernel_width: plan.kernel_width(),
-            length: plan.domain().length() as f32,
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv,
-        };
-        let output = NufftGpuKernel::execute_fast_type1_1d(
-            &self.device,
-            plan.domain().n,
-            fast.oversampled_len,
-            configuration,
-            positions,
-            values,
-        )?;
-        Ok(Array1::from(
-            output
-                .into_iter()
-                .map(|value| Complex64::new(value.re as f64, value.im as f64))
-                .collect::<Vec<_>>(),
-        ))
+        let mut buffers = NufftGpuBuffers1D::new(&self.device, plan, positions.len())?;
+        let mut output = vec![Complex64::new(0.0, 0.0); plan.domain().n];
+        self.execute_fast_type1_1d_with_buffers(&mut buffers, positions, values, &mut output)?;
+        Ok(Array1::from(output))
     }
 
     /// Execute fast gridded Type-1 1D NUFFT with caller-owned typed storage.
@@ -130,28 +110,17 @@ impl NufftWgpuBackend {
         validate_usize_to_u32(grid.ny)?;
         validate_usize_to_u32(grid.nz)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_3d_metadata(plan)?;
-        let (lx, ly, lz) = grid.lengths();
-        let configuration = KaiserBesselThree {
-            kernel_width: plan.kernel_width(),
-            lengths: (lx as f32, ly as f32, lz as f32),
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv_xyz,
-        };
-        let output = NufftGpuKernel::execute_fast_type1_3d(
-            &self.device,
-            (grid.nx, grid.ny, grid.nz),
-            (fast.mx, fast.my, fast.mz),
-            configuration,
-            positions,
-            values,
-        )?;
-        let converted: Vec<Complex64> = output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect();
-        Array3::from_shape_vec([grid.nx, grid.ny, grid.nz], converted).map_err(|_| {
+        let mut buffers = NufftGpuBuffers3D::new(&self.device, plan, positions.len())?;
+        let output_len = grid
+            .nx
+            .checked_mul(grid.ny)
+            .and_then(|value| value.checked_mul(grid.nz))
+            .ok_or(NufftWgpuError::InvalidPlan {
+                message: "fast 3D type1 output length overflows usize",
+            })?;
+        let mut output = vec![Complex64::new(0.0, 0.0); output_len];
+        self.execute_fast_type1_3d_with_buffers(&mut buffers, positions, values, &mut output)?;
+        Array3::from_shape_vec([grid.nx, grid.ny, grid.nz], output).map_err(|_| {
             NufftWgpuError::InvalidPlan {
                 message: "fast 3D type1 output shape does not match grid dimensions",
             }
@@ -236,73 +205,60 @@ impl NufftWgpuBackend {
     /// Execute fast gridded Type-1 1D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type1_1d_with_buffers(
         &self,
-        plan: &NufftWgpuPlan1D,
         buffers: &mut NufftGpuBuffers1D,
         positions: &[f32],
         values: &[Complex32],
-    ) -> NufftWgpuResult<Vec<Complex64>> {
+        output: &mut [Complex64],
+    ) -> NufftWgpuResult<()> {
         validate_pair_lengths(positions.len(), values.len())?;
-        validate_fast_1d_plan(plan)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_1d_metadata(plan)?;
-        let configuration = KaiserBesselOne {
-            kernel_width: plan.kernel_width(),
-            length: plan.domain().length() as f32,
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv,
-        };
-        let output = NufftGpuKernel::execute_fast_type1_1d_with_buffers(
+        if output.len() != buffers.n {
+            return Err(NufftWgpuError::InputLengthMismatch {
+                expected: buffers.n,
+                actual: output.len(),
+            });
+        }
+        NufftGpuKernel::execute_fast_type1_1d_with_buffers(
             &self.device,
             buffers,
-            configuration,
             positions,
             values,
         )?;
-        Ok(output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect())
+        write_complex_output(buffers.readback_prefix(output.len())?, output);
+        Ok(())
     }
 
     /// Execute fast gridded Type-1 3D NUFFT with exclusively borrowed pre-allocated buffers.
     pub fn execute_fast_type1_3d_with_buffers(
         &self,
-        plan: &NufftWgpuPlan3D,
         buffers: &mut NufftGpuBuffers3D,
         positions: &[(f32, f32, f32)],
         values: &[Complex32],
-    ) -> NufftWgpuResult<Array3<Complex64>> {
+        output: &mut [Complex64],
+    ) -> NufftWgpuResult<()> {
         validate_pair_lengths(positions.len(), values.len())?;
-        let grid = plan.grid();
-        validate_usize_to_u32(grid.nx)?;
-        validate_usize_to_u32(grid.ny)?;
-        validate_usize_to_u32(grid.nz)?;
         validate_usize_to_u32(positions.len())?;
-        let fast = fast_3d_metadata(plan)?;
-        let (lx, ly, lz) = grid.lengths();
-        let configuration = KaiserBesselThree {
-            kernel_width: plan.kernel_width(),
-            lengths: (lx as f32, ly as f32, lz as f32),
-            beta: fast.beta as f32,
-            i0_beta: fast.i0_beta as f32,
-            deconvolution: &fast.deconv_xyz,
-        };
-        let output = NufftGpuKernel::execute_fast_type1_3d_with_buffers(
+        let expected = buffers
+            .shape
+            .0
+            .checked_mul(buffers.shape.1)
+            .and_then(|value| value.checked_mul(buffers.shape.2))
+            .ok_or(NufftWgpuError::InvalidPlan {
+                message: "fast 3D type1 output length overflows usize",
+            })?;
+        if output.len() != expected {
+            return Err(NufftWgpuError::InputLengthMismatch {
+                expected,
+                actual: output.len(),
+            });
+        }
+        NufftGpuKernel::execute_fast_type1_3d_with_buffers(
             &self.device,
             buffers,
-            configuration,
             positions,
             values,
         )?;
-        let converted: Vec<Complex64> = output
-            .into_iter()
-            .map(|v| Complex64::new(v.re as f64, v.im as f64))
-            .collect();
-        Array3::from_shape_vec([grid.nx, grid.ny, grid.nz], converted).map_err(|_| {
-            NufftWgpuError::InvalidPlan {
-                message: "fast 3D type1 with_buffers output shape does not match grid",
-            }
-        })
+        write_complex_output(buffers.readback_prefix(output.len())?, output);
+        Ok(())
     }
 }

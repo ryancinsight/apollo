@@ -3,23 +3,13 @@ use hephaestus_core::DeviceLimits;
 use hephaestus_wgpu::WgpuDevice;
 
 use super::infrastructure::buffers::StftGpuBuffers;
-use super::infrastructure::kernel::{ComplexPod, StftGpuKernel as Kernel};
+use super::infrastructure::kernel::StftGpuKernel as Kernel;
 use super::{FramedExecution, StftWgpuBackend, StftWgpuPlan, WgpuError, WgpuResult};
 
-/// Storage buffers the Bluestein chirp shader binds in one stage:
-/// four working buffers plus two operation buffers.
-const BLUESTEIN_STORAGE_BINDINGS: u32 = 6;
-
-/// Return the Hephaestus limits required by Bluestein dispatch.
-///
-/// The returned request preserves provider defaults and raises only the
-/// storage-binding lower bound. Acquire the device with these limits
-/// before constructing the backend.
+/// Return the Hephaestus limits required by STFT dispatch.
 #[must_use]
 pub fn required_device_limits() -> DeviceLimits {
-    let mut limits = WgpuDevice::default_device_limits();
-    limits.max_storage_buffers_per_shader_stage = Some(BLUESTEIN_STORAGE_BINDINGS);
-    limits
+    WgpuDevice::default_device_limits()
 }
 
 /// Return the spectrum length the forward STFT produces for a signal.
@@ -28,19 +18,30 @@ pub fn required_device_limits() -> DeviceLimits {
 ///
 /// Returns an invalid-plan or input-too-short rejection.
 pub fn forward_output_len(plan: &StftWgpuPlan, signal_len: usize) -> WgpuResult<usize> {
-    plan.payload().validate_geometry()?;
+    let (_, output_len) = checked_frame_geometry(plan, signal_len)?;
     if signal_len < plan.payload().frame_len() {
         return Err(WgpuError::InputTooShort {
             min: plan.payload().frame_len(),
             actual: signal_len,
         });
     }
-    let frame_count = 1 + signal_len.div_ceil(plan.payload().hop_len());
-    frame_count
+    Ok(output_len)
+}
+
+fn checked_frame_geometry(plan: &StftWgpuPlan, signal_len: usize) -> WgpuResult<(usize, usize)> {
+    plan.payload().validate_geometry()?;
+    let frame_count = signal_len
+        .div_ceil(plan.payload().hop_len())
+        .checked_add(1)
+        .ok_or_else(|| WgpuError::InvalidPlan {
+            message: "1 + ceil(signal_len / hop_len) overflows host address space".to_owned(),
+        })?;
+    let output_len = frame_count
         .checked_mul(plan.payload().frame_len())
         .ok_or_else(|| WgpuError::InvalidPlan {
             message: "frame_count * frame_len overflows host address space".to_owned(),
-        })
+        })?;
+    Ok((frame_count, output_len))
 }
 
 impl FramedExecution for StftWgpuBackend {
@@ -52,14 +53,9 @@ impl FramedExecution for StftWgpuBackend {
                 actual: signal.len(),
             });
         }
-        let frame_count = 1 + signal.len().div_ceil(plan.payload().hop_len());
-        Kernel::execute_forward_fft(
-            self.device(),
-            signal,
-            plan.payload().frame_len(),
-            plan.payload().hop_len(),
-            frame_count,
-        )
+        let mut buffers = self.make_buffers(plan, signal.len())?;
+        self.execute_forward_with_buffers(plan, signal, &mut buffers)?;
+        Ok(buffers.fwd_output().to_vec())
     }
 
     fn execute_forward_leto(
@@ -136,7 +132,6 @@ impl FramedExecution for StftWgpuBackend {
         spectrum: &[Complex32],
         signal_len: usize,
     ) -> WgpuResult<Vec<f32>> {
-        plan.payload().validate_geometry()?;
         if signal_len == 0 {
             return Err(WgpuError::InvalidPlan {
                 message: format!(
@@ -146,22 +141,16 @@ impl FramedExecution for StftWgpuBackend {
                 ),
             });
         }
-        let frame_count = 1 + signal_len.div_ceil(plan.payload().hop_len());
-        let expected = frame_count * plan.payload().frame_len();
+        let (_, expected) = checked_frame_geometry(plan, signal_len)?;
         if spectrum.len() != expected {
             return Err(WgpuError::LengthMismatch {
                 expected,
                 actual: spectrum.len(),
             });
         }
-        Kernel::execute_inverse(
-            self.device(),
-            spectrum,
-            plan.payload().frame_len(),
-            plan.payload().hop_len(),
-            frame_count,
-            signal_len,
-        )
+        let mut buffers = self.make_buffers(plan, signal_len)?;
+        self.execute_inverse_with_buffers(plan, spectrum, signal_len, &mut buffers)?;
+        Ok(buffers.inv_output().to_vec())
     }
 
     fn execute_inverse_leto(
@@ -234,8 +223,7 @@ impl FramedExecution for StftWgpuBackend {
     }
 
     fn make_buffers(&self, plan: &StftWgpuPlan, signal_len: usize) -> WgpuResult<StftGpuBuffers> {
-        plan.payload().validate_geometry()?;
-        let frame_count = 1 + signal_len.div_ceil(plan.payload().hop_len());
+        let (frame_count, _) = checked_frame_geometry(plan, signal_len)?;
         StftGpuBuffers::new(
             self.device(),
             frame_count,
@@ -262,17 +250,7 @@ impl FramedExecution for StftWgpuBackend {
                     .to_owned(),
             });
         }
-        if !plan.payload().frame_len().is_power_of_two() {
-            let result = self.execute_forward(plan, signal)?;
-            for (dest, src) in buffers.forward_host.iter_mut().zip(result.iter()) {
-                *dest = ComplexPod {
-                    re: src.re,
-                    im: src.im,
-                };
-            }
-            return Ok(());
-        }
-        Kernel::execute_forward_fft_with_buffers(self.device(), signal, buffers)
+        Kernel::execute_forward_with_buffers(self.device(), signal, buffers)
     }
 
     fn execute_inverse_with_buffers(
@@ -282,13 +260,7 @@ impl FramedExecution for StftWgpuBackend {
         signal_len: usize,
         buffers: &mut StftGpuBuffers,
     ) -> WgpuResult<()> {
-        plan.payload().validate_geometry()?;
-        let frame_count = 1 + signal_len.div_ceil(plan.payload().hop_len());
-        let expected = frame_count
-            .checked_mul(plan.payload().frame_len())
-            .ok_or_else(|| WgpuError::InvalidPlan {
-                message: "frame_count * frame_len overflows host address space".to_owned(),
-            })?;
+        let (frame_count, expected) = checked_frame_geometry(plan, signal_len)?;
         if plan.payload().frame_len() != buffers.frame_len()
             || plan.payload().hop_len() != buffers.hop_len()
             || signal_len != buffers.signal_len()
@@ -299,11 +271,6 @@ impl FramedExecution for StftWgpuBackend {
                 message: "buffer geometry does not match the inverse STFT plan and spectrum"
                     .to_owned(),
             });
-        }
-        if !plan.payload().frame_len().is_power_of_two() {
-            let result = self.execute_inverse(plan, spectrum, signal_len)?;
-            buffers.inverse_host.copy_from_slice(&result);
-            return Ok(());
         }
         Kernel::execute_inverse_with_buffers(self.device(), spectrum, signal_len, buffers)
     }

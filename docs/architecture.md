@@ -78,7 +78,7 @@ The table below is the authoritative record of per-crate precision support. Each
 | apollo-sdft | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/[f16;2] storage, f32 compute) | Forward/inverse direct-bins IDFT; f16 promoted at boundary |
 | apollo-sft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
 | apollo-sht | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | f16 promoted at host boundary |
-| apollo-stft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Forward/inverse FFT-accelerated (Radix-2 DIT); f16 promoted |
+| apollo-stft | HIGH_ACCURACY (Complex64/32/f16) | LOW_PRECISION_F32 (Complex32/[f16;2] storage, f32 compute) | Apollo Hann/WOLA around retained Hephaestus selected-axis FFT/Bluestein plans; f16 promoted at the host boundary |
 | apollo-wavelet | HIGH_ACCURACY (f64/f32/f16 storage) | LOW_PRECISION_F32 (f32/f16 storage, f32 compute) | f16 promoted at host boundary |
 
 ### Key: dense WGPU FFT precision

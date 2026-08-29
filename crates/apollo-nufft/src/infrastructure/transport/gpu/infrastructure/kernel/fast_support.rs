@@ -6,6 +6,7 @@ use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 
 use super::{
     buffers::{NufftGpuBuffers1D, NufftGpuBuffers3D},
+    configuration::{FastConfiguration1D, FastConfiguration3D},
     descriptors::{FastNufftParams, FastNufftParams3D, Position3Pod, WORKGROUP_SIZE},
 };
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
@@ -13,32 +14,12 @@ use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, Nufft
 #[cfg(any(test, feature = "diagnostics"))]
 use super::buffers::NufftGridSnapshot;
 
-/// One-dimensional Kaiser--Bessel parameters and deconvolution factors.
-#[derive(Clone, Copy)]
-pub(crate) struct KaiserBesselOne<'a> {
-    pub(crate) kernel_width: usize,
-    pub(crate) length: f32,
-    pub(crate) beta: f32,
-    pub(crate) i0_beta: f32,
-    pub(crate) deconvolution: &'a [f32],
-}
-
-/// Three-dimensional Kaiser--Bessel parameters and deconvolution factors.
-#[derive(Clone, Copy)]
-pub(crate) struct KaiserBesselThree<'a> {
-    pub(crate) kernel_width: usize,
-    pub(crate) lengths: (f32, f32, f32),
-    pub(crate) beta: f32,
-    pub(crate) i0_beta: f32,
-    pub(crate) deconvolution: &'a [f32],
-}
-
 impl FastNufftParams {
     pub(super) fn for_grid(
         n: usize,
         m: usize,
         sample_count: usize,
-        configuration: KaiserBesselOne<'_>,
+        configuration: &FastConfiguration1D,
     ) -> NufftWgpuResult<Self> {
         Ok(Self {
             n: dimension(n, "mode count")?,
@@ -58,7 +39,7 @@ impl FastNufftParams3D {
         shape: (usize, usize, usize),
         oversampled: (usize, usize, usize),
         sample_count: usize,
-        configuration: KaiserBesselThree<'_>,
+        configuration: &FastConfiguration3D,
     ) -> NufftWgpuResult<Self> {
         Ok(Self {
             nx: dimension(shape.0, "x mode count")?,
@@ -182,21 +163,19 @@ pub(super) fn grid(elements: usize) -> NufftWgpuResult<DispatchGrid> {
     )?)
 }
 
-pub(super) fn download_prefix(
+pub(super) fn download(
     device: &WgpuDevice,
     buffer: &WgpuBuffer<Complex32>,
-    len: usize,
-) -> NufftWgpuResult<Vec<Complex32>> {
-    if len > buffer.len() {
+    output: &mut [Complex32],
+) -> NufftWgpuResult<()> {
+    if output.len() != buffer.len() {
         return Err(NufftWgpuError::InputLengthMismatch {
             expected: buffer.len(),
-            actual: len,
+            actual: output.len(),
         });
     }
-    let mut values = vec![Complex32::new(0.0, 0.0); buffer.len()];
-    device.download(buffer, &mut values)?;
-    values.truncate(len);
-    Ok(values)
+    device.download(buffer, output)?;
+    Ok(())
 }
 
 #[cfg(any(test, feature = "diagnostics"))]

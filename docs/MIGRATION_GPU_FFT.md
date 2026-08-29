@@ -14,6 +14,12 @@ Hephaestus.
 
 No forwarding aliases replace these items.
 
+`ApolloError::Wgpu` is also removed because no Apollo FFT operation constructs
+it after the dense provider deletion. Match the typed `HephaestusError` from
+provider preparation or execution. Apollo's `WgpuError` remains a distinct
+non-FFT transform-transport contract; it is not a replacement
+`ApolloError` variant.
+
 ## Prepared Hephaestus plan
 
 Use a Leto layout and fixed split-complex device buffers:
@@ -51,6 +57,15 @@ Apollo NUFFT consumers retaining `NufftGpuBuffers1D` or
 `NufftGpuBuffers3D` pass them by mutable reference to `with_buffers` methods.
 The exclusive borrow prevents overlapping writes and lets the workspace retain
 its host conversion capacity between calls.
+
+Apollo STFT consumers retain `StftGpuBuffers` for one signal/frame/hop
+geometry. Internally the workspace prepares rank-two Hephaestus plans over
+`[frame_count, frame_len]` with active axis `[1]`; the frame axis remains a
+batch dimension. Apollo keeps only framing, Hann, interleave/deinterleave,
+synthesis-window, and overlap-add kernels. The former Apollo radix-2 and
+Bluestein descriptors, shaders, chirp workspace, and six-binding device-limit
+request are removed. Hephaestus inverse normalization already applies
+`1/frame_len`, so consumer synthesis kernels must not scale again.
 
 `NufftWgpuError::Fft` is removed with Apollo's dense WGPU FFT provider. Match
 `NufftWgpuError::Provider` for Hephaestus preparation, dispatch, allocation,

@@ -42,9 +42,11 @@ coeus (spectral NNs)     helios (CT reconstruction)
 
 ## Hephaestus Integration
 
-GPU transforms use `WgpuTransformBackend` from `hephaestus-wgpu`.
-The shared validation helpers in `WgpuTransformBackend` are consumed
-by `apollo-fft`, `apollo-gft`, and `apollo-validation`.
+Apollo's non-FFT GPU transforms share
+`apollo-fft::WgpuTransformBackend<K>` as a transport scaffold. Dense WGPU FFT
+consumers call `hephaestus_wgpu::WgpuFftOps` directly and retain prepared
+provider plans. Validation exercises the Hephaestus FFT contract through that
+public provider surface; `WgpuTransformBackend` is not owned by Hephaestus.
 
 ## Leto Integration
 

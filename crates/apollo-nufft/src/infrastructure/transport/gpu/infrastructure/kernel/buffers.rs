@@ -9,11 +9,13 @@ use hephaestus_wgpu::{
 };
 use leto::Layout;
 
+use super::configuration::{FastConfiguration1D, FastConfiguration3D};
 use super::descriptors::{
     ExtractOne, ExtractThree, FastOneKernel, FastThreeKernel, InterpolateOne, InterpolateThree,
     LoadOne, LoadThree, Position3Pod, SpreadOne, SpreadThree,
 };
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
+use crate::infrastructure::transport::gpu::{NufftWgpuPlan1D, NufftWgpuPlan3D};
 
 struct PreparedFftPair<const R: usize> {
     forward: WgpuPreparedFft<R>,
@@ -143,6 +145,8 @@ pub struct NufftGpuBuffers1D {
     pub(crate) padding_buffer: WgpuBuffer<Complex32>,
     pub(super) host_positions: Vec<Complex32>,
     pub(super) host_deconvolution: Vec<Complex32>,
+    pub(super) host_readback: Vec<Complex32>,
+    pub(super) configuration: FastConfiguration1D,
     pub(super) kernels: PreparedNufftKernels1D,
     fft: PreparedFftPair<1>,
     /// Output Fourier-mode count.
@@ -165,10 +169,12 @@ impl NufftGpuBuffers1D {
     /// buffer or prepare a pipeline.
     pub fn new(
         device: &WgpuDevice,
-        n: usize,
-        m: usize,
+        plan: &NufftWgpuPlan1D,
         max_samples: usize,
     ) -> NufftWgpuResult<Self> {
+        let configuration = FastConfiguration1D::new(plan)?;
+        let n = configuration.n;
+        let m = configuration.oversampled_len;
         let sample_capacity = max_samples.max(1);
         let output_capacity = n.max(max_samples).max(1);
         let real_grid = device.alloc_zeroed(m.max(1))?;
@@ -186,6 +192,8 @@ impl NufftGpuBuffers1D {
             padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
             host_positions: Vec::with_capacity(sample_capacity),
             host_deconvolution: Vec::with_capacity(n.max(1)),
+            host_readback: vec![Complex32::new(0.0, 0.0); output_capacity],
+            configuration,
             kernels,
             fft,
             n,
@@ -209,6 +217,19 @@ impl NufftGpuBuffers1D {
     ) -> NufftWgpuResult<()> {
         self.fft.encode_inverse(device, stream)
     }
+
+    pub(crate) fn write_coefficients(
+        &self,
+        device: &WgpuDevice,
+        coefficients: &[Complex32],
+    ) -> NufftWgpuResult<()> {
+        device.write_sub_buffer(&self.coefficient_buffer, 0, coefficients)?;
+        Ok(())
+    }
+
+    pub(crate) fn readback_prefix(&self, len: usize) -> NufftWgpuResult<&[Complex32]> {
+        prefix(&self.host_readback, len)
+    }
 }
 
 /// Pre-allocated provider buffers for repeated three-dimensional fast NUFFT execution.
@@ -223,6 +244,9 @@ pub struct NufftGpuBuffers3D {
     pub(crate) coefficient_buffer: WgpuBuffer<Complex32>,
     pub(crate) padding_buffer: WgpuBuffer<Complex32>,
     pub(super) host_positions: Vec<Position3Pod>,
+    pub(super) host_coefficients: Vec<Complex32>,
+    pub(super) host_readback: Vec<Complex32>,
+    pub(super) configuration: FastConfiguration3D,
     pub(super) kernels: PreparedNufftKernels3D,
     fft: PreparedFftPair<3>,
     /// Output shape `(nx, ny, nz)`.
@@ -245,10 +269,12 @@ impl NufftGpuBuffers3D {
     /// device cannot allocate a buffer or prepare a pipeline.
     pub fn new(
         device: &WgpuDevice,
-        shape: (usize, usize, usize),
-        oversampled: (usize, usize, usize),
+        plan: &NufftWgpuPlan3D,
         max_samples: usize,
     ) -> NufftWgpuResult<Self> {
+        let configuration = FastConfiguration3D::new(plan)?;
+        let shape = configuration.shape;
+        let oversampled = configuration.oversampled;
         let grid_len = oversampled
             .0
             .checked_mul(oversampled.1)
@@ -291,6 +317,9 @@ impl NufftGpuBuffers3D {
             coefficient_buffer: device.alloc_zeroed(mode_len.max(1))?,
             padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
             host_positions: Vec::with_capacity(sample_capacity),
+            host_coefficients: vec![Complex32::new(0.0, 0.0); mode_len],
+            host_readback: vec![Complex32::new(0.0, 0.0); output_capacity],
+            configuration,
             kernels,
             fft,
             shape,
@@ -314,6 +343,24 @@ impl NufftGpuBuffers3D {
     ) -> NufftWgpuResult<()> {
         self.fft.encode_inverse(device, stream)
     }
+
+    pub(crate) fn write_coefficients(
+        &mut self,
+        device: &WgpuDevice,
+        coefficients: &leto::Array3<Complex32>,
+    ) -> NufftWgpuResult<()> {
+        if let Some(contiguous) = coefficients.as_slice() {
+            device.write_sub_buffer(&self.coefficient_buffer, 0, contiguous)?;
+        } else {
+            refill_host_coefficients(&mut self.host_coefficients, coefficients);
+            device.write_sub_buffer(&self.coefficient_buffer, 0, &self.host_coefficients)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn readback_prefix(&self, len: usize) -> NufftWgpuResult<&[Complex32]> {
+        prefix(&self.host_readback, len)
+    }
 }
 
 pub(crate) fn ensure_sample_capacity(max_samples: usize, actual: usize) -> NufftWgpuResult<()> {
@@ -324,4 +371,56 @@ pub(crate) fn ensure_sample_capacity(max_samples: usize, actual: usize) -> Nufft
         });
     }
     Ok(())
+}
+
+fn prefix(values: &[Complex32], len: usize) -> NufftWgpuResult<&[Complex32]> {
+    values
+        .get(..len)
+        .ok_or(NufftWgpuError::InputLengthMismatch {
+            expected: values.len(),
+            actual: len,
+        })
+}
+
+fn refill_host_coefficients(
+    workspace: &mut Vec<Complex32>,
+    coefficients: &leto::Array3<Complex32>,
+) {
+    workspace.clear();
+    workspace.extend(coefficients.iter().copied());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refill_host_coefficients;
+    use crate::infrastructure::transport::gpu::verification::count_allocations;
+    use eunomia::Complex32;
+    use leto::{Array3, Layout, VecStorage};
+
+    fn strided_coefficients(shift: f32) -> Array3<Complex32> {
+        let layout = Layout::try_new([3, 2, 2], [1, 6, 3], 0).expect("strided layout");
+        let storage = (0..12)
+            .map(|index| Complex32::new(index as f32 + shift, shift - index as f32))
+            .collect();
+        Array3::new(layout, VecStorage::new(storage)).expect("strided coefficients")
+    }
+
+    #[test]
+    fn noncontiguous_coefficient_refill_reuses_retained_capacity() {
+        let first = strided_coefficients(0.0);
+        let second = strided_coefficients(0.25);
+        let mut workspace = Vec::with_capacity(second.len());
+        refill_host_coefficients(&mut workspace, &first);
+        let retained_pointer = workspace.as_ptr();
+        let retained_capacity = workspace.capacity();
+
+        let ((), allocations) =
+            count_allocations(|| refill_host_coefficients(&mut workspace, &second));
+
+        let expected = second.iter().copied().collect::<Vec<_>>();
+        assert_eq!(workspace, expected);
+        assert_eq!(workspace.as_ptr(), retained_pointer);
+        assert_eq!(workspace.capacity(), retained_capacity);
+        assert_eq!(allocations, 0, "retained coefficient refill allocated");
+    }
 }
