@@ -51,7 +51,7 @@ sum into the inverse yields
 
 because the root-of-unity sum is `N` when `j = l` and zero otherwise.
 
-The device-present CPU and WGPU differential tests use
+The device-present CPU and Hephaestus WGPU differential tests use
 `2 gamma_256 ||x||_1`, where
 `gamma_256 = 256 u / (1 - 256 u)` and `u = epsilon_f32 / 2`. Each side has a
 conservative `gamma_256 ||x||_1` bound for the bounded eight-point regression
@@ -70,6 +70,8 @@ transcendental implementations.
   new provider family.
 - CUDA tests skip only `HephaestusError::AdapterUnavailable`; every other
   provider failure remains visible.
+- The WGPU differential calls the Hephaestus rank-one `FftOps` implementation
+  directly; Apollo owns no WGPU FFT oracle or adapter.
 - On this Windows GNU validation host, the installed driver supplies
   `nvcuda.dll` but not its GNU import archive. The checked test command adds a
   generated `libcuda.dll.a` from that installed driver in the ignored shared

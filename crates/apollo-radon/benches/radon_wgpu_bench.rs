@@ -6,7 +6,7 @@
 
 #![allow(missing_docs)]
 
-use apollo_bench::{BenchmarkCase, BenchmarkSuite};
+use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use apollo_radon::ProjectionExecution;
 use apollo_radon::{GeometryPlan, RadonWgpuBackend, RadonWgpuPlan};
 use leto::Array2;
@@ -114,9 +114,11 @@ fn bench_filtered_backproject(suite: &mut BenchmarkSuite) {
     }
 }
 
-fn main() {
-    let mut suite = BenchmarkSuite::default();
+fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    let mode = BenchmarkMode::from_environment()?;
+    let mut suite = BenchmarkSuite::new(mode.apply(BenchmarkConfig::standard()));
     bench_forward(&mut suite);
     bench_filtered_backproject(&mut suite);
     suite.emit();
+    Ok(())
 }

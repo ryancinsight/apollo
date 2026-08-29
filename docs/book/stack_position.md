@@ -4,14 +4,15 @@
 
 Apollo is the Atlas spectral transform layer. It owns:
 
-- **FFT** — 1D/2D/3D real/complex transforms, plan cache, GPU backend
+- **FFT** — 1D/2D/3D CPU real/complex transforms and plan cache
 - **STFT** — short-time Fourier transform and inverse
 - **Wavelet transforms** — DWT (Haar, Daubechies) and CWT (Ricker, Morlet)
 - **NTT** — number theoretic transform over finite fields
 - **DHT** — discrete Hartley transform
 - **Frequency grids** — sample-frequency axis construction
 - **Parseval normalization contracts** — energy conservation across transforms
-- **GPU transform backend** — wgpu-based FFT dispatch
+- **GPU transform algorithms** — domain-specific non-FFT kernels composed with
+  Hephaestus device and dense-FFT operations
 
 Apollo does **not** own acoustic physics (kwavers), MR imaging (ritk),
 dose computation (helios), tensor algebra (coeus), or memory allocation.
@@ -41,9 +42,11 @@ coeus (spectral NNs)     helios (CT reconstruction)
 
 ## Hephaestus Integration
 
-GPU transforms use `WgpuTransformBackend` from `hephaestus-wgpu`.
-The shared validation helpers in `WgpuTransformBackend` are consumed
-by `apollo-fft`, `apollo-gft`, and `apollo-validation`.
+Apollo's non-FFT GPU transforms share
+`apollo-fft::WgpuTransformBackend<K>` as a transport scaffold. Dense WGPU FFT
+consumers call `hephaestus_wgpu::WgpuFftOps` directly and retain prepared
+provider plans. Validation exercises the Hephaestus FFT contract through that
+public provider surface; `WgpuTransformBackend` is not owned by Hephaestus.
 
 ## Leto Integration
 

@@ -193,6 +193,13 @@ approximately 21 seconds for `half_cyclic_rader`, 10 seconds for
 Each binary has a 300-second hard bound. A full-case smoke mode invokes each
 production closure once without warm-up and marks its single observation as
 non-inferential. The committed bench gate applies a 60-second process bound.
+Every benchmark executable reads `APOLLO_BENCH_MODE` before constructing its
+suite; using `BenchmarkSuite::default()` would silently select the full
+measurement budget and violates the smoke contract.
+GPU preparation comparisons retain one largest representative per dimensional
+regime when a single preparation observation takes hundreds of milliseconds.
+This keeps the established 100-observation estimator while avoiding redundant
+sizes whose dispatch strategy and oversampled grid are identical.
 These are instrument-design changes; full measurement retains 100 observations
 per case, no comparator threshold is widened, and no production transform path
 changes. Before the one-observation correction, the reference Windows host ran

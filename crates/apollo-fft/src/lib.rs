@@ -56,7 +56,7 @@ pub use application::execution::plan::fft::{
     real_storage::RealFftData,
 };
 pub use application::orchestration::cache::plans::PlanCacheProvider;
-pub use domain::contracts::backend::FftBackend;
+pub use domain::contracts::backend::{BackendCapabilities, FftBackend};
 pub use domain::contracts::error::{ApolloError, ApolloResult};
 pub use domain::metadata::precision::{
     BackendKind, ComputePrecision, Normalization, PrecisionMode, PrecisionProfile, StoragePrecision,
@@ -81,9 +81,6 @@ pub use api::icfft::*;
 pub use api::irfft::*;
 pub use api::rfft::*;
 pub use api::shift::*;
-
-#[cfg(feature = "wgpu")]
-pub use infrastructure::transport::gpu::*;
 
 #[cfg(feature = "cuda")]
 pub use infrastructure::transport::cuda::*;

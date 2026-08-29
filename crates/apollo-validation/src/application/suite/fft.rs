@@ -1,14 +1,122 @@
 use crate::domain::report::{CpuFftReport, GpuFftReport, PrecisionRunReport};
-use apollo_fft::{FftBackend, Shape3D};
-use hephaestus_core::HephaestusError;
-use hephaestus_wgpu::WgpuDevice;
-use leto::{self, Array1, Storage};
+use hephaestus_core::{
+    ComputeDevice, FftDirection, FftOperands, FftOps, HephaestusError, StridedView,
+};
+use hephaestus_wgpu::{WgpuDevice, WgpuFftOps};
+use leto::{self, Array1, Array3, Layout, Storage};
 
 use super::benchmark::precision_profile_reports;
 use super::metrics::{
     max_complex_abs_delta, max_real_abs_delta, max_real_abs_delta_3d, representative_field_3d,
 };
 use super::{SuiteResult, CPU_PARSEVAL_LIMIT, CPU_ROUNDTRIP_LIMIT, CPU_STABILITY_LIMIT};
+
+const GPU_SHAPE: [usize; 3] = [4, 4, 4];
+
+struct GpuFftErrors {
+    forward: f64,
+    inverse: f64,
+    forward_limit: f64,
+    inverse_limit: f64,
+}
+
+fn axis_rounding_sites(length: usize) -> u32 {
+    if length <= 1 {
+        0
+    } else {
+        5 * length.ilog2()
+    }
+}
+
+fn relative_error_bound(rounding_sites: u32) -> f64 {
+    let unit_roundoff = f64::from(f32::EPSILON) / 2.0;
+    let accumulated = f64::from(rounding_sites) * unit_roundoff;
+    debug_assert!(
+        accumulated < 1.0,
+        "invariant: FFT rounding model requires sites times unit roundoff below one"
+    );
+    accumulated / (1.0 - accumulated)
+}
+
+fn gpu_rounding_sites(shape: [usize; 3]) -> (u32, u32) {
+    let axis_sites = shape.into_iter().map(axis_rounding_sites).sum::<u32>();
+    let active_axes = u32::try_from(shape.into_iter().filter(|&n| n > 1).count())
+        .expect("invariant: rank-three active-axis count fits u32");
+    (1 + axis_sites, 1 + 2 * axis_sites + active_axes)
+}
+
+fn gpu_fft_errors(device: &WgpuDevice) -> SuiteResult<GpuFftErrors> {
+    let reference = representative_field_3d(GPU_SHAPE);
+    let input = reference
+        .iter()
+        .map(|&value| value as f32)
+        .collect::<Vec<_>>();
+    let represented =
+        Array3::from_shape_vec(GPU_SHAPE, input.iter().copied().map(f64::from).collect())?;
+    let reference_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
+        GPU_SHAPE,
+        represented
+            .as_slice()
+            .expect("invariant: constructed reference field is contiguous"),
+    )?;
+    let cpu_spectrum = apollo_fft::fft_3d_leto(reference_leto.view());
+    let real = device.upload(&input)?;
+    let imaginary = device.alloc_zeroed(input.len())?;
+    let layout = Layout::c_contiguous(GPU_SHAPE)?;
+    let operands = || FftOperands {
+        real: StridedView::new(&real, &layout),
+        imaginary: StridedView::new(&imaginary, &layout),
+    };
+    let ops = WgpuFftOps;
+    let forward = ops.prepare_fft(device, operands(), FftDirection::Forward)?;
+    let inverse = ops.prepare_fft(device, operands(), FftDirection::Inverse)?;
+
+    ops.dispatch_fft(device, &forward)?;
+    let gpu_real = device.download_owned(&real)?;
+    let gpu_imaginary = device.download_owned(&imaginary)?;
+    let forward_error = cpu_spectrum
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(gpu_real.iter().zip(&gpu_imaginary))
+        .map(|(expected, (&actual_real, &actual_imaginary))| {
+            (f64::from(actual_real) - expected.re).hypot(f64::from(actual_imaginary) - expected.im)
+        })
+        .fold(0.0_f64, f64::max);
+
+    ops.dispatch_fft(device, &inverse)?;
+    let recovered = Array3::from_shape_vec(
+        GPU_SHAPE,
+        device
+            .download_owned(&real)?
+            .into_iter()
+            .map(f64::from)
+            .collect(),
+    )?;
+    let inverse_error = max_real_abs_delta_3d(&represented, &recovered);
+
+    // Hephaestus's radix-2 conformance model counts five rounded operations
+    // per stage and component. The forward component bound is gamma_k times
+    // the complex-input L1 norm. For a normalized forward/inverse pair, the
+    // maximum component error is bounded by the relative L2 bound times the
+    // input L2 norm because max-norm <= L2-norm.
+    let (forward_sites, roundtrip_sites) = gpu_rounding_sites(GPU_SHAPE);
+    let input_l1 = input
+        .iter()
+        .map(|&value| f64::from(value).abs())
+        .sum::<f64>();
+    let input_l2 = input
+        .iter()
+        .map(|&value| f64::from(value).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    Ok(GpuFftErrors {
+        forward: forward_error,
+        inverse: inverse_error,
+        forward_limit: relative_error_bound(forward_sites) * input_l1,
+        inverse_limit: relative_error_bound(roundtrip_sites) * input_l2,
+    })
+}
 
 /// Validate CPU FFT invariants against analytical identities.
 pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
@@ -77,7 +185,7 @@ pub fn run_fft_cpu_suite() -> SuiteResult<CpuFftReport> {
 
 /// Validate WGPU availability and record adapter-backed status.
 pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
-    let backend = match WgpuDevice::try_default("apollo-validation-fft-wgpu") {
+    let device = match WgpuDevice::try_default("apollo-validation-fft-wgpu") {
         Err(HephaestusError::AdapterUnavailable { .. }) => {
             return Ok(GpuFftReport {
                 attempted: false,
@@ -97,85 +205,39 @@ pub fn run_fft_gpu_suite() -> SuiteResult<GpuFftReport> {
             });
         }
         Err(error) => return Err(Box::new(error)),
-        Ok(device) => apollo_fft::WgpuBackend::new(device),
+        Ok(device) => device,
     };
-
-    let shape = Shape3D::new(4, 4, 4).expect("valid shape");
-    let plan = match FftBackend::plan_3d(&backend, shape) {
-        Err(error) => {
-            return Ok(GpuFftReport {
-                attempted: false,
-                passed: false,
-                forward_max_abs_error: None,
-                inverse_max_abs_error: None,
-                note: Some(format!("GpuFft3d plan creation failed: {error}")),
-                precision_profiles: vec![PrecisionRunReport {
-                    profile: "low_precision".to_string(),
-                    attempted: false,
-                    passed: false,
-                    forward_max_abs_error: None,
-                    inverse_max_abs_error: None,
-                    relative_error: None,
-                    note: None,
-                }],
-            });
-        }
-        Ok(p) => p,
-    };
-
-    // Run an actual GPU forward + inverse roundtrip on a 4×4×4 reference field.
-    let reference = representative_field_3d([4, 4, 4]);
-    let reference_leto = leto::Array::<_, leto::MnemosyneStorage<_>, 3>::from_mnemosyne_slice(
-        [4, 4, 4],
-        reference.as_slice().unwrap(),
-    )
-    .unwrap();
-    let spectrum_leto = plan
-        .forward_leto(reference_leto.view())
-        .expect("GPU forward");
-    let cpu_spectrum_leto = apollo_fft::fft_3d_leto(reference_leto.view());
-
-    // Forward error: max |GPU complex spectrum - CPU f64 reference spectrum|.
-    let gpu_spectrum_slice = spectrum_leto.storage().as_slice();
-    let forward_max_abs_error = cpu_spectrum_leto
-        .storage()
-        .as_slice()
-        .iter()
-        .enumerate()
-        .map(|(idx, cpu_val)| {
-            let gpu_re = f64::from(gpu_spectrum_slice[2 * idx]);
-            let gpu_im = f64::from(gpu_spectrum_slice[2 * idx + 1]);
-            ((gpu_re - cpu_val.re).powi(2) + (gpu_im - cpu_val.im).powi(2)).sqrt()
-        })
-        .fold(0.0_f64, f64::max);
-
-    // Inverse error: max |GPU roundtrip recovered - reference|.
-    let recovered_leto = plan
-        .inverse_leto(spectrum_leto.view())
-        .expect("GPU inverse");
-    let recovered =
-        leto::Array3::from_shape_vec([4, 4, 4], recovered_leto.storage().as_slice().to_vec())
-            .unwrap();
-    let inverse_max_abs_error = max_real_abs_delta_3d(&reference, &recovered);
-
-    // GPU f32 tolerance: three axis passes with f32 accumulation.
-    const GPU_F32_TOL: f64 = 1.0e-4;
-    let passed = forward_max_abs_error <= GPU_F32_TOL && inverse_max_abs_error <= GPU_F32_TOL;
+    let errors = gpu_fft_errors(&device)?;
+    let passed = errors.forward <= errors.forward_limit && errors.inverse <= errors.inverse_limit;
 
     Ok(GpuFftReport {
         attempted: true,
         passed,
-        forward_max_abs_error: Some(forward_max_abs_error),
-        inverse_max_abs_error: Some(inverse_max_abs_error),
+        forward_max_abs_error: Some(errors.forward),
+        inverse_max_abs_error: Some(errors.inverse),
         note: None,
         precision_profiles: vec![PrecisionRunReport {
             profile: "low_precision".to_string(),
             attempted: true,
             passed,
-            forward_max_abs_error: Some(forward_max_abs_error),
-            inverse_max_abs_error: Some(inverse_max_abs_error),
-            relative_error: Some(forward_max_abs_error.max(inverse_max_abs_error)),
-            note: Some("GPU f32 shader precision; forward error vs CPU f64 reference".to_string()),
+            forward_max_abs_error: Some(errors.forward),
+            inverse_max_abs_error: Some(errors.inverse),
+            relative_error: Some(errors.forward.max(errors.inverse)),
+            note: Some(format!(
+                "Hephaestus f32 FFT; derived forward limit {:.3e}, inverse limit {:.3e}",
+                errors.forward_limit, errors.inverse_limit
+            )),
         }],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{gpu_rounding_sites, relative_error_bound, GPU_SHAPE};
+
+    #[test]
+    fn gpu_error_model_counts_every_radix_stage() {
+        assert_eq!(gpu_rounding_sites(GPU_SHAPE), (31, 64));
+        assert!(relative_error_bound(31) < relative_error_bound(64));
+    }
 }

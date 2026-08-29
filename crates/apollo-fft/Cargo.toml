@@ -55,7 +55,6 @@ cuda = [
     "dep:hephaestus-cuda",
     "dep:hephaestus-core",
 ]
-native-f16 = ["wgpu"]
 default = ["parallel", "mnemosyne-memory"]
 parallel = []
 mnemosyne-memory = []
@@ -76,8 +75,3 @@ harness = false
 
 [lints]
 workspace = true
-
-[[bench]]
-name = "buffer_reuse"
-harness = false
-required-features = ["wgpu"]

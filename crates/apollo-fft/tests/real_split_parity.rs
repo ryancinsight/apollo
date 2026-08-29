@@ -162,3 +162,26 @@ fn half_spectrum_entry_allocates_nothing_and_matches_the_full_one() {
         }
     }
 }
+
+#[test]
+fn split_spectrum_round_trips_through_the_public_inverse() {
+    for n in [128, 256, 512] {
+        let src = signal(n);
+        let spectrum = apollo_fft::fft_1d_slice::<f64>(&src);
+        let reconstructed = apollo_fft::ifft_1d_slice::<f64>(&spectrum);
+        let input_l1 = src.iter().map(|value| value.abs()).sum();
+        let spectrum_l1 = spectrum.iter().map(|value| value.re.hypot(value.im)).sum();
+        // The inverse propagates each forward-bin error through a 1/N-scaled
+        // sum and adds its own O(log N * u) transform error.
+        let bound = tolerance(n, input_l1) + tolerance(n, spectrum_l1) / n as f64;
+        let worst = src
+            .iter()
+            .zip(&reconstructed)
+            .map(|(expected, actual)| (expected - actual).abs())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            worst <= bound,
+            "N={n}: public real round trip differs by {worst:.3e} > {bound:.3e}"
+        );
+    }
+}

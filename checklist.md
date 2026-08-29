@@ -1,5 +1,33 @@
 # Apollo Checklist
 
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 [major] [arch] [perf] — Codex
+
+- [x] Delete Apollo's duplicate dense WGPU FFT implementation, shaders,
+      benchmark, feature, and public exports while retaining CUDA FFT.
+- [x] Move all in-repository dense WGPU consumers to prepared rank-generic
+      Hephaestus plans and retain NUFFT plans, buffers, and host capacity.
+- [x] Prepare and bind all four reusable NUFFT domain stages once, update only
+      retained parameter buffers, and encode each operation as one grouped
+      Hephaestus sequence with a retained fixed-capacity interpolation grid.
+- [x] Prove value correctness when one workspace executes maximum-capacity then
+      shorter logical-sample requests across 1-D/3-D Type-1/Type-2 paths.
+- [x] Prove zero Apollo-owned warm allocations for host conversion, readback,
+      and non-contiguous 3-D coefficient staging while preserving capacity.
+- [x] Reject foreign-device reusable workspaces before every host-to-device
+      write and prove the typed error leaves all four caller outputs unchanged.
+- [x] Repair benchmark-mode selection and complete the bounded retained-versus-
+      per-call GPU measurement without reducing statistical observations.
+- [x] Correct base-128 split inverse normalization and repair the hosted book
+      and package-owned benchmark-smoke gates without extending their budgets.
+- [x] Pass the local feature matrix, value-semantic Nextest suites, doctests,
+      warning-denied Rustdoc, residue checks, and SemVer classification.
+- [x] Commit source candidate `f981908f` and documentation correction
+      `7c063e27`; provider PR #234 is merged at `44754cd1`.
+- [x] Obtain independent GREEN review of the exact source and documentation
+      candidates.
+- [ ] Deliver PR #176 through hosted gates, merge, synchronize closure
+      revisions, and discharge the lease.
+
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
 - [x] Reproduce the pool-warmup retained census at the merged Moirai revision

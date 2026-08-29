@@ -5,6 +5,7 @@
 
 /// Reusable provider-owned fast-path buffers.
 pub mod buffers;
+mod configuration;
 mod descriptors;
 mod direct;
 mod fast;
@@ -13,7 +14,6 @@ mod fast_support;
 pub use buffers::{NufftGpuBuffers1D, NufftGpuBuffers3D};
 #[cfg(any(test, feature = "diagnostics"))]
 pub use buffers::{NufftGridSnapshot, NufftType2GridDiagnostics};
-pub(crate) use fast_support::{KaiserBesselOne, KaiserBesselThree};
 
 /// Zero-sized NUFFT orchestration over the typed accelerator provider.
 #[derive(Clone, Copy, Debug, Default)]

@@ -82,12 +82,12 @@ impl BackendCapabilities {
         ],
     };
 
-    /// WGPU backend capabilities as a compile-time constant.
+    /// Hephaestus WGPU dense-FFT capabilities as a compile-time constant.
     pub const WGPU: Self = Self {
         kind: BackendKind::Wgpu,
         normalization: Normalization::FftwCompatible,
-        supports_1d: false,
-        supports_2d: false,
+        supports_1d: true,
+        supports_2d: true,
         supports_3d: true,
         supports_real_to_complex: false,
         supports_mixed_precision: true,

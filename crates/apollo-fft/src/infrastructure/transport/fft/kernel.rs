@@ -46,26 +46,16 @@ impl<T: Pod, E: FftEntry> KernelInterface for FftKernel<T, E> {
 }
 
 pub(crate) struct BitReverse;
-pub(crate) struct RadixFourBitReverse;
 pub(crate) struct Butterfly;
-pub(crate) struct RadixFourButterfly;
 pub(crate) struct Scale;
 
 impl FftEntry for BitReverse {
     const LABEL: &'static str = "apollo-fft-bit-reverse";
     const ENTRY: &'static str = "fft_bitrev";
 }
-impl FftEntry for RadixFourBitReverse {
-    const LABEL: &'static str = "apollo-fft-radix-four-bit-reverse";
-    const ENTRY: &'static str = "fft_bitrev_radix4";
-}
 impl FftEntry for Butterfly {
     const LABEL: &'static str = "apollo-fft-butterfly";
     const ENTRY: &'static str = "fft_forward";
-}
-impl FftEntry for RadixFourButterfly {
-    const LABEL: &'static str = "apollo-fft-radix-four-butterfly";
-    const ENTRY: &'static str = "fft_forward_radix4";
 }
 impl FftEntry for Scale {
     const LABEL: &'static str = "apollo-fft-scale";

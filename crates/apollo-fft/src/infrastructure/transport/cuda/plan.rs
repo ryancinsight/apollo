@@ -361,6 +361,10 @@ mod tests {
     #[cfg(feature = "wgpu")]
     #[test]
     fn cuda_forward_matches_wgpu_when_devices_exist() {
+        use hephaestus_core::{ComputeDevice, FftDirection, FftOperands, FftOps, StridedView};
+        use hephaestus_wgpu::WgpuFftOps;
+        use leto::Layout;
+
         let Some(cuda_device) = cuda_or_skip() else {
             return;
         };
@@ -386,13 +390,32 @@ mod tests {
         let input = original
             .as_slice()
             .expect("owned Leto signal is contiguous");
-        let mut wgpu_real: Vec<f32> = input.iter().map(|value| value.re).collect();
-        let mut wgpu_imaginary: Vec<f32> = input.iter().map(|value| value.im).collect();
-        let wgpu_plan = crate::GpuFft3d::new(wgpu_device, original.size(), 1, 1)
+        let wgpu_real = wgpu_device
+            .upload(&input.iter().map(|value| value.re).collect::<Vec<_>>())
+            .expect("WGPU real-component upload");
+        let wgpu_imaginary = wgpu_device
+            .upload(&input.iter().map(|value| value.im).collect::<Vec<_>>())
+            .expect("WGPU imaginary-component upload");
+        let layout = Layout::c_contiguous([original.size()]).expect("dense differential layout");
+        let prepared = WgpuFftOps
+            .prepare_fft(
+                &wgpu_device,
+                FftOperands {
+                    real: StridedView::new(&wgpu_real, &layout),
+                    imaginary: StridedView::new(&wgpu_imaginary, &layout),
+                },
+                FftDirection::Forward,
+            )
             .expect("one-dimensional WGPU differential plan");
-        wgpu_plan
-            .execute_forward_in_place(&mut wgpu_real, &mut wgpu_imaginary)
+        WgpuFftOps
+            .dispatch_fft(&wgpu_device, &prepared)
             .expect("WGPU forward transform");
+        let wgpu_real = wgpu_device
+            .download_owned(&wgpu_real)
+            .expect("WGPU real-component download");
+        let wgpu_imaginary = wgpu_device
+            .download_owned(&wgpu_imaginary)
+            .expect("WGPU imaginary-component download");
 
         for (index, (cuda, (&wgpu_real, &wgpu_imaginary))) in cuda_actual
             .as_slice()
