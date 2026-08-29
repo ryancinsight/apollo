@@ -36,6 +36,11 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest.workspace = true
+apollo-bench = { path = "../apollo-bench" }
+
+[[bench]]
+name = "cwt_scale_rows"
+harness = false
 
 [lints]
 workspace = true

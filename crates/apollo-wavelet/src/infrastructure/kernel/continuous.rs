@@ -1,4 +1,11 @@
 //! Continuous wavelet transform analysis kernels.
+//!
+//! [`coefficient`] is the direct O(n) per-coefficient definition and remains
+//! the specification of the transform and the differential oracle for the
+//! [`convolution`] kernel, which evaluates a whole scale row in O(n log n).
+
+/// Per-scale FFT cross-correlation kernel.
+pub mod convolution;
 
 use crate::domain::metadata::wavelet::ContinuousWavelet;
 

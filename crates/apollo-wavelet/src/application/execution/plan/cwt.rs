@@ -4,6 +4,7 @@ use crate::domain::contracts::error::{WaveletError, WaveletResult};
 use crate::domain::metadata::wavelet::ContinuousWavelet;
 use crate::domain::spectrum::coefficients::CwtCoefficients;
 use crate::infrastructure::kernel::continuous::coefficient;
+use crate::infrastructure::kernel::continuous::convolution::{CwtSpectrum, FFT_CWT_LEN_THRESHOLD};
 use crate::WaveletStorage;
 use apollo_fft::PrecisionProfile;
 use leto::Array2;
@@ -63,27 +64,63 @@ impl CwtPlan {
     }
 
     /// Execute the CWT. Output shape is `(scales, signal_len)`.
+    ///
+    /// Above [`FFT_CWT_LEN_THRESHOLD`] each scale row is evaluated as one
+    /// circular cross-correlation through `apollo-fft`, costing
+    /// O(scales · n log n) with `2n - 1` mother-wavelet evaluations per scale.
+    /// Below it the direct O(scales · n²) kernel runs, which is also the
+    /// differential oracle for the fast path
+    /// (see [`crate::infrastructure::kernel::continuous::convolution`]).
     pub fn transform(&self, signal: &[f64]) -> WaveletResult<CwtCoefficients> {
         if signal.len() != self.len {
             return Err(WaveletError::LengthMismatch);
         }
-        // Collect directly into the row-major output buffer. The indexed map
-        // preserves logical order while avoiding one allocation per scale row.
         let output_len = self
             .scales
             .len()
             .checked_mul(self.len)
             .ok_or(WaveletError::CoefficientShapeMismatch)?;
-        let values =
-            moirai::map_collect_index_with::<moirai::Adaptive, _, _>(output_len, |index| {
-                let scale_index = index / self.len;
-                let shift = index % self.len;
-                coefficient(signal, self.wavelet, self.scales[scale_index], shift)
-            });
+        let values = if self.len >= FFT_CWT_LEN_THRESHOLD {
+            self.transform_via_convolution(signal, output_len)
+        } else {
+            self.transform_direct(output_len, signal)
+        };
         let values = Array2::from_shape_vec([self.scales.len(), self.len], values)
             .expect("CWT output shape");
 
         Ok(CwtCoefficients::new(self.scales.clone(), values))
+    }
+
+    /// Row-major coefficients from one shared signal spectrum, one scale row
+    /// per parallel task.
+    fn transform_via_convolution(&self, signal: &[f64], output_len: usize) -> Vec<f64> {
+        let spectrum = CwtSpectrum::new(signal);
+        let rows = moirai::map_collect_index_with::<moirai::Adaptive, _, _>(
+            self.scales.len(),
+            |scale_index| {
+                let mut row = vec![0.0; self.len];
+                spectrum.row_into(self.wavelet, self.scales[scale_index], &mut row);
+                row
+            },
+        );
+        let mut values = Vec::with_capacity(output_len);
+        for row in rows {
+            values.extend_from_slice(&row);
+        }
+        values
+    }
+
+    /// Direct per-coefficient evaluation: the transform's specification, and
+    /// the oracle the convolution path is verified against.
+    ///
+    /// Collects directly into the row-major output buffer; the indexed map
+    /// preserves logical order while avoiding one allocation per scale row.
+    fn transform_direct(&self, output_len: usize, signal: &[f64]) -> Vec<f64> {
+        moirai::map_collect_index_with::<moirai::Adaptive, _, _>(output_len, |index| {
+            let scale_index = index / self.len;
+            let shift = index % self.len;
+            coefficient(signal, self.wavelet, self.scales[scale_index], shift)
+        })
     }
 
     /// Execute the CWT from a Leto 1D signal view.
@@ -238,6 +275,75 @@ mod tests {
         let actual = actual_view.as_slice().expect("contiguous leto output");
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+
+    /// Difference bound between the convolution row and the direct sum.
+    ///
+    /// Direct naive summation over `n` terms carries `|error| ≤ n · ε · ‖x‖₂ ‖w‖₂`;
+    /// the three-transform FFT convolution carries the classical
+    /// `c · log₂ L · ε · ‖x‖₂ ‖w‖₂` growth with `c = 8` a conservative radix-2
+    /// constant. The two computed results differ by at most the sum. The norms
+    /// are measured from the inputs; only the `(n + 8 log₂ L) · ε` shape is
+    /// assumed.
+    fn plan_difference_bound(signal: &[f64], wavelet: ContinuousWavelet, scale: f64) -> f64 {
+        use crate::infrastructure::kernel::continuous::convolution::transform_len;
+        use crate::infrastructure::kernel::continuous::mother_wavelet;
+
+        let n = signal.len();
+        let signal_norm = signal.iter().map(|value| value * value).sum::<f64>().sqrt();
+        let inv_sqrt_scale = 1.0 / scale.sqrt();
+        let kernel_norm = (-(n as isize - 1)..n as isize)
+            .map(|lag| {
+                let weight = inv_sqrt_scale * mother_wavelet(wavelet, lag as f64 / scale);
+                weight * weight
+            })
+            .sum::<f64>()
+            .sqrt();
+        (n as f64 + 8.0 * (transform_len(n) as f64).log2())
+            * f64::EPSILON
+            * signal_norm
+            * kernel_norm
+    }
+
+    #[test]
+    fn transform_matches_the_direct_kernel_above_and_below_the_threshold() {
+        use crate::infrastructure::kernel::continuous::coefficient;
+        use crate::infrastructure::kernel::continuous::convolution::FFT_CWT_LEN_THRESHOLD;
+
+        let scales = vec![0.75_f64, 2.0, 6.5, 25.0];
+        for wavelet in [
+            ContinuousWavelet::Ricker,
+            ContinuousWavelet::Morlet { omega0: 5.0 },
+        ] {
+            // Straddles the threshold in both directions, including the
+            // exact boundary and a non-power-of-two length above it.
+            for len in [
+                1_usize,
+                5,
+                FFT_CWT_LEN_THRESHOLD - 1,
+                FFT_CWT_LEN_THRESHOLD,
+                129,
+                256,
+            ] {
+                let signal: Vec<f64> = (0..len)
+                    .map(|index| (index as f64 * 0.29).sin() - (index % 3) as f64 * 0.4)
+                    .collect();
+                let plan = CwtPlan::new(len, scales.clone(), wavelet).expect("valid CWT plan");
+                let actual = plan.transform(&signal).expect("CWT");
+                for (scale_index, &scale) in scales.iter().enumerate() {
+                    let bound = plan_difference_bound(&signal, wavelet, scale);
+                    for shift in 0..len {
+                        let expected = coefficient(&signal, wavelet, scale, shift);
+                        let actual = actual.values()[[scale_index, shift]];
+                        assert!(
+                            (actual - expected).abs() <= bound,
+                            "len {len} scale {scale} shift {shift}: \
+                             |{actual} - {expected}| exceeds derived bound {bound}"
+                        );
+                    }
+                }
+            }
         }
     }
 

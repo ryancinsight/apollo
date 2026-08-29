@@ -306,7 +306,11 @@ pub(super) fn exec_base64_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
         transform_64::<F, true>(slice, plan.base64_inverse_plan()),
         "invariant: the selected base-64 capability remains available"
     );
-    F::normalize(slice, 64);
+    // The IDFT scale is 1/n for the transform length, never the base the
+    // route is named for; the base-64 route serves n = 64 alone today, but
+    // the constant would silently mis-scale the moment it serves 128 as the
+    // base-128 route already does.
+    F::normalize(slice, slice.len());
 }
 
 /// Unnormalized inverse companion of [`exec_base64_forward`].
@@ -338,6 +342,9 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
         transform_via_base_128::<F, true>(slice, plan.base128_inverse_plan()),
         "invariant: the selected base-128 capability remains available"
     );
+    // The base-128 route serves n = 128, 256, and 512 (log2n 7, 8, 9 in
+    // `FftPlan1D::new`), so the IDFT scale is 1/n and not the route's base:
+    // the constant 128 left n = 256 doubled and n = 512 quadrupled.
     F::normalize(slice, plan.len());
 }
 

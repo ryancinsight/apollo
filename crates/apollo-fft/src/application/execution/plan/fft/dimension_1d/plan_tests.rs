@@ -104,6 +104,37 @@ fn static_fft_plan_matches_direct_for_pot_composite_and_rader() {
 }
 
 #[test]
+fn normalized_inverse_recovers_every_power_of_two_routing_rung() {
+    // The normalized inverse must apply the 1/n IDFT scale for its own
+    // transform length. The base-128 route serves n = 128, 256, and 512, so a
+    // constant scale named after the route left 256 doubled and 512
+    // quadrupled; no per-size normalized-inverse round trip existed to see it.
+    // Every power-of-two rung the planner dispatches is covered here so a
+    // route serving more than one length cannot mis-scale again unseen.
+    for log2n in 0..=14u32 {
+        let n = 1usize << log2n;
+        let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
+        let input = signal64(n);
+        let mut spectrum = input.clone();
+        plan.forward_complex_slice_inplace(&mut spectrum);
+        // Bound the round trip against the spectrum feeding the inverse.
+        let (bound, _) = inverse_bounds64(&spectrum);
+        plan.inverse_complex_slice_inplace(&mut spectrum);
+
+        let max_err = spectrum
+            .iter()
+            .zip(input.iter())
+            .map(|(actual, expected)| (*actual - *expected).norm())
+            .fold(0.0f64, f64::max);
+        assert!(
+            max_err <= bound,
+            "N={n} normalized inverse round trip max_err={max_err:.3e} exceeds \
+             derived bound {bound:.3e}"
+        );
+    }
+}
+
+#[test]
 fn tiny_runtime_and_static_n3_match_direct() {
     let input64 = signal64(3);
     let expected64 = dft_forward(&input64);
