@@ -596,7 +596,7 @@
 - **Evidence:** `crates/apollo-sht/src/application/execution/plan/sht.rs`
   90-130; `crates/apollo-sht/src/infrastructure/kernel/quadrature.rs` 60-95.
 
-## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — blocked
+## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — in-progress
 
 - **Outcome:** DCT-I routes through a 2(N−1)-point real FFT and DCT-IV,
   DST-I, DST-IV through half-shift FFT factorizations, so every kind reaches
@@ -614,8 +614,11 @@
   2(N+1), and 2N that these factorizations need are safe at any N. The failure
   this item cited (N = 361 → 2N = 722, relative error 0.997) is covered by the
   oracle sweep and no longer reproduces. Ready to claim.
-- **Re-open trigger:** the composite-radix census passes clean, at which point
-  the derivations are ready to implement: DCT-I is `Re(DFT_{2(N−1)}(y))[k]` on
+- **Integrator:** claude-fable session 03d80d33. **Claimed 2026-08-29.**
+- **Lease:** `crates/apollo-dctdst/src/infrastructure/kernel/fast.rs`,
+  `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`,
+  `crates/apollo-dctdst/tests/`, plus this entry.
+- **Derivations, ready to implement:** DCT-I is `Re(DFT_{2(N−1)}(y))[k]` on
   the whole-sample-symmetric extension `y`; DST-I is
   `−½·Im(DFT_{2(N+1)}(y))[k+1]` on the antisymmetric extension; DCT-IV and
   DST-IV share one 2N-point FFT of the pre-twiddled `u[n] = x[n]·e^{−iπn/(2N)}`
