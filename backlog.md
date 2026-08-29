@@ -341,32 +341,16 @@
   obviously removable — something must carry the reversal, and the store
   side is the cheaper of the two places to put it.
 
-## ATLAS-APOLLO-PLANAR-MOVEMENT-2026-08-28 — What is left of the planar route's movement [perf] — todo
+## ATLAS-APOLLO-PLANAR-MOVEMENT-2026-08-28 — What is left of the planar route's movement [perf] — done 2026-08-29
 
-- **Integrator:** Codex task `01a03eb2-6f0a-7301-9290-55b918675e48`.
-  **Lease:** `components/batched/{mod.rs,boundary.rs,pinned_sections.rs}`,
-  the pinned section instrument, focused value/allocation tests,
-  `gap_audit.md#planar-movement`, CHANGELOG, and this item through the next
-  verified commit. **Last update:** 2026-08-29.
-- **State:** movement is about 26% of the route, down from 30%, and none of
-  it is repair — deinterleave, transpose, and sink each move data the
-  algorithm needs moved (`gap_audit.md#dif-stage-set`). The next gain at
-  these sizes is not another pass to delete, so this item is open for a
-  measurement-first look rather than a named fix.
-- **Where to start:** the sink's cost rose with the bit-reversed read, most
-  sharply on the split route's combine (4361 -> 5404 TSC at 2048,
-  15086 -> 19999 at 8192). Whether that is the reversal or the two-plane
-  read is not yet separated, and separating it is the first increment.
-- **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** totals
-  9545 at 1024, 23224 at 2048, 45455 at 4096, 100475 at 8192, 198694 at
-  16384.
-- **Bounded experiment:** keep the production workload and arithmetic fixed and
-  add instrument-only sink variants that independently select natural versus
-  bit-reversed destinations and one-plane versus two-plane reads. Accept a
-  production change only when two pinned, counterbalanced runs attribute a
-  repeatable median reduction of at least 5% to a removable mechanism while
-  value and zero-warm-allocation oracles remain unchanged; otherwise remove the
-  variants and close with the measured rejection.
+- **Reconciled:** `gap_audit.md#sink-permutation` already ran the required
+  three-way sink experiment. The two-plane read matched the pre-DIF floor;
+  reversed reads were the cost, and moving the permutation to scattered writes
+  reduced the split combine from 5,504.6 to 5,051.8 TSC at 2,048 and from
+  21,281.1 to 18,378.8 at 8,192 while preserving values.
+- **Closure:** production already contains that selected sink. The remaining
+  deinterleave, transpose, and sink passes carry required data movement; no
+  unmeasured removable mechanism remains in this item. Lease: none.
 
 ## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
 
