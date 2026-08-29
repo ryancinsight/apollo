@@ -471,6 +471,7 @@ dependencies = [
 name = "apollo-wavelet"
 version = "0.10.0"
 dependencies = [
+ "apollo-bench",
  "apollo-fft",
  "apollo-leto-interop",
  "bytemuck",
