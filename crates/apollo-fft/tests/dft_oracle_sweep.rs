@@ -32,15 +32,26 @@ const TOL: f64 = 1e-8;
 fn naive_dft(x: &[f64]) -> Vec<(f64, f64)> {
     let n = x.len();
     let scale = -2.0 * std::f64::consts::PI / n as f64;
+    // The kernel takes only `n` distinct values, indexed by `j * k mod n`, so
+    // the whole sum needs `n` trig evaluations rather than one per term. That
+    // is the same arithmetic on the same arguments — each entry is the angle
+    // the inner loop would have passed to `sin_cos` — evaluated once instead
+    // of `n` times. It matters because the sweep is `sum of n^2` over the
+    // range: with trig inline the oracle dominates the run and overruns the
+    // 60s per-test bound on a CI runner.
+    let roots: Vec<(f64, f64)> = (0..n)
+        .map(|r| {
+            let (sin, cos) = (scale * r as f64).sin_cos();
+            (cos, sin)
+        })
+        .collect();
     (0..n)
         .map(|k| {
             let (mut re, mut im) = (0.0, 0.0);
             for (j, &xj) in x.iter().enumerate() {
-                // `j * k` overflows f64's exact-integer range only far beyond
-                // this sweep; reducing mod n first also keeps the angle small.
-                let angle = scale * ((j * k) % n) as f64;
-                re += xj * angle.cos();
-                im += xj * angle.sin();
+                let (cos, sin) = roots[j * k % n];
+                re += xj * cos;
+                im += xj * sin;
             }
             (re, im)
         })
