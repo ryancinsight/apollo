@@ -1,3 +1,243 @@
+## The benchmark gate flagged a benchmark the change cannot reach (2026-08-28) <a id="benchmark-gate-noise"></a>
+
+The [paired decimation pass](#split-single-pass) was held at merge by the
+CI benchmark regression check, which reported two benchmarks slower in all
+four counterbalanced comparisons: `bluestein_f64/257`, by 1.3% to 7.8%
+across the four, and `half_cyclic_f64/67`.
+
+**One of the two cannot reach the changed code.** Rader for p = 67 reduces
+to a cyclic convolution of length 66, or 33 in the half-cyclic form.
+Neither is a power of two, so neither enters `four_step_batched`, and the
+change was confined to that module. A benchmark that cannot touch the diff
+regressing under the same gate is the gate measuring its runner.
+
+A local A/B agrees. Pinned P-core, three ladder runs per side, RustFFT in
+the same run as the control:
+
+| | n = 1024 mean | RustFFT control | ratio |
+| --- | --- | --- | --- |
+| baseline | 3276 ns | 2458 | 1.33 |
+| candidate | 3328 | 2496 | 1.33 |
+
+The candidate is 1.6% higher and **the control moved 1.5% with it**. The
+machine drifted; the ratio did not. n = 4096 was flat to 0.1%. Bluestein at
+257 does pad to a 1024-point convolution and so does route through the path
+this touched, but a real effect there would move the ratio at n = 1024, and
+it does not.
+
+Merged on that evidence. The finding worth keeping is about the gate: it
+runs timing on shared runners, which this repository's own performance
+policy names as the noise mode to avoid — counterbalancing narrows drift
+without removing it, and the untouched Rader case is the proof. Machine-
+independent regression evidence wants instruction and cache counters
+(`iai-callgrind`-class) or a controlled local machine; wall-clock on a
+hosted runner produces exactly this, a red gate that costs an
+investigation and names innocent code.
+
+## Where the planar route's time actually goes (2026-08-28) <a id="planar-pass-attribution"></a>
+
+The [standing measurement](#reference-standing) said the even powers are
+converging on parity and left it there, because nothing said *why* they are
+behind at all. The driver had a per-pass instrument, but it printed a line
+per pass per call, so a size worth measuring — thousands of calls — could
+not be measured with it without the printing becoming the measurement. It
+now accumulates per label and a probe drains the totals.
+
+Pinned, P-core, 200 calls per size, TSC per call:
+
+| n | deint | stages1 | transpose | permute | stages2 | reint/combine | total |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1024 | 1223 | 3301 | 724 | 517 | 4056 | 824 | 10645 |
+| 2048 | 2986 | 6740 | 1436 | 1081 | 8440 | 4361 | 25044 |
+| 4096 | 5122 | 15240 | 3524 | 3014 | 18075 | 3726 | 48700 |
+| 8192 | 10665 | 30208 | 6800 | 6019 | 36127 | 15086 | 104905 |
+| 16384 | 20155 | 71855 | 13982 | 11756 | 83061 | 14850 | 215660 |
+
+Three readings, and the third is the one to act on.
+
+**The butterflies are about 70% and the movement about 30%,** stable across
+the range (69.1% at 1024, 71.8% at 16384). That is the planar layout's
+bargain stated numerically: it buys butterflies with no cross-lane shuffle
+and pays a deinterleave in and an interleave out. The bargain is a good one
+— at 16384 we are at 1.05 against RustFFT *while* paying it, which means our
+stage sets are materially faster than its — but it is also the reason the
+smaller even powers lag: the same 30% is a larger share of a shorter
+transform's total advantage.
+
+**Stage set two costs about 15% more than stage set one** for identical
+butterfly work (4056 against 3301 at 1024; 83061 against 71855 at 16384).
+The difference is the four-step twiddle folded into its first loads. That is
+real arithmetic — `N` complex multiplies — and it is already riding a pass
+that had to happen, so there is nothing obviously to remove.
+
+**The permute pass is 4.9-6.2% and is pure repair.** The deinterleave gets
+bit-reversed rows for free by writing each row to `rev(row)`; the transpose
+then destroys that order, so a separate pass restores it before stage set
+two. It is the one pass in the pipeline whose entire content is undoing what
+the pass before it did — 11756 TSC at 16384, on the order of the whole
+transpose. Folding the reversal into the transpose, or teaching stage set
+two's first stage to read permuted rows the way it already reads folded
+twiddles, would remove it outright.
+
+That is the next item. The measurement to beat is in the table.
+
+## The paired decimation pass, and why it bought less than the model said (2026-08-28) <a id="split-single-pass"></a>
+
+[Fusing the decimation](#odd-power-fusion) left half its cost, and the
+shape looked obvious: each half deinterleaved from `data` at stride two, so
+each traversed every cache line of the input and the pair read the array
+twice. One pass taking the adjacent pair together would read each line once
+and halve the remainder.
+
+Built, and the direction is right but the size is not:
+
+| n | strided pair | single pass | change |
+| --- | --- | --- | --- |
+| 2048 (P) | 7568.4 ns | **7473.0** | -1.3% |
+| 8192 (P) | 31402.5 | **30927.9** | -1.5% |
+| 2048 (E) | 5317.6 | **5123.0** | -3.7% |
+| 8192 (E) | 22756.6 | **22449.2** | -1.4% |
+
+The residual decimation cost at 8192 fell from 3001 to 2594 ns — 14%, not
+the 50% the traffic model predicted, and the ratio against RustFFT moved
+1.16 to 1.13.
+
+**The model counted misses that were not there.** At these sizes the second
+traversal is not going to memory: 8192 complex is 128 KB, over L1 but well
+inside L2, so the strided re-read of an array the first half just walked
+was already being served a level down. The pass that was removed cost about
+what an L2 hit costs, which is real but is not what a redundant DRAM
+traversal costs. The saving should widen with `n` — at 131072 the array
+exceeds L2 — but that size decimates into halves above the planar
+threshold, so it takes the threaded route and never reaches here.
+
+Kept nonetheless, because the traffic argument is sound in the direction it
+points and the code that expresses it is smaller: the `STEP`/`OFFSET` const
+parameters are gone, the deinterleave has one definition per shape rather
+than one parameterized over both, and the plane geometry and buffer split
+that three call sites had open-coded are named functions.
+
+**Where the remaining 2594 ns sits.** It is now two pieces, and neither is
+another pass to remove: the paired deinterleave writes four plane streams
+where the square route writes two, and the combine reads two planes to
+write one array. Both are the minimum work for a decimation in this layout.
+Getting past it means not decimating at all — the rectangular four-step,
+recorded against [the standing measurement](#reference-standing) as the
+follow-on and still blocked on re-deriving the symmetric-twiddle identity
+the driver folds into stage set two.
+
+## Fusing the odd-power decimation into the planar boundary (2026-08-28) <a id="odd-power-fusion"></a>
+
+The [standing measurement](#reference-standing) isolated the odd-power
+deficit to movement rather than arithmetic: the decimation materialized the
+even and odd subsequences into scratch, each half then deinterleaved *again*
+into its own planes, each reinterleaved its result, and only then did the
+combine run. Three passes over `n` existed solely because the halves were
+transformed as if they were free-standing inputs.
+
+They are now read in place. The planar driver's boundary passes carry
+`STEP`/`OFFSET` const parameters, so a half deinterleaves straight out of
+`data` at stride two, and the two halves' reinterleave and butterfly combine
+became one pass writing `data`.
+
+**Measured, pinned, min of twelve blocks, controls in the same run:**
+
+| n | before | after | change | vs RustFFT |
+| --- | --- | --- | --- | --- |
+| 2048 (P) | 8133.8 ns | **7568.4** | **-7.0%** | 1.44 -> **1.34** |
+| 8192 (P) | 34413.9 | **31402.5** | **-8.8%** | 1.27 -> **1.16** |
+| 2048 (E) | 6481.4 | **5317.6** | **-18.0%** | 2.12 -> **1.83** |
+| 8192 (E) | 28148.4 | **22756.6** | **-19.2%** | 1.81 -> **1.36** |
+| 4096 (P) | 14212.7 | 14200.8 | control | 1.14 |
+| 16384 (P) | 62119.7 | 61970.5 | control | 1.05 |
+| 128 (P) | 277.4 | 279.3 | control | 1.54 |
+
+The decimation's residual cost, still by subtraction against the halves'
+own measured times, fell from 1394 to 930 ns at 2048 and from 5989 to 3001
+at 8192 — **half of it removed**.
+
+Two things worth recording beyond the number:
+
+- **The const parameters cost the sequential path nothing.** That was the
+  live risk, because the [strided base source](#strided-base-source) paid 5%
+  on its common path for exactly this kind of parameterization and had to be
+  reverted. Here every control is flat. The difference is plausibly size:
+  the planar driver is a large function whose code placement the two extra
+  parameters do not perturb, where the base kernel is small and dense.
+- **Peak scratch fell.** The fused route holds two half-planes; the unfused
+  one held a full `n`-element decimation buffer with a half-plane nested
+  inside it.
+
+**What remains.** Half the decimation cost is still there, and its shape is
+now visible: each half reads `data` at stride two, so each traverses every
+cache line of the input and the pair reads the whole array twice. One pass
+filling both plane sets together would halve that traffic. The combine's own
+pass is irreducible — it is the butterfly.
+
+## Where we actually stand against the references (2026-08-28) <a id="reference-standing"></a>
+
+The ladder began at n = 256, so it could not see the two sizes the base
+kernel serves directly, and no single record stated the standing across the
+whole range. Both are fixed: the instrument now starts at n = 64, and this
+is what it reports, pinned, P-core, min-of-twelve-blocks, all three engines
+in the same run on the same core.
+
+| n | apollo | RustFFT | PhastFT | vs RustFFT | route |
+| --- | --- | --- | --- | --- | --- |
+| 64 | 129.6 ns | 82.7 | 162.1 | **1.57** | 64-base |
+| 128 | 277.4 | 180.6 | 328.9 | **1.54** | 128-base |
+| 256 | 736.7 | 413.0 | 688.5 | **1.78** | 128-base split |
+| 512 | 1928.8 | 1043.7 | 1472.8 | **1.85** | 128-base split x2 |
+| 1024 | 3369.7 | 2553.9 | 3311.6 | 1.32 | planar 32x32 |
+| 2048 | 8133.8 | 5656.4 | 7047.3 | **1.44** | radix-2 split |
+| 4096 | 14212.7 | 12501.2 | 15854.5 | 1.14 | planar 64x64 |
+| 8192 | 34413.9 | 27034.4 | 33379.5 | **1.27** | radix-2 split |
+| 16384 | 62119.7 | 58923.0 | 71370.5 | 1.05 | planar 128x128 |
+
+We are ahead of PhastFT at the smallest sizes and at 4096 and 16384, and
+level with or behind it in between.
+Against RustFFT we are behind everywhere, and the shape of the deficit is
+the useful part, because it is two separate causes rather than one:
+
+**Below 1024 the base kernel's arithmetic is the deficit.** 1.54 at n = 128
+is close to the multiply ratio the [arithmetic comparison](#base128-arithmetic-count)
+found, and that line is [measured to its end](#base128-root2) and blocked on
+register width (#wider-isa). The split sizes inherit it and add to it: two
+128-bases are 555 ns of the 736 at n = 256, four are 1110 ns of the 1929 at
+n = 512. Even with the split made free, n = 512 could not reach RustFFT's
+1044 -- the four base transforms alone exceed it. **Nothing below n = 1024
+is reachable without the wider ISA.**
+
+**At and above 1024 the deficit is structural and unblocked.** Read the
+even powers alone and the route is converging on parity: 1.32 at 1024, 1.14
+at 4096, 1.05 at 16384 -- fixed overheads amortizing against a route that
+is otherwise sound. The odd powers break that trend, and they are exactly
+the sizes that do not get it: an odd `log2` has no square split, so it takes
+[one radix-2 decimation](#odd-power-routing) and two planar halves.
+
+The cost of that decimation is measurable by subtraction, since the halves'
+own times are on the same table:
+
+| n | total | two halves | decimation | RustFFT |
+| --- | --- | --- | --- | --- |
+| 2048 | 8133.8 ns | 2 x 3369.7 = 6739.4 | **1394.4** | 5656.4 |
+| 8192 | 34413.9 | 2 x 14212.7 = 28425.4 | **5988.5** | 27034.4 |
+
+**At n = 8192 the decimation is the entire deficit.** The two halves cost
+28425 against RustFFT's 27034 -- 1.05, the same parity the even powers
+reach. Every nanosecond of the 1.27 is the split. At 2048 it is most of it:
+without the split we would be at 1.19 rather than 1.44.
+
+That is where the next work goes. The decimation is not arithmetic, it is
+movement: it materializes the even and odd subsequences into scratch, runs
+two independent planar transforms that each deinterleave *again* into their
+planes, reinterleaves each result, and only then combines. Three of those
+passes over n exist solely because the halves are transformed as if they
+were free-standing inputs. Fusing the decimation into the planar
+deinterleave and the combine into the reinterleave removes them, and
+lowers the peak scratch as well: the fused form holds two half-planes
+where the present one holds a full n-element split buffer plus a half-plane.
+
 ## What a wider ISA would buy, and what stands in its way (2026-08-28) <a id="wider-isa"></a>
 
 [The arithmetic line closed](#base128-root2) by saying that further gain at

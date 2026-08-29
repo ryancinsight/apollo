@@ -1,5 +1,149 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
+
+- **Measured, not estimated** (`git rev-list --count origin/main..<branch>`,
+  with each branch's last commit date), after deleting the three that were
+  fully merged:
+
+  | branch | commits ahead | last commit |
+  | --- | --- | --- |
+  | `codex/fix-apollo-package-sources` | 8 | 4 weeks |
+  | `perf/apollo-f32-rader-narrowing` | 5 | 2 weeks |
+  | `feat/apollo-benchmark-generator` | 3 | 13 days |
+  | `fix/apollo-large-composite-wiring` | 3 | 11 days |
+  | `cascade/hermes-07` | 3 | 11 days |
+  | `codex/apollo-arch-006-junk-drawer-rename` | 2 | 4 weeks |
+  | `style/apollo-butterfly-lint-consolidation-217` | 1 | 9 days |
+  | `fix/apollo-sht-thread-local-lint` | 1 | 4 weeks |
+
+  Every one is past the stale-claim interval by days or weeks, so all are
+  takeover material rather than peer-held. Two more are live and excluded:
+  `perf/apollo-base128-arith` (the shared tree's current branch) and
+  `perf/apollo-base-generic`.
+- **Not one sweep item.** Each branch is its own increment, worked
+  closest-to-done first: diff it against `origin/main`, and either it holds
+  a unique delta — rebase onto a current base, verify, integrate — or it
+  does not, and it is deleted in the same cycle. Filing the inventory is
+  what makes that ordering possible; it is not a licence to defer the
+  branches behind a single ticket.
+- **Why it accumulates:** three of the fourteen were already fully merged
+  and simply never deleted, which is one branch of debt per merge that
+  nobody collects. Branch deletion belongs to the merge, not to a later
+  audit.
+
+## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
+
+- **Evidence** (`gap_audit.md#benchmark-gate-noise`): the gate held the
+  paired-decimation merge over two benchmarks, one of which — Rader at
+  p = 67, a length-66 cyclic convolution — cannot reach the changed
+  power-of-two module at all. A local pinned A/B with an in-run control
+  showed the ratio unchanged and the machine drifted 1.5%.
+- **Why it matters beyond one merge:** every such flag costs an
+  investigation and names innocent code, and a gate that cries wolf gets
+  read as noise, which is worse than not having it.
+- **Options, in preference order:** move the regression evidence to
+  machine-independent counters (`iai-callgrind`-class instruction and
+  cache counts, which a shared runner reports honestly); or keep wall-clock
+  but demote the job to advisory and require a pinned local baseline
+  comparison on the PR, which is what the performance policy asks for
+  anyway; or widen the counterbalancing until drift of this size cannot
+  trip it, which trades queue time for a weaker gate.
+- **Not in scope here:** the four benchmark-pair jobs plus artifact builds
+  are a large share of this repository's per-PR CI, so whichever option is
+  taken should account for that as well.
+
+## ATLAS-APOLLO-PLANAR-ATTRIBUTION-2026-08-28 — Make the planar route's passes measurable [patch] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#planar-pass-attribution`): the driver's
+  per-pass instrument accumulates per label instead of printing a line per
+  pass per call, and `pinned_sections` drains the totals for the sizes the
+  planar route serves. The old form could not measure a size worth
+  measuring — thousands of calls — because the printing became the
+  measurement.
+- **Also here:** a stale doc block describing `four_step_batched` was
+  sitting above `scratch_len`, which has its own.
+- **What it found:** butterflies about 70% of the route and movement about
+  30%, stable across the range; stage set two about 15% dearer than stage
+  set one for identical butterflies, which is the four-step twiddle fold
+  and is real arithmetic; and the permute pass at 4.9-6.2% is pure repair.
+
+## ATLAS-APOLLO-PERMUTE-FOLD-2026-08-28 — Remove the planar route's repair pass [perf] — ready
+
+- **Outcome:** the permute pass disappears. Acceptance: 1024 and 4096
+  improve against the attribution table with every oracle passing, and the
+  odd powers, which run the route twice, improve proportionately.
+- **Why** (`gap_audit.md#planar-pass-attribution`): the deinterleave gets
+  bit-reversed rows for free by writing each row to `rev(row)`; the
+  transpose destroys that order, so a whole pass restores it before stage
+  set two. It is the one pass whose entire content is undoing the pass
+  before it — 11756 TSC at 16384, on the order of the transpose itself, and
+  4.9-6.2% of the route everywhere. Since the boundary passes are the whole
+  deficit at the large even powers (butterflies are already ahead of the
+  reference), removing it is what takes 16384 below 1.0.
+- **The design is decided, not open.** `BatchedPlan::new` builds `swaps` as
+  exactly `rev(i)` over `log2(len)` bits, so the pass is the plain DIT
+  bit-reversal — which settles the two shapes that were open:
+  - *Fold it into the transpose* is rejected. The composite map is
+    `(r, c) -> (rev(c), r)`, a bit-permutation of the flat index whose
+    cycles do not decompose into tile-pair swaps, so the in-place tiled
+    transpose stops being tileable and becomes cycle-following. That trades
+    a 5% pass for a slower 6.5% one.
+  - *Run stage set two as decimation-in-frequency* is the answer. DIF takes
+    natural-order input — which is exactly what the transpose leaves — and
+    produces bit-reversed output, and the sink absorbs that reversal for
+    free by reading `rev(row)`, the same trick the deinterleave already uses
+    on the source side. `InterleaveRows` absorbs it on the square route and
+    `combine_planar_halves` on the split route; both are index changes at a
+    pass that already exists.
+- **What it costs to build:** `BatchedStages` fuses two stages per pass with
+  `l` doubling from 2; the DIF form halves `l` from `len`, and the twiddle
+  table is the same values in the reverse stage order. The risk to watch is
+  the one this repository has already paid twice: a const parameter over
+  decimation direction may perturb the sequential path's code placement, so
+  build it as a sibling kernel and keep the controls in the same run.
+- **Baselines (P-core, pinned, TSC per call, `pinned_sections`):** permute
+  517 at 1024, 3014 at 4096, 11756 at 16384; totals 10645, 48700, 215660.
+  Ladder ratios to beat: 1.34 at 1024, 1.14 at 4096, 1.05 at 16384.
+
+## ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28 — One decimation pass feeding both plane sets [perf] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#split-single-pass`): the two halves of an odd
+  power deinterleave in one pass over `data` rather than two strided ones,
+  so each cache line is read once for both. The `STEP`/`OFFSET` const
+  parameters introduced by the fusion are gone with it, and the plane
+  geometry and buffer split are named functions rather than open-coded at
+  three call sites.
+- **Measured pinned:** 2048 7568.4 -> 7473.0 ns and 8192 31402.5 -> 30927.9
+  on a P-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
+  on an E-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
+- **Less than the model predicted, and the reason is recorded:** 8192 is
+  128 KB, over L1 but inside L2, so the strided re-read the pass removes
+  was being served from L2 rather than memory. The residual decimation cost
+  fell 14%, not the 50% a redundant-traversal model implies.
+- **Residual:** 2594 ns at 8192, and it is no longer passes — four plane
+  write streams against the square route's two, plus a combine reading two
+  planes. That is the minimum for a decimation in this layout; getting past
+  it means not decimating, which is the rectangular four-step.
+
+## ATLAS-APOLLO-ODD-POWER-FUSION-2026-08-28 — Fuse the radix-2 decimation into the planar boundary [perf] — done 2026-08-28
+
+- **Delivered** (`gap_audit.md#odd-power-fusion`): the planar driver's
+  boundary passes carry `STEP`/`OFFSET`, so each half of an odd power
+  deinterleaves straight out of `data` at stride two, and the two halves'
+  reinterleave and butterfly combine are one pass. Three passes over `n`
+  removed; peak scratch lower than the unfused route.
+- **Measured pinned, controls in the same run:** 2048 8133.8 -> 7568.4 ns
+  (-7.0%, ratio 1.44 -> 1.34) and 8192 34413.9 -> 31402.5 (-8.8%, 1.27 ->
+  1.16) on a P-core; -18.0% and -19.2% on an E-core. Controls 4096, 16384,
+  1024, 512, 256, 128 all flat. The const parameters cost the sequential
+  path nothing, which was the live risk after the strided base source paid
+  5% for the same shape.
+- **Residual:** half the decimation cost remains (930 ns at 2048, 3001 at
+  8192). Each half traverses every cache line of `data`, so the pair reads
+  the input twice; one pass filling both plane sets together would halve
+  it. Continues as ATLAS-APOLLO-SPLIT-SINGLE-PASS-2026-08-28.
+
 ## ATLAS-APOLLO-WIDER-ISA-2026-08-28 — The AVX-512 path for the base kernel [arch] — blocked: no AVX-512 hardware
 
 - **The blocker is a fact about the machine, not a dependency:** this host

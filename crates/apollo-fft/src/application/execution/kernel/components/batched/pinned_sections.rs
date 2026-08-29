@@ -1,0 +1,61 @@
+//! Pinned per-pass attribution for the planar route. Asserts nothing; run
+//! with `--ignored --nocapture`.
+//!
+//! [`super::pinned_ladder`] says where a size stands against the references;
+//! this says where its time goes. The two answer different questions and the
+//! second is the one that decides what to work on next, because a route can
+//! be behind for want of arithmetic or for want of movement and the totals
+//! separate them.
+
+use crate::application::execution::kernel::test_utils::pin;
+use eunomia::Complex64;
+
+/// Sizes worth attributing: the even powers, which take the square route
+/// whole, and the odd powers, which decimate and run it twice.
+const SIZES: [usize; 5] = [1024, 2048, 4096, 8192, 16384];
+
+/// Calls per size. Enough that per-pass totals are stable, few enough that
+/// the whole probe stays inside the suite's runtime budget.
+const CALLS: u32 = 200;
+
+#[test]
+#[ignore = "measurement instrument for the planar route's pass attribution"]
+fn planar_passes_by_size() {
+    let landed = pin(2);
+    for n in SIZES {
+        let src: Vec<Complex64> = (0..n)
+            .map(|i| {
+                let x = i as f64;
+                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect();
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let mut work = src.clone();
+
+        // One untimed call so plan and twiddle caches are warm, then drain
+        // whatever it recorded so the totals below are steady-state.
+        plan.forward_complex_slice_inplace(&mut work);
+        let _ = super::sections::take();
+
+        for _ in 0..CALLS {
+            work.copy_from_slice(&src);
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
+        }
+
+        let totals = super::sections::take();
+        let all: u64 = totals.iter().map(|&(_, cycles, _)| cycles).sum();
+        for (label, cycles, passes) in totals {
+            let per_call = cycles as f64 / f64::from(CALLS);
+            let share = 100.0 * cycles as f64 / all as f64;
+            let per_call_passes = passes as f64 / f64::from(CALLS);
+            println!(
+                "BPASS cpu={landed:<2} n={n:<5} {label:<9} tsc={per_call:>9.1} share={share:>5.1}% passes={per_call_passes:>3.1}"
+            );
+        }
+        println!(
+            "BPASS cpu={landed:<2} n={n:<5} {:<9} tsc={:>9.1}",
+            "total",
+            all as f64 / f64::from(CALLS)
+        );
+    }
+}

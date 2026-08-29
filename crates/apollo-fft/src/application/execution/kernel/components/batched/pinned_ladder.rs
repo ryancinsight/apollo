@@ -26,7 +26,7 @@ fn best_block<F: FnMut()>(calls: u32, mut f: F) -> f64 {
 fn batched_against_the_references_across_the_ladder() {
     for cpu in [2u32, 12] {
         let landed = pin(cpu);
-        for exp in [8u32, 9, 10, 11, 12, 13, 14] {
+        for exp in [6u32, 7, 8, 9, 10, 11, 12, 13, 14] {
             let n = 1usize << exp;
             // Keep each block near one millisecond so twelve blocks resist
             // scheduler noise without inflating the suite budget.

@@ -565,17 +565,6 @@ fn run_batched<T>(
     });
 }
 
-/// Four-step power-of-two transform over the batched layout.
-///
-/// Requires a square split, which is what the four-step dispatch gate admits,
-/// so the middle transpose is in place and the scratch requirement matches the
-/// Stockham path it replaces: one `N`-element complex buffer, reinterpreted as
-/// two `N`-element real planes.
-///
-/// # Panics
-///
-/// Panics if `data.len()` is not an even power of two, or if `scratch` is
-/// shorter than `data`.
 /// Scratch length, in complex elements, that [`four_step_batched`] requires
 /// for a transform of length `n`.
 ///
@@ -586,73 +575,198 @@ pub(crate) fn scratch_len(n: usize) -> usize {
     m * (m + ROW_PAD)
 }
 
-pub(crate) fn four_step_batched<T, const INVERSE: bool>(
-    data: &mut [Complex<T>],
-    scratch: &mut [Complex<T>],
-) where
-    T: BatchedPlanCache<Complex = Complex<T>>,
-{
-    let n = data.len();
+/// Whether [`four_step_batched`] covers a transform of length `n`.
+///
+/// The single definition of the planar route's domain: an even power of two
+/// — the square split the driver is written for — below the point where the
+/// row transforms are worth threading.
+pub(crate) fn planar_applies(n: usize) -> bool {
+    n.is_power_of_two()
+        && n.trailing_zeros() % 2 == 0
+        && n >= 4
+        && n < crate::application::execution::kernel::components::four_step::PARALLEL_ROW_THRESHOLD
+}
+
+/// Whether [`four_step_split_batched`] covers a transform of length `n`.
+///
+/// An odd power of two has no square split, so it decimates once; the route
+/// applies when both halves are then planar. The lower bound is the one the
+/// unfused decimation already carried — below it the plan hands these
+/// lengths to the base kernels and codelets, which never reach here, so
+/// widening the domain would change only what tests exercise.
+pub(crate) fn planar_split_applies(n: usize) -> bool {
+    n.is_power_of_two() && n.trailing_zeros() % 2 == 1 && n >= 512 && planar_applies(n / 2)
+}
+
+/// Scratch, in complex elements, that [`four_step_split_batched`] requires.
+///
+/// Both half-planes are live at once, which is what lets the combine read
+/// them together; against the unfused route — a full `n`-element decimation
+/// buffer plus one half-plane nested inside it — this is the smaller peak.
+pub(crate) fn split_scratch_len(n: usize) -> usize {
+    2 * scratch_len(n / 2)
+}
+
+/// Per-pass cycle attribution for the planar driver, compiled only into test
+/// builds; the release pinned probes run as tests, so they see it, while
+/// production builds carry nothing.
+///
+/// Totals accumulate per label rather than printing per pass. A transform
+/// worth measuring runs thousands of times, and a line of stderr per pass
+/// per call is not a measurement — it is a cost large enough to change the
+/// thing being measured. [`sections::take`] drains the totals.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+pub(crate) mod sections {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static TOTALS: RefCell<Vec<(&'static str, u64, u64)>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// Adds one pass's cycle count to its label's running total.
+    pub(crate) fn record(label: &'static str, cycles: u64) {
+        TOTALS.with_borrow_mut(|totals| {
+            if let Some(entry) = totals.iter_mut().find(|(name, _, _)| *name == label) {
+                entry.1 += cycles;
+                entry.2 += 1;
+            } else {
+                totals.push((label, cycles, 1));
+            }
+        });
+    }
+
+    /// Drains the accumulated totals as `(label, cycles, passes)`, in the
+    /// order the labels were first seen — which is the order the driver runs
+    /// them, so a caller can print the pipeline as a pipeline.
+    pub(crate) fn take() -> Vec<(&'static str, u64, u64)> {
+        TOTALS.with_borrow_mut(std::mem::take)
+    }
+}
+
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+macro_rules! sect {
+    ($label:literal, $body:block) => {{
+        let t0 = unsafe { core::arch::x86_64::_rdtsc() };
+        let out = $body;
+        let t1 = unsafe { core::arch::x86_64::_rdtsc() };
+        sections::record($label, t1 - t0);
+        out
+    }};
+}
+#[cfg(not(all(test, windows, target_arch = "x86_64")))]
+macro_rules! sect {
+    ($label:literal, $body:block) => {
+        $body
+    };
+}
+
+/// Plane geometry for a length-`n` planar transform: the square edge `m` and
+/// the padded row stride. Element `j` of a transform lands at plane index
+/// `(j / m) * stride + j % m`.
+///
+/// # Panics
+///
+/// Panics if `n` is not an even power of two of at least four.
+fn plane_geometry(n: usize) -> (usize, usize) {
     let k = n.trailing_zeros();
     assert!(
         n.is_power_of_two() && k % 2 == 0 && n >= 4,
         "requires an even power of two of at least 4"
     );
     let m = 1usize << (k / 2);
-    let stride = m + ROW_PAD;
-    let plane = scratch_len(n);
-    // One complex scratch element is two reals, so `m * stride` complexes hold
-    // the two padded planes. The pad breaks the power-of-two row stride that
-    // makes every plane row alias to one L1 set (see [`ROW_PAD`]).
+    (m, m + ROW_PAD)
+}
+
+/// Splits a plane buffer into its real and imaginary halves.
+///
+/// One complex scratch element is two reals, so `m * stride` complexes hold
+/// the two padded planes. The pad breaks the power-of-two row stride that
+/// makes every plane row alias to one L1 set (see [`ROW_PAD`]).
+///
+/// # Panics
+///
+/// Panics if `scratch` is shorter than `plane`.
+fn split_plane<T>(scratch: &mut [Complex<T>], plane: usize) -> (&mut [T], &mut [T])
+where
+    T: bytemuck::Pod,
+    Complex<T>: bytemuck::Pod,
+{
     assert!(
         scratch.len() >= plane,
         "scratch must hold two padded planes"
     );
     let flat: &mut [T] = bytemuck::cast_slice_mut(&mut scratch[..plane]);
-    let (re, im) = flat.split_at_mut(plane);
+    flat.split_at_mut(plane)
+}
 
-    // Per-pass attribution instrument, compiled only into test builds; the
-    // release pinned probes run as tests, so they see it, while production
-    // builds carry nothing.
-    #[cfg(all(test, windows, target_arch = "x86_64"))]
-    macro_rules! sect {
-        ($label:literal, $body:block) => {{
-            let t0 = unsafe { core::arch::x86_64::_rdtsc() };
-            let out = $body;
-            let t1 = unsafe { core::arch::x86_64::_rdtsc() };
-            static SECTIONS: std::sync::LazyLock<bool> =
-                std::sync::LazyLock::new(|| std::env::var_os("RESIDENT_SECTIONS").is_some());
-            if *SECTIONS {
-                eprintln!("BSECT {} {}", $label, t1 - t0);
-            }
-            out
-        }};
-    }
-    #[cfg(not(all(test, windows, target_arch = "x86_64")))]
-    macro_rules! sect {
-        ($label:literal, $body:block) => {
-            $body
-        };
-    }
-
-    // The stage set wants bit-reversed rows, so the deinterleave writes each
-    // row at its reversed position and the separate permutation pass this
-    // replaces is deleted: bit reversal is an involution, so writing to
-    // `rev(row)` is exactly the swap list the plan would have applied.
-    let row_bits = k / 2;
-    // The scalar loop stays deliberately: a vectorized sibling built on the
-    // native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
-    // LLVM already auto-vectorizes this loop well (see `boundary`).
-    sect!("deint", {
-        for (row, chunk) in data.chunks_exact(m).enumerate() {
-            let dest = row.reverse_bits() >> (usize::BITS - row_bits);
-            for (b, c) in chunk.iter().enumerate() {
-                re[dest * stride + b] = c.re;
-                im[dest * stride + b] = c.im;
-            }
+/// Writes `src` into the padded planes in bit-reversed row order.
+///
+/// The stage set wants bit-reversed rows, so the deinterleave writes each row
+/// at its reversed position and the separate permutation pass this replaces
+/// is deleted: bit reversal is an involution, so writing to `rev(row)` is
+/// exactly the swap list the plan would have applied.
+///
+/// The scalar loop stays deliberately: a vectorized sibling built on the
+/// native deinterleave network measured slower (1431 -> 1520 TSC pinned) —
+/// LLVM already auto-vectorizes this loop well (see [`boundary`]).
+fn deinterleave_rows<T: Copy>(
+    src: &[Complex<T>],
+    re: &mut [T],
+    im: &mut [T],
+    m: usize,
+    stride: usize,
+) {
+    let row_bits = m.trailing_zeros();
+    for (row, chunk) in src.chunks_exact(m).enumerate().take(m) {
+        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
+        for (b, c) in chunk.iter().enumerate() {
+            re[dest * stride + b] = c.re;
+            im[dest * stride + b] = c.im;
         }
-    });
+    }
+}
 
+/// Writes both halves of a radix-2 decimation into their planes in one pass.
+///
+/// The alternative is [`deinterleave_rows`] twice over a strided view, which
+/// reads every cache line of `src` once per half. Taking the adjacent pair
+/// together reads each line once for both, which is why this exists rather
+/// than a step parameter on the sequential form
+/// (`gap_audit.md#odd-power-fusion`).
+fn deinterleave_decimated_rows<T: Copy>(
+    src: &[Complex<T>],
+    even: (&mut [T], &mut [T]),
+    odd: (&mut [T], &mut [T]),
+    m: usize,
+    stride: usize,
+) {
+    let (e_re, e_im) = even;
+    let (o_re, o_im) = odd;
+    let row_bits = m.trailing_zeros();
+    for (row, chunk) in src.chunks_exact(2 * m).enumerate().take(m) {
+        let dest = row.reverse_bits() >> (usize::BITS - row_bits);
+        let base = dest * stride;
+        for b in 0..m {
+            let e = chunk[2 * b];
+            let o = chunk[2 * b + 1];
+            e_re[base + b] = e.re;
+            e_im[base + b] = e.im;
+            o_re[base + b] = o.re;
+            o_im[base + b] = o.im;
+        }
+    }
+}
+
+/// Runs both four-step stage sets over planes already in bit-reversed rows.
+fn planar_stages<T, const INVERSE: bool>(
+    re: &mut [T],
+    im: &mut [T],
+    n: usize,
+    m: usize,
+    stride: usize,
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
     // 1. The `m` transforms of length `m` along the first axis; the input is
     //    already batch-major for this direction, so no transpose is needed.
     let plan = T::cached_plan::<INVERSE>(m);
@@ -693,6 +807,26 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
             stride,
         )
     });
+}
+
+/// In-place four-step FFT over the padded planar layout.
+///
+/// # Panics
+///
+/// Panics if `data.len()` is not an even power of two of at least four, or
+/// if `scratch` is shorter than [`scratch_len`].
+pub(crate) fn four_step_batched<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    scratch: &mut [Complex<T>],
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
+    let n = data.len();
+    let (m, stride) = plane_geometry(n);
+    let plane = scratch_len(n);
+    let (re, im) = split_plane(scratch, plane);
+    sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
+    planar_stages::<T, INVERSE>(re, im, n, m, stride);
 
     sect!("reint", {
         let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
@@ -713,6 +847,114 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     });
 }
 
+/// In-place four-step FFT for an odd power of two, decimated once.
+///
+/// `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j O[j]`, with `E`
+/// and `O` the transforms of the even- and odd-indexed samples. Both halves
+/// are even powers, so each takes the planar route — and each takes it
+/// *from `data` directly*, at stride two, so the decimation never
+/// materializes. The combine then rides the pass that would have
+/// interleaved the halves back.
+///
+/// That fusion is the whole point of the route. Transforming the halves as
+/// free-standing inputs costs three extra passes over `n`, which at
+/// n = 8192 measured as the entire deficit against the reference
+/// (`gap_audit.md#reference-standing`).
+///
+/// # Panics
+///
+/// Panics unless [`planar_split_applies`] accepts `data.len()`, or if
+/// `scratch` is shorter than [`split_scratch_len`].
+pub(crate) fn four_step_split_batched<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    scratch: &mut [Complex<T>],
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
+    let n = data.len();
+    assert!(
+        planar_split_applies(n),
+        "requires a planar odd power of two"
+    );
+    let half = n / 2;
+    let plane = scratch_len(half);
+    assert!(
+        scratch.len() >= 2 * plane,
+        "scratch must hold both half-planes"
+    );
+    // The stage-major table ends with the length-`n` stage, whose `n / 2`
+    // entries are `W_N^j` in order; earlier stages occupy `n / 2 - 1` slots.
+    let twiddles = if INVERSE {
+        T::cached_twiddle_inv(n)
+    } else {
+        T::cached_twiddle_fwd(n)
+    };
+    let combine = &twiddles[half - 1..n - 1];
+
+    let (m, stride) = plane_geometry(half);
+    let (even, odd) = scratch.split_at_mut(plane);
+    sect!("deint", {
+        let (e_re, e_im) = split_plane(even, plane);
+        let (o_re, o_im) = split_plane(odd, plane);
+        deinterleave_decimated_rows(data, (e_re, e_im), (o_re, o_im), m, stride);
+    });
+    {
+        let (re, im) = split_plane(even, plane);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+    }
+    {
+        let (re, im) = split_plane(odd, plane);
+        planar_stages::<T, INVERSE>(re, im, half, m, stride);
+    }
+    combine_planar_halves(data, even, odd, m, stride, combine);
+}
+
+/// Combines two planar half-transforms into `data` in one pass.
+///
+/// `even` and `odd` hold the transforms of the even- and odd-indexed
+/// subsequences in the padded plane layout [`four_step_planes`] returns.
+/// This writes `X[j] = E[j] + W_N^j O[j]` and `X[j + N/2] = E[j] - W_N^j
+/// O[j]`, so the butterfly rides the pass that would have interleaved each
+/// half back on its own — the pass, and the half-sized buffers it would
+/// have written to, are what the fusion removes.
+///
+/// # Panics
+///
+/// Panics if `data` is not twice the half-transform length, or if
+/// `twiddles` is shorter than that half.
+pub(crate) fn combine_planar_halves<T>(
+    data: &mut [Complex<T>],
+    even: &[Complex<T>],
+    odd: &[Complex<T>],
+    m: usize,
+    stride: usize,
+    twiddles: &[Complex<T>],
+) where
+    T: BatchedPlanCache<Complex = Complex<T>>,
+{
+    let half = m * m;
+    assert_eq!(data.len(), 2 * half, "combine spans both halves");
+    assert!(twiddles.len() >= half, "one rotation per output pair");
+    let plane = m * stride;
+    let (e_re, e_im) = bytemuck::cast_slice::<_, T>(&even[..plane]).split_at(plane);
+    let (o_re, o_im) = bytemuck::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
+    let (low, high) = data.split_at_mut(half);
+
+    sect!("combine", {
+        for row in 0..m {
+            let base = row * stride;
+            for b in 0..m {
+                let j = row * m + b;
+                let e = Complex::new(e_re[base + b], e_im[base + b]);
+                let o = Complex::new(o_re[base + b], o_im[base + b]);
+                let rotated = o * twiddles[j];
+                low[j] = e + rotated;
+                high[j] = e - rotated;
+            }
+        }
+    });
+}
+
 pub(crate) mod boundary;
 
 // Test-gated deliberately: the interleaved in-place kernel is correct and
@@ -727,6 +969,10 @@ pub(crate) mod interleaved;
 // Windows-gated: pins threads through Win32 to control the hybrid scheduler.
 #[cfg(all(test, windows))]
 mod pinned_ladder;
+
+// Additionally x86-gated: the pass totals come from `_rdtsc`.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+mod pinned_sections;
 
 #[cfg(test)]
 mod tests;
