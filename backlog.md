@@ -33,6 +33,25 @@
 - **Do not resolve with a hand-kept list of good lengths** — that is defect
   masking. Either the length is computed correctly or plan construction
   rejects it.
+## ATLAS-APOLLO-SMALL-SIZE-FALSIFIED-2026-08-28 — Two small-size hypotheses, both falsified [perf] — done 2026-08-28
+
+- **Rerouting 256/512 to the planar four-step:** measured 10 to 12% slower
+  than the base split at both sizes, even after the DIF stage set improved
+  the planar route ~10%. The routing is right
+  (`gap_audit.md#small-size-falsified`).
+- **Hoisting the per-block dispatch:** measured about 4% *worse* at both
+  sizes. The per-block kernel is `#[inline(always)]` by contract, so
+  hoisting does not remove a call — it inlines a 250-line body into a loop
+  body. Reverted in apollo.
+- **Upstream stands regardless:** the hoist needed a reusable capability
+  token, and `Simd<T, Arch>` is a `PhantomData` proof that was not `Copy`
+  (`HS-SIMD-CAPABILITY-COPY-2026-08-28`). Removing a constraint the type
+  imposed on itself is right whether or not this consumer benefits.
+- **What is left at 256:** two base transforms are 562 ns of the 713, so
+  the split's own work is about 151 ns. The remainder is the base kernel at
+  1.54, measured to the end of its arithmetic and blocked on register
+  width.
+
 
 - **Severity: shipped wrong answers, not a slow path.** `DctDstPlan::new(361,
   DctII).forward_into` returns a result with relative error 0.997 against the

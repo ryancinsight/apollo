@@ -1,3 +1,58 @@
+## Two small-size hypotheses, both falsified (2026-08-28) <a id="small-size-falsified"></a>
+
+With [the flat split](#flat-base-split) landed, n = 256 became the worst
+size on the ladder at 1.73 against RustFFT. Two candidate causes were
+measured, and neither survived.
+
+**The planar route has not overtaken the base split.** The four-step planar
+route gained about 10% from [the DIF stage set](#dif-stage-set), which
+raised the question of whether the routing decision that sent 256 and 512
+to the base split still holds. Timed directly against each other, pinned,
+min of twelve blocks:
+
+| n | base split | planar | planar / base |
+| --- | --- | --- | --- |
+| 256 | 713.2 ns | 781.2 | 1.10 |
+| 512 | 1697.2 | 1899.3 | 1.12 |
+
+The planar route is 10 to 12% slower at both. The routing is right, and the
+estimate that suggested otherwise — scaling 1024's per-element cost down by
+the log factor — ignored that the planar route's fixed passes do not shrink
+with `n` the way its butterflies do.
+
+**Dispatch per block is not the overhead either.** The split calls the base
+once per 128-sample block, and each call re-entered the dispatcher: a
+capability probe and an indirect call per block, exactly the placement
+Hermes ADR 016 argues against. Hoisting it needed a capability token that
+could be reused inside a kernel, which `Simd<T, Arch>` was not — it is a
+`PhantomData` proof but was not `Copy`, so it moved on first use. That was
+worth fixing upstream on its own terms and was
+(`HS-SIMD-CAPABILITY-COPY-2026-08-28`).
+
+With it fixed, one dispatch running every block measured **worse**:
+
+| n | per-block dispatch | one dispatch |
+| --- | --- | --- |
+| 256 | 717.8 ns | 744.2 / 742.7 |
+| 512 | 1714.4 | 1771.0 / 1780.4 |
+
+About 4% worse at both, controls clean. The plausible reason is that the
+per-block kernel is `#[inline(always)]` by contract — it must fold into the
+dispatcher's target-feature frame — so hoisting does not remove a call, it
+inlines a 250-line body into a loop body that previously held one
+monomorphized function per block. The dispatch was never costing what the
+inlining now costs.
+
+Reverted in apollo. The upstream `Copy` stands: it removes a constraint the
+type was imposing on itself, and the consumer that motivated it not
+benefiting does not make the constraint correct.
+
+**What is left at n = 256.** Two 128-point bases are 562 ns of the 713, so
+the split's own work is about 151 ns for one gather and one combine over
+256 samples. The rest is the base kernel, which is 1.54 against RustFFT and
+[measured to the end of its arithmetic](#base128-root2), blocked on
+register width.
+
 ## The small-size split gathered once per level (2026-08-28) <a id="flat-base-split"></a>
 
 n = 512 was the worst size on the ladder, 1.83 against RustFFT where 1024
