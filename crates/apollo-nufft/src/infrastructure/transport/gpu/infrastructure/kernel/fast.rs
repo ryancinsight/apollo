@@ -28,6 +28,7 @@ impl NufftGpuKernel {
         positions: &[f32],
         values: &[Complex32],
     ) -> NufftWgpuResult<()> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_complex(&mut buffers.host_positions, positions);
         copy_real_as_complex(
@@ -64,6 +65,7 @@ impl NufftGpuKernel {
         buffers: &mut NufftGpuBuffers1D,
         positions: &[f32],
     ) -> NufftWgpuResult<()> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_complex(&mut buffers.host_positions, positions);
         copy_real_as_complex(
@@ -96,6 +98,7 @@ impl NufftGpuKernel {
         positions: &[(f32, f32, f32)],
         values: &[Complex32],
     ) -> NufftWgpuResult<()> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_pod(&mut buffers.host_positions, positions);
         write_three_type1_buffers(
@@ -127,6 +130,7 @@ impl NufftGpuKernel {
         buffers: &mut NufftGpuBuffers3D,
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<()> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_pod(&mut buffers.host_positions, positions);
         device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;
@@ -158,6 +162,7 @@ impl NufftGpuKernel {
         buffers: &mut NufftGpuBuffers1D,
         positions: &[f32],
     ) -> NufftWgpuResult<NufftType2GridDiagnostics> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_complex(&mut buffers.host_positions, positions);
         copy_real_as_complex(
@@ -208,6 +213,7 @@ impl NufftGpuKernel {
         buffers: &mut NufftGpuBuffers3D,
         positions: &[(f32, f32, f32)],
     ) -> NufftWgpuResult<NufftType2GridDiagnostics> {
+        buffers.validate_device(device)?;
         ensure_sample_capacity(buffers.max_samples, positions.len())?;
         copy_positions_as_pod(&mut buffers.host_positions, positions);
         device.write_sub_buffer(&buffers.position_buffer, 0, &buffers.host_positions)?;

@@ -1,11 +1,12 @@
 //! Reusable-buffer capacity and value-equivalence contracts.
 
-use eunomia::Complex32;
+use eunomia::{Complex32, Complex64};
+use hephaestus_core::HephaestusError;
 use leto::{Array3, Layout, Storage, VecStorage};
 
 use crate::{
     infrastructure::transport::gpu::{
-        NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuPlan1D, NufftWgpuPlan3D,
+        NufftGpuBuffers1D, NufftGpuBuffers3D, NufftWgpuError, NufftWgpuPlan1D, NufftWgpuPlan3D,
     },
     UniformDomain1D, UniformGrid3D,
 };
@@ -35,6 +36,84 @@ fn strided_shifted_modes3d(shift: f32) -> Array3<Complex32> {
         }
     }
     Array3::new(layout, VecStorage::new(storage)).expect("strided mode array")
+}
+
+fn assert_foreign_device_error(error: NufftWgpuError) {
+    match error {
+        NufftWgpuError::Provider(HephaestusError::DispatchFailed { message }) => {
+            assert_eq!(message, "prepared WGPU FFT belongs to a different device")
+        }
+        other => panic!("expected foreign-device provider error, received {other:?}"),
+    }
+}
+
+#[test]
+fn reusable_workspaces_reject_foreign_devices_before_output_mutation() {
+    let Some(owner) = backend() else {
+        return;
+    };
+    let foreign = backend().expect("an available adapter must create a second logical device");
+    let plan_1d = NufftWgpuPlan1D::new(UniformDomain1D::new(8, 0.25).expect("domain"), 2, 6);
+    let positions_1d = [0.0_f32, 0.25];
+    let values_1d = [Complex32::new(1.0, 0.0), Complex32::new(-0.25, 0.5)];
+    let coefficients_1d = [Complex32::new(0.5, -0.25); 8];
+    let mut buffers_1d = NufftGpuBuffers1D::new(owner.device(), &plan_1d, positions_1d.len())
+        .expect("owner buffer allocation");
+    let sentinel = Complex64::new(17.0, -23.0);
+    let mut type1_output_1d = vec![sentinel; 8];
+    let error = foreign
+        .execute_fast_type1_1d_with_buffers(
+            &mut buffers_1d,
+            &positions_1d,
+            &values_1d,
+            &mut type1_output_1d,
+        )
+        .expect_err("foreign Type-1 1D workspace must fail");
+    assert_foreign_device_error(error);
+    assert_eq!(type1_output_1d, vec![sentinel; 8]);
+
+    let mut type2_output_1d = vec![sentinel; positions_1d.len()];
+    let error = foreign
+        .execute_fast_type2_1d_with_buffers(
+            &mut buffers_1d,
+            &coefficients_1d,
+            &positions_1d,
+            &mut type2_output_1d,
+        )
+        .expect_err("foreign Type-2 1D workspace must fail");
+    assert_foreign_device_error(error);
+    assert_eq!(type2_output_1d, vec![sentinel; positions_1d.len()]);
+
+    let grid = grid3d();
+    let plan_3d = NufftWgpuPlan3D::new(grid, 2, 6);
+    let positions_3d = positions3d();
+    let values_3d = [Complex32::new(1.0, 0.0); 3];
+    let modes_3d = modes3d(grid);
+    let mut buffers_3d = NufftGpuBuffers3D::new(owner.device(), &plan_3d, positions_3d.len())
+        .expect("owner buffer allocation");
+    let mut type1_output_3d = vec![sentinel; 12];
+    let error = foreign
+        .execute_fast_type1_3d_with_buffers(
+            &mut buffers_3d,
+            &positions_3d,
+            &values_3d,
+            &mut type1_output_3d,
+        )
+        .expect_err("foreign Type-1 3D workspace must fail");
+    assert_foreign_device_error(error);
+    assert_eq!(type1_output_3d, vec![sentinel; 12]);
+
+    let mut type2_output_3d = vec![sentinel; positions_3d.len()];
+    let error = foreign
+        .execute_fast_type2_3d_with_buffers(
+            &mut buffers_3d,
+            &modes_3d,
+            &positions_3d,
+            &mut type2_output_3d,
+        )
+        .expect_err("foreign Type-2 3D workspace must fail");
+    assert_foreign_device_error(error);
+    assert_eq!(type2_output_3d, vec![sentinel; positions_3d.len()]);
 }
 
 #[test]

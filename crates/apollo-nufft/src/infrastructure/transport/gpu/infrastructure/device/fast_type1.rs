@@ -218,6 +218,7 @@ impl NufftWgpuBackend {
                 actual: output.len(),
             });
         }
+        buffers.validate_device(&self.device)?;
         NufftGpuKernel::execute_fast_type1_1d_with_buffers(
             &self.device,
             buffers,
@@ -252,6 +253,7 @@ impl NufftWgpuBackend {
                 actual: output.len(),
             });
         }
+        buffers.validate_device(&self.device)?;
         NufftGpuKernel::execute_fast_type1_3d_with_buffers(
             &self.device,
             buffers,

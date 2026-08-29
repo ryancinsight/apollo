@@ -338,7 +338,7 @@ pub(super) fn exec_base128_inverse<F: MixedRadixScalar<Complex = Complex<F>>>(
         transform_via_base_128::<F, true>(slice, plan.base128_inverse_plan()),
         "invariant: the selected base-128 capability remains available"
     );
-    F::normalize(slice, 128);
+    F::normalize(slice, plan.len());
 }
 
 pub(super) fn exec_base128_inverse_unnorm<F: MixedRadixScalar<Complex = Complex<F>>>(

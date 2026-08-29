@@ -8,31 +8,12 @@ operands.
 ## Dense FFT
 
 A dense accelerator FFT is prepared through Hephaestus rather than an Apollo
-backend wrapper. The rank is encoded by `Layout<R>` and `FftOperands`:
-
-```rust,no_run
-use hephaestus_core::{
-    ComputeDevice, FftDirection, FftOperands, FftOps, StridedView,
-};
-use hephaestus_wgpu::{WgpuDevice, WgpuFftOps};
-use leto::Layout;
-
-# fn run(device: &WgpuDevice) -> Result<(), Box<dyn std::error::Error>> {
-let real = device.upload(&[1.0_f32, 0.0, -1.0, 0.0])?;
-let imaginary = device.alloc_zeroed(4)?;
-let layout = Layout::c_contiguous([4])?;
-let plan = WgpuFftOps.prepare_fft(
-    device,
-    FftOperands {
-        real: StridedView::new(&real, &layout),
-        imaginary: StridedView::new(&imaginary, &layout),
-    },
-    FftDirection::Forward,
-)?;
-WgpuFftOps.dispatch_fft(device, &plan)?;
-# Ok(())
-# }
-```
+backend wrapper. The rank is encoded by `Layout<R>` and `FftOperands`. Upload
+the real component and allocate the imaginary component through `WgpuDevice`,
+construct a C-contiguous Leto layout, then pass the two `StridedView` operands
+to `WgpuFftOps::prepare_fft`. Retain the returned plan and execute it with
+`WgpuFftOps::dispatch_fft`, or encode it into a larger command stream with the
+`FftOps` composition surface.
 
 Preparation validates shape, strides, aliasing, scalar capability, and device
 ownership before mutation. It also compiles and binds the required radix or

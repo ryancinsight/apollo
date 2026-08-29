@@ -365,6 +365,32 @@ fn dynamic_plan_owns_forward_and_lazily_initializes_inverse() {
 }
 
 #[test]
+fn dynamic_split_plans_normalize_by_full_length() {
+    for n in super::BASE_SPLIT_LENGTHS {
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let source = signal(n);
+        let mut actual = source.clone();
+        let Some(_) = plan.base128.as_ref() else {
+            assert!(
+                plan.twiddle_fwd.is_some(),
+                "the incumbent route retains its forward twiddles"
+            );
+            continue;
+        };
+
+        plan.forward_complex_slice_inplace(&mut actual);
+        plan.inverse_complex_slice_inplace(&mut actual);
+
+        let error = worst(&actual, &source);
+        let bound = 2.0 * tolerance(&source);
+        assert!(
+            error <= bound,
+            "N={n} dynamic split round trip differs by {error:.3e} > {bound:.3e}"
+        );
+    }
+}
+
+#[test]
 fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
     let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });
     let first_input = signal(128);

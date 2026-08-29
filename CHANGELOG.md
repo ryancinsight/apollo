@@ -54,6 +54,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Reusable NUFFT WGPU workspaces validate their prepared-device
+  provenance before any host-to-device write. Passing a workspace to a
+  different logical device now returns the typed Hephaestus ownership error
+  without submitting work or mutating caller output.
+- [patch] Base-128-routed inverse FFT plans normalize by the full plan length,
+  restoring normalized round trips at lengths 256 and 512.
 - [patch] [perf] Retained NUFFT WGPU workspaces now bind their four domain
   stages once and update only parameter storage between calls. The unchanged
   100-observation buffer-reuse instrument reduces warm medians by 4.11% to

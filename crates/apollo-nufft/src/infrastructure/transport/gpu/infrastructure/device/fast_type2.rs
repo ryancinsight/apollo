@@ -271,6 +271,7 @@ impl NufftWgpuBackend {
             });
         }
         validate_usize_to_u32(positions.len())?;
+        buffers.validate_device(&self.device)?;
         buffers.write_coefficients(&self.device, fourier_coeffs)?;
         NufftGpuKernel::execute_fast_type2_1d_with_buffers(&self.device, buffers, positions)?;
         write_complex_output(buffers.readback_prefix(output.len())?, output);
@@ -297,6 +298,7 @@ impl NufftWgpuBackend {
             });
         }
         validate_usize_to_u32(positions.len())?;
+        buffers.validate_device(&self.device)?;
         buffers.write_coefficients(&self.device, modes)?;
         NufftGpuKernel::execute_fast_type2_3d_with_buffers(&self.device, buffers, positions)?;
         write_complex_output(buffers.readback_prefix(output.len())?, output);

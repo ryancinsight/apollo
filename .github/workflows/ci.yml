@@ -98,6 +98,9 @@ jobs:
           --bench kernel_strategy
           --bench prime_compose
           --bench half_cyclic_rader
+      - name: Build NUFFT benchmark smoke
+        run: >-
+          cargo test --locked -p apollo-nufft --all-features --no-run
           --bench buffer_reuse
       - name: Benchmark smoke
         env:
@@ -110,6 +113,11 @@ jobs:
           --bench kernel_strategy
           --bench prime_compose
           --bench half_cyclic_rader
+      - name: NUFFT benchmark smoke
+        env:
+          APOLLO_BENCH_MODE: smoke
+        run: >-
+          timeout 60s cargo test --locked -p apollo-nufft --all-features
           --bench buffer_reuse
       - name: Doctests
         run: cargo test --locked --doc --workspace --exclude apollo-python

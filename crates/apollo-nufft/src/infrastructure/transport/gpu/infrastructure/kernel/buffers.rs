@@ -141,6 +141,10 @@ impl NufftGpuBuffers1D {
         self.fft.encode_forward(sequence)
     }
 
+    pub(crate) fn validate_device(&self, device: &WgpuDevice) -> NufftWgpuResult<()> {
+        self.fft.validate_device(device)
+    }
+
     pub(crate) fn encode_inverse(
         &self,
         sequence: &mut WgpuGroupedSequence<'_>,
@@ -335,6 +339,10 @@ impl NufftGpuBuffers3D {
         sequence: &mut WgpuGroupedSequence<'_>,
     ) -> hephaestus_core::Result<()> {
         self.fft.encode_forward(sequence)
+    }
+
+    pub(crate) fn validate_device(&self, device: &WgpuDevice) -> NufftWgpuResult<()> {
+        self.fft.validate_device(device)
     }
 
     pub(crate) fn encode_inverse(

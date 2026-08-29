@@ -65,6 +65,11 @@ impl<const R: usize> PreparedFftPair<R> {
         self.forward.encode_in_sequence(sequence)
     }
 
+    pub(super) fn validate_device(&self, device: &WgpuDevice) -> NufftWgpuResult<()> {
+        self.forward.validate_device(device)?;
+        Ok(())
+    }
+
     pub(super) fn encode_inverse(
         &self,
         sequence: &mut WgpuGroupedSequence<'_>,
