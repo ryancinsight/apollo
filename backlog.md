@@ -188,8 +188,8 @@
 - **Status:** `ATLAS-APOLLO-CWT-FFT-CONVOLUTION` is delivered. It uncovered and
   carried a prerequisite fix: the base-128 route's normalized inverse scaled by
   the constant 128 rather than by its own length, so `n = 256` came back
-  doubled and `n = 512` quadrupled. `ATLAS-APOLLO-DCTDST-FAST-KINDS` is blocked
-  — see its entry.
+  doubled and `n = 512` quadrupled. `ATLAS-APOLLO-DCTDST-FAST-KINDS` is
+  delivered too, once the composite-radix fix cleared its blocker.
 - **Integrator:** claude-fable session 03d80d33 subagent.
 - **Lease:** `crates/apollo-wavelet/src/application/execution/plan/cwt.rs`,
   `crates/apollo-wavelet/src/infrastructure/kernel/continuous.rs`,
@@ -596,34 +596,37 @@
 - **Evidence:** `crates/apollo-sht/src/application/execution/plan/sht.rs`
   90-130; `crates/apollo-sht/src/infrastructure/kernel/quadrature.rs` 60-95.
 
-## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — in-progress
+## ATLAS-APOLLO-DCTDST-FAST-KINDS — Implement Makhoul fast paths for DCT-I/IV and DST-I/IV [minor] — review
 
-- **Outcome:** DCT-I routes through a 2(N−1)-point real FFT and DCT-IV,
-  DST-I, DST-IV through half-shift FFT factorizations, so every kind reaches
-  O(N log N) above the threshold; the direct kernels remain as differential
-  oracles. Today types I and IV dispatch to the direct O(N²) kernels in both
-  threshold branches (complexity docs corrected under
-  ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27).
-- **Evidence:** `crates/apollo-dctdst/src/infrastructure/kernel/fast.rs`
-  155-158 already cites Makhoul (1980);
-  `crates/apollo-dctdst/src/application/execution/plan/dctdst/forward.rs`
-  214-236 and `inverse.rs` 221-243 route I/IV kinds to direct kernels at
-  every size.
-- **Blocker CLEARED 2026-08-29.** `ATLAS-APOLLO-COMPOSITE-RADIX-WRONG-ANSWERS-2026-08-28`
-  is done: every length routes correctly, so the FFTs of length 2(N−1),
-  2(N+1), and 2N that these factorizations need are safe at any N. The failure
-  this item cited (N = 361 → 2N = 722, relative error 0.997) is covered by the
-  oracle sweep and no longer reproduces. Ready to claim.
-- **Integrator:** claude-fable session 03d80d33. **Claimed 2026-08-29.**
-- **Lease:** `crates/apollo-dctdst/src/infrastructure/kernel/fast.rs`,
-  `crates/apollo-dctdst/src/application/execution/plan/dctdst/{forward.rs,inverse.rs}`,
-  `crates/apollo-dctdst/tests/`, plus this entry.
-- **Derivations, ready to implement:** DCT-I is `Re(DFT_{2(N−1)}(y))[k]` on
-  the whole-sample-symmetric extension `y`; DST-I is
-  `−½·Im(DFT_{2(N+1)}(y))[k+1]` on the antisymmetric extension; DCT-IV and
-  DST-IV share one 2N-point FFT of the pre-twiddled `u[n] = x[n]·e^{−iπn/(2N)}`
-  as `Re` and `−Im` of `e^{−iπ(2k+1)/(4N)}·F[k]`, mirroring the existing
-  `dct2_dst2_fast` shared-FFT structure.
+- **Delivered.** All four kinds now reach O(N log N) above `FAST_THRESHOLD`:
+  DCT-I through a 2(N-1)-point FFT of the whole-sample-symmetric extension,
+  DST-I through a 2(N+1)-point FFT of the odd extension, and DCT-IV/DST-IV
+  through one shared 2N-point FFT of the pre-twiddled input, read as `Re` and
+  `-Im`. The direct kernels stay as the specification, the differential oracle,
+  and the sub-threshold path.
+- **Correction to the recorded derivation.** The entry gave DST-I as
+  `-1/2 Im(DFT)`. That half belongs to a DST-I convention without the leading
+  factor of 2; `direct::dst1` applies it, so the implemented relation is
+  `-Im(DFT_{2(N+1)}(y))[k+1]` with no half. Verified against the direct kernel
+  rather than against the note.
+- **Measured** (best of 50 runs, release, this workstation; direct kernel goes
+  parallel at `PAR_THRESHOLD = 256`, which is why its wall clock is not
+  monotonic in N):
+
+  | N | DCT-I | DCT-IV | DST-I | DST-IV |
+  |---|---|---|---|---|
+  | 64 | 16.9 -> 0.30 us (56x) | 15.3 -> 0.70 us (22x) | 15.0 -> 0.30 us (50x) | 15.5 -> 0.70 us (22x) |
+  | 256 | 275 -> 1.6 us (172x) | 292 -> 3.3 us (88x) | 295 -> 5.0 us (59x) | 293 -> 3.6 us (81x) |
+  | 1024 | 364 -> 16.8 us (22x) | 350 -> 13.4 us (26x) | 370 -> 15.4 us (24x) | 356 -> 13.5 us (26x) |
+  | 4096 | 5305 -> 38.6 us (137x) | 5493 -> 63.1 us (87x) | 5711 -> 84.7 us (67x) | 5564 -> 56.7 us (98x) |
+
+- **Evidence:** `crates/apollo-dctdst/tests/fast_type14_parity.rs` — each fast
+  path against its direct kernel across 12 lengths spanning powers of two,
+  smooth composites, primes, and `361` with its neighbours; the pair kernel
+  against the two single-output kernels; and an independent algebraic oracle
+  (both Type-IV transforms are involutions up to `2/N`), which would catch an
+  error common to the fast and direct paths. Tolerance is `N^2 eps max|x|`,
+  derived from the direct sum's sequential accumulation.
 
 ## ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS — Promote kernel-entry guards to release asserts [patch] — todo
 

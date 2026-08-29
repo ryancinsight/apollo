@@ -108,6 +108,21 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Added
 
+- [minor] `apollo-dctdst` computes DCT-I, DCT-IV, DST-I and DST-IV in
+  O(N log N) above `FAST_THRESHOLD`; every kind now has a fast path, where
+  before only Types II and III did and the other four ran the direct O(N^2)
+  kernel at every size. DCT-I goes through a 2(N-1)-point FFT of the
+  whole-sample-symmetric extension and DST-I through a 2(N+1)-point FFT of the
+  odd extension, both reading the result straight off the transform. DCT-IV and
+  DST-IV share one 2N-point FFT of the pre-twiddled input `x[n] e^{-i pi n/2N}`,
+  taken as `Re` and `-Im` of `e^{-i pi (2k+1)/4N} F[k]`, so a caller needing
+  both pays for one transform. Measured best-of-50 on one workstation, direct
+  to fast: 275 -> 1.6 us for DCT-I at N = 256, and 5.3 ms -> 38.6 us at
+  N = 4096. The direct kernels remain the specification, the differential
+  oracle, and the sub-threshold path. This depended on every FFT length routing
+  correctly: the factorizations need lengths 2(N-1), 2(N+1) and 2N, which for
+  general N are neither powers of two nor smooth.
+
 - [minor] Power-of-two transforms at square splits below the threading
   threshold run on a batched layout that holds the transform index in the lane
   position, which removes every cross-lane shuffle from the butterfly and lets

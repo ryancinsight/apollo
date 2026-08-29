@@ -419,3 +419,292 @@ pub fn dst3_fast(signal: &[f64], output: &mut [f64]) {
         });
     });
 }
+
+// ── Types I and IV ───────────────────────────────────────────────────────────
+//
+// The Type-II/III kernels above share one structure: extend the input to a
+// longer complex sequence whose DFT carries the wanted real transform in its
+// real or imaginary part, then read it back through a twiddle. Types I and IV
+// take the same route with different extensions and different lengths.
+//
+// ## Sub-theorem 3: DCT-I via a 2(N-1)-point forward DFT
+//
+// Let `M = 2(N - 1)` and let `y` be the whole-sample-symmetric extension of
+// `x`: `y[n] = x[n]` for `n < N`, and `y[M - n] = x[n]` for `1 <= n <= N - 2`.
+// The two endpoints `x[0]` and `x[N-1]` are their own mirror images and appear
+// once each. Then
+//
+// ```text
+// DFT_M(y)[k] = x[0] + x[N-1] e^{-i pi k}
+//             + sum_{n=1}^{N-2} x[n] (e^{-2 pi i k n / M} + e^{+2 pi i k n / M})
+//           = x[0] + (-1)^k x[N-1] + 2 sum_{n=1}^{N-2} x[n] cos(pi n k / (N-1))
+// ```
+//
+// using `2 pi / M = pi / (N - 1)`. That is exactly `direct::dct1`, and it is
+// real, so `DCT-I[k] = Re(DFT_M(y)[k])` with no twiddle at all.
+//
+// ## Sub-theorem 4: DST-I via a 2(N+1)-point forward DFT
+//
+// Let `M = 2(N + 1)` and let `y` be the odd extension with explicit zeros at
+// both boundaries: `y[0] = y[N+1] = 0`, `y[n] = x[n-1]` for `1 <= n <= N`, and
+// `y[M - n] = -x[n-1]` over the same range. Each conjugate pair contributes
+// `-2i sin`, so
+//
+// ```text
+// DFT_M(y)[k] = -2i sum_{n=1}^{N} x[n-1] sin(pi n k / (N + 1))
+// ```
+//
+// and therefore `DST-I[k] = -Im(DFT_M(y)[k+1])`, which carries the factor of 2
+// that `direct::dst1` applies. A DST-I convention without that factor would
+// take half this value; apollo's applies it, so the factor is absorbed here
+// rather than corrected at the call site.
+//
+// ## Sub-theorem 5: DCT-IV and DST-IV share one 2N-point forward DFT
+//
+// Both Type-IV transforms are half-shifted in *both* indices, which is what
+// lets one complex sum carry the pair:
+//
+// ```text
+// DCT-IV[k] - i DST-IV[k] = sum_n x[n] e^{-i pi (n + 1/2)(k + 1/2) / N}
+// ```
+//
+// Expanding `(n + 1/2)(k + 1/2) = nk + n/2 + k/2 + 1/4` separates the exponent
+// into a factor depending on `n` alone, one on `k` alone, and the DFT kernel:
+//
+// ```text
+//   = e^{-i pi (2k+1)/(4N)} sum_n (x[n] e^{-i pi n/(2N)}) e^{-2 pi i n k/(2N)}
+// ```
+//
+// So with `u[n] = x[n] e^{-i pi n / (2N)}` zero-padded to length `2N` and
+// `F = DFT_{2N}(u)`:
+//
+// ```text
+// DCT-IV[k] =  Re(e^{-i pi (2k+1)/(4N)} F[k])
+// DST-IV[k] = -Im(e^{-i pi (2k+1)/(4N)} F[k])
+// ```
+//
+// The pre-twiddle is what distinguishes this from the Type-II route, where the
+// input enters the buffer unmodified.
+
+/// Fast DCT-I via a 2(N-1)-point forward FFT. Complexity: O(N log N).
+///
+/// The direct kernel stays the specification and the differential oracle;
+/// this is selected for `N >= FAST_THRESHOLD`.
+///
+/// # Mathematical contract
+///
+/// `output[k] = signal[0] + (-1)^k signal[N-1]
+///            + 2 sum_{n=1}^{N-2} signal[n] cos(pi n k / (N-1))`
+///
+/// Derived via Sub-theorem 3. Lengths below 2 produce zeros, matching
+/// `direct::dct1`: DCT-I is undefined there, since its `2(N-1)` extension
+/// degenerates.
+///
+/// # Panics
+///
+/// Only in debug builds when `output` is not `signal.len()` long.
+pub fn dct1_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
+    debug_assert_eq!(output.len(), n, "dct1_fast: output length mismatch");
+    if n < 2 {
+        output.fill(0.0);
+        return;
+    }
+    let m = 2 * (n - 1);
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(m, |buf| {
+            for (i, &x) in signal.iter().enumerate() {
+                buf[i] = Complex64::new(x, 0.0);
+            }
+            // The mirror runs over the interior only: both endpoints are fixed
+            // points of the reflection and are already in place.
+            for i in 1..=(n - 2) {
+                buf[m - i] = Complex64::new(signal[i], 0.0);
+            }
+
+            let plan = f64::get_1d_plan(Shape1D::new(m).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            for (k, out) in output.iter_mut().enumerate() {
+                *out = buf[k].re;
+            }
+        });
+    });
+}
+
+/// Fast DST-I via a 2(N+1)-point forward FFT. Complexity: O(N log N).
+///
+/// The direct kernel stays the specification and the differential oracle;
+/// this is selected for `N >= FAST_THRESHOLD`.
+///
+/// # Mathematical contract
+///
+/// `output[k] = 2 sum_{n=0}^{N-1} signal[n] sin(pi (n+1)(k+1) / (N+1))`
+///
+/// Derived via Sub-theorem 4, whose sign convention already carries the
+/// factor of 2 that `direct::dst1` applies.
+///
+/// # Panics
+///
+/// Only in debug builds when `output` is not `signal.len()` long.
+pub fn dst1_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
+    debug_assert_eq!(output.len(), n, "dst1_fast: output length mismatch");
+    if n == 0 {
+        return;
+    }
+    let m = 2 * (n + 1);
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(m, |buf| {
+            buf[..m].fill(Complex64::new(0.0, 0.0));
+            // Indices 0 and n+1 stay zero: they are the boundary samples an
+            // odd extension pins there, and writing the signal from index 1 is
+            // what shifts the sine argument to (n+1)(k+1).
+            for (i, &x) in signal.iter().enumerate() {
+                buf[i + 1] = Complex64::new(x, 0.0);
+                buf[m - (i + 1)] = Complex64::new(-x, 0.0);
+            }
+
+            let plan = f64::get_1d_plan(Shape1D::new(m).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            for (k, out) in output.iter_mut().enumerate() {
+                *out = -buf[k + 1].im;
+            }
+        });
+    });
+}
+
+/// Shared 2N-point forward DFT kernel for DCT-IV and DST-IV.
+///
+/// Computes one pre-twiddled 2N-point FFT and fills both outputs, so a caller
+/// needing the pair pays for one transform rather than two.
+///
+/// # Mathematical contract
+///
+/// With `u[n] = signal[n] e^{-i pi n / (2N)}` zero-padded to `2N` and
+/// `F = DFT_{2N}(u)`, for `k = 0,...,N-1` (Sub-theorem 5):
+/// - `dct_output[k] =  Re(e^{-i pi (2k+1)/(4N)} F[k])`
+/// - `dst_output[k] = -Im(e^{-i pi (2k+1)/(4N)} F[k])`
+///
+/// # Panics
+///
+/// Only in debug builds when either output length differs from `signal.len()`.
+pub fn dct4_dst4_fast(signal: &[f64], dct_output: &mut [f64], dst_output: &mut [f64]) {
+    let n = signal.len();
+    debug_assert_eq!(
+        dct_output.len(),
+        n,
+        "dct4_dst4_fast: dct_output length mismatch"
+    );
+    debug_assert_eq!(
+        dst_output.len(),
+        n,
+        "dct4_dst4_fast: dst_output length mismatch"
+    );
+    if n == 0 {
+        return;
+    }
+    let two_n = 2 * n;
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            fill_type4_prefix(signal, buf);
+
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            let quarter_cycle = PI / (4 * n) as f64;
+            for k in 0..n {
+                let angle = -(quarter_cycle * (2 * k + 1) as f64);
+                let (sin_a, cos_a) = angle.sin_cos();
+                let value = Complex64::new(cos_a, sin_a) * buf[k];
+                dct_output[k] = value.re;
+                dst_output[k] = -value.im;
+            }
+        });
+    });
+}
+
+/// Fast DCT-IV via 2N-point forward FFT. Complexity: O(N log N).
+///
+/// # Mathematical contract
+///
+/// `output[k] = sum_{n=0}^{N-1} signal[n] cos(pi (n+1/2)(k+1/2) / N)`,
+/// derived via Sub-theorem 5.
+///
+/// # Panics
+///
+/// Only in debug builds when `output` is not `signal.len()` long.
+pub fn dct4_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
+    debug_assert_eq!(output.len(), n, "dct4_fast: output length mismatch");
+    if n == 0 {
+        return;
+    }
+    type4_projection(signal, output, |value| value.re);
+}
+
+/// Fast DST-IV via 2N-point forward FFT. Complexity: O(N log N).
+///
+/// # Mathematical contract
+///
+/// `output[k] = sum_{n=0}^{N-1} signal[n] sin(pi (n+1/2)(k+1/2) / N)`,
+/// derived via Sub-theorem 5.
+///
+/// # Panics
+///
+/// Only in debug builds when `output` is not `signal.len()` long.
+pub fn dst4_fast(signal: &[f64], output: &mut [f64]) {
+    let n = signal.len();
+    debug_assert_eq!(output.len(), n, "dst4_fast: output length mismatch");
+    if n == 0 {
+        return;
+    }
+    type4_projection(signal, output, |value| -value.im);
+}
+
+/// Write the pre-twiddled input `u[n] = x[n] e^{-i pi n / (2N)}` into the low
+/// half of `buf` and zero the rest.
+///
+/// Shared so the pair kernel and the two single-output kernels cannot drift in
+/// how they build the input — the pre-twiddle is the whole difference between
+/// the Type-IV route and the Type-II one.
+fn fill_type4_prefix(signal: &[f64], buf: &mut [Complex64]) {
+    let n = signal.len();
+    let two_n = 2 * n;
+    let half_cycle = PI / two_n as f64;
+    for (i, &x) in signal.iter().enumerate() {
+        let angle = -(half_cycle * i as f64);
+        let (sin_a, cos_a) = angle.sin_cos();
+        buf[i] = Complex64::new(x * cos_a, x * sin_a);
+    }
+    buf[n..two_n].fill(Complex64::new(0.0, 0.0));
+}
+
+/// One Type-IV transform: the shared FFT, read back through `project`.
+///
+/// `project` selects `Re` for DCT-IV and `-Im` for DST-IV from the same
+/// post-twiddled value, which is the only place the two kinds differ.
+fn type4_projection(signal: &[f64], output: &mut [f64], project: impl Fn(Complex64) -> f64) {
+    let n = signal.len();
+    let two_n = 2 * n;
+
+    COMPLEX_SCRATCH_POOL.with(|pool| {
+        pool.with_scratch(two_n, |buf| {
+            fill_type4_prefix(signal, buf);
+
+            let plan = f64::get_1d_plan(Shape1D::new(two_n).expect("Shape1D"));
+            plan.forward_complex_slice_inplace(buf);
+
+            let quarter_cycle = PI / (4 * n) as f64;
+            for (k, out) in output.iter_mut().enumerate() {
+                let angle = -(quarter_cycle * (2 * k + 1) as f64);
+                let (sin_a, cos_a) = angle.sin_cos();
+                *out = project(Complex64::new(cos_a, sin_a) * buf[k]);
+            }
+        });
+    });
+}
