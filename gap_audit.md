@@ -1,3 +1,58 @@
+## The sink's permutation is cheaper on the write side (2026-08-28) <a id="sink-permutation"></a>
+
+[Decimating stage set two in frequency](#dif-stage-set) moved the route's
+bit-reversal into the sink, and the sink got dearer for it — the split
+route's combine most of all. What was not separated was *which* part of the
+sink's work the increase belonged to: the reversed read, or the fact that
+the combine reads two planes where the square route's sink reads one.
+
+Three variants of the combine, pinned, TSC per call. The middle one is
+incorrect and exists only to bound the question:
+
+| variant | n = 2048 | n = 8192 |
+| --- | --- | --- |
+| reversed read (as merged) | 5504.6 | 21281.1 |
+| **no permutation at all** (wrong results, floor) | 3988.3 | 15014.6 |
+| reversed write | **4869.7** | **18195.7** |
+
+**The two-plane read is not the cause.** The unpermuted floor, 3988 and
+15015, sits within 9% of what the combine cost *before* the stage set
+changed at all — 4361 and 15086 — and that earlier version already read two
+planes. Essentially the whole increase is the permutation.
+
+**And the permutation is 40% cheaper carried on the store side.** Plane row
+`p` holds output row `rev(p)`, bit reversal being an involution, so the loop
+can walk the planes in order and scatter its writes instead of gathering its
+reads. That turns four scattered read streams into four sequential ones and
+two sequential writes into two scattered ones — three permuted streams
+instead of four, and the three that remain are stores, which retire into a
+buffer rather than stalling the pipeline the way a load does.
+
+Applied to both sinks, since the square route's reinterleave had the same
+shape:
+
+| | before | after |
+| --- | --- | --- |
+| combine, n = 2048 | 5504.6 | **5051.8** |
+| combine, n = 8192 | 21281.1 | **18378.8** |
+| reinterleave, n = 4096 | 4294.3 | **3894.6** |
+| reinterleave, n = 16384 | 16624.7 | **15139.5** |
+
+End to end, pinned, on a run whose in-run RustFFT control matches history
+within 3%:
+
+| n | vs RustFFT before | vs RustFFT after |
+| --- | --- | --- |
+| 1024 | 1.22 | **1.20** |
+| 2048 | 1.27 | **1.24** |
+| 4096 | 1.06 | 1.06 |
+| 8192 | 1.09 | **1.08** |
+| 16384 | 0.97 | **0.93** |
+
+Half the permutation's cost is still there, and it is not obviously
+removable: something has to carry the reversal, and the store side is the
+cheaper of the two places to put it.
+
 ## Apollo is faster than RustFFT at n = 16384 (2026-08-28) <a id="dif-stage-set"></a>
 
 The [pass attribution](#planar-pass-attribution) found one pass whose entire

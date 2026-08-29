@@ -89,6 +89,29 @@
   planes in bit-reversed row order, so the odd powers gain less than the
   even ones.
 
+## ATLAS-APOLLO-SINK-PERMUTATION-2026-08-28 — Carry the sink's reversal on the write side [perf] — done 2026-08-28
+
+- **The question this answers** (`gap_audit.md#sink-permutation`): the DIF
+  stage set moved the route's bit-reversal into the sink and the sink got
+  dearer; it was not separated whether that belonged to the reversed read
+  or to the combine's two-plane read.
+- **Separated by an unpermuted floor** — incorrect results, timing only:
+  the floor sits within 9% of what the combine cost before the stage set
+  changed at all, and that version already read two planes. The two-plane
+  read is not the cause; essentially the whole increase is the permutation.
+- **Delivered:** plane row `p` holds output row `rev(p)`, bit reversal
+  being an involution, so both sinks now walk the planes in order and
+  scatter their writes. Four scattered read streams become four sequential
+  ones; two sequential writes become two scattered ones — and stores retire
+  into a buffer where loads stall.
+- **Measured pinned:** combine 5504.6 -> 5051.8 TSC at 2048 and
+  21281.1 -> 18378.8 at 8192; reinterleave 4294.3 -> 3894.6 at 4096 and
+  16624.7 -> 15139.5 at 16384. End to end against RustFFT: 1024 1.22 ->
+  1.20, 2048 1.27 -> 1.24, 8192 1.09 -> 1.08, 16384 0.97 -> **0.93**.
+- **Residual:** about half the permutation's cost remains and is not
+  obviously removable — something must carry the reversal, and the store
+  side is the cheaper of the two places to put it.
+
 ## ATLAS-APOLLO-PLANAR-MOVEMENT-2026-08-28 — What is left of the planar route's movement [perf] — todo
 
 - **State:** movement is about 26% of the route, down from 30%, and none of

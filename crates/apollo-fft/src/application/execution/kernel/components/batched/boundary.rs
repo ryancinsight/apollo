@@ -97,13 +97,16 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
             "invariant: both planes hold m padded rows and the output 2m^2 lanes"
         );
         // The stage set that produced these planes is decimated in
-        // frequency, so its output rows are bit-reversed. Reading `rev(row)`
+        // frequency, so its output rows are bit-reversed. Absorbing that
         // here is the whole of the permutation the route used to spend a
-        // separate pass on.
+        // separate pass on, and it rides the *write* side: plane row `p`
+        // holds output row `rev(p)`, bit reversal being an involution, so
+        // the plane reads stay sequential and only the stores scatter
+        // (gap_audit.md#sink-permutation).
         let bits = self.m.trailing_zeros();
         for row in 0..self.m {
-            let src_c = (row.reverse_bits() >> (usize::BITS - bits)) * self.stride / 4;
-            let dst_c = row * self.m / 2;
+            let src_c = row * self.stride / 4;
+            let dst_c = (row.reverse_bits() >> (usize::BITS - bits)) * self.m / 2;
             for r in 0..self.m / 4 {
                 let e = chunk::<T, A>(self.re, src_c + r);
                 let o = chunk::<T, A>(self.im, src_c + r);

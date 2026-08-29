@@ -834,9 +834,9 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     sect!("deint", { deinterleave_rows(data, re, im, m, stride) });
     planar_stages::<T, INVERSE>(re, im, n, m, stride);
 
-    // The stage set left its rows bit-reversed, so the sink reads
-    // `rev(row)`. That is the permutation the route used to spend a pass on,
-    // and here it is an index computation on a pass that had to happen.
+    // The stage set left its rows bit-reversed, so the sink absorbs that
+    // permutation — the one the route used to spend a whole pass on — as an
+    // index computation on a pass that had to happen anyway.
     let bits = m.trailing_zeros();
     sect!("reint", {
         let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
@@ -848,10 +848,11 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
         })
         .unwrap_or(false);
         if !handled {
-            for (row, chunk) in data.chunks_exact_mut(m).enumerate() {
-                let src = (row.reverse_bits() >> (usize::BITS - bits)) * stride;
-                for (b, c) in chunk.iter_mut().enumerate() {
-                    *c = Complex::new(re[src + b], im[src + b]);
+            for row in 0..m {
+                let src = row * stride;
+                let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
+                for b in 0..m {
+                    data[dst + b] = Complex::new(re[src + b], im[src + b]);
                 }
             }
         }
@@ -951,14 +952,18 @@ pub(crate) fn combine_planar_halves<T>(
     let (o_re, o_im) = bytemuck::cast_slice::<_, T>(&odd[..plane]).split_at(plane);
     let (low, high) = data.split_at_mut(half);
 
-    // As the square route's sink: the stage set left bit-reversed rows, so
-    // the read side carries the permutation.
+    // The stage set left bit-reversed rows, and the permutation rides the
+    // write side: plane row `p` holds output row `rev(p)`, bit reversal
+    // being an involution. Reading the planes in order keeps four streams
+    // sequential and leaves two scattered, where carrying it on the read
+    // side scattered four (gap_audit.md#sink-permutation).
     let bits = m.trailing_zeros();
     sect!("combine", {
         for row in 0..m {
-            let base = (row.reverse_bits() >> (usize::BITS - bits)) * stride;
+            let base = row * stride;
+            let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
             for b in 0..m {
-                let j = row * m + b;
+                let j = dst + b;
                 let e = Complex::new(e_re[base + b], e_im[base + b]);
                 let o = Complex::new(o_re[base + b], o_im[base + b]);
                 let rotated = o * twiddles[j];
