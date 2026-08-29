@@ -219,37 +219,47 @@
   never what needed changing; the number of gathers was. The kernel here is
   byte-identical.
 
-## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — todo
+## ATLAS-APOLLO-BRANCH-INVENTORY-2026-08-28 — Eight stale branches carry unmerged deltas [patch] — done 2026-08-29
 
-- **Measured, not estimated** (`git rev-list --count origin/main..<branch>`,
-  with each branch's last commit date), after deleting the three that were
-  fully merged:
+- **Swept 2026-08-29.** Eleven local branches at the time of the sweep; all
+  eleven processed, `main` is now the only local branch.
+- **Method.** `git diff` against `main` is useless here — the branches are far
+  enough behind that the diff is dominated by main's own progress showing up as
+  deletions. Each branch was classified by whether its PR's merge commit is an
+  ancestor of `origin/main`, and where there was no PR, by whether its content
+  is present in main today.
+- **Disposition.** Five had merged PRs whose merge commits are on main
+  (#96, #74, #95, #73, #174) — pure duplication, deleted. Three had PRs closed
+  without merging (#86, #103, #92) — the decision is recorded in the closed PR,
+  deleted. `perf/apollo-base-generic` was superseded: its base-64
+  generalization is in main via #174. `codex/apollo-fft-hephaestus-cutover`
+  held only a board-claim commit; its work landed as PR #176.
+  `style/apollo-butterfly-lint-consolidation-217` was 10 days stale and its
+  approach was wrong anyway — see the item it generated.
+- **Generated:** `ATLAS-APOLLO-BUTTERFLY-BLANKET-ALLOWS-2026-08-29`.
+- **Not resurrected, deliberately.** `direct::dft_inverse` still accumulates in
+  `f64` through the `precise_re`/`from_precise` channel and narrows back, which
+  reads as a widen-compute-narrow generic. PR #92 proposed accumulating in `T`
+  and was **closed**, so this is a settled decision rather than an open defect;
+  re-opening it needs new numerical evidence, not a rediscovery.
 
-  | branch | commits ahead | last commit |
-  | --- | --- | --- |
-  | `codex/fix-apollo-package-sources` | 8 | 4 weeks |
-  | `perf/apollo-f32-rader-narrowing` | 5 | 2 weeks |
-  | `feat/apollo-benchmark-generator` | 3 | 13 days |
-  | `fix/apollo-large-composite-wiring` | 3 | 11 days |
-  | `cascade/hermes-07` | 3 | 11 days |
-  | `codex/apollo-arch-006-junk-drawer-rename` | 2 | 4 weeks |
-  | `style/apollo-butterfly-lint-consolidation-217` | 1 | 9 days |
-  | `fix/apollo-sht-thread-local-lint` | 1 | 4 weeks |
+## ATLAS-APOLLO-BUTTERFLY-BLANKET-ALLOWS-2026-08-29 — Module-wide lint allows in the butterfly kernels [patch] — todo
 
-  Every one is past the stale-claim interval by days or weeks, so all are
-  takeover material rather than peer-held. Two more are live and excluded:
-  `perf/apollo-base128-arith` (the shared tree's current branch) and
-  `perf/apollo-base-generic`.
-- **Not one sweep item.** Each branch is its own increment, worked
-  closest-to-done first: diff it against `origin/main`, and either it holds
-  a unique delta — rebase onto a current base, verify, integrate — or it
-  does not, and it is deleted in the same cycle. Filing the inventory is
-  what makes that ordering possible; it is not a licence to defer the
-  branches behind a single ticket.
-- **Why it accumulates:** three of the fourteen were already fully merged
-  and simply never deleted, which is one branch of debt per merge that
-  nobody collects. Branch deletion belongs to the merge, not to a later
-  audit.
+- **Finding.** `stockham/butterfly/fixed.rs` and `stage.rs` open with
+  module-scoped `#![allow(clippy::many_single_char_names)]` and
+  `#![allow(clippy::too_many_arguments)]`. Blanket allows suppress the lint for
+  everything in the module, including code added later that the lint would have
+  caught.
+- **Why the obvious fix is wrong.** A closed branch proposed moving these into
+  the workspace `[lints]` table. That is worse: it turns a two-module
+  suppression into a workspace-wide one. The sanctioned form is per-site
+  `#[expect(lint, reason = "...")]`, which expires when the site stops
+  triggering.
+- **Acceptance.** Both files carry no module-scoped `allow`; each remaining
+  site carries `#[expect]` with a reason naming why the butterfly kernel's
+  single-character names or argument count are the domain's form. Clippy stays
+  warning-clean.
+
 
 ## ATLAS-APOLLO-BENCH-GATE-NOISE-2026-08-28 — The benchmark gate times on shared runners [patch] — todo
 
@@ -456,7 +466,7 @@
   free. **Phase attribution separates a hot-loop change from code placement
   in one run; earlier sessions guessed between them.**
 
-## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 — Delete consumer-owned WGPU FFT [major] [arch] [perf] — in progress
+## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 — Delete consumer-owned WGPU FFT [major] [arch] [perf] — done 2026-08-29 (PR #176)
 
 - **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`; last update 2026-08-28.
 - **Lease:** closure integration owns this item's PM/release records and PR delivery; source fix-forward `f981908f` and documentation correction `7c063e27` passed independent review.
@@ -466,7 +476,11 @@
 - **Dependencies:** Hephaestus PR #227 merged native f32/f16 rank-generic FFT parity at `2a785d8`; PR #234 merged mutable retained grouped-parameter updates at `44754cd1`, with independent GREEN review of provider candidate `e6218da`. Kwavers PR #663 already selects Leto or Hephaestus and owns no private FFT kernel.
 - **Candidate evidence:** Apollo `fcb924bb` corrects every finding from review of `9094166a`: STFT uses selected-axis prepared Hephaestus plans; NUFFT retains readback, non-contiguous coefficient staging, four domain-stage pipelines/bind groups/parameter buffers, fixed grids, and host conversion capacity; obsolete Apollo WGPU error surfaces and ownership claims are removed. Apollo-owned warm host conversion/staging allocations are zero. Review of that revision found foreign-device workspaces reached device writes before provider ownership validation. Fix-forward `f981908f` preflights all 1-D/3-D Type-1/Type-2 public and kernel paths and structurally verifies the typed error plus unchanged output. It also corrects base-128 split inverse normalization at lengths 256 and 512 and assigns NUFFT benchmark smoke to its owning package. Documentation correction `7c063e27` records the reproduced 6.661e-16 Windows/MSVC round-trip observation as bounded finite-precision evidence. Independent exact-revision review is GREEN. Warning-denied all-target/all-feature Clippy passes for Apollo FFT and NUFFT; Apollo FFT Nextest passes 492/492, focused foreign-device execution passes 1/1, bounded FFT/NUFFT smoke completes in 7.8/5.9 seconds, doctests and warning-denied Rustdoc pass, and the standalone lock resolves 36 first-party Git sources. Focused SemVer reports exactly the intended constructor-arity and `NufftWgpuError::Fft` major breaks.
 - **Performance evidence:** the unchanged 100-observation retained instrument measures Type-1 1-D 0.151293 ms, Type-2 1-D 0.172448 ms, Type-1 3-D 0.120422 ms, and Type-2 3-D 1.37592 ms: 4.11% to 6.15% below the entry retained medians with disjoint confidence intervals. Per-call/retained ratios are 2,374.6x, 1,860.6x, 4,728.4x, and 370.0x. These measurements cover Apollo-managed preparation and dispatch only; WGPU/driver internals are not allocation-instrumented.
-- **Remaining closure:** PR #176 hosted gates, merge, and lease discharge.
+- **Closed 2026-08-29 by stale-claim takeover.** PR #176 merged 2026-08-29T02:10Z;
+  the Codex claim was last updated 2026-08-28 and never discharged. Verified by
+  re-running this item's own acceptance scan rather than trusting the claim:
+  no `GpuFft3d` or `GpuFft3dBuffers` reference remains in `crates/`. Lease
+  released.
 
 ## ATLAS-APOLLO-SMALL-SIZE-NEXT-2026-08-28 — Ranked small-size work [perf] — todo
 
