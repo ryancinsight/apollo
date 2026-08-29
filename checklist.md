@@ -25,7 +25,7 @@
       `7c063e27`; provider PR #234 is merged at `44754cd1`.
 - [x] Obtain independent GREEN review of the exact source and documentation
       candidates.
-- [ ] Deliver PR #176 through hosted gates, merge, synchronize closure
+- [x] Deliver PR #176 through hosted gates, merge, synchronize closure
       revisions, and discharge the lease.
 
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
