@@ -21,10 +21,12 @@
       and package-owned benchmark-smoke gates without extending their budgets.
 - [x] Pass the local feature matrix, value-semantic Nextest suites, doctests,
       warning-denied Rustdoc, residue checks, and SemVer classification.
-- [x] Commit exact Apollo candidate `f981908f`; provider PR #234 is merged at
-      `44754cd1` and its independent review is GREEN.
-- [ ] Obtain independent review of `f981908f`, deliver PR #176 through hosted
-      gates, merge, synchronize closure revisions, and discharge the lease.
+- [x] Commit source candidate `f981908f` and documentation correction
+      `7c063e27`; provider PR #234 is merged at `44754cd1`.
+- [x] Obtain independent GREEN review of the exact source and documentation
+      candidates.
+- [ ] Deliver PR #176 through hosted gates, merge, synchronize closure
+      revisions, and discharge the lease.
 
 ## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 [perf] — Codex
 
