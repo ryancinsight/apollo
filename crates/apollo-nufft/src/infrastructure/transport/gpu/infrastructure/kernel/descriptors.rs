@@ -5,7 +5,10 @@ use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use eunomia::Complex32;
-use hephaestus_core::{BindingDecl, KernelInterface, KernelSource, Wgsl};
+use hephaestus_core::{
+    BindingDecl, GroupedBindingDecl, GroupedKernelInterface, GroupedKernelSource, KernelInterface,
+    KernelSource, Wgsl,
+};
 
 pub(crate) const WORKGROUP_SIZE: u32 = 64;
 
@@ -177,22 +180,24 @@ impl<O> FastOneKernel<O> {
     }
 }
 
-impl<O: FastOperation> KernelInterface for FastOneKernel<O> {
+impl<O: FastOperation> GroupedKernelInterface for FastOneKernel<O> {
     type Params = FastNufftParams;
     const LABEL: &'static str = O::LABEL;
-    const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_only::<Complex32>(),
-        BindingDecl::read_only::<Complex32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_only::<Complex32>(),
-        BindingDecl::read_write::<Complex32>(),
-        BindingDecl::read_only::<Complex32>(),
+    const BINDINGS: &'static [GroupedBindingDecl] = &[
+        GroupedBindingDecl::read_only::<Complex32>(0, 0),
+        GroupedBindingDecl::read_only::<Complex32>(0, 1),
+        GroupedBindingDecl::read_write::<f32>(0, 2),
+        GroupedBindingDecl::read_write::<f32>(0, 3),
+        GroupedBindingDecl::read_only::<Complex32>(0, 4),
+        GroupedBindingDecl::read_write::<Complex32>(0, 5),
+        GroupedBindingDecl::read_only::<Complex32>(0, 6),
     ];
+    const PARAM_GROUP: u32 = 1;
+    const PARAM_BINDING: u32 = 0;
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<O: FastOperation> KernelSource<Wgsl> for FastOneKernel<O> {
+impl<O: FastOperation> GroupedKernelSource<Wgsl> for FastOneKernel<O> {
     const ENTRY: &'static str = O::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {
@@ -208,22 +213,24 @@ impl<O> FastThreeKernel<O> {
     }
 }
 
-impl<O: FastOperation> KernelInterface for FastThreeKernel<O> {
+impl<O: FastOperation> GroupedKernelInterface for FastThreeKernel<O> {
     type Params = FastNufftParams3D;
     const LABEL: &'static str = O::LABEL;
-    const BINDINGS: &'static [BindingDecl] = &[
-        BindingDecl::read_only::<Position3Pod>(),
-        BindingDecl::read_only::<Complex32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_write::<f32>(),
-        BindingDecl::read_only::<f32>(),
-        BindingDecl::read_write::<Complex32>(),
-        BindingDecl::read_only::<Complex32>(),
+    const BINDINGS: &'static [GroupedBindingDecl] = &[
+        GroupedBindingDecl::read_only::<Position3Pod>(0, 0),
+        GroupedBindingDecl::read_only::<Complex32>(0, 1),
+        GroupedBindingDecl::read_write::<f32>(0, 2),
+        GroupedBindingDecl::read_write::<f32>(0, 3),
+        GroupedBindingDecl::read_only::<f32>(0, 4),
+        GroupedBindingDecl::read_write::<Complex32>(0, 5),
+        GroupedBindingDecl::read_only::<Complex32>(0, 6),
     ];
+    const PARAM_GROUP: u32 = 1;
+    const PARAM_BINDING: u32 = 0;
     const WORKGROUP: [u32; 3] = [WORKGROUP_SIZE, 1, 1];
 }
 
-impl<O: FastOperation> KernelSource<Wgsl> for FastThreeKernel<O> {
+impl<O: FastOperation> GroupedKernelSource<Wgsl> for FastThreeKernel<O> {
     const ENTRY: &'static str = O::ENTRY;
 
     fn source(&self) -> Cow<'static, str> {

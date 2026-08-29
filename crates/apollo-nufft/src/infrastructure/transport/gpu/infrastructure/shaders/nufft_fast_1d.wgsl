@@ -45,7 +45,7 @@ var<storage, read_write> output_values: array<Complex32>;
 @group(0) @binding(6)
 var<storage, read> coefficients: array<Complex32>;
 
-@group(0) @binding(7)
+@group(1) @binding(0)
 var<uniform> params: FastNufftParams;
 
 fn signed_index(index: u32, len: u32) -> i32 {

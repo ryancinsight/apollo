@@ -56,7 +56,29 @@ provider selection.
 Apollo NUFFT consumers retaining `NufftGpuBuffers1D` or
 `NufftGpuBuffers3D` pass them by mutable reference to `with_buffers` methods.
 The exclusive borrow prevents overlapping writes and lets the workspace retain
-its host conversion capacity between calls.
+its host conversion capacity between calls. Construction also binds every
+spread/load/extract/interpolate pipeline to its fixed provider buffers and
+maximum-capacity dispatch grid. A warm call may change its logical sample
+count up to that capacity; it updates the retained parameter buffer and encodes
+the domain stages with the retained Hephaestus FFT in one grouped sequence.
+No warm bind-group construction is required.
+
+Buffer construction now consumes validated plan geometry instead of separate
+raw dimensions:
+
+```rust,ignore
+// Before
+NufftGpuBuffers1D::new(device, n, oversampled_len, max_samples)?;
+NufftGpuBuffers3D::new(device, shape, oversampled_shape, max_samples)?;
+
+// After
+NufftGpuBuffers1D::new(device, &plan_1d, max_samples)?;
+NufftGpuBuffers3D::new(device, &plan_3d, max_samples)?;
+```
+
+This is a breaking constructor migration: do not derive a second geometry
+beside the plan. Construction can now fail while preparing retained domain and
+FFT pipelines, reported through `NufftWgpuError::Provider`.
 
 Apollo STFT consumers retain `StftGpuBuffers` for one signal/frame/hop
 geometry. Internally the workspace prepares rank-two Hephaestus plans over
@@ -66,6 +88,15 @@ synthesis-window, and overlap-add kernels. The former Apollo radix-2 and
 Bluestein descriptors, shaders, chirp workspace, and six-binding device-limit
 request are removed. Hephaestus inverse normalization already applies
 `1/frame_len`, so consumer synthesis kernels must not scale again.
+
+The low-level `StftGpuKernel::execute_forward_fft`,
+`execute_forward_fft_with_buffers`, `execute_inverse`, and
+`execute_inverse_with_buffers` methods and the public `forward_chirp` and
+`inverse_chirp` modules are removed with that implementation. Import
+`FramedExecution` and call `execute_forward`, `execute_inverse`,
+`make_buffers`, `execute_forward_with_buffers`, or
+`execute_inverse_with_buffers` on `StftWgpuBackend`. No forwarding methods or
+module aliases remain.
 
 `NufftWgpuError::Fft` is removed with Apollo's dense WGPU FFT provider. Match
 `NufftWgpuError::Provider` for Hephaestus preparation, dispatch, allocation,

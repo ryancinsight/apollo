@@ -1,116 +1,20 @@
 //! Reusable typed accelerator buffers for the fast NUFFT paths.
 
+mod prepared;
+
 use eunomia::Complex32;
-use hephaestus_core::{
-    ComputeDevice, FftDirection, FftOperands, FftOps, KernelDevice, StridedView,
-};
-use hephaestus_wgpu::{
-    WgpuBuffer, WgpuCommandStream, WgpuDevice, WgpuFftOps, WgpuPrepared, WgpuPreparedFft,
-};
-use leto::Layout;
+use hephaestus_core::ComputeDevice;
+use hephaestus_wgpu::{WgpuBuffer, WgpuDevice, WgpuGroupedSequence};
 
 use super::configuration::{FastConfiguration1D, FastConfiguration3D};
-use super::descriptors::{
-    ExtractOne, ExtractThree, FastOneKernel, FastThreeKernel, InterpolateOne, InterpolateThree,
-    LoadOne, LoadThree, Position3Pod, SpreadOne, SpreadThree,
-};
+use super::descriptors::{FastNufftParams, FastNufftParams3D, Position3Pod};
+use super::fast_support::grid;
 use crate::infrastructure::transport::gpu::domain::error::{NufftWgpuError, NufftWgpuResult};
 use crate::infrastructure::transport::gpu::{NufftWgpuPlan1D, NufftWgpuPlan3D};
-
-struct PreparedFftPair<const R: usize> {
-    forward: WgpuPreparedFft<R>,
-    inverse: WgpuPreparedFft<R>,
-}
-
-impl<const R: usize> core::fmt::Debug for PreparedFftPair<R> {
-    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let Self {
-            forward: _,
-            inverse: _,
-        } = self;
-        formatter
-            .debug_struct("PreparedFftPair")
-            .field("forward", &"prepared")
-            .field("inverse", &"prepared")
-            .finish()
-    }
-}
-
-impl<const R: usize> PreparedFftPair<R> {
-    fn new(
-        device: &WgpuDevice,
-        real: &WgpuBuffer<f32>,
-        imaginary: &WgpuBuffer<f32>,
-        shape: [usize; R],
-    ) -> NufftWgpuResult<Self> {
-        let layout = Layout::c_contiguous(shape).map_err(|_| NufftWgpuError::InvalidPlan {
-            message: "oversampled FFT shape cannot form a dense layout",
-        })?;
-        let operands = || FftOperands {
-            real: StridedView::new(real, &layout),
-            imaginary: StridedView::new(imaginary, &layout),
-        };
-        let ops = WgpuFftOps;
-        Ok(Self {
-            forward: ops.prepare_fft(device, operands(), FftDirection::Forward)?,
-            inverse: ops.prepare_fft(device, operands(), FftDirection::Inverse)?,
-        })
-    }
-
-    fn encode_forward(
-        &self,
-        device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
-    ) -> NufftWgpuResult<()> {
-        Ok(WgpuFftOps.encode_fft(device, &self.forward, stream)?)
-    }
-
-    fn encode_inverse(
-        &self,
-        device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
-    ) -> NufftWgpuResult<()> {
-        Ok(WgpuFftOps.encode_fft(device, &self.inverse, stream)?)
-    }
-}
-
-#[derive(Debug)]
-pub(super) struct PreparedNufftKernels1D {
-    pub(super) spread: WgpuPrepared<FastOneKernel<SpreadOne>>,
-    pub(super) extract: WgpuPrepared<FastOneKernel<ExtractOne>>,
-    pub(super) load: WgpuPrepared<FastOneKernel<LoadOne>>,
-    pub(super) interpolate: WgpuPrepared<FastOneKernel<InterpolateOne>>,
-}
-
-impl PreparedNufftKernels1D {
-    fn new(device: &WgpuDevice) -> NufftWgpuResult<Self> {
-        Ok(Self {
-            spread: device.prepare(&FastOneKernel::<SpreadOne>::new())?,
-            extract: device.prepare(&FastOneKernel::<ExtractOne>::new())?,
-            load: device.prepare(&FastOneKernel::<LoadOne>::new())?,
-            interpolate: device.prepare(&FastOneKernel::<InterpolateOne>::new())?,
-        })
-    }
-}
-
-#[derive(Debug)]
-pub(super) struct PreparedNufftKernels3D {
-    pub(super) spread: WgpuPrepared<FastThreeKernel<SpreadThree>>,
-    pub(super) extract: WgpuPrepared<FastThreeKernel<ExtractThree>>,
-    pub(super) load: WgpuPrepared<FastThreeKernel<LoadThree>>,
-    pub(super) interpolate: WgpuPrepared<FastThreeKernel<InterpolateThree>>,
-}
-
-impl PreparedNufftKernels3D {
-    fn new(device: &WgpuDevice) -> NufftWgpuResult<Self> {
-        Ok(Self {
-            spread: device.prepare(&FastThreeKernel::<SpreadThree>::new())?,
-            extract: device.prepare(&FastThreeKernel::<ExtractThree>::new())?,
-            load: device.prepare(&FastThreeKernel::<LoadThree>::new())?,
-            interpolate: device.prepare(&FastThreeKernel::<InterpolateThree>::new())?,
-        })
-    }
-}
+use prepared::{
+    NufftKernelGrids, NufftKernelOperands, PreparedFftPair, PreparedNufftKernels1D,
+    PreparedNufftKernels3D,
+};
 
 /// Snapshot of a complex grid for diagnostics and value-semantic tests.
 #[cfg(any(test, feature = "diagnostics"))]
@@ -138,16 +42,17 @@ pub struct NufftGpuBuffers1D {
     pub(crate) position_buffer: WgpuBuffer<Complex32>,
     pub(crate) value_buffer: WgpuBuffer<Complex32>,
     pub(crate) deconv_buffer: WgpuBuffer<Complex32>,
+    #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) real_grid: WgpuBuffer<f32>,
+    #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) imaginary_grid: WgpuBuffer<f32>,
     pub(crate) output_buffer: WgpuBuffer<Complex32>,
     pub(crate) coefficient_buffer: WgpuBuffer<Complex32>,
-    pub(crate) padding_buffer: WgpuBuffer<Complex32>,
     pub(super) host_positions: Vec<Complex32>,
     pub(super) host_deconvolution: Vec<Complex32>,
     pub(super) host_readback: Vec<Complex32>,
     pub(super) configuration: FastConfiguration1D,
-    pub(super) kernels: PreparedNufftKernels1D,
+    kernels: PreparedNufftKernels1D,
     fft: PreparedFftPair<1>,
     /// Output Fourier-mode count.
     pub(crate) n: usize,
@@ -177,19 +82,46 @@ impl NufftGpuBuffers1D {
         let m = configuration.oversampled_len;
         let sample_capacity = max_samples.max(1);
         let output_capacity = n.max(max_samples).max(1);
+        let position_buffer = device.alloc_zeroed(sample_capacity)?;
+        let value_buffer = device.alloc_zeroed(sample_capacity)?;
+        let deconv_buffer = device.alloc_zeroed(n.max(1))?;
         let real_grid = device.alloc_zeroed(m.max(1))?;
         let imaginary_grid = device.alloc_zeroed(m.max(1))?;
+        let output_buffer = device.alloc_zeroed(output_capacity)?;
+        let coefficient_buffer = device.alloc_zeroed(n.max(1))?;
+        let padding_buffer = device.upload(&[Complex32::new(0.0, 0.0)])?;
         let fft = PreparedFftPair::new(device, &real_grid, &imaginary_grid, [m])?;
-        let kernels = PreparedNufftKernels1D::new(device)?;
+        let params = FastNufftParams::for_grid(n, m, 0, &configuration)?;
+        let operands = NufftKernelOperands {
+            positions: &position_buffer,
+            values: &value_buffer,
+            real: &real_grid,
+            imaginary: &imaginary_grid,
+            deconvolution: &deconv_buffer,
+            output: &output_buffer,
+        };
+        let kernels = PreparedNufftKernels1D::new(
+            device,
+            &operands,
+            &padding_buffer,
+            &coefficient_buffer,
+            &params,
+            NufftKernelGrids {
+                oversampled: grid(m)?,
+                modes: grid(n)?,
+                samples: grid(sample_capacity)?,
+            },
+        )?;
         Ok(Self {
-            position_buffer: device.alloc_zeroed(sample_capacity)?,
-            value_buffer: device.alloc_zeroed(sample_capacity)?,
-            deconv_buffer: device.alloc_zeroed(n.max(1))?,
+            position_buffer,
+            value_buffer,
+            deconv_buffer,
+            #[cfg(any(test, feature = "diagnostics"))]
             real_grid,
+            #[cfg(any(test, feature = "diagnostics"))]
             imaginary_grid,
-            output_buffer: device.alloc_zeroed(output_capacity)?,
-            coefficient_buffer: device.alloc_zeroed(n.max(1))?,
-            padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
+            output_buffer,
+            coefficient_buffer,
             host_positions: Vec::with_capacity(sample_capacity),
             host_deconvolution: Vec::with_capacity(n.max(1)),
             host_readback: vec![Complex32::new(0.0, 0.0); output_capacity],
@@ -204,18 +136,60 @@ impl NufftGpuBuffers1D {
 
     pub(crate) fn encode_forward(
         &self,
-        device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
-    ) -> NufftWgpuResult<()> {
-        self.fft.encode_forward(device, stream)
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.fft.encode_forward(sequence)
     }
 
     pub(crate) fn encode_inverse(
         &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.fft.encode_inverse(sequence)
+    }
+
+    pub(crate) fn update_type_one(
+        &mut self,
         device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
+        params: &FastNufftParams,
     ) -> NufftWgpuResult<()> {
-        self.fft.encode_inverse(device, stream)
+        self.kernels.update_type_one(device, params)
+    }
+
+    pub(crate) fn update_type_two(
+        &mut self,
+        device: &WgpuDevice,
+        params: &FastNufftParams,
+    ) -> NufftWgpuResult<()> {
+        self.kernels.update_type_two(device, params)
+    }
+
+    pub(crate) fn encode_spread(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.spread.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_extract(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.extract.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_load(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.load.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_interpolate(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.interpolate.encode_in_sequence(sequence)
     }
 
     pub(crate) fn write_coefficients(
@@ -238,16 +212,17 @@ pub struct NufftGpuBuffers3D {
     pub(crate) position_buffer: WgpuBuffer<Position3Pod>,
     pub(crate) value_buffer: WgpuBuffer<Complex32>,
     pub(crate) deconv_buffer: WgpuBuffer<f32>,
+    #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) real_grid: WgpuBuffer<f32>,
+    #[cfg(any(test, feature = "diagnostics"))]
     pub(crate) imaginary_grid: WgpuBuffer<f32>,
     pub(crate) output_buffer: WgpuBuffer<Complex32>,
     pub(crate) coefficient_buffer: WgpuBuffer<Complex32>,
-    pub(crate) padding_buffer: WgpuBuffer<Complex32>,
     pub(super) host_positions: Vec<Position3Pod>,
     pub(super) host_coefficients: Vec<Complex32>,
     pub(super) host_readback: Vec<Complex32>,
     pub(super) configuration: FastConfiguration3D,
-    pub(super) kernels: PreparedNufftKernels3D,
+    kernels: PreparedNufftKernels3D,
     fft: PreparedFftPair<3>,
     /// Output shape `(nx, ny, nz)`.
     pub(crate) shape: (usize, usize, usize),
@@ -298,24 +273,51 @@ impl NufftGpuBuffers3D {
             })?;
         let sample_capacity = max_samples.max(1);
         let output_capacity = mode_len.max(max_samples).max(1);
+        let position_buffer = device.alloc_zeroed(sample_capacity)?;
+        let value_buffer = device.alloc_zeroed(sample_capacity)?;
+        let deconv_buffer = device.alloc_zeroed(deconv_len.max(1))?;
         let real_grid = device.alloc_zeroed(grid_len.max(1))?;
         let imaginary_grid = device.alloc_zeroed(grid_len.max(1))?;
+        let output_buffer = device.alloc_zeroed(output_capacity)?;
+        let coefficient_buffer = device.alloc_zeroed(mode_len.max(1))?;
+        let padding_buffer = device.upload(&[Complex32::new(0.0, 0.0)])?;
         let fft = PreparedFftPair::new(
             device,
             &real_grid,
             &imaginary_grid,
             [oversampled.0, oversampled.1, oversampled.2],
         )?;
-        let kernels = PreparedNufftKernels3D::new(device)?;
+        let params = FastNufftParams3D::for_grid(shape, oversampled, 0, &configuration)?;
+        let operands = NufftKernelOperands {
+            positions: &position_buffer,
+            values: &value_buffer,
+            real: &real_grid,
+            imaginary: &imaginary_grid,
+            deconvolution: &deconv_buffer,
+            output: &output_buffer,
+        };
+        let kernels = PreparedNufftKernels3D::new(
+            device,
+            &operands,
+            &padding_buffer,
+            &coefficient_buffer,
+            &params,
+            NufftKernelGrids {
+                oversampled: grid(grid_len)?,
+                modes: grid(mode_len)?,
+                samples: grid(sample_capacity)?,
+            },
+        )?;
         Ok(Self {
-            position_buffer: device.alloc_zeroed(sample_capacity)?,
-            value_buffer: device.alloc_zeroed(sample_capacity)?,
-            deconv_buffer: device.alloc_zeroed(deconv_len.max(1))?,
+            position_buffer,
+            value_buffer,
+            deconv_buffer,
+            #[cfg(any(test, feature = "diagnostics"))]
             real_grid,
+            #[cfg(any(test, feature = "diagnostics"))]
             imaginary_grid,
-            output_buffer: device.alloc_zeroed(output_capacity)?,
-            coefficient_buffer: device.alloc_zeroed(mode_len.max(1))?,
-            padding_buffer: device.upload(&[Complex32::new(0.0, 0.0)])?,
+            output_buffer,
+            coefficient_buffer,
             host_positions: Vec::with_capacity(sample_capacity),
             host_coefficients: vec![Complex32::new(0.0, 0.0); mode_len],
             host_readback: vec![Complex32::new(0.0, 0.0); output_capacity],
@@ -330,18 +332,60 @@ impl NufftGpuBuffers3D {
 
     pub(crate) fn encode_forward(
         &self,
-        device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
-    ) -> NufftWgpuResult<()> {
-        self.fft.encode_forward(device, stream)
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.fft.encode_forward(sequence)
     }
 
     pub(crate) fn encode_inverse(
         &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.fft.encode_inverse(sequence)
+    }
+
+    pub(crate) fn update_type_one(
+        &mut self,
         device: &WgpuDevice,
-        stream: &mut WgpuCommandStream<'_>,
+        params: &FastNufftParams3D,
     ) -> NufftWgpuResult<()> {
-        self.fft.encode_inverse(device, stream)
+        self.kernels.update_type_one(device, params)
+    }
+
+    pub(crate) fn update_type_two(
+        &mut self,
+        device: &WgpuDevice,
+        params: &FastNufftParams3D,
+    ) -> NufftWgpuResult<()> {
+        self.kernels.update_type_two(device, params)
+    }
+
+    pub(crate) fn encode_spread(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.spread.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_extract(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.extract.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_load(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.load.encode_in_sequence(sequence)
+    }
+
+    pub(crate) fn encode_interpolate(
+        &self,
+        sequence: &mut WgpuGroupedSequence<'_>,
+    ) -> hephaestus_core::Result<()> {
+        self.kernels.interpolate.encode_in_sequence(sequence)
     }
 
     pub(crate) fn write_coefficients(

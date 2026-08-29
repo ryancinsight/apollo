@@ -23,25 +23,42 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `docs/MIGRATION_GPU_FFT.md`.
 - [major] `apollo-nufft` reusable WGPU buffers prepare and retain forward and
   inverse Hephaestus FFT plans, spread/load/extract/interpolate pipelines, and
-  Type-2 coefficient storage during construction. Reusable execution now takes
-  an exclusive mutable buffer borrow, preventing concurrent calls from
-  interleaving writes to one workspace, and retains host position/deconvolution
-  conversion capacity. Existing buffer constructors can now report typed
-  provider preparation failures before any dispatch; warm execution performs
-  no transient provider-buffer allocation, position/deconvolution conversion
-  allocation, pipeline preparation/compilation, or provider selection. The
-  obsolete `NufftWgpuError::Fft` variant is removed; provider failures now use
-  `NufftWgpuError::Provider(HephaestusError)`.
+  fixed dispatch grids, bind groups, parameter buffers, and Type-2 coefficient
+  storage during construction. Reusable execution now takes an exclusive
+  mutable buffer borrow, preventing concurrent calls from interleaving writes
+  to one workspace, and retains host position/deconvolution conversion
+  capacity. Each call updates only retained parameter storage and fixed data
+  buffers before encoding one grouped spread/FFT/extract or
+  load/IFFT/interpolate sequence. Existing buffer constructors can now report
+  typed provider preparation failures before any dispatch; warm execution
+  performs no transient provider-buffer allocation, position/deconvolution
+  conversion allocation, pipeline preparation/compilation, bind-group
+  construction, or provider selection. The obsolete `NufftWgpuError::Fft`
+  variant is removed; provider failures now use
+  `NufftWgpuError::Provider(HephaestusError)`. Migration: replace
+  `NufftGpuBuffers1D::new(device, n, m, max_samples)` and
+  `NufftGpuBuffers3D::new(device, shape, oversampled, max_samples)` with
+  `NufftGpuBuffers1D::new(device, &plan, max_samples)` and
+  `NufftGpuBuffers3D::new(device, &plan, max_samples)` respectively; the
+  validated plan is now the single geometry and preparation source.
+- [major] [arch] `apollo-stft` removes the public low-level
+  `StftGpuKernel::{execute_forward_fft, execute_forward_fft_with_buffers,
+  execute_inverse, execute_inverse_with_buffers}` methods and the
+  `forward_chirp`/`inverse_chirp` modules with their private radix-2 and
+  Bluestein implementation. Consumers call `FramedExecution` methods on
+  `StftWgpuBackend`; retained `StftGpuBuffers` prepare one rank-two Hephaestus
+  plan per direction over `[frame_count, frame_len]` with active axis 1.
+  Apollo retains framing, Hann conversion, interleave/deinterleave, synthesis
+  windowing, and weighted overlap-add. See ADR 0008 and
+  `docs/MIGRATION_GPU_FFT.md`.
 
 ### Changed
 
-- [patch] [arch] `apollo-stft` removes its private radix-2 and Bluestein
-  descriptors, shaders, and chirp workspace. One retained
-  `[frame_count, frame_len]` Hephaestus plan per direction transforms only axis
-  1; Apollo retains framing, Hann conversion, and weighted overlap-add. Both
-  power-of-two classes share one prepared path and one submission per forward
-  or inverse call. Reusable workspaces retain host upload/readback capacity and
-  two-input tests pin value correctness and storage identity. See ADR 0008.
+- [patch] [perf] Retained NUFFT WGPU workspaces now bind their four domain
+  stages once and update only parameter storage between calls. The unchanged
+  100-observation buffer-reuse instrument reduces warm medians by 4.11% to
+  6.15% across 1D/3D Type-1/Type-2 on the reference RTX 5080; every corrected
+  confidence interval is disjoint from its entry baseline. See ADR 0009.
 - [patch] NUFFT, STFT, and Radon benchmark executables now apply
   `APOLLO_BENCH_MODE`; their bounded smoke runs execute each production closure
   once instead of silently selecting the full measurement budget.

@@ -34,16 +34,20 @@ raw device or queue.
 
 Direct 1D/3D descriptors bind positions, complex source data, complex output,
 and one POD parameter block. Fast descriptors bind the seven canonical
-position/value/deconvolution/grid/output buffers plus parameters. The ordered
-command stream records spread or load, a prepared Hephaestus FFT, then extract
-or interpolate, establishing each device write-before-read dependency. Leto owns
-the CPU array/view boundary; accelerator storage is typed `f32` or
-`Complex32` and never aliases a Leto allocation.
+position/value/deconvolution/grid/output buffers plus parameters. Reusable
+construction binds those fixed resources and dispatch grids once. Each call
+updates the retained parameter buffer and records spread or load, a prepared
+Hephaestus FFT, then extract or interpolate in one grouped sequence,
+establishing each device write-before-read dependency without reconstructing
+bind groups. Leto owns the CPU array/view boundary; accelerator storage is
+typed `f32` or `Complex32` and never aliases a Leto allocation.
 
 `NufftGpuBuffers1D` and `NufftGpuBuffers3D` retain provider-owned reusable
 storage. Their Type-2 output capacity is `max(mode_count, sample_capacity)`,
 so a reusable Type-2 plan remains valid when it evaluates more non-uniform
-positions than Fourier modes.
+positions than Fourier modes. Logical sample count may vary between calls up
+to that construction-time capacity; the exclusive mutable borrow serializes
+parameter updates and submission through one workspace.
 
 ## Mathematical Contract
 

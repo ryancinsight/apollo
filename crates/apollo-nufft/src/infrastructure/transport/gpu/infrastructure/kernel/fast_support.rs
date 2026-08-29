@@ -1,7 +1,7 @@
 //! Shared typed-buffer preparation and transfer operations for fast NUFFT dispatch.
 
 use eunomia::Complex32;
-use hephaestus_core::{Binding, ComputeDevice, DeviceBuffer, DispatchGrid};
+use hephaestus_core::{ComputeDevice, DeviceBuffer, DispatchGrid};
 use hephaestus_wgpu::{WgpuBuffer, WgpuDevice};
 
 use super::{
@@ -60,36 +60,6 @@ impl FastNufftParams3D {
     }
 }
 
-pub(super) fn one_bindings<'a>(
-    buffers: &'a NufftGpuBuffers1D,
-    coefficients: &'a WgpuBuffer<Complex32>,
-) -> [Binding<'a, WgpuDevice>; 7] {
-    [
-        Binding::read(&buffers.position_buffer),
-        Binding::read(&buffers.value_buffer),
-        Binding::read_write(&buffers.real_grid),
-        Binding::read_write(&buffers.imaginary_grid),
-        Binding::read(&buffers.deconv_buffer),
-        Binding::read_write(&buffers.output_buffer),
-        Binding::read(coefficients),
-    ]
-}
-
-pub(super) fn three_bindings<'a>(
-    buffers: &'a NufftGpuBuffers3D,
-    coefficients: &'a WgpuBuffer<Complex32>,
-) -> [Binding<'a, WgpuDevice>; 7] {
-    [
-        Binding::read(&buffers.position_buffer),
-        Binding::read(&buffers.value_buffer),
-        Binding::read_write(&buffers.real_grid),
-        Binding::read_write(&buffers.imaginary_grid),
-        Binding::read(&buffers.deconv_buffer),
-        Binding::read_write(&buffers.output_buffer),
-        Binding::read(coefficients),
-    ]
-}
-
 pub(super) fn write_one_type1_buffers(
     device: &WgpuDevice,
     buffers: &NufftGpuBuffers1D,
@@ -146,6 +116,7 @@ pub(super) fn copy_real_as_complex(output: &mut Vec<Complex32>, values: &[f32], 
     );
 }
 
+#[cfg(any(test, feature = "diagnostics"))]
 pub(super) fn product(shape: (usize, usize, usize)) -> NufftWgpuResult<usize> {
     shape
         .0
@@ -222,4 +193,68 @@ fn snapshot(
 
 fn dimension(value: usize, name: &'static str) -> NufftWgpuResult<u32> {
     u32::try_from(value).map_err(|_| NufftWgpuError::InvalidPlan { message: name })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{copy_positions_as_complex, copy_positions_as_pod, copy_real_as_complex};
+    use crate::infrastructure::transport::gpu::verification::count_allocations;
+    use eunomia::Complex32;
+
+    #[test]
+    fn retained_host_conversions_allocate_nothing() {
+        let mut one_positions = Vec::with_capacity(4);
+        copy_positions_as_complex(&mut one_positions, &[0.0, 0.25, 0.5, 0.75]);
+        let one_pointer = one_positions.as_ptr();
+        let one_capacity = one_positions.capacity();
+
+        let mut three_positions = Vec::with_capacity(3);
+        copy_positions_as_pod(
+            &mut three_positions,
+            &[(0.0, 0.25, 0.5), (0.75, 1.0, 1.25), (1.5, 1.75, 2.0)],
+        );
+        let three_pointer = three_positions.as_ptr();
+        let three_capacity = three_positions.capacity();
+
+        let mut deconvolution = Vec::with_capacity(4);
+        copy_real_as_complex(&mut deconvolution, &[1.0, 2.0, 3.0, 4.0], 1.0);
+        let deconvolution_pointer = deconvolution.as_ptr();
+        let deconvolution_capacity = deconvolution.capacity();
+
+        let ((), allocations) = count_allocations(|| {
+            copy_positions_as_complex(&mut one_positions, &[0.125, 0.625]);
+            copy_positions_as_pod(
+                &mut three_positions,
+                &[(0.125, 0.375, 0.625), (0.875, 1.125, 1.375)],
+            );
+            copy_real_as_complex(&mut deconvolution, &[1.5, 2.5, 3.5], 2.0);
+        });
+
+        assert_eq!(allocations, 0, "retained host conversion allocated");
+        assert_eq!(
+            one_positions,
+            [Complex32::new(0.125, 0.0), Complex32::new(0.625, 0.0)]
+        );
+        assert_eq!(three_positions.len(), 2);
+        assert_eq!(three_positions[0].x, 0.125);
+        assert_eq!(three_positions[0].y, 0.375);
+        assert_eq!(three_positions[0].z, 0.625);
+        assert_eq!(three_positions[1].x, 0.875);
+        assert_eq!(three_positions[1].y, 1.125);
+        assert_eq!(three_positions[1].z, 1.375);
+        assert_eq!(
+            deconvolution,
+            [
+                Complex32::new(3.0, 0.0),
+                Complex32::new(5.0, 0.0),
+                Complex32::new(7.0, 0.0)
+            ]
+        );
+        assert_eq!(one_positions.as_ptr(), one_pointer);
+        assert_eq!(one_positions.capacity(), one_capacity);
+        assert_eq!(three_positions.as_ptr(), three_pointer);
+        assert_eq!(three_positions.capacity(), three_capacity);
+        assert_eq!(deconvolution.as_ptr(), deconvolution_pointer);
+        assert_eq!(deconvolution.capacity(), deconvolution_capacity);
+    }
 }

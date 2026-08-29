@@ -1,7 +1,7 @@
 //! Reusable-buffer capacity and value-equivalence contracts.
 
 use eunomia::Complex32;
-use leto::{Array3, Layout, VecStorage};
+use leto::{Array3, Layout, Storage, VecStorage};
 
 use crate::{
     infrastructure::transport::gpu::{
@@ -70,6 +70,53 @@ fn fast_type1_reusable_1d_rejects_sample_capacity_overflow() {
 }
 
 #[test]
+fn fast_type1_reusable_1d_updates_logical_sample_count() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    let plan = NufftWgpuPlan1D::new(UniformDomain1D::new(8, 0.25).expect("domain"), 2, 6);
+    let first_positions = [0.0_f32, 0.25, 0.5, 0.75];
+    let first_values = [
+        Complex32::new(1.0, 0.0),
+        Complex32::new(-0.25, 0.5),
+        Complex32::new(0.75, -0.5),
+        Complex32::new(0.125, 0.25),
+    ];
+    let second_positions = [0.1_f32, 0.6];
+    let second_values = [Complex32::new(-0.5, 0.25), Complex32::new(0.75, 0.125)];
+    let expected_first = backend
+        .execute_fast_type1_1d(&plan, &first_positions, &first_values)
+        .expect("first per-call fast type1");
+    let expected_second = backend
+        .execute_fast_type1_1d(&plan, &second_positions, &second_values)
+        .expect("second per-call fast type1");
+    let mut buffers = NufftGpuBuffers1D::new(backend.device(), &plan, first_positions.len())
+        .expect("provider buffer allocation");
+    let mut actual = vec![eunomia::Complex64::new(0.0, 0.0); expected_first.len()];
+
+    backend
+        .execute_fast_type1_1d_with_buffers(
+            &mut buffers,
+            &first_positions,
+            &first_values,
+            &mut actual,
+        )
+        .expect("first reusable fast type1");
+    assert_eq!(actual, expected_first.storage().as_slice());
+
+    backend
+        .execute_fast_type1_1d_with_buffers(
+            &mut buffers,
+            &second_positions,
+            &second_values,
+            &mut actual,
+        )
+        .expect("second reusable fast type1");
+    assert_eq!(actual, expected_second.storage().as_slice());
+    assert_ne!(expected_first, expected_second);
+}
+
+#[test]
 fn fast_type2_reusable_1d_supports_more_samples_than_modes() {
     let Some(backend) = backend() else {
         return;
@@ -98,6 +145,21 @@ fn fast_type2_reusable_1d_supports_more_samples_than_modes() {
         .execute_fast_type2_1d_with_buffers(&mut buffers, &coefficients, &positions, &mut actual)
         .expect("reusable fast type2");
     assert_eq!(actual, expected);
+
+    let shorter_positions = &positions[..5];
+    let expected_shorter = backend
+        .execute_fast_type2_1d(&plan, &coefficients, shorter_positions)
+        .expect("shorter per-call fast type2");
+    let mut actual_shorter = vec![eunomia::Complex64::new(0.0, 0.0); shorter_positions.len()];
+    backend
+        .execute_fast_type2_1d_with_buffers(
+            &mut buffers,
+            &coefficients,
+            shorter_positions,
+            &mut actual_shorter,
+        )
+        .expect("shorter reusable fast type2");
+    assert_eq!(actual_shorter, expected_shorter);
 }
 
 #[test]
@@ -122,6 +184,53 @@ fn fast_type1_reusable_3d_rejects_sample_capacity_overflow() {
 }
 
 #[test]
+fn fast_type1_reusable_3d_updates_logical_sample_count() {
+    let Some(backend) = backend() else {
+        return;
+    };
+    let grid = grid3d();
+    let plan = NufftWgpuPlan3D::new(grid, 2, 6);
+    let first_positions = positions3d();
+    let first_values = [
+        Complex32::new(1.0, 0.0),
+        Complex32::new(-0.25, 0.5),
+        Complex32::new(0.75, -0.5),
+    ];
+    let second_positions = [(0.15_f32, 0.3, 0.45)];
+    let second_values = [Complex32::new(-0.5, 0.25)];
+    let expected_first = backend
+        .execute_fast_type1_3d(&plan, &first_positions, &first_values)
+        .expect("first per-call fast type1");
+    let expected_second = backend
+        .execute_fast_type1_3d(&plan, &second_positions, &second_values)
+        .expect("second per-call fast type1");
+    let mut buffers = NufftGpuBuffers3D::new(backend.device(), &plan, first_positions.len())
+        .expect("provider buffer allocation");
+    let mut actual = vec![eunomia::Complex64::new(0.0, 0.0); expected_first.len()];
+
+    backend
+        .execute_fast_type1_3d_with_buffers(
+            &mut buffers,
+            &first_positions,
+            &first_values,
+            &mut actual,
+        )
+        .expect("first reusable fast type1");
+    assert_eq!(actual, expected_first.storage().as_slice());
+
+    backend
+        .execute_fast_type1_3d_with_buffers(
+            &mut buffers,
+            &second_positions,
+            &second_values,
+            &mut actual,
+        )
+        .expect("second reusable fast type1");
+    assert_eq!(actual, expected_second.storage().as_slice());
+    assert_ne!(expected_first, expected_second);
+}
+
+#[test]
 fn fast_type2_reusable_3d_matches_per_call_execution() {
     let Some(backend) = backend() else {
         return;
@@ -140,6 +249,21 @@ fn fast_type2_reusable_3d_matches_per_call_execution() {
         .execute_fast_type2_3d_with_buffers(&mut buffers, &modes, &positions, &mut actual)
         .expect("reusable fast type2");
     assert_eq!(actual, expected);
+
+    let shorter_positions = &positions[..2];
+    let expected_shorter = backend
+        .execute_fast_type2_3d(&plan, &modes, shorter_positions)
+        .expect("shorter per-call fast type2");
+    let mut actual_shorter = vec![eunomia::Complex64::new(0.0, 0.0); shorter_positions.len()];
+    backend
+        .execute_fast_type2_3d_with_buffers(
+            &mut buffers,
+            &modes,
+            shorter_positions,
+            &mut actual_shorter,
+        )
+        .expect("shorter reusable fast type2");
+    assert_eq!(actual_shorter, expected_shorter);
 }
 
 #[test]

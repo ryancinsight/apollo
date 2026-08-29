@@ -58,7 +58,7 @@ var<storage, read_write> output_values: array<Complex32>;
 @group(0) @binding(6)
 var<storage, read> coefficients: array<Complex32>;
 
-@group(0) @binding(7)
+@group(1) @binding(0)
 var<uniform> params: FastNufftParams3D;
 
 // Modified Bessel function I_0(x) via convergent series.

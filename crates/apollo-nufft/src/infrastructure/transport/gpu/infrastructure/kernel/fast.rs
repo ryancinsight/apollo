@@ -1,15 +1,15 @@
 //! Kaiser--Bessel spread/FFT/extract and load/IFFT/interpolate dispatch.
 
 use eunomia::Complex32;
-use hephaestus_core::{CommandStream, KernelDevice};
+use hephaestus_core::{GroupedCommandStream, GroupedKernelDevice};
 use hephaestus_wgpu::WgpuDevice;
 
 use super::{
     buffers::{ensure_sample_capacity, NufftGpuBuffers1D, NufftGpuBuffers3D},
     descriptors::{FastNufftParams, FastNufftParams3D},
     fast_support::{
-        copy_positions_as_complex, copy_positions_as_pod, copy_real_as_complex, download, grid,
-        one_bindings, product, three_bindings, write_one_type1_buffers, write_three_type1_buffers,
+        copy_positions_as_complex, copy_positions_as_pod, copy_real_as_complex, download,
+        write_one_type1_buffers, write_three_type1_buffers,
     },
     NufftGpuKernel,
 };
@@ -48,24 +48,14 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
-        {
-            let bindings = one_bindings(buffers, &buffers.padding_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(
-                &buffers.kernels.spread,
-                &bindings,
-                &params,
-                grid(buffers.m)?,
-            )?;
-            buffers.encode_forward(device, &mut stream)?;
-            stream.encode(
-                &buffers.kernels.extract,
-                &bindings,
-                &params,
-                grid(buffers.n)?,
-            )?;
-            stream.submit()?;
-        }
+        buffers.update_type_one(device, &params)?;
+        let mut stream = device.grouped_stream()?;
+        stream.encode_grouped_sequence("apollo-nufft-fast-type1-1d", |sequence| {
+            buffers.encode_spread(sequence)?;
+            buffers.encode_forward(sequence)?;
+            buffers.encode_extract(sequence)
+        })?;
+        stream.submit_grouped()?;
         download(device, &buffers.output_buffer, &mut buffers.host_readback)
     }
 
@@ -89,19 +79,14 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
-        {
-            let bindings = one_bindings(buffers, &buffers.coefficient_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(&buffers.kernels.load, &bindings, &params, grid(buffers.m)?)?;
-            buffers.encode_inverse(device, &mut stream)?;
-            stream.encode(
-                &buffers.kernels.interpolate,
-                &bindings,
-                &params,
-                grid(positions.len())?,
-            )?;
-            stream.submit()?;
-        }
+        buffers.update_type_two(device, &params)?;
+        let mut stream = device.grouped_stream()?;
+        stream.encode_grouped_sequence("apollo-nufft-fast-type2-1d", |sequence| {
+            buffers.encode_load(sequence)?;
+            buffers.encode_inverse(sequence)?;
+            buffers.encode_interpolate(sequence)
+        })?;
+        stream.submit_grouped()?;
         download(device, &buffers.output_buffer, &mut buffers.host_readback)
     }
 
@@ -126,21 +111,14 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
-        let grid_len = product(buffers.oversampled)?;
-        let output_len = product(buffers.shape)?;
-        {
-            let bindings = three_bindings(buffers, &buffers.padding_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(&buffers.kernels.spread, &bindings, &params, grid(grid_len)?)?;
-            buffers.encode_forward(device, &mut stream)?;
-            stream.encode(
-                &buffers.kernels.extract,
-                &bindings,
-                &params,
-                grid(output_len)?,
-            )?;
-            stream.submit()?;
-        }
+        buffers.update_type_one(device, &params)?;
+        let mut stream = device.grouped_stream()?;
+        stream.encode_grouped_sequence("apollo-nufft-fast-type1-3d", |sequence| {
+            buffers.encode_spread(sequence)?;
+            buffers.encode_forward(sequence)?;
+            buffers.encode_extract(sequence)
+        })?;
+        stream.submit_grouped()?;
         download(device, &buffers.output_buffer, &mut buffers.host_readback)
     }
 
@@ -163,20 +141,14 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
-        let grid_len = product(buffers.oversampled)?;
-        {
-            let bindings = three_bindings(buffers, &buffers.coefficient_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(&buffers.kernels.load, &bindings, &params, grid(grid_len)?)?;
-            buffers.encode_inverse(device, &mut stream)?;
-            stream.encode(
-                &buffers.kernels.interpolate,
-                &bindings,
-                &params,
-                grid(positions.len())?,
-            )?;
-            stream.submit()?;
-        }
+        buffers.update_type_two(device, &params)?;
+        let mut stream = device.grouped_stream()?;
+        stream.encode_grouped_sequence("apollo-nufft-fast-type2-3d", |sequence| {
+            buffers.encode_load(sequence)?;
+            buffers.encode_inverse(sequence)?;
+            buffers.encode_interpolate(sequence)
+        })?;
+        stream.submit_grouped()?;
         download(device, &buffers.output_buffer, &mut buffers.host_readback)
     }
 
@@ -201,24 +173,26 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
+        buffers.update_type_two(device, &params)?;
         let (after_load, after_ifft) = {
-            let bindings = one_bindings(buffers, &buffers.coefficient_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(&buffers.kernels.load, &bindings, &params, grid(buffers.m)?)?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream.encode_grouped_sequence("apollo-nufft-diagnostics-load-1d", |sequence| {
+                buffers.encode_load(sequence)
+            })?;
+            stream.submit_grouped()?;
             let after_load = snapshot_one(device, buffers)?;
-            let mut stream = device.stream()?;
-            buffers.encode_inverse(device, &mut stream)?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream.encode_grouped_sequence("apollo-nufft-diagnostics-ifft-1d", |sequence| {
+                buffers.encode_inverse(sequence)
+            })?;
+            stream.submit_grouped()?;
             let after_ifft = snapshot_one(device, buffers)?;
-            let mut stream = device.stream()?;
-            stream.encode(
-                &buffers.kernels.interpolate,
-                &bindings,
-                &params,
-                grid(positions.len())?,
-            )?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream
+                .encode_grouped_sequence("apollo-nufft-diagnostics-interpolate-1d", |sequence| {
+                    buffers.encode_interpolate(sequence)
+                })?;
+            stream.submit_grouped()?;
             (after_load, after_ifft)
         };
         download(device, &buffers.output_buffer, &mut buffers.host_readback)?;
@@ -248,25 +222,26 @@ impl NufftGpuKernel {
             positions.len(),
             &buffers.configuration,
         )?;
-        let grid_len = product(buffers.oversampled)?;
+        buffers.update_type_two(device, &params)?;
         let (after_load, after_ifft) = {
-            let bindings = three_bindings(buffers, &buffers.coefficient_buffer);
-            let mut stream = device.stream()?;
-            stream.encode(&buffers.kernels.load, &bindings, &params, grid(grid_len)?)?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream.encode_grouped_sequence("apollo-nufft-diagnostics-load-3d", |sequence| {
+                buffers.encode_load(sequence)
+            })?;
+            stream.submit_grouped()?;
             let after_load = snapshot_three(device, buffers)?;
-            let mut stream = device.stream()?;
-            buffers.encode_inverse(device, &mut stream)?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream.encode_grouped_sequence("apollo-nufft-diagnostics-ifft-3d", |sequence| {
+                buffers.encode_inverse(sequence)
+            })?;
+            stream.submit_grouped()?;
             let after_ifft = snapshot_three(device, buffers)?;
-            let mut stream = device.stream()?;
-            stream.encode(
-                &buffers.kernels.interpolate,
-                &bindings,
-                &params,
-                grid(positions.len())?,
-            )?;
-            stream.submit()?;
+            let mut stream = device.grouped_stream()?;
+            stream
+                .encode_grouped_sequence("apollo-nufft-diagnostics-interpolate-3d", |sequence| {
+                    buffers.encode_interpolate(sequence)
+                })?;
+            stream.submit_grouped()?;
             (after_load, after_ifft)
         };
         download(device, &buffers.output_buffer, &mut buffers.host_readback)?;
