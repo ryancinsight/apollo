@@ -1248,3 +1248,44 @@ fn forward_rejects_length_mismatch_f32() {
     let mut data = signal32(8);
     plan.forward_complex_slice_inplace(&mut data);
 }
+
+/// Lengths with no correct route must fail at plan construction rather than
+/// return corrupt output.
+///
+/// `361 = 19^2` is rejected by `factorize_composite` (19 is above the
+/// supported radix set) and has no coprime split, so every strategy arm
+/// declines it and the fallback reached Rader — whose primality precondition
+/// is guarded only by a `debug_assert`, so release builds computed silently
+/// wrong results. Measured before this guard: a forward-then-normalized-inverse
+/// round trip at 361 returned a maximum error of 2.019e1 against an input of
+/// order 1, and `apollo-dctdst`'s DCT-II at 361 (which routes through a
+/// 722-point FFT) returned relative error 1.0101 — output uncorrelated with
+/// the truth, reported as success.
+#[test]
+#[should_panic(expected = "no correct route for length 361")]
+fn composite_length_without_a_correct_route_is_rejected() {
+    let _ = FftPlan1D::<f64>::new(Shape1D::new(361).expect("shape"));
+}
+
+/// The guard must reject only what is genuinely unroutable: the neighbours of
+/// an affected length, and a prime that Rader legitimately serves, still plan
+/// and round-trip.
+#[test]
+fn lengths_adjacent_to_the_rejected_route_still_round_trip() {
+    for n in [360usize, 362, 359] {
+        let plan = FftPlan1D::<f64>::new(Shape1D::new(n).expect("shape"));
+        let original = signal64(n);
+        let mut data = original.clone();
+        plan.forward_complex_slice_inplace(&mut data);
+        plan.inverse_complex_slice_inplace(&mut data);
+        let max_err = original
+            .iter()
+            .zip(data.iter())
+            .map(|(a, b)| (*a - *b).norm())
+            .fold(0.0f64, f64::max);
+        assert!(
+            max_err <= 1.0e-10,
+            "round trip at n = {n} drifted by {max_err:e}"
+        );
+    }
+}
