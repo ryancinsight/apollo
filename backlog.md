@@ -2227,11 +2227,20 @@
   item is closed as a stale/duplicate root-cause report rather than as a new
   optimization.
 
-## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — todo
+## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — in-progress
 
-- Owner: unclaimed; scope: the Rader kernel (`rader_fft`) for small primes and
-  the codegen of its `Complex32` instantiation. Kernel selection policy, the
+- Owner: Codex session `01a03eb2-6f0a-7301-9290-55b918675e48`; scope: the
+  Rader kernel (`rader_fft`) for small primes and the codegen of its
+  `Complex32` instantiation. Kernel selection policy, the
   Winograd-pair path, GPU transports, and sizes above 53 are non-goals.
+- **Integrator:** Codex session `01a03eb2-6f0a-7301-9290-55b918675e48`;
+  **lease:** `components/rader/{mod.rs,static_rader.rs}` and focused Rader
+  value/codegen tests; last update 2026-08-29.
+- **Bounded experiment:** isolate the small-prime gather/staging loop shape
+  that makes the `f32` instantiation spill or fail to vectorize, verify release
+  assembly, then run the unchanged counterbalanced N=19/23/29/31 instrument.
+  Reject the candidate on any f64 regression or if f32 remains slower; do not
+  alter routing, benchmark inputs, sampling, or timed regions.
 - Outcome: `f32` Rader time is at most `f64` Rader time at equal N. `f32` moves
   half the bytes per element and admits twice the SIMD lane count, so the
   inversion is a codegen or layout defect, not a precision cost.
