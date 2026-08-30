@@ -216,12 +216,24 @@ fn cache_initialization_fits_standard_stack() {
 }
 
 #[test]
-fn rader_bluestein_policy_is_scalar_trait_driven() {
-    assert!(super::prefers_bluestein_for_rader::<f32>(67));
-    assert!(super::prefers_bluestein_for_rader::<f32>(193));
-    assert!(super::prefers_bluestein_for_rader::<f32>(257));
-    assert!(!super::prefers_bluestein_for_rader::<f64>(193));
-    assert!(!super::prefers_bluestein_for_rader::<f64>(257));
+fn rader_bluestein_policy_follows_the_convolution_shape() {
+    // The selection depends on `m = n - 1`, not on the scalar, so both
+    // precisions must answer identically for every length. A per-scalar bias
+    // here cost a four-byte scalar up to 6.6x; see the function's own note.
+    for n in [67usize, 113, 193, 257, 131, 401, 61, 71] {
+        assert_eq!(
+            super::prefers_bluestein_for_rader::<f32>(n),
+            super::prefers_bluestein_for_rader::<f64>(n),
+            "length {n}: the Bluestein choice must not depend on the scalar"
+        );
+    }
+
+    // `m` past the threshold, and `m` that no supported radix set factors,
+    // are the two shapes the cyclic backends cannot serve well.
+    assert!(super::prefers_bluestein_for_rader::<f32>(2053));
+    assert!(super::prefers_bluestein_for_rader::<f64>(60)); // m = 59, prime
+    assert!(!super::prefers_bluestein_for_rader::<f64>(193)); // m = 192 = 2^6*3
+    assert!(!super::prefers_bluestein_for_rader::<f32>(257)); // m = 256
 }
 
 #[test]

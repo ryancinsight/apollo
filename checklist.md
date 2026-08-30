@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## PERF-F32-SMALL-PRIME-001 [perf] — Codex
+
+- [x] Reconfirm the current production Rader path, prior assembly diagnosis,
+      benchmark workload, and disjoint ownership against `origin/main`.
+- [ ] Attribute the f32-only small-prime inversion to one production loop and
+      implement the smallest canonical loop-shape correction.
+- [ ] Verify independent Rader value semantics and warning-denied release
+      codegen for f32/f64 without changing route selection.
+- [ ] Run the unchanged counterbalanced N=19/23/29/31 comparison on a quiet
+      host; retain only a candidate with f32 at or below f64 and no f64
+      regression.
+- [ ] Synchronize CHANGELOG, gap audit, backlog evidence, review the exact
+      diff, and deliver the branch through merge.
+
 ## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 [major] [arch] [perf] — Codex
 
 - [x] Delete Apollo's duplicate dense WGPU FFT implementation, shaders,

@@ -57,9 +57,6 @@ pub trait MixedRadixScalar:
     /// Whether N=72 is forced to the composite route for this scalar.
     const FORCE_COMPOSITE_72: bool;
 
-    /// Whether runtime Rader should prefer Bluestein for f32-sized mid primes.
-    const PREFER_BLUESTEIN_MID_RADER: bool;
-
     /// Whether N=64 takes the register-resident 8x8 base route for this scalar.
     ///
     /// That kernel is built on four-lane vectors. Four lanes is a whole vector

@@ -2255,119 +2255,73 @@
   item is closed as a stale/duplicate root-cause report rather than as a new
   optimization.
 
-## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — todo
+## PERF-F32-SMALL-PRIME-001 — `f32` slower than `f64` on the Rader path [patch] — done 2026-08-29 by takeover
 
-- Owner: unclaimed; scope: the Rader kernel (`rader_fft`) for small primes and
-  the codegen of its `Complex32` instantiation. Kernel selection policy, the
-  Winograd-pair path, GPU transports, and sizes above 53 are non-goals.
-- Outcome: `f32` Rader time is at most `f64` Rader time at equal N. `f32` moves
-  half the bytes per element and admits twice the SIMD lane count, so the
-  inversion is a codegen or layout defect, not a precision cost.
-- Scope correction (2026-08-13): this item first also claimed an N=31
-  Winograd-pair regression. That row is **retracted**. The `kernel_strategy`
-  bench reaches the Winograd path through
-  `benchmark_kernels::winograd_pair_prime_forward`, whose
-  `dispatch_winograd_pair_prime!` macro calls the interleaved (AoS)
-  `dft_pair_impl` for whatever `F` it is given. Production `f32` at N=31 does
-  not take that route: `ShortWinogradScalar for f32` sends `dft31` to the
-  split-array (SoA) `dft_pair_impl_reduced` instead — a deliberate, measured
-  narrowing recorded under Closure CVXII, which found SoA 87.31 ns against an
-  AoS probe at 107.39 ns. The bench therefore measured exactly the path that
-  special case exists to avoid, and the slow AoS `f32`/31 number is the
-  premise of that decision rather than evidence against it. The Rader rows are
-  unaffected: `rader_prime_forward` calls the production `rader_fft` with no
-  per-type special-casing.
-- Evidence (measured, this tree, `kernel_strategy` release bench, quiet host
-  verified at 0 concurrent `cargo`/`rustc` processes, 100 ordered samples per
-  case). Reported as `min` and `median [lower, upper]` in ns, because one f64
-  case is bimodal and its median alone would overstate precision:
+- **Fixed, and the premise was misaimed.** The item scoped itself to "small
+  primes" and named an N=19/23/29/31 instrument. Those four lengths never reach
+  Rader: they are all in `SHORT_WINOGRAD_SIZES`, and the plan takes that arm for
+  `n <= 64`. Probed directly — 19, 23, 29, 31 route to `ShortWinograd`; 59, 61,
+  67, 71 route to `Rader`. The designed instrument could not have moved, which
+  is why the candidate measured as a no-op on it.
+- **Real cause: a per-scalar routing bias, not codegen.**
+  `prefers_bluestein_for_rader` carried
+  `F::PREFER_BLUESTEIN_MID_RADER && (n == 113 || n == 67 || m >= 128)`, which
+  sent every four-byte-scalar prime with `m >= 128`, plus 67 and 113 by name,
+  down the Bluestein convolution. Its comment said this was to fix that scalar
+  being slow on this path. It was causing it.
+- **Measured** (interleaved in one process so both precisions meet identical
+  core and thermal state; best of 150 blocks; four-byte scalar, bias on -> off):
 
-  | case | `f64` min | `f64` median | `f32` min | `f32` median |
-  | --- | ---: | ---: | ---: | ---: |
-  | N=19 Rader | 54 | 79 [79, 80] | 122 | 135 [130, 136] |
-  | N=19 Winograd pair | 29 | 51 [51, 52] | 51 | 53 [53, 53] |
-  | N=31 Rader | 73 | 105 [104, 108] | 123 | 125 [125, 127] |
-  | N=31 Winograd pair | 61 | 96 [74, 115] | 132 | 149 [148, 151] |
-  | N=53 Rader | 202 | 256 [255, 258] | 221 | 251 [249, 254] |
-  | N=53 Winograd pair | 233 | 305 [304, 306] | 217 | 251 [251, 252] |
+  | n | with bias | without | change |
+  |---|---|---|---|
+  | 67 | 2059 ns | 407 ns | 5.06x |
+  | 113 | 4137 ns | 625 ns | 6.61x |
+  | 131 | 4322 ns | 1009 ns | 4.28x |
+  | 137 | 4311 ns | 1021 ns | 4.22x |
+  | 197 | 4358 ns | 1060 ns | 4.11x |
+  | 257 | 4377 ns | 2237 ns | 1.96x |
+  | 401 | 8587 ns | 1296 ns | 6.63x |
+  | 521 | 5525 ns | 3293 ns | 1.68x |
 
-  Reading, with confidence stated per row rather than one blanket ratio:
-  - **N=19 Rader and N=31 Rader are the item.** Both distributions are tight
-    and both exercise the production kernel: `f32` 1.71x and 1.19x slower.
-  - N=31 Winograd pair is retracted per the scope correction above — not a
-    production `f32` path, and its `f64` median is bimodal ([74, 115]) besides.
-  - N=19 Winograd pair is near parity (51 vs 53) and N=53 reverses in both
-    kernels, so the Winograd path shows no defect where the bench and
-    production agree.
-  Minima are the least contamination-prone statistic here and agree with the
-  medians on direction in every row.
-  The Rader inversion is localized to small N and closes by N=53, which points
-  at per-call setup or a failed `Complex32` autovectorization rather than at
-  the arithmetic itself.
-- Re-measurement note: any confirming or refuting run must re-verify the quiet
-  host first. Concurrent stack builds contend on the shared Atlas target and
-  contaminate timings; a run taken under peer load is not evidence either way.
-- Ruled out already, by reading rather than guessing. Apollo does carry real
-  per-type divergences on this path, so each was checked against the sizes
-  actually measured rather than dismissed generically:
-  - Widening: `rader_fft` and `dft_pair_impl` are generic over `F` with no
-    widen-compute-narrow anywhere on the path.
-  - Per-call table conversion: `impl_prime_pair_table!` emits `static`
-    `[[f32; H]; H]` and `[[f64; H]; H]` literal arrays, and `cos_table` /
-    `sin_table` return `&'static` references to them for both types.
-  - Dispatch asymmetry at entry: `rader_prime_forward` reaches
-    `rader_fft::<F, INVERSE>` with no per-type branch.
-  - **Convolution-backend selection.** `prefers_bluestein_for_rader` carries an
-    explicit `f32` bias, but its own predicate does not fire at these sizes:
-    N=19 has `m=18` (prime-2/3-smooth, `< 128`, not 67/113) so neither type
-    takes Bluestein, and N=31 has `m=30` (factor 5, so not smooth) which sends
-    **both** types to Bluestein. The comment above that function describes the
-    bias in general terms; the arithmetic is what governs here.
-  - **Half-cyclic selection.** `HALF_CYCLIC_RADER_THRESHOLD` is 32 for both
-    `f32` and `f64`, and neither type's `HALF_CYCLIC_RADER_PRIMES` lists 19 or
-    31 (`f32` is empty, `f64` is `[67]`). Same backend at both sizes.
-  - **Static vs dynamic Rader.** `try_static_rader` is generic with `ShortDft<m>`
-    bounds, and the `ShortDft<N>` impls are blanket over
-    `F: ShortWinogradScalar`. They delegate to per-type methods, but the only
-    method that diverges by type is `dft31`, which `m=18` and `m=30` do not
-    reach. Same path for both.
-  - A benchmark artifact: `signal32` conversion sits outside the timed
-    closure, and the timed body is `copy_from_slice` plus the kernel call for
-    both types — a shape that if anything favours `f32`, which copies half the
-    bytes.
-- Codegen confirmed as the locus, and one candidate fix tried and **rejected by
-  measurement**:
-  - The register-pressure asymmetry is real. Under `try_static_rader`'s
-    `#[inline]` hint, LLVM declines for `f64` (`rader_fft::<f64>`: 1215
-    instructions, 0 spills, 40-byte frame) and accepts for `f32`
-    (`rader_fft::<f32>`: 4275 instructions, 469 spills, 720-byte frame).
-  - Marking it `#[inline(never)]` removes the asymmetry entirely: both land
-    near 210 instructions, 0 spills, 40-byte frames.
-  - The replicated counterbalanced gate then rejected it, slower in all four
-    comparisons on every affected row: `rader_f32/53` 366→458 ns (+25%),
-    `rader_f64/53` 375→444 ns (+18%), `rader_f64/19` 106→115 ns (+8%),
-    `half_cyclic_f64/67` 708→723 ns (+2%).
-  - The `f64` rows are the decisive disproof: `f64` spilled zero times before
-    the change, so removing the hint could only cost call overhead and lost
-    specialisation — and measurably did. Inlining lets the caller specialise
-    the static codelets against a known `n`, and that is worth more than the
-    spills it costs.
-  - Recorded in a doc comment on `try_static_rader` so the "obvious" fix is
-    not re-attempted. Spill count is a model of cost, not a measurement of it.
-- Still open, therefore: the `f32` Rader regression at N=19/31 is a codegen
-  effect that is **not** explained by the spill asymmetry, since eliminating
-  the spills makes things worse. Next candidates are vectorisation of the
-  interleaved `Complex<f32>` staging arrays and the shape of the gather/scatter
-  loops, both of which need the counterbalanced gate rather than static reads.
-- Method: emit release assembly (`cargo rustc -p apollo-fft --lib --
-  --emit asm`) and diff the `f32` and `f64` instantiations of the Rader inner
-  kernel for vector width, spill count, and table load shape. Note that the
-  `f32` instantiation only appears when the `kernel-strategy-bench` feature is
-  enabled, since `benchmark_kernels` is the only in-crate caller at that type.
-- Acceptance: a differential benchmark shows `f32` at or below `f64` Rader time
-  for N in {19, 23, 29, 31} with the existing accuracy tests unchanged; the fix
-  lands in the production kernel, never in the benchmark or its workload.
-- Dependencies: none. Risk class: [patch], contained in one kernel family.
+  Controls: 61, 71, 103, 109 (primes the bias did not capture) held flat, and
+  the eight-byte scalar — which never took the bias — held flat throughout.
+  That pair is what says the probe measured the routing and not the machine.
+  The independent RustFFT sweep agrees at the one affected size it covers:
+  n = 67 four-byte, 4349.7 ns -> 523.6 ns, ratio 19.40x -> 2.11x.
+- **Fix.** The clause and its now-dead `PREFER_BLUESTEIN_MID_RADER` const are
+  removed. Bluestein selection now depends only on the convolution's own shape —
+  `m` past `BLUESTEIN_RADER_THRESHOLD`, or `m` that no supported radix set
+  factors — which is the same answer for every scalar. The policy test now
+  asserts precisely that: both precisions agree at every length.
+- **Candidate rejected.** The handover's uncommitted change was one line,
+  `#[inline]` -> `#[inline(never)]` on the generated Rader kernel. Measured on
+  the sizes it targets: no effect, because those sizes do not take this path.
+  Rejected also on principle — `#[inline(never)]` on a generic drops it out of
+  the caller's `#[target_feature]` frame, which cost hermes 1.81 ms -> 118 ms in
+  the same session (`HS-GEMM-PANEL-REUSE-2026-08-29`).
+- **Left open, deliberately.** n = 59 measured 3377/2761/1644 ns across three
+  runs of the same build — too unstable to attribute. It takes Bluestein through
+  the smoothness clause (`m = 58 = 2*29`), which this change does not touch.
+  Filed as `ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29` rather than folded in on
+  a number I cannot reproduce.
+- **Handover.** Claimed by Codex session `01a03eb2`, whose tree sat 6.6 hours
+  untouched with the one-line candidate uncommitted and its instrument unrun.
+  Taken over, completed to a verdict, lease released.
+
+## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 — Rader at n = 59 is unstable across runs [patch] — todo
+
+- **Finding.** The same release build measured n = 59 at 3377, 2761 and 1644 ns
+  for an eight-byte scalar across three runs, on a probe whose neighbouring
+  lengths reproduce to under 2%. Whatever drives it is not the routing bias
+  removed under `PERF-F32-SMALL-PRIME-001`.
+- **What is known.** `m = 58 = 2 * 29`, so 29 is outside the supported radix
+  set and `is_prime23_smooth(58)` is false: n = 59 takes Bluestein through the
+  smoothness clause, for both precisions. Its padded convolution length and
+  cache behaviour are the first place to look.
+- **Acceptance.** Either the variance is explained and the measurement
+  stabilised, or n = 59's route is changed on a reproducible comparison. Do not
+  tune a threshold against a number that moves 2x between runs.
+
 
 ## Rust crate publication aliases [patch] — in progress
 
