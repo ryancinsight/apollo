@@ -1,8 +1,8 @@
 //! Correctness for the 64- and 128-point base butterflies. The direct DFT is
 //! the analytical authority.
 
-use super::butterfly::{transform_64, Plan64};
 use super::instance_major::{transform_128, Plan128};
+use super::instance_major::{transform_64, Plan64};
 use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 

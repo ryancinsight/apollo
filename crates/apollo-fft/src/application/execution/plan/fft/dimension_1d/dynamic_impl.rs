@@ -1,6 +1,5 @@
-use crate::application::execution::kernel::components::base128::butterfly::{Plan64, State64};
 use crate::application::execution::kernel::components::base128::instance_major::{
-    Plan128, Plan128State as State128,
+    Plan128, Plan64, State128, State64,
 };
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use crate::domain::metadata::shape::Shape1D;

@@ -67,6 +67,8 @@ pub(crate) mod phase_meter {
 /// Output row permutation of the column pass: DIF register `q` holds
 /// spectral `REV3[q]`.
 const REV3: [usize; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
+/// Two-bit reversal for the four-row column pass.
+const REV2: [usize; 4] = [0, 2, 1, 3];
 
 /// Twiddle tables for one direction, in dup-split form: every pair twiddle
 /// `[W_a, W_b]` is stored as two four-lane chunks `[re_a, re_a, re_b, re_b]`
@@ -76,10 +78,22 @@ const REV3: [usize; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 /// `W_8^{0..4}` pairs at chunk 0, `W_16^{0..8}` pairs at chunk 4, then the
 /// mixed-radix pairs `[W_128^{a*2g}, W_128^{a*(2g+1)}]` for `a = 1..8`,
 /// `g = 0..8` at chunk 12.
-/// Lane count of [`Plan128::table`]: 131 dup-split chunks of four.
-const TABLE_LANES: usize = 524;
+/// First chunk of the mixed-radix twiddles: the table opens with them.
+const MIX_CH: usize = 0;
 
-pub(crate) struct Plan128<T> {
+/// Chunk of the broadcast `W_16^1`; `W_16^3`, `-W_16^1`, and the real
+/// `sqrt(2)/2` broadcast follow at `+2`, `+4`, and `+6`.
+const fn b16_1_ch(rows: usize) -> usize {
+    (rows - 1) * 16
+}
+
+/// Lane count of the table for `rows` subsequences: `(rows - 1) * 8`
+/// mixed-radix dup-split pairs, three broadcast pairs, one real broadcast.
+pub(crate) const fn table_lanes(rows: usize) -> usize {
+    ((rows - 1) * 16 + 7) * 4
+}
+
+pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
     /// Dup-split twiddles. The fixed-size type is load-bearing, not
     /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
     /// folds only when the length is a compile-time constant, and this
@@ -87,23 +101,15 @@ pub(crate) struct Plan128<T> {
     /// kernel learned the same lesson first (gap_audit.md#base128-bounds);
     /// this module was shelved before that fix landed and never received it.
     table: Box<[T; TABLE_LANES]>,
-    /// `W_8^1` and `W_8^3` as complex values for the column-pass splats.
+    /// `W_8^1` and `W_8^3` as complex values for the eight-row column pass's
+    /// splats; unread by the four-row pass, whose radix-4 column transform
+    /// needs no multiply beyond its rotation.
     col: [[T; 2]; 2],
 }
 
-/// Chunk offsets into [`Plan128::table`].
-const MIX_CH: usize = 12;
-/// Broadcast `W_16^1`, `W_16^3`, and `-W_16^1` in dup-split form, plus the
-/// real `sqrt(2)/2` broadcast. The row transform holds two FFT *instances*
-/// per register, so its twiddles are scalars replicated across both samples
-/// rather than a distinct value per sample — which is exactly what lets the
-/// trivial ones stay trivial.
-const B16_1_CH: usize = 124;
-const B16_3_CH: usize = 126;
-const B16_N1_CH: usize = 128;
-const HALF_ROOT2_CH: usize = 130;
-
-impl<T: MixedRadixScalar> Plan128<T> {
+impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
+    BasePlan<T, ROWS, TABLE_LANES>
+{
     /// Builds the immutable plan when the exact four-lane capability exists.
     pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
         exact_lanes_supported::<4, T>().then(Self::new::<INVERSE>)
@@ -115,21 +121,17 @@ impl<T: MixedRadixScalar> Plan128<T> {
             let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
             [c, s]
         };
-        let mut table = Vec::with_capacity(524);
+        debug_assert_eq!(TABLE_LANES, table_lanes(ROWS));
+        let n = 16 * ROWS;
+        let mut table = Vec::with_capacity(TABLE_LANES);
         let mut push_pair = |a: [f64; 2], b: [f64; 2]| {
             for v in [[a[0], a[0], b[0], b[0]], [a[1], a[1], b[1], b[1]]] {
                 table.extend(v.map(T::from_precise));
             }
         };
-        for j in [0usize, 2] {
-            push_pair(w(j, 8), w(j + 1, 8));
-        }
-        for j in [0usize, 2, 4, 6] {
-            push_pair(w(j, 16), w(j + 1, 16));
-        }
-        for a in 1..8 {
+        for a in 1..ROWS {
             for g in 0..8 {
-                push_pair(w((a * 2 * g) % 128, 128), w((a * (2 * g + 1)) % 128, 128));
+                push_pair(w((a * 2 * g) % n, n), w((a * (2 * g + 1)) % n, n));
             }
         }
         // Broadcast row twiddles: each dup-split chunk pair repeats one
@@ -154,29 +156,38 @@ impl<T: MixedRadixScalar> Plan128<T> {
     }
 }
 
-/// Plan-owned directional state for the selected 128-point route.
-pub(crate) struct Plan128State<T> {
-    forward: Plan128<T>,
-    inverse: OnceLock<Plan128<T>>,
+/// Plan-owned directional state for a selected base route.
+pub(crate) struct BasePlanState<T, const ROWS: usize, const TABLE_LANES: usize> {
+    forward: BasePlan<T, ROWS, TABLE_LANES>,
+    inverse: OnceLock<BasePlan<T, ROWS, TABLE_LANES>>,
 }
 
-impl<T: MixedRadixScalar> Plan128State<T> {
+impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
+    BasePlanState<T, ROWS, TABLE_LANES>
+{
     /// Builds the forward plan when the exact-width route is available.
     pub(crate) fn new_if_supported() -> Option<Self> {
-        Plan128::new_if_supported::<false>().map(|forward| Self {
+        // The four-row route is selected per scalar, not universally: its
+        // four lanes fill a whole register only for a scalar whose widest
+        // supported width is four, and `USE_BASE_64` carries that
+        // measurement. The eight-row route is profitable regardless.
+        if ROWS == 4 && !T::USE_BASE_64 {
+            return None;
+        }
+        BasePlan::new_if_supported::<false>().map(|forward| Self {
             forward,
             inverse: OnceLock::new(),
         })
     }
 
     /// Borrows the immutable forward plan.
-    pub(crate) fn forward(&self) -> &Plan128<T> {
+    pub(crate) fn forward(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
         &self.forward
     }
 
     /// Borrows the immutable inverse plan, initializing it once across clones.
-    pub(crate) fn inverse(&self) -> &Plan128<T> {
-        self.inverse.get_or_init(Plan128::new::<true>)
+    pub(crate) fn inverse(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
+        self.inverse.get_or_init(BasePlan::new::<true>)
     }
 
     #[cfg(test)]
@@ -247,16 +258,34 @@ where
     ComplexReg::from_interleaved(picked.into_interleaved() * half_root2)
 }
 
-/// The 128-point transform as a lane kernel over interleaved samples.
-pub(crate) struct Transform128<'a, T, const INVERSE: bool, const MEASURE_PHASES: bool> {
-    /// Interleaved samples. Fixed-size for the reason [`Plan128::table`]
+/// The base transform as a lane kernel over interleaved samples: `ROWS`
+/// stride-`ROWS` subsequences of sixteen, so `ROWS = 8` is the 128-point
+/// transform and `ROWS = 4` the 64-point one. The sixteen-sample row
+/// machinery is identical at both; the column pass is a lane-wise DIF of
+/// length `ROWS`.
+pub(crate) struct BaseTransform<
+    'a,
+    T,
+    const INVERSE: bool,
+    const MEASURE_PHASES: bool,
+    const ROWS: usize,
+    const LANES: usize,
+    const TABLE_LANES: usize,
+> {
+    /// Interleaved samples. Fixed-size for the reason [`BasePlan::table`]
     /// documents: the phase-one loads index this from inside a loop.
-    pub(crate) data: &'a mut [T; 256],
-    pub(crate) plan: &'a Plan128<T>,
+    pub(crate) data: &'a mut [T; LANES],
+    pub(crate) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
 }
 
-impl<T, const INVERSE: bool, const MEASURE_PHASES: bool> LaneKernel<T>
-    for Transform128<'_, T, INVERSE, MEASURE_PHASES>
+impl<
+        T,
+        const INVERSE: bool,
+        const MEASURE_PHASES: bool,
+        const ROWS: usize,
+        const LANES: usize,
+        const TABLE_LANES: usize,
+    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES>
 where
     T: LaneScalar + MixedRadixScalar,
 {
@@ -326,25 +355,28 @@ where
         // 2 KB `memset` the disassembly showed costing about 7% of the
         // transform at every size this kernel serves
         // (gap_audit.md#base-kernel-memset).
-        let mut staging_uninit = core::mem::MaybeUninit::<[T; 256]>::uninit();
+        debug_assert!(LANES == 32 * ROWS && TABLE_LANES == table_lanes(ROWS));
+        let b16_1 = b16_1_ch(ROWS);
+        let mut staging_uninit = core::mem::MaybeUninit::<[T; LANES]>::uninit();
         // SAFETY: the reference is used only for writes until every lane is
         // initialized. Phase 1 stores chunk `2p*8 + g` and `(2p+1)*8 + g`
-        // for `p in 0..4` and `g = 2q + mh` with `q in 0..4, mh in 0..2` —
-        // rows 0..8 times chunks 0..8, all 64 four-lane chunks, before phase
-        // 2 performs the first read. Every `LaneScalar` implementor is an
+        // for `p in 0..ROWS/2` and `g = 2q + mh` with `q in 0..4,
+        // mh in 0..2` — rows `0..ROWS` times chunks 0..8, all `8*ROWS`
+        // four-lane chunks (`LANES` lanes), before phase 2 performs the
+        // first read. Every `LaneScalar` implementor is an
         // IEEE float with no validity niche. Coverage is enforced, not just
         // argued: debug builds poison the buffer with NaN below, so a lane
         // read before it is written poisons the output and fails every
         // value-semantic oracle in the debug suite. Miri cannot reach this
         // body (the dispatcher only selects it on AVX2 hardware); the NaN
         // poison plus the analytical oracles are the substitute coverage.
-        let staging: &mut [T; 256] = unsafe { &mut *staging_uninit.as_mut_ptr() };
+        let staging: &mut [T; LANES] = unsafe { &mut *staging_uninit.as_mut_ptr() };
         #[cfg(debug_assertions)]
         staging.fill(T::from_precise(f64::NAN));
         {
             let data_view = simd.view(self.data.as_slice());
             let mut stg = simd.view_mut(staging.as_mut_slice());
-            let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(&tab_view, HALF_ROOT2_CH);
+            let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(&tab_view, b16_1 + 6);
 
             // The two radix-4 stages run as separate passes over a
             // 512-byte spill plane. Holding all sixteen twiddled values in
@@ -355,13 +387,13 @@ where
             // redistribution pass used to pay, and keeps each stage inside
             // roughly a dozen live values.
             let mut zbuf = [T::from_precise(0.0); 64];
-            for p in 0..4usize {
+            for p in 0..ROWS / 2 {
                 {
                     let mut zv = simd.view_mut(&mut zbuf);
                     let load_r = |b: usize| {
                         ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
                             &data_view,
-                            4 * b + p,
+                            (ROWS / 2) * b + p,
                         ))
                     };
                     for b0 in 0..4usize {
@@ -378,9 +410,9 @@ where
                             0 => y,
                             1 => [
                                 y[0],
-                                cmul(y[1], B16_1_CH),
+                                cmul(y[1], b16_1),
                                 root2_twiddle::<T, A, INVERSE, false>(y[2], half_root2),
-                                cmul(y[3], B16_3_CH),
+                                cmul(y[3], b16_1 + 2),
                             ],
                             2 => [
                                 y[0],
@@ -390,9 +422,9 @@ where
                             ],
                             _ => [
                                 y[0],
-                                cmul(y[1], B16_3_CH),
+                                cmul(y[1], b16_1 + 2),
                                 root2_twiddle::<T, A, INVERSE, true>(y[2], half_root2),
-                                cmul(y[3], B16_N1_CH),
+                                cmul(y[3], b16_1 + 4),
                             ],
                         };
                         for (m, reg) in z.into_iter().enumerate() {
@@ -450,42 +482,49 @@ where
         } else {
             0
         };
-        // Phase 3: mixed-radix twiddle and the lane-wise 8-point DIF across
-        // rows, one natural column pair per group.
+        // Phase 3: mixed-radix twiddle and the lane-wise `ROWS`-point DIF
+        // across rows, one natural column pair per group. The eight-row form
+        // opens with a distance-4 stage whose twiddles need the `W_8`
+        // splats; the four-row form starts at distance 2, where the only
+        // twiddle is a rotation.
         let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
         let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
         let stg = simd.view(staging.as_slice());
-        let mut out = simd.view_mut(self.data);
+        let mut out = simd.view_mut(self.data.as_mut_slice());
         for g in 0..8usize {
             let mut c = [zero_complex; 8];
-            for (a, reg) in c.iter_mut().enumerate() {
+            for (a, reg) in c.iter_mut().enumerate().take(ROWS) {
                 *reg = ComplexReg::from_interleaved(hermes_simd::Vector::from_view_chunk(
                     &stg,
                     a * 8 + g,
                 ));
             }
-            for a in 1..8usize {
+            for a in 1..ROWS {
                 c[a] = cmul(c[a], MIX_CH + 2 * ((a - 1) * 8 + g));
             }
-            // Distance 4 (L = 8): v * W8^a on the difference.
-            for a in 0..4usize {
-                let (u, v) = c[a].butterfly(c[a + 4]);
-                c[a] = u;
-                c[a + 4] = match a {
-                    0 => v,
-                    1 => v * w8_1,
-                    2 => {
-                        if INVERSE {
-                            v.mul_i()
-                        } else {
-                            v.mul_neg_i()
+            // Distance 4 (L = 8): v * W8^a on the difference. A four-row
+            // column ends before this distance exists.
+            if ROWS == 8 {
+                for a in 0..4usize {
+                    let (u, v) = c[a].butterfly(c[a + 4]);
+                    c[a] = u;
+                    c[a + 4] = match a {
+                        0 => v,
+                        1 => v * w8_1,
+                        2 => {
+                            if INVERSE {
+                                v.mul_i()
+                            } else {
+                                v.mul_neg_i()
+                            }
                         }
-                    }
-                    _ => v * w8_3,
-                };
+                        _ => v * w8_3,
+                    };
+                }
             }
             // Distance 2 (L = 4): twiddles [1, -+i].
-            for base in [0usize, 4] {
+            for h in 0..ROWS / 4 {
+                let base = 4 * h;
                 for j in 0..2usize {
                     let (u, v) = c[base + j].butterfly(c[base + j + 2]);
                     c[base + j] = u;
@@ -499,13 +538,15 @@ where
                 }
             }
             // Distance 1 (L = 2): twiddle one.
-            for base in [0usize, 2, 4, 6] {
+            for h in 0..ROWS / 2 {
+                let base = 2 * h;
                 let (u, v) = c[base].butterfly(c[base + 1]);
                 (c[base], c[base + 1]) = (u, v);
             }
-            for (q, reg) in c.iter().enumerate() {
+            for (q, reg) in c.iter().enumerate().take(ROWS) {
+                let row = if ROWS == 8 { REV3[q] } else { REV2[q] };
                 reg.into_interleaved()
-                    .store_to_view_chunk(&mut out, REV3[q] * 8 + g);
+                    .store_to_view_chunk(&mut out, row * 8 + g);
             }
         }
         #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -518,24 +559,51 @@ where
     }
 }
 
-fn transform_128_with_measurement<T, const INVERSE: bool, const MEASURE_PHASES: bool>(
+fn transform_base<
+    T,
+    const INVERSE: bool,
+    const MEASURE_PHASES: bool,
+    const ROWS: usize,
+    const LANES: usize,
+    const TABLE_LANES: usize,
+>(
     data: &mut [Complex<T>],
-    plan: &Plan128<T>,
+    plan: &BasePlan<T, ROWS, TABLE_LANES>,
 ) -> bool
 where
     T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
-    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
+    assert_eq!(
+        2 * data.len(),
+        LANES,
+        "the base transform requires LANES / 2 samples"
+    );
+    let flat: &mut [T; LANES] = bytemuck::cast_slice_mut(data)
         .try_into()
-        .expect("invariant: 128 complex samples are exactly 256 lanes");
-    hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
+        .expect("invariant: the assertion above fixes the lane count");
+    hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
+        T,
+        INVERSE,
+        MEASURE_PHASES,
+        ROWS,
+        LANES,
+        TABLE_LANES,
+    > {
         data: flat,
         plan,
     })
     .unwrap_or(false)
 }
+
+/// The 128-point base plan: eight rows of sixteen.
+pub(crate) type Plan128<T> = BasePlan<T, 8, { table_lanes(8) }>;
+/// The 64-point base plan: four rows of sixteen.
+pub(crate) type Plan64<T> = BasePlan<T, 4, { table_lanes(4) }>;
+/// Directional state for the 128-point base.
+pub(crate) type State128<T> = BasePlanState<T, 8, { table_lanes(8) }>;
+/// Directional state for the 64-point base.
+pub(crate) type State64<T> = BasePlanState<T, 4, { table_lanes(4) }>;
 
 /// Runs the 128-point base butterfly when a four-lane backend is available.
 ///
@@ -550,7 +618,24 @@ where
     T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
-    transform_128_with_measurement::<T, INVERSE, false>(data, plan)
+    transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }>(data, plan)
+}
+
+/// Runs the 64-point base butterfly: the same construction over four
+/// stride-4 subsequences of sixteen.
+///
+/// # Panics
+///
+/// If `data` is not exactly 64 samples.
+pub(crate) fn transform_64<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan64<T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: bytemuck::Pod,
+{
+    transform_base::<T, INVERSE, false, 4, 128, { table_lanes(4) }>(data, plan)
 }
 
 /// Runs the phase-attributed variant of the 128-point base butterfly.
@@ -563,5 +648,5 @@ where
     T: MixedRadixScalar,
     Complex<T>: bytemuck::Pod,
 {
-    transform_128_with_measurement::<T, INVERSE, true>(data, plan)
+    transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }>(data, plan)
 }
