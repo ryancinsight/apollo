@@ -1,5 +1,26 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
+
+- **Delivered** (`gap_audit.md#instance-major-64`): the instance-major
+  kernel is generic over `ROWS ∈ {4, 8}` — 64 is four stride-4
+  subsequences of sixteen, so the sixteen-sample row machinery is reused
+  verbatim and the column DIF truncates to start at distance 2. The
+  sample-major kernel lost its last caller and is deleted (~560 lines);
+  the per-scalar `USE_BASE_64` gate survives on the new plan. The 128
+  plan also sheds 48 dead table lanes the generalization surfaced.
+- **Measured pinned, back to back, controls within 1%:** 64 goes
+  155.8 -> **89.3** ns on a P-core (1.88 -> **1.08** vs RustFFT, 0.55 vs
+  PhastFT) and 65.8 -> **46.4** on an E-core; 128/256/512 flat, verifying
+  the table relayout neutral. Every ladder size now sits between 1.07 and
+  1.35 against RustFFT.
+- **Also falsified today, recorded in the same audit entry:** re-removing
+  the remaining dead zero-fills (LLVM now elides them itself — the
+  MaybeUninit candidate was byte-identical codegen, dropped as
+  unjustified unsafe) and fusing the `zbuf` spill plane into a register
+  array (a wash; the staged design was right even though its recorded
+  justification came from the contaminated era).
+
 ## ATLAS-APOLLO-BASE-MEMSET-2026-08-29 — Fold the bounds checks; drop the dead zero-fill [perf] — done 2026-08-29
 
 - **Delivered** (`gap_audit.md#base-kernel-memset`): the instance-major

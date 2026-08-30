@@ -12,7 +12,7 @@ use crate::with_pot_zst;
 use eunomia::Complex;
 
 use super::FftPlan1D;
-use crate::application::execution::kernel::components::base128::butterfly::transform_64;
+use crate::application::execution::kernel::components::base128::instance_major::transform_64;
 use crate::application::execution::kernel::components::base128::transform_via_base_128;
 
 // ── Static dispatch (used by StaticFftPlan1D) ────────────────────────────────

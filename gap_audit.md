@@ -1,3 +1,54 @@
+## The instance-major construction generalizes to n = 64 (2026-08-30) <a id="instance-major-64"></a>
+
+n = 64 was the worst ratio on the ladder — 1.88 against RustFFT, against
+1.10 at 128 — and it was still served by the sample-major kernel. The
+instance-major construction turns out to fit it with almost no new
+machinery: 64 is **four** stride-4 subsequences of sixteen where 128 is
+eight of them, so phase 1's radix-4×4 sixteen-sample row transform is
+reused verbatim with the pair loop halved (`p in 0..ROWS/2`, load stride
+`ROWS/2·b + p`), and the column pass is the same DIF net truncated — it
+starts at distance 2, where the only twiddle is a rotation, and stores
+through the two-bit reversal instead of the three-bit one.
+
+So the kernel is now generic over `ROWS ∈ {4, 8}` — one construction, one
+table builder (`(ROWS-1)·8` mixed pairs against modulus `16·ROWS`), one
+body whose only structural branch is the eight-row column stage. The
+generalization also removed 48 dead table lanes the 128 plan had been
+carrying: its first twelve chunks were `W_8`/`W_16` pair pushes nothing
+ever read, a leftover from the sample-major table layout.
+
+**Measured, pinned, back to back, controls within 1%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 64 (P) | 155.8 ns | **89.3 / 89.4** | 1.88 -> **1.08 / 1.07** | 0.95 -> **0.55** |
+| 64 (E) | 65.8 | **46.4** | 1.72 -> **1.22** | 0.92 -> **0.63** |
+| 128 | 201.0 | 199.9 | 1.11 -> 1.10 (control) | 0.61 |
+| 256 | 554.4 | 556.0 | 1.35 -> 1.34 (control) | 0.80 |
+| 512 | 1375.9 | 1367.7 | 1.32 -> 1.31 (control) | 0.94 |
+
+**A 43% drop at n = 64.** The flat controls also verify that the table
+relayout is neutral for the 128 path. Every size on the ladder now sits
+between 1.07 and 1.35 against RustFFT on a P-core, and PhastFT is behind
+at every size, most by 20-45%.
+
+The sample-major kernel now has no callers at any size and is deleted —
+`butterfly.rs`, its plan machinery, and its `REGS` generalization, about
+560 lines. Its per-scalar `USE_BASE_64` gate survives on the new plan:
+f32's widest width is not four lanes, so it still declines the 64 route.
+
+### Falsified on the way here (same day)
+
+- **Re-removing dead zero-fills from both kernels:** after the bounds
+  checks folded, LLVM's dead-store elimination started deleting the
+  remaining fills on its own — the candidate `MaybeUninit` change produced
+  byte-identical codegen and was dropped as unjustified unsafe.
+- **Fusing phase 1's `zbuf` spill plane into a register array:** measured a
+  wash (203.0 vs 200.0 at 128, controls clean). The staged form's recorded
+  justification came from the contaminated era, but the design itself was
+  right: hand-staged and allocator-spilled cost the same, and the incumbent
+  stays.
+
 ## The instance-major kernel zero-filled a buffer it fully overwrites (2026-08-29) <a id="base-kernel-memset"></a>
 
 Disassembling the kernel that [shipped yesterday](#across-instance-outlining)

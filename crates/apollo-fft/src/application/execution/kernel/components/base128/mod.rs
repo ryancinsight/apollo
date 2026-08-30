@@ -15,15 +15,14 @@
 //! directions. The pinned probe times the zero-instrumentation specialization;
 //! phase attribution runs as a separate const-specialized pass.
 
-pub(crate) mod butterfly;
 pub(crate) mod cmul;
 
-/// The 128-point base: registers hold two FFT instances rather than two
+/// The base kernels: registers hold two FFT instances rather than two
 /// samples, which turns every row twiddle into a broadcast and cuts the row
-/// multiplies from 64 to 16 (gap_audit.md#across-instance-outlining).
-///
-/// [`butterfly`] keeps the sample-major construction, which is what the
-/// 64-point base still uses.
+/// multiplies from 64 to 16 (gap_audit.md#across-instance-outlining). One
+/// generic construction serves both the 128-point (eight rows) and 64-point
+/// (four rows) routes; the sample-major sibling it replaced is deleted
+/// (gap_audit.md#instance-major-64).
 pub(crate) mod instance_major;
 
 #[cfg(test)]
