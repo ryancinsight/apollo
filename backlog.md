@@ -97,6 +97,29 @@
   length in `2..=2048`, plus the tracked lengths above it, now passes with no
   wrong answers and no refusals.
 
+## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
+
+- **What happened.** `USE_BASE_64` was added 2026-08-29 on a real measurement:
+  a four-byte scalar at N = 64 cost 252 ns taking the four-row base route
+  against 126 ns without it, so the route was gated off for it.
+- **Both premises then changed within a day.** The instance-major construction
+  replaced the sample-major kernel the figure was taken on
+  (`perf(apollo-fft): Serve n = 64 with the instance-major construction`), and
+  hermes began entering its scalar fallback inside the AVX2+FMA frame
+  (`HS-SCALAR-FALLBACK-FRAME`), which is precisely the path a four-byte scalar
+  takes here.
+- **Re-measured** (best of 250 blocks of 300 transforms, three runs):
+  route on 76.0 / 76.0 / 73.3 ns, route off 126.7 / 126.3 ns. The eight-byte
+  scalar held at 37.0-39.0 ns throughout as the control. The verdict is
+  reversed, so the constant was removed rather than flipped — both scalars now
+  want the route and a switch with one value is not a switch.
+- **Worth keeping as a pattern.** A constant justified by measurement carries
+  the premises of that measurement, and nothing in the type system expires it
+  when they change. This one was wrong within a day, in a repository where two
+  agents were actively changing the very things it depended on. Constants of
+  this kind should name the measurement's premises, not just its number — the
+  replacement comment does.
+
 ## ATLAS-APOLLO-SEMVER-BASELINE-UNBUILDABLE-2026-08-29 — cargo-semver-checks cannot build the released baseline [patch] — todo
 
 - **Finding.** `cargo semver-checks check-release -p apollo-fft --baseline-rev

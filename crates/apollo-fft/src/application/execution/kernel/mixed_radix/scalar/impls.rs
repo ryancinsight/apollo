@@ -40,7 +40,6 @@ impl MixedRadixScalar for f32 {
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 2, 5, 5];
     const FORCE_COMPOSITE_63: bool = true;
     const FORCE_COMPOSITE_72: bool = true;
-    const USE_BASE_64: bool = false;
     const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
     const BLUESTEIN_NATIVE_PHASE_TRIG: bool = true;
 
@@ -329,7 +328,6 @@ impl MixedRadixScalar for f64 {
     const COMPOSITE_RADICES_200: &'static [usize] = &[4, 5, 5, 2];
     const FORCE_COMPOSITE_63: bool = false;
     const FORCE_COMPOSITE_72: bool = false;
-    const USE_BASE_64: bool = true;
     const BLUESTEIN_PAD_POWER_OF_TWO: bool = true;
     const BLUESTEIN_NATIVE_PHASE_TRIG: bool = false;
 
