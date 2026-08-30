@@ -537,34 +537,53 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half register width [perf] — todo
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar with no vector unit at all [perf] — todo
 
-- **Finding.** `BasePlan` is built on `exact_lanes_supported::<4, T>()`. Four
-  lanes fills a 256-bit register for an eight-byte scalar and half of one for a
-  four-byte scalar, which supports eight. The kernel therefore issues the same
-  instruction count for both while moving half the data in the narrow case, so
-  a four-byte scalar gets no width advantage at all from a route designed
-  around it.
-- **Measured** (interleaved in one process, best of 200 blocks of 100
-  transforms, so both precisions see identical core and thermal state):
+- **Root cause, traced 2026-08-29.** Sharper than this entry first recorded. It
+  is not that a four-byte scalar runs at half register width — it runs with **no
+  SIMD backend whatsoever**.
+- **Mechanism.** `BasePlan::new_if_supported` gates on
+  `exact_lanes_supported::<4, T>()`, which asks hermes for a backend providing
+  *exactly* four lanes. `hermes_simd::vectorize::dispatch_lane_count` tries
+  AVX-512, then AVX2, each only when its `LANE_COUNT == LANES`, and otherwise
+  falls through to `dispatch_scalar`. Measured lane counts on this host:
 
-  | n | 8-byte | 4-byte | ratio |
-  |---|---|---|---|
-  | 64 | 40 ns | 126 ns | 3.15x |
-  | 128 | 89 ns | 653 ns | 7.34x |
-  | 256 | 292 ns | 1434 ns | 4.91x |
-  | 512 | 758 ns | 2802 ns | 3.70x |
+  | backend | 4-byte scalar | 8-byte scalar |
+  |---|---|---|
+  | AVX2 | 8 | 4 |
+  | AVX-512 | 16 | 8 |
 
-  A four-byte scalar should be *faster* at equal length — half the memory
-  traffic and twice the available lanes — so this is the wrong sign, not a
-  small shortfall.
-- **Outcome.** Parameterize the base kernel over its lane count so each scalar
-  takes the widest width its target supports, rather than a fixed four. The
-  8x8 route's per-scalar switch (`USE_BASE_64`) exists because of this and
-  should fall out once the width is right.
+  So an eight-byte scalar matches AVX2 exactly and gets the vector kernel,
+  while a four-byte scalar matches nothing and silently lands on the scalar
+  fallback. `exact_lanes_supported` returns `true` in both cases, because the
+  scalar backend does provide four lanes — which is why this reads as supported
+  everywhere it is consulted.
+- **This contradicts the module's own contract.** `base128/butterfly.rs` states
+  "Other native widths decline before touching the input; production routing
+  must retain its incumbent path until Hermes can select this exact width."
+  A four-byte scalar does not decline. It proceeds, unvectorized.
+- **Consequence** (`docs/benchmark_results.md`, Apollo/RustFFT, lower better):
+  4-byte 9.33x at 128, 11.20x at 256, 10.49x at 512, against 0.97x / 1.42x /
+  1.48x for the 8-byte scalar on the identical kernel. Within apollo, the
+  4-byte scalar costs 5.8x its 8-byte counterpart at n = 128 (653 ns vs 113 ns)
+  running what is nominally the same code.
+- **Not fixable by declining.** Measured: disabling the base route for a
+  four-byte scalar costs 653 -> 947 ns at 128, 1434 -> 1883 at 256, and
+  2802 -> 3866 at 512. The scalar-emulated base kernel still beats the generic
+  route, so the generic four-byte path is worse again. Both need the width.
+- **Outcome.** A native-width variant of the base kernel: eight lanes (four
+  interleaved complex samples per register) for a four-byte scalar, selected by
+  the widest width the target actually backs rather than a hardcoded four. The
+  stage network, the dup-split twiddle layout, and the `swap_pairs`/`blend`
+  redistribution all assume two complex samples per register today, so this is
+  a kernel variant rather than a parameter change.
+- **Secondary, and cheap.** Give `lane_capability` a query that distinguishes a
+  natively-backed width from one the scalar fallback satisfies. The absence of
+  that distinction is what let this sit: every call site reads
+  `exact_lanes_supported` as "there is a vector unit for this".
 - **Acceptance.** The four-byte column at 128/256/512 improves against the
-  recorded figures above with value parity unchanged; `USE_BASE_64` is
-  re-measured and removed if the width fix subsumes it.
+  figures above with value parity unchanged, and the base route is entered only
+  where a vector backend actually serves it.
 
 
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28

@@ -21,10 +21,30 @@
 //!    and register `q` stores to output row `rev3(q)` — natural output
 //!    order, 32-byte contiguous stores.
 //!
-//! The register map is defined for four native scalar lanes (two interleaved
-//! complex samples). Other native widths decline before touching the input;
-//! production routing must retain its incumbent path until Hermes can select
-//! this exact width or this kernel gains a native-width variant.
+//! The register map is defined for four scalar lanes (two interleaved complex
+//! samples).
+//!
+//! # A scalar whose native width is not four runs this unvectorized
+//!
+//! The gate below is `exact_lanes_supported::<4, T>()`, which asks hermes for a
+//! backend providing *exactly* four lanes. `dispatch_lane_count` tries AVX-512,
+//! then AVX2, each only when its `LANE_COUNT` equals the request, and otherwise
+//! falls through to the scalar backend — which provides any width asked of it.
+//! On this host AVX2 carries four lanes of an eight-byte scalar and eight of a
+//! four-byte one, so the eight-byte scalar matches and gets the vector kernel
+//! while the four-byte scalar matches nothing and lands on the scalar
+//! fallback. The gate answers `true` either way.
+//!
+//! An earlier version of this note claimed other native widths "decline before
+//! touching the input". They do not: they proceed without a vector unit. The
+//! cost is 5.8x at n = 128 for a four-byte scalar against an eight-byte one
+//! running nominally the same code.
+//!
+//! Declining is not the fix — measured, skipping this route costs a four-byte
+//! scalar a further 653 -> 947 ns at 128, because the generic route is worse
+//! again. The fix is a native-width variant, tracked as
+//! `ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29`; until it exists this route
+//! is retained on measurement, not on a capability claim.
 
 use crate::application::execution::kernel::components::lane_capability::exact_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
