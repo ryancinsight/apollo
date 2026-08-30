@@ -1,18 +1,39 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 [perf] — Codex
+
+- [x] Reproduce the current standalone locked f32/f64 power-of-two disparity
+      with the unchanged clone-inclusive comparison instrument at `c08ddf86`.
+- [ ] Attribute the gap to native-width code generation and implement one
+      canonical eight-lane four-byte base variant without changing the f64
+      route or public surface.
+- [ ] Prove forward/inverse value semantics, no-mutation decline, and warm
+      allocation parity at 64/128/256/512 in debug and release profiles.
+- [ ] Run warning-denied diagnostics and inspect release code generation for
+      in-loop probes, calls, spills, and scalar fallback.
+- [ ] Retain only a paired benchmark improvement with stable f64 controls;
+      synchronize the gap audit, backlog, CHANGELOG, and exact evidence.
+- [ ] Obtain independent artifact review, publish, pass hosted gates, merge,
+      and discharge the lease.
+
 ## PERF-F32-SMALL-PRIME-001 [perf] — Codex
 
 - [x] Reconfirm the current production Rader path, prior assembly diagnosis,
       benchmark workload, and disjoint ownership against `origin/main`.
-- [ ] Attribute the f32-only small-prime inversion to one production loop and
+- [x] Attribute the f32-only small-prime inversion to one production loop and
       implement the smallest canonical loop-shape correction.
-- [ ] Verify independent Rader value semantics and warning-denied release
+- [x] Verify independent Rader value semantics and warning-denied release
       codegen for f32/f64 without changing route selection.
-- [ ] Run the unchanged counterbalanced N=19/23/29/31 comparison on a quiet
+- [x] Run the unchanged counterbalanced N=19/23/29/31 comparison on a quiet
       host; retain only a candidate with f32 at or below f64 and no f64
       regression.
-- [ ] Synchronize CHANGELOG, gap audit, backlog evidence, review the exact
+- [x] Synchronize CHANGELOG, gap audit, backlog evidence, review the exact
       diff, and deliver the branch through merge.
+
+**Evidence:** the original 19/23/29/31 premise was false because those sizes
+use Short Winograd, not Rader. Production commit `5fc3c2e9` removed the harmful
+f32-only Rader routing bias after exact route/value/codegen and paired timing
+checks; PR #200 merged as `62b05816`.
 
 ## APOLLO-FFT-HEPHAESTUS-CUTOVER-2026-08-28 [major] [arch] [perf] — Codex
 

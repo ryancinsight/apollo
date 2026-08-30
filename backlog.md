@@ -599,7 +599,21 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar with no vector unit at all [perf] — todo
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — in progress
+
+- **Integrator:** Codex `/root`; last update 2026-08-30.
+- **Lease:** Codex — `crates/apollo-fft/src/application/execution/kernel/
+  components/{base128,lane_capability.rs}`, focused tests/benchmark, and this
+  item's PM/CHANGELOG sections through the source-candidate commit.
+- **Scope/non-goals.** Add the smallest native eight-lane base-kernel variant
+  for four-byte scalars while retaining the four-lane eight-byte route. Do not
+  change FFT formulas, normalization, public API, benchmark workload, or the
+  f64 route; do not widen unrelated fixed-four-lane kernels in this increment.
+- **Exact entry baseline.** Standalone locked `c08ddf86`, unchanged
+  `rustfft_comparison`, one confirmation sweep on the current host (Apollo
+  median; Apollo/RustFFT): f32 n=64 76.12 ns / 3.72x, n=128 159.90 ns / 2.38x,
+  n=256 467.33 ns / 3.59x, n=512 970.01 ns / 3.54x. The f64 controls are
+  57.93/93.32/324.67/792.75 ns respectively.
 
 - **Root cause, traced 2026-08-29.** Sharper than this entry first recorded. It
   is not that a four-byte scalar runs at half register width — it runs with **no
