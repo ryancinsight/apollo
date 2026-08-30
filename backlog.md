@@ -2234,8 +2234,9 @@
   `Complex32` instantiation. Kernel selection policy, the
   Winograd-pair path, GPU transports, and sizes above 53 are non-goals.
 - **Integrator:** Codex session `01a03eb2-6f0a-7301-9290-55b918675e48`;
-  **lease:** `components/rader/{mod.rs,static_rader.rs}` and focused Rader
-  value/codegen tests; last update 2026-08-29.
+  **lease:** `components/rader/{mod.rs,static_rader.rs}`, the generated kernel
+  body in `apollo-fft-macros/src/rader.rs`, and focused Rader value/codegen
+  tests; last update 2026-08-29.
 - **Bounded experiment:** isolate the small-prime gather/staging loop shape
   that makes the `f32` instantiation spill or fail to vectorize, verify release
   assembly, then run the unchanged counterbalanced N=19/23/29/31 instrument.
