@@ -76,9 +76,17 @@ const REV3: [usize; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 /// `W_8^{0..4}` pairs at chunk 0, `W_16^{0..8}` pairs at chunk 4, then the
 /// mixed-radix pairs `[W_128^{a*2g}, W_128^{a*(2g+1)}]` for `a = 1..8`,
 /// `g = 0..8` at chunk 12.
+/// Lane count of [`Plan128::table`]: 131 dup-split chunks of four.
+const TABLE_LANES: usize = 524;
+
 pub(crate) struct Plan128<T> {
-    /// Dup-split twiddles, 524 lanes (131 chunks).
-    table: Box<[T]>,
+    /// Dup-split twiddles. The fixed-size type is load-bearing, not
+    /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
+    /// folds only when the length is a compile-time constant, and this
+    /// kernel reads the table from inside its hot loops. The sample-major
+    /// kernel learned the same lesson first (gap_audit.md#base128-bounds);
+    /// this module was shelved before that fix landed and never received it.
+    table: Box<[T; TABLE_LANES]>,
     /// `W_8^1` and `W_8^3` as complex values for the column-pass splats.
     col: [[T; 2]; 2],
 }
@@ -138,10 +146,11 @@ impl<T: MixedRadixScalar> Plan128<T> {
         table.extend([core::f64::consts::FRAC_1_SQRT_2; 4].map(T::from_precise));
 
         let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
-        Self {
-            table: table.into_boxed_slice(),
-            col,
-        }
+        let table: Box<[T; TABLE_LANES]> = table
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("the pushes above emit exactly TABLE_LANES lanes"));
+        Self { table, col }
     }
 }
 
@@ -240,8 +249,9 @@ where
 
 /// The 128-point transform as a lane kernel over interleaved samples.
 pub(crate) struct Transform128<'a, T, const INVERSE: bool, const MEASURE_PHASES: bool> {
-    /// Interleaved samples, 256 lanes.
-    pub(crate) data: &'a mut [T],
+    /// Interleaved samples. Fixed-size for the reason [`Plan128::table`]
+    /// documents: the phase-one loads index this from inside a loop.
+    pub(crate) data: &'a mut [T; 256],
     pub(crate) plan: &'a Plan128<T>,
 }
 
@@ -273,7 +283,7 @@ where
         // a multiple of the four-lane width, so chunk indices are exact. The
         // checked-slice load form spends a visible share of the transform in
         // repeated probes, bounds checks, and Result branches.
-        let tab_view = simd.view(&self.plan.table);
+        let tab_view = simd.view(self.plan.table.as_slice());
         // Dup-split complex multiply: one shuffle, one multiply, one
         // alternating FMA (see the plan-layout doc).
         let cmul = |v: ComplexReg<T, A>, ch: usize| super::cmul::cmul_chunk(&tab_view, v, ch);
@@ -311,10 +321,29 @@ where
         // 16 = 4 x 4 with `b = 4*b1 + b0` and output `k2 = 4q + m`: radix-4
         // over `b1` within each stride-4 group, the `W_16^{b0*m}` layer, then
         // radix-4 over `b0`. Natural order in and out, so no bit reversal.
-        let mut staging = [T::from_precise(0.0); 256];
+        // The staging buffer is written in full by phase 1 before phase 2
+        // reads a lane of it, so zero-filling it first was pure waste — a
+        // 2 KB `memset` the disassembly showed costing about 7% of the
+        // transform at every size this kernel serves
+        // (gap_audit.md#base-kernel-memset).
+        let mut staging_uninit = core::mem::MaybeUninit::<[T; 256]>::uninit();
+        // SAFETY: the reference is used only for writes until every lane is
+        // initialized. Phase 1 stores chunk `2p*8 + g` and `(2p+1)*8 + g`
+        // for `p in 0..4` and `g = 2q + mh` with `q in 0..4, mh in 0..2` —
+        // rows 0..8 times chunks 0..8, all 64 four-lane chunks, before phase
+        // 2 performs the first read. Every `LaneScalar` implementor is an
+        // IEEE float with no validity niche. Coverage is enforced, not just
+        // argued: debug builds poison the buffer with NaN below, so a lane
+        // read before it is written poisons the output and fails every
+        // value-semantic oracle in the debug suite. Miri cannot reach this
+        // body (the dispatcher only selects it on AVX2 hardware); the NaN
+        // poison plus the analytical oracles are the substitute coverage.
+        let staging: &mut [T; 256] = unsafe { &mut *staging_uninit.as_mut_ptr() };
+        #[cfg(debug_assertions)]
+        staging.fill(T::from_precise(f64::NAN));
         {
-            let data_view = simd.view(&*self.data);
-            let mut stg = simd.view_mut(&mut staging);
+            let data_view = simd.view(self.data.as_slice());
+            let mut stg = simd.view_mut(staging.as_mut_slice());
             let half_root2 = hermes_simd::Vector::<T, A>::from_view_chunk(&tab_view, HALF_ROOT2_CH);
 
             // The two radix-4 stages run as separate passes over a
@@ -425,7 +454,7 @@ where
         // rows, one natural column pair per group.
         let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
         let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
-        let stg = simd.view(&staging);
+        let stg = simd.view(staging.as_slice());
         let mut out = simd.view_mut(self.data);
         for g in 0..8usize {
             let mut c = [zero_complex; 8];
@@ -498,7 +527,9 @@ where
     Complex<T>: bytemuck::Pod,
 {
     assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    let flat: &mut [T] = bytemuck::cast_slice_mut(data);
+    let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
+        .try_into()
+        .expect("invariant: 128 complex samples are exactly 256 lanes");
     hermes_simd::vectorize_lanes::<4, T, _>(Transform128::<T, INVERSE, MEASURE_PHASES> {
         data: flat,
         plan,
