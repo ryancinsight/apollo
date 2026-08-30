@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BASE-MEMSET-2026-08-29 — Fold the bounds checks; drop the dead zero-fill [perf] — done 2026-08-29
+
+- **Delivered** (`gap_audit.md#base-kernel-memset`): the instance-major
+  kernel's `data` and `table` carry their lengths in their types, folding
+  15 bounds compares and two panic paths (the `#base128-bounds` fix this
+  module missed by being shelved); and the 2 KB staging zero-fill — dead,
+  since phase 1 writes all 64 chunks before phase 2 reads — is
+  `MaybeUninit`, with debug builds NaN-poisoning the buffer so
+  read-before-write fails every debug oracle deterministically (miri cannot
+  reach an AVX2-gated body; this is the substitute coverage, stated).
+- **Measured pinned, back to back, controls within 0.5%:** 128
+  215.3 -> **200.7** ns (1.19 -> **1.10** vs RustFFT), 256 586.7 ->
+  **561.6** (1.42 -> **1.35**), 512 1435.9 -> **1379.2** (1.37 ->
+  **1.31**); 64 flat (control). The bounds fold alone measured neutral;
+  the memset was the 7%.
+- **Kernel body now 354 lines, 0 calls, 0 compares** — straight-line
+  vector code. 499/499 in debug (poison active) and release profiles.
+
 ## ATLAS-APOLLO-INSTANCE-MAJOR-2026-08-29 — The across-instance layout ships [perf] [arch] — done 2026-08-29
 
 - **Delivered** (`gap_audit.md#across-instance-outlining`): the 128-point

@@ -1,3 +1,58 @@
+## The instance-major kernel zero-filled a buffer it fully overwrites (2026-08-29) <a id="base-kernel-memset"></a>
+
+Disassembling the kernel that [shipped yesterday](#across-instance-outlining)
+showed two defects it had inherited from being shelved before this
+repository's own fixes landed — the shelf preserved the code and also
+preserved everything the mainline learned afterward *not* being applied to
+it.
+
+**Runtime-sized types re-opened the bounds checks.** `data: &mut [T]` and
+`table: Box<[T]>` are runtime-sized, so the checked view's
+`offset + LANE_COUNT <= len` assert cannot fold — 15 compare-and-branch
+sites and two panic paths inside the kernel, the exact defect
+[#base128-bounds](#base128-bounds) fixed for the sample-major kernel with
+`&mut [T; 256]` and `Box<[T; TABLE_LANES]>`. The same types applied here
+measured **neutral end to end** — these checks were few and predicted where
+the sample-major case had ~130 — but they cost nothing to fold and the
+body loses its panic paths.
+
+**A 2 KB `memset` was 7% of the transform.** The staging buffer was declared
+`[T::from_precise(0.0); 256]` and then written in full by phase 1 before
+phase 2 reads a lane — the zero-fill is provably dead, and it survived as a
+`memset` call. Phase 1's coverage is exact: chunks `{2p, 2p+1}·8 + g` for
+`p in 0..4`, `g = 2q + mh`, `q in 0..4`, `mh in 0..2` — all 64 four-lane
+chunks. The buffer is now `MaybeUninit`, with the enforcement story the
+unsafe discipline asks for where miri cannot go (the dispatcher only
+selects this body on AVX2 hardware): **debug builds poison the buffer with
+NaN**, so any lane read before it is written poisons the output and fails
+every value-semantic oracle in the debug suite deterministically. All 499
+tests pass in both profiles.
+
+The kernel body after both: **354 lines, 0 calls, 0 compares, 0 panic
+paths** — pure straight-line vector code — against 429 lines, 3 calls and
+15 compares before.
+
+**Measured, pinned, back to back on a quiet machine, controls within
+0.5%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 64 | 156.3 ns | 158.3 | 1.87 -> 1.88 (control) | 0.96 |
+| 128 | 215.3 | **200.7** | 1.19 -> **1.10** | 0.66 -> **0.61** |
+| 256 | 586.7 | **561.6** | 1.42 -> **1.35** | 0.85 -> **0.81** |
+| 512 | 1435.9 | **1379.2** | 1.37 -> **1.31** | 0.98 -> **0.94** |
+
+The gain shrinks with size because the memset was per base-kernel call and
+the split's other work grows around it.
+
+**The lesson is about shelving, not about memsets.** This module sat
+preserved while the mainline fixed bounds folding, closure outlining, and
+CPU re-probing — and came back carrying all three plus this. A preserved
+experiment is a fork: everything learned after the fork has to be
+re-applied on restore, and the restore checklist is exactly the
+disassembly read — calls, compares, spills, probes — that found every one
+of these.
+
 ## The across-instance layout was blocked by a closure, not by registers (2026-08-29) <a id="across-instance-outlining"></a>
 
 The across-instance row layout — registers holding two FFT *instances* rather
