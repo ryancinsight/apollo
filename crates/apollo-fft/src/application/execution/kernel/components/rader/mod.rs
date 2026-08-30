@@ -121,19 +121,35 @@ fn rader_runtime_impl<
 
 pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
 
-/// Returns true when the Rader convolution for length n should prefer the
-/// Bluestein path. For f32 we bias to Bluestein + Stockham PoT for all runtime
-/// primes (post-static): this routes through the most optimized f32 kernels
-/// (AVX fused stockham) and the pooled TL bluestein/rader scratch, avoiding
-/// variable composite/GT sub-dispatch in FullCyclic and reducing recursion risk.
+/// Returns true when the Rader convolution for length `n` should prefer the
+/// Bluestein path.
+///
+/// Two conditions select it, and both are about the convolution's own shape
+/// rather than the scalar type: a convolution length past
+/// [`BLUESTEIN_RADER_THRESHOLD`], and one whose length is not smooth over the
+/// supported radices, where the cyclic backends have no good factorization to
+/// run on.
+///
+/// A third condition used to sit here: a four-byte scalar biased every prime
+/// with `m >= 128`, plus 67 and 113 by name, into Bluestein. It was introduced
+/// to fix that scalar being slower than an eight-byte one on this path, and
+/// measurement says it was the cause. Interleaved in one process, best of 150
+/// blocks, four-byte scalar, with the bias against without:
+///
+/// ```text
+///   n = 67    2059 ns -> 407 ns    n = 131   4322 ns -> 1009 ns
+///   n = 113   4137 ns -> 625 ns    n = 197   4358 ns -> 1060 ns
+///   n = 257   4377 ns -> 2237 ns   n = 401   8587 ns -> 1296 ns
+/// ```
+///
+/// Every prime the bias captured was 1.7x to 6.6x slower for it; primes it did
+/// not capture (61, 71, 103, 109) held flat, and the eight-byte scalar — which
+/// never took the bias — held flat throughout, which is what says the probe
+/// measured the routing and not the machine.
 #[inline]
 pub(crate) fn prefers_bluestein_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
     let m = n - 1;
-    // f32: bias to Bluestein+Stockham for m>=128 + explicit 113/67 (md f32 rader worst 2-4x+ like 67/113/257/271; see gap
-    // full f32 avx/pot sub with_scratch + dftN heap + pools for stack). Small f32 use FullCyclic (safe).
-    // Targets md rader f32 ratios + mem (pool reuse in bluestein for kernel/convolve). Broadened from 256.
-    (F::PREFER_BLUESTEIN_MID_RADER && (n == 113 || n == 67 || m >= 128))
-        || m >= BLUESTEIN_RADER_THRESHOLD
+    m >= BLUESTEIN_RADER_THRESHOLD
         || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
 }
 

@@ -108,6 +108,21 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Rader's Bluestein convolution is selected by the convolution's shape
+  alone, not by the scalar type. The selector carried a per-scalar bias sending
+  every four-byte-scalar prime with `m >= 128`, plus 67 and 113 by name, down
+  the Bluestein path; its comment said this fixed that scalar being slow on
+  this path, and measurement says it caused it. Interleaved best-of-150, bias
+  on to off: n = 67 2059 -> 407 ns, n = 113 4137 -> 625 ns, n = 131
+  4322 -> 1009 ns, n = 401 8587 -> 1296 ns — every prime the bias captured
+  between 1.7x and 6.6x faster without it, while primes it did not capture and
+  the eight-byte scalar both held flat. The RustFFT sweep agrees at n = 67:
+  4349.7 -> 523.6 ns, ratio 19.40x -> 2.11x. Selection now depends only on
+  whether the convolution length passes `BLUESTEIN_RADER_THRESHOLD` or has no
+  supported factorization, so both precisions answer identically; the
+  `PREFER_BLUESTEIN_MID_RADER` scalar constant is removed with the branch it
+  drove.
+
 - [patch] The register-resident 8x8 base route at N = 64 is now selected per
   scalar rather than universally. It is built on four-lane vectors, which fills
   a whole vector register for an eight-byte scalar and half of one for a
