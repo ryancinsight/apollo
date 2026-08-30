@@ -108,6 +108,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Repin `hermes-simd` onto the scalar-fallback frame fix
+  (`HS-SCALAR-FALLBACK-FRAME`). Every one of this crate's SIMD entry points
+  requests exactly four lanes, which AVX2 satisfies for an eight-byte scalar
+  and no backend satisfies for a four-byte one — so the four-byte scalar fell
+  to the scalar backend, reached through no target-feature frame, and ran at
+  baseline x86-64 with no FMA. Interleaved best-of-200, framed against
+  unframed: 457.5 -> 167.0 ns at n = 128, 1066 -> 438.5 at 256, 2122.5 -> 919
+  at 512, with the eight-byte scalar flat as a control. Values are unchanged.
+
 - [patch] Rader's Bluestein convolution is selected by the convolution's shape
   alone, not by the scalar type. The selector carried a per-scalar bias sending
   every four-byte-scalar prime with `m >= 128`, plus 67 and 113 by name, down

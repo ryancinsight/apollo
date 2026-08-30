@@ -595,6 +595,21 @@
   stage network, the dup-split twiddle layout, and the `swap_pairs`/`blend`
   redistribution all assume two complex samples per register today, so this is
   a kernel variant rather than a parameter change.
+- **Upstream half fixed 2026-08-30 (hermes `HS-SCALAR-FALLBACK-FRAME`).** The
+  fallback was reached through no `#[target_feature]` frame at all, so the
+  four-byte scalar ran not merely unvectorized but at baseline x86-64 with no
+  FMA — and the scalar backend's `fmadd` is `f32::mul_add`, correctly-rounded
+  fused, which outside an FMA frame is a libm call rather than an instruction.
+  Running the same fallback inside the AVX2+FMA frame is 2.31x-2.74x at
+  128/256/512 (interleaved, controls flat), and apollo is repinned onto it.
+  The sweep ratios move 4.92x -> 2.54x at 128, 13.72x -> 4.00x at 256, and
+  14.31x -> 2.56x at 512.
+- **What remains here.** The four-byte scalar still runs four-lane algorithms in
+  128-bit registers where eight lanes exist, so it stays roughly 2x off a
+  native-width kernel and 2.5x-4x off RustFFT. That residue is this item: a
+  kernel variant, not a dispatch fix. The measurements above replace the
+  earlier "5.8x against the eight-byte scalar" figure, which conflated the
+  missing frame with the missing width.
 - **Breadth: this is every hermes-SIMD entry in the crate, not one kernel.**
   All 15 `vectorize_lanes::<4, T>` / `exact_lanes_supported::<4, T>` call sites
   in `apollo-fft` request exactly four lanes — `base128/{butterfly,
