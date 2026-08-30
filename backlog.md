@@ -577,6 +577,14 @@
   stage network, the dup-split twiddle layout, and the `swap_pairs`/`blend`
   redistribution all assume two complex samples per register today, so this is
   a kernel variant rather than a parameter change.
+- **Breadth: this is every hermes-SIMD entry in the crate, not one kernel.**
+  All 15 `vectorize_lanes::<4, T>` / `exact_lanes_supported::<4, T>` call sites
+  in `apollo-fft` request exactly four lanes — `base128/{butterfly,
+  instance_major}.rs`, `batched/mod.rs`, `codelet/mod.rs`,
+  `resident/{mod,planar}.rs`, `test_support.rs`. A four-byte scalar matches
+  none of them on any backend, so it reaches a hermes vector unit nowhere in
+  this crate. The base kernel is where it is measurable, not where it is
+  confined.
 - **Secondary, and cheap.** Give `lane_capability` a query that distinguishes a
   natively-backed width from one the scalar fallback satisfies. The absence of
   that distinction is what let this sit: every call site reads
