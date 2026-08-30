@@ -414,6 +414,39 @@ fn retained_footprint_attribution() {
 }
 
 #[test]
+#[ignore = "allocation probe must run as the only selected test in its process"]
+fn native_width_base_warm_execution_is_allocation_free() {
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+
+    for n in [64usize, 128, 256, 512] {
+        let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+        let mut signal = (0..n)
+            .map(|index| {
+                let x = index as f32;
+                eunomia::Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect::<Vec<_>>();
+
+        plan.forward_complex_slice_inplace(&mut signal);
+        let label = format!("warm f32 n={n}");
+        window(&label, || {
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+        });
+
+        assert_eq!(
+            GLOBAL_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed f32 n={n} execution allocated through the global allocator"
+        );
+        assert_eq!(
+            MNEMOSYNE_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed f32 n={n} execution allocated directly through Mnemosyne"
+        );
+    }
+}
+
+#[test]
 fn reset_hides_stale_slots_from_an_unpublished_current_slot() {
     static COUNTER: AllocationCounter = AllocationCounter::new();
     let mut byte = 0u8;

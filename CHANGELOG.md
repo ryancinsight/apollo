@@ -54,6 +54,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] Four-byte 64/128/256/512-point base-routed FFTs now use a
+  native eight-lane AVX2 map instead of Hermes' four-lane scalar fallback.
+  Two affinitized 100-sample comparisons reduce f32 medians by 38.95% to
+  56.15% with disjoint exact intervals and stable f64 controls. Warm execution
+  remains allocation-free under the Apollo-global and direct-Mnemosyne census;
+  fixed-four-lane targets retain their prior route. See ADR 0041.
 - [patch] Reusable NUFFT WGPU workspaces validate their prepared-device
   provenance before any host-to-device write. Passing a workspace to a
   different logical device now returns the typed Hephaestus ownership error

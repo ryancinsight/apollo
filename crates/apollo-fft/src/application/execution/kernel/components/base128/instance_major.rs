@@ -21,16 +21,20 @@
 //!    and register `q` stores to output row `rev3(q)` — natural output
 //!    order, 32-byte contiguous stores.
 //!
-//! The register map is defined for four native scalar lanes (two interleaved
-//! complex samples). Other native widths decline before touching the input;
-//! production routing must retain its incumbent path until Hermes can select
-//! this exact width or this kernel gains a native-width variant.
+//! The register map has native layouts for four scalar lanes (two interleaved
+//! complex samples) and eight scalar lanes (four interleaved complex samples).
+//! The plan selects the widest supported layout once, before execution; other
+//! native widths decline before touching the input so production routing keeps
+//! its incumbent path.
 
-use crate::application::execution::kernel::components::lane_capability::exact_lanes_supported;
+use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
+use core::mem::size_of;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
 use std::sync::OnceLock;
+
+mod wide;
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -93,6 +97,29 @@ pub(crate) const fn table_lanes(rows: usize) -> usize {
     ((rows - 1) * 16 + 7) * 4
 }
 
+/// Native register layout selected when the plan is built.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BaseLaneWidth {
+    /// Two interleaved complex samples per register.
+    Four,
+    /// Four interleaved complex samples per register.
+    Eight,
+}
+
+const fn select_lane_width(
+    scalar_bytes: usize,
+    eight_lanes_supported: bool,
+    four_lanes_supported: bool,
+) -> Option<BaseLaneWidth> {
+    if scalar_bytes == 4 && eight_lanes_supported {
+        Some(BaseLaneWidth::Eight)
+    } else if four_lanes_supported {
+        Some(BaseLaneWidth::Four)
+    } else {
+        None
+    }
+}
+
 pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
     /// Dup-split twiddles. The fixed-size type is load-bearing, not
     /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
@@ -101,6 +128,8 @@ pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
     /// kernel learned the same lesson first (gap_audit.md#base128-bounds);
     /// this module was shelved before that fix landed and never received it.
     table: Box<[T; TABLE_LANES]>,
+    /// Register layout used to build `table` and execute this plan.
+    lane_width: BaseLaneWidth,
     /// `W_8^1` and `W_8^3` as complex values for the eight-row column pass's
     /// splats; unread by the four-row pass, whose radix-4 column transform
     /// needs no multiply beyond its rotation.
@@ -110,12 +139,17 @@ pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
 impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
     BasePlan<T, ROWS, TABLE_LANES>
 {
-    /// Builds the immutable plan when the exact four-lane capability exists.
+    /// Builds the immutable plan for the widest native layout this kernel
+    /// implements. Scalar fallback is not a base-kernel capability.
     pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
-        exact_lanes_supported::<4, T>().then(Self::new::<INVERSE>)
+        let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
+        let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
+        let lane_width =
+            select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
+        Some(Self::new::<INVERSE>(lane_width))
     }
 
-    fn new<const INVERSE: bool>() -> Self {
+    fn new<const INVERSE: bool>(lane_width: BaseLaneWidth) -> Self {
         let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         let w = |j: usize, n: usize| -> [f64; 2] {
             let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
@@ -124,14 +158,22 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
         debug_assert_eq!(TABLE_LANES, table_lanes(ROWS));
         let n = 16 * ROWS;
         let mut table = Vec::with_capacity(TABLE_LANES);
-        let mut push_pair = |a: [f64; 2], b: [f64; 2]| {
-            for v in [[a[0], a[0], b[0], b[0]], [a[1], a[1], b[1], b[1]]] {
-                table.extend(v.map(T::from_precise));
-            }
-        };
         for a in 1..ROWS {
-            for g in 0..8 {
-                push_pair(w((a * 2 * g) % n, n), w((a * (2 * g + 1)) % n, n));
+            let groups = match lane_width {
+                BaseLaneWidth::Four => 8,
+                BaseLaneWidth::Eight => 4,
+            };
+            let samples_per_group = match lane_width {
+                BaseLaneWidth::Four => 2,
+                BaseLaneWidth::Eight => 4,
+            };
+            for group in 0..groups {
+                for component in 0..2 {
+                    for sample in 0..samples_per_group {
+                        let twiddle = w((a * (samples_per_group * group + sample)) % n, n);
+                        table.extend([T::from_precise(twiddle[component]); 2]);
+                    }
+                }
             }
         }
         // Broadcast row twiddles: each dup-split chunk pair repeats one
@@ -141,9 +183,11 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
                 table.extend([c; 4].map(T::from_precise));
             }
         };
-        push_broadcast(w(1, 16));
-        push_broadcast(w(3, 16));
-        let neg1 = w(1, 16);
+        let row1 = w(1, 16);
+        let row3 = w(3, 16);
+        push_broadcast(row1);
+        push_broadcast(row3);
+        let neg1 = row1;
         push_broadcast([-neg1[0], -neg1[1]]);
         table.extend([core::f64::consts::FRAC_1_SQRT_2; 4].map(T::from_precise));
 
@@ -152,7 +196,11 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
             .into_boxed_slice()
             .try_into()
             .unwrap_or_else(|_| unreachable!("the pushes above emit exactly TABLE_LANES lanes"));
-        Self { table, col }
+        Self {
+            table,
+            lane_width,
+            col,
+        }
     }
 }
 
@@ -189,7 +237,8 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
 
     /// Borrows the immutable inverse plan, initializing it once across clones.
     pub(crate) fn inverse(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
-        self.inverse.get_or_init(BasePlan::new::<true>)
+        self.inverse
+            .get_or_init(|| BasePlan::new::<true>(self.forward.lane_width))
     }
 
     #[cfg(test)]
@@ -584,18 +633,42 @@ where
     let flat: &mut [T; LANES] = bytemuck::cast_slice_mut(data)
         .try_into()
         .expect("invariant: the assertion above fixes the lane count");
-    hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
-        T,
-        INVERSE,
-        MEASURE_PHASES,
-        ROWS,
-        LANES,
-        TABLE_LANES,
-    > {
-        data: flat,
-        plan,
-    })
-    .unwrap_or(false)
+    let mut run_four = || {
+        hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
+            T,
+            INVERSE,
+            MEASURE_PHASES,
+            ROWS,
+            LANES,
+            TABLE_LANES,
+        > {
+            data: flat,
+            plan,
+        })
+        .unwrap_or(false)
+    };
+    // `MixedRadixScalar` is sealed to f32/f64. Keeping the eight-byte route
+    // outside the runtime width match preserves its pre-existing monomorphic
+    // kernel body; four-byte hosts still select between NEON-width and AVX2-
+    // width layouts once per base invocation.
+    if size_of::<T>() != 4 {
+        return run_four();
+    }
+    match plan.lane_width {
+        BaseLaneWidth::Four => run_four(),
+        BaseLaneWidth::Eight => hermes_simd::vectorize_lanes::<8, T, _>(wide::BaseTransform::<
+            T,
+            INVERSE,
+            MEASURE_PHASES,
+            ROWS,
+            LANES,
+            TABLE_LANES,
+        > {
+            data: flat,
+            plan,
+        })
+        .unwrap_or(false),
+    }
 }
 
 /// The 128-point base plan: eight rows of sixteen.
@@ -607,7 +680,8 @@ pub(crate) type State128<T> = BasePlanState<T, 8, { table_lanes(8) }>;
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, { table_lanes(4) }>;
 
-/// Runs the 128-point base butterfly when a four-lane backend is available.
+/// Runs the 128-point base butterfly when a supported native layout is
+/// available.
 ///
 /// # Panics
 ///
@@ -651,4 +725,17 @@ where
     Complex<T>: bytemuck::Pod,
 {
     transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }>(data, plan)
+}
+
+#[cfg(test)]
+mod lane_width_tests {
+    use super::{select_lane_width, BaseLaneWidth};
+
+    #[test]
+    fn selector_preserves_the_four_lane_eight_byte_route() {
+        assert_eq!(select_lane_width(8, true, true), Some(BaseLaneWidth::Four));
+        assert_eq!(select_lane_width(4, true, true), Some(BaseLaneWidth::Eight));
+        assert_eq!(select_lane_width(4, false, true), Some(BaseLaneWidth::Four));
+        assert_eq!(select_lane_width(4, false, false), None);
+    }
 }

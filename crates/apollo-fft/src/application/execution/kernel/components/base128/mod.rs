@@ -6,9 +6,10 @@
 //! stores land in natural output order. Two-and-a-half passes over the data
 //! where the batched four-step pays six.
 //!
-//! The current register map requests exactly four scalar lanes: f64 selects
-//! AVX2 even on AVX-512 hosts, while f32 selects NEON or Hermes' portable
-//! packed backend. A host without that width declines without mutation.
+//! The register map selects a native width once: f64 retains the four-lane
+//! AVX2 layout, f32 uses the eight-lane AVX2 layout or the four-lane NEON
+//! layout, and a host without either native capability declines without
+//! mutation. Hermes' scalar fallback is not reported as a base capability.
 //! The distribution-free median interval clears the production N = 128 route
 //! on both measured core types. [`crate::FftPlan1D`] owns the immutable forward
 //! plan and initializes inverse state on first use; plan clones share both
@@ -27,8 +28,8 @@ pub(crate) mod instance_major;
 
 #[cfg(test)]
 mod tests;
-// Windows-gated: pins threads through Win32 to control the hybrid scheduler.
-#[cfg(all(test, windows))]
+// x86-64 Windows-gated: pins threads and reads TSC phase counters.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 mod pinned_probe;
 
 /// Powers of two that decompose down to the 128-point base: 128 itself, and

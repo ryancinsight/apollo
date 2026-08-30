@@ -599,7 +599,21 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar with no vector unit at all [perf] — todo
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — review
+
+- **Integrator:** Codex `/root`; last update 2026-08-30.
+- **Lease:** none; exact source candidate `958fbfb2` is published for
+  independent and hosted review. No scalar trait or public plan surface is
+  changed.
+- **Scope/non-goals.** Add the smallest native eight-lane base-kernel variant
+  for four-byte scalars while retaining the four-lane eight-byte route. Do not
+  change FFT formulas, normalization, public API, benchmark workload, or the
+  f64 route; do not widen unrelated fixed-four-lane kernels in this increment.
+- **Exact entry baseline.** Standalone locked `c08ddf86`, unchanged
+  `rustfft_comparison`, one confirmation sweep on the current host (Apollo
+  median; Apollo/RustFFT): f32 n=64 76.12 ns / 3.72x, n=128 159.90 ns / 2.38x,
+  n=256 467.33 ns / 3.59x, n=512 970.01 ns / 3.54x. The f64 controls are
+  57.93/93.32/324.67/792.75 ns respectively.
 
 - **Root cause, traced 2026-08-29.** Sharper than this entry first recorded. It
   is not that a four-byte scalar runs at half register width — it runs with **no
@@ -654,21 +668,33 @@
   kernel variant, not a dispatch fix. The measurements above replace the
   earlier "5.8x against the eight-byte scalar" figure, which conflated the
   missing frame with the missing width.
-- **Breadth: this is every hermes-SIMD entry in the crate, not one kernel.**
-  All 15 `vectorize_lanes::<4, T>` / `exact_lanes_supported::<4, T>` call sites
-  in `apollo-fft` request exactly four lanes — `base128/{butterfly,
-  instance_major}.rs`, `batched/mod.rs`, `codelet/mod.rs`,
-  `resident/{mod,planar}.rs`, `test_support.rs`. A four-byte scalar matches
-  none of them on any backend, so it reaches a hermes vector unit nowhere in
-  this crate. The base kernel is where it is measurable, not where it is
-  confined.
+- **Breadth at entry.** Every Hermes-SIMD entry requested exactly four lanes,
+  so a four-byte scalar reached no native backend. This increment closes the
+  measured base family only. Batched, codelet, resident, and test-support
+  kernels retain their fixed-four-lane maps and remain separate capability
+  partitions rather than being widened without measurements.
 - **Secondary, and cheap.** Give `lane_capability` a query that distinguishes a
   natively-backed width from one the scalar fallback satisfies. The absence of
   that distinction is what let this sit: every call site reads
   `exact_lanes_supported` as "there is a vector unit for this".
-- **Acceptance.** The four-byte column at 128/256/512 improves against the
-  figures above with value parity unchanged, and the base route is entered only
-  where a vector backend actually serves it.
+- **Acceptance.** The four-byte column at 64/128/256/512 improves against the
+  figures above with value parity unchanged; the f64 route remains stable; the
+  base route is entered only where a vector backend serves it; warmed execution
+  adds no Apollo-global or direct-Mnemosyne allocation.
+- **Source-candidate evidence (`958fbfb2`).** Two affinitized 100-sample
+  base/candidate comparisons against immutable `c08ddf86` reduce f32 medians by
+  56.06%/56.15% at 64, 55.03%/54.87% at 128, 42.08%/42.50% at 256, and
+  38.95%/39.45% at 512, with disjoint exact median intervals. Corresponding
+  f64 controls remain within -1.12% to +0.16% and show no same-direction
+  regression. Focused value tests pass 16/16; the warmed allocation probe is
+  1/1 with every observed count zero; warning-denied all-target/all-feature
+  Clippy passes. Release f32 AVX2 codegen has no calls or capability probes,
+  and the scalar guard removes every f64 eight-lane specialization. The exact
+  debug and release package suites pass 500/500 each; warning-denied AArch64
+  Windows all-target compilation, Rustdoc, the compile-fail doctest, formatting,
+  and diff checks pass. The AArch64 gate also closed a pre-existing test-only
+  cfg mismatch by excluding the x86 TSC probe at its module boundary. Hosted
+  and independent-review closure remain open.
 
 
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28

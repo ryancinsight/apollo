@@ -18,6 +18,10 @@
   incumbent forward-twiddle table when the base route is selected. The local
   pinned instrument clears the incumbent; the unchanged hosted paired
   comparator remains the merge oracle for placement effects.
+- Revision 2026-08-30: adds a four-complex, eight-lane map for four-byte
+  scalars. Eight-byte scalars retain the original four-lane map; the plan
+  selects the widest implemented native layout and never treats Hermes'
+  scalar fallback as a base capability.
 
 ## Context
 
@@ -48,11 +52,13 @@ redistribution instead of repeatedly streaming the full transform.
    contiguous and naturally ordered. Dup-split twiddles reduce each general
    interleaved complex multiply to one shuffle, one multiply, and one
    alternating FMA.
-2. **Treat lane width as a capability, not an assumption.** The current map
-   requires four scalar lanes, or two interleaved complex samples. Hermes
-   `vectorize_lanes::<4, T, _>` selects f64 AVX2 even on AVX-512 hosts and
-   selects f32 NEON or the portable packed backend. A host without an exact
-   match declines before base/resident plan construction or mutation.
+2. **Treat lane width as a capability, not an assumption.** The base has two
+   layouts over one stage network: four lanes carry two interleaved complex
+   samples and eight lanes carry four. Four-byte scalars prefer the eight-lane
+   layout and otherwise use a native four-lane layout; eight-byte scalars use
+   only the four-lane layout. A scalar fallback does not satisfy this
+   capability. A host without an implemented native match declines before
+   plan construction or mutation.
 3. **Keep plans immutable and outside the hot call.** A selected dynamic
    `FftPlan1D` owns one `Arc`-shared base state. Construction initializes the
    immutable forward table, first inverse execution initializes the inverse
@@ -76,10 +82,11 @@ redistribution instead of repeatedly streaming the full transform.
 
 ## Failure modes and controls
 
-- A width mismatch could silently run the address map with the wrong number of
+- A width mismatch could silently run an address map with the wrong number of
   complex samples per register. Exact-count dispatch filters before invoking
-  the kernel, the kernel retains its local `LANE_COUNT == 4` invariant, and
-  tests assert execution or bit-preserving decline.
+  either kernel, each retains its local lane-count invariant, and tests assert
+  execution or bit-preserving decline. A hardware-independent selector test
+  pins the eight-byte scalar to four lanes even when eight lanes are available.
 - A benchmark could compare instrumented Apollo code with uninstrumented
   references. Const-specialized timing and attribution paths plus codegen
   inspection prevent that recurrence.
@@ -115,9 +122,11 @@ differential add independent transform and integration checks. Apollo Bench
 establishes pinned same-process timing with exact median intervals. Serialized
 TSC counters locate phase cost but do not establish wall-clock speedup. Codegen
 inspection establishes absence of probes and attribution instructions, not
-runtime latency. Hermes PR #86 establishes the exact-width provider contract;
-Apollo's hosted AVX-512 execution remains the integration gate for this
-consumer revision.
+runtime latency. The local host establishes the f32 AVX2 and f64 AVX2 routes;
+the AArch64 build establishes compilation but not execution or timing, and no
+local AVX-512 execution evidence exists. Hermes PR #86 establishes the
+exact-width provider contract; Apollo's hosted execution remains the
+integration gate for unmeasured targets.
 
 The corrected 100-sample run completed its measurement body in 11.98 seconds
 and produced 96.4799% exact distribution-free median intervals (nanoseconds):
