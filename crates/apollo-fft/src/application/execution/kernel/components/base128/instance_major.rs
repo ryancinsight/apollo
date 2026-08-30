@@ -166,14 +166,16 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
     BasePlanState<T, ROWS, TABLE_LANES>
 {
     /// Builds the forward plan when the exact-width route is available.
+    ///
+    /// Both row counts serve every scalar. The four-row route briefly carried
+    /// a per-scalar switch, because on 2026-08-29 a four-byte scalar measured
+    /// 252 ns against 126 ns without it at n = 64. Two things have changed
+    /// since: this construction replaced the sample-major kernel that measured
+    /// it, and hermes now enters its scalar fallback inside the AVX2+FMA frame
+    /// (`HS-SCALAR-FALLBACK-FRAME`). Re-measured against both, the route is
+    /// 76 ns against 126 ns — the reverse — so the switch is gone rather than
+    /// flipped.
     pub(crate) fn new_if_supported() -> Option<Self> {
-        // The four-row route is selected per scalar, not universally: its
-        // four lanes fill a whole register only for a scalar whose widest
-        // supported width is four, and `USE_BASE_64` carries that
-        // measurement. The eight-row route is profitable regardless.
-        if ROWS == 4 && !T::USE_BASE_64 {
-            return None;
-        }
         BasePlan::new_if_supported::<false>().map(|forward| Self {
             forward,
             inverse: OnceLock::new(),

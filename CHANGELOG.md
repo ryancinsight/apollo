@@ -132,16 +132,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   `PREFER_BLUESTEIN_MID_RADER` scalar constant is removed with the branch it
   drove.
 
-- [patch] The register-resident 8x8 base route at N = 64 is now selected per
-  scalar rather than universally. It is built on four-lane vectors, which fills
-  a whole vector register for an eight-byte scalar and half of one for a
-  four-byte scalar, where the generic sized-Stockham route uses the full width
-  and is faster. Measured interleaved in one process, best of 200 blocks of 100
-  transforms: a four-byte scalar at N = 64 falls from 252 ns to 126 ns, and the
-  RustFFT comparison sweep independently moves 264 ns to 134 ns (ratio 12.93x
-  to 4.68x). The eight-byte path is unchanged at 40 ns and keeps the route. The
-  wider 8x16 route serving 128, 256 and 512 is profitable for both and is not
-  gated.
+- [patch] The four-row base route serves every scalar again. It briefly carried
+  a per-scalar switch: on 2026-08-29 a four-byte scalar measured 252 ns at
+  N = 64 taking the route against 126 ns without it, because four lanes filled
+  only half a register for it. Two premises have since changed — the
+  instance-major construction replaced the sample-major kernel that was
+  measured, and hermes now enters its scalar fallback inside the AVX2+FMA
+  frame. Re-measured against both, the route is 73-76 ns against 126 ns, the
+  reverse of the original finding, so the switch is removed rather than
+  flipped. An eight-byte scalar is unchanged at 37 ns throughout.
 
 ### Added
 

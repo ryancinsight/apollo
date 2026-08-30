@@ -57,20 +57,6 @@ pub trait MixedRadixScalar:
     /// Whether N=72 is forced to the composite route for this scalar.
     const FORCE_COMPOSITE_72: bool;
 
-    /// Whether N=64 takes the register-resident 8x8 base route for this scalar.
-    ///
-    /// That kernel is built on four-lane vectors. Four lanes is a whole vector
-    /// register for a scalar whose widest supported width is four, and half a
-    /// register for one that supports eight, where the generic sized-Stockham
-    /// route uses the full width and wins. Measured interleaved in one process,
-    /// best of 200 blocks of 100 transforms: taking the base route costs 252 ns
-    /// against 126 ns without it for a four-byte scalar, and saves 40 ns against
-    /// 53 ns for an eight-byte one.
-    ///
-    /// The wider 8x16 route that serves 128, 256 and 512 is profitable for both
-    /// and carries no such switch.
-    const USE_BASE_64: bool;
-
     /// Whether Bluestein pads to a power-of-two length instead of the next
     /// 7-smooth length. This is a scalar policy because f32 and f64 favor
     /// different Stockham/composite tradeoffs.
