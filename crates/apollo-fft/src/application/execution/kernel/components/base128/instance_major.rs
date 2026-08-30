@@ -1,18 +1,3 @@
-// PRESERVED EXPERIMENT — not compiled. See gap_audit.md#base128-across-instance.
-//
-// The across-instance row layout for the 128-point base: registers hold two
-// FFT instances rather than two samples, so the redistribution pass folds
-// into a contiguous load, every row twiddle becomes a broadcast, and the
-// radix-4 x radix-4 decomposition needs no bit reversal. Verified against
-// all nine oracles; row multiplies 64 -> 16; the fused load-and-rows pass
-// measured 513 TSC against the baseline's 688.
-//
-// It is preserved rather than merged because it outgrows apollo's
-// single-kernel body: the untouched column pass degrades 4x (P-core) and
-// 12x (E-core), the partial-outlining signature. Restore it once the
-// transform is split into per-phase kernels with their own target-feature
-// scopes, which is how the reference is structured.
-
 //! The 128-point base butterfly: mixed radix 8 x 16, register-resident
 //! stages, one 2 KB staging buffer, no gathers and no scattered accesses.
 //!
@@ -99,8 +84,6 @@ pub(crate) struct Plan128<T> {
 }
 
 /// Chunk offsets into [`Plan128::table`].
-const T3_CH: usize = 0;
-const T4_CH: usize = 4;
 const MIX_CH: usize = 12;
 /// Broadcast `W_16^1`, `W_16^3`, and `-W_16^1` in dup-split form, plus the
 /// real `sqrt(2)/2` broadcast. The row transform holds two FFT *instances*
@@ -293,12 +276,7 @@ where
         let tab_view = simd.view(&self.plan.table);
         // Dup-split complex multiply: one shuffle, one multiply, one
         // alternating FMA (see the plan-layout doc).
-        let cmul = |v: ComplexReg<T, A>, ch: usize| {
-            let wr = hermes_simd::Vector::from_view_chunk(&tab_view, ch);
-            let wi = hermes_simd::Vector::from_view_chunk(&tab_view, ch + 1);
-            let vi = v.into_interleaved();
-            ComplexReg::from_interleaved(vi.fmaddsub(wr, vi.swap_adjacent() * wi))
-        };
+        let cmul = |v: ComplexReg<T, A>, ch: usize| super::cmul::cmul_chunk(&tab_view, v, ch);
         let zero = T::from_precise(0.0);
         let one = T::from_precise(1.0);
         let neg = T::from_precise(-1.0);
@@ -306,7 +284,7 @@ where
         // selecting the high complex of a register.
         let constants = [one, one, neg, neg, zero, zero, neg, neg];
         let constants = simd.view(&constants);
-        let sgn = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 0);
+        let _sgn = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 0);
         let hi_mask = hermes_simd::Vector::<T, A>::from_view_chunk(&constants, 1);
         let zero_complex = ComplexReg::from_interleaved(simd.zero());
         let complex_splat = |sample: Complex<T>| {
@@ -352,9 +330,10 @@ where
                 {
                     let mut zv = simd.view_mut(&mut zbuf);
                     let load_r = |b: usize| {
-                        ComplexReg::<T, A>::from_interleaved(
-                            hermes_simd::Vector::from_view_chunk(&data_view, 4 * b + p),
-                        )
+                        ComplexReg::<T, A>::from_interleaved(hermes_simd::Vector::from_view_chunk(
+                            &data_view,
+                            4 * b + p,
+                        ))
                     };
                     for b0 in 0..4usize {
                         let y = radix4::<T, A, INVERSE>([
@@ -388,7 +367,8 @@ where
                             ],
                         };
                         for (m, reg) in z.into_iter().enumerate() {
-                            reg.into_interleaved().store_to_view_chunk(&mut zv, 4 * m + b0);
+                            reg.into_interleaved()
+                                .store_to_view_chunk(&mut zv, 4 * m + b0);
                         }
                     }
                 }

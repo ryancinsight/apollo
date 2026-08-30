@@ -1,7 +1,8 @@
 //! Correctness for the 64- and 128-point base butterflies. The direct DFT is
 //! the analytical authority.
 
-use super::butterfly::{transform_128, transform_64, Plan128, Plan64};
+use super::butterfly::{transform_64, Plan64};
+use super::instance_major::{transform_128, Plan128};
 use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 
@@ -299,7 +300,7 @@ fn reduced_precision_computes_or_declines_without_mutation() {
 #[cfg(all(windows, target_arch = "x86_64"))]
 #[test]
 fn comparison_specialization_does_not_record_phases() {
-    use super::butterfly::phase_meter::{CALLS, PHASES};
+    use super::instance_major::phase_meter::{CALLS, PHASES};
     use std::sync::atomic::Ordering;
 
     CALLS.store(0, Ordering::Relaxed);

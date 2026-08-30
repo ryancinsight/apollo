@@ -262,12 +262,7 @@ where
         let tab_view = simd.view(self.plan.table.as_slice());
         // Dup-split complex multiply: one shuffle, one multiply, one
         // alternating FMA (see the plan-layout doc).
-        let cmul = |v: ComplexReg<T, A>, ch: usize| {
-            let wr = hermes_simd::Vector::from_view_chunk(&tab_view, ch);
-            let wi = hermes_simd::Vector::from_view_chunk(&tab_view, ch + 1);
-            let vi = v.into_interleaved();
-            ComplexReg::from_interleaved(vi.fmaddsub(wr, vi.swap_adjacent() * wi))
-        };
+        let cmul = |v: ComplexReg<T, A>, ch: usize| super::cmul::cmul_chunk(&tab_view, v, ch);
         let zero = T::from_precise(0.0);
         let one = T::from_precise(1.0);
         let neg = T::from_precise(-1.0);
@@ -457,12 +452,8 @@ where
     }
 }
 
-/// The 128-point base plan: eight rows of sixteen.
-pub(crate) type Plan128<T> = BasePlan<T, 8, { table_lanes(8) }>;
 /// The 64-point base plan: eight rows of eight.
 pub(crate) type Plan64<T> = BasePlan<T, 4, { table_lanes(4) }>;
-/// Directional state for the 128-point base.
-pub(crate) type State128<T> = BasePlanState<T, 8, { table_lanes(8) }>;
 /// Directional state for the 64-point base.
 pub(crate) type State64<T> = BasePlanState<T, 4, { table_lanes(4) }>;
 
@@ -504,22 +495,6 @@ where
     .unwrap_or(false)
 }
 
-/// Runs the 128-point base butterfly when a four-lane backend is available.
-///
-/// # Panics
-///
-/// If `data` is not exactly 128 samples.
-pub(crate) fn transform_128<T, const INVERSE: bool>(
-    data: &mut [Complex<T>],
-    plan: &Plan128<T>,
-) -> bool
-where
-    T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
-{
-    transform_base::<T, INVERSE, false, 8, 256, { table_lanes(8) }>(data, plan)
-}
-
 /// Runs the 64-point base butterfly: the same construction at half the row
 /// length, its row transform being the sixteen-sample one without the last
 /// stage.
@@ -536,17 +511,4 @@ where
     Complex<T>: bytemuck::Pod,
 {
     transform_base::<T, INVERSE, false, 4, 128, { table_lanes(4) }>(data, plan)
-}
-
-/// Runs the phase-attributed variant of the 128-point base butterfly.
-#[cfg(all(test, windows, target_arch = "x86_64"))]
-pub(crate) fn transform_128_measured<T, const INVERSE: bool>(
-    data: &mut [Complex<T>],
-    plan: &Plan128<T>,
-) -> bool
-where
-    T: MixedRadixScalar,
-    Complex<T>: bytemuck::Pod,
-{
-    transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }>(data, plan)
 }

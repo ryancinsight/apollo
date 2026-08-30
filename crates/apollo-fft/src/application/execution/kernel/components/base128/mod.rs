@@ -16,6 +16,15 @@
 //! phase attribution runs as a separate const-specialized pass.
 
 pub(crate) mod butterfly;
+pub(crate) mod cmul;
+
+/// The 128-point base: registers hold two FFT instances rather than two
+/// samples, which turns every row twiddle into a broadcast and cuts the row
+/// multiplies from 64 to 16 (gap_audit.md#across-instance-outlining).
+///
+/// [`butterfly`] keeps the sample-major construction, which is what the
+/// 64-point base still uses.
+pub(crate) mod instance_major;
 
 #[cfg(test)]
 mod tests;
@@ -49,10 +58,10 @@ const BASE: usize = 128;
 /// (gap_audit.md#flat-base-split).
 ///
 /// Reports whether the dispatched width ran it, matching
-/// [`butterfly::transform_128`].
+/// [`instance_major::transform_128`].
 pub(crate) fn transform_via_base_128<F, const INVERSE: bool>(
     data: &mut [F::Complex],
-    plan: &butterfly::Plan128<F>,
+    plan: &instance_major::Plan128<F>,
 ) -> bool
 where
     F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
@@ -63,7 +72,7 @@ where
     let n = data.len();
     debug_assert!(BASE_SPLIT_LENGTHS.contains(&n));
     if n == BASE {
-        return butterfly::transform_128::<F, INVERSE>(data, plan);
+        return instance_major::transform_128::<F, INVERSE>(data, plan);
     }
 
     let blocks = n / BASE;
@@ -79,7 +88,7 @@ where
                 }
             }
             for block in scratch.chunks_exact_mut(BASE).take(blocks) {
-                if !butterfly::transform_128::<F, INVERSE>(block, plan) {
+                if !instance_major::transform_128::<F, INVERSE>(block, plan) {
                     return false;
                 }
             }

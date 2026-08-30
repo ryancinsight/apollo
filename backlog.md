@@ -1,5 +1,33 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-INSTANCE-MAJOR-2026-08-29 — The across-instance layout ships [perf] [arch] — done 2026-08-29
+
+- **Delivered** (`gap_audit.md#across-instance-outlining`): the 128-point
+  base is the across-instance kernel — registers hold two FFT instances
+  rather than two samples, so row twiddles are broadcasts and the row
+  multiplies fall from 64 to 16. The 64-point base keeps the sample-major
+  kernel; the superseded 128-point path is deleted from it.
+- **Why it was shelved, and why that was wrong:** the record blamed
+  register pressure, the layout wanting sixteen live registers. It was one
+  closure. The kernel defined its complex multiply as a closure, LLVM
+  declined to inline it in a body this large, and the call fell out of the
+  dispatcher's `#[target_feature]` frame — so the column pass, 56 of those
+  multiplies, compiled at baseline and cost 1673 TSC against 341. Hoisting
+  it to a free `#[inline(always)]` function restored 341 exactly.
+- **Fourth occurrence of this defect** (hermes dispatch-inline, the strided
+  read closure, `root2_scale`, this). The multiply now has one definition in
+  `base128/cmul.rs` that both kernels call.
+- **Measured back to back in one session, controls within 1%:** 128
+  262.4 -> **215.9** ns (1.45 -> **1.19** against RustFFT), 256
+  679.0 -> **586.7** (1.65 -> **1.42**), 512 1636.9 -> **1438.1**
+  (1.57 -> **1.37**), 64 unchanged at 156 (does not use this kernel).
+  Apollo is now ahead of PhastFT at every power of two on the ladder.
+- **Measurement note:** the same baseline read 116/253/659/1579 earlier in
+  the day and 156/262/679/1637 now with the control unchanged. Absolute
+  levels at these sizes shift between builds by more than any change
+  measured here, so only back-to-back comparison counts; n = 64 is the
+  control that proves this one.
+
 ## ATLAS-APOLLO-BASE-OPS-2026-08-29 — Instruction model for the base kernel [perf] — done 2026-08-29
 
 - **Model** (`gap_audit.md#base-kernel-ops`): 411 static vector

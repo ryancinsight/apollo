@@ -10,29 +10,29 @@ use rustfft::num_complex::Complex as RustComplex;
 fn phase_attribution(
     src: &[Complex64],
     work: &mut [Complex64],
-    plan: &super::butterfly::Plan128<f64>,
+    plan: &super::instance_major::Plan128<f64>,
 ) -> [u64; 3] {
     use std::sync::atomic::Ordering;
 
     const CALLS: u64 = 8_192;
-    for phase in &super::butterfly::phase_meter::PHASES {
+    for phase in &super::instance_major::phase_meter::PHASES {
         phase.store(0, Ordering::Relaxed);
     }
-    super::butterfly::phase_meter::CALLS.store(0, Ordering::Relaxed);
+    super::instance_major::phase_meter::CALLS.store(0, Ordering::Relaxed);
     for _ in 0..CALLS {
         work.copy_from_slice(src);
-        assert!(super::butterfly::transform_128_measured::<f64, false>(
+        assert!(super::instance_major::transform_128_measured::<f64, false>(
             std::hint::black_box(work),
             plan,
         ));
     }
-    let calls = super::butterfly::phase_meter::CALLS
+    let calls = super::instance_major::phase_meter::CALLS
         .load(Ordering::Relaxed)
         .max(1);
     let mut averages = [0; 3];
     for (average, phase) in averages
         .iter_mut()
-        .zip(&super::butterfly::phase_meter::PHASES)
+        .zip(&super::instance_major::phase_meter::PHASES)
     {
         *average = phase.load(Ordering::Relaxed) / calls;
     }
@@ -68,16 +68,16 @@ fn small_sizes_against_the_references_by_core_type() {
                 plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
             });
             if n == 128 {
-                let base_plan = super::butterfly::Plan128::<f64>::new_if_supported::<false>()
+                let base_plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
                     .expect("the pinned host must provide the four-lane base capability");
                 work.copy_from_slice(&src);
                 assert!(
-                    super::butterfly::transform_128::<f64, false>(&mut work, &base_plan),
+                    super::instance_major::transform_128::<f64, false>(&mut work, &base_plan),
                     "the pinned host must provide the four-lane base capability"
                 );
                 suite.run(BenchmarkCase::new(core, "base-128", n), || {
                     work.copy_from_slice(&src);
-                    std::hint::black_box(super::butterfly::transform_128::<f64, false>(
+                    std::hint::black_box(super::instance_major::transform_128::<f64, false>(
                         std::hint::black_box(&mut work),
                         &base_plan,
                     ));

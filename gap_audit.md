@@ -1,3 +1,79 @@
+## The across-instance layout was blocked by a closure, not by registers (2026-08-29) <a id="across-instance-outlining"></a>
+
+The across-instance row layout — registers holding two FFT *instances* rather
+than two samples, so every row twiddle becomes a broadcast and the row
+multiplies fall from 64 to 16 — was
+[built, verified against every oracle, and shelved](#base128-across-instance).
+Its rows were faster even then. What sank it was that the **untouched column
+pass degraded fourfold**, which the record named "the partial-outlining
+signature" and attributed to the layout outgrowing a single kernel body.
+
+That was the right diagnosis of the symptom and the wrong one of the cause.
+
+Restored and re-measured on the current kernel, its own phase meter reads:
+
+| phase | shipped | across-instance |
+| --- | --- | --- |
+| redistribute + rows (fused) | 656 TSC | **460** |
+| columns | 341 | **1673** |
+
+The rows are 30% faster, as recorded. The columns — the same source as the
+shipped kernel's, doing the same work — cost five times as much.
+
+**The cause was one closure.** The kernel body defined its complex multiply
+as a closure, and a closure is inlined at LLVM's discretion. This body is
+large enough that LLVM declined, which drops the call out of the
+dispatcher's `#[target_feature]` frame and compiles it at baseline. The
+column pass performs 56 of those multiplies. Hoisting the closure into a
+free `#[inline(always)]` function:
+
+| phase | before | after |
+| --- | --- | --- |
+| columns | 1673 TSC | **341** |
+
+— exactly the shipped kernel's column cost, and the layout goes from 2.2x
+slower to **18% faster** on the 128-point transform in isolation.
+
+This is the fourth time this repository has paid for the same defect: the
+hermes dispatch-inline fix, the strided read closure, the `root2_scale`
+closure, and now this. The rule that keeps being relearned is that **a
+kernel must not depend on an inlining heuristic to be compiled for the
+instruction set it was dispatched to.** The multiply now lives in
+`base128/cmul.rs` as one free `#[inline(always)]` function that both base
+kernels call.
+
+### Measured in production
+
+The 128-point route is now the instance-major kernel; the 64-point route
+keeps the sample-major one. Baseline and candidate measured back to back in
+one session, controls matching within 1%:
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 64 | 156.2 ns | 156.9 | 1.87 -> 1.90 | 0.96 |
+| 128 | 262.4 | **215.9** | 1.45 -> **1.19** | 0.80 -> **0.66** |
+| 256 | 679.0 | **586.7** | 1.65 -> **1.42** | 0.98 -> **0.85** |
+| 512 | 1636.9 | **1438.1** | 1.57 -> **1.37** | 1.12 -> **0.98** |
+
+n = 64 does not use this kernel and does not move. Apollo is now ahead of
+PhastFT at every power of two the ladder covers.
+
+**A note on the numbers, because they moved under us.** The same baseline
+measured 116/253/659/1579 ns earlier in the day and 156/262/679/1637 now,
+with the RustFFT control unchanged to within 1% in both. Absolute levels at
+these sizes shift between builds by more than any change measured here —
+the code-placement sensitivity this repository has recorded before. Only
+back-to-back comparison in one session is worth anything, which is how the
+table above was taken, and the n = 64 column is the control that proves it:
+untouched route, untouched number.
+
+### What it does to the arithmetic line
+
+The [instruction model](#base-kernel-ops) put 408 of the kernel's 1686 ops
+in complex multiplies and named the across-instance layout as worth 144 of
+them, gated on sixteen live registers. It was never gated on registers. The
+row multiplies are now 16 rather than 64, on AVX2, today.
+
 ## What the base kernel spends, instruction by instruction (2026-08-29) <a id="base-kernel-ops"></a>
 
 With [the CPU re-probing removed](#base-kernel-probes) the kernel is worth
