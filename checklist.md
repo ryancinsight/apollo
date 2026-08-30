@@ -4,14 +4,14 @@
 
 - [x] Reproduce the current standalone locked f32/f64 power-of-two disparity
       with the unchanged clone-inclusive comparison instrument at `c08ddf86`.
-- [ ] Attribute the gap to native-width code generation and implement one
+- [x] Attribute the gap to native-width code generation and implement one
       canonical eight-lane four-byte base variant without changing the f64
       route or public surface.
-- [ ] Prove forward/inverse value semantics, no-mutation decline, and warm
+- [x] Prove forward/inverse value semantics, no-mutation decline, and warm
       allocation parity at 64/128/256/512 in debug and release profiles.
-- [ ] Run warning-denied diagnostics and inspect release code generation for
+- [x] Run warning-denied diagnostics and inspect release code generation for
       in-loop probes, calls, spills, and scalar fallback.
-- [ ] Retain only a paired benchmark improvement with stable f64 controls;
+- [x] Retain only a paired benchmark improvement with stable f64 controls;
       synchronize the gap audit, backlog, CHANGELOG, and exact evidence.
 - [ ] Obtain independent artifact review, publish, pass hosted gates, merge,
       and discharge the lease.

@@ -1,3 +1,55 @@
+## Four-byte base transforms use the native AVX2 width (2026-08-30) <a id="base-native-width"></a>
+
+The base plan previously requested exactly four scalar lanes for every
+precision. On AVX2 that is native for an eight-byte scalar, but a four-byte
+scalar has eight lanes. Hermes therefore reached its four-lane scalar fallback
+for f32: the base route still beat the generic route, but it executed at half
+the available register width and did not satisfy the module's native-capability
+contract.
+
+The base now has two layouts over the same radix-4-by-4 row and mixed-radix
+column network. The retained four-lane layout carries two interleaved complex
+samples and remains the only route for f64. The new eight-lane layout carries
+four f32 complex samples, groups four rows per register, and halves the row and
+column group counts. It reuses the existing twiddle-table tail for scalar
+broadcasts, so the wider route adds no plan allocation or duplicate constant
+storage. A native-capability query rejects Hermes' scalar fallback; plan
+construction selects the widest implemented native layout before execution.
+
+The unchanged 100-sample clone-inclusive instrument ran on one affinitized
+Windows P-core against immutable base `c08ddf86`. Two base and two candidate
+runs produced 96.4799% exact distribution-free median intervals. Every f32
+base/candidate interval is disjoint (nanoseconds; reduction compares the
+corresponding runs):
+
+| n | base medians | candidate medians | median reduction |
+| ---: | ---: | ---: | ---: |
+| 64 | 123.007 / 123.295 | 54.049 / 54.061 | 56.06% / 56.15% |
+| 128 | 255.815 / 255.841 | 115.032 / 115.457 | 55.03% / 54.87% |
+| 256 | 654.969 / 658.919 | 379.326 / 378.865 | 42.08% / 42.50% |
+| 512 | 1400.897 / 1394.107 | 855.183 / 844.192 | 38.95% / 39.45% |
+
+The f64 control medians remain within -1.12% to +0.16% of their corresponding
+base runs, with no same-direction regression. A final candidate run measured
+f32 at 54.463/115.725/379.314/845.048 ns against RustFFT at
+51.073/133.434/289.856/603.961 ns: Apollo is 1.07x, 0.87x, 1.31x, and 1.40x
+respectively. This closes the missing native width; it does not claim parity at
+every size.
+
+The warmed 64/128/256/512 execution census records zero global-allocator and
+zero direct-Mnemosyne allocations after plan construction. Release assembly
+for the f32 AVX2 128-point forward specialization has no calls or capability
+probes and only two counted-loop backedges; the scalar-width guard eliminates
+all f64 instantiations of the eight-lane body. Focused direct-DFT, incumbent,
+round-trip, normalization, clone-sharing, and reduced-precision oracles pass.
+
+Evidence is local AVX2 execution and revision-addressed source/codegen. The
+AArch64 gate proves compilation, not execution or timing; no local AVX-512
+runtime evidence exists. Processor affinity is applied after process launch
+but before the instrument's warm-up and measured samples. Allocation hooks
+cover Apollo's global allocator and direct Mnemosyne calls, not opaque OS or
+driver allocation.
+
 ## The instance-major construction generalizes to n = 64 (2026-08-30) <a id="instance-major-64"></a>
 
 n = 64 was the worst ratio on the ladder — 1.88 against RustFFT, against
@@ -34,8 +86,8 @@ at every size, most by 20-45%.
 
 The sample-major kernel now has no callers at any size and is deleted —
 `butterfly.rs`, its plan machinery, and its `REGS` generalization, about
-560 lines. Its per-scalar `USE_BASE_64` gate survives on the new plan:
-f32's widest width is not four lanes, so it still declines the 64 route.
+560 lines. The later [native-width increment](#base-native-width) removes the
+temporary f32 decline: the same plan now selects its eight-lane layout at 64.
 
 ### Falsified on the way here (same day)
 
@@ -784,6 +836,11 @@ where the present one holds a full n-element split buffer plus a half-plane.
 
 ## What a wider ISA would buy, and what stands in its way (2026-08-28) <a id="wider-isa"></a>
 
+**Revision 2026-08-30.** The [base-native-width increment](#base-native-width)
+closes this partition for f32 on AVX2 by adding a four-complex eight-lane map.
+The analysis below remains current for f64 AVX-512 and the other fixed-width
+kernel families; no local AVX-512 timing is claimed.
+
 [The arithmetic line closed](#base128-root2) by saying that further gain at
 n = 128 needs a register working set the AVX2 file cannot hold, so the next
 lever is a wider ISA rather than a better arrangement of this one. That is
@@ -816,14 +873,11 @@ our 64, matching the reference exactly — is preserved and waiting in
 
 ### What stands in the way, concretely
 
-Apollo's kernels do not prefer four lanes, they **require** them, at
-seventeen sites across six modules: `exact_lanes_supported::<4, T>()` gates
-plan construction, `vectorize_lanes::<4, T, _>` pins dispatch, and each
-kernel body opens with a `LANE_COUNT != 4` early return. The base kernel,
-the batched boundary, the N=16 codelet, and both resident row kernels all
-do it. On an AVX-512 host every one of them selects the AVX2 backend and
-runs at half width, so the wider ISA today buys **nothing at all** rather
-than something.
+The batched boundary, N=16 codelet, resident-row kernels, and the f64 base map
+still require four lanes: exact-count plan gates and dispatch pin them to that
+width, and their kernel bodies retain a four-lane invariant. The f32 base is
+the measured exception added in 2026-08-30. On an AVX-512 host the remaining
+fixed-width maps still select AVX2 and run below the widest ISA.
 
 Closing that is not a flag or a threshold. Each kernel's address map is
 written in chunks of two complex samples: phase one's block-pair
@@ -1437,6 +1491,12 @@ arithmetic-count comparison against the reference's stage structure, not
 another schedule of the current one.
 
 ## Native SIMD width is a capability partition (2026-08-27) <a id="native-width-partition"></a>
+
+**Revision 2026-08-30.** Fixed-four-lane dispatch remains the correct contract
+for kernels with only that address map. The base transform now implements a
+second eight-lane map and uses a native-capability query that does not mistake
+Hermes' scalar fallback for hardware SIMD; see
+[Four-byte base transforms use the native AVX2 width](#base-native-width).
 
 Hosted verification selected a widest-native width other than the four lanes
 required by the AVX2-shaped codelet and resident-row diagnostics. The kernels
