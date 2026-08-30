@@ -599,13 +599,12 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — in progress
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — review
 
 - **Integrator:** Codex `/root`; last update 2026-08-30.
-- **Lease:** Codex — `crates/apollo-fft/src/application/execution/kernel/
-  components/{base128,lane_capability.rs}`, focused tests/benchmark, and this
-  item's PM/CHANGELOG sections through the source-candidate commit. No scalar
-  trait or public plan surface is leased or changed.
+- **Lease:** none; exact source candidate `958fbfb2` is published for
+  independent and hosted review. No scalar trait or public plan surface is
+  changed.
 - **Scope/non-goals.** Add the smallest native eight-lane base-kernel variant
   for four-byte scalars while retaining the four-lane eight-byte route. Do not
   change FFT formulas, normalization, public API, benchmark workload, or the
@@ -682,8 +681,8 @@
   figures above with value parity unchanged; the f64 route remains stable; the
   base route is entered only where a vector backend serves it; warmed execution
   adds no Apollo-global or direct-Mnemosyne allocation.
-- **Source-candidate evidence.** Two affinitized 100-sample base/candidate
-  comparisons against immutable `c08ddf86` reduce f32 medians by
+- **Source-candidate evidence (`958fbfb2`).** Two affinitized 100-sample
+  base/candidate comparisons against immutable `c08ddf86` reduce f32 medians by
   56.06%/56.15% at 64, 55.03%/54.87% at 128, 42.08%/42.50% at 256, and
   38.95%/39.45% at 512, with disjoint exact median intervals. Corresponding
   f64 controls remain within -1.12% to +0.16% and show no same-direction
