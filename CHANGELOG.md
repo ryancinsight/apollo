@@ -54,10 +54,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] Apollo's default benchmark profile now inherits the release profile
+  without code-generation overrides. This removes a benchmark-only 21.86x
+  slowdown observed at the 1,024-point QFT boundary while preserving the
+  separate `bench-quick` profile for fast smoke compilation; production FFT
+  source and routing are unchanged.
 - [patch] [perf] Reusable CPU QFT plans now share one Apollo FFT plan and use
   it for every positive length. An exact-revision, same-process 100-sample
   comparison against the retained dense/Hermes kernel reduces forward medians
-  by 24.92% to 99.60% across lengths 1--1024. Caller-owned forward-plus-inverse
+  by 59.08% to 99.67% across lengths 1--1024 under the release profile.
+  Caller-owned forward-plus-inverse
   execution at 127 and 256 remains allocation- and reallocation-free after
   warm-up. Plans no longer retain a separate 16N-byte QFT twiddle vector or
   populate a 16N-byte QFT lane scratch on each participating Moirai worker;

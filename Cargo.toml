@@ -43,9 +43,9 @@ incremental = false
 lto = false
 
 [profile.bench]
+# Performance measurements use the exact release optimization contract.
+# `bench-quick` remains the explicit fast-compilation profile for smoke runs.
 inherits = "release"
-codegen-units = 8
-lto = "thin"
 
 
 [workspace.package]
