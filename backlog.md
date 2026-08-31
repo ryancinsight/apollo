@@ -97,6 +97,60 @@
   length in `2..=2048`, plus the tracked lengths above it, now passes with no
   wrong answers and no refusals.
 
+## ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31 — A per-length kernel cost 13x at the length it specialized [perf] — review
+
+- **Finding.** `ReducedStockhamAvxFma::stage_triple` dispatched a hand-written
+  `stage_triple_radix1_n1024_avx_fma` for a four-byte scalar at n = 1024. It
+  cost **7697 ns against 590 ns** for the generic arm below it — 13x, in the
+  direction it was written to improve.
+- **Measured** (interleaved with f64 and n = 2048 as controls, best of 200
+  blocks of 200 transforms, three repeats):
+
+  | n | specialized | generic | verdict |
+  |---|---|---|---|
+  | 256 | 217.5 ns | 217.5 ns | no effect |
+  | 512 | 550.0 ns | 542.5 ns | no effect |
+  | **1024** | **7697.5 ns** | **590.0 ns** | **13.0x worse** |
+  | 32768 | 54225 ns | 55243 ns | ~2% better |
+
+  Only 1024 is harmful, so only its arm is removed. The eight-byte scalar held
+  at 1455-1570 ns throughout and n = 2048 at ~3040 ns, both unaffected.
+- **Why it was written.** Its own comment targets "1024/32768 PoT (md 32768
+  f64 2.75x); f32 avx sub for rader bluestein pads" — f64 at 32768 and the
+  Bluestein pad sizes. A four-byte scalar at n = 1024 as a transform length was
+  never the case it was measured on, and it is the case it was applied to.
+- **Tell.** n = 1024 cost 2.5x n = 2048 for the same scalar, at half the work.
+  A length costing more than twice its double is a routing fact, not a scaling
+  one.
+- **The AVX-512 dispatch keeps its arm.** `ReducedStockhamAvx512` calls the
+  same kernel at 512 and 1024 through a different backend, unmeasurable here
+  (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
+  rather than changed blind.
+
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — todo
+
+- **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
+  the committed instrument measures nothing at or above 1024. Per-length
+  specializations exist at 256, 512, 1024 and 32768; a sweep that stops below
+  the largest of them cannot see what they do. That is how a 13x pessimization
+  at 1024 survived (`ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31`) — it was
+  found by hand, not by the instrument built for it.
+- **Naive extension does not work, tested.** Adding 1024 and 2048 to
+  `DEFAULT_SIZES` produced rows that swing 3x between consecutive runs on an
+  idle host: the eight-byte scalar at 1024 read 43268 ns then 14018 ns, and the
+  four-byte at 2048 read 46861 ns then 16836 ns, against a stable 1480 ns and
+  3040 ns from an interleaved best-of probe. 43 us for a 1024-point transform
+  is also implausible on its face when the reference does it in 1.3 us.
+- **Cause to confirm.** The per-case configuration is 20 ms warm-up and 80 ms
+  measurement; at these lengths that admits few enough samples that the median
+  is dominated by scheduler noise. The instrument reports medians, and the
+  fix is a per-size measurement budget rather than one flat pair.
+- **Acceptance.** Sizes at and above 1024 appear in the default sweep with
+  consecutive runs agreeing to within a few percent, and agreeing with an
+  interleaved best-of probe at the same lengths. Until then the extension stays
+  reverted: a row that swings 3x is worse than an absent one, because it will
+  be read as a regression.
+
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
 - **What happened.** `USE_BASE_64` was added 2026-08-29 on a real measurement:
