@@ -17,6 +17,7 @@
 //! phase attribution runs as a separate const-specialized pass.
 
 pub(crate) mod cmul;
+mod split_boundary;
 
 /// The base kernels: registers hold two FFT instances rather than two
 /// samples, which turns every row twiddle into a broadcast and cuts the row
@@ -80,11 +81,28 @@ where
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         n,
         |scratch| {
-            // One gather covering every level.
-            for (b, block) in scratch.chunks_exact_mut(BASE).enumerate().take(blocks) {
-                let offset = b.reverse_bits() >> (usize::BITS - bits);
-                for (j, slot) in block.iter_mut().enumerate() {
-                    *slot = data[j * blocks + offset];
+            // One gather covering every level — the whole-register blend
+            // network where the width admits it, the scalar strided read
+            // otherwise (gap_audit.md#split-boundary).
+            let gathered = if blocks == 2 {
+                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 2> {
+                    src: bytemuck::cast_slice(&*data),
+                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
+                })
+                .unwrap_or(false)
+            } else {
+                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 4> {
+                    src: bytemuck::cast_slice(&*data),
+                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
+                })
+                .unwrap_or(false)
+            };
+            if !gathered {
+                for (b, block) in scratch.chunks_exact_mut(BASE).enumerate().take(blocks) {
+                    let offset = b.reverse_bits() >> (usize::BITS - bits);
+                    for (j, slot) in block.iter_mut().enumerate() {
+                        *slot = data[j * blocks + offset];
+                    }
                 }
             }
             for block in scratch.chunks_exact_mut(BASE).take(blocks) {
@@ -135,11 +153,19 @@ where
     let combine = &twiddles[len - 1..2 * len - 1];
     for pair in data.chunks_exact_mut(2 * len) {
         let (low, high) = pair.split_at_mut(len);
-        for j in 0..len {
-            let rotated = high[j] * combine[j];
-            let even = low[j];
-            low[j] = even + rotated;
-            high[j] = even - rotated;
+        let handled = hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::CombineInPlace {
+            low: bytemuck::cast_slice_mut(low),
+            high: bytemuck::cast_slice_mut(high),
+            tw: bytemuck::cast_slice(combine),
+        })
+        .unwrap_or(false);
+        if !handled {
+            for j in 0..len {
+                let rotated = high[j] * combine[j];
+                let even = low[j];
+                low[j] = even + rotated;
+                high[j] = even - rotated;
+            }
         }
     }
 }
@@ -159,9 +185,19 @@ where
     let combine = &twiddles[len - 1..2 * len - 1];
     let (even, odd) = scratch.split_at(len);
     let (low, high) = out.split_at_mut(len);
-    for j in 0..len {
-        let rotated = odd[j] * combine[j];
-        low[j] = even[j] + rotated;
-        high[j] = even[j] - rotated;
+    let handled = hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::CombineInto {
+        even: bytemuck::cast_slice(even),
+        odd: bytemuck::cast_slice(odd),
+        low: bytemuck::cast_slice_mut(low),
+        high: bytemuck::cast_slice_mut(high),
+        tw: bytemuck::cast_slice(combine),
+    })
+    .unwrap_or(false);
+    if !handled {
+        for j in 0..len {
+            let rotated = odd[j] * combine[j];
+            low[j] = even[j] + rotated;
+            high[j] = even[j] - rotated;
+        }
     }
 }
