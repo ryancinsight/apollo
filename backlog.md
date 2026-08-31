@@ -18,6 +18,28 @@
   PR, and merge remain.
 - **Integrator / lease:** Codex `/root`; lease none. Last update 2026-08-31.
 
+## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 — Remove the 1,024-point power-of-two cliff [perf] [patch] — in-progress
+
+- **Outcome:** reduce the measured 1,024-point f64 FFT cost without regressing
+  the existing 64/128/256/512 base ladder or changing public FFT semantics.
+- **Scope / non-goals:** profile and route Apollo FFT's dynamic 1,024-point
+  power-of-two plan; reuse Hermes, Moirai, and Mnemosyne only through their
+  canonical Apollo FFT seams. Do not tune the QFT instrument, change workloads,
+  or add a per-length clone of an existing generic kernel.
+- **Acceptance:** revision-attested sampling and route inspection explain why
+  N=1,024 costs 43.524 microseconds while N=256 costs 0.351 microseconds; a
+  bounded production candidate preserves forward/inverse direct-DFT,
+  normalization, round-trip, f32/f64, warm-allocation, and clone-sharing
+  contracts; the unchanged extended comparison sweep records stable paired
+  medians with 64--512 controls; warning-denied, release, codegen, lock, docs,
+  and independent-review gates pass. Change class [patch], risk [perf].
+- **Dependencies / lease:** QFT PR #213 is enqueued for independent and hosted
+  review. Integrator Codex `/root`; lease `crates/apollo-fft/src/application/
+  execution/{plan/fft/dimension_1d/**,kernel/components/{base128,resident}/**}`,
+  focused FFT tests, the owner-keyed checklist section, and this item. The
+  peer-owned batched kernel and comparison instrument remain out of scope.
+  Last update 2026-08-31.
+
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 
 - **Delivered** (`gap_audit.md#instance-major-64`): the instance-major
