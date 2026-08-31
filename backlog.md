@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — in-progress
+
+- **Outcome:** replace the reusable QFT plan's O(N²) large-length execution
+  with the existing Apollo FFT provider while retaining the dense kernel as
+  the small-length path and independent differential oracle.
+- **Scope / non-goals:** `apollo-qft` plan, dense-kernel tests, one bounded
+  benchmark/allocation instrument, Rustdoc, CHANGELOG, and PM evidence only.
+  Preserve the public API, serialized representation, unitary sign and
+  normalization conventions, typed/Leto behavior, and the dense formula; do
+  not change Apollo FFT routing or unrelated GPU paths.
+- **Acceptance:** a same-process paired instrument establishes the crossover;
+  every routed forward/inverse length matches the dense direct DFT within a
+  derived f64 bound; even, odd, prime, power-of-two, contiguous, strided, and
+  serialized-plan cases preserve values; construction retains one FFT plan;
+  warmed caller-owned execution allocates zero times and no longer retains
+  one O(N) generated-weight scratch per participating worker; package Clippy,
+  Nextest, Rustdoc/doctests, benchmark smoke, lock integrity, and an
+  independent artifact review pass.
+- **Integrator / lease:** Codex `/root`; lease
+  `crates/apollo-qft/{Cargo.toml,src/**,benches/**}`, `CHANGELOG.md`, this item,
+  the owner-keyed checklist section, and the QFT gap-audit entry. Last update
+  2026-08-31.
+
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 
 - **Delivered** (`gap_audit.md#instance-major-64`): the instance-major
