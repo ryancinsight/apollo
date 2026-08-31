@@ -315,12 +315,12 @@ impl StockhamPrecision for ReducedStockhamAvxFma {
             unsafe {
                 stage_triple_radix1_n512_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
             };
-        } else if radix == 1 && n == 1024 {
-            // Per-LOG2 unroll for n=1024 radix1 (len1024 first pass + p=1024 f32 pads): n1024 special.
-            // Targets 1024/32768 PoT (md 32768 f64 2.75x); f32 avx sub for rader bluestein pads. Additive to n512 + ZST.
-            unsafe {
-                stage_triple_radix1_n1024_avx_fma::<f32>(src, dst, second_twiddles, third_twiddles)
-            };
+        // n = 1024 deliberately has no specialization here. One existed and
+        // was removed: measured against the generic arm below, best of 200
+        // blocks of 200 transforms, it cost 7697 ns against 590 ns — 13x, in
+        // the direction the specialization was meant to improve. Its note
+        // targeted f64 at 32768 and the Bluestein pads, so the four-byte
+        // scalar at this length was never the case it was measured on.
         } else if radix == 1 && n == 32768 {
             // 4x unrolled k loop for n=32768 radix1 first pass (len32768, md f64 2.75x).
             // Additive to n1024. 4 do_one/iter for higher ILP. Uniform step (avx f32 step=4 + avx512).
