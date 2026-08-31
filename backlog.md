@@ -226,9 +226,11 @@
   comparison from `ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31`; production FFT
   kernel regions remain unleased until attribution selects one.
 - **Integrator / lease:** `/root`; lease `/root` on
-  `crates/apollo-fft/src/application/execution/kernel/components/batched/pinned_ladder.rs`
-  and this item's PM hunks; production kernel regions remain unleased pending
-  phase attribution; last update 2026-08-31.
+  `crates/apollo-fft/src/application/execution/kernel/components/batched/pinned_sections.rs`
+  and this item's PM hunks; the first direct reconstruction proved N=32,768
+  uses the four-step route rather than the standalone Stockham path. Production
+  kernel regions remain unleased pending phase attribution; last update
+  2026-08-31.
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
 
