@@ -88,16 +88,19 @@ checks; PR #200 merged as `62b05816`.
       large-size warm survivors without changing workloads.
 - [x] Remove the largest avoidable production-owned term while preserving the
       non-increasing warm-call allocation bound and value-semantic FFT oracles.
-- [ ] Pass focused warning-denied checks, Nextest, exact retained-memory census,
-      timing-census regression checks, independent review, and merge.
+- [x] Pass source gates and merge Apollo PR #169; merge Moirai provider PR #187;
+      refresh the exact retained-memory census against the current providers.
 
-The corrected global pointer ledger measures 1,169,112 live requested bytes.
-The direct Mnemosyne pointer ledger independently measures 96 local-deque
-payload allocations of 32,768 bytes, totaling 3,145,728 bytes and exactly
-matching the 24-worker source model. The concurrent 210,763,776-byte process
-mapping delta is virtual address space, not resident or live-payload evidence.
-The 87,768-byte remainder is 83,914 bytes of source-attributed Moirai control
-state plus 3,854 bytes at the standard-library thread-spawn boundary. The
+The original corrected global pointer ledger measured 1,169,112 live requested
+bytes. Its direct Mnemosyne ledger measured 96 local-deque payload allocations
+of 32,768 bytes, totaling 3,145,728 bytes and exactly matching the 24-worker
+source model. The 2026-08-31 refresh after Moirai PR #187 records 1,070,816
+global bytes plus 96 direct 16,384-byte blocks, totaling 1,572,864 direct bytes.
+The concurrent mapped-address delta is virtual address space, not resident or
+live-payload evidence.
+In the original census, the 87,768-byte remainder was 83,914 bytes of
+source-attributed Moirai control state plus 3,854 bytes at the standard-library
+thread-spawn boundary. The
 4,096- and 8,192-byte FFT survivors were worker-local row scratch allocated
 through Mnemosyne's globally allocated `AlignedVec`, not queue payload. Paired
 active/inactive four-step planes remove that scratch; the exact candidate
