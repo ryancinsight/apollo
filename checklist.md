@@ -35,14 +35,14 @@
 
 ## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 [perf] — Codex
 
-- [ ] Reproduce the pinned N=512 baseline with 64/128/256 controls and isolate
+- [x] Reproduce the pinned N=512 baseline with 64/128/256 controls and isolate
       the existing fused final's load/store cost without changing the probe.
-- [ ] Fuse both 512-point combine levels into the block-one/block-three base
-      stores, preserving the four-lane decline and incumbent fallback paths.
-- [ ] Differential-test f32/f64 forward, inverse, normalization, round-trip,
+- [x] Fuse both 512-point combine levels into the block-one/block-three base
+      stores, preserving the eight-lane decline and incumbent fallback paths.
+- [x] Differential-test f32/f64 forward, inverse, normalization, round-trip,
       clone sharing, and warm allocation semantics across every split length.
-- [ ] Retain only a stable paired-median win with non-regressing controls and
-      verify the exact target-feature codegen has no hot-path dispatch branch.
+- [x] Retain only a stable paired-median win with non-regressing controls and
+      verify the exact target-feature codegen has no hot-path store-mode branch.
 - [ ] Pass warning-denied, debug/release, lock, documentation, independent
       review, hosted, and merge gates; discharge all leases.
 

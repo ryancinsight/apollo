@@ -40,6 +40,26 @@ pub(crate) const BASE_SPLIT_LENGTHS: [usize; 3] = [128, 256, 512];
 /// Length of the base transform every split bottoms out in.
 const BASE: usize = 128;
 
+fn base_lanes<T>(data: &[eunomia::Complex<T>]) -> &[T; 2 * BASE]
+where
+    T: bytemuck::Pod,
+    eunomia::Complex<T>: bytemuck::Pod,
+{
+    bytemuck::cast_slice(data)
+        .try_into()
+        .expect("invariant: one base block is exactly 256 scalar lanes")
+}
+
+fn base_lanes_mut<T>(data: &mut [eunomia::Complex<T>]) -> &mut [T; 2 * BASE]
+where
+    T: bytemuck::Pod,
+    eunomia::Complex<T>: bytemuck::Pod,
+{
+    bytemuck::cast_slice_mut(data)
+        .try_into()
+        .expect("invariant: one base block is exactly 256 scalar lanes")
+}
+
 /// Transforms `data` by decimating down to the 128-point base.
 ///
 /// The four-step route pays six passes over the array regardless of size,
@@ -110,8 +130,7 @@ where
             // writing both halves of `data` directly — no separate combine
             // pass and no store-then-reload of the odd spectrum
             // (gap_audit.md#combine-sink). A width that does not carry the
-            // sink falls back to the two-pass form; four blocks keep the
-            // fused two-level final.
+            // sink falls back to the two-pass form.
             if blocks == 2 {
                 let (even, odd) = scratch.split_at_mut(BASE);
                 if !instance_major::transform_128::<F, INVERSE>(even, plan) {
@@ -125,10 +144,10 @@ where
                         odd,
                         plan,
                         instance_major::CombineSink {
-                            peer: bytemuck::cast_slice(even),
-                            tw: bytemuck::cast_slice(combine),
-                            low: bytemuck::cast_slice_mut(low),
-                            high: bytemuck::cast_slice_mut(high),
+                            peer: base_lanes(even),
+                            tw: base_lanes(combine),
+                            low: base_lanes_mut(low),
+                            high: base_lanes_mut(high),
                         },
                     ) {
                         return true;
@@ -140,7 +159,107 @@ where
                 combine_final::<F, INVERSE>(data, scratch, BASE);
                 return true;
             }
+            // Four blocks on the same four-lane layout keep only the even
+            // pair's two halves as an intermediate. Block one writes those
+            // halves into the first two output quarters; block three applies
+            // its pair butterfly and the outer level as its registers leave
+            // the base kernel, replacing the intermediates and filling the
+            // last two quarters. The detached scalar final pass disappears.
+            if plan.combine_sink_supported() {
+                let inner_twiddles = combine_twiddles::<F, INVERSE>(BASE);
+                let inner = &inner_twiddles[BASE - 1..2 * BASE - 1];
+                let outer_twiddles = combine_twiddles::<F, INVERSE>(2 * BASE);
+                let outer = &outer_twiddles[2 * BASE - 1..4 * BASE - 1];
+                let (outer_low, outer_high) = outer.split_at(BASE);
+
+                let (b01, b23) = scratch[..n].split_at_mut(2 * BASE);
+                let (b0, b1) = b01.split_at_mut(BASE);
+                let (b2, b3) = b23.split_at_mut(BASE);
+                // Establish that both ordinary base calls run before the
+                // first output mutation. The plan's one selected native
+                // width makes the following two sink calls the same
+                // capability decision.
+                if !instance_major::transform_128::<F, INVERSE>(b0, plan)
+                    || !instance_major::transform_128::<F, INVERSE>(b2, plan)
+                {
+                    return false;
+                }
+                {
+                    let (even, _) = data.split_at_mut(2 * BASE);
+                    let (even_low, even_high) = even.split_at_mut(BASE);
+                    if !instance_major::transform_128_combining::<F, INVERSE>(
+                        b1,
+                        plan,
+                        instance_major::CombineSink {
+                            peer: base_lanes(b0),
+                            tw: base_lanes(inner),
+                            low: base_lanes_mut(even_low),
+                            high: base_lanes_mut(even_high),
+                        },
+                    ) {
+                        return false;
+                    }
+                }
+                let (low, high) = data.split_at_mut(2 * BASE);
+                let (even_low, even_high) = low.split_at_mut(BASE);
+                let (high_low, high_high) = high.split_at_mut(BASE);
+                return instance_major::transform_128_combining_final::<F, INVERSE>(
+                    b3,
+                    plan,
+                    instance_major::FinalCombineSink {
+                        peer: base_lanes(b2),
+                        inner_tw: base_lanes(inner),
+                        even_low: base_lanes_mut(even_low),
+                        even_high: base_lanes_mut(even_high),
+                        outer_low_tw: base_lanes(outer_low),
+                        outer_high_tw: base_lanes(outer_high),
+                        high_low: base_lanes_mut(high_low),
+                        high_high: base_lanes_mut(high_high),
+                    },
+                );
+            }
             for block in scratch.chunks_exact_mut(BASE).take(blocks) {
+                if !instance_major::transform_128::<F, INVERSE>(block, plan) {
+                    return false;
+                }
+            }
+            combine_final4::<F, INVERSE>(data, scratch, BASE);
+            true
+        },
+    )
+}
+
+#[cfg(test)]
+fn transform_via_base_128_incumbent<F, const INVERSE: bool>(
+    data: &mut [F::Complex],
+    plan: &instance_major::Plan128<F>,
+) -> bool
+where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+    eunomia::Complex<F>: bytemuck::Pod,
+{
+    let n = data.len();
+    assert_eq!(n, 4 * BASE, "the incumbent probe covers only N=512");
+    <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
+        n,
+        |scratch| {
+            let gathered =
+                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 4> {
+                    src: bytemuck::cast_slice(&*data),
+                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
+                })
+                .unwrap_or(false);
+            if !gathered {
+                for (block_index, block) in scratch.chunks_exact_mut(BASE).enumerate().take(4) {
+                    let offset = block_index.reverse_bits() >> (usize::BITS - 2);
+                    for (index, slot) in block.iter_mut().enumerate() {
+                        *slot = data[4 * index + offset];
+                    }
+                }
+            }
+            for block in scratch.chunks_exact_mut(BASE).take(4) {
                 if !instance_major::transform_128::<F, INVERSE>(block, plan) {
                     return false;
                 }

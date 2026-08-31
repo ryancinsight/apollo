@@ -444,6 +444,33 @@ fn native_width_base_warm_execution_is_allocation_free() {
             "warmed f32 n={n} execution allocated directly through Mnemosyne"
         );
     }
+
+    for n in [64usize, 128, 256, 512] {
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let mut signal = (0..n)
+            .map(|index| {
+                let x = index as f64;
+                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect::<Vec<_>>();
+
+        plan.forward_complex_slice_inplace(&mut signal);
+        let label = format!("warm f64 n={n}");
+        window(&label, || {
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+        });
+
+        assert_eq!(
+            GLOBAL_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed f64 n={n} execution allocated through the global allocator"
+        );
+        assert_eq!(
+            MNEMOSYNE_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed f64 n={n} execution allocated directly through Mnemosyne"
+        );
+    }
 }
 
 #[test]

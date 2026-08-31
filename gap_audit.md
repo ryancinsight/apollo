@@ -69,15 +69,17 @@ remaining structural waste was at the split: the odd block's column pass
 stored its spectrum to scratch, and the combine pass immediately reloaded
 it, rotated it, and wrote the real output.
 
-Phase 3 now takes an optional [`CombineSink`]: when the block is the odd
+Phase 3 now takes a type-selected [`CombineSink`]: when the block is the odd
 half of a split pair, the register bound for output index `j` produces
 `peer[j] + W^j reg` and `peer[j] - W^j reg` into the parent's two output
 halves directly. The separate combine pass and the odd spectrum's
-store-then-reload cease to exist. The sink follows the batched driver's
-loop-invariant `fold: Option<..>` idiom, so the `None` monomorphization
-keeps its plain store loop — verified by the flat n = 128 control below,
-not assumed. The twiddles come interleaved from the existing cache
-through a general `ComplexReg` multiply: one more shuffle per chunk than
+store-then-reload cease to exist. Direct, pair, and four-block-final stores
+are separate generic monomorphizations, so no mode branch reaches the column
+loop. Every operand has the fixed `[T; 256]` lane shape established once at
+the caller; optimized AVX2 assembly contains no sink call and reduces the
+final sink from ten compares and eleven conditional jumps to three compares
+and four conditional jumps. The twiddles come interleaved from the existing
+cache through a general `ComplexReg` multiply: one more shuffle per chunk than
 the dup-split form, and no second cached table representation.
 
 Only the four-lane kernel carries the sink; a host that selects the
@@ -96,13 +98,29 @@ n = 256 has moved 1.35 -> 1.31 -> 1.25 across this and the previous
 increment; its remaining composition is two base transforms (~365 ns), a
 38 ns gather, and the fused output pass.
 
-**512's version is filed, not built.** Its four blocks would need the
-two-level form — block 1 combining into an `E` region, block 3 applying
-*both* levels as it stores (its own pair's butterfly and then the
-`W_512` layer against `E`) — which is a different sink shape carrying two
-twiddle sets and four output quarters. The one-level sink measured a wash
-at 512 by analysis (it replaces one one-pass combine with another); only
-the two-level fusion deletes a pass there.
+The retained four-block form applies both levels as block three stores: block
+one writes the even pair into the first two output quarters, then block three
+combines with block two and applies the outer `W_512` layer against that pair,
+replacing the intermediates and filling all four quarters. This removes the
+detached scalar final pass and avoids materializing the two odd spectra. It
+does **not** remove a full 16 KiB of aggregate transfer: writing and rereading
+the even-pair intermediate keeps the scalar transfer count comparable. The
+measured gain comes from fixed-shape, cache-local SIMD stores with the hot
+bounds checks eliminated, not from a bandwidth claim.
+
+Three same-buffer ABBA confirmations use one non-inlined indirect call wrapper
+for both candidate and incumbent, so closure codegen and address placement are
+identical; the third run binds the final source layout. N = 256 invokes the
+same production function in both arms as the positional control. Median
+improvements at N = 512 were 0.44--2.70% on the pinned P-core and
+18.36--19.51% on the pinned E-core; all N = 256 control medians remained within
+0.2% with overlapping intervals. The test-only incumbent reconstructs the
+former gather, four ordinary bases, and `combine_final4` route. Independent
+direct DFTs cover f64 forward and normalized inverse at N = 256/512 and f32
+forward at N = 512. Warm f32/f64 execution at N = 64/128/256/512 records zero
+global and zero direct-Mnemosyne allocations. AArch64 Windows establishes
+warning-denied compilation only; the local host supplies no AArch64 or AVX-512
+execution timing.
 
 ## Small non-smooth Rader routing (2026-08-31) <a id="small-nonsmooth-rader"></a>
 

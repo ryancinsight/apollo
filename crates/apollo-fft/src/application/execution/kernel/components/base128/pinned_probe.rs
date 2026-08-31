@@ -7,6 +7,19 @@ use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
 use rustfft::num_complex::Complex as RustComplex;
 
+type BenchTransform = fn(&mut [Complex64], &super::instance_major::Plan128<f64>) -> bool;
+
+#[inline(never)]
+fn run_bench_transform(
+    source: &[Complex64],
+    work: &mut [Complex64],
+    plan: &super::instance_major::Plan128<f64>,
+    transform: BenchTransform,
+) {
+    work.copy_from_slice(source);
+    std::hint::black_box(transform)(std::hint::black_box(work), plan);
+}
+
 fn phase_attribution(
     src: &[Complex64],
     work: &mut [Complex64],
@@ -106,6 +119,80 @@ fn small_sizes_against_the_references_by_core_type() {
             });
         }
         println!("SML cpu={landed} ({core})");
+        suite.emit();
+    }
+}
+
+#[test]
+#[ignore = "paired measurement of the N=512 final-store sink"]
+fn final_store_sink_against_incumbent_by_core_type() {
+    for cpu in [2u32, 12] {
+        let landed = pin(cpu);
+        let core = if landed < 8 { "p-core" } else { "e-core" };
+        let plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
+            .expect("the pinned host must provide the base capability");
+        let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
+        for n in [256usize, 512] {
+            let source: Vec<Complex64> = (0..n)
+                .map(|index| {
+                    let x = index as f64;
+                    Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+                })
+                .collect();
+            let mut candidate = source.clone();
+            let mut incumbent = source.clone();
+            let mut work = source.clone();
+            assert!(super::transform_via_base_128::<f64, false>(
+                &mut candidate,
+                &plan
+            ));
+            if n == 512 {
+                assert!(super::transform_via_base_128_incumbent::<f64, false>(
+                    &mut incumbent,
+                    &plan
+                ));
+            } else {
+                assert!(super::transform_via_base_128::<f64, false>(
+                    &mut incumbent,
+                    &plan
+                ));
+            }
+            let error = candidate
+                .iter()
+                .zip(&incumbent)
+                .map(|(actual, reference)| {
+                    (actual.re - reference.re).hypot(actual.im - reference.im)
+                })
+                .fold(0.0_f64, f64::max);
+            let scale: f64 = source.iter().map(|value| value.re.hypot(value.im)).sum();
+            let operations = 24.0 * n as f64;
+            let scaled_epsilon = operations * (f64::EPSILON / 2.0);
+            let bound = scaled_epsilon / (1.0 - scaled_epsilon) * scale;
+            assert!(
+                error <= bound,
+                "N={n} final-store sink differs by {error:.3e} > {bound:.3e}"
+            );
+
+            let candidate_transform: BenchTransform = super::transform_via_base_128::<f64, false>;
+            let incumbent_transform: BenchTransform = if n == 512 {
+                super::transform_via_base_128_incumbent::<f64, false>
+            } else {
+                candidate_transform
+            };
+            suite.run(BenchmarkCase::new(core, "final-store-a", n), || {
+                run_bench_transform(&source, &mut work, &plan, candidate_transform);
+            });
+            suite.run(BenchmarkCase::new(core, "incumbent-a", n), || {
+                run_bench_transform(&source, &mut work, &plan, incumbent_transform);
+            });
+            suite.run(BenchmarkCase::new(core, "incumbent-b", n), || {
+                run_bench_transform(&source, &mut work, &plan, incumbent_transform);
+            });
+            suite.run(BenchmarkCase::new(core, "final-store-b", n), || {
+                run_bench_transform(&source, &mut work, &plan, candidate_transform);
+            });
+        }
+        println!("SINK cpu={landed} ({core})");
         suite.emit();
     }
 }

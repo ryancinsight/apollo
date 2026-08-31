@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Items: ATLAS-APOLLO-BASE-BUTTERFLY-128,
-  ATLAS-APOLLO-FUSED-PLANAR-ROWS
+  ATLAS-APOLLO-FUSED-PLANAR-ROWS,
+  ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31
 - Date: 2026-08-27
 - Revision 2026-08-27: rewrites the rejected planar-row proposal around the
   measured interleaved 128-point base. The prior record retained a superseded
@@ -22,6 +23,10 @@
   scalars. Eight-byte scalars retain the original four-lane map; the plan
   selects the widest implemented native layout and never treats Hermes'
   scalar fallback as a base capability.
+- Revision 2026-08-31: makes direct, pair-combine, and four-block-final stores
+  distinct generic monomorphizations with fixed `[T; 256]` operands. The
+  four-lane N = 512 route applies both combine levels as block three leaves the
+  base kernel; the eight-lane f32 route retains the incumbent final pass.
 
 ## Context
 
@@ -79,6 +84,13 @@ redistribution instead of repeatedly streaming the full transform.
    candidate-caused regression before merge. The 8-by-128 N = 1024 composition
    begins only after the corrected base measurement makes its outer
    redistribution budget viable.
+6. **Fuse split stores only through fixed shapes.** Direct, pair, and
+   four-block-final stores are separate generic sink types. Pair and final
+   operands carry their exact 256-lane shape, so validation occurs before the
+   Hermes kernel and no runtime store-mode or operand-length branch reaches
+   its column loop. The N = 512 final sink removes the detached scalar pass and
+   the two odd-spectrum materializations; it does not claim lower aggregate
+   scalar transfer volume because the even-pair intermediate remains.
 
 ## Failure modes and controls
 
@@ -91,8 +103,9 @@ redistribution instead of repeatedly streaming the full transform.
   references. Const-specialized timing and attribution paths plus codegen
   inspection prevent that recurrence.
 - Bounds checks or host-support probes could re-enter the hot loop. Capability
-  views and token-scoped zero/splat constructors provide all constants and
-  loads after one dispatch.
+  views, fixed-array sink operands, and token-scoped zero/splat constructors
+  provide all constants and loads after one dispatch. Release assembly is the
+  acceptance oracle for the sink call and length-check elimination.
 - A per-call plan handle could add atomic and allocator traffic at N = 128.
   `FftPlan1D` owns the state and executors borrow it; only cloning the outer
   plan increments the shared-state count. Forward-only plans never initialize
