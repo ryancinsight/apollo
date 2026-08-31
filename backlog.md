@@ -2450,11 +2450,10 @@
   That pair is what says the probe measured the routing and not the machine.
   The independent RustFFT sweep agrees at the one affected size it covers:
   n = 67 four-byte, 4349.7 ns -> 523.6 ns, ratio 19.40x -> 2.11x.
-- **Fix.** The clause and its now-dead `PREFER_BLUESTEIN_MID_RADER` const are
-  removed. Bluestein selection now depends only on the convolution's own shape —
-  `m` past `BLUESTEIN_RADER_THRESHOLD`, or `m` that no supported radix set
-  factors — which is the same answer for every scalar. The policy test now
-  asserts precisely that: both precisions agree at every length.
+- **Fix.** The clause and its now-dead `PREFER_BLUESTEIN_MID_RADER` const were
+  removed. Selection became scalar-independent and based on the convolution
+  shape. `ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29` later refined the small
+  non-smooth boundary without restoring a scalar-specific bias.
 - **Candidate rejected.** The handover's uncommitted change was one line,
   `#[inline]` -> `#[inline(never)]` on the generated Rader kernel. Measured on
   the sizes it targets: no effect, because those sizes do not take this path.
@@ -2486,6 +2485,14 @@
 - **Acceptance.** Either the variance is explained and the measurement
   stabilised, or n = 59's route is changed on a reproducible comparison. Do not
   tune a threshold against a number that moves 2x between runs.
+- **Outcome.** The earlier sparse timings were not repeatable route changes:
+  repeated 100-sample runs hold the incumbent Bluestein path near 3.9--4.0 us.
+  Forced-kernel comparison identified the complete shared win at n = 59, 83,
+  and 107, so non-smooth `m < 128` now uses the existing half-cyclic kernel.
+  One same-process run reduced automatic medians by 42.8%--89.3% across both
+  precisions; direct-DFT cases pass and all six warm routes record zero global
+  and zero direct-Mnemosyne allocations. The n = 167 and medium-prime controls
+  do not support a stable wider rule and remain unchanged.
 
 
 ## Rust crate publication aliases [patch] — in progress

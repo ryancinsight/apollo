@@ -1,5 +1,21 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
+
+- [x] Reproduce the apparent 59-point variance with the retained 100-sample
+      native strategy instrument and distinguish route cost from noise.
+- [x] Enumerate every dynamic prime below the next non-smooth boundary and
+      compare full-cyclic, half-cyclic, Bluestein, and automatic routes for
+      f32 and f64 without changing the timed closure.
+- [x] Retain only the common 59/83/107 route win; preserve the incumbent route
+      at 167 and above where replications or precisions do not agree.
+- [x] Verify f32/f64 output against independent direct DFTs and assert the
+      shape-only selector boundary.
+- [x] Prove warm execution allocates zero times through both Apollo's global
+      allocator and direct Mnemosyne hooks.
+- [ ] Complete warning-denied package gates, exact-lock validation,
+      independent review, hosted verification, merge, and lease discharge.
+
 ## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 [perf] — Codex
 
 - [x] Reproduce the current standalone locked f32/f64 power-of-two disparity

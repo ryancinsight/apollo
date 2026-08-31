@@ -54,6 +54,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] The 59-, 83-, and 107-point dynamic Rader paths now use the
+  existing half-cyclic convolution instead of Bluestein. One same-process
+  100-sample comparison reduced automatic-route medians by 42.8% to 89.3%
+  across f32/f64 while retaining direct-DFT agreement. Warm execution remains
+  allocation-free under both the global and direct-Mnemosyne ledgers, and a
+  fresh affected route no longer initializes Bluestein's 128-/256-element
+  kernel and paired transform-scratch resources. Larger non-smooth routes are
+  unchanged pending a stable scalar-and-shape cost model.
 - [patch] [perf] Four-byte 64/128/256/512-point base-routed FFTs now use a
   native eight-lane AVX2 map instead of Hermes' four-lane scalar fallback.
   Two affinitized 100-sample comparisons reduce f32 medians by 38.95% to

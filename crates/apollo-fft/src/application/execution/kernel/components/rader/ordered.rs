@@ -36,7 +36,7 @@ pub(crate) fn rader_ordered_impl<
     let x0 = head[0];
     let sum_x = sum_ordered::<F>(nonzero);
 
-    if super::prefers_bluestein_for_rader::<F>(n) {
+    if super::prefers_bluestein_for_rader(n) {
         rader_ordered_convolve::<F, INVERSE, super::Bluestein>(nonzero, n, generator_inverse);
     } else if super::prefers_half_cyclic_for_rader::<F>(n) {
         rader_ordered_convolve::<F, INVERSE, super::HalfCyclicWinograd>(
