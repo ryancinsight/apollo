@@ -130,8 +130,7 @@ fn split_pieces_by_size() {
         let mut scratch = src.clone();
         let mut out = src.clone();
         let calls = 8000u32;
-        let (mut t_gather, mut t_base, mut t_route) =
-            (f64::INFINITY, f64::INFINITY, f64::INFINITY);
+        let (mut t_gather, mut t_base, mut t_route) = (f64::INFINITY, f64::INFINITY, f64::INFINITY);
         let production = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
         for _ in 0..12 {
             let t = std::time::Instant::now();
@@ -149,7 +148,10 @@ fn split_pieces_by_size() {
             let t = std::time::Instant::now();
             for _ in 0..calls {
                 for block in scratch.chunks_exact_mut(128).take(blocks) {
-                    assert!(transform_128::<f64, false>(std::hint::black_box(block), &plan));
+                    assert!(transform_128::<f64, false>(
+                        std::hint::black_box(block),
+                        &plan
+                    ));
                 }
             }
             t_base = t_base.min(t.elapsed().as_nanos() as f64 / f64::from(calls));
