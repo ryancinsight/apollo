@@ -44,8 +44,8 @@
       clone sharing, and warm allocation semantics across every split length.
 - [x] Retain only a stable paired-median win with non-regressing controls and
       verify the exact target-feature codegen has no hot-path store-mode branch.
-- [x] Commit exact rebased source candidate `72bdf90a` and discharge source
-      leases.
+- [x] Commit exact rebased source `72bdf90a`, close the hosted Linux test-CFG
+      leak at `160d3154`, and discharge source leases.
 - [ ] Pass warning-denied, debug/release, lock, documentation, independent
       review, hosted, and merge gates; discharge all leases.
 

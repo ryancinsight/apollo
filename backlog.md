@@ -30,15 +30,17 @@
   operands remove seven hot conditional branches. Aggregate scalar transfer
   remains comparable because the even pair is still materialized; no 16 KiB
   traffic-removal claim remains.
-- **Evidence:** source `72bdf90a`; three same-buffer ABBA confirmations improve N = 512 by
+- **Evidence:** source `72bdf90a`, Linux test-CFG correction `160d3154`;
+  three same-buffer ABBA confirmations improve N = 512 by
   0.44--2.70% on the pinned P-core and 18.36--19.51% on the pinned E-core;
   N = 256 controls remain neutral. Release assembly has zero sink calls and
   three rather than ten compares. Debug/release 19/19 and release 510/510
   value tests, warm f32/f64 allocation census, all-target/all-feature Clippy,
   and warning-denied AArch64 Windows compilation pass on the current diff.
-- **Integrator / lease:** Codex `/root`; lease none. Independent review, hosted
-  verification, PR, and merge remain open. The peer-owned batched kernel and
-  RustFFT comparison instrument remain excluded. Last update 2026-08-31.
+- **Integrator / lease:** Codex `/root`; lease none. PR #215; exact-head
+  independent review, hosted rerun, and merge remain open. The peer-owned
+  batched kernel and RustFFT comparison instrument remain excluded. Last update
+  2026-08-31.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
