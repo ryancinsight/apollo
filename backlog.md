@@ -206,7 +206,7 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — in progress
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — blocked
 
 - **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
   the committed instrument measures nothing at or above 1024. Per-length
@@ -225,13 +225,27 @@
   false. The unstable rows predate PR #214's correction of the default bench
   profile to release codegen. Re-test the unchanged flat budget before adding
   size-dependent measurement policy.
+- **Flat-budget result after PR #214.** Two complete 100-sample runs bring the
+  1,024 and 2,048 rows into agreement: Apollo measures 1.712/1.746 us and
+  4.759/4.792 us for the eight-byte scalar, and 0.632/0.647 us and
+  3.040/3.041 us for the four-byte scalar. The 32,768 rows remain host-state
+  dependent across both engines: Apollo moves 102.250 -> 95.388 us and
+  81.187 -> 60.325 us; RustFFT moves 242.850 -> 205.500 us and
+  70.429 -> 39.055 us. One first-run distribution is visibly split between
+  two latency bands. More samples cannot correct processor-class migration.
+- **Dependency.** The canonical instrument needs an exact processor binding
+  owned upstream by Hermes: a typed processor index, processor-group-safe
+  Windows binding, restoration on drop, and explicit unsupported/failure
+  results. Apollo will consume that public seam and delete its duplicated
+  test-only Win32 affinity shim before retrying this unchanged size extension.
 - **Acceptance.** Sizes at and above 1024 appear in the default sweep with
   consecutive runs agreeing to within a few percent, and agreeing with an
   interleaved best-of probe at the same lengths. Until then the extension stays
   reverted: a row that swings 3x is worse than an absent one, because it will
   be read as a regression.
-- **Integrator / lease:** Codex `/root`; lease `rustfft_comparison.rs`, PM,
-  benchmark results. Exclude production FFT source. Last update 2026-08-31.
+- **Integrator / lease:** Codex `/root`; lease none. Blocked on the Hermes exact
+  processor-binding provider; production FFT source remains excluded. Last
+  update 2026-08-31.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
