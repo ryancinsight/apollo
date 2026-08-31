@@ -230,7 +230,8 @@
   comparisons report Apollo f64 N=32,768 medians of 126.314 and 125.014 us.
   Warning-denied all-target/all-feature Clippy, 510/510 package Nextest,
   focused probe, AArch64 check, doctest, Rustdoc, format, diff, and standalone
-  36-source lock gates pass. Independent review and merge remain; last update
+  36-source lock gates pass. Independent exact-object review is GREEN with
+  timing provenance limited to supplied evidence; merge remains. Last update
   2026-08-31.
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review

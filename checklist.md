@@ -11,7 +11,8 @@
 - [x] Preserve production byte-for-byte and pass the focused probe, 510/510
       package Nextest, warning-denied all-target/all-feature Clippy, AArch64
       check, doctest, Rustdoc, format, diff, and 36-source standalone lock gate.
-- [ ] Obtain independent exact-artifact review and merge without squash.
+- [x] Obtain independent exact-artifact GREEN review at PM head `5a6992cb`.
+- [ ] Merge PR #217 without squash after repository checks pass.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 [perf] — Codex
 
