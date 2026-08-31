@@ -2,10 +2,11 @@
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
 
-- [ ] Generalize the retained phase instrument across f32/f64 without
+- [x] Generalize the retained phase instrument across f32/f64 without
       duplicating route logic or changing production instrumentation.
-- [ ] Collect three exact-processor release phase runs at 16,384/32,768 and
-      retain a production candidate only for a reproducing phase.
+- [x] Collect three exact-processor release phase runs at 16,384/32,768;
+      select the fixed four-lane transpose after f32 repeats at 50.5k cycles
+      versus f64's 26.9k while the stage sets scale to about half.
 - [ ] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
       allocations; improve two adjacent unchanged comparisons with neutral
       f64 and N=16,384 controls.
