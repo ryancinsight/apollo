@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
+
+- **Delivered** (`gap_audit.md#split-boundary`): the split's gather is the
+  phase-one blend network under one dispatch — a six-instruction loop, 38
+  ns against the scalar 55 — with the four-block form landing subsequences
+  in bit-reversed block order for free; and the four-block combine applies
+  both butterfly levels per index in one pass over the array, deleting
+  `combine_stage` and one full read+write.
+- **Falsified, twice-confirmed:** a SIMD combine. The planar kernel
+  measured 176 ns against the scalar loop's 96.5 in isolation — the scalar
+  auto-vectorization is ~3.4 cycles/butterfly already. The first cut also
+  re-committed the runtime-length checked-view defect and regressed the
+  route 12-23% until the isolation probe separated the pieces. Do not
+  re-try without new structure.
+- **Measured pinned, back to back, controls within 1%:** 256 556.9 ->
+  **543.3** (1.35 -> **1.31**), 512 1375.4 -> **1309.9** (1.31 ->
+  **1.25**); 64/128 flat.
+- **Remaining at these sizes:** the bases themselves (365 of 543 at 256),
+  plus a boundary floor now at or near its measured best form.
+
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 
 - **Delivered** (`gap_audit.md#instance-major-64`): the instance-major

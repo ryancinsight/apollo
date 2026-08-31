@@ -17,7 +17,7 @@
 //! phase attribution runs as a separate const-specialized pass.
 
 pub(crate) mod cmul;
-mod split_boundary;
+pub(crate) mod split_boundary;
 
 /// The base kernels: registers hold two FFT instances rather than two
 /// samples, which turns every row twiddle into a broadcast and cuts the row
@@ -111,15 +111,14 @@ where
                 }
             }
 
-            // Combining stages, each doubling the transform length. All but
-            // the last run in place in scratch; the last writes `data`, so no
-            // pass exists only to copy the result back.
-            let mut len = BASE;
-            while len * 2 < n {
-                combine_stage::<F, INVERSE>(scratch, len);
-                len *= 2;
+            // Combining stages. Two blocks take the single final butterfly;
+            // four blocks take both levels fused into one pass, so the
+            // array is read and written once instead of twice.
+            if blocks == 2 {
+                combine_final::<F, INVERSE>(data, scratch, BASE);
+            } else {
+                combine_final4::<F, INVERSE>(data, scratch, BASE);
             }
-            combine_final::<F, INVERSE>(data, scratch, len);
             true
         },
     )
@@ -141,35 +140,6 @@ where
     }
 }
 
-/// One in-place combining stage, pairing adjacent length-`len` transforms into
-/// length-`2 * len` ones.
-fn combine_stage<F, const INVERSE: bool>(data: &mut [F::Complex], len: usize)
-where
-    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
-        Complex = eunomia::Complex<F>,
-    >,
-{
-    let twiddles = combine_twiddles::<F, INVERSE>(len);
-    let combine = &twiddles[len - 1..2 * len - 1];
-    for pair in data.chunks_exact_mut(2 * len) {
-        let (low, high) = pair.split_at_mut(len);
-        let handled = hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::CombineInPlace {
-            low: bytemuck::cast_slice_mut(low),
-            high: bytemuck::cast_slice_mut(high),
-            tw: bytemuck::cast_slice(combine),
-        })
-        .unwrap_or(false);
-        if !handled {
-            for j in 0..len {
-                let rotated = high[j] * combine[j];
-                let even = low[j];
-                low[j] = even + rotated;
-                high[j] = even - rotated;
-            }
-        }
-    }
-}
-
 /// The last combining stage, reading `scratch` and writing `out`.
 ///
 /// The combining loop stays scalar: a hand-vectorized sibling measured
@@ -185,19 +155,55 @@ where
     let combine = &twiddles[len - 1..2 * len - 1];
     let (even, odd) = scratch.split_at(len);
     let (low, high) = out.split_at_mut(len);
-    let handled = hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::CombineInto {
-        even: bytemuck::cast_slice(even),
-        odd: bytemuck::cast_slice(odd),
-        low: bytemuck::cast_slice_mut(low),
-        high: bytemuck::cast_slice_mut(high),
-        tw: bytemuck::cast_slice(combine),
-    })
-    .unwrap_or(false);
-    if !handled {
-        for j in 0..len {
-            let rotated = odd[j] * combine[j];
-            low[j] = even[j] + rotated;
-            high[j] = even[j] - rotated;
-        }
+    for j in 0..len {
+        let rotated = odd[j] * combine[j];
+        low[j] = even[j] + rotated;
+        high[j] = even[j] - rotated;
+    }
+}
+
+/// Both combine levels of a four-block split in one pass.
+///
+/// The chained form runs `combine_stage` and then `combine_final` — two
+/// full reads and writes of the array. Fusing them applies both butterfly
+/// levels per index while every operand is in registers: block values
+/// `b0..b3` at index `j` produce the four outputs `j`, `j + len`,
+/// `j + 2 * len`, `j + 3 * len` directly, and the array is read and
+/// written once (gap_audit.md#split-boundary).
+///
+/// Level one pairs `(b0, b1)` and `(b2, b3)` with `W_{2 * len}`; level two
+/// combines those with `W_{4 * len}` at `j` and `j + len` — the block
+/// order is the gather's bit-reversed one, which is exactly what makes the
+/// adjacent-pair pairing correct.
+fn combine_final4<F, const INVERSE: bool>(
+    out: &mut [F::Complex],
+    scratch: &[F::Complex],
+    len: usize,
+) where
+    F: crate::application::execution::kernel::mixed_radix::MixedRadixScalar<
+        Complex = eunomia::Complex<F>,
+    >,
+{
+    let inner = combine_twiddles::<F, INVERSE>(len);
+    let inner = &inner[len - 1..2 * len - 1];
+    let outer = combine_twiddles::<F, INVERSE>(2 * len);
+    let outer = &outer[2 * len - 1..4 * len - 1];
+    let (b01, b23) = scratch.split_at(2 * len);
+    let (b0, b1) = b01.split_at(len);
+    let (b2, b3) = b23.split_at(len);
+    let (lo, hi) = out.split_at_mut(2 * len);
+    let (out0, out1) = lo.split_at_mut(len);
+    let (out2, out3) = hi.split_at_mut(len);
+    for j in 0..len {
+        let r = b1[j] * inner[j];
+        let (e_lo, e_hi) = (b0[j] + r, b0[j] - r);
+        let r = b3[j] * inner[j];
+        let (o_lo, o_hi) = (b2[j] + r, b2[j] - r);
+        let r = o_lo * outer[j];
+        out0[j] = e_lo + r;
+        out2[j] = e_lo - r;
+        let r = o_hi * outer[j + len];
+        out1[j] = e_hi + r;
+        out3[j] = e_hi - r;
     }
 }
