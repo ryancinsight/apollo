@@ -1,27 +1,22 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — in-progress
+## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — review
 
-- **Outcome:** replace the reusable QFT plan's O(N²) large-length execution
-  with the existing Apollo FFT provider while retaining the dense kernel as
-  the small-length path and independent differential oracle.
+- **Outcome:** reusable QFT plans use one shared Apollo FFT plan at every
+  positive length; the public dense/Hermes kernel remains the independent
+  differential oracle after measurements falsified a profitable direct range.
 - **Scope / non-goals:** `apollo-qft` plan, dense-kernel tests, one bounded
   benchmark/allocation instrument, Rustdoc, CHANGELOG, and PM evidence only.
   Preserve the public API, serialized representation, unitary sign and
   normalization conventions, typed/Leto behavior, and the dense formula; do
   not change Apollo FFT routing or unrelated GPU paths.
-- **Acceptance:** a same-process paired instrument establishes the crossover;
-  every routed forward/inverse length matches the dense direct DFT within a
-  derived f64 bound; even, odd, prime, power-of-two, contiguous, strided, and
-  serialized-plan cases preserve values; construction retains one FFT plan;
-  warmed caller-owned execution allocates zero times and no longer retains
-  one O(N) generated-weight scratch per participating worker; package Clippy,
-  Nextest, Rustdoc/doctests, benchmark smoke, lock integrity, and an
-  independent artifact review pass.
-- **Integrator / lease:** Codex `/root`; lease
-  `crates/apollo-qft/{Cargo.toml,src/**,benches/**}`, `CHANGELOG.md`, this item,
-  the owner-keyed checklist section, and the QFT gap-audit entry. Last update
-  2026-08-31.
+- **Evidence:** source `39420cca`; exact same-process paired medians improve
+  24.92%--99.60% over N=1--1024; debug/release all-feature Nextest 41/41;
+  all-target/all-feature Clippy and Rustdoc with warnings denied; doctests;
+  exact allocation census; benchmark under its 30-second bound; standalone
+  lock guard with 36 first-party Git sources. Independent review, hosted gates,
+  PR, and merge remain.
+- **Integrator / lease:** Codex `/root`; lease none. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 
