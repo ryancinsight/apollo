@@ -2470,7 +2470,10 @@
   untouched with the one-line candidate uncommitted and its instrument unrun.
   Taken over, completed to a verdict, lease released.
 
-## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 — Rader at n = 59 is unstable across runs [patch] — todo
+## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 — Rader at n = 59 is unstable across runs [patch] — in progress
+
+- **Integrator / lease.** Codex `/root`; lease: Rader/Bluestein routing,
+  focused variance instrument, and this item only.
 
 - **Finding.** The same release build measured n = 59 at 3377, 2761 and 1644 ns
   for an eight-byte scalar across three runs, on a probe whose neighbouring
