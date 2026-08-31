@@ -1819,15 +1819,11 @@
   `ATLAS-APOLLO-ACCURACY-GATE-2026-08-25` should land first so the
   consolidation is covered by the gate it motivated.
 
-## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — in progress 2026-08-27
+## ATLAS-APOLLO-RETAINED-FOOTPRINT-2026-08-27 — Attribute and reduce the retained working set [perf] — done 2026-08-31
 
-- **Current increment:** resumed by Codex session
-  `01a0253c-6013-7552-99cc-36bbbcf77f6d` on
-  `perf/apollo-retained-footprint`; lease:
-  `kernel/retained_footprint.rs`, `components/four_step/mod.rs`, allocation
-  owners identified by that probe, `gap_audit.md#retained-attribution`, this
-  item block, and the matching checklist through the next verified commit;
-  last update 2026-08-28.
+- **Closure:** stale PM lease taken over by Codex `/root`; lease: none. Apollo's
+  plane-reuse source merged in PR #169 (`f4ef9708`), and Moirai's local-queue
+  capacity reduction merged in provider PR #187 (`32f9d08`).
 - **Corrected attribution (2026-08-28):** the pointer-identity ledger records
   all global allocations and proves 1,169,112 global requested bytes are live
   after pool warmup. The previous size-only ledger could consume a same-sized
@@ -1857,14 +1853,14 @@
   Remaining apollo-side: only the four-step matrix representation at
   > `FUSE_THRESHOLD` sizes (route working set; reduce only with a route
   redesign).
-- **Worker term rehomed, not closed (2026-08-28):** the parallel warmup proves
+- **Worker term rehomed, later closed (2026-08-28):** the parallel warmup proves
   first-touch ownership is Moirai rather than the transform. Moirai PR #184
   reduces the global injector slot size, but four local 256-slot
   `ScheduledJob` payload arrays per worker bypass the global allocator through
   direct Mnemosyne allocation. Apollo's direct hook measures their exact
-  requested bytes; throughput-controlled capacity tuning remains open in the
-  provider. Apollo records the boundary without claiming that pool storage was
-  eliminated.
+  requested bytes; throughput-controlled capacity tuning remained open in the
+  provider. Apollo recorded the boundary without claiming that pool storage was
+  eliminated until provider PR #187 supplied and verified the reduction.
 - **Apollo row scratch resolved (2026-08-28):** the large-size 4,096- and
   8,192-byte survivors were worker-local `ScratchPool` buffers allocated by
   the parallel four-step row stages, not scheduler queue storage. Both row
@@ -1880,9 +1876,17 @@
   scratch is eliminated; Moirai's direct queue payload remains explicit for
   the provider increment, with the no-floor pointer ledger as the regression
   instrument.
-- **Evidence:** `gap_audit.md#peak-working-set` — retained working set is
+- **Provider closure refresh (2026-08-31):** at Apollo `ab4c36e6` with current
+  Moirai `18666269`, the exact probe records 1,070,816 global pool-warmup bytes
+  and 1,572,864 direct Mnemosyne bytes (`96 * 16,384`), halving the original
+  3,145,728-byte local-queue term. Every measured warm forward still records
+  zero global and zero direct-Mnemosyne allocations and retained bytes. The
+  concurrent 209,190,912-byte mapped-address delta is not RSS evidence.
+- **Evidence:** the historical `gap_audit.md#peak-working-set` table records
   2.75-4.12x the signal through the global allocator (references: ~1.0x) after
-  Moirai PR #184, excluding 3,145,728 bytes of direct Mnemosyne queue payload.
+  Moirai PR #184, excluding the then-current 3,145,728 bytes of direct
+  Mnemosyne queue payload. The current provider result is the closure refresh
+  above.
   The former 10.4x n = 65536 aggregate included Moirai first-touch queue
   startup and alignment padding and was not transform-only retention. The
   Stockham ping-pong scratch (16n) remains a minor term, so the in-place-DIT
