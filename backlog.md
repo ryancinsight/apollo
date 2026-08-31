@@ -1,22 +1,11 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — review
+## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 
-- **Outcome:** reusable QFT plans use one shared Apollo FFT plan at every
-  positive length; the public dense/Hermes kernel remains the independent
-  differential oracle after measurements falsified a profitable direct range.
-- **Scope / non-goals:** `apollo-qft` plan, dense-kernel tests, one bounded
-  benchmark/allocation instrument, Rustdoc, CHANGELOG, and PM evidence only.
-  Preserve the public API, serialized representation, unitary sign and
-  normalization conventions, typed/Leto behavior, and the dense formula; do
-  not change Apollo FFT routing or unrelated GPU paths.
-- **Evidence:** source `39420cca`; exact same-process paired medians improve
-  24.92%--99.60% over N=1--1024; debug/release all-feature Nextest 41/41;
-  all-target/all-feature Clippy and Rustdoc with warnings denied; doctests;
-  exact allocation census; benchmark under its 30-second bound; standalone
-  lock guard with 36 first-party Git sources. Independent review, hosted gates,
-  PR, and merge remain.
-- **Integrator / lease:** Codex `/root`; lease none. Last update 2026-08-31.
+- **Delivered:** source `39420cca`, review correction `f3138f50`, PR #213,
+  merge `3e2c2edc`; one shared Apollo FFT plan replaces retained QFT twiddles.
+- **Evidence:** independent GREEN; debug/release 43/43; warning-denied Clippy,
+  Rustdoc, allocation census, benchmark, and standalone 36-source lock gates.
 
 ## ATLAS-APOLLO-COMBINE-SINK-2026-08-31 — The split's combine rides the column pass out [perf] — done 2026-08-31
 
@@ -68,27 +57,25 @@
 - **Remaining at these sizes:** the bases themselves (365 of 543 at 256),
   plus a boundary floor now at or near its measured best form.
 
-## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 — Remove the 1,024-point power-of-two cliff [perf] [patch] — in-progress
+## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 — Align benchmark codegen with release [patch] — review
 
-- **Outcome:** reduce the measured 1,024-point f64 FFT cost without regressing
-  the existing 64/128/256/512 base ladder or changing public FFT semantics.
-- **Scope / non-goals:** profile and route Apollo FFT's dynamic 1,024-point
-  power-of-two plan; reuse Hermes, Moirai, and Mnemosyne only through their
-  canonical Apollo FFT seams. Do not tune the QFT instrument, change workloads,
-  or add a per-length clone of an existing generic kernel.
-- **Acceptance:** revision-attested sampling and route inspection explain why
-  N=1,024 costs 43.524 microseconds while N=256 costs 0.351 microseconds; a
-  bounded production candidate preserves forward/inverse direct-DFT,
-  normalization, round-trip, f32/f64, warm-allocation, and clone-sharing
-  contracts; the unchanged extended comparison sweep records stable paired
-  medians with 64--512 controls; warning-denied, release, codegen, lock, docs,
-  and independent-review gates pass. Change class [patch], risk [perf].
-- **Dependencies / lease:** QFT PR #213 is enqueued for independent and hosted
-  review. Integrator Codex `/root`; lease `crates/apollo-fft/src/application/
-  execution/{plan/fft/dimension_1d/**,kernel/components/{base128,resident}/**}`,
-  focused FFT tests, the owner-keyed checklist section, and this item. The
-  peer-owned batched kernel and comparison instrument remain out of scope.
-  Last update 2026-08-31.
+- **Outcome:** default performance measurements use Apollo's release codegen
+  contract, eliminating a false 1,024-point routing signal without changing
+  production FFT source or routing.
+- **Scope / non-goals:** root benchmark profile, unchanged QFT instrument, ADR
+  0036, CHANGELOG, gap audit, and PM evidence. Preserve `bench-quick` as the
+  explicit fast-compilation smoke profile; do not tune benchmark workloads or
+  build a production candidate after release measurements falsify the premise.
+- **Acceptance:** the unchanged instrument reproduces the divergence at the
+  exact candidate (default bench 42.745 microseconds versus release 1.955
+  microseconds at N=1,024), default `cargo bench` then matches the release
+  profile across the complete N=1--1024 matrix, and manifest, smoke, formatting,
+  lock, documentation, independent-review, hosted, and merge gates pass.
+- **Evidence / lease:** source `168c03f9`; unchanged N=1--1024 full benchmark
+  and smoke pass under the corrected default profile; manifest parse, formatting,
+  diff, and standalone 36-source lock gates pass. QFT PR #213 merged as
+  `3e2c2edc`. Integrator Codex `/root`; lease none. Independent review, hosted
+  verification, PR, and merge remain. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 

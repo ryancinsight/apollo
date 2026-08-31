@@ -13,25 +13,25 @@
       serialized, and WGPU-feature paths.
 - [x] Prove plan clones share provider state and warmed 127/256 caller-owned
       forward-plus-inverse execution makes zero allocations and reallocations.
-- [x] Pass all-target/all-feature Clippy, debug and release 41/41 Nextest,
+- [x] Pass all-target/all-feature Clippy, debug and release 43/43 Nextest,
       warning-denied Rustdoc, doctests, benchmark budget, formatting, diff, and
       standalone 36-source lock gates.
 - [x] Commit exact source candidate `39420cca` and discharge source leases.
-- [ ] Obtain independent artifact review, pass hosted verification, merge, and
-      bind closure evidence to the exact provider and merge revisions.
+- [x] Obtain independent artifact review and merge PR #213 as `3e2c2edc`.
 
 ## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 [perf] — Codex
 
-- [ ] Reproduce and attribute the N=1,024 cliff against stable 64/128/256/512
-      controls without changing the committed comparison workload.
-- [ ] Inspect dynamic-plan selection, retained state, and exact hot-path
-      codegen; state the analytical bound and a bounded candidate experiment.
-- [ ] Preserve f32/f64 forward, inverse, normalization, round-trip, allocation,
-      and clone-sharing contracts through independent value oracles.
-- [ ] Retain only a stable paired-median improvement with non-regressing
-      controls; synchronize docs and exact evidence.
-- [ ] Pass warning-denied, debug/release, codegen, lock, independent-review,
-      hosted, and merge gates; discharge all leases.
+- [x] Reproduce the N=1,024 signal without changing the instrument: default
+      bench 42.745 microseconds versus release 1.955 microseconds.
+- [x] Falsify a production route defect with the release pinned probe and the
+      complete release-profile QFT matrix; make no production source change.
+- [x] Remove the default bench profile's divergent codegen override while
+      retaining `bench-quick` for explicit smoke compilation.
+- [x] Re-run the unchanged default benchmark and confirm release-equivalent
+      medians across N=1--1024; synchronize exact evidence.
+- [x] Pass manifest, full benchmark, smoke, formatting, diff, and standalone
+      36-source lock gates at exact source `168c03f9`; discharge the lease.
+- [ ] Obtain independent review, pass hosted verification, and merge.
 
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 
