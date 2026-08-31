@@ -20,6 +20,19 @@
 - [ ] Obtain independent artifact review, pass hosted verification, merge, and
       bind closure evidence to the exact provider and merge revisions.
 
+## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 [perf] — Codex
+
+- [ ] Reproduce and attribute the N=1,024 cliff against stable 64/128/256/512
+      controls without changing the committed comparison workload.
+- [ ] Inspect dynamic-plan selection, retained state, and exact hot-path
+      codegen; state the analytical bound and a bounded candidate experiment.
+- [ ] Preserve f32/f64 forward, inverse, normalization, round-trip, allocation,
+      and clone-sharing contracts through independent value oracles.
+- [ ] Retain only a stable paired-median improvement with non-regressing
+      controls; synchronize docs and exact evidence.
+- [ ] Pass warning-denied, debug/release, codegen, lock, independent-review,
+      hosted, and merge gates; discharge all leases.
+
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 
 - [x] Reproduce the apparent 59-point variance with the retained 100-sample
