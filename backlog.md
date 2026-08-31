@@ -20,7 +20,8 @@
 - **Risk / dependencies.** [patch] [perf]. Depends on the exact-processor
   comparison and N=32,768 phase coverage merged through PR #217 / `5bf93047`.
 - **Integrator / lease:** `/root`; lease `/root` on batched
-  `pinned_sections.rs`, `boundary.rs`, `mod.rs`, and this item's PM hunks. Three
+  `pinned_sections.rs`, `boundary.rs`, `mod.rs`, kernel
+  `retained_footprint.rs`, and this item's PM hunks. Three
   exact-processor release runs place f32 N=32,768 transpose at
   50,454--50,859 cycles versus f64's 26,848--26,873, while both f32 stage sets
   take about half the f64 cycles. The fixed four-lane transpose boundary is the
