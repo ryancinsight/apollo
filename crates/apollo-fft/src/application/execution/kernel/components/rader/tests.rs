@@ -1,8 +1,8 @@
 use super::generator::PRIMITIVE_ROOTS;
 use crate::application::execution::kernel::direct::dft_forward;
 use crate::application::execution::kernel::mixed_radix::scalar::MixedRadixScalar;
-use crate::application::execution::kernel::test_utils::max_abs_err_64;
-use eunomia::Complex64;
+use crate::application::execution::kernel::test_utils::{max_abs_err_32, max_abs_err_64};
+use eunomia::{Complex32, Complex64};
 
 fn signal(n: usize) -> Vec<Complex64> {
     (0..n)
@@ -10,6 +10,13 @@ fn signal(n: usize) -> Vec<Complex64> {
             let t = k as f64;
             Complex64::new((0.27 * t).sin(), (0.35 * t).cos())
         })
+        .collect()
+}
+
+fn signal32(n: usize) -> Vec<Complex32> {
+    signal(n)
+        .into_iter()
+        .map(|value| Complex32::new(value.re as f32, value.im as f32))
         .collect()
 }
 
@@ -40,6 +47,17 @@ fn assert_rader_forward_matches_direct(n: usize) {
     super::rader_fft::<f64, false>(&mut got);
     let err = max_abs_err_64(&got, &expected);
     assert!(err < 1.0e-10, "Rader forward N={n} mismatch err={err:.2e}");
+}
+
+fn assert_rader_forward32_matches_direct(n: usize) {
+    let input = signal32(n);
+    let expected = dft_forward(&input);
+    let mut got = input;
+    super::rader_fft::<f32, false>(&mut got);
+    let err = max_abs_err_32(&got, &expected);
+    // Both direct sums contain `n` terms, so O(n^2 * f32::EPSILON) bounds the
+    // comparison. At n=107 the bound is 1.37e-3.
+    assert!(err < 2.0e-3, "Rader forward N={n} mismatch err={err:.2e}");
 }
 
 fn assert_rader_backend_forward_matches_direct<B: super::RaderConvolutionBackend>(
@@ -155,6 +173,14 @@ fn runtime_rader_37_roundtrip() {
 }
 
 #[test]
+fn runtime_small_nonsmooth_rader_matches_direct() {
+    for n in [59, 83, 107] {
+        assert_rader_forward_matches_direct(n);
+        assert_rader_forward32_matches_direct(n);
+    }
+}
+
+#[test]
 fn runtime_rader_caches_distinguish_primitive_generators() {
     const PRIME: usize = 43;
     const GENERATORS: [(usize, usize); 2] = [(3, 29), (28, 20)];
@@ -217,23 +243,19 @@ fn cache_initialization_fits_standard_stack() {
 
 #[test]
 fn rader_bluestein_policy_follows_the_convolution_shape() {
-    // The selection depends on `m = n - 1`, not on the scalar, so both
-    // precisions must answer identically for every length. A per-scalar bias
-    // here cost a four-byte scalar up to 6.6x; see the function's own note.
-    for n in [67usize, 113, 193, 257, 131, 401, 61, 71] {
-        assert_eq!(
-            super::prefers_bluestein_for_rader::<f32>(n),
-            super::prefers_bluestein_for_rader::<f64>(n),
-            "length {n}: the Bluestein choice must not depend on the scalar"
+    for n in [59usize, 83, 107] {
+        assert!(
+            !super::prefers_bluestein_for_rader(n),
+            "length {n}: small non-smooth convolution must remain cyclic"
         );
+        assert!(super::prefers_half_cyclic_for_rader::<f32>(n));
+        assert!(super::prefers_half_cyclic_for_rader::<f64>(n));
     }
 
-    // `m` past the threshold, and `m` that no supported radix set factors,
-    // are the two shapes the cyclic backends cannot serve well.
-    assert!(super::prefers_bluestein_for_rader::<f32>(2053));
-    assert!(super::prefers_bluestein_for_rader::<f64>(60)); // m = 59, prime
-    assert!(!super::prefers_bluestein_for_rader::<f64>(193)); // m = 192 = 2^6*3
-    assert!(!super::prefers_bluestein_for_rader::<f32>(257)); // m = 256
+    assert!(super::prefers_bluestein_for_rader(167)); // m = 166 = 2*83
+    assert!(super::prefers_bluestein_for_rader(2053)); // m exceeds 2,048
+    assert!(!super::prefers_bluestein_for_rader(193)); // m = 192 = 2^6*3
+    assert!(!super::prefers_bluestein_for_rader(257)); // m = 256
 }
 
 #[test]

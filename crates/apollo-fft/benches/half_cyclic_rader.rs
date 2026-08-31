@@ -38,8 +38,9 @@ fn signal32(len: usize) -> Vec<Complex32> {
 
 #[cfg(feature = "kernel-strategy-bench")]
 fn bench_half_cyclic_rader(suite: &mut BenchmarkSuite, config: BenchmarkConfig) {
-    // Geometric regimes cover the small, crossover, and large-prime paths.
-    for len in [67_usize, 257, 521, 1031] {
+    // The first four non-smooth regimes isolate the small-route crossover;
+    // the remaining geometric regimes cover medium and large primes.
+    for len in [59_usize, 67, 83, 107, 167, 257, 347, 467, 521, 683, 1031] {
         let input64 = signal64(len);
         let mut full64 = input64.clone();
         suite.run_with_config(

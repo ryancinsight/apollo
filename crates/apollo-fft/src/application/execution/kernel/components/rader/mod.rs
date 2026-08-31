@@ -110,7 +110,7 @@ fn rader_runtime_impl<
     data: &mut [F::Complex],
     n: usize,
 ) {
-    if prefers_bluestein_for_rader::<F>(n) {
+    if prefers_bluestein_for_rader(n) {
         rader_runtime_impl_with_backend::<F, INVERSE, Bluestein>(data, n);
     } else if prefers_half_cyclic_for_rader::<F>(n) {
         rader_runtime_impl_with_backend::<F, INVERSE, HalfCyclicWinograd>(data, n);
@@ -120,15 +120,18 @@ fn rader_runtime_impl<
 }
 
 pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
+pub(crate) const BLUESTEIN_RADER_NONSMOOTH_THRESHOLD: usize = 128;
 
 /// Returns true when the Rader convolution for length `n` should prefer the
 /// Bluestein path.
 ///
 /// Two conditions select it, and both are about the convolution's own shape
-/// rather than the scalar type: a convolution length past
-/// [`BLUESTEIN_RADER_THRESHOLD`], and one whose length is not smooth over the
-/// supported radices, where the cyclic backends have no good factorization to
-/// run on.
+/// rather than the scalar type: a convolution length at or past
+/// [`BLUESTEIN_RADER_THRESHOLD`], and a non-smooth convolution length at or
+/// past [`BLUESTEIN_RADER_NONSMOOTH_THRESHOLD`]. Below that second boundary,
+/// the half-cyclic backend's smaller workspace and direct convolution win for
+/// every affected dynamic prime (`n = 59, 83, 107`). The next affected prime,
+/// `n = 167`, is retained as a control rather than extending the route.
 ///
 /// A third condition used to sit here: a four-byte scalar biased every prime
 /// with `m >= 128`, plus 67 and 113 by name, into Bluestein. It was introduced
@@ -146,11 +149,21 @@ pub(crate) const BLUESTEIN_RADER_THRESHOLD: usize = 2048;
 /// not capture (61, 71, 103, 109) held flat, and the eight-byte scalar — which
 /// never took the bias — held flat throughout, which is what says the probe
 /// measured the routing and not the machine.
+///
+/// A later paired 100-sample instrument isolated the remaining small
+/// non-smooth cases. Bluestein versus half-cyclic medians in microseconds were
+/// `3.884 -> 0.417`, `1.921 -> 0.705`, and `1.946 -> 1.114` for eight-byte
+/// scalars at `n = 59, 83, 107`; the four-byte results were `2.134 -> 0.574`,
+/// `4.163 -> 0.637`, and `4.196 -> 1.033`. The `n = 167` control did not produce
+/// a stable common crossover across replications and precisions, so this
+/// correction stops before it instead of fitting a wider heuristic to noisy
+/// data.
 #[inline]
-pub(crate) fn prefers_bluestein_for_rader<F: MixedRadixScalar>(n: usize) -> bool {
+pub(crate) fn prefers_bluestein_for_rader(n: usize) -> bool {
     let m = n - 1;
     m >= BLUESTEIN_RADER_THRESHOLD
-        || !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m)
+        || (m >= BLUESTEIN_RADER_NONSMOOTH_THRESHOLD
+            && !crate::application::execution::kernel::radix_shape::is_prime23_smooth(m))
 }
 
 #[inline]

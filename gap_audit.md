@@ -1,3 +1,31 @@
+## Small non-smooth Rader routing (2026-08-31) <a id="small-nonsmooth-rader"></a>
+
+The first dynamic primes whose `m = n - 1` convolution is not smooth over
+Apollo's supported radix set are 59, 83, and 107. The prior selector sent all
+three to Bluestein. A same-process 100-sample instrument measured forced
+Bluestein versus the corrected automatic half-cyclic route (microseconds):
+
+| n | f64 | f32 |
+| ---: | ---: | ---: |
+| 59 | 3.884 -> 0.417 | 2.134 -> 0.574 |
+| 83 | 1.921 -> 0.705 | 4.163 -> 0.637 |
+| 107 | 1.946 -> 1.114 | 4.196 -> 1.033 |
+
+The selector now retains cyclic convolution for non-smooth `m < 128`; its
+existing half-cyclic threshold then selects the measured kernel for both
+precisions. Independent direct DFTs cover all six routes. A warmed allocation
+census records zero global and zero direct-Mnemosyne allocations. On a fresh
+thread, the route also avoids initializing Bluestein's power-of-two kernel,
+Bluestein scratch, and Stockham scratch at `p = 128, 256, 256`; this is a
+source-derived retained-state reduction, not a process RSS claim, because
+other transforms can populate the same thread-local pools.
+
+The next non-smooth cases remain unresolved. Forced half-cyclic measurements
+at 167 and in the 347--1031 range vary by precision and replication, so the
+candidate deliberately preserves their incumbent route. A later cost-model
+item must use counterbalanced replications and must select on transform shape
+and scalar execution cost without reintroducing a blanket precision bias.
+
 ## The split's boundary: gather vectorized, combine fused, combine-SIMD falsified twice (2026-08-31) <a id="split-boundary"></a>
 
 Piece attribution for the split, pinned (scalar pieces, production plan):
