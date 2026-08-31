@@ -31,7 +31,8 @@
       medians across N=1--1024; synchronize exact evidence.
 - [x] Pass manifest, full benchmark, smoke, formatting, diff, and standalone
       36-source lock gates at exact source `168c03f9`; discharge the lease.
-- [ ] Obtain independent review, pass hosted verification, and merge.
+- [x] Obtain independent review and merge PR #214 as `2b172372` after all
+      repository checks passed.
 
 ## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 [perf] — Codex
 
@@ -43,7 +44,8 @@
       clone sharing, and warm allocation semantics across every split length.
 - [x] Retain only a stable paired-median win with non-regressing controls and
       verify the exact target-feature codegen has no hot-path store-mode branch.
-- [x] Commit exact source candidate `59e5aacf` and discharge source leases.
+- [x] Commit exact rebased source candidate `72bdf90a` and discharge source
+      leases.
 - [ ] Pass warning-denied, debug/release, lock, documentation, independent
       review, hosted, and merge gates; discharge all leases.
 

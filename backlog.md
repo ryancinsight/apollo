@@ -30,7 +30,7 @@
   operands remove seven hot conditional branches. Aggregate scalar transfer
   remains comparable because the even pair is still materialized; no 16 KiB
   traffic-removal claim remains.
-- **Evidence:** source `59e5aacf`; three same-buffer ABBA confirmations improve N = 512 by
+- **Evidence:** source `72bdf90a`; three same-buffer ABBA confirmations improve N = 512 by
   0.44--2.70% on the pinned P-core and 18.36--19.51% on the pinned E-core;
   N = 256 controls remain neutral. Release assembly has zero sink calls and
   three rather than ten compares. Debug/release 19/19 and release 510/510
@@ -60,7 +60,7 @@
 - **Remaining at these sizes:** the bases themselves (365 of 543 at 256),
   plus a boundary floor now at or near its measured best form.
 
-## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 — Align benchmark codegen with release [patch] — review
+## ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31 — Align benchmark codegen with release [patch] — done 2026-08-31
 
 - **Outcome:** default performance measurements use Apollo's release codegen
   contract, eliminating a false 1,024-point routing signal without changing
@@ -74,11 +74,10 @@
   microseconds at N=1,024), default `cargo bench` then matches the release
   profile across the complete N=1--1024 matrix, and manifest, smoke, formatting,
   lock, documentation, independent-review, hosted, and merge gates pass.
-- **Evidence / lease:** source `168c03f9`; unchanged N=1--1024 full benchmark
-  and smoke pass under the corrected default profile; manifest parse, formatting,
-  diff, and standalone 36-source lock gates pass. QFT PR #213 merged as
-  `3e2c2edc`. Integrator Codex `/root`; lease none. Independent review, hosted
-  verification, PR, and merge remain. Last update 2026-08-31.
+- **Delivered:** source `168c03f9`, evidence `3b7a985f`, PR #214, merge
+  `2b172372`; the unchanged N=1--1024 instrument now uses release codegen.
+- **Evidence:** independent GREEN; repository checks green; full benchmark,
+  smoke, manifest, formatting, diff, and standalone 36-source lock gates pass.
 
 ## ATLAS-APOLLO-INSTANCE-MAJOR-64-2026-08-30 — The instance-major construction serves n = 64 [perf] [arch] — done 2026-08-30
 
