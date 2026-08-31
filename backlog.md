@@ -21,7 +21,7 @@
   flat — the direct-sink monomorphization's store loop verified unperturbed by
   control, not assumption.
 
-## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — review
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — done 2026-08-31
 
 - **Outcome:** n = 512's four blocks fuse both combine levels into the
   column passes: block 1 sinks into an `E` region with `W_256`; block 3
@@ -37,10 +37,8 @@
   three rather than ten compares. Debug/release 19/19 and release 510/510
   value tests, warm f32/f64 allocation census, all-target/all-feature Clippy,
   and warning-denied AArch64 Windows compilation pass on the current diff.
-- **Integrator / lease:** Codex `/root`; lease none. PR #215; exact-head
-  independent review, hosted rerun, and merge remain open. The peer-owned
-  batched kernel and RustFFT comparison instrument remain excluded. Last update
-  2026-08-31.
+- **Delivered:** source `72bdf90a`, Linux test-CFG correction `160d3154`,
+  independent GREEN, PR #215, merge `e94757f5`.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
@@ -208,7 +206,7 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — todo
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — in progress
 
 - **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
   the committed instrument measures nothing at or above 1024. Per-length
@@ -222,15 +220,18 @@
   four-byte at 2048 read 46861 ns then 16836 ns, against a stable 1480 ns and
   3040 ns from an interleaved best-of probe. 43 us for a 1024-point transform
   is also implausible on its face when the reference does it in 1.3 us.
-- **Cause to confirm.** The per-case configuration is 20 ms warm-up and 80 ms
-  measurement; at these lengths that admits few enough samples that the median
-  is dominated by scheduler noise. The instrument reports medians, and the
-  fix is a per-size measurement budget rather than one flat pair.
+- **Cause correction.** `BenchmarkConfig` always records 100 samples and
+  calibrates iterations per sample, so the prior few-sample hypothesis is
+  false. The unstable rows predate PR #214's correction of the default bench
+  profile to release codegen. Re-test the unchanged flat budget before adding
+  size-dependent measurement policy.
 - **Acceptance.** Sizes at and above 1024 appear in the default sweep with
   consecutive runs agreeing to within a few percent, and agreeing with an
   interleaved best-of probe at the same lengths. Until then the extension stays
   reverted: a row that swings 3x is worse than an absent one, because it will
   be read as a regression.
+- **Integrator / lease:** Codex `/root`; lease `rustfft_comparison.rs`, PM,
+  benchmark results. Exclude production FFT source. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
