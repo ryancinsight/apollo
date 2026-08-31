@@ -1990,41 +1990,10 @@
   bounded below `PARALLEL_ROW_THRESHOLD`; its independent extension item below
   is still valid.
 
-## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — in-progress
+## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — done 2026-08-31
 
-- **Outcome:** the batched four-step covers every square split, not only those
-  below the threading threshold, without giving up the row parallelism the
-  superseded path has above it.
-- **Why the bound exists today:** the batched kernel is single-threaded, and its
-  batch dimension is the innermost one, so handing a worker a sub-range of the
-  batch gives it a strided view rather than a contiguous chunk — which is what
-  `moirai::for_each_chunk_mut_with` partitions. Rather than remove parallelism
-  that exists today at `N >= 65536`, the new path stops below it.
-- **The structure that makes this tractable, recorded so it is not rediscovered:**
-  every stage couples elements along the length dimension and never across the
-  batch, so **each batch column is a fully independent transform through the
-  entire stage set**. Partitioning is therefore by batch range, once, outside the
-  stage loop — not per stage. Each worker runs the whole stage set for its
-  columns.
-- **Scope:** a disjoint-range partition over the batch with `moirai` outside and
-  `hermes_simd::vectorize` inside each worker, which is the placement Hermes ADR
-  016 requires — never wrap a thread-spawning call. The ranges are strided rather
-  than contiguous sub-slices, so the split needs a pointer-level disjointness
-  argument with a `SAFETY` comment, not `split_at_mut`.
-- **Acceptance oracle:** on a quiet host, no regression at `N >= 65536` against
-  the superseded parallel path, the existing correctness suite, and a
-  thread-count sweep showing the partition actually scales.
-- **Risk / change class:** [patch]; adds one `unsafe` block behind a safe API.
-  **Dependencies:** the validation in the item above.
-- **Integrator:** Codex `/root`.
-- **Lease:** `crates/apollo-fft/src/application/execution/kernel/components/batched/**`,
-  the batched route predicate in
-  `crates/apollo-fft/src/application/execution/kernel/components/radix_composite/cache.rs`,
-  focused allocation/scaling evidence, and this item. The live
-  `perf/apollo-split-sizes` lane owns `components/base128/**` and remains
-  disjoint.
-- **Last update:** 2026-08-31; implementation branch
-  `perf/apollo-batched-parallel`, based on Apollo merge `d975ecf6`.
+- **Outcome:** rejected; disjoint strided-column Moirai units regressed every measured size, while widening the sequential route made the unpinned production census topology-sensitive and slower. The existing `N >= 65536` parallel generic route remains unchanged.
+- **Evidence:** `gap_audit.md#batched-parallel-rejection`; zero warm allocations remained intact, and all candidate source/unsafe code was removed. Re-open only for a cache-local partition that beats the unchanged production census.
 
 ## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25
 
