@@ -229,7 +229,7 @@ where
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 fn transform_via_base_128_incumbent<F, const INVERSE: bool>(
     data: &mut [F::Complex],
     plan: &instance_major::Plan128<F>,
