@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
+
+- [x] Bind the attribution to merged comparison revision `a6fbcd02` and claim
+      only the same-binary probe plus PM regions before production attribution.
+- [ ] Measure copy, dispatch, Stockham passes, and host-state controls in one
+      exact-processor process at 16,384/32,768/65,536.
+- [ ] Retain a production correction only if the varying phase reproduces and
+      the complete unchanged comparison improves in two adjacent runs.
+- [ ] Preserve direct-DFT/round-trip values and zero warmed allocations; run
+      warning-denied, cross-target, documentation, and standalone-lock gates.
+- [ ] Obtain independent exact-artifact review and merge without squash.
+
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 [perf] — Codex
 
 - [x] Measure the retained dense/Hermes kernel and reusable Apollo FFT route
@@ -68,8 +80,8 @@
 - [x] Synchronize benchmark results, audit/ADR, CHANGELOG, backlog, and exact
       evidence; pass warning-denied, smoke, value, documentation, cross-target,
       and standalone-lock gates at source `8a88529d`.
-- [ ] Pass hosted review/checks and merge without squash; bind closure evidence
-      to the exact merge revision.
+- [x] Merge PR #216 without squash as `a6fbcd02`; post-merge hosted checks are
+      the remaining delivery evidence, not a source blocker for this item.
 
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 

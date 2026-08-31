@@ -206,7 +206,7 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — todo
+## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — in progress
 
 - **Outcome.** Attribute and remove Apollo f64 N=32,768's
   126.293--154.510 us exact-processor spread without changing the benchmark
@@ -225,7 +225,10 @@
 - **Risk / dependencies.** [patch] [perf]. Depends on the retained-state
   comparison from `ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31`; production FFT
   kernel regions remain unleased until attribution selects one.
-- **Integrator / lease:** none; last update 2026-08-31.
+- **Integrator / lease:** `/root`; lease `/root` on
+  `crates/apollo-fft/src/application/execution/kernel/components/batched/pinned_ladder.rs`
+  and this item's PM hunks; production kernel regions remain unleased pending
+  phase attribution; last update 2026-08-31.
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
 
