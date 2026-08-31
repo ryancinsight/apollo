@@ -1,7 +1,7 @@
 # Apollo QFT
 
-`apollo-qft` owns dense quantum Fourier transform plans for Apollo state
-vectors.
+`apollo-qft` owns reusable unitary quantum Fourier transform plans for Apollo
+state vectors.
 
 ## Architecture
 
@@ -9,17 +9,21 @@ vectors.
 src/
   domain/          quantum state-dimension contracts and errors
   application/     reusable QFT plan
-  infrastructure/  dense unitary kernel execution
+  infrastructure/  dense reference oracle and accelerator execution
   verification/    unitarity, roundtrip, and property tests
 ```
 
-`QftPlan` caches the state dimension and twiddle factors used by forward and
-inverse dense QFT execution.
+`QftPlan` retains the state dimension and one shared Apollo FFT plan. Plan
+clones share that immutable provider state, and warmed caller-owned forward and
+inverse execution allocates no storage. The public dense Hermes/Moirai kernel
+remains available as the independent direct-transform oracle; it is not the
+reusable plan's execution route. Serialization emits the historical
+`dimension`/`twiddles` representation without retaining a twiddle table in the
+plan.
 
 Typed execution uses Apollo's shared precision profile contract:
 
-- `HIGH_ACCURACY_F64`: `Complex64` storage with owner `Complex64` dense unitary
-  QFT kernels.
+- `HIGH_ACCURACY_F64`: `Complex64` storage with the owner unitary FFT route.
 - `LOW_PRECISION_F32`: `Complex32` storage converted through the owner path and
   quantized once into caller-owned output.
 - `MIXED_PRECISION_F16_F32`: `[f16; 2]` real/imaginary lane storage converted

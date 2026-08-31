@@ -561,6 +561,30 @@ mod tests {
         assert_matches_direct(&input, &actual, false);
     }
 
+    #[test]
+    fn serialized_plan_rejects_zero_dimension() {
+        let plan = QftPlan::new(QuantumStateDimension::new(1).expect("valid dimension"));
+        let mut value = serde_json::to_value(plan).expect("serialize QFT plan");
+        value["dimension"]["n"] = serde_json::Value::from(0);
+
+        let error = serde_json::from_value::<QftPlan>(value).expect_err("zero dimension must fail");
+        assert_eq!(error.to_string(), "QFT plan dimension must be positive");
+    }
+
+    #[test]
+    fn serialized_plan_rejects_wrong_twiddle_count() {
+        let plan = QftPlan::new(QuantumStateDimension::new(3).expect("valid dimension"));
+        let mut value = serde_json::to_value(plan).expect("serialize QFT plan");
+        value["twiddles"]
+            .as_array_mut()
+            .expect("serialized twiddle array")
+            .truncate(2);
+
+        let error =
+            serde_json::from_value::<QftPlan>(value).expect_err("wrong twiddle count must fail");
+        assert_eq!(error.to_string(), "QFT plan has 2 twiddles for dimension 3");
+    }
+
     fn input64() -> Array1<Complex64> {
         Array1::from(vec![
             Complex64::new(1.0, -0.5),
