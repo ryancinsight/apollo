@@ -240,3 +240,21 @@ four-comparison acceptance rule are unchanged. The operational critical path
 is therefore one artifact build plus one matched pair instead of two builds
 plus eight serialized measurements; hosted validation of the resulting bound
 remains the delivery gate for this revision.
+
+## Revision: 2026-08-31
+
+The default `bench` profile had inherited release and then overridden its
+single codegen unit with eight. This contradicted the release profile's stated
+cross-module inlining and vectorization requirement. The unchanged QFT route
+instrument reproduced a 42.745-microsecond N=1,024 median under the divergent
+profile and a 1.955-microsecond median under `--profile release`; the release
+pinned route probe independently measured 1.819--3.036 microseconds across the
+host's core classes. The 21.86x separation falsified a production routing
+defect and identified benchmark-profile drift.
+
+The default benchmark profile now inherits release without optimization or
+codegen overrides. `bench-quick` remains the explicit profile for smoke runs
+that trade code quality for compilation latency. Benchmark bodies, workloads,
+sample counts, timing regions, and the production FFT route are unchanged.
+The corrected default profile measures the unchanged N=1,024 QFT case at
+1.954 microseconds.

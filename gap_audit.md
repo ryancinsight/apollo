@@ -24,17 +24,17 @@ median intervals (nanoseconds):
 
 | N | dense/Hermes median | Apollo FFT median | reduction |
 | ---: | ---: | ---: | ---: |
-| 1 | 5.569 | 4.181 | 24.92% |
-| 2 | 5.770 | 4.162 | 27.87% |
-| 3 | 10.694 | 5.083 | 52.47% |
-| 4 | 18.623 | 5.238 | 71.87% |
-| 8 | 73.066 | 8.410 | 88.49% |
-| 16 | 291.272 | 14.340 | 95.08% |
-| 32 | 1,162.350 | 39.501 | 96.60% |
-| 64 | 4,647.953 | 64.992 | 98.60% |
-| 127 | 18,534.090 | 845.911 | 95.44% |
-| 256 | 88,583.332 | 351.163 | 99.60% |
-| 1,024 | 117,649.999 | 43,523.683 | 63.01% |
+| 1 | 10.950 | 4.481 | 59.08% |
+| 2 | 11.880 | 4.670 | 60.69% |
+| 3 | 13.234 | 5.251 | 60.32% |
+| 4 | 18.944 | 5.588 | 70.50% |
+| 8 | 73.689 | 8.219 | 88.85% |
+| 16 | 291.129 | 14.704 | 94.95% |
+| 32 | 1,161.999 | 39.161 | 96.63% |
+| 64 | 4,647.368 | 59.915 | 98.71% |
+| 127 | 18,318.888 | 844.088 | 95.39% |
+| 256 | 85,610.000 | 281.244 | 99.67% |
+| 1,024 | 114,991.666 | 1,955.099 | 98.30% |
 
 The boundary measurements falsify the proposed small direct route: Apollo FFT
 wins with disjoint intervals even at N=1, so every valid plan uses the provider.
@@ -47,11 +47,17 @@ reallocations for caller-owned forward-plus-inverse execution at N=127 and
 N=256. These are allocator-call and local timing claims, not process-RSS or
 cross-machine throughput claims.
 
-The same instrument exposes a separate Apollo FFT cliff: N=1,024 takes
-43.524 microseconds versus 0.351 microseconds at N=256. The fourfold size
-increase costs 124 times more, so the generic power-of-two route needs an
-independent profile-and-route item; this QFT increment does not hide that
-provider gap.
+The original table used the workspace's default bench profile, whose eight
+codegen units diverged from the single-unit release contract documented in the
+root manifest. The unchanged instrument reproduced 42.745 microseconds at
+N=1,024 under that profile, then measured 1.955 microseconds under `--profile
+release`; the pinned production-route probe independently measured 1.819--3.036
+microseconds across the host's core classes. The apparent provider cliff was a
+21.86x benchmark-codegen artifact, not a production routing defect. The default
+bench profile now inherits release without overrides; `bench-quick` remains the
+explicit fast-compilation profile. No production FFT source or route changes.
+After the correction, unchanged default `cargo bench` measures N=1,024 at
+1.954 microseconds, matching the release-profile result.
 
 ## The combine rides the column pass out (2026-08-31) <a id="combine-sink"></a>
 
