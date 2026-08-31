@@ -41,8 +41,36 @@ microseconds at the same three sizes, consistent with the corrected table's
 lower timing band. This is local Windows AVX2 evidence on one hybrid processor
 and does not establish cross-machine throughput. The result is mixed rather
 than a speed claim, and no production FFT route or kernel changed. The isolated
-f64 32,768 variance is tracked as
+f64 32,768 variance was investigated by
 `ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31`.
+
+### N=32,768 variance attribution
+
+The public f64 N=32,768 plan does not execute the standalone Stockham route. It
+selects the four-step split and runs two N=16,384 planar stage sets around
+deinterleave, transpose, and combine phases. The retained phase instrument now
+includes N=32,768 so this route remains observable without changing production
+code.
+
+Four exact-processor runs of 200 calls placed the complete N=32,768 four-step
+route between 422,562 and 434,908 cycles, a 2.9% span. The N=16,384 control
+spanned 192,140--197,714 cycles, also 2.9%. Individual second-stage and combine
+measurements moved in opposite directions, but no phase reproduced the original
+22.3% complete-run band. The evidence therefore falsifies a varying production
+component rather than selecting a kernel correction.
+
+Two adjacent executions of the unchanged 100-sample comparison then reported
+Apollo f64 N=32,768 medians of 126.314 microseconds (95% interval
+126.200--126.529) and 125.014 microseconds (123.486--125.593). The same second
+run reported 129.971 microseconds for RustFFT f64, 82.970 for Apollo f32, and
+67.600 for RustFFT f32. No benchmark workload, estimator, route, or production
+source changed between these confirmations.
+
+The original broad band is attributed to host frequency or interruption state
+outside exact processor identity. No production change is retained: changing a
+stable phase would not satisfy the item's reproduce-before-edit condition. This
+is local Windows AVX2 evidence; it does not control dynamic voltage and
+frequency scaling, interrupts, or establish a cross-machine throughput result.
 
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
