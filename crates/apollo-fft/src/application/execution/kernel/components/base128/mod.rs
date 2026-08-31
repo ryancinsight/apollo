@@ -105,20 +105,47 @@ where
                     }
                 }
             }
+            // Two blocks: the even block transforms into scratch and the
+            // odd block combines on the way out of its own column pass,
+            // writing both halves of `data` directly — no separate combine
+            // pass and no store-then-reload of the odd spectrum
+            // (gap_audit.md#combine-sink). A width that does not carry the
+            // sink falls back to the two-pass form; four blocks keep the
+            // fused two-level final.
+            if blocks == 2 {
+                let (even, odd) = scratch.split_at_mut(BASE);
+                if !instance_major::transform_128::<F, INVERSE>(even, plan) {
+                    return false;
+                }
+                let twiddles = combine_twiddles::<F, INVERSE>(BASE);
+                let combine = &twiddles[BASE - 1..2 * BASE - 1];
+                {
+                    let (low, high) = data.split_at_mut(BASE);
+                    if instance_major::transform_128_combining::<F, INVERSE>(
+                        odd,
+                        plan,
+                        instance_major::CombineSink {
+                            peer: bytemuck::cast_slice(even),
+                            tw: bytemuck::cast_slice(combine),
+                            low: bytemuck::cast_slice_mut(low),
+                            high: bytemuck::cast_slice_mut(high),
+                        },
+                    ) {
+                        return true;
+                    }
+                }
+                if !instance_major::transform_128::<F, INVERSE>(odd, plan) {
+                    return false;
+                }
+                combine_final::<F, INVERSE>(data, scratch, BASE);
+                return true;
+            }
             for block in scratch.chunks_exact_mut(BASE).take(blocks) {
                 if !instance_major::transform_128::<F, INVERSE>(block, plan) {
                     return false;
                 }
             }
-
-            // Combining stages. Two blocks take the single final butterfly;
-            // four blocks take both levels fused into one pass, so the
-            // array is read and written once instead of twice.
-            if blocks == 2 {
-                combine_final::<F, INVERSE>(data, scratch, BASE);
-            } else {
-                combine_final4::<F, INVERSE>(data, scratch, BASE);
-            }
+            combine_final4::<F, INVERSE>(data, scratch, BASE);
             true
         },
     )

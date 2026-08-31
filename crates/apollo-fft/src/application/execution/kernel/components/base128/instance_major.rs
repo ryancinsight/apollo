@@ -309,6 +309,25 @@ where
     ComplexReg::from_interleaved(picked.into_interleaved() * half_root2)
 }
 
+/// The split's combine butterfly, applied by phase 3 as it stores.
+///
+/// When present, the block being transformed is the odd half of a split
+/// pair whose even half `peer` is already transformed: the register bound
+/// for output index `j` instead produces `peer[j] + W^j reg` into `low[j]`
+/// and `peer[j] - W^j reg` into `high[j]`. The separate combine pass — and
+/// the store of this block's spectrum that it would have reloaded — cease
+/// to exist (gap_audit.md#combine-sink).
+pub(crate) struct CombineSink<'a, T> {
+    /// The even block's transformed spectrum, one chunk per output index.
+    pub(crate) peer: &'a [T],
+    /// Interleaved `W^j` twiddles from the split's cached table.
+    pub(crate) tw: &'a [T],
+    /// The parent transform's low output half.
+    pub(crate) low: &'a mut [T],
+    /// The parent transform's high output half.
+    pub(crate) high: &'a mut [T],
+}
+
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
 /// stride-`ROWS` subsequences of sixteen, so `ROWS = 8` is the 128-point
 /// transform and `ROWS = 4` the 64-point one. The sixteen-sample row
@@ -327,6 +346,10 @@ pub(crate) struct BaseTransform<
     /// documents: the phase-one loads index this from inside a loop.
     pub(crate) data: &'a mut [T; LANES],
     pub(crate) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
+    /// `Some` when this block is the odd half of a split pair; follows the
+    /// batched driver's loop-invariant `fold: Option<..>` idiom, which LLVM
+    /// unswitches so the `None` monomorphization keeps its store loop.
+    pub(crate) combine: Option<CombineSink<'a, T>>,
 }
 
 impl<
@@ -541,6 +564,7 @@ where
         let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
         let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
         let stg = simd.view(staging.as_slice());
+        let mut combine = self.combine;
         let mut out = simd.view_mut(self.data.as_mut_slice());
         for g in 0..8usize {
             let mut c = [zero_complex; 8];
@@ -596,8 +620,28 @@ where
             }
             for (q, reg) in c.iter().enumerate().take(ROWS) {
                 let row = if ROWS == 8 { REV3[q] } else { REV2[q] };
-                reg.into_interleaved()
-                    .store_to_view_chunk(&mut out, row * 8 + g);
+                let j = row * 8 + g;
+                match combine.as_mut() {
+                    None => {
+                        reg.into_interleaved().store_to_view_chunk(&mut out, j);
+                    }
+                    Some(sink) => {
+                        let peer = simd.view(sink.peer);
+                        let tw = simd.view(sink.tw);
+                        let e = ComplexReg::<T, A>::from_interleaved(
+                            hermes_simd::Vector::from_view_chunk(&peer, j),
+                        );
+                        let w = ComplexReg::<T, A>::from_interleaved(
+                            hermes_simd::Vector::from_view_chunk(&tw, j),
+                        );
+                        let rotated = *reg * w;
+                        let (lo, hi) = e.butterfly(rotated);
+                        let mut low = simd.view_mut(&mut *sink.low);
+                        lo.into_interleaved().store_to_view_chunk(&mut low, j);
+                        let mut high = simd.view_mut(&mut *sink.high);
+                        hi.into_interleaved().store_to_view_chunk(&mut high, j);
+                    }
+                }
             }
         }
         #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -644,6 +688,7 @@ where
         > {
             data: flat,
             plan,
+            combine: None,
         })
         .unwrap_or(false)
     };
@@ -669,6 +714,54 @@ where
         })
         .unwrap_or(false),
     }
+}
+
+/// Runs the 128-point base butterfly as the odd half of a split pair,
+/// combining with `sink.peer` on the way out (see [`CombineSink`]).
+///
+/// Only the four-lane kernel carries the sink: a host that selects the
+/// eight-lane layout reports unhandled, and the split takes its two-pass
+/// fallback.
+///
+/// # Panics
+///
+/// If `data` is not exactly 128 samples or the sink's buffers mismatch.
+pub(crate) fn transform_128_combining<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan128<T>,
+    sink: CombineSink<'_, T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: bytemuck::Pod,
+{
+    if size_of::<T>() == 4 && matches!(plan.lane_width, BaseLaneWidth::Eight) {
+        return false;
+    }
+    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
+    assert!(
+        sink.peer.len() == 256
+            && sink.low.len() == 256
+            && sink.high.len() == 256
+            && sink.tw.len() >= 256,
+        "invariant: combine sink buffers match the transform length"
+    );
+    let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
+        .try_into()
+        .expect("invariant: 128 complex samples are exactly 256 lanes");
+    hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
+        T,
+        INVERSE,
+        false,
+        8,
+        256,
+        { table_lanes(8) },
+    > {
+        data: flat,
+        plan,
+        combine: Some(sink),
+    })
+    .unwrap_or(false)
 }
 
 /// The 128-point base plan: eight rows of sixteen.
