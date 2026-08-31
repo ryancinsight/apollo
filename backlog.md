@@ -1990,7 +1990,7 @@
   bounded below `PARALLEL_ROW_THRESHOLD`; its independent extension item below
   is still valid.
 
-## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — todo
+## ATLAS-APOLLO-BATCHED-PARALLEL-2026-08-25 — Parallelize the batched stage set [patch] — in-progress
 
 - **Outcome:** the batched four-step covers every square split, not only those
   below the threading threshold, without giving up the row parallelism the
@@ -2016,6 +2016,15 @@
   thread-count sweep showing the partition actually scales.
 - **Risk / change class:** [patch]; adds one `unsafe` block behind a safe API.
   **Dependencies:** the validation in the item above.
+- **Integrator:** Codex `/root`.
+- **Lease:** `crates/apollo-fft/src/application/execution/kernel/components/batched/**`,
+  the batched route predicate in
+  `crates/apollo-fft/src/application/execution/kernel/components/radix_composite/cache.rs`,
+  focused allocation/scaling evidence, and this item. The live
+  `perf/apollo-split-sizes` lane owns `components/base128/**` and remains
+  disjoint.
+- **Last update:** 2026-08-31; implementation branch
+  `perf/apollo-batched-parallel`, based on Apollo merge `d975ecf6`.
 
 ## ATLAS-APOLLO-ENGINE-CENSUS-2026-08-25 — Commit the four-engine census as an instrument [patch] — done 2026-08-25
 
