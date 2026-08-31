@@ -1,17 +1,18 @@
-//! Reusable QFT forward execution across the direct-to-FFT crossover.
+//! Reusable QFT forward execution against the retained dense oracle.
 //!
-//! The plan, input, and caller-owned output are constructed outside the timed
-//! closure. Each observation executes the public reusable-plan path against
-//! the same immutable signal and black-boxes the computed output. The eight
-//! geometrically spaced lengths cover the small direct regime, a non-smooth
-//! prime, and the large regime where quadratic work should lose to Apollo FFT.
+//! The plan, twiddles, input, and caller-owned outputs are constructed outside
+//! the timed closures. Each length runs the public reusable plan and retained
+//! dense/Hermes kernel in the same process against one immutable signal. The
+//! boundary and geometrically spaced lengths cover identity, tiny transforms,
+//! a non-smooth prime, and large quadratic workloads.
 //!
-//! The default budget is eight cases times 20 ms warm-up plus 80 ms
-//! measurement, or 0.8 s before harness overhead. A hard 30 s suite bound
+//! The default budget is twenty-two cases times 20 ms warm-up plus 80 ms
+//! measurement, or 2.2 s before harness overhead. A hard 30 s suite bound
 //! catches an accidental return to unbounded quadratic work. Smoke mode still
 //! executes and validates every case once.
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
+use apollo_qft::infrastructure::kernel::dense::qft_forward_dense_into;
 use apollo_qft::{QftPlan, QuantumStateDimension};
 use eunomia::Complex64;
 use leto::Array1;
@@ -19,7 +20,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 const GROUP: &str = "qft_forward_reusable";
-const LENGTHS: [usize; 8] = [4, 8, 16, 32, 64, 127, 256, 1024];
+const LENGTHS: [usize; 11] = [1, 2, 3, 4, 8, 16, 32, 64, 127, 256, 1024];
 const WARM_UP_MS: u64 = 20;
 const MEASUREMENT_MS: u64 = 80;
 const BUDGET_SECS: u64 = 30;
@@ -29,6 +30,15 @@ fn signal(len: usize) -> Array1<Complex64> {
         let x = index as f64;
         Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
     })
+}
+
+fn twiddles(len: usize) -> Vec<Complex64> {
+    (0..len)
+        .map(|index| {
+            let angle = std::f64::consts::TAU * index as f64 / len as f64;
+            Complex64::new(angle.cos(), angle.sin())
+        })
+        .collect()
 }
 
 fn direct_qft(input: &Array1<Complex64>) -> Vec<Complex64> {
@@ -80,6 +90,21 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
 
     for len in LENGTHS {
         let input = signal(len);
+        let input_slice = input.as_slice().expect("benchmark input is contiguous");
+        let twiddles = twiddles(len);
+        let mut dense_output = vec![Complex64::new(0.0, 0.0); len];
+        qft_forward_dense_into(input_slice, &mut dense_output, &twiddles);
+        assert_matches_direct(&input, &Array1::from(dense_output.clone()));
+
+        suite.run(BenchmarkCase::new(GROUP, "dense", len), || {
+            qft_forward_dense_into(
+                black_box(input_slice),
+                black_box(&mut dense_output),
+                black_box(&twiddles),
+            );
+            black_box(&dense_output);
+        });
+
         let plan = QftPlan::new(
             QuantumStateDimension::new(len).expect("benchmark lengths are valid dimensions"),
         );

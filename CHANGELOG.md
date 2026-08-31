@@ -54,6 +54,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] Reusable CPU QFT plans now share one Apollo FFT plan and use
+  it for every positive length. An exact-revision, same-process 100-sample
+  comparison against the retained dense/Hermes kernel reduces forward medians
+  by 24.92% to 99.60% across lengths 1--1024. Caller-owned forward-plus-inverse
+  execution at 127 and 256 remains allocation- and reallocation-free after
+  warm-up. Plans no longer retain a separate 16N-byte QFT twiddle vector or
+  populate a 16N-byte QFT lane scratch on each participating Moirai worker;
+  clones share the FFT plan. Serialization emits the prior
+  `dimension`/`twiddles` representation and validates its dimensions on read;
+  the public dense kernel remains available as an independent oracle.
 - [patch] [perf] The 59-, 83-, and 107-point dynamic Rader paths now use the
   existing half-cyclic convolution instead of Bluestein. One same-process
   100-sample comparison reduced automatic-route medians by 42.8% to 89.3%

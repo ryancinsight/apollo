@@ -1,45 +1,69 @@
-//! Reusable dense quantum Fourier transform plan.
+//! Reusable quantum Fourier transform plan.
 //!
 //! For a state vector x in C^n, the forward QFT is
 //! X_k = (1/sqrt(n)) sum_j x_j exp(2*pi*i*j*k/n). The inverse is the
 //! conjugate transpose with the negative phase. Both maps are unitary.
 //!
-//! Twiddle factors exp(2*pi*i*k/n) for k=0..n are precomputed at plan
-//! construction time and reused across all forward and inverse calls.
+//! Execution reuses one Apollo FFT plan. Apollo's unnormalized inverse has the
+//! forward QFT phase; its forward transform has the inverse QFT phase. A final
+//! `1/sqrt(n)` pass gives the unitary normalization in both directions.
+//!
+//! The serialized form retains the historical `dimension` and `twiddles`
+//! fields. Twiddles are generated directly into the serializer instead of
+//! occupying retained plan storage.
 
 use crate::domain::contracts::error::{QftError, QftResult};
 use crate::domain::state::dimension::QuantumStateDimension;
-use crate::infrastructure::kernel::dense::{qft_forward_dense_into, qft_inverse_dense_into};
-use apollo_fft::{f16, CpuElement, CpuStorage, PrecisionProfile};
+use apollo_fft::{f16, CpuElement, CpuStorage, FftPlan1D, PrecisionProfile, Shape1D};
 use eunomia::{Complex32, Complex64};
 use leto::Array1;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::ser::{SerializeSeq, SerializeStruct};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::Arc;
 
-/// Reusable QFT plan with precomputed twiddle factors.
-///
-/// `twiddles[k] = exp(2*pi*i*k/n)` for `k = 0..n`. The kernel indexes
-/// `twiddles[(row*col) % n]` to obtain `exp(2*pi*i*row*col/n)` without
-/// trigonometric evaluation per transform element.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Reusable unitary QFT plan backed by a shared Apollo FFT plan.
+#[derive(Debug, Clone)]
 pub struct QftPlan {
     dimension: QuantumStateDimension,
-    /// Precomputed twiddle factors: twiddles[k] = exp(2*pi*i*k/n).
-    twiddles: Vec<Complex64>,
+    fft_plan: Arc<FftPlan1D<f64>>,
 }
 
 impl QftPlan {
     /// Create a QFT plan for a validated quantum state dimension.
     pub fn new(dimension: QuantumStateDimension) -> Self {
-        let n = dimension.len();
-        let twiddles: Vec<Complex64> = (0..n)
-            .map(|k| {
-                let angle = std::f64::consts::TAU * k as f64 / n as f64;
-                Complex64::new(angle.cos(), angle.sin())
-            })
-            .collect();
         Self {
             dimension,
-            twiddles,
+            fft_plan: Self::build_fft_plan(dimension.len()),
+        }
+    }
+
+    fn build_fft_plan(len: usize) -> Arc<FftPlan1D<f64>> {
+        Arc::new(FftPlan1D::new(
+            Shape1D::new(len).expect("invariant: QFT dimensions are non-zero"),
+        ))
+    }
+
+    fn fft_plan(&self) -> &FftPlan1D<f64> {
+        self.fft_plan.as_ref()
+    }
+
+    fn forward_fft_into(&self, input: &[Complex64], output: &mut [Complex64]) {
+        output.copy_from_slice(input);
+        self.fft_plan().inverse_complex_slice_unnorm_inplace(output);
+        Self::scale_unitary(output);
+    }
+
+    fn inverse_fft_into(&self, input: &[Complex64], output: &mut [Complex64]) {
+        output.copy_from_slice(input);
+        self.fft_plan().forward_complex_slice_inplace(output);
+        Self::scale_unitary(output);
+    }
+
+    fn scale_unitary(output: &mut [Complex64]) {
+        let scale = 1.0 / (output.len() as f64).sqrt();
+        for value in output {
+            *value *= scale;
         }
     }
 
@@ -105,7 +129,7 @@ impl QftPlan {
         if input.len() != self.len() || output.len() != self.len() {
             return Err(QftError::LengthMismatch);
         }
-        qft_forward_dense_into(input, output, &self.twiddles);
+        self.forward_fft_into(input, output);
         Ok(())
     }
 
@@ -187,7 +211,7 @@ impl QftPlan {
         if input.len() != self.len() || output.len() != self.len() {
             return Err(QftError::LengthMismatch);
         }
-        qft_inverse_dense_into(input, output, &self.twiddles);
+        self.inverse_fft_into(input, output);
         Ok(())
     }
 
@@ -232,6 +256,64 @@ impl QftPlan {
         *data = transformed;
         Ok(())
     }
+}
+
+struct SerializedTwiddles(usize);
+
+impl Serialize for SerializedTwiddles {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0))?;
+        for index in 0..self.0 {
+            sequence.serialize_element(&canonical_twiddle(self.0, index))?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Deserialize)]
+struct SerializedQftPlan {
+    dimension: QuantumStateDimension,
+    twiddles: Vec<Complex64>,
+}
+
+impl Serialize for QftPlan {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("QftPlan", 2)?;
+        state.serialize_field("dimension", &self.dimension)?;
+        state.serialize_field("twiddles", &SerializedTwiddles(self.len()))?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for QftPlan {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let serialized = SerializedQftPlan::deserialize(deserializer)?;
+        let len = serialized.dimension.len();
+        if len == 0 {
+            return Err(D::Error::custom("QFT plan dimension must be positive"));
+        }
+        if serialized.twiddles.len() != len {
+            return Err(D::Error::custom(format_args!(
+                "QFT plan has {} twiddles for dimension {len}",
+                serialized.twiddles.len()
+            )));
+        }
+        Ok(Self::new(serialized.dimension))
+    }
+}
+
+fn canonical_twiddle(len: usize, index: usize) -> Complex64 {
+    let angle = std::f64::consts::TAU * index as f64 / len as f64;
+    Complex64::new(angle.cos(), angle.sin())
 }
 
 /// Complex storage accepted by typed QFT paths.
@@ -388,8 +470,95 @@ mod tests {
     use super::*;
     use eunomia::assert_relative_eq;
 
+    fn signal(len: usize) -> Vec<Complex64> {
+        (0..len)
+            .map(|index| {
+                let x = index as f64;
+                Complex64::new((0.17 * x).sin(), 0.25 * (0.31 * x).cos())
+            })
+            .collect()
+    }
+
+    fn direct_qft(input: &[Complex64], inverse: bool) -> Vec<Complex64> {
+        let len = input.len();
+        let direction = if inverse { -1.0 } else { 1.0 };
+        let scale = 1.0 / (len as f64).sqrt();
+        (0..len)
+            .map(|bin| {
+                input
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        let angle =
+                            direction * std::f64::consts::TAU * (bin * index) as f64 / len as f64;
+                        *value * Complex64::new(angle.cos(), angle.sin())
+                    })
+                    .sum::<Complex64>()
+                    * scale
+            })
+            .collect()
+    }
+
+    fn assert_matches_direct(input: &[Complex64], actual: &[Complex64], inverse: bool) {
+        let expected = direct_qft(input, inverse);
+        let l1 = input.iter().map(|value| value.norm()).sum::<f64>();
+        // Naive direct summation contributes O(N*u); 64 covers its generated
+        // trigonometric values plus the routed O(log N*u) FFT contribution.
+        let tolerance = 64.0 * input.len() as f64 * f64::EPSILON * l1.max(1.0);
+        for (bin, (got, want)) in actual.iter().zip(expected).enumerate() {
+            assert!(
+                (*got - want).norm() <= tolerance,
+                "length {} bin {bin}: {got:?} differs from {want:?} by {}, bound {tolerance}",
+                input.len(),
+                (*got - want).norm()
+            );
+        }
+    }
+
     fn plan4() -> QftPlan {
         QftPlan::new(QuantumStateDimension::new(4).expect("valid dimension"))
+    }
+
+    #[test]
+    fn retained_fft_matches_direct_qft_for_all_length_classes() {
+        for len in [1, 2, 3, 4, 5, 16, 127, 128, 257] {
+            let plan = QftPlan::new(QuantumStateDimension::new(len).expect("valid dimension"));
+            let input = signal(len);
+            let mut forward = vec![Complex64::new(0.0, 0.0); len];
+            plan.forward_complex64_slice_into(&input, &mut forward)
+                .expect("forward QFT");
+            assert_matches_direct(&input, &forward, false);
+
+            let mut inverse = vec![Complex64::new(0.0, 0.0); len];
+            plan.inverse_complex64_slice_into(&input, &mut inverse)
+                .expect("inverse QFT");
+            assert_matches_direct(&input, &inverse, true);
+        }
+    }
+
+    #[test]
+    fn cloned_plans_share_the_retained_fft_plan() {
+        let plan = QftPlan::new(QuantumStateDimension::new(127).expect("valid dimension"));
+        let cloned = plan.clone();
+        assert!(Arc::ptr_eq(&plan.fft_plan, &cloned.fft_plan));
+    }
+
+    #[test]
+    fn serialized_plan_preserves_wire_shape_and_values() {
+        let plan = QftPlan::new(QuantumStateDimension::new(5).expect("valid dimension"));
+        let value = serde_json::to_value(&plan).expect("serialize QFT plan");
+        let object = value.as_object().expect("QFT plan object");
+        assert_eq!(object.len(), 2);
+        assert_eq!(object["dimension"]["n"], 5);
+        assert_eq!(object["twiddles"].as_array().map(Vec::len), Some(5));
+
+        let restored: QftPlan = serde_json::from_value(value).expect("deserialize QFT plan");
+        let input = signal(5);
+        let mut actual = vec![Complex64::new(0.0, 0.0); 5];
+        restored
+            .forward_complex64_slice_into(&input, &mut actual)
+            .expect("restored QFT execution");
+        assert_matches_direct(&input, &actual, false);
     }
 
     fn input64() -> Array1<Complex64> {

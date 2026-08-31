@@ -36,6 +36,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
+serde_json.workspace = true
 
 [[bench]]
 name = "qft_route"
