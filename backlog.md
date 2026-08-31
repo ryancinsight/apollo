@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — in progress
+
+- **Outcome.** Attribute and reduce Apollo f32 N=32,768's stable 23% latency
+  deficit against retained-scratch RustFFT without changing numerical or
+  allocation semantics.
+- **Scope / non-goals.** Extend the test-only exact-processor phase instrument
+  generically across f32 and f64, then isolate movement versus arithmetic in
+  the public four-step route at N=16,384 and N=32,768. Do not change the
+  comparison workload, estimator, crossover, or production code before one
+  phase reproduces across three runs; do not trade f64 or smaller sizes for the
+  f32 row.
+- **Acceptance.** Same-binary phase attribution reproduces across three
+  processor-2 runs with f64 and N=16,384 controls. A retained production
+  correction preserves direct-DFT and round-trip values, exact route selection,
+  zero warm allocations, and improves the unchanged 100-sample comparison in
+  two adjacent runs while controls remain neutral. Reject any candidate whose
+  phase or complete-path intervals do not reproduce.
+- **Risk / dependencies.** [patch] [perf]. Depends on the exact-processor
+  comparison and N=32,768 phase coverage merged through PR #217 / `5bf93047`.
+- **Integrator / lease:** `/root`; lease `/root` on
+  `crates/apollo-fft/src/application/execution/kernel/components/batched/pinned_sections.rs`
+  and this item's PM hunks. Production regions remain unleased until phase
+  attribution selects one; last update 2026-08-31.
+
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 
 - **Delivered:** source `39420cca`, review correction `f3138f50`, PR #213,

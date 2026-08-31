@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
+
+- [ ] Generalize the retained phase instrument across f32/f64 without
+      duplicating route logic or changing production instrumentation.
+- [ ] Collect three exact-processor release phase runs at 16,384/32,768 and
+      retain a production candidate only for a reproducing phase.
+- [ ] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
+      allocations; improve two adjacent unchanged comparisons with neutral
+      f64 and N=16,384 controls.
+- [ ] Pass focused, package, warning-denied, cross-target, documentation,
+      standalone-lock, independent-review, hosted, and non-squash merge gates.
+
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
 
 - [x] Bind the attribution to merged comparison revision `a6fbcd02` and claim
