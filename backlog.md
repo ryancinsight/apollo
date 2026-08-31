@@ -206,7 +206,7 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — blocked
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — in progress
 
 - **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
   the committed instrument measures nothing at or above 1024. Per-length
@@ -243,9 +243,11 @@
   interleaved best-of probe at the same lengths. Until then the extension stays
   reverted: a row that swings 3x is worse than an absent one, because it will
   be read as a regression.
-- **Integrator / lease:** Codex `/root`; lease none. Blocked on the Hermes exact
-  processor-binding provider; production FFT source remains excluded. Last
-  update 2026-08-31.
+- **Integrator / lease:** Codex `/root`; lease `rustfft_comparison.rs`, FFT
+  pinned-probe/test utility leaves, dependency lock, CHANGELOG/audit/PM. Hermes
+  PR #109 exposes the provider through the local stack overlay while hosted and
+  independent gates run; production FFT kernels remain excluded. Last update
+  2026-08-31.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
