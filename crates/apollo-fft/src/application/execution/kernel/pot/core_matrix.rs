@@ -11,8 +11,8 @@
 use super::route::{FourStep, PotRoute};
 use super::strategies::StockhamAutosort;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
+use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use std::time::Instant;
 
 fn best<R: PotRoute>(src: &[Complex64], work: &mut [Complex64], tw: &[Complex64]) -> f64 {
@@ -39,7 +39,13 @@ fn route_cost_by_core_type() {
 
     // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         let stockham = best::<StockhamAutosort>(&src, &mut work, &tw);
         let four_step = best::<FourStep>(&src, &mut work, &tw);
         println!(

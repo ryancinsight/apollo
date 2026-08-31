@@ -195,7 +195,7 @@ where
         .unwrap_or(false)
 }
 
-// Windows-gated: pins threads through Win32 to control the hybrid scheduler.
+// Windows-gated: uses Hermes exact processor binding to control the hybrid scheduler.
 #[cfg(all(test, windows))]
 mod pinned_probe;
 #[cfg(test)]

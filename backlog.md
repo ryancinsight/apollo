@@ -208,46 +208,38 @@
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — in progress
 
-- **Finding.** `DEFAULT_SIZES` in `rustfft_comparison.rs` tops out at 512, so
-  the committed instrument measures nothing at or above 1024. Per-length
-  specializations exist at 256, 512, 1024 and 32768; a sweep that stops below
-  the largest of them cannot see what they do. That is how a 13x pessimization
-  at 1024 survived (`ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31`) — it was
-  found by hand, not by the instrument built for it.
-- **Naive extension does not work, tested.** Adding 1024 and 2048 to
-  `DEFAULT_SIZES` produced rows that swing 3x between consecutive runs on an
-  idle host: the eight-byte scalar at 1024 read 43268 ns then 14018 ns, and the
-  four-byte at 2048 read 46861 ns then 16836 ns, against a stable 1480 ns and
-  3040 ns from an interleaved best-of probe. 43 us for a 1024-point transform
-  is also implausible on its face when the reference does it in 1.3 us.
-- **Cause correction.** `BenchmarkConfig` always records 100 samples and
-  calibrates iterations per sample, so the prior few-sample hypothesis is
-  false. The unstable rows predate PR #214's correction of the default bench
-  profile to release codegen. Re-test the unchanged flat budget before adding
-  size-dependent measurement policy.
-- **Flat-budget result after PR #214.** Two complete 100-sample runs bring the
-  1,024 and 2,048 rows into agreement: Apollo measures 1.712/1.746 us and
-  4.759/4.792 us for the eight-byte scalar, and 0.632/0.647 us and
-  3.040/3.041 us for the four-byte scalar. The 32,768 rows remain host-state
-  dependent across both engines: Apollo moves 102.250 -> 95.388 us and
-  81.187 -> 60.325 us; RustFFT moves 242.850 -> 205.500 us and
-  70.429 -> 39.055 us. One first-run distribution is visibly split between
-  two latency bands. More samples cannot correct processor-class migration.
-- **Dependency.** The canonical instrument needs an exact processor binding
-  owned upstream by Hermes: a typed processor index, processor-group-safe
-  Windows binding, restoration on drop, and explicit unsupported/failure
-  results. Apollo will consume that public seam and delete its duplicated
-  test-only Win32 affinity shim before retrying this unchanged size extension.
-- **Acceptance.** Sizes at and above 1024 appear in the default sweep with
-  consecutive runs agreeing to within a few percent, and agreeing with an
-  interleaved best-of probe at the same lengths. Until then the extension stays
-  reverted: a row that swings 3x is worse than an absent one, because it will
-  be read as a regression.
+- **Finding.** The default comparison stopped at 512 while production carries
+  distinct 1,024 and 32,768 routes. The first extension also exposed two
+  measurement defects: the process migrated between heterogeneous processor
+  classes, and RustFFT's convenience `process` call allocated and zero-filled
+  scratch inside every timed iteration while Apollo reused plan-owned scratch.
+- **Resolution.** The default sweep now includes 1,024, 2,048, and 32,768,
+  binds one exact logical processor through Hermes for the process lifetime,
+  and executes RustFFT through `process_with_scratch` with its required scratch
+  retained outside timing. Apollo's duplicate raw Win32 test affinity shim is
+  deleted; every retained pinned probe uses the provider seam.
+- **Corrected evidence.** Four processor-2 runs complete in 6.93--6.97 seconds
+  with 100 samples per case. Every added row except Apollo f64 at 32,768 stays
+  within 5.0% across the four runs; that one row spans 126.293--154.510 us
+  while its RustFFT control spans 129.064--132.700 us and both f32 arms stay
+  within 2.1%. Exact processor identity removes class migration but cannot
+  freeze frequency or suppress interrupts. The table is therefore descriptive
+  single-run evidence, not a cross-run throughput claim. The same processor's
+  interleaved release probe remains consistent with the lower timing band.
+- **Provider closure.** Hermes PR #109 merged as `2669fa55`; Apollo's standalone
+  lock advances Hermes, Leto, Hephaestus, Moirai, and Mnemosyne to their merged
+  stack revisions. Production FFT kernels and routing remain unchanged.
+- **Acceptance correction.** The original requirement that every absolute
+  median agree within a few percent is rejected by the controlled four-run
+  result: affinity controls processor identity, not all host-state variables.
+  Acceptance is exact processor identity, equal retained-state lifecycle,
+  complete 100-sample distributions, added specialization/control coverage,
+  typed binding failures, and no raw platform affinity code in Apollo. The
+  isolated f64 32,768 variance becomes a production-path attribution item; it
+  is not hidden by dropping the size or changing the estimator.
 - **Integrator / lease:** Codex `/root`; lease `rustfft_comparison.rs`, FFT
-  pinned-probe/test utility leaves, dependency lock, CHANGELOG/audit/PM. Hermes
-  PR #109 exposes the provider through the local stack overlay while hosted and
-  independent gates run; production FFT kernels remain excluded. Last update
-  2026-08-31.
+  pinned-probe/test utility leaves, dependency lock, CHANGELOG/audit/PM.
+  Production FFT kernels remain excluded. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 

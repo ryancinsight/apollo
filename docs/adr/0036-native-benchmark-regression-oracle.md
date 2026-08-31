@@ -258,3 +258,29 @@ that trade code quality for compilation latency. Benchmark bodies, workloads,
 sample counts, timing regions, and the production FFT route are unchanged.
 The corrected default profile measures the unchanged N=1,024 QFT case at
 1.954 microseconds.
+
+The bounded RustFFT comparison additionally binds one exact logical processor
+through Hermes for the complete measurement process. An explicit
+`APOLLO_BENCH_PROCESSOR` selects the processor; otherwise a supported host binds
+the processor observed at startup. Unsupported hosts emit an unpinned warning,
+so those runs remain smoke or correctness evidence rather than timing evidence.
+Binding, parsing, and post-bind identity failures remain typed errors.
+
+Comparator lifecycle is part of the measurement contract. Both engines build
+plans and reusable scratch before timing; each timed closure restores identical
+input and executes one transform. RustFFT's convenience `process` method is
+rejected because it allocates and zero-fills scratch on every call. The
+comparison uses `process_with_scratch` with the planner-reported scratch size.
+Keeping the convenience call was the strongest rejected alternative: it would
+measure allocator and initialization cost for one engine against retained
+execution for the other, not transform throughput.
+
+The representative default set now includes 1,024, 2,048, and 32,768 so the
+instrument observes Apollo's large fixed-length specialization and its adjacent
+control. Four 100-sample processor-2 runs complete in 6.93--6.97 seconds.
+Every added row stays within 5.0% across the four runs except Apollo f64 at
+32,768, which spans 126.293--154.510 microseconds while its RustFFT control
+spans 129.064--132.700 microseconds. Exact binding controls processor identity,
+not frequency state or interruption. The comparison therefore preserves full
+sample distributions and remains one-run descriptive evidence; it does not
+claim cross-run or cross-machine invariance.

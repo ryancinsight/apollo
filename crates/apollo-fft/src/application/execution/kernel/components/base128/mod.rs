@@ -29,7 +29,7 @@ pub(crate) mod instance_major;
 
 #[cfg(test)]
 mod tests;
-// x86-64 Windows-gated: pins threads and reads TSC phase counters.
+// x86-64 Windows-gated: uses Hermes exact processor binding and reads TSC phase counters.
 #[cfg(all(test, windows, target_arch = "x86_64"))]
 mod pinned_probe;
 

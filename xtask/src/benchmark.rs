@@ -194,7 +194,8 @@ fn render(rows: &BTreeMap<usize, Row>, full: bool) -> String {
         out,
         "Sweep: {}. Benchmark: clone-inclusive 1D forward complex FFT — each timed\n\
          iteration restores its input, so the copy is charged to both engines and\n\
-         cancels in the ratio. Plans are built once, outside the timed region.\n\n",
+         cancels in the ratio. Plans and reusable scratch are built once, outside\n\
+         the timed region.\n\n",
         if full {
             "full (1..=500)"
         } else {

@@ -53,14 +53,18 @@
 
 - [x] Re-read the benchmark configuration after PR #214 and falsify the
       recorded few-sample hypothesis against its fixed 100-sample estimator.
-- [ ] Add only the 1,024/2,048/32,768 specialization and control lengths while
-      preserving closures, ordering, budgets, modes, and the full sweep.
+- [x] Add only the 1,024/2,048/32,768 specialization and control lengths while
+      preserving budgets, modes, and the full sweep.
 - [x] Run consecutive default sweeps; retain no instrument change after the
       32,768 rows reproduce processor-class-dependent latency bands across
       both engines.
-- [ ] Consume the Hermes exact processor-binding seam, delete Apollo's
+- [x] Consume the Hermes exact processor-binding seam, delete Apollo's
       duplicate test-only affinity shim, and rerun the unchanged extension
       plus the interleaved probe on one processor.
+- [x] Remove RustFFT's per-iteration scratch allocation from the comparison by
+      retaining its required scratch outside timing; run four exact-processor
+      confirmations and record the isolated f64 32,768 variance without
+      dropping the case or weakening the estimator.
 - [ ] Synchronize benchmark results, audit/ADR, CHANGELOG, backlog, and exact
       evidence; pass warning-denied, smoke, lock, review, hosted, and merge
       gates.

@@ -6,8 +6,8 @@
 //! not per call, so both arms measure transform cost, not memcpy.
 
 use super::try_transform_16;
-use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
+use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use std::time::Instant;
 
 const CALLS_PER_BLOCK: u32 = 4096;
@@ -30,7 +30,13 @@ fn best_block<F: FnMut()>(mut f: F) -> f64 {
 fn interleaved_against_planar_by_core_type() {
     use crate::application::execution::kernel::components::batched;
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         for k in [8u32, 10, 12, 14, 16] {
             let n = 1usize << k;
             let src: Vec<Complex64> = (0..n)
@@ -85,7 +91,13 @@ fn interleaved_against_planar_by_core_type() {
 fn mid_sizes_against_the_batched_four_step_by_core_type() {
     use crate::application::execution::kernel::components::batched;
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         for k in [8u32, 10] {
             let n = 1usize << k;
             let src: Vec<Complex64> = (0..n)
@@ -130,7 +142,13 @@ fn codelet_against_the_incumbent_by_core_type() {
 
     // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         let mut work = src.clone();
         let incumbent = best_block(|| {
             plan.forward_complex_slice_inplace(std::hint::black_box(&mut work));
