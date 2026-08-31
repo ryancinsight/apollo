@@ -65,9 +65,11 @@
       retaining its required scratch outside timing; run four exact-processor
       confirmations and record the isolated f64 32,768 variance without
       dropping the case or weakening the estimator.
-- [ ] Synchronize benchmark results, audit/ADR, CHANGELOG, backlog, and exact
-      evidence; pass warning-denied, smoke, lock, review, hosted, and merge
-      gates.
+- [x] Synchronize benchmark results, audit/ADR, CHANGELOG, backlog, and exact
+      evidence; pass warning-denied, smoke, value, documentation, cross-target,
+      and standalone-lock gates at source `8a88529d`.
+- [ ] Pass hosted review/checks and merge without squash; bind closure evidence
+      to the exact merge revision.
 
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 

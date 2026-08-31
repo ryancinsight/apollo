@@ -206,7 +206,28 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — in progress
+## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — todo
+
+- **Outcome.** Attribute and remove Apollo f64 N=32,768's
+  126.293--154.510 us exact-processor spread without changing the benchmark
+  workload, estimator, or production semantics.
+- **Scope / non-goals.** Use the retained comparison and interleaved release
+  probe to isolate plan dispatch, copy, base kernel, combine, and host-state
+  contributions on logical processor 2. Change production code only after a
+  phase-localized cause reproduces; do not tune the benchmark, drop N=32,768,
+  raise its budget, or claim that affinity controls frequency and interrupts.
+- **Acceptance.** A same-binary, exact-processor phase attribution identifies
+  the varying production component against stable RustFFT and f32 controls. A
+  retained correction preserves direct-DFT/round-trip values and zero warm
+  allocations, then improves the complete unchanged 100-sample comparison in
+  two adjacent runs with a neutral 16,384 or 65,536 control. Reject a candidate
+  whose phase or complete-path confidence intervals do not reproduce.
+- **Risk / dependencies.** [patch] [perf]. Depends on the retained-state
+  comparison from `ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31`; production FFT
+  kernel regions remain unleased until attribution selects one.
+- **Integrator / lease:** none; last update 2026-08-31.
+
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
 
 - **Finding.** The default comparison stopped at 512 while production carries
   distinct 1,024 and 32,768 routes. The first extension also exposed two
@@ -237,9 +258,12 @@
   typed binding failures, and no raw platform affinity code in Apollo. The
   isolated f64 32,768 variance becomes a production-path attribution item; it
   is not hidden by dropping the size or changing the estimator.
-- **Integrator / lease:** Codex `/root`; lease `rustfft_comparison.rs`, FFT
-  pinned-probe/test utility leaves, dependency lock, CHANGELOG/audit/PM.
-  Production FFT kernels remain excluded. Last update 2026-08-31.
+- **Integrator / lease:** Codex `/root`; lease none. Source `8a88529d` passes
+  format, warning-denied Apollo/xtask Clippy, Apollo Nextest 510/510, xtask
+  Nextest 9/9, 25-size smoke, doctest, warning-denied Rustdoc, warning-denied
+  AArch64 Windows all-target compilation, ADR index, diff, and standalone-lock
+  validation with 36 first-party Git sources. Hosted review/merge remain. Last
+  update 2026-08-31.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 

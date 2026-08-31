@@ -41,7 +41,8 @@ microseconds at the same three sizes, consistent with the corrected table's
 lower timing band. This is local Windows AVX2 evidence on one hybrid processor
 and does not establish cross-machine throughput. The result is mixed rather
 than a speed claim, and no production FFT route or kernel changed. The isolated
-f64 32,768 variance remains a production-path attribution item.
+f64 32,768 variance is tracked as
+`ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31`.
 
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
