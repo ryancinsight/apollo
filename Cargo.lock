@@ -322,6 +322,7 @@ dependencies = [
 name = "apollo-qft"
 version = "0.9.0"
 dependencies = [
+ "apollo-bench",
  "apollo-fft",
  "apollo-leto-interop",
  "bytemuck",
@@ -334,6 +335,7 @@ dependencies = [
  "moirai-runtime",
  "proptest",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
 ]
 

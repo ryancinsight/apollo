@@ -1,5 +1,23 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — review
+
+- **Outcome:** reusable QFT plans use one shared Apollo FFT plan at every
+  positive length; the public dense/Hermes kernel remains the independent
+  differential oracle after measurements falsified a profitable direct range.
+- **Scope / non-goals:** `apollo-qft` plan, dense-kernel tests, one bounded
+  benchmark/allocation instrument, Rustdoc, CHANGELOG, and PM evidence only.
+  Preserve the public API, serialized representation, unitary sign and
+  normalization conventions, typed/Leto behavior, and the dense formula; do
+  not change Apollo FFT routing or unrelated GPU paths.
+- **Evidence:** source `39420cca`; exact same-process paired medians improve
+  24.92%--99.60% over N=1--1024; debug/release all-feature Nextest 41/41;
+  all-target/all-feature Clippy and Rustdoc with warnings denied; doctests;
+  exact allocation census; benchmark under its 30-second bound; standalone
+  lock guard with 36 first-party Git sources. Independent review, hosted gates,
+  PR, and merge remain.
+- **Integrator / lease:** Codex `/root`; lease none. Last update 2026-08-31.
+
 ## ATLAS-APOLLO-COMBINE-SINK-2026-08-31 — The split's combine rides the column pass out [perf] — done 2026-08-31
 
 - **Delivered** (`gap_audit.md#combine-sink`): phase 3 of the base kernel

@@ -1,5 +1,25 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-QFT-FFT-2026-08-31 [perf] — Codex
+
+- [x] Measure the retained dense/Hermes kernel and reusable Apollo FFT route
+      in one process across identity, tiny, prime, power-of-two, and large
+      lengths; reject the direct range after every boundary loses.
+- [x] Retain one shared Apollo FFT plan, preserve QFT phase and unitary
+      normalization, and remove retained QFT twiddles without changing the
+      serialized `dimension`/`twiddles` shape.
+- [x] Differential-test forward and inverse against an independent direct DFT
+      across even, odd, prime, power-of-two, contiguous, strided, typed,
+      serialized, and WGPU-feature paths.
+- [x] Prove plan clones share provider state and warmed 127/256 caller-owned
+      forward-plus-inverse execution makes zero allocations and reallocations.
+- [x] Pass all-target/all-feature Clippy, debug and release 41/41 Nextest,
+      warning-denied Rustdoc, doctests, benchmark budget, formatting, diff, and
+      standalone 36-source lock gates.
+- [x] Commit exact source candidate `39420cca` and discharge source leases.
+- [ ] Obtain independent artifact review, pass hosted verification, merge, and
+      bind closure evidence to the exact provider and merge revisions.
+
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 
 - [x] Reproduce the apparent 59-point variance with the retained 100-sample

@@ -1,3 +1,58 @@
+## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
+
+The reusable CPU QFT plan previously called the public dense kernel for every
+length. That path performs N² complex products, schedules rows through Moirai
+from N=128, and fills one `2N`-f64 twiddle-lane scratch on every participating
+worker before calling Hermes. The plan also retained its own N-element
+`Complex64` twiddle vector.
+
+The plan now owns one shared `Arc<FftPlan1D<f64>>`. Forward QFT calls Apollo's
+unnormalized inverse FFT because it has the required positive phase; inverse
+QFT calls the forward FFT. Both apply one `1/sqrt(N)` unitary scaling pass.
+Clones share the provider plan. The historical serialized
+`dimension`/`twiddles` shape is unchanged: serialization generates the
+canonical sequence directly and deserialization validates its dimension and
+table length before building the FFT plan, so the 16N-byte QFT twiddle vector
+is no longer retained. Values remain derived from the dimension; rejecting a
+bitwise-different cross-platform trigonometric table would make the historical
+portable representation platform-specific.
+
+The final exact-source instrument runs both implementations in one process,
+builds plans, tables, input, and outputs outside timing, independently checks
+the direct DFT, and records 100 samples with exact 96.4799% distribution-free
+median intervals (nanoseconds):
+
+| N | dense/Hermes median | Apollo FFT median | reduction |
+| ---: | ---: | ---: | ---: |
+| 1 | 5.569 | 4.181 | 24.92% |
+| 2 | 5.770 | 4.162 | 27.87% |
+| 3 | 10.694 | 5.083 | 52.47% |
+| 4 | 18.623 | 5.238 | 71.87% |
+| 8 | 73.066 | 8.410 | 88.49% |
+| 16 | 291.272 | 14.340 | 95.08% |
+| 32 | 1,162.350 | 39.501 | 96.60% |
+| 64 | 4,647.953 | 64.992 | 98.60% |
+| 127 | 18,534.090 | 845.911 | 95.44% |
+| 256 | 88,583.332 | 351.163 | 99.60% |
+| 1,024 | 117,649.999 | 43,523.683 | 63.01% |
+
+The boundary measurements falsify the proposed small direct route: Apollo FFT
+wins with disjoint intervals even at N=1, so every valid plan uses the provider.
+The dense API and its Hermes/Moirai tests remain unchanged as the public direct
+kernel and differential oracle. An all-feature 41-case suite covers forward
+and inverse direct-DFT agreement over identity, even, odd, prime, and
+power-of-two lengths; serialized plans; contiguous, strided, typed, and WGPU
+surfaces. A dedicated warm census records zero allocations and zero
+reallocations for caller-owned forward-plus-inverse execution at N=127 and
+N=256. These are allocator-call and local timing claims, not process-RSS or
+cross-machine throughput claims.
+
+The same instrument exposes a separate Apollo FFT cliff: N=1,024 takes
+43.524 microseconds versus 0.351 microseconds at N=256. The fourfold size
+increase costs 124 times more, so the generic power-of-two route needs an
+independent profile-and-route item; this QFT increment does not hide that
+provider gap.
+
 ## The combine rides the column pass out (2026-08-31) <a id="combine-sink"></a>
 
 Fresh phase attribution for the shipping 128 kernel — 397 TSC for the
