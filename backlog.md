@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COMBINE-SINK-2026-08-31 — The split's combine rides the column pass out [perf] — done 2026-08-31
+
+- **Delivered** (`gap_audit.md#combine-sink`): phase 3 of the base kernel
+  takes an optional `CombineSink`; at n = 256 the odd block's column pass
+  applies the combine butterfly as it stores, writing both halves of the
+  parent's output directly. The separate combine pass and the odd
+  spectrum's store-then-reload are gone. Four-lane kernel only; the
+  eight-lane f32 layout reports unhandled and the two-pass fallback
+  stands.
+- **Measured pinned, back to back, controls within 1%:** 256 541.4 ->
+  **518.0** ns (1.31 -> **1.25** vs RustFFT), three-run stable; 64/128
+  flat — the `None` monomorphization's store loop verified unperturbed by
+  control, not assumption.
+
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — todo
+
+- **Outcome:** n = 512's four blocks fuse both combine levels into the
+  column passes: block 1 sinks into an `E` region with `W_256`; block 3
+  applies its own pair's butterfly and then the `W_512` layer against
+  `E`, writing the four output quarters directly — deleting the fused
+  final's full read+write pass.
+- **Why filed rather than built:** the one-level sink is a wash at 512
+  (it swaps one one-pass combine for another); only the two-level shape
+  deletes a pass. It needs a second sink form carrying two twiddle sets
+  and four output slices — a bounded but distinct piece of kernel
+  surgery, measured on its own.
+- **Baseline (P-core, pinned):** 512 = 1307-1310 ns, 1.25 vs RustFFT;
+  expected saving is the final's ~8 KB read + 8 KB write pass, on the
+  order of 60-90 ns.
+
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
 - **Delivered** (`gap_audit.md#split-boundary`): the split's gather is the
