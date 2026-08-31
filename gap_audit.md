@@ -53,6 +53,51 @@ increase costs 124 times more, so the generic power-of-two route needs an
 independent profile-and-route item; this QFT increment does not hide that
 provider gap.
 
+## The combine rides the column pass out (2026-08-31) <a id="combine-sink"></a>
+
+Fresh phase attribution for the shipping 128 kernel — 397 TSC for the
+fused redistribute-and-rows, 331 for the columns, 728 total, with a body
+of 321 vector instructions, no calls and no compares — put it near its
+throughput floor and within ~10% of the reference at its own sizes. The
+remaining structural waste was at the split: the odd block's column pass
+stored its spectrum to scratch, and the combine pass immediately reloaded
+it, rotated it, and wrote the real output.
+
+Phase 3 now takes an optional [`CombineSink`]: when the block is the odd
+half of a split pair, the register bound for output index `j` produces
+`peer[j] + W^j reg` and `peer[j] - W^j reg` into the parent's two output
+halves directly. The separate combine pass and the odd spectrum's
+store-then-reload cease to exist. The sink follows the batched driver's
+loop-invariant `fold: Option<..>` idiom, so the `None` monomorphization
+keeps its plain store loop — verified by the flat n = 128 control below,
+not assumed. The twiddles come interleaved from the existing cache
+through a general `ComplexReg` multiply: one more shuffle per chunk than
+the dup-split form, and no second cached table representation.
+
+Only the four-lane kernel carries the sink; a host that selects the
+eight-lane f32 layout reports unhandled and the split takes its two-pass
+fallback, which stays in place as exactly that.
+
+**Measured, pinned, back to back, controls within 1%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 541.4 ns | **518.0 / 517.4 / 517.1** | 1.31 -> **1.25** | 0.79 -> **0.75** |
+| 512 | 1297.1 | 1309.8 (untouched route) | 1.25 | 0.89 |
+| 64 / 128 | — | — | controls, flat | — |
+
+n = 256 has moved 1.35 -> 1.31 -> 1.25 across this and the previous
+increment; its remaining composition is two base transforms (~365 ns), a
+38 ns gather, and the fused output pass.
+
+**512's version is filed, not built.** Its four blocks would need the
+two-level form — block 1 combining into an `E` region, block 3 applying
+*both* levels as it stores (its own pair's butterfly and then the
+`W_512` layer against `E`) — which is a different sink shape carrying two
+twiddle sets and four output quarters. The one-level sink measured a wash
+at 512 by analysis (it replaces one one-pass combine with another); only
+the two-level fusion deletes a pass there.
+
 ## Small non-smooth Rader routing (2026-08-31) <a id="small-nonsmooth-rader"></a>
 
 The first dynamic primes whose `m = n - 1` convolution is not smooth over
@@ -80,6 +125,61 @@ at 167 and in the 347--1031 range vary by precision and replication, so the
 candidate deliberately preserves their incumbent route. A later cost-model
 item must use counterbalanced replications and must select on transform shape
 and scalar execution cost without reintroducing a blanket precision bias.
+
+## The split's boundary: gather vectorized, combine fused, combine-SIMD falsified twice (2026-08-31) <a id="split-boundary"></a>
+
+Piece attribution for the split, pinned (scalar pieces, production plan):
+
+| n | route | gather | bases | combine + copy |
+| --- | --- | --- | --- | --- |
+| 256 | 558 | 55 | 365 | 138 |
+| 512 | 1371 | 117 | 729 | 524 |
+
+The non-base cost — 193 ns of 558 at 256, 641 of 1371 at 512 — outweighs
+the whole gap to the reference, and the scalar-combine verdict on record
+predated the instance-major kernel. Three moves came out of this, and the
+measurement rejected the biggest one.
+
+**The gather vectorizes and wins.** A subsequence chunk is a
+whole-register concatenation of two parent chunks — the base kernels'
+phase-one blend network — and for four blocks the network lands the
+subsequences in the bit-reversed block order the combine wants, for free.
+LLVM compiles it to a six-instruction loop (two loads, two `vperm2f128`,
+two stores): 38 ns against the scalar strided read's 55 at two blocks.
+
+**The combine does not vectorize — confirmed a second way.** A planar
+combine kernel (deinterleave to real/imaginary planes, two multiplies and
+two FMAs, reinterleave out) measured **176 ns against the scalar loop's
+96.5** in isolation: the scalar loop auto-vectorizes to ~3.4 cycles per
+butterfly already, and the planar form's shuffle traffic costs more than
+its arithmetic saves. The first cut was worse still — checked views over
+runtime-length slices re-derived bounds per touch (the
+[#base128-bounds](#base128-bounds) defect re-committed) and the route
+regressed 12-23% before the isolation probe located why. The original
+record rejected a hand-vectorized combine years of increments ago; that
+verdict now has two independent confirmations and should not be re-tried
+without new structure.
+
+**The combine's pass count fuses instead.** At four blocks the chain ran
+`combine_stage` then `combine_final` — two full reads and writes of the
+array. Both butterfly levels now apply per index while the operands are in
+registers: block values `b0..b3` at index `j` produce outputs `j`,
+`j + len`, `j + 2len`, `j + 3len` directly, one read and one write of the
+array, and `combine_stage` is deleted. The gather's bit-reversed block
+order is exactly what makes the adjacent-pair pairing correct.
+
+**Measured, pinned, back to back, controls within 1%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 556.9 ns | **543.3 / 541.8** | 1.35 -> **1.31** | 0.81 -> **0.78** |
+| 512 | 1375.4 | **1309.9 / 1300.6** | 1.31 -> **1.25 / 1.24** | 0.93 -> **0.88** |
+| 64 / 128 | — | — | controls, flat | — |
+
+What remains at the split sizes is the bases themselves (365 of 543 at
+256) — the base kernel's own line — plus a floor of one gather, one fused
+combine, and the scratch round-trip, each now at or near its measured
+best form.
 
 ## Four-byte base transforms use the native AVX2 width (2026-08-30) <a id="base-native-width"></a>
 
