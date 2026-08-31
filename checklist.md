@@ -33,6 +33,19 @@
       36-source lock gates at exact source `168c03f9`; discharge the lease.
 - [ ] Obtain independent review, pass hosted verification, and merge.
 
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 [perf] — Codex
+
+- [ ] Reproduce the pinned N=512 baseline with 64/128/256 controls and isolate
+      the existing fused final's load/store cost without changing the probe.
+- [ ] Fuse both 512-point combine levels into the block-one/block-three base
+      stores, preserving the four-lane decline and incumbent fallback paths.
+- [ ] Differential-test f32/f64 forward, inverse, normalization, round-trip,
+      clone sharing, and warm allocation semantics across every split length.
+- [ ] Retain only a stable paired-median win with non-regressing controls and
+      verify the exact target-feature codegen has no hot-path dispatch branch.
+- [ ] Pass warning-denied, debug/release, lock, documentation, independent
+      review, hosted, and merge gates; discharge all leases.
+
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 
 - [x] Reproduce the apparent 59-point variance with the retained 100-sample

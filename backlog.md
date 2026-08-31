@@ -21,7 +21,7 @@
   flat — the `None` monomorphization's store loop verified unperturbed by
   control, not assumption.
 
-## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — todo
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — in-progress
 
 - **Outcome:** n = 512's four blocks fuse both combine levels into the
   column passes: block 1 sinks into an `E` region with `W_256`; block 3
@@ -36,6 +36,11 @@
 - **Baseline (P-core, pinned):** 512 = 1307-1310 ns, 1.25 vs RustFFT;
   expected saving is the final's ~8 KB read + 8 KB write pass, on the
   order of 60-90 ns.
+- **Integrator / lease:** Codex `/root`; lease `base128/{mod.rs,
+  instance_major.rs,tests.rs,pinned_probe.rs}`, matching exact tests, ADR 0041,
+  CHANGELOG, gap audit, and owner-keyed PM sections. The peer-owned batched
+  kernel and RustFFT comparison instrument remain excluded. Last update
+  2026-08-31.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
