@@ -27,14 +27,18 @@
 //! native widths decline before touching the input so production routing keeps
 //! its incumbent path.
 
-use crate::application::execution::kernel::components::lane_capability::native_lanes_supported;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
 use eunomia::Complex;
 use hermes_simd::{ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel, SimdStorage};
-use std::sync::OnceLock;
 
+mod plan;
+mod store;
 mod wide;
+
+use plan::{BaseLaneWidth, BasePlan, BasePlanState};
+pub(crate) use store::{CombineSink, FinalCombineSink};
+use store::{DirectSink, StoreSink};
 
 /// Per-phase TSC accumulators for the separately instantiated attribution
 /// instrument.
@@ -95,156 +99,6 @@ const fn b16_1_ch(rows: usize) -> usize {
 /// mixed-radix dup-split pairs, three broadcast pairs, one real broadcast.
 pub(crate) const fn table_lanes(rows: usize) -> usize {
     ((rows - 1) * 16 + 7) * 4
-}
-
-/// Native register layout selected when the plan is built.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BaseLaneWidth {
-    /// Two interleaved complex samples per register.
-    Four,
-    /// Four interleaved complex samples per register.
-    Eight,
-}
-
-const fn select_lane_width(
-    scalar_bytes: usize,
-    eight_lanes_supported: bool,
-    four_lanes_supported: bool,
-) -> Option<BaseLaneWidth> {
-    if scalar_bytes == 4 && eight_lanes_supported {
-        Some(BaseLaneWidth::Eight)
-    } else if four_lanes_supported {
-        Some(BaseLaneWidth::Four)
-    } else {
-        None
-    }
-}
-
-pub(crate) struct BasePlan<T, const ROWS: usize, const TABLE_LANES: usize> {
-    /// Dup-split twiddles. The fixed-size type is load-bearing, not
-    /// decoration: the checked view's `offset + LANE_COUNT <= len` assert
-    /// folds only when the length is a compile-time constant, and this
-    /// kernel reads the table from inside its hot loops. The sample-major
-    /// kernel learned the same lesson first (gap_audit.md#base128-bounds);
-    /// this module was shelved before that fix landed and never received it.
-    table: Box<[T; TABLE_LANES]>,
-    /// Register layout used to build `table` and execute this plan.
-    lane_width: BaseLaneWidth,
-    /// `W_8^1` and `W_8^3` as complex values for the eight-row column pass's
-    /// splats; unread by the four-row pass, whose radix-4 column transform
-    /// needs no multiply beyond its rotation.
-    col: [[T; 2]; 2],
-}
-
-impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
-    BasePlan<T, ROWS, TABLE_LANES>
-{
-    /// Builds the immutable plan for the widest native layout this kernel
-    /// implements. Scalar fallback is not a base-kernel capability.
-    pub(crate) fn new_if_supported<const INVERSE: bool>() -> Option<Self> {
-        let eight_lanes_supported = size_of::<T>() == 4 && native_lanes_supported::<8, T>();
-        let four_lanes_supported = !eight_lanes_supported && native_lanes_supported::<4, T>();
-        let lane_width =
-            select_lane_width(size_of::<T>(), eight_lanes_supported, four_lanes_supported)?;
-        Some(Self::new::<INVERSE>(lane_width))
-    }
-
-    fn new<const INVERSE: bool>(lane_width: BaseLaneWidth) -> Self {
-        let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
-        let w = |j: usize, n: usize| -> [f64; 2] {
-            let (s, c) = (dir * core::f64::consts::TAU * j as f64 / n as f64).sin_cos();
-            [c, s]
-        };
-        debug_assert_eq!(TABLE_LANES, table_lanes(ROWS));
-        let n = 16 * ROWS;
-        let mut table = Vec::with_capacity(TABLE_LANES);
-        for a in 1..ROWS {
-            let groups = match lane_width {
-                BaseLaneWidth::Four => 8,
-                BaseLaneWidth::Eight => 4,
-            };
-            let samples_per_group = match lane_width {
-                BaseLaneWidth::Four => 2,
-                BaseLaneWidth::Eight => 4,
-            };
-            for group in 0..groups {
-                for component in 0..2 {
-                    for sample in 0..samples_per_group {
-                        let twiddle = w((a * (samples_per_group * group + sample)) % n, n);
-                        table.extend([T::from_precise(twiddle[component]); 2]);
-                    }
-                }
-            }
-        }
-        // Broadcast row twiddles: each dup-split chunk pair repeats one
-        // scalar across both samples (chunks 124..131).
-        let mut push_broadcast = |v: [f64; 2]| {
-            for c in [v[0], v[1]] {
-                table.extend([c; 4].map(T::from_precise));
-            }
-        };
-        let row1 = w(1, 16);
-        let row3 = w(3, 16);
-        push_broadcast(row1);
-        push_broadcast(row3);
-        let neg1 = row1;
-        push_broadcast([-neg1[0], -neg1[1]]);
-        table.extend([core::f64::consts::FRAC_1_SQRT_2; 4].map(T::from_precise));
-
-        let col = [w(1, 8), w(3, 8)].map(|v| [T::from_precise(v[0]), T::from_precise(v[1])]);
-        let table: Box<[T; TABLE_LANES]> = table
-            .into_boxed_slice()
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("the pushes above emit exactly TABLE_LANES lanes"));
-        Self {
-            table,
-            lane_width,
-            col,
-        }
-    }
-}
-
-/// Plan-owned directional state for a selected base route.
-pub(crate) struct BasePlanState<T, const ROWS: usize, const TABLE_LANES: usize> {
-    forward: BasePlan<T, ROWS, TABLE_LANES>,
-    inverse: OnceLock<BasePlan<T, ROWS, TABLE_LANES>>,
-}
-
-impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
-    BasePlanState<T, ROWS, TABLE_LANES>
-{
-    /// Builds the forward plan when the exact-width route is available.
-    ///
-    /// Both row counts serve every scalar. The four-row route briefly carried
-    /// a per-scalar switch, because on 2026-08-29 a four-byte scalar measured
-    /// 252 ns against 126 ns without it at n = 64. Two things have changed
-    /// since: this construction replaced the sample-major kernel that measured
-    /// it, and hermes now enters its scalar fallback inside the AVX2+FMA frame
-    /// (`HS-SCALAR-FALLBACK-FRAME`). Re-measured against both, the route is
-    /// 76 ns against 126 ns — the reverse — so the switch is gone rather than
-    /// flipped.
-    pub(crate) fn new_if_supported() -> Option<Self> {
-        BasePlan::new_if_supported::<false>().map(|forward| Self {
-            forward,
-            inverse: OnceLock::new(),
-        })
-    }
-
-    /// Borrows the immutable forward plan.
-    pub(crate) fn forward(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
-        &self.forward
-    }
-
-    /// Borrows the immutable inverse plan, initializing it once across clones.
-    pub(crate) fn inverse(&self) -> &BasePlan<T, ROWS, TABLE_LANES> {
-        self.inverse
-            .get_or_init(|| BasePlan::new::<true>(self.forward.lane_width))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inverse_is_initialized(&self) -> bool {
-        self.inverse.get().is_some()
-    }
 }
 
 /// Multiplies by `-i` forward, `+i` inverse — a shuffle and a sign flip.
@@ -309,25 +163,6 @@ where
     ComplexReg::from_interleaved(picked.into_interleaved() * half_root2)
 }
 
-/// The split's combine butterfly, applied by phase 3 as it stores.
-///
-/// When present, the block being transformed is the odd half of a split
-/// pair whose even half `peer` is already transformed: the register bound
-/// for output index `j` instead produces `peer[j] + W^j reg` into `low[j]`
-/// and `peer[j] - W^j reg` into `high[j]`. The separate combine pass — and
-/// the store of this block's spectrum that it would have reloaded — cease
-/// to exist (gap_audit.md#combine-sink).
-pub(crate) struct CombineSink<'a, T> {
-    /// The even block's transformed spectrum, one chunk per output index.
-    pub(crate) peer: &'a [T],
-    /// Interleaved `W^j` twiddles from the split's cached table.
-    pub(crate) tw: &'a [T],
-    /// The parent transform's low output half.
-    pub(crate) low: &'a mut [T],
-    /// The parent transform's high output half.
-    pub(crate) high: &'a mut [T],
-}
-
 /// The base transform as a lane kernel over interleaved samples: `ROWS`
 /// stride-`ROWS` subsequences of sixteen, so `ROWS = 8` is the 128-point
 /// transform and `ROWS = 4` the 64-point one. The sixteen-sample row
@@ -341,15 +176,16 @@ pub(crate) struct BaseTransform<
     const ROWS: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
+    S,
 > {
     /// Interleaved samples. Fixed-size for the reason [`BasePlan::table`]
     /// documents: the phase-one loads index this from inside a loop.
     pub(crate) data: &'a mut [T; LANES],
     pub(crate) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
-    /// `Some` when this block is the odd half of a split pair; follows the
-    /// batched driver's loop-invariant `fold: Option<..>` idiom, which LLVM
-    /// unswitches so the `None` monomorphization keeps its store loop.
-    pub(crate) combine: Option<CombineSink<'a, T>>,
+    /// Type-selected output strategy. Direct, pair, and four-block-final
+    /// stores are separate monomorphizations, so no mode branch reaches the
+    /// column loop.
+    sink: S,
 }
 
 impl<
@@ -359,9 +195,11 @@ impl<
         const ROWS: usize,
         const LANES: usize,
         const TABLE_LANES: usize,
-    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES>
+        S,
+    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES, S>
 where
     T: LaneScalar + MixedRadixScalar,
+    S: StoreSink<T>,
 {
     /// Whether the dispatched width handled the transform.
     type Output = bool;
@@ -564,7 +402,7 @@ where
         let w8_1 = complex_splat(Complex::new(self.plan.col[0][0], self.plan.col[0][1]));
         let w8_3 = complex_splat(Complex::new(self.plan.col[1][0], self.plan.col[1][1]));
         let stg = simd.view(staging.as_slice());
-        let mut combine = self.combine;
+        let mut sink = self.sink;
         let mut out = simd.view_mut(self.data.as_mut_slice());
         for g in 0..8usize {
             let mut c = [zero_complex; 8];
@@ -621,26 +459,10 @@ where
             for (q, reg) in c.iter().enumerate().take(ROWS) {
                 let row = if ROWS == 8 { REV3[q] } else { REV2[q] };
                 let j = row * 8 + g;
-                match combine.as_mut() {
-                    None => {
-                        reg.into_interleaved().store_to_view_chunk(&mut out, j);
-                    }
-                    Some(sink) => {
-                        let peer = simd.view(sink.peer);
-                        let tw = simd.view(sink.tw);
-                        let e = ComplexReg::<T, A>::from_interleaved(
-                            hermes_simd::Vector::from_view_chunk(&peer, j),
-                        );
-                        let w = ComplexReg::<T, A>::from_interleaved(
-                            hermes_simd::Vector::from_view_chunk(&tw, j),
-                        );
-                        let rotated = *reg * w;
-                        let (lo, hi) = e.butterfly(rotated);
-                        let mut low = simd.view_mut(&mut *sink.low);
-                        lo.into_interleaved().store_to_view_chunk(&mut low, j);
-                        let mut high = simd.view_mut(&mut *sink.high);
-                        hi.into_interleaved().store_to_view_chunk(&mut high, j);
-                    }
+                if S::DIRECT {
+                    reg.into_interleaved().store_to_view_chunk(&mut out, j);
+                } else {
+                    sink.store(&simd, *reg, j);
                 }
             }
         }
@@ -685,10 +507,11 @@ where
             ROWS,
             LANES,
             TABLE_LANES,
+            DirectSink,
         > {
             data: flat,
             plan,
-            combine: None,
+            sink: DirectSink,
         })
         .unwrap_or(false)
     };
@@ -725,7 +548,7 @@ where
 ///
 /// # Panics
 ///
-/// If `data` is not exactly 128 samples or the sink's buffers mismatch.
+/// If `data` is not exactly 128 samples.
 pub(crate) fn transform_128_combining<T, const INVERSE: bool>(
     data: &mut [Complex<T>],
     plan: &Plan128<T>,
@@ -739,13 +562,6 @@ where
         return false;
     }
     assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
-    assert!(
-        sink.peer.len() == 256
-            && sink.low.len() == 256
-            && sink.high.len() == 256
-            && sink.tw.len() >= 256,
-        "invariant: combine sink buffers match the transform length"
-    );
     let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
         .try_into()
         .expect("invariant: 128 complex samples are exactly 256 lanes");
@@ -756,10 +572,52 @@ where
         8,
         256,
         { table_lanes(8) },
+        CombineSink<'_, T>,
     > {
         data: flat,
         plan,
-        combine: Some(sink),
+        sink,
+    })
+    .unwrap_or(false)
+}
+
+/// Runs block three of a four-block split and stores the final four quarters.
+///
+/// Only the four-lane kernel carries this sink. Callers preflight
+/// [`BasePlan::combine_sink_supported`] before mutating the output with block
+/// one's intermediate pair.
+///
+/// # Panics
+///
+/// If `data` is not exactly 128 samples.
+pub(crate) fn transform_128_combining_final<T, const INVERSE: bool>(
+    data: &mut [Complex<T>],
+    plan: &Plan128<T>,
+    sink: FinalCombineSink<'_, T>,
+) -> bool
+where
+    T: MixedRadixScalar,
+    Complex<T>: bytemuck::Pod,
+{
+    if !plan.combine_sink_supported() {
+        return false;
+    }
+    assert_eq!(data.len(), 128, "the 128-point base requires 128 samples");
+    let flat: &mut [T; 256] = bytemuck::cast_slice_mut(data)
+        .try_into()
+        .expect("invariant: 128 complex samples are exactly 256 lanes");
+    hermes_simd::vectorize_lanes::<4, T, _>(BaseTransform::<
+        T,
+        INVERSE,
+        false,
+        8,
+        256,
+        { table_lanes(8) },
+        FinalCombineSink<'_, T>,
+    > {
+        data: flat,
+        plan,
+        sink,
     })
     .unwrap_or(false)
 }
@@ -818,17 +676,4 @@ where
     Complex<T>: bytemuck::Pod,
 {
     transform_base::<T, INVERSE, true, 8, 256, { table_lanes(8) }>(data, plan)
-}
-
-#[cfg(test)]
-mod lane_width_tests {
-    use super::{select_lane_width, BaseLaneWidth};
-
-    #[test]
-    fn selector_preserves_the_four_lane_eight_byte_route() {
-        assert_eq!(select_lane_width(8, true, true), Some(BaseLaneWidth::Four));
-        assert_eq!(select_lane_width(4, true, true), Some(BaseLaneWidth::Eight));
-        assert_eq!(select_lane_width(4, false, true), Some(BaseLaneWidth::Four));
-        assert_eq!(select_lane_width(4, false, false), None);
-    }
 }

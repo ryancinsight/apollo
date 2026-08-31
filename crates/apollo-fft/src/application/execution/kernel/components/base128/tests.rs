@@ -391,6 +391,75 @@ fn dynamic_split_plans_normalize_by_full_length() {
     }
 }
 
+fn assert_dynamic_split_matches_direct<const INVERSE: bool>() {
+    for n in [256usize, 512] {
+        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        let source = signal(n);
+        let mut actual = source.clone();
+        let Some(_) = plan.base128.as_ref() else {
+            assert_eq!(actual, source, "a width decline must not mutate the input");
+            continue;
+        };
+
+        if INVERSE {
+            plan.inverse_complex_slice_inplace(&mut actual);
+        } else {
+            plan.forward_complex_slice_inplace(&mut actual);
+        }
+        let normalization = if INVERSE { n as f64 } else { 1.0 };
+        let expected: Vec<_> = dft(&source, INVERSE)
+            .into_iter()
+            .map(|value| Complex64::new(value.re / normalization, value.im / normalization))
+            .collect();
+        let error = worst(&actual, &expected);
+        let bound = 2.0 * tolerance(&source) / normalization;
+        assert!(
+            error <= bound,
+            "N={n} split transform differs by {error:.3e} > {bound:.3e}"
+        );
+    }
+}
+
+#[test]
+fn dynamic_split_forward_matches_the_direct_transform() {
+    assert_dynamic_split_matches_direct::<false>();
+}
+
+#[test]
+fn dynamic_split_inverse_matches_the_direct_transform() {
+    assert_dynamic_split_matches_direct::<true>();
+}
+
+#[test]
+fn reduced_dynamic_split_matches_the_direct_transform() {
+    const N: usize = 512;
+    let source: Vec<Complex32> = (0..N)
+        .map(|index| {
+            let x = index as f32;
+            Complex32::new((0.043 * x).sin(), 0.25 * (0.029 * x).cos())
+        })
+        .collect();
+    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n: N });
+    let mut actual = source.clone();
+    let Some(_) = plan.base128.as_ref() else {
+        assert_eq!(actual, source, "a width decline must not mutate the input");
+        return;
+    };
+
+    plan.forward_complex_slice_inplace(&mut actual);
+    let expected = dft_reduced(&source, false);
+    let error = actual
+        .iter()
+        .zip(&expected)
+        .map(|(value, reference)| (value.re - reference.re).hypot(value.im - reference.im))
+        .fold(0.0_f32, f32::max);
+    let bound = reduced_tolerance(&source);
+    assert!(
+        error <= bound,
+        "reduced N=512 split differs by {error:.3e} > {bound:.3e}"
+    );
+}
+
 #[test]
 fn f64_dynamic_plan_clones_execute_inverse_concurrently() {
     let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 128 });

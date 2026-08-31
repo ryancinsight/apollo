@@ -54,6 +54,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] The four-lane `apollo-fft` N = 512 base split now applies both
+  combine levels through fixed-shape Hermes store sinks as block three leaves
+  the base kernel. Release assembly contains no sink calls and reduces the
+  final sink from ten to three compares; the eight-lane f32 route is unchanged.
+  Three same-buffer 100-sample ABBA confirmations reduce the N = 512 median by
+  0.44--2.70% on the measured P-core and 18.36--19.51% on the measured E-core,
+  with neutral N = 256 positional controls. Warm f32/f64 execution remains
+  allocation-free at N = 64/128/256/512 through both the global allocator and
+  direct Mnemosyne hooks. These are local AVX2 results; AArch64 is compile-only
+  evidence and no AVX-512 result is claimed.
 - [patch] Apollo's default benchmark profile now inherits the release profile
   without code-generation overrides. This removes a benchmark-only 21.86x
   slowdown observed at the 1,024-point QFT boundary while preserving the

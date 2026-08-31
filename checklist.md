@@ -31,7 +31,23 @@
       medians across N=1--1024; synchronize exact evidence.
 - [x] Pass manifest, full benchmark, smoke, formatting, diff, and standalone
       36-source lock gates at exact source `168c03f9`; discharge the lease.
-- [ ] Obtain independent review, pass hosted verification, and merge.
+- [x] Obtain independent review and merge PR #214 as `2b172372` after all
+      repository checks passed.
+
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 [perf] — Codex
+
+- [x] Reproduce the pinned N=512 baseline with 64/128/256 controls and isolate
+      the existing fused final's load/store cost without changing the probe.
+- [x] Fuse both 512-point combine levels into the block-one/block-three base
+      stores, preserving the eight-lane decline and incumbent fallback paths.
+- [x] Differential-test f32/f64 forward, inverse, normalization, round-trip,
+      clone sharing, and warm allocation semantics across every split length.
+- [x] Retain only a stable paired-median win with non-regressing controls and
+      verify the exact target-feature codegen has no hot-path store-mode branch.
+- [x] Commit exact rebased source `72bdf90a`, close the hosted Linux test-CFG
+      leak at `160d3154`, and discharge source leases.
+- [ ] Pass warning-denied, debug/release, lock, documentation, independent
+      review, hosted, and merge gates; discharge all leases.
 
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 
