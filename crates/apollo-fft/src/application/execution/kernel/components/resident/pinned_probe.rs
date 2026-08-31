@@ -5,8 +5,8 @@
 use super::four_step_resident;
 use super::planar::four_step_planar;
 use crate::application::execution::kernel::components::batched;
-use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
+use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 use std::time::Instant;
 
@@ -43,7 +43,13 @@ fn resident_against_batched_and_the_references_by_core_type() {
     let phast = phastft::planner::PlannerDit64::new(n);
 
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         let mut work = src.clone();
         let mut scratch = vec![Complex64::default(); batched::scratch_len(n)];
 

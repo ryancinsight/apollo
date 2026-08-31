@@ -46,8 +46,30 @@
       verify the exact target-feature codegen has no hot-path store-mode branch.
 - [x] Commit exact rebased source `72bdf90a`, close the hosted Linux test-CFG
       leak at `160d3154`, and discharge source leases.
-- [ ] Pass warning-denied, debug/release, lock, documentation, independent
-      review, hosted, and merge gates; discharge all leases.
+- [x] Pass warning-denied, debug/release, lock, documentation, independent
+      review, and merge PR #215 as `e94757f5`; discharge all leases.
+
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 [perf] — Codex
+
+- [x] Re-read the benchmark configuration after PR #214 and falsify the
+      recorded few-sample hypothesis against its fixed 100-sample estimator.
+- [x] Add only the 1,024/2,048/32,768 specialization and control lengths while
+      preserving budgets, modes, and the full sweep.
+- [x] Run consecutive default sweeps; retain no instrument change after the
+      32,768 rows reproduce processor-class-dependent latency bands across
+      both engines.
+- [x] Consume the Hermes exact processor-binding seam, delete Apollo's
+      duplicate test-only affinity shim, and rerun the unchanged extension
+      plus the interleaved probe on one processor.
+- [x] Remove RustFFT's per-iteration scratch allocation from the comparison by
+      retaining its required scratch outside timing; run four exact-processor
+      confirmations and record the isolated f64 32,768 variance without
+      dropping the case or weakening the estimator.
+- [x] Synchronize benchmark results, audit/ADR, CHANGELOG, backlog, and exact
+      evidence; pass warning-denied, smoke, value, documentation, cross-target,
+      and standalone-lock gates at source `8a88529d`.
+- [ ] Pass hosted review/checks and merge without squash; bind closure evidence
+      to the exact merge revision.
 
 ## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 [perf] — Codex
 

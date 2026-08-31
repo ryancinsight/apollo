@@ -12,16 +12,19 @@
 //! cancels in the ratio while keeping each absolute figure honest about what a
 //! caller pays to transform a buffer it still owns.
 //!
-//! Plans are built once, outside the timed region, for both engines. Planning
-//! is a setup cost that a real caller amortises; including it would measure
-//! planner construction rather than transform throughput.
+//! Plans and reusable scratch are built once, outside the timed region, for
+//! both engines. Planning and scratch allocation are setup costs that a real
+//! caller amortises; including either would measure lifecycle overhead rather
+//! than transform throughput. In particular, RustFFT's convenience `process`
+//! method allocates and zero-fills scratch on every call, so this instrument
+//! uses its allocation-free `process_with_scratch` execution seam.
 //!
 //! ## Runtime budget
 //!
 //! ```text
 //! per case  = WARM_UP_MS + MEASUREMENT_MS         = 20 ms + 80 ms = 100 ms
 //! cases     = 4 per size (Apollo/RustFFT x f64/f32)
-//! default   = 22 sizes x 4 x 100 ms               ~ 8.8 s
+//! default   = 25 sizes x 4 x 100 ms               ~ 10.0 s
 //! full      = 500 sizes x 4 x 100 ms              ~ 200 s   (opt-in)
 //! ```
 //!
@@ -46,9 +49,13 @@ use std::time::{Duration, Instant};
 
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
 use eunomia::{Complex32, Complex64};
+use hermes_simd::{ProcessorBinding, ProcessorBindingError, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 use rustfft::FftPlanner;
+use std::env::VarError;
+use std::fmt;
 use std::hint::black_box;
+use std::num::ParseIntError;
 
 /// Hard wall-clock bound for the default sweep. See the module budget table.
 const BUDGET_SECS: u64 = 30;
@@ -60,14 +67,137 @@ const MEASUREMENT_MS: u64 = 80;
 const FULL_SWEEP_MAX: usize = 500;
 /// Environment switch selecting the dense 1..=FULL_SWEEP_MAX sweep.
 const FULL_SWEEP_VAR: &str = "APOLLO_BENCH_FULL_SWEEP";
+/// Optional exact logical processor used for the complete measurement process.
+const PROCESSOR_VAR: &str = "APOLLO_BENCH_PROCESSOR";
 
 /// Representative lengths spanning the regimes Apollo dispatches differently:
 /// identity, short Winograd codelets, power-of-two Stockham, odd primes that
 /// reach Rader, prime-power and smooth composites, and a few larger sizes where
 /// asymptotics rather than codelet quality dominate.
-const DEFAULT_SIZES: [usize; 22] = [
-    1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512,
+const DEFAULT_SIZES: [usize; 25] = [
+    1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512, 1024,
+    2048, 32768,
 ];
+
+#[derive(Debug)]
+enum ProcessorSelectionError {
+    Environment(VarError),
+    InvalidIndex(ParseIntError),
+    Binding(ProcessorBindingError),
+    Mismatch {
+        requested: ProcessorIndex,
+        observed: ProcessorIndex,
+    },
+}
+
+#[derive(Debug)]
+enum BenchmarkError {
+    Mode(apollo_bench::BenchmarkModeError),
+    Processor(ProcessorSelectionError),
+}
+
+impl fmt::Display for BenchmarkError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mode(error) => error.fmt(formatter),
+            Self::Processor(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for BenchmarkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Mode(error) => Some(error),
+            Self::Processor(error) => Some(error),
+        }
+    }
+}
+
+impl From<apollo_bench::BenchmarkModeError> for BenchmarkError {
+    fn from(error: apollo_bench::BenchmarkModeError) -> Self {
+        Self::Mode(error)
+    }
+}
+
+impl From<ProcessorSelectionError> for BenchmarkError {
+    fn from(error: ProcessorSelectionError) -> Self {
+        Self::Processor(error)
+    }
+}
+
+impl fmt::Display for ProcessorSelectionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Environment(error) => write!(formatter, "read {PROCESSOR_VAR}: {error}"),
+            Self::InvalidIndex(error) => {
+                write!(formatter, "parse {PROCESSOR_VAR} as a u32: {error}")
+            }
+            Self::Binding(error) => write!(formatter, "bind benchmark processor: {error}"),
+            Self::Mismatch {
+                requested,
+                observed,
+            } => write!(
+                formatter,
+                "requested processor {}, but observed processor {} after binding",
+                requested.get(),
+                observed.get()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProcessorSelectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Environment(error) => Some(error),
+            Self::InvalidIndex(error) => Some(error),
+            Self::Binding(error) => Some(error),
+            Self::Mismatch { .. } => None,
+        }
+    }
+}
+
+fn bind_measurement_processor() -> Result<Option<ProcessorBinding>, ProcessorSelectionError> {
+    let requested = match std::env::var(PROCESSOR_VAR) {
+        Ok(value) => Some((
+            ProcessorIndex::new(
+                value
+                    .parse()
+                    .map_err(ProcessorSelectionError::InvalidIndex)?,
+            ),
+            PROCESSOR_VAR,
+        )),
+        Err(VarError::NotPresent) => match ProcessorIndex::current() {
+            Ok(current) => Some((current, "current processor")),
+            Err(ProcessorBindingError::UnsupportedPlatform) => None,
+            Err(error) => return Err(ProcessorSelectionError::Binding(error)),
+        },
+        Err(error) => return Err(ProcessorSelectionError::Environment(error)),
+    };
+
+    let Some((requested, selection)) = requested else {
+        eprintln!(
+            "rustfft_comparison: exact processor binding is unsupported; measurements are unpinned"
+        );
+        return Ok(None);
+    };
+
+    let binding = ProcessorBinding::bind(requested).map_err(ProcessorSelectionError::Binding)?;
+    std::thread::yield_now();
+    let observed = ProcessorIndex::current().map_err(ProcessorSelectionError::Binding)?;
+    if observed != requested {
+        return Err(ProcessorSelectionError::Mismatch {
+            requested,
+            observed,
+        });
+    }
+    eprintln!(
+        "rustfft_comparison: bound to logical processor {} ({selection})",
+        observed.get(),
+    );
+    Ok(Some(binding))
+}
 
 /// Deterministic complex signal; identical values feed both engines.
 fn signal(len: usize) -> Vec<Complex64> {
@@ -115,14 +245,16 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
     let rust_source64 = to_rustfft_64(&source64);
     let rust_source32 = to_rustfft_32(&source32);
 
-    // Plans and working buffers are built once; only the copy plus transform is
-    // timed. Both engines get the same treatment.
+    // Plans, working buffers, and reusable scratch are built once; only the
+    // copy plus transform is timed. Both engines get the same treatment.
     let apollo64 = apollo_fft::FftPlan1D::<f64>::new(apollo_fft::Shape1D { n: len });
     let apollo32 = apollo_fft::FftPlan1D::<f32>::new(apollo_fft::Shape1D { n: len });
     let mut planner64 = FftPlanner::<f64>::new();
     let mut planner32 = FftPlanner::<f32>::new();
     let rust64 = planner64.plan_fft_forward(len);
     let rust32 = planner32.plan_fft_forward(len);
+    let mut rust_scratch64 = vec![RustComplex::new(0.0, 0.0); rust64.get_inplace_scratch_len()];
+    let mut rust_scratch32 = vec![RustComplex::new(0.0, 0.0); rust32.get_inplace_scratch_len()];
 
     let mut work64 = source64.clone();
     suite.run_with_config(config, BenchmarkCase::new(GROUP, "apollo_f64", len), || {
@@ -137,7 +269,8 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
         BenchmarkCase::new(GROUP, "rustfft_f64", len),
         || {
             rust_work64.copy_from_slice(&rust_source64);
-            rust64.process(black_box(&mut rust_work64));
+            rust64
+                .process_with_scratch(black_box(&mut rust_work64), black_box(&mut rust_scratch64));
             black_box(&rust_work64);
         },
     );
@@ -155,13 +288,15 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
         BenchmarkCase::new(GROUP, "rustfft_f32", len),
         || {
             rust_work32.copy_from_slice(&rust_source32);
-            rust32.process(black_box(&mut rust_work32));
+            rust32
+                .process_with_scratch(black_box(&mut rust_work32), black_box(&mut rust_scratch32));
             black_box(&rust_work32);
         },
     );
 }
 
-fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+fn main() -> Result<(), BenchmarkError> {
+    let _processor_binding = bind_measurement_processor()?;
     let started = Instant::now();
     let lengths = sizes();
     let full = lengths.len() > DEFAULT_SIZES.len();

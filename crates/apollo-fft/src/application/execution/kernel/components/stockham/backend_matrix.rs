@@ -20,8 +20,8 @@ use super::precision::{
 };
 use super::transform::transform_sized;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
-use crate::application::execution::kernel::test_utils::pin;
 use eunomia::{Complex32, Complex64};
+use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use std::time::Instant;
 
 /// Best-of-blocks per-call cost in nanoseconds, clone-inclusive.
@@ -77,7 +77,13 @@ fn stockham_backend_cost_matrix() {
     }
     // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
     for cpu in [2u32, 12] {
-        let landed = pin(cpu);
+        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+            .expect("measurement processor must be available");
+        std::thread::yield_now();
+        let landed = ProcessorIndex::current()
+            .expect("Windows supports processor queries")
+            .get();
+        assert_eq!(landed, cpu, "processor binding must remain exact");
         let core = if landed < 8 { "P" } else { "E" };
         println!("== core {core} (cpu {landed}) ==");
         println!(

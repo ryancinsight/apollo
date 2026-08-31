@@ -54,6 +54,12 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] `apollo-fft`'s bounded RustFFT comparison now covers the 1,024,
+  2,048, and 32,768 specialization/control lengths, retains both engines'
+  reusable execution scratch outside timing, and binds one exact logical
+  processor through Hermes. Apollo's duplicate raw Win32 test affinity helper
+  is removed in favor of the provider seam. Production FFT routing and kernels
+  are unchanged.
 - [patch] [perf] The four-lane `apollo-fft` N = 512 base split now applies both
   combine levels through fixed-shape Hermes store sinks as block three leaves
   the base kernel. Release assembly contains no sink calls and reduces the

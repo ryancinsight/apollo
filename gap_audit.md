@@ -1,3 +1,49 @@
+## Exact-processor, retained-state FFT comparison (2026-08-31) <a id="comparison-sweep-coverage"></a>
+
+Apollo's default RustFFT comparison stopped at 512 even though production has
+distinct routes at 1,024 and 32,768. A direct extension initially produced
+multiple latency bands. Two independent causes were present: Windows moved the
+process between heterogeneous processor classes, and RustFFT 6.4.1's
+convenience `process` method allocated and zero-filled a scratch vector inside
+every timed call. Apollo already retained its execution scratch in the plan.
+The old comparison therefore measured different lifecycles and its large-size
+rows are not valid throughput evidence.
+
+The bounded default sweep now adds 1,024, 2,048, and 32,768. It holds one exact
+logical processor through Hermes for the full process and calls RustFFT's
+`process_with_scratch` with the planner-reported scratch retained outside the
+timed region. The timed closure still restores identical input and executes one
+forward transform for each engine. Apollo's duplicate raw Win32 affinity helper
+is deleted; the retained release probes use the same typed Hermes provider.
+
+Four 100-sample default runs on logical processor 2 completed in 6.93--6.97
+seconds. The first adjacent pair's medians are microseconds:
+
+| N | Apollo f64 A/B | RustFFT f64 A/B | Apollo f32 A/B | RustFFT f32 A/B |
+| ---: | ---: | ---: | ---: | ---: |
+| 1,024 | 3.044 / 3.039 | 2.502 / 2.507 | 1.420 / 1.420 | 1.267 / 1.267 |
+| 2,048 | 6.953 / 6.814 | 5.595 / 5.642 | 5.011 / 5.116 | 2.904 / 2.901 |
+| 32,768 | 132.158 / 126.293 | 129.257 / 129.064 | 83.030 / 82.995 | 67.487 / 67.758 |
+
+The second pair reproduced every added row within 5.0% of the first pair except
+Apollo f64 at 32,768. Across all four runs that median spans
+126.293--154.510 microseconds, while RustFFT f64 spans 129.064--132.700,
+Apollo f32 spans 82.995--83.490, and RustFFT f32 spans 66.400--67.758.
+Affinity therefore removed processor-class migration but did not make absolute
+f64 32,768 latency invariant to frequency or interruption state. The original
+all-row few-percent acceptance was analytically too strong and is rejected;
+the raw 100-sample distributions remain the evidence rather than dropping the
+case or changing its estimator.
+
+An independent interleaved best-of release probe on the same processor reports
+Apollo/RustFFT medians of 3.011/2.445, 6.766/5.529, and 123.707/129.347
+microseconds at the same three sizes, consistent with the corrected table's
+lower timing band. This is local Windows AVX2 evidence on one hybrid processor
+and does not establish cross-machine throughput. The result is mixed rather
+than a speed claim, and no production FFT route or kernel changed. The isolated
+f64 32,768 variance is tracked as
+`ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31`.
+
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
 The reusable CPU QFT plan previously called the public dense kernel for every

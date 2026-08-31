@@ -7,8 +7,8 @@
 //! be behind for want of arithmetic or for want of movement and the totals
 //! separate them.
 
-use crate::application::execution::kernel::test_utils::pin;
 use eunomia::Complex64;
+use hermes_simd::{ProcessorBinding, ProcessorIndex};
 
 /// Sizes worth attributing: the even powers, which take the square route
 /// whole, and the odd powers, which decimate and run it twice.
@@ -21,7 +21,14 @@ const CALLS: u32 = 200;
 #[test]
 #[ignore = "measurement instrument for the planar route's pass attribution"]
 fn planar_passes_by_size() {
-    let landed = pin(2);
+    let cpu = 2;
+    let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+        .expect("measurement processor must be available");
+    std::thread::yield_now();
+    let landed = ProcessorIndex::current()
+        .expect("Windows supports processor queries")
+        .get();
+    assert_eq!(landed, cpu, "processor binding must remain exact");
     for n in SIZES {
         let src: Vec<Complex64> = (0..n)
             .map(|i| {
