@@ -72,6 +72,36 @@ stable phase would not satisfy the item's reproduce-before-edit condition. This
 is local Windows AVX2 evidence; it does not control dynamic voltage and
 frequency scaling, interrupts, or establish a cross-machine throughput result.
 
+### The f32 transpose was using half the native width
+
+The same phase instrument, generalized over f32 and f64 without changing the
+production route, exposed a separate stable defect. Across three exact-processor
+release runs at N=32,768, the f32 stage sets took about half the f64 cycles but
+the f32 transpose took 50,454--50,859 cycles against f64's 26,848--26,873. The
+boundary requested exactly four lanes for both scalar types, so AVX2 moved only
+16 bytes per f32 vector while its Hermes eight-lane transpose was available.
+
+The private scalar plan contract now selects an exact eight-lane transpose for
+f32 and retains exact four-lane dispatch for f64. If eight f32 lanes are absent,
+the same operation tries four lanes before the scalar fallback, preserving the
+AArch64 NEON route. One const-generic tile body owns both widths; dispatch stays
+outside the tile loops and the arithmetic is unchanged.
+
+Three candidate phase runs reduced the f32 N=32,768 transpose to
+17,341--17,564 cycles and the complete instrumented route from
+282,337--295,185 to 255,734--259,555 cycles. The f32 N=16,384 route also fell
+from 118,993--121,715 to 102,281--105,604 cycles; the f64 transpose remained at
+26,886--27,204 cycles. A focused warmed census at both f32 lengths reports zero
+global allocations and zero direct Mnemosyne allocations.
+
+Three unchanged 100-sample comparison runs reported Apollo f32 N=32,768
+medians of 74.005, 72.145, and 73.614 microseconds, 10.81%, 13.05%, and 11.28%
+below the retained 82.970 microsecond baseline. Their paired RustFFT medians
+were 66.442, 68.154, and 67.746 microseconds, leaving 11.38%, 5.86%, and 8.66%
+residual gaps. This is local Windows AVX2 evidence on one processor; AArch64 is
+warning-denied compile evidence, and no AVX-512 or cross-machine result is
+claimed.
+
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
 The reusable CPU QFT plan previously called the public dense kernel for every
