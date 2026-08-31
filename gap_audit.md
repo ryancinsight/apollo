@@ -26,6 +26,61 @@ candidate deliberately preserves their incumbent route. A later cost-model
 item must use counterbalanced replications and must select on transform shape
 and scalar execution cost without reintroducing a blanket precision bias.
 
+## The split's boundary: gather vectorized, combine fused, combine-SIMD falsified twice (2026-08-31) <a id="split-boundary"></a>
+
+Piece attribution for the split, pinned (scalar pieces, production plan):
+
+| n | route | gather | bases | combine + copy |
+| --- | --- | --- | --- | --- |
+| 256 | 558 | 55 | 365 | 138 |
+| 512 | 1371 | 117 | 729 | 524 |
+
+The non-base cost — 193 ns of 558 at 256, 641 of 1371 at 512 — outweighs
+the whole gap to the reference, and the scalar-combine verdict on record
+predated the instance-major kernel. Three moves came out of this, and the
+measurement rejected the biggest one.
+
+**The gather vectorizes and wins.** A subsequence chunk is a
+whole-register concatenation of two parent chunks — the base kernels'
+phase-one blend network — and for four blocks the network lands the
+subsequences in the bit-reversed block order the combine wants, for free.
+LLVM compiles it to a six-instruction loop (two loads, two `vperm2f128`,
+two stores): 38 ns against the scalar strided read's 55 at two blocks.
+
+**The combine does not vectorize — confirmed a second way.** A planar
+combine kernel (deinterleave to real/imaginary planes, two multiplies and
+two FMAs, reinterleave out) measured **176 ns against the scalar loop's
+96.5** in isolation: the scalar loop auto-vectorizes to ~3.4 cycles per
+butterfly already, and the planar form's shuffle traffic costs more than
+its arithmetic saves. The first cut was worse still — checked views over
+runtime-length slices re-derived bounds per touch (the
+[#base128-bounds](#base128-bounds) defect re-committed) and the route
+regressed 12-23% before the isolation probe located why. The original
+record rejected a hand-vectorized combine years of increments ago; that
+verdict now has two independent confirmations and should not be re-tried
+without new structure.
+
+**The combine's pass count fuses instead.** At four blocks the chain ran
+`combine_stage` then `combine_final` — two full reads and writes of the
+array. Both butterfly levels now apply per index while the operands are in
+registers: block values `b0..b3` at index `j` produce outputs `j`,
+`j + len`, `j + 2len`, `j + 3len` directly, one read and one write of the
+array, and `combine_stage` is deleted. The gather's bit-reversed block
+order is exactly what makes the adjacent-pair pairing correct.
+
+**Measured, pinned, back to back, controls within 1%:**
+
+| n | before | after | vs RustFFT | vs PhastFT |
+| --- | --- | --- | --- | --- |
+| 256 | 556.9 ns | **543.3 / 541.8** | 1.35 -> **1.31** | 0.81 -> **0.78** |
+| 512 | 1375.4 | **1309.9 / 1300.6** | 1.31 -> **1.25 / 1.24** | 0.93 -> **0.88** |
+| 64 / 128 | — | — | controls, flat | — |
+
+What remains at the split sizes is the bases themselves (365 of 543 at
+256) — the base kernel's own line — plus a floor of one gather, one fused
+combine, and the scratch round-trip, each now at or near its measured
+best form.
+
 ## Four-byte base transforms use the native AVX2 width (2026-08-30) <a id="base-native-width"></a>
 
 The base plan previously requested exactly four scalar lanes for every

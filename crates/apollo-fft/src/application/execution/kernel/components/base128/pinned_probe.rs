@@ -109,3 +109,63 @@ fn small_sizes_against_the_references_by_core_type() {
         suite.emit();
     }
 }
+
+/// Piece attribution for the small-size split: gather, base blocks, combine.
+#[test]
+#[ignore = "measurement instrument for the split's piece costs"]
+fn split_pieces_by_size() {
+    use super::instance_major::{transform_128, Plan128};
+
+    let landed = pin(2);
+    let plan = Plan128::<f64>::new_if_supported::<false>().expect("four-lane host");
+    for n in [256usize, 512] {
+        let blocks = n / 128;
+        let bits = blocks.trailing_zeros();
+        let src: Vec<Complex64> = (0..n)
+            .map(|i| {
+                let x = i as f64;
+                Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect();
+        let mut scratch = src.clone();
+        let mut out = src.clone();
+        let calls = 8000u32;
+        let (mut t_gather, mut t_base, mut t_route) = (f64::INFINITY, f64::INFINITY, f64::INFINITY);
+        let production = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+        for _ in 0..12 {
+            let t = std::time::Instant::now();
+            for _ in 0..calls {
+                for (b, block) in scratch.chunks_exact_mut(128).enumerate().take(blocks) {
+                    let offset = b.reverse_bits() >> (usize::BITS - bits);
+                    for (j, slot) in block.iter_mut().enumerate() {
+                        *slot = src[j * blocks + offset];
+                    }
+                }
+                std::hint::black_box(&mut scratch);
+            }
+            t_gather = t_gather.min(t.elapsed().as_nanos() as f64 / f64::from(calls));
+
+            let t = std::time::Instant::now();
+            for _ in 0..calls {
+                for block in scratch.chunks_exact_mut(128).take(blocks) {
+                    assert!(transform_128::<f64, false>(
+                        std::hint::black_box(block),
+                        &plan
+                    ));
+                }
+            }
+            t_base = t_base.min(t.elapsed().as_nanos() as f64 / f64::from(calls));
+
+            let t = std::time::Instant::now();
+            for _ in 0..calls {
+                out.copy_from_slice(&src);
+                production.forward_complex_slice_inplace(std::hint::black_box(&mut out));
+            }
+            t_route = t_route.min(t.elapsed().as_nanos() as f64 / f64::from(calls));
+        }
+        let combine = t_route - t_gather - t_base;
+        println!(
+            "SPLIT cpu={landed:<2} n={n:<4} route={t_route:>7.1} gather={t_gather:>6.1} bases={t_base:>6.1} combine+copy~={combine:>6.1}"
+        );
+    }
+}
