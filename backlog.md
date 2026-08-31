@@ -2469,10 +2469,9 @@
   untouched with the one-line candidate uncommitted and its instrument unrun.
   Taken over, completed to a verdict, lease released.
 
-## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 — Rader at n = 59 is unstable across runs [patch] — in progress
+## ATLAS-APOLLO-RADER-59-VARIANCE-2026-08-29 — Rader at n = 59 is unstable across runs [patch] — review
 
-- **Integrator / lease.** Codex `/root`; lease: Rader/Bluestein routing,
-  focused variance instrument, and this item only.
+- **Integrator / lease.** Codex `/root`; lease: none.
 
 - **Finding.** The same release build measured n = 59 at 3377, 2761 and 1644 ns
   for an eight-byte scalar across three runs, on a probe whose neighbouring
@@ -2493,6 +2492,11 @@
   precisions; direct-DFT cases pass and all six warm routes record zero global
   and zero direct-Mnemosyne allocations. The n = 167 and medium-prime controls
   do not support a stable wider rule and remain unchanged.
+- **Exact evidence.** Provider `0ba9c504`; warning-denied all-target/all-feature
+  Clippy, debug and release Nextest 507/507, focused direct-DFT and allocation
+  probes, doctest, Rustdoc, benchmark smoke, formatting, diff, and standalone
+  36-source lock gates pass. Independent review, hosted verification, and merge
+  remain open.
 
 
 ## Rust crate publication aliases [patch] — in progress

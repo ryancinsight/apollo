@@ -13,8 +13,9 @@
       shape-only selector boundary.
 - [x] Prove warm execution allocates zero times through both Apollo's global
       allocator and direct Mnemosyne hooks.
-- [ ] Complete warning-denied package gates, exact-lock validation,
-      independent review, hosted verification, merge, and lease discharge.
+- [x] Complete warning-denied package gates, exact-lock validation, and lease
+      discharge at exact provider `0ba9c504`.
+- [ ] Obtain independent artifact review, pass hosted verification, and merge.
 
 ## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 [perf] — Codex
 
