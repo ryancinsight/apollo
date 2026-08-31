@@ -43,6 +43,7 @@
       clone sharing, and warm allocation semantics across every split length.
 - [x] Retain only a stable paired-median win with non-regressing controls and
       verify the exact target-feature codegen has no hot-path store-mode branch.
+- [x] Commit exact source candidate `59e5aacf` and discharge source leases.
 - [ ] Pass warning-denied, debug/release, lock, documentation, independent
       review, hosted, and merge gates; discharge all leases.
 

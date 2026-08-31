@@ -21,7 +21,7 @@
   flat — the direct-sink monomorphization's store loop verified unperturbed by
   control, not assumption.
 
-## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — in-progress
+## ATLAS-APOLLO-COMBINE-SINK-512-2026-08-31 — Two-level sink for the four-block split [perf] — review
 
 - **Outcome:** n = 512's four blocks fuse both combine levels into the
   column passes: block 1 sinks into an `E` region with `W_256`; block 3
@@ -30,18 +30,15 @@
   operands remove seven hot conditional branches. Aggregate scalar transfer
   remains comparable because the even pair is still materialized; no 16 KiB
   traffic-removal claim remains.
-- **Evidence:** three same-buffer ABBA confirmations improve N = 512 by
+- **Evidence:** source `59e5aacf`; three same-buffer ABBA confirmations improve N = 512 by
   0.44--2.70% on the pinned P-core and 18.36--19.51% on the pinned E-core;
   N = 256 controls remain neutral. Release assembly has zero sink calls and
   three rather than ten compares. Debug/release 19/19 and release 510/510
   value tests, warm f32/f64 allocation census, all-target/all-feature Clippy,
   and warning-denied AArch64 Windows compilation pass on the current diff.
-- **Integrator / lease:** Codex `/root`; lease `base128/{mod.rs,
-  instance_major.rs,instance_major/{plan.rs,store.rs},tests.rs,pinned_probe.rs}`,
-  `retained_footprint.rs`, matching
-  exact tests, ADR 0041, CHANGELOG, gap audit, and owner-keyed PM sections. The
-  peer-owned batched kernel and RustFFT comparison instrument remain excluded.
-  Last update 2026-08-31.
+- **Integrator / lease:** Codex `/root`; lease none. Independent review, hosted
+  verification, PR, and merge remain open. The peer-owned batched kernel and
+  RustFFT comparison instrument remain excluded. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
