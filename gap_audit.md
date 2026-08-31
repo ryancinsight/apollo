@@ -2283,6 +2283,30 @@ never across the batch, so each batch column is an independent transform through
 the entire stage set, and the partition is by batch range once, outside the stage
 loop.
 
+### Parallel extension rejected (2026-08-31) <a id="batched-parallel-rejection"></a>
+
+The recorded independence argument is correct but incomplete as a performance
+model. A Moirai unit owning sixteen columns must stream that narrow band through
+every padded row. On the pinned P-core probe, its minimum-of-40 samples regressed
+the sequential batched kernel at every measured length: 323.2 versus 311.0 us at
+65,536, 2.037 versus 1.939 ms at 262,144, 6.418 versus 6.200 ms at 1,048,576,
+and 24.746 versus 24.072 ms at 4,194,304. The 2.8--5.0% loss is consistent with
+discarding contiguous row streaming for strided worker bands. The candidate and
+its pointer-level disjoint-range surface were removed.
+
+Simply widening the sequential route also fails the production oracle. The
+unchanged cache-flushing `engine_census` moved the 65,536 median from 558.875 us
+(96.48% interval 527.700--614.850 us) to 4.22090 ms
+(4.21040--4.23160 ms), and the 262,144 median from 2.08890 ms
+(2.03120--2.16500 ms) to 19.13965 ms (19.10360--19.17350 ms). A separate
+P-core-pinned 40-sample probe measured the widened route at 262.3 us and
+1.8463 ms, so the apparent single-core win is topology-dependent rather than a
+general production improvement. Both census revisions retained zero warm
+complex allocations. The `PARALLEL_ROW_THRESHOLD` boundary and the existing
+Moirai-parallel generic four-step therefore remain unchanged. A future attempt
+must preserve cache-local streaming and beat the same unpinned census before it
+can reopen this item.
+
 ### One-dimensional closure (2026-08-26)
 
 The cache-flushing `engine_census` now measures the corrected 1-D route. A
