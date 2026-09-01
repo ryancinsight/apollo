@@ -63,13 +63,14 @@
       gates; discharge the source/test/documentation lease.
 - [x] Obtain independent exact-artifact GREEN review and merge PR #219 without
       squash as `8ef1e5d3`; collect its exact hosted results.
-- [ ] Attribute the hosted four-of-four regressions in generic 64/256 and
-      radix composite 38 without weakening the unchanged benchmark oracle.
+- [x] Close the hosted generic 64/256 and radix-composite 38 regressions as
+      non-reproducing: none executes the changed combine, and unchanged PR #222
+      passes every comparator row without a source or oracle correction.
 - [x] Split Hermes PR #110 / `363c407d` hardware-only selection and its
       7,680-byte linked-footprint reduction to
       `ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31`; it carries no latency claim.
-- [ ] Retain only a source correction that keeps the N = 32,768 gain and clears
-      two local paired comparisons plus the hosted regression check.
+- [x] Retain source `d1dda1bf`: the N = 32,768 gain reproduces in two local
+      pairs, and the unchanged PR #222 comparator passes every hosted row.
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
 
@@ -86,7 +87,8 @@
       gates; discharge the source/test/documentation lease.
 - [x] Obtain independent exact-object GREEN review of source `5a1b3e8a`; the
       reviewer treats dynamic gate and timing results as supplied evidence.
-- [ ] Pass hosted gates and merge the resulting PR without squash.
+- [x] Pass every hosted repository, artifact, identity, counterbalanced-pair,
+      and final-comparator gate; merge PR #218 without squash as `23993c6a`.
 
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
 

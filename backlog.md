@@ -80,82 +80,15 @@
 - **Delivered:** PM-only measured rejection; exact quarter-turn twiddle reuse regressed f64 N = 512, so production source remains byte-identical to merged PR #219 / `8ef1e5d3`.
 - **Evidence:** direct-oracle debug/release 4/4; three exact-processor phase runs and one unchanged comparison reproduce the regression; lease none. See `gap_audit.md#base128-quarter-turn`.
 
-## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — blocked
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — done 2026-08-31
 
-- **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
-  after the exact-eight-lane transpose correction.
-- **Scope / non-goals.** Reuse the exact-processor planar-pass instrument to
-  separate stage, transpose, and copy costs at N = 16,384/32,768 with f64 and
-  adjacent-size controls. Do not change the comparison workload, estimator,
-  route selection, or production source until one phase reproduces across
-  three runs; do not trade f64 or smaller-size latency for the target row.
-- **Acceptance.** Three same-revision processor-2 runs identify a stable
-  dominant phase. A retained production correction preserves direct-DFT,
-  round-trip, exact-route, and zero-warm-allocation semantics, improves two
-  adjacent unchanged 100-sample comparisons, and keeps controls neutral.
-  Reject the candidate if the phase or complete-path intervals do not
-  reproduce.
-- **Risk / dependencies.** [patch] [perf]. Depends on PR #218 / `23993c6a`,
-  which removed the prior transpose bottleneck. Exact local Windows AVX2
-  measurements are required; AArch64 remains compilation coverage unless a
-  runner supplies timing evidence.
-- **Hosted fix-forward.** PR #219 merged as `8ef1e5d3`; its lock, workspace,
-  bindings, artifact, identity, and four paired benchmark jobs passed, but the
-  final comparison found four-of-four regressions in `generic_selector/64`,
-  `generic_selector/256`, and radix composite 38. The first two rows exercise
-  the base route and the last is unrelated to the planar combine. Attribute
-  binary-wide code-generation or measurement effects before changing source;
-  do not weaken the regression oracle.
-- **Provider dependency.** Exact Linux artifacts show only 0.05--0.12% growth
-  per affected benchmark binary, but the f32 fallback links a 5,080-byte
-  `call_scalar_in_avx2_frame` exact-four kernel even though AVX2 executes the
-  exact-eight kernel. Hermes PR #110 / merge `363c407d` now supplies the
-  hardware-only exact-width entry. The 7,680-byte Apollo executable reduction
-  is split to `ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31`; paired N = 64/256
-  timings do not establish a latency win and do not satisfy this item.
-- **Integrator / lease:** `/root`; lease none. Source `d1dda1bf` routes the
-  combine through Hermes exact-eight/exact-four lane kernels with the unchanged
-  scalar fallback. Three processor-2 runs reduce its median 40.06%
-  (57,172 -> 34,269 cycles) and the full instrumented-route median 8.66%
-  (256,514 -> 234,310 cycles); f64 moves 0.38% lower. Two unchanged
-  comparisons report Apollo f32 N = 32,768 at 66.37/66.42 microseconds versus
-  RustFFT at 66.26/67.94. Debug/release package tests pass 506/506, the focused
-  analytical oracles pass 2/2, the warm global/Mnemosyne census remains zero,
-  and warning-denied Clippy, AArch64 compilation, Rustdoc, doctest, format,
-  diff, and 36-source standalone-lock gates pass. Independent review is GREEN;
-  hosted fix-forward remains. Re-open after the hardware-lane footprint item
-  lands and its unchanged hosted comparison either clears or reproduces the
-  regression. Last update 2026-08-31.
+- **Delivered:** source `d1dda1bf`, PR #219, merge `8ef1e5d3`; the planar combine median falls 40.06% and the complete instrumented route 8.66%, reaching local f32 N = 32,768 parity with RustFFT while preserving value, route, and zero-warm-allocation semantics.
+- **Evidence:** independent GREEN; debug/release package, analytical, allocation, warning-denied host/AArch64, documentation, and lock gates pass. PR #219's unrelated comparator rows did not reproduce in unchanged PR #222; no source or oracle correction was retained. Lease none.
 
-## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — done 2026-08-31
 
-- **Outcome.** Attribute and reduce Apollo f32 N=32,768's stable 23% latency
-  deficit against retained-scratch RustFFT without changing numerical or
-  allocation semantics.
-- **Scope / non-goals.** Extend the test-only exact-processor phase instrument
-  generically across f32 and f64, then isolate movement versus arithmetic in
-  the public four-step route at N=16,384 and N=32,768. Do not change the
-  comparison workload, estimator, crossover, or production code before one
-  phase reproduces across three runs; do not trade f64 or smaller sizes for the
-  f32 row.
-- **Acceptance.** Same-binary phase attribution reproduces across three
-  processor-2 runs with f64 and N=16,384 controls. A retained production
-  correction preserves direct-DFT and round-trip values, exact route selection,
-  zero warm allocations, and improves the unchanged 100-sample comparison in
-  two adjacent runs while controls remain neutral. Reject any candidate whose
-  phase or complete-path intervals do not reproduce.
-- **Risk / dependencies.** [patch] [perf]. Depends on the exact-processor
-  comparison and N=32,768 phase coverage merged through PR #217 / `5bf93047`.
-- **Integrator / lease:** `/root`; lease none. Source `5a1b3e8a` selects Hermes'
-  exact eight-lane f32 transpose before the retained four-lane/scalar fallbacks;
-  f64 remains four-lane. Three exact-processor runs reduce the f32 transpose
-  from 50,454--50,859 to 17,341--17,564 cycles; three unchanged comparisons
-  report 72.145--74.005 us versus the retained 82.970 us baseline. Debug and
-  release Nextest pass 510/510, the focused global/direct-Mnemosyne census is
-  zero/zero, all-target/all-feature Clippy and AArch64 check pass with warnings
-  denied, and doctest/Rustdoc/format/36-source standalone-lock gates pass;
-  independent exact-object review is GREEN with dynamic gates treated as
-  supplied evidence; hosted gates, PR, and merge remain. Last update 2026-08-31.
+- **Delivered:** source `5a1b3e8a`, PR #218, merge `23993c6a`; native eight-lane f32 transpose reduces the phase from 50,454--50,859 to 17,341--17,564 cycles and the unchanged whole-plan median from 82.970 to 72.145--74.005 microseconds.
+- **Evidence:** independent GREEN; every hosted repository and counterbalanced benchmark gate passes; debug/release value, zero-allocation, warning-denied host/AArch64, documentation, and standalone-lock gates pass. Lease none.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 

@@ -246,6 +246,13 @@ AArch64 Windows library check pass. The timings are local Windows AVX2 evidence
 on one P-core; dynamic frequency, interrupts, AVX-512, and cross-machine
 behavior remain outside the evidence.
 
+PR #219 merged as `8ef1e5d3`. Its final comparator rejected generic N = 64/256
+and radix-composite N = 38 rows that do not execute this combine. The source
+remained in the unchanged successor comparison, and PR #222 passed every row.
+The hosted failure is therefore closed as a non-reproducing whole-binary
+layout or measurement effect; no production or benchmark-oracle correction is
+retained, and the exact mechanism is not established.
+
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
 The reusable CPU QFT plan previously called the public dense kernel for every
