@@ -18,16 +18,30 @@
   how the candidate artifact is produced or invoked — extraction order, page
   cache state, path, or anything else that always attaches to "candidate".
   Cause unknown; do not guess it into the record.
-- **Fix, two parts:**
-  1. **Identity short-circuit.** Before timing, compare the two benchmark
-     executables' code sections (strip or mask PE/ELF link metadata — on Linux
-     `objcopy --strip-all` or a `.text` `objdump -d` diff). When they match,
-     report `no code delta` and skip the pair jobs. This removes the class and
-     saves four runner jobs on every docs-, comment-, or import-only PR.
-  2. **Root-cause the systematic candidate slowdown** with the artifacts from
-     run 33570302967: swap the two binaries' roles (run the baseline artifact
-     as "candidate") and see whether the slowdown follows the *role* or the
-     *file*. That one experiment partitions the cause.
+- **Proven on the CI artifacts (run 33570302967), superseding the local
+  Windows evidence:** parsing the two Linux `half_cyclic_rader` ELF
+  executables section by section, `.text` is **byte-identical**
+  (4,321,182 B), as are `.rodata`, `.init`, `.fini`, `.plt`. Only `.strtab`,
+  `.data.rel.ro`, and `.note.gnu.build-id` differ — symbol-name hashes and
+  the build id, which follow the two build directories
+  (`apollo-measurement/` vs `apollo-candidate-source/`). Identical code,
+  +10% reported.
+- **The short-circuit already exists and is defeated.** The
+  `benchmark executable identity` job runs `sha256sum` + `cmp` on the whole
+  files and gates the pair jobs on `measurements_required`; whole-file
+  identity can never hold across two build paths, so it always falls
+  through to timing. Fix: compare **code sections** (every
+  `SHF_EXECINSTR` section plus `.rodata`), not files — a dependency-free
+  ELF section compare in `scripts/`, exit 0 on identical code — so
+  doc-, comment-, and import-only PRs report `no code delta` and skip the
+  four pair jobs.
+- **Separate and unresolved: the systematic candidate slowdown.** With code
+  identical, "slower in all four comparisons" means something attached to
+  the *candidate role or artifact* costs ~10% — and on a real change that
+  bias inflates every regression and hides every improvement of that size.
+  Root-cause with the retained artifacts: swap roles (run the baseline
+  executable as "candidate") and see whether the slowdown follows the role
+  or the file. Cause not guessed into the record.
 - **Acceptance oracle:** re-running the gate on #242's head reports
   `no code delta`; an injected real regression (a deliberate extra pass in
   one kernel on a scratch branch) is still caught — prove the check is live
