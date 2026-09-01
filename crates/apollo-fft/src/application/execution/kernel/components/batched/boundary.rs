@@ -12,7 +12,10 @@
 //! The driver requests the scalar-selected preferred width explicitly: eight
 //! lanes for f32, four for f64, then four as the portable SIMD fallback. A host
 //! without either width, or a shape not divisible by it, falls back to the
-//! scalar loop, which remains the reference implementation.
+//! scalar loop, which remains the reference implementation. All three boundary
+//! kernels here — transpose, half combine, and reinterleave — take that width
+//! from `BatchedPlanCache::BOUNDARY_LANES`; one const-generic body serves both
+//! widths and dispatch stays outside the tile loops.
 
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -85,11 +88,11 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
-        if <A as SimdStorage<T>>::LANE_COUNT != 4 || self.m % 4 != 0 || self.stride % 4 != 0 {
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        if !matches!(lanes, 4 | 8) || self.m % lanes != 0 || self.stride % lanes != 0 {
             return false;
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
-        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         assert!(
             self.re.len() >= self.m * self.stride
                 && self.im.len() >= self.m * self.stride
@@ -104,11 +107,17 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
         // holds output row `rev(p)`, bit reversal being an involution, so
         // the plane reads stay sequential and only the stores scatter
         // (gap_audit.md#sink-permutation).
+        //
+        // Both indices below count whole `lanes`-wide chunks. A source chunk
+        // is `lanes` reals of one plane; a destination chunk is `lanes`
+        // interleaved reals, so one row spans `2 * m / lanes` of them and each
+        // read pair yields two of them. `stride % lanes == 0` and
+        // `m % lanes == 0` are guarded above, so both divisions are exact.
         let bits = self.m.trailing_zeros();
         for row in 0..self.m {
-            let src_c = row * self.stride / 4;
-            let dst_c = (row.reverse_bits() >> (usize::BITS - bits)) * self.m / 2;
-            for r in 0..self.m / 4 {
+            let src_c = row * self.stride / lanes;
+            let dst_c = (row.reverse_bits() >> (usize::BITS - bits)) * 2 * self.m / lanes;
+            for r in 0..self.m / lanes {
                 let e = chunk::<T, A>(self.re, src_c + r);
                 let o = chunk::<T, A>(self.im, src_c + r);
                 let (lo, hi) = e.interleave(o);
