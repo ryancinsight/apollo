@@ -1,5 +1,10 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 — Batch the residual Good-Thomas columns [patch] [perf] — done 2026-09-01
+
+- **Outcome:** rejected before production routing; the value-gated exact-eight-lane candidate regressed the release column/scatter phase from 46.07 ns to 56.91 ns (23.53%) because register materialization preserved all 96 scalar CRT stores.
+- **Evidence:** focused debug and release Nextest passed; the experimental source and derived stack-overlay lock delta were removed, so production and the standalone lock are unchanged. Timing is local Windows AVX2, best-of-block, non-Criterion, and the instrument diff was not revision-attested. Lease none.
+
 ## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 — Reduce the N = 96 fixed-codelet latency gap [patch] [perf] — done 2026-09-01
 
 - **Delivery:** source `074dedee`; PR #225 merged without squash as `eea29fd3`; Hermes provider PR #111 merged as `9ac23fa4`; lease none.
