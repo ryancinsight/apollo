@@ -120,6 +120,92 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
     }
 }
 
+/// Combines two planar half-transforms and writes interleaved output.
+///
+/// Each vector covers `LANE_COUNT` consecutive complex outputs. The even and
+/// odd planes supply separate real/imaginary registers, while the cached
+/// twiddle and the two output halves use the public interleaved complex layout.
+/// The row permutation rides the output address exactly as in
+/// [`InterleaveRows`].
+pub(crate) struct CombinePlanarHalves<'a, T> {
+    /// Even-half real plane.
+    pub(crate) even_re: &'a [T],
+    /// Even-half imaginary plane.
+    pub(crate) even_im: &'a [T],
+    /// Odd-half real plane.
+    pub(crate) odd_re: &'a [T],
+    /// Odd-half imaginary plane.
+    pub(crate) odd_im: &'a [T],
+    /// Interleaved complex twiddles, represented as scalar lanes.
+    pub(crate) twiddles: &'a [T],
+    /// Interleaved low output half, represented as scalar lanes.
+    pub(crate) low: &'a mut [T],
+    /// Interleaved high output half, represented as scalar lanes.
+    pub(crate) high: &'a mut [T],
+    /// Live row length in complexes.
+    pub(crate) m: usize,
+    /// Padded plane row stride.
+    pub(crate) stride: usize,
+}
+
+impl<T: BatchedPlanCache> LaneKernel<T> for CombinePlanarHalves<'_, T> {
+    /// Whether the dispatched width handled the pass.
+    type Output = bool;
+
+    #[expect(
+        clippy::inline_always,
+        reason = "the body must inline into the dispatcher's target-feature frame"
+    )]
+    #[inline(always)]
+    fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        if !matches!(lanes, 4 | 8) || self.m % lanes != 0 || self.stride % lanes != 0 {
+            return false;
+        }
+
+        let half = self.m * self.m;
+        let plane = self.m * self.stride;
+        assert!(
+            self.even_re.len() >= plane
+                && self.even_im.len() >= plane
+                && self.odd_re.len() >= plane
+                && self.odd_im.len() >= plane
+                && self.twiddles.len() >= 2 * half
+                && self.low.len() >= 2 * half
+                && self.high.len() >= 2 * half,
+            "invariant: combine inputs hold two padded planes, half twiddles, and both output halves"
+        );
+
+        let bits = self.m.trailing_zeros();
+        for row in 0..self.m {
+            let base = row * self.stride;
+            let dst = (row.reverse_bits() >> (usize::BITS - bits)) * self.m;
+            for column in (0..self.m).step_by(lanes) {
+                let plane_chunk = (base + column) / lanes;
+                let even_re = chunk::<T, A>(self.even_re, plane_chunk);
+                let even_im = chunk::<T, A>(self.even_im, plane_chunk);
+                let odd_re = chunk::<T, A>(self.odd_re, plane_chunk);
+                let odd_im = chunk::<T, A>(self.odd_im, plane_chunk);
+
+                let output_chunk = 2 * (dst + column) / lanes;
+                let twiddle_lo = chunk::<T, A>(self.twiddles, output_chunk);
+                let twiddle_hi = chunk::<T, A>(self.twiddles, output_chunk + 1);
+                let (twiddle_re, twiddle_im) = twiddle_lo.deinterleave(twiddle_hi);
+                let rotated_re = twiddle_re.mul_add(odd_re, -(twiddle_im * odd_im));
+                let rotated_im = twiddle_re.mul_add(odd_im, twiddle_im * odd_re);
+
+                let (low_lo, low_hi) = (even_re + rotated_re).interleave(even_im + rotated_im);
+                let (high_lo, high_hi) = (even_re - rotated_re).interleave(even_im - rotated_im);
+                put_chunk(low_lo, self.low, output_chunk);
+                put_chunk(low_hi, self.low, output_chunk + 1);
+                put_chunk(high_lo, self.high, output_chunk);
+                put_chunk(high_hi, self.high, output_chunk + 1);
+            }
+        }
+        true
+    }
+}
+
 /// In-place square transpose of both padded planes through native in-register
 /// tiles (`Vector::transpose_square`): each off-diagonal tile pair loads two
 /// tiles, transposes both in registers, and stores them exchanged; diagonal

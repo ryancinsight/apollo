@@ -102,6 +102,42 @@ residual gaps. This is local Windows AVX2 evidence on one processor; AArch64 is
 warning-denied compile evidence, and no AVX-512 or cross-machine result is
 claimed.
 
+### The planar half combine now uses the native lane width
+
+Three follow-up phase runs on the merged transpose route placed the f32
+N=32,768 combine/output pass at 56,600--61,328 cycles while both stage sets
+already used Hermes' native eight-lane dispatch. The combine still constructed
+one complex value at a time from the even/odd planes, multiplied one twiddle,
+and wrote the two interleaved output halves through scalar indexing.
+
+One private `LaneKernel` now owns that formula for both exact four- and
+eight-lane vectors. It loads the four planar inputs, deinterleaves two cached
+twiddle vectors, performs the complex multiply-add in registers, and
+interleaves both butterfly outputs. Dispatch occurs once outside the row and
+column loops. f32 requests exact eight lanes first; exact four lanes preserves
+the narrower x86 and AArch64 path, and absence retains the scalar formula
+without mutation or a public API change.
+
+Three exact-processor candidate runs reduced the combine median from 57,172 to
+34,269 cycles (40.06%) and the complete instrumented-route median from 256,514
+to 234,310 cycles (8.66%). The f64 N=32,768 control median moved from 438,758 to
+437,091 cycles (0.38% lower). Two executions of the unchanged 100-sample
+comparison reported Apollo f32 medians of 66.367 and 66.415 microseconds,
+entirely below the retained 72.145--74.005 post-transpose band; their paired
+RustFFT medians were 66.258 and 67.938 microseconds. Apollo was 0.16% slower in
+the first pair and 2.24% faster in the second, so this establishes local parity
+rather than a cross-machine lead.
+
+An independent scalar-formula oracle covers both output halves and the
+bit-reversed row sink. A nonzero-index analytical impulse covers every output
+bin and the normalized public-plan round trip at N=32,768. The complete debug
+and release package suites each pass 506/506, and the warmed N=16,384/32,768
+f32 census remains zero allocations through both the global allocator and
+direct Mnemosyne hooks. Warning-denied all-target/all-feature Clippy and the
+AArch64 Windows library check pass. The timings are local Windows AVX2 evidence
+on one P-core; dynamic frequency, interrupts, AVX-512, and cross-machine
+behavior remain outside the evidence.
+
 ## Reusable QFT plans use Apollo FFT (2026-08-31) <a id="qft-fft-route"></a>
 
 The reusable CPU QFT plan previously called the public dense kernel for every

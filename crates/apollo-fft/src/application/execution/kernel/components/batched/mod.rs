@@ -974,16 +974,47 @@ pub(crate) fn combine_planar_halves<T>(
     // side scattered four (gap_audit.md#sink-permutation).
     let bits = m.trailing_zeros();
     sect!("combine", {
-        for row in 0..m {
-            let base = row * stride;
-            let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
-            for b in 0..m {
-                let j = dst + b;
-                let e = Complex::new(e_re[base + b], e_im[base + b]);
-                let o = Complex::new(o_re[base + b], o_im[base + b]);
-                let rotated = o * twiddles[j];
-                low[j] = e + rotated;
-                high[j] = e - rotated;
+        let twiddle_lanes = bytemuck::cast_slice(twiddles);
+        let handled = if T::TRANSPOSE_LANES == 8 {
+            hermes_simd::vectorize_lanes::<8, T, _>(boundary::CombinePlanarHalves {
+                even_re: e_re,
+                even_im: e_im,
+                odd_re: o_re,
+                odd_im: o_im,
+                twiddles: twiddle_lanes,
+                low: bytemuck::cast_slice_mut(&mut *low),
+                high: bytemuck::cast_slice_mut(&mut *high),
+                m,
+                stride,
+            })
+            .unwrap_or(false)
+        } else {
+            false
+        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::CombinePlanarHalves {
+            even_re: e_re,
+            even_im: e_im,
+            odd_re: o_re,
+            odd_im: o_im,
+            twiddles: twiddle_lanes,
+            low: bytemuck::cast_slice_mut(&mut *low),
+            high: bytemuck::cast_slice_mut(&mut *high),
+            m,
+            stride,
+        })
+        .unwrap_or(false);
+
+        if !handled {
+            for row in 0..m {
+                let base = row * stride;
+                let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
+                for b in 0..m {
+                    let j = dst + b;
+                    let e = Complex::new(e_re[base + b], e_im[base + b]);
+                    let o = Complex::new(o_re[base + b], o_im[base + b]);
+                    let rotated = o * twiddles[j];
+                    low[j] = e + rotated;
+                    high[j] = e - rotated;
+                }
             }
         }
     });
