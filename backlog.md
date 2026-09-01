@@ -599,7 +599,7 @@
   length in `2..=2048`, plus the tracked lengths above it, now passes with no
   wrong answers and no refusals.
 
-## ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31 — A per-length kernel cost 13x at the length it specialized [perf] — review
+## ATLAS-APOLLO-N1024-SPECIALIZATION-2026-08-31 — A per-length kernel cost 13x at the length it specialized [perf] — done 2026-09-01
 
 - **Finding.** `ReducedStockhamAvxFma::stage_triple` dispatched a hand-written
   `stage_triple_radix1_n1024_avx_fma` for a four-byte scalar at n = 1024. It
@@ -629,6 +629,11 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source `82557a32`
+  landed through PR #207 (`d975ecf6`); on current main the four-byte scalar's
+  `stage_triple` carries no n = 1024 arm (`reduced.rs` references none) while
+  the eight-byte arm in `precise.rs` keeps it, exactly as scoped. Suite
+  521/521 debug and release on the delivered tree.
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — done 2026-08-31
 
 - **Delivered:** source `3d3a7d37`, PR #217, merge `5bf93047`; retained phase
@@ -636,7 +641,7 @@
 - **Evidence:** independent GREEN; hosted lock/workspace/bindings/benchmark
   gates green; exact local package, cross-target, docs, and lock gates green.
 
-## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
+## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — done 2026-09-01
 
 - **Finding.** The default comparison stopped at 512 while production carries
   distinct 1,024 and 32,768 routes. The first extension also exposed two
@@ -685,6 +690,9 @@
   claim commit `b156a967` claimed ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31,
   which is already done on main; it was not carried forward.
 
+- **Closed by verification (2026-09-01, Claude `/root`).** Source `8a88529d`
+  landed through PR #216 (`a6fbcd02`) and is an ancestor of main; the
+  "hosted review/merge remain" line above predates that merge.
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
 - **What happened.** `USE_BASE_64` was added 2026-08-29 on a real measurement:
@@ -3103,7 +3111,7 @@
   remain open.
 
 
-## Rust crate publication aliases [patch] — in progress
+## Rust crate publication aliases [patch] — blocked: release authority
 
 - Owner: Codex `/root`; scope: root dependency identities, clean lockfile,
   registry package verification, and crates.io publication readiness.
@@ -3119,6 +3127,13 @@
   runtime-only integer math is package-owned. Exact package verification,
   hosted verification, and merge remain.
 
+- **State (2026-09-01, Claude `/root`, claim four weeks stale).** The
+  workspace half is done: `mnemosyne = { package = "mnemosyne-memory" }` and
+  `moirai = { package = "moirai-runtime" }` bind the published identities at
+  the root (`0917a6a6`) without changing imports, and the gate is green. The
+  remaining half — publishing through the OIDC release workflow — is the
+  release state, which needs explicit authority; re-open trigger: a release
+  authorization naming the crates.
 ## D20-real-spherical-harmonic-provider [minor] — complete 2026-08-13
 
 - Owner: Codex `codex/real-spherical-harmonics`; scope: `apollo-sht` real,
