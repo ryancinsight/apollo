@@ -138,7 +138,9 @@
   conclusion cannot be recovered by swapping labels, re-measure with the
   corrected instrument rather than reinterpreting.
 
-## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — todo
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — in-progress 2026-09-01
+
+- **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `fix/apollo-ecoqos-premise`; lease: `benches/engine_census.rs`, `docs/adr/0039-*`, this entry.
 
 - **Outcome:** the "Windows hands benchmark child processes EcoQoS" diagnosis
   (ADR 0039 Context, `benches/engine_census.rs:403`, the four-step layout
