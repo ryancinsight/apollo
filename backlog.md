@@ -1,6 +1,8 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — todo
+## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — in-progress 2026-09-01 (identity fixed; bias open)
+
+- **Delivered (part 1), `d3490283` (PR #250):** the identity gate compares code sections via `scripts/bench_executable_identity.py`, shipped in the candidate archive. Proven live on #250's own run: all three benches `CODE IDENTICAL`, `measurements_required=false`, pair jobs skipped, regression check green — the gate's first ever short-circuit. **Open (part 2):** the systematic ~10% candidate slowdown on identical code; root-cause by role swap with the retained artifacts of run 33570302967.
 
 - **Observed (PR #242, run 33570302967):** `benchmark regression check` fails
   with `rader_half_cyclic_vs_full_cyclic/{auto,bluestein}_f32/1031` "candidate
