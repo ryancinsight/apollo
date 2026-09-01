@@ -2,7 +2,7 @@
 //!
 //! The plan and analytical linear signal are constructed before timing. N = 64
 //! stays below the provider threshold, while N = 128 and 256 exercise the
-//! direct-DFT rows that currently materialize real samples as complex lanes.
+//! direct-DFT rows that borrow real samples and reuse retained complex weights.
 //! An independent log-grid DFT validates one coefficient before each case.
 
 #![allow(missing_docs)]
