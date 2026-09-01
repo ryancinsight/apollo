@@ -1,5 +1,86 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-CORE-CLASS-LABELS-2026-09-01 — Pinned probes select cores by queried class [patch] — done 2026-09-01
+
+- **Delivered** (ADR 0043): the nine pinned-probe sites that hardcoded
+  `for cpu in [2u32, 12]` and labelled by `landed < 8` now select through
+  `kernel::core_class`, which queries `EfficiencyClass` from
+  `GetLogicalProcessorInformationEx` and prints the full per-processor class
+  census, marking its selections, ahead of every table. The premise the
+  literals encoded was false: this host's performance set is
+  `{0, 1, 10, 11, 12, 13, 22, 23}` (mask `0xc03c03`), so cpu 2 is an efficiency
+  core and cpu 12 a performance core, and both probe arms were mislabelled.
+- **Verified:** OS mask; an independent per-processor timing sweep partitioning
+  the host identically; and reproduction of ADR 0042's old `P` column on two
+  distinct efficiency cores.
+- **Interim by design.** The canonical home is themis (`themis-topology`), which
+  owns `CpuTopology` and already queries the same API for cache levels. This
+  module is `cfg(test)` instrument support and is deleted, not adapted, when
+  that lands — `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`.
+- **Integrator:** Claude session 5050c72a.
+
+## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — blocked
+
+- **Outcome:** `kernel::core_class`'s Windows query is deleted and the probes
+  bind processors selected through the themis topology API, so core class has
+  one home across the stack instead of a hand-rolled constant per repository.
+- **Blocker:** `themis-topology` does not yet expose core efficiency class.
+  **Re-open trigger:** that API lands and apollo's themis requirement advances
+  to it.
+- **Non-goals:** widening apollo's interim module in the meantime; it stays
+  minimal precisely so it can be deleted outright.
+
+## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
+
+- **Outcome:** every recorded claim measured through the mislabelled probes
+  either reads correctly or is marked, so no second inverted conclusion stands.
+- **Scope:** the audit found 40+ affected claims. Dispatched here rather than
+  in the correction PR because each needs its own read: a column header swaps
+  mechanically, but a conclusion drawn from an asymmetric row has to be
+  re-reasoned, and some need re-measurement.
+  - **Corrected already:** ADR 0042 (re-measured), ADR 0039 and ADR 0041
+    (dated revision notes), `gap_audit.md#stockham-backend-matrix`,
+    `stockham/mod.rs` routing comment, this board's audit item.
+  - **Remaining, `gap_audit.md`:** lines ~541, 709–717, 1325–1328, 1376–1382,
+    1566, 1586, 1686, 1729, 1798, 1828–1838, 1870, 1928–1931, 2084, 2147–2157,
+    2171, 2868–2882, and the single-core "P-core" attributions at 13, 108, 115,
+    191, 207, 275, 298, 417, 653, 1005, 1029, 1179, 1243, 1275, 1411, 1630,
+    1709, 1856, 2054.
+  - **Remaining, `backlog.md`:** items `ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY`,
+    `-INTERLEAVED-CODELETS`, `-INTERLEAVED-BATCHED`, `-PLANAR-RADIX8`,
+    `HS-VECTORIZE-LARGE-KERNEL`, the pinned-ladder standings, and the per-core
+    attributions at 172–183, 234, 749–770, 837, 1005–1029, 1294–1309, 1345,
+    1383–1405, 1489, 1544–1572, 1599, 1662–1681, 1706–1721, 1801.
+  - **Remaining, source comments:** `batched/interleaved.rs:3-11`,
+    `batched/mod.rs:1042-1047`, `resident/planar.rs:3-11`,
+    `codelet/mod.rs:3-10`, `tuning.rs:29-39`, `mixed_radix/scalar/impls.rs:539`,
+    `benches/engine_census.rs:403-409`.
+  - **Not affected:** any claim of the form "X wins on BOTH core types" —
+    label-independent by construction. The `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`
+    = 256 reroute and the f64 256/512 scalar reroute are both of this form and
+    were re-verified.
+- **Acceptance oracle:** no `P-core`/`E-core` claim traceable to a pre-2026-09-01
+  pinned probe remains without either a correction or a revision note; a grep
+  for `P-core` in `gap_audit.md` and `backlog.md` returns only marked text.
+- **Risk:** [patch]. Corrections to the record, not to code. Where a
+  conclusion cannot be recovered by swapping labels, re-measure with the
+  corrected instrument rather than reinterpreting.
+
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — todo
+
+- **Outcome:** the "Windows hands benchmark child processes EcoQoS" diagnosis
+  (ADR 0039 Context, `benches/engine_census.rs:403`, the four-step layout
+  item) is either re-established on correct evidence or withdrawn.
+- **Why:** its stated observation was the batched kernel "executing exclusively
+  on E-cores (CPUs 8 through 21, wandering)". That range contains cpus 10–13,
+  four of this host's eight performance cores, so it does not establish
+  efficiency-core placement. The power-throttling opt-out in the census was
+  built on it, and the conclusion may still be right — the evidence given for
+  it is not.
+- **Acceptance oracle:** a run that records the queried class of each processor
+  the unpinned kernel lands on, over a full census, plus the process's QoS
+  level from `GetProcessInformation(ProcessPowerThrottling)`.
+
 ## ATLAS-APOLLO-FUSED-SPLIT-LOADS-2026-09-01 — The gather rides the phase-one loads out [patch] [perf] — done 2026-09-01 (falsified)
 
 - **Outcome:** built in full and value-verified, then falsified pinned —
@@ -2516,21 +2597,36 @@
   instantiation coupling should be understood before the rewrite rather than
   discovered during it.
 
-## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — decided 2026-08-27: retained; f64 256/512 route scalar
+## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — status: in-progress (reopened 2026-09-01)
 
-- **Verdict (2026-08-27, ADR 0042):** the retirement premise was a scheduler
-  artifact. The new same-binary pinned instrument
-  (`stockham::backend_matrix`, run `--ignored --nocapture`, release) shows the
-  AVX backend winning 1.4–2.9x on a pinned P-core at nearly every size and
-  precision; the entry ratios at 256/512/4096 sit in the pinned E-core band
-  and the 1024 entry matches neither column — unpinned scheduling (EcoQoS
-  E-core placement) is the leading hypothesis for the entry numbers.
-  Full table and correction: `gap_audit.md#stockham-backend-matrix`. The one
-  both-core-consistent exception, f64 N = 256/512 (scalar −16%/−77% at 512),
-  is now routed to the scalar stages in `StockhamKernel for f64`;
-  `PreciseStockham` compiles unconditionally to serve it. f32 keeps the AVX
-  backend everywhere. AVX-512 arms untouched (no silicon; HS-429 class).
-  Integrator: Claude session 5050c72a.
+- **Reopened 2026-09-01.** The 2026-08-27 verdict below was withdrawn: it rested
+  on a `backend_matrix` table whose two core-class columns were swapped, because
+  the probe pinned to cpu 2 / cpu 12 and labelled by `landed < 8` while this
+  host's performance set is `{0, 1, 10, 11, 12, 13, 22, 23}` (ADR 0043). The
+  instrument now queries the class; the corrected re-run (three runs, ADR 0042)
+  shows **the auto-vectorized scalar backend beating the AVX backend at every
+  probed size and both precisions on performance cores** (f64 2.2–4.4x, f32
+  1.05–2.1x), while AVX wins on efficiency cores at most sizes. The retirement
+  premise this item opened with is supported, not falsified.
+- **Next step (first, blocking):** explain ADR 0042 finding 3 — the AVX arm is
+  *absolutely* slower on a performance core than on an efficiency core (512 f64:
+  7527 ns on cpu 1 against 3126 ns on cpu 3) while the scalar arm shows the
+  normal ordering. Reproduced across three runs and two processor pairs. A
+  backend that inverts the core hierarchy is showing a microarchitectural
+  pathology; retirement should not be decided on an unexplained measurement, and
+  a fixable pathology would change the answer. Method: codegen inspection of the
+  AVX stage body (`cargo asm`) plus `perf`-class counters on both classes.
+- **Then:** decide retire / keep / narrow, with f32 efficiency-core coverage,
+  and record in ADR 0042 (which currently holds retention as status quo, not as
+  a supported decision).
+- **Unchanged and re-verified:** f64 N = 256/512 route to the scalar stages.
+  That reroute was justified as "scalar wins on both core types", which is
+  label-independent; corrected, scalar still wins on both classes at both sizes
+  (256: 0.271 / 0.989; 512: 0.225 / 0.831). No production routing changed by the
+  2026-09-01 correction.
+- **Superseded verdict (2026-08-27, withdrawn):** claimed the retirement premise
+  was a scheduler artifact and that AVX won 1.4–2.9x on a pinned P-core. That
+  column was an efficiency core. Integrator: Claude session 5050c72a.
 - **Outcome:** the AVX Stockham backend either earns its place with measurements
   or is retired, rather than being carried on the assumption that hand-written
   intrinsics are faster than what the optimizer produces.

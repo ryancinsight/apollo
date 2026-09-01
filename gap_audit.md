@@ -2510,51 +2510,115 @@ terms. The measured lever is cache and arena retention, not the ping-pong
 buffer, so the in-place rewrite is not the indicated next step on memory
 grounds.
 
-## The AVX-Stockham retirement premise was a scheduler artifact (2026-08-27) <a id="stockham-backend-matrix"></a>
+## Every pinned table had its core-class axis inverted (2026-09-01) <a id="core-class-inversion"></a>
+
+Evidence tier: OS query (`GetLogicalProcessorInformationEx`,
+`RelationProcessorCore`), corroborated by an independent per-processor timing
+sweep and by reproduction of a superseded table on the opposite core class.
+
+Nine pinned-probe sites selected measurement processors as `for cpu in [2u32, 12]`
+and labelled them `if landed < 8 { "P" } else { "E" }`, under the comment
+"Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K". The
+comment is false. The performance set is `{0, 1, 10, 11, 12, 13, 22, 23}` —
+mask `0xc03c03` — an interleaved layout, so **cpu 2 is an efficiency core and
+cpu 12 is a performance core**. Both arms were mislabelled and every table
+comparing them carried swapped headers.
+
+Three corroborations were already in this file and in the ADRs, unremarked
+because the labels were trusted:
+
+- ADR 0041's four-engine table: RustFFT (84.7 vs 181.8 ns), PhastFT (149.0 vs
+  330.0) and Apollo's base (146.4 vs 294.5) all ~2x faster on the row labelled
+  `E`. Three unrelated engines do not run twice as fast on an efficiency core.
+- ADR 0039's `core_matrix`: the "E-core" four-step (13.2 us) beating the
+  "P-core" one (16.6 us).
+- The 2048/8192 tables here: every `(E)` row absolutely faster than its `(P)`
+  counterpart.
+
+**Root cause:** the instrument asserted a property of the host it never
+measured, in a comment nothing could check. Not a wrong literal — an
+unverifiable axis. **The check that would have caught it:** the probe printing
+the queried class of the processors it selected, alongside its numbers. That is
+now what it does (ADR 0043), and the general form is the pattern to carry
+forward — *an instrument that labels an axis must derive the label in the run
+that produces the data.* A plausible-looking asymmetry between two arms is not
+evidence that the arms are what they say they are.
+
+**Scope of the damage:** 40+ recorded claims. Claims of the form "X wins on
+**both** core types" are label-independent and unaffected — this includes the
+`ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD` = 256 reroute and the f64 256/512 scalar
+reroute, both re-verified. Asymmetric claims either swap or need re-measuring;
+tracked as `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`, with the EcoQoS
+root-cause narrative split out as `ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01`
+because its stated observation ("executing exclusively on E-cores, CPUs 8
+through 21") names a range containing four performance cores.
+
+**Not established:** that cpu 2 is anomalously slow beyond its class. A
+calibration sweep put it at 1 936 000 ns against a 1 924 200–1 936 200 ns spread
+across the sixteen efficiency cores — an ordinary member of its class. Its
+numbers were wrong because they were labelled performance.
+
+## The AVX-Stockham retirement premise holds on performance cores (corrected 2026-09-01) <a id="stockham-backend-matrix"></a>
 
 Evidence tier: same-binary pinned measurement (`stockham::backend_matrix`,
 release profile), both backends instantiated under `cfg(test)`, interleaved
-per size, thread pinned per core type; numerical agreement between backends
-guarded to rounding-difference growth over `log2 n` stages.
+per size, thread pinned to a processor whose class is queried from
+`GetLogicalProcessorInformationEx`; numerical agreement between backends
+guarded to rounding-difference growth over `log2 n` stages. Three runs
+2026-09-01; medians below, per-run ranges in
+[ADR 0042](docs/adr/0042-avx-stockham-backend-retained.md).
+
+**This section previously recorded the opposite conclusion — "the retirement
+premise was a scheduler artifact" — and it was wrong.** The probe that produced
+the superseded table pinned to cpu 2 and cpu 12 and labelled by `landed < 8`,
+but this host's performance set is `{0, 1, 10, 11, 12, 13, 22, 23}`, so its
+`P` column was measured on an efficiency core and its `E` column on a
+performance core (ADR [0043](docs/adr/0043-measurement-core-class-is-queried.md)).
 
 `ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25` entered with scalar/AVX ratios of
-0.35x–1.11x — "the AVX backend is a pessimization at three of four sizes" —
-measured before the pinned instruments existed. Pinned, the table splits by
-core type (scalar-time over AVX-time; above 1.0 the AVX backend wins):
+0.35x–1.11x — "the AVX backend is a pessimization at three of four sizes".
+Pinned by queried class (scalar-time over AVX-time; above 1.0 the AVX backend
+wins):
 
-| n | f64 P | f64 E | f32 P | f32 E |
+| n | f64 performance | f64 efficiency | f32 performance | f32 efficiency |
 | --- | --- | --- | --- | --- |
-| 128 | 1.46 | 0.43 | 2.80 | 0.90 |
-| 256 | 0.99 | 0.27 | 1.76 | 0.49 |
-| 512 | 0.84 | 0.23 | 2.18 | 0.61 |
-| 1024 | 1.53 | 0.45 | 2.88 | 0.99 |
-| 2048 | 1.45 | 0.34 | 1.98 | 0.60 |
-| 4096 | 1.41 | 0.34 | 1.40 | 0.51 |
-| 8192 | 1.41 | 0.47 | 1.56 | 0.78 |
-| 16384 | 1.58 | 0.41 | 1.38 | 0.54 |
-| 32768 | 1.48 | 0.42 | 2.70 | 0.87 |
+| 128 | 0.405 | 1.452 | 0.894 | 2.852 |
+| 256 | 0.271 | 0.989 | 0.485 | 1.764 |
+| 512 | 0.225 | 0.831 | 0.583 | 2.159 |
+| 1024 | 0.441 | 1.474 | 0.953 | 2.896 |
+| 2048 | 0.356 | 1.330 | 0.588 | 1.910 |
+| 4096 | 0.363 | 1.190 | 0.510 | 1.328 |
+| 8192 | 0.528 | 1.554 | 0.794 | 1.520 |
+| 16384 | 0.406 | 1.600 | 0.557 | 1.525 |
+| 32768 | 0.426 | 1.512 | 0.892 | 3.412 |
 
-The entry ratios at 256/512/4096 (0.35/0.55/0.69) sit in the pinned E-core
-band (0.27/0.23/0.34), not the P-core one, and the 1024 entry (1.11) matches
-neither column — consistent with an unpinned thread migrating between core
-types mid-run. E-core (EcoQoS) scheduling is the leading hypothesis for the
-entry numbers (the harnesses differ, so the match is qualitative), and it is
-the same confound `pot::core_matrix` was built to remove from the route
-crossover. On a pinned P-core the AVX backend wins nearly everywhere,
-1.4–2.9x. The correction limits [the profile's](#pot-f64-profile)
-"hand-written AVX backend is slower than the auto-vectorized scalar one"
-claim to unpinned scheduling.
+**On performance cores the scalar backend wins at every probed size and both
+precisions** — f64 by 2.2–4.4x, f32 by 1.05–2.1x. The entry ratios
+(0.35/0.55/0.69 at 256/512/4096) sit near this performance-core column, which
+is what an unpinned thread mostly runs on; they were never an efficiency-core
+artifact. The [profile's](#pot-f64-profile) "hand-written AVX backend is slower
+than the auto-vectorized scalar one" claim is **reinstated without the
+"unpinned scheduling only" qualifier** the superseded record attached to it.
 
-The exception is real and both-core-consistent: f64 N = 256 and 512 are the
-only sizes where the scalar stages meet or beat the AVX stages on **both**
-core types (512: −16% P-core, −77% E-core). Decision and reroute in
-[ADR 0042](docs/adr/0042-avx-stockham-backend-retained.md): backend retained,
-f64 256/512 route scalar, f32 unchanged. The reverted "route N = 256/512 to
-the scalar backend" experiment's 2x wins at the changed sizes are consistent
-with this table; its "1.8x regressions at unrelated larger sizes" were also
-measured unpinned, so scheduling noise is the leading hypothesis for them —
-the post-reroute pinned rerun of this matrix is the check: unchanged AVX arms
-holding their times refutes cross-arm codegen coupling on this diff.
+The relabelling is a reproduction, not a reinterpretation: the corrected
+efficiency-core column matches the superseded `P` column cell for cell
+(128: 1.452 vs 1.46; 256: 0.989 vs 0.99; 512: 0.831 vs 0.84; 1024: 1.474 vs
+1.53) on a *different* efficiency core from the one originally measured.
+
+One result does not reduce to "the optimizer beats the intrinsics", and it
+blocks the retirement decision: **the AVX arm is absolutely slower on a
+performance core than on an efficiency core.** At 512 f64 it takes 7527 ns on
+cpu 1 against 3126 ns on cpu 3, while the scalar arm shows the normal ordering
+(1697 vs 2591 ns). Same binary, interleaved in one run, reproduced across three
+runs and two processor pairs. No mechanism is established; a backend that
+inverts the core hierarchy is showing a microarchitectural pathology, and
+retiring it on an unexplained measurement would repeat the error this section
+is correcting. First step of the reopened item.
+
+The both-core-consistent exception is unchanged and re-verified: f64 N = 256
+and 512 are the only sizes where the scalar stages beat the AVX stages on
+**both** classes (256: 0.271 / 0.989; 512: 0.225 / 0.831), and they remain
+routed to the scalar stages. No production routing changed by this correction.
 
 ## Stage fusion pays on the kernel, and the end-to-end census cannot see it (2026-08-26) <a id="stage-fusion"></a>
 
