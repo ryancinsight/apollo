@@ -1,5 +1,34 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [patch] [perf] — todo
+
+- **Finding (EcoQoS probe, 2026-09-01, this host, High performance plan):**
+  2000 unpinned `forward_complex_inplace` calls on the 4096x16 batched shape
+  landed on **all 24 processors** — 54% on the 16 efficiency cores, 45% on the
+  8 performance cores before the throttling opt-out; 49%/50% after. Median
+  154 us, **p90 372-407 us (2.4-2.6x median)**. The census's `engine_census`
+  numbers, and every comparison table built from them (apollo vs rustfft vs
+  phastft), are therefore a scheduler-dependent blend of two core classes
+  with a fat tail, not a property of the engines. Pinned probes elsewhere in
+  the crate already select a processor by queried class (themis); the census
+  does not.
+- **Why it matters:** a blend's median moves with whatever share of calls the
+  scheduler happens to place on each class in that run. Two runs of the same
+  binary can disagree by the inter-class latency ratio without any code
+  change — the "process-dependent anomaly" class ADR 0039 attributed to
+  EcoQoS is exactly what a two-class blend produces on its own.
+- **Outcome:** census arms run pinned to a processor selected by queried
+  efficiency class, reporting per-class rows (highest class as the headline,
+  lowest class alongside), or the census documents that it is deliberately
+  measuring the unpinned scheduler blend and its tables say so. Default
+  recommendation: pin, and report both classes, matching the pinned probes.
+- **Acceptance oracle:** the same census binary run twice reports headline
+  medians whose spread is inside the derived per-class noise bound rather
+  than the inter-class ratio; `landed` processor class is asserted, not
+  assumed, for every timed arm.
+- **Non-goals:** the power-throttling opt-out — its premise is handled under
+  ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01.
+
 ## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — review 2026-09-01 (decision: author)
 
 - **Reframed 2026-09-01:** #241 restored per-site `allow(..., reason)` at both sites before this landed, so main no longer needs #242 to be green. #242 stands as the no-suppression, convention-matching alternative; accepting or closing it is the author's call, tradeoff stated once in the PR body.
