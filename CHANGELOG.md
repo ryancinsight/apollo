@@ -54,6 +54,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] `apollo-fft` now uses Hermes' hardware-only exact-width
+  selector for the planar combine when Apollo's existing scalar loop already
+  owns the portable fallback. The unchanged local optimized `kernel_strategy`
+  executable shrinks from 8,192,512 to 8,184,832 bytes; direct-formula values
+  and zero-allocation warmed f32 N = 16,384/32,768 execution are unchanged.
+  Paired latency measurements were inconclusive, so this is a linked-footprint
+  result rather than a throughput claim.
 - [patch] [perf] `apollo-fft` now combines the two planar halves of the
   N = 32,768 four-step route through one Hermes lane kernel, using exact eight
   lanes for f32 when available, then exact four lanes, then the unchanged

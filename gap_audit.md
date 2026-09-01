@@ -1,3 +1,26 @@
+## Portable exact-width fallback was linked behind a hardware-only probe (2026-08-31) <a id="hardware-lane-link-footprint"></a>
+
+Apollo's planar combine tries exact eight lanes, then exact four lanes, before
+running its own scalar loop. Hermes' existing `vectorize_lanes` contract treats
+its portable scalar backend as an exact-width capability, so the second probe
+could instantiate a portable four-lane kernel even though Apollo immediately
+owns the same fallback decision. The exact Linux PR #219 artifact retained the
+unused `call_scalar_in_avx2_frame` specialization at 5,080 bytes.
+
+Hermes PR #110 / merge `363c407d` adds a hardware-only exact-width selector
+without changing the existing portable API. Apollo now uses that selector at
+both combine probes. AVX-512-to-AVX2 and NEON hardware priority remains in the
+provider; absence still reaches the unchanged Apollo scalar loop before any
+kernel mutation. The arithmetic, route, and benchmark body are unchanged.
+
+On the local Windows toolchain, the unchanged optimized `kernel_strategy`
+executable falls from 8,192,512 to 8,184,832 bytes, a 7,680-byte reduction.
+The direct-formula oracle passes 1/1, and the warmed f32 N = 16,384/32,768
+census passes 1/1 with zero global allocations, zero direct Mnemosyne
+allocations, and zero retained bytes. Two paired N = 64/256 measurements are
+inconclusive; this result establishes linked code-footprint reduction only and
+does not resolve the hosted latency regression.
+
 ## Quarter-turn twiddle reuse regresses the final base-128 sink (2026-08-31) <a id="base128-quarter-turn"></a>
 
 Three exact-processor comparisons on the merged base-128 and fused-sink route

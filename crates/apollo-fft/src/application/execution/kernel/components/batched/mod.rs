@@ -975,8 +975,23 @@ pub(crate) fn combine_planar_halves<T>(
     let bits = m.trailing_zeros();
     sect!("combine", {
         let twiddle_lanes = bytemuck::cast_slice(twiddles);
-        let handled = if T::TRANSPOSE_LANES == 8 {
-            hermes_simd::vectorize_lanes::<8, T, _>(boundary::CombinePlanarHalves {
+        let handled =
+            if T::TRANSPOSE_LANES == 8 {
+                hermes_simd::vectorize_hardware_lanes::<8, T, _>(boundary::CombinePlanarHalves {
+                    even_re: e_re,
+                    even_im: e_im,
+                    odd_re: o_re,
+                    odd_im: o_im,
+                    twiddles: twiddle_lanes,
+                    low: bytemuck::cast_slice_mut(&mut *low),
+                    high: bytemuck::cast_slice_mut(&mut *high),
+                    m,
+                    stride,
+                })
+                .unwrap_or(false)
+            } else {
+                false
+            } || hermes_simd::vectorize_hardware_lanes::<4, T, _>(boundary::CombinePlanarHalves {
                 even_re: e_re,
                 even_im: e_im,
                 odd_re: o_re,
@@ -987,21 +1002,7 @@ pub(crate) fn combine_planar_halves<T>(
                 m,
                 stride,
             })
-            .unwrap_or(false)
-        } else {
-            false
-        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::CombinePlanarHalves {
-            even_re: e_re,
-            even_im: e_im,
-            odd_re: o_re,
-            odd_im: o_im,
-            twiddles: twiddle_lanes,
-            low: bytemuck::cast_slice_mut(&mut *low),
-            high: bytemuck::cast_slice_mut(&mut *high),
-            m,
-            stride,
-        })
-        .unwrap_or(false);
+            .unwrap_or(false);
 
         if !handled {
             for row in 0..m {
