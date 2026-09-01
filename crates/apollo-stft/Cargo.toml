@@ -45,3 +45,7 @@ workspace = true
 name = "stft_bench"
 harness = false
 required-features = ["wgpu"]
+
+[[bench]]
+name = "stft_cpu_forward"
+harness = false

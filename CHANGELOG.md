@@ -54,6 +54,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] `apollo-mellin` passes real log-grid samples directly to
+  Hermes' real-by-interleaved-complex reduction instead of retaining a second
+  2N-lane f64 scratch buffer. This removes 16N retained bytes per active worker
+  while preserving the scalar formula, weight generation, Moirai scheduling,
+  thresholds, and public Mellin/Leto contracts. A fresh-thread census observes
+  one first-use allocation for the remaining 2N weight buffer, zero warmed row
+  allocations, and a match with an independent complex sum. Two controlled
+  same-provider Windows AVX2 pairs
+  reduce unchanged public forward-spectrum medians by 1.96%/1.49% at N = 128
+  and 1.46%/0.83% at N = 256; the below-threshold N = 64 control moves
+  -0.28%/+0.82%. No AArch64, AVX-512, or cross-machine timing is claimed.
 - [patch] [perf] Multidimensional CPU FFT plans now delegate batched complex
   axis transposes to Leto Ops, which selects allocation-free Hermes register
   tiles for the measured high-count small-matrix regime and retains Leto's

@@ -1,5 +1,33 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 [perf] — Codex
+
+- [x] Commit the unchanged public Mellin forward-spectrum benchmark and record
+      exact N = 64 control plus N = 128/256 candidate baselines.
+- [x] Implement one generic Hermes real-by-interleaved-complex dot with exact
+      preflight, scalar/native tails, differential values, and isolated timing.
+- [x] Delete Apollo's retained real-lane materialization only if two unchanged
+      complete-path comparisons improve with a neutral control; prove the 16N
+      retained-byte removal and warm allocation contract.
+- [x] Merge provider head `59c89431` through Hermes PR #113 as `2e993503`; pass
+      exact-Git consumer Clippy, 27/27 debug and release Nextest, Rustdoc,
+      doctest, benchmark smoke, and the 36-source shadow-lock check.
+- [ ] Integrate the canonical Apollo lock after its peer lease discharges, pass
+      exact Apollo review, and merge without squash; otherwise remove the
+      candidate and retain the negative instrument.
+
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 [perf] — Codex
+
+- [x] Commit the unchanged CPU STFT complete-plan benchmark and record an exact
+      pre-adoption baseline with frame-length and signal-length controls.
+- [x] Reject the consumer because two adjacent complete-path comparisons do not
+      separate target movement from the scalar control; remove all experimental
+      source and retain the benchmark instrument only.
+- [x] Record the source-equivalent value, warm-allocation, and analytical
+      16,384-byte-per-active-worker evidence with its revision-attribution limit.
+- [ ] Pass exact benchmark smoke, warning-denied all-target Clippy, format/diff,
+      independent review, and merge the instrument without squash.
+
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [perf] — Codex
 
 - [x] Record exact scalar-Leto isolated and unchanged 2-D/3-D entry baselines.
@@ -9,8 +37,8 @@
       target-feature safety, no hot capability probe, and bounded size growth.
 - [x] Reproduce paired isolated and full-path measurements, synchronize durable
       evidence, and pass exact local gates at source `9ac833cd`.
-- [ ] Complete independent hosted gates and merge without squash; provider PR
-      #135 is merged as `060eb7eb`.
+- [x] Complete independent hosted gates and merge without squash: provider PR
+      #135 merged as `060eb7eb`; Apollo PR #230 merged as `17bad886`.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
 
@@ -2334,12 +2362,12 @@ The source theorem is SSOT: all callers name
 - Evidence: value-semantic NUFFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
 
 ## Mellin log-frequency Hermes complex dot routing [patch]
-- [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::real_interleaved_complex_dot_runtime` without real-lane materialization.
 - [x] Routed threshold-sized inverse log-frequency spectrum rows through the same Hermes complex dot boundary and retained the real component required by the IDFT contract.
-- [x] Materialized one shared real interleaved input lane buffer or complex spectrum lane buffer per threshold-sized transform and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
+- [x] Deleted the forward real-lane buffer, retained the inverse complex spectrum lane buffer, and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
 - [x] Kept scalar DFT/IDFT row formulas for smaller spectra and as the value-semantic formula reference.
 - [x] Preserved existing Moirai disjoint output-row scheduling and public Leto/slice spectrum execution contracts.
-- [x] Added direct threshold-path tests for Hermes forward row parity, Hermes inverse row parity, and twiddle-lane materialization.
+- [x] Added direct threshold-path tests for Hermes forward/inverse row parity, twiddle-lane materialization, and a fresh-thread census that observes one first-use retained weight buffer and zero warmed row allocations.
 - [x] Verification: `cargo fmt --check`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
 
