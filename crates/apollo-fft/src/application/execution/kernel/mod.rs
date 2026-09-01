@@ -31,6 +31,20 @@ pub mod benchmark_kernels;
 
 // Owns the test binary's global allocator; allocation attribution needs no
 // pinning, so unlike the pinned probes this is not Windows-gated.
+// Selects the pinned probes' measurement processors by queried core class and
+// measured cost. Not Windows-gated: the non-Windows arm reports no class
+// information, which the probes handle by skipping.
+#[cfg(test)]
+// The class query has a Windows backend only; every other target's arm
+// reports `None`, leaving the selection types below it unconstructed there.
+#[cfg_attr(
+    not(windows),
+    expect(
+        dead_code,
+        reason = "processor-class discovery is Windows-backed; other targets' probes skip"
+    )
+)]
+pub(crate) mod core_class;
 #[cfg(test)]
 mod retained_footprint;
 #[cfg(test)]

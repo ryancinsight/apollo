@@ -4,6 +4,22 @@
 - **Date:** 2026-08-26
 - **Class:** [patch] [arch]
 - **Item:** `ATLAS-APOLLO-BATCHED-1D-UNREACHABLE-2026-08-26`
+- **Revision 2026-09-01:** every `P-core` / `E-core` label below is inverted.
+  The instruments that produced them pinned to cpu 2 and cpu 12 and labelled
+  by `landed < 8`; Windows reports this host's performance set as
+  `{0, 1, 10, 11, 12, 13, 22, 23}`, so the column headed `P-core` was measured
+  on an efficiency core and vice versa (ADR
+  [0043](0043-measurement-core-class-is-queried.md)). **The routing decision
+  stands**: it rests on four-step winning on *both* core types, which is
+  label-independent, and the tell was visible in the table itself — the
+  "E-core" four-step (13.2 us) beating the "P-core" one (16.6 us). What does
+  not survive is the EcoQoS root-cause narrative in Context: "executing
+  exclusively on E-cores (CPUs 8 through 21)" describes a range that contains
+  four performance cores, so that observation does not establish
+  efficiency-core placement. Swap the two column headers and the two rows of
+  every pinned table below; single-core "P-core" attributions were measured on
+  an efficiency core. Tracked as
+  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`.
 
 ## Context
 
