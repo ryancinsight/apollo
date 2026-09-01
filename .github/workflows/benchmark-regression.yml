@@ -173,6 +173,11 @@ jobs:
             install -m 755 \
               "$CARGO_TARGET_DIR/release/apollo-bench-compare" \
               benchmark-executables/apollo-bench-compare
+            # The identity job has no source checkout; the code-section
+            # comparer rides in this archive like the compare tool does.
+            install -m 755 \
+              apollo-measurement/scripts/bench_executable_identity.py \
+              benchmark-executables/bench_executable_identity.py
           fi
 
           for benchmark in kernel_strategy prime_compose half_cyclic_rader; do
@@ -233,11 +238,18 @@ jobs:
             sha256sum \
               "benchmark-executables/baseline/$benchmark" \
               "benchmark-executables/candidate/$benchmark"
-            if ! cmp --silent \
+            # Whole-file identity never holds across the two build directories
+            # (symbol hashes, build id, .strtab follow the path), so compare the
+            # code sections. 0 = identical code, 1 = differs, else malformed.
+            rc=0
+            python3 benchmark-executables/bench_executable_identity.py \
               "benchmark-executables/baseline/$benchmark" \
-              "benchmark-executables/candidate/$benchmark"; then
-              measurements_required=true
-            fi
+              "benchmark-executables/candidate/$benchmark" || rc=$?
+            case "$rc" in
+              0) ;;
+              1) measurements_required=true ;;
+              *) echo "::error::bench_executable_identity failed on $benchmark (exit $rc)"; exit "$rc" ;;
+            esac
           done
           echo "measurements_required=$measurements_required" >> "$GITHUB_OUTPUT"
 
