@@ -29,19 +29,26 @@ use std::f64::consts::TAU;
 /// twiddle generation.
 const TOLERANCE_FACTOR: f64 = 16.0;
 
+/// Each restarted untangling block advances its twiddle at most seven times,
+/// and a complex multiply has six rounded scalar operations, so `42u` bounds
+/// the recurrence's additional error independently of `N`.
+const RESTARTED_RECURRENCE_FACTOR: f64 = 42.0;
+
 fn tolerance(n: usize, l1: f64) -> f64 {
     let stages = f64::from(u32::try_from(n.trailing_zeros()).expect("power of two fits u32"));
-    TOLERANCE_FACTOR * stages * (f64::EPSILON / 2.0) * l1
+    (TOLERANCE_FACTOR * stages + RESTARTED_RECURRENCE_FACTOR) * (f64::EPSILON / 2.0) * l1
 }
 
 fn tolerance_f32(n: usize, l1: f32) -> f32 {
     let stages =
         f32::from(u16::try_from(n.trailing_zeros()).expect("power-of-two stage count fits u16"));
-    // Each restarted block advances its twiddle at most seven times. A complex
-    // multiply has six rounded scalar operations, so 42u bounds the additional
-    // recurrence error independently of N.
-    const RESTARTED_RECURRENCE_FACTOR: f32 = 42.0;
-    (16.0 * stages + RESTARTED_RECURRENCE_FACTOR) * (f32::EPSILON / 2.0) * l1
+    // The same derivation as the f64 bound, in native precision.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "42 and 16 are exact in f32"
+    )]
+    let (recurrence, factor) = (RESTARTED_RECURRENCE_FACTOR as f32, TOLERANCE_FACTOR as f32);
+    (factor * stages + recurrence) * (f32::EPSILON / 2.0) * l1
 }
 
 fn signal(n: usize) -> Vec<f64> {

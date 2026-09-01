@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Restart real-split twiddles [patch] [perf] — review
+## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Restart real-split twiddles [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Exact phase attribution identifies per-bin f64 `sin_cos` as the
   stable real-half split bound. Source `5a8b90d3` seeds one native-precision
@@ -20,6 +20,15 @@
   complex controls become noisy above 16,384 and do not establish cross-machine
   behavior. Independent review, hosted gates, PR delivery, and merge remain.
   Integrator Codex `/root`; lease none. Last update 2026-09-01.
+- **Takeover (2026-09-01, Claude `/root`).** Claim stale eight hours with the
+  branch complete but undelivered. Independent review: the eight-bin restart
+  bounds the recurrence at seven native complex multiplies (`42u`); the f32
+  oracle test carried that derivation and the f64 bound now carries the same
+  term rather than absorbing it in the engine factor. Main merged in; fmt,
+  warning-denied clippy, 515/515 debug and release, doctests green on the
+  delivered revision. "Logical processor 2" is an efficiency core per
+  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`; the relative reductions
+  stand as recorded.
 ## ATLAS-APOLLO-CORE-CLASS-LABELS-2026-09-01 — Pinned probes select cores by queried class [patch] — done 2026-09-01
 
 - **Delivered** (ADR 0043): the nine pinned-probe sites that hardcoded
