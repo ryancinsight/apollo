@@ -49,7 +49,9 @@
 - **Limit stated:** identity was shown on the Windows/MSVC build; CI's Linux
   artifacts should be diffed the same way as the first step of part 2.
 
-## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [patch] [perf] — todo
+## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [patch] [perf] — in-progress 2026-09-01
+
+- **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `perf/apollo-bench-measurement-processor`; lease: `crates/apollo-bench/{Cargo.toml,src/**}`, `crates/apollo-fft/benches/{engine_census,rustfft_comparison}.rs`, this entry. Consolidation: `rustfft_comparison` already hand-rolls a processor binding (env override, else the current processor — class unknown); the census is the second occurrence, so selection-by-queried-class lands once in `apollo-bench` and both benches call it.
 
 - **Finding (EcoQoS probe, 2026-09-01, this host, High performance plan):**
   2000 unpinned `forward_complex_inplace` calls on the 4096x16 batched shape
