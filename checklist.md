@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 [perf] — Codex
+
+- [ ] Commit the unchanged public Mellin forward-spectrum benchmark and record
+      exact N = 64 control plus N = 128/256 candidate baselines.
+- [ ] Implement one generic Hermes real-by-interleaved-complex dot with exact
+      preflight, scalar/native tails, differential values, and isolated timing.
+- [ ] Delete Apollo's retained real-lane materialization only if two unchanged
+      complete-path comparisons improve with a neutral control; prove the 16N
+      retained-byte removal and warm allocation contract.
+- [ ] Pass provider/consumer exact gates, independent review, and merge without
+      squash; otherwise remove the candidate and retain the negative instrument.
+
 ## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 [perf] — Codex
 
 - [x] Commit the unchanged CPU STFT complete-plan benchmark and record an exact

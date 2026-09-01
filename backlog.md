@@ -1,9 +1,16 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — review
+## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 — Remove forward-spectrum lane materialization [patch] [perf] — in progress
+
+- **Outcome.** Measure and, only on two reproduced complete-path wins, add one Hermes real-by-interleaved-complex dot provider so Apollo Mellin deletes its retained `[sample, 0]` lane buffer and reads N real input lanes instead of 2N interleaved lanes in every direct-DFT row.
+- **Scope / non-goals.** Confine Apollo production source to CPU forward log-frequency spectra, its exact value/allocation tests, one complete public-plan benchmark, and synchronized PM/docs; confine Hermes to the generic dot kernel, runtime dispatch, tests, and isolated benchmark. Preserve inverse Mellin, resampling, weight generation, Moirai scheduling, thresholds, public Apollo APIs, workloads, assertions, and timeouts.
+- **Acceptance.** Validate `weights.len() == 2 * real.len()` before work; preserve non-conjugated complex arithmetic, empty/ragged SIMD tails, f32/f64 and scalar/native parity; remove the 16N-byte real-lane scratch role; retain the consumer only when two unchanged public forward-spectrum comparisons improve with a neutral below-threshold control. Pass exact provider/consumer value, allocation, host/AArch64, debug/release, Rustdoc/doctest, standalone-lock, SemVer, format/diff, and independent-review gates.
+- **Risk / dependency.** [patch] [perf], additive Hermes surface only if consumed. Integrator `/root`; lease `/root` on Hermes complex-dot dispatch/tests/bench/PM and Apollo Mellin CPU kernel/tests/new benchmark plus this item's PM/doc hunks. Last update 2026-09-01.
+
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — blocked
 
 - **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
-- **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Lease none.
+- **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` await the peer-owned standalone-lock lease discharge before the mandatory pre-push guard can run; re-open trigger: canonical lock regeneration. Lease none.
 
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
