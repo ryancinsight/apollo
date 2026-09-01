@@ -6,16 +6,19 @@
       100-sample runs with f64 and N = 64/128 controls.
 - [x] Falsify the initial composite-cache hypothesis against the actual
       `ShortWinograd` strategy before retaining any production change.
-- [ ] Attribute the generated `(3, 32)` gather, DFT-32 rows, DFT-3 columns, and
+- [x] Attribute the generated `(3, 32)` gather, DFT-32 rows, DFT-3 columns, and
       scatter, then test the bounded `(32, 3)` orientation alternative.
-- [ ] Retain only a candidate with a reproduced complete-path win; if column
-      DFTs remain binding, add the minimum Hermes lane primitive upstream.
-- [ ] Prove direct-DFT, normalized/unnormalized inverse, exact CRT mapping,
+- [x] Reject the slower value-correct `(32,3)` orientation and retain one
+      Hermes-backed target frame around the measured three-row DFT-32 batch.
+- [x] Prove direct-DFT, normalized/unnormalized inverse, exact CRT mapping,
       warmed zero allocation, f32/f64 parity, and non-x86 behavior.
-- [ ] Keep two adjacent complete-path comparisons green with f64 N = 96 and
+- [x] Keep two adjacent complete-path comparisons green with f64 N = 96 and
       f32/f64 N = 64/128 controls neutral; reject any non-reproducing source.
-- [ ] Pass focused debug/release, warning-denied host/AArch64, Rustdoc, doctest,
-      formatting, allocation, lock, independent review, and hosted gates.
+- [x] Pass 508/508 debug and release tests, warning-denied all-target/all-feature
+      host Clippy and AArch64 checks, Rustdoc, doctest, formatting, the isolated
+      allocation census, assembly inspection, and the 36-source lock gate.
+- [ ] Pass exact staged-diff review and hosted gates, then merge the item
+      without squash and record the delivery revisions.
 
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
 

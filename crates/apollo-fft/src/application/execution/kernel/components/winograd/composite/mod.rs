@@ -1,5 +1,6 @@
 mod medium;
 pub(crate) mod power;
+mod radix_four_eight;
 mod small;
 
 pub(crate) use medium::{
@@ -9,6 +10,7 @@ pub(crate) use medium::{
     dft96_impl, dft99_impl,
 };
 pub(crate) use power::{dft128_impl, dft16_impl, dft32_impl, dft64_impl};
+pub(crate) use radix_four_eight::{try_dft32_hardware, try_dft32_rows_hardware};
 pub(crate) use small::{
     dft10_impl,
     dft12_impl,

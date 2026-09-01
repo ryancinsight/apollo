@@ -110,10 +110,41 @@ pub(crate) fn good_thomas_function(
     let fn_name = format_ident!("dft{}_impl", n);
     let stride = (n2 * inv_n2_n1) % n;
 
+    let scalar_bound = (n2 == 32).then(|| {
+        quote! {
+            + crate::application::execution::kernel::components::winograd::ShortWinogradScalar
+        }
+    });
+    let transform_rows = if n2 == 32 {
+        quote! {
+            // SAFETY: the gather initialized all N1 × 32 elements, and the
+            // array view covers that exact contiguous scratch region.
+            let rows = unsafe {
+                &mut *(scratch_ptr as *mut [[eunomia::Complex<F>; 32]; #n1])
+            };
+            crate::application::execution::kernel::components::winograd::short_winograd::dft32_rows::<
+                F,
+                #n1,
+                INVERSE,
+            >(rows);
+        }
+    } else {
+        quote! {
+            // Transform rows using zero-cost pointer cast
+            for i1 in 0..#n1 {
+                let row_start = i1 * #n2;
+                let row = unsafe { &mut *(scratch_ptr.add(row_start) as *mut [eunomia::Complex<F>; #n2]) };
+                unsafe {
+                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
+                }
+            }
+        }
+    };
+
     quote! {
         #inline_attr
         #[allow(unused_variables, unused_mut)]
-        pub(crate) unsafe fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>, const INVERSE: bool>(
+        pub(crate) unsafe fn #fn_name<F: crate::application::execution::kernel::components::winograd::traits::WinogradScalar + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1> + crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2> #scalar_bound, const INVERSE: bool>(
             data: &mut [eunomia::Complex<F>; #n],
         ) {
             // Use MaybeUninit to avoid zero-initialization overhead
@@ -135,14 +166,7 @@ pub(crate) fn good_thomas_function(
                 }
             }
 
-            // Transform rows using zero-cost pointer cast
-            for i1 in 0..#n1 {
-                let row_start = i1 * #n2;
-                let row = unsafe { &mut *(scratch_ptr.add(row_start) as *mut [eunomia::Complex<F>; #n2]) };
-                unsafe {
-                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n2>>::dft::<INVERSE>(row);
-                }
-            }
+            #transform_rows
 
             // Transform columns & scatter output using incremental index calculation (no runtime modulo)
             let inv_n1_n2 = #inv_n1_n2;

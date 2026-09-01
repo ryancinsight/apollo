@@ -10,6 +10,69 @@ use super::radix::odd_prime_pair::{dft_pair_impl, dft_pair_impl_reduced, PrimePa
 use super::WinogradScalar;
 use eunomia::{Complex32, Complex64};
 
+mod private {
+    pub trait Dft32Dispatch {
+        fn dft32<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 32])
+        where
+            Self: Sized;
+
+        fn dft32_rows<const ROWS: usize, const INVERSE: bool>(
+            data: &mut [[eunomia::Complex<Self>; 32]; ROWS],
+        ) where
+            Self: Sized;
+    }
+
+    impl Dft32Dispatch for f32 {
+        #[inline]
+        fn dft32<const INVERSE: bool>(data: &mut [eunomia::Complex32; 32]) {
+            if !super::super::composite::try_dft32_hardware::<INVERSE>(data) {
+                super::super::dft32_impl::<f32, INVERSE>(data);
+            }
+        }
+
+        #[inline]
+        fn dft32_rows<const ROWS: usize, const INVERSE: bool>(
+            data: &mut [[eunomia::Complex32; 32]; ROWS],
+        ) {
+            if !super::super::composite::try_dft32_rows_hardware::<ROWS, INVERSE>(data) {
+                for row in data {
+                    super::super::dft32_impl::<f32, INVERSE>(row);
+                }
+            }
+        }
+    }
+
+    impl Dft32Dispatch for f64 {
+        #[inline]
+        fn dft32<const INVERSE: bool>(data: &mut [eunomia::Complex64; 32]) {
+            super::super::dft32_impl::<f64, INVERSE>(data);
+        }
+
+        #[inline]
+        fn dft32_rows<const ROWS: usize, const INVERSE: bool>(
+            data: &mut [[eunomia::Complex64; 32]; ROWS],
+        ) {
+            for row in data {
+                super::super::dft32_impl::<f64, INVERSE>(row);
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn dft32<F: ShortWinogradScalar, const INVERSE: bool>(
+    data: &mut [eunomia::Complex<F>; 32],
+) {
+    <F as private::Dft32Dispatch>::dft32::<INVERSE>(data);
+}
+
+#[inline]
+pub(crate) fn dft32_rows<F: ShortWinogradScalar, const ROWS: usize, const INVERSE: bool>(
+    data: &mut [[eunomia::Complex<F>; 32]; ROWS],
+) {
+    <F as private::Dft32Dispatch>::dft32_rows::<ROWS, INVERSE>(data);
+}
+
 macro_rules! impl_short_winograd_prime_pair {
     ($ty:ty, $(($method:ident, $n:expr, $h:expr)),+ $(,)?) => {
         $(
@@ -40,7 +103,7 @@ macro_rules! impl_short_winograd_prime_pair_reduced {
     };
 }
 
-pub trait ShortWinogradScalar: WinogradScalar {
+pub trait ShortWinogradScalar: WinogradScalar + private::Dft32Dispatch {
     fn dft2(data: &mut [eunomia::Complex<Self>; 2]);
     fn dft3<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 3]);
     fn dft4<const INVERSE: bool>(data: &mut [eunomia::Complex<Self>; 4]);
