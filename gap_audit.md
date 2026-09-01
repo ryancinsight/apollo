@@ -1,3 +1,29 @@
+## Quarter-turn twiddle reuse regresses the final base-128 sink (2026-08-31) <a id="base128-quarter-turn"></a>
+
+Three exact-processor comparisons on the merged base-128 and fused-sink route
+place f64 N = 256 at 1.2533--1.2564x RustFFT and N = 512 at
+1.2403--1.2475x. Three release phase runs attribute N = 512 to
+116.2--116.5 ns of gather, 725.9--726.9 ns of base transforms, and
+450.7--459.2 ns of fused-combine residual. The final sink is therefore the
+largest non-base phase.
+
+The two outer twiddle vectors obey the exact identity
+`W_512^(j+128) = W_512^j * (-i)` forward and `* (+i)` inverse. A bounded
+candidate removed the second table load and derived the high product through
+Hermes' register-resident quarter-turn operation. Direct-reference and
+normalization tests passed 4/4 in both debug and release, but the performance
+model was false: three candidate phase runs moved the complete N = 512 route
+to 1.3560--1.3728 microseconds. The unchanged comparison then reported
+1.357692 microseconds against the 1.298743--1.308291 microsecond entry range,
+while its RustFFT control remained at 1.047574 microseconds. N = 256 remained
+inside its entry band.
+
+The candidate is rejected and no production source is retained. The result is
+local Windows AVX2 evidence on logical processor 2. It establishes the
+direction of this exact candidate, not whether instruction count, dependency
+length, or register allocation caused the loss; a future attempt requires
+code-generation attribution before editing the sink again.
+
 ## Exact-processor, retained-state FFT comparison (2026-08-31) <a id="comparison-sweep-coverage"></a>
 
 Apollo's default RustFFT comparison stopped at 512 even though production has
