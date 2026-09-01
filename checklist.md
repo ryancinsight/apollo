@@ -28,7 +28,8 @@
       package Nextest, warning-denied all-target/all-feature Clippy, AArch64
       check, doctest, Rustdoc, format, diff, and 36-source standalone lock gate.
 - [x] Obtain independent exact-artifact GREEN review at PM head `5a6992cb`.
-- [ ] Merge PR #217 without squash after repository checks pass.
+- [x] Merge PR #217 without squash as `5bf93047` after every repository check
+      passes.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 [perf] — Codex
 

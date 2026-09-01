@@ -235,33 +235,12 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — review
+## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — done 2026-08-31
 
-- **Outcome.** The 126.293--154.510 us band did not reproduce in the production
-  route. Reject a speculative kernel change and retain exact N=32,768 phase
-  coverage without changing benchmark or production semantics.
-- **Scope / non-goals.** Use the retained comparison and interleaved release
-  probe to isolate plan dispatch, copy, base kernel, combine, and host-state
-  contributions on logical processor 2. Change production code only after a
-  phase-localized cause reproduces; do not tune the benchmark, drop N=32,768,
-  raise its budget, or claim that affinity controls frequency and interrupts.
-- **Acceptance.** A same-binary, exact-processor phase attribution identifies
-  the varying production component against stable RustFFT and f32 controls. A
-  retained correction preserves direct-DFT/round-trip values and zero warm
-  allocations, then improves the complete unchanged 100-sample comparison in
-  two adjacent runs with a neutral 16,384 or 65,536 control. Reject a candidate
-  whose phase or complete-path confidence intervals do not reproduce.
-- **Risk / dependencies.** [patch] [perf]. Depends on the retained-state
-  comparison from `ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31`. Source/audit
-  candidate `3d3a7d37` extends the retained phase probe; production is unchanged.
-- **Integrator / lease:** `/root`; lease none. Four exact-processor release
-  phase runs span 2.9% at both N=16,384 and N=32,768. Two adjacent unchanged
-  comparisons report Apollo f64 N=32,768 medians of 126.314 and 125.014 us.
-  Warning-denied all-target/all-feature Clippy, 510/510 package Nextest,
-  focused probe, AArch64 check, doctest, Rustdoc, format, diff, and standalone
-  36-source lock gates pass. Independent exact-object review is GREEN with
-  timing provenance limited to supplied evidence; merge remains. Last update
-  2026-08-31.
+- **Delivered:** source `3d3a7d37`, PR #217, merge `5bf93047`; retained phase
+  coverage falsifies the broad variance without changing production FFT code.
+- **Evidence:** independent GREEN; hosted lock/workspace/bindings/benchmark
+  gates green; exact local package, cross-target, docs, and lock gates green.
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
 
