@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 [perf] — Codex
+
+- [x] Record three exact-processor planar-pass runs at 16,384/32,768 with f64
+      and adjacent-size controls; identify a reproducible dominant phase.
+- [x] Build only the phase correction supported by the attribution, retaining
+      one canonical scalar-generic implementation and existing route semantics.
+- [x] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
+      allocation; improve two unchanged comparisons with neutral controls.
+- [x] Commit exact source `d1dda1bf`; pass warning-denied, debug/release package,
+      cross-target, documentation, allocation, and 36-source standalone-lock
+      gates; discharge the source/test/documentation lease.
+- [ ] Obtain independent exact-artifact review, pass hosted gates, and merge the
+      resulting PR without squash.
+
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
 
 - [x] Generalize the retained phase instrument across f32/f64 without

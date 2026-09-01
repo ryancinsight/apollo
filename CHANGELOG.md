@@ -54,6 +54,17 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] `apollo-fft` now combines the two planar halves of the
+  N = 32,768 four-step route through one Hermes lane kernel, using exact eight
+  lanes for f32 when available, then exact four lanes, then the unchanged
+  scalar formula. Three exact-processor Windows AVX2 runs reduced the f32
+  combine median from 57,172 to 34,269 cycles and the complete instrumented
+  route median from 256,514 to 234,310 cycles. Two unchanged 100-sample
+  comparisons report 66.37/66.42 microsecond Apollo medians against
+  66.26/67.94 microseconds for RustFFT. Warm f32 N = 16,384/32,768 execution
+  remains allocation-free through the global allocator and direct Mnemosyne
+  hooks. AArch64 is compile-only evidence; no AVX-512 or cross-machine result
+  is claimed.
 - [patch] [perf] `apollo-fft` now requests Hermes' exact eight-lane capability
   for f32 planar four-step transposes, with the existing exact four-lane and
   scalar routes retained as fallbacks; f64 remains four-lane. On the measured

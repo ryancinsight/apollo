@@ -3,8 +3,10 @@
 //! The transpose and the batched stage set are verified separately from the
 //! assembled transform, so a failure localizes.
 
-use super::{four_step_batched, scratch_len, transpose_planes, BatchedPlanCache};
-use eunomia::Complex64;
+use super::{
+    combine_planar_halves, four_step_batched, scratch_len, transpose_planes, BatchedPlanCache,
+};
+use eunomia::{Complex32, Complex64};
 use std::f64::consts::TAU;
 
 #[test]
@@ -188,8 +190,6 @@ fn forward_then_inverse_recovers_the_input() {
 
 #[test]
 fn f32_forward_matches_the_direct_transform() {
-    use eunomia::Complex32;
-
     for k in [4u32, 6, 8] {
         let n = 1usize << k;
         let src64 = signal(n);
@@ -219,6 +219,121 @@ fn f32_forward_matches_the_direct_transform() {
             "N={n} f32: differs by {worst:.3e} > {bound:.3e}"
         );
     }
+}
+
+#[test]
+fn f32_n32768_public_plan_matches_an_impulse_and_round_trip() {
+    let n = 32_768usize;
+    let source_index = 13usize;
+    let source = Complex32::new(0.75, -0.25);
+    let mut actual = vec![Complex32::default(); n];
+    actual[source_index] = source;
+    let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+
+    plan.forward_complex_slice_inplace(&mut actual);
+
+    let stages = n.trailing_zeros() as f32;
+    // Each radix level contributes at most one complex twiddle multiply and
+    // two butterfly additions. Bounding each complex operation by sixteen
+    // roundoffs, then doubling for twiddle construction and comparison,
+    // gives 64 * log2(N) * epsilon * |source|.
+    let forward_bound = 64.0 * stages * f32::EPSILON * source.norm();
+    let forward_error = actual
+        .iter()
+        .enumerate()
+        .map(|(frequency, got)| {
+            let phase =
+                -core::f32::consts::TAU * ((frequency * source_index) % n) as f32 / n as f32;
+            let (sin, cos) = phase.sin_cos();
+            let expected = Complex32::new(
+                source.re.mul_add(cos, -(source.im * sin)),
+                source.re.mul_add(sin, source.im * cos),
+            );
+            (*got - expected).norm()
+        })
+        .fold(0.0_f32, f32::max);
+    assert!(
+        forward_error <= forward_bound,
+        "N={n} f32 impulse differs by {forward_error:.3e} > {forward_bound:.3e}"
+    );
+
+    plan.inverse_complex_slice_inplace(&mut actual);
+
+    // Forward and inverse each satisfy the bound above; normalization adds
+    // one exactly representable power-of-two scale at this length.
+    let round_trip_bound = 128.0 * stages * f32::EPSILON * source.norm();
+    let round_trip_error = actual
+        .iter()
+        .enumerate()
+        .map(|(index, got)| {
+            let expected = if index == source_index {
+                source
+            } else {
+                Complex32::default()
+            };
+            (*got - expected).norm()
+        })
+        .fold(0.0_f32, f32::max);
+    assert!(
+        round_trip_error <= round_trip_bound,
+        "N={n} f32 round trip differs by {round_trip_error:.3e} > {round_trip_bound:.3e}"
+    );
+}
+
+#[test]
+fn f32_planar_half_combine_matches_the_scalar_formula() {
+    let (m, stride) = (16usize, 24usize);
+    let half = m * m;
+    let plane = m * stride;
+    let mut even = vec![Complex32::default(); plane];
+    let mut odd = vec![Complex32::default(); plane];
+    let (even_re, even_im) = bytemuck::cast_slice_mut::<_, f32>(&mut even).split_at_mut(plane);
+    let (odd_re, odd_im) = bytemuck::cast_slice_mut::<_, f32>(&mut odd).split_at_mut(plane);
+    for row in 0..m {
+        for column in 0..m {
+            let index = row * stride + column;
+            let logical = (row * m + column) as f32;
+            even_re[index] = 0.25 + logical * 0.003;
+            even_im[index] = -0.5 + logical * 0.002;
+            odd_re[index] = 0.75 - logical * 0.001;
+            odd_im[index] = -0.125 + logical * 0.004;
+        }
+    }
+    let twiddles: Vec<Complex32> = (0..half)
+        .map(|index| {
+            let angle = -core::f32::consts::TAU * index as f32 / (2 * half) as f32;
+            let (sin, cos) = angle.sin_cos();
+            Complex32::new(cos, sin)
+        })
+        .collect();
+    let mut expected = vec![Complex32::default(); 2 * half];
+    let bits = m.trailing_zeros();
+    for row in 0..m {
+        let base = row * stride;
+        let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
+        for column in 0..m {
+            let index = dst + column;
+            let even_value = Complex32::new(even_re[base + column], even_im[base + column]);
+            let odd_value = Complex32::new(odd_re[base + column], odd_im[base + column]);
+            let rotated = odd_value * twiddles[index];
+            expected[index] = even_value + rotated;
+            expected[index + half] = even_value - rotated;
+        }
+    }
+
+    let mut actual = vec![Complex32::default(); 2 * half];
+    combine_planar_halves(&mut actual, &even, &odd, m, stride, &twiddles);
+
+    // One complex multiply followed by one add/sub accumulates at most eight
+    // unit roundoffs at this scale; the factor of two covers subnormal-free
+    // input scaling and the SIMD path's fused multiply-add rounding.
+    let bound = 16.0 * f32::EPSILON;
+    let worst = actual
+        .iter()
+        .zip(&expected)
+        .map(|(got, want)| (*got - *want).norm())
+        .fold(0.0_f32, f32::max);
+    assert!(worst <= bound, "combine error {worst:.3e} > {bound:.3e}");
 }
 
 #[test]
