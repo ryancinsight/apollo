@@ -1,5 +1,22 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 [perf] — Codex
+
+- [x] Deliver Hermes' hardware-only exact-width selector through PR #110 / merge
+      `363c407d`, preserving the existing portable `vectorize_lanes` contract.
+- [x] Route both planar-combine exact-width probes through the hardware-only
+      selector while retaining the existing scalar loop as the sole fallback.
+- [x] Preserve the focused direct-formula value oracle and warmed N = 16,384 /
+      32,768 allocation census: 1/1 each, zero global/direct-Mnemosyne
+      allocations and zero retained bytes.
+- [x] Compare unchanged optimized executables: 8,192,512 -> 8,184,832 bytes;
+      record paired N = 64/256 timings as inconclusive, with no latency claim.
+- [x] Pass host all-target/all-feature Clippy, 506/506 package Nextest, release
+      direct-formula, warning-denied AArch64, Rustdoc, doctest, unchanged
+      benchmark-smoke, formatting, diff, and standalone 36-source lock gates.
+- [ ] Commit the exact source and PM evidence, discharge the lease, obtain an
+      independent artifact verdict, and merge without squash.
+
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 [perf] — Codex
 
 - [x] Record three exact-processor current comparisons at f64 N = 256/512 with
@@ -27,9 +44,9 @@
       squash as `8ef1e5d3`; collect its exact hosted results.
 - [ ] Attribute the hosted four-of-four regressions in generic 64/256 and
       radix composite 38 without weakening the unchanged benchmark oracle.
-- [x] Consume Hermes PR #110 / `363c407d` hardware-only exact-width selection;
-      the unchanged optimized benchmark executable shrinks 7,680 bytes, while
-      pinned local timing remains inconclusive and carries no latency claim.
+- [x] Split Hermes PR #110 / `363c407d` hardware-only selection and its
+      7,680-byte linked-footprint reduction to
+      `ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31`; it carries no latency claim.
 - [ ] Retain only a source correction that keeps the N = 32,768 gain and clears
       two local paired comparisons plus the hosted regression check.
 
