@@ -3,7 +3,8 @@
 //! # Theorem: the CWT scale row is one circular cross-correlation
 //!
 //! The real-valued CWT coefficient produced by
-//! [`super::coefficient`](super::coefficient) is, for scale `s > 0` and shift
+//! [`coefficient`](crate::infrastructure::kernel::continuous::coefficient)
+//! is, for scale `s > 0` and shift
 //! `τ ∈ [0, n)`,
 //!
 //! ```text
