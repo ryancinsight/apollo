@@ -35,7 +35,9 @@ views, including offset views, operate on their backing block. Fortran-dense
 and general strided views assign once into reusable logical C-order staging,
 transform, and assign back; warmed staging allocates nothing. Row and
 depth-axis passes operate on chunks through Moirai, while non-contiguous axes
-transpose through Leto into plan-owned scratch.
+transpose through Leto Ops into plan-owned scratch. Leto selects exact Hermes
+register tiles for supported high-count small-matrix batches and retains its
+generic allocation-free assignment elsewhere.
 
 The typed CPU plan surface supports f64 storage/compute, f32 storage/compute,
 and mixed f16 storage with f32 compute. Caller-owned output and scratch paths

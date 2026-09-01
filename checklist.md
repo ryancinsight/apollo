@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [perf] — Codex
+
+- [x] Record exact scalar-Leto isolated and unchanged 2-D/3-D entry baselines.
+- [x] Implement one allocation-free Hermes complex-tile path with Leto fallback;
+      preserve every full tile, ragged edge, matrix batch, and caller contract.
+- [x] Prove direct transpose and transform values, warm allocation parity,
+      target-feature safety, no hot capability probe, and bounded size growth.
+- [x] Reproduce paired isolated and full-path measurements, synchronize durable
+      evidence, and pass exact local gates at source `9ac833cd`.
+- [ ] Complete independent hosted gates and merge without squash; provider PR
+      #135 is merged as `060eb7eb`.
+
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
 
 - [x] Add a value-gated constant-index 32-column candidate to the pinned phase
