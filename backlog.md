@@ -1,10 +1,10 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — review
+## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
 
 - **Outcome.** The private generated `(3,32)` schedule now expands 32 constant-address DFT-3/scatter blocks; every other pair retains the compact loop and all arithmetic, inverse, public, scratch, and routing contracts remain unchanged.
 - **Evidence.** The exact phase falls 46.07 -> 27.37 ns f32 and 53.98 -> 22.22 ns f64. Two unchanged 100-sample comparisons reduce N = 96 from 128.429/128.359 to 111.396/111.688 ns f32 and 249.444/249.567 to 221.344/221.015 ns f64; N = 64/128 controls stay within 0.92%. Direct forward/inverse f32/f64 oracles, exact CRT coverage, 524/524 debug and release Nextest, and the warm N = 64/96/128/256/512 allocation census pass.
-- **Size / limits.** The same-command all-feature release library grows 18,708,202 -> 18,808,258 bytes (+100,056, 0.535%). Timing is local Windows AVX2 only; AArch64 is a warning-denied compile gate. Exact source `c616b8c2`; hosted review and merge remain.
+- **Size / limits.** The same-command all-feature release library grows 18,708,202 -> 18,808,258 bytes (+100,056, 0.535%). Timing is local Windows AVX2 only; AArch64 is a warning-denied compile gate. Exact source `c616b8c2`; evidence head `2e263f8f`; PR #228 merged without squash as `271dea4d` after all repository and counterbalanced benchmark gates passed.
 - **Integrator / lease:** `/root`; lease none. Last update 2026-09-01.
 
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 — Batch the residual Good-Thomas columns [patch] [perf] — done 2026-09-01
