@@ -284,7 +284,7 @@
   conclusion cannot be recovered by swapping labels, re-measure with the
   corrected instrument rather than reinterpreting.
 
-## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — review 2026-09-01
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — done 2026-09-01 (withdrawn, merged 0ed7660a)
 
 - **Withdrawn (PR #245).** Probe added to the census
   (`APOLLO_QOS_PLACEMENT_PROBE=1`); one run on this host (24 LPs, High
