@@ -1,3 +1,30 @@
+## CPU STFT forward-frame fusion is control-confounded (2026-09-01) <a id="stft-window-fusion"></a>
+
+The reusable CPU STFT forward path copies one real frame into retained scratch,
+multiplies it by the Hann window into a second retained scratch, then
+materializes interleaved complex input. At frame length 1,024 those two buffers
+retain 16,384 bytes per active worker. A source-equivalent candidate replaced
+the three passes for interior frames with one Hermes multiply-and-interleave
+kernel, preserved the scalar boundary path, and recorded zero warmed global,
+reallocation, and direct-Mnemosyne counts after plan warmup.
+
+The exact `c1853792` benchmark measures complete reusable forward execution at
+frame length 32 as a scalar control and at frame length 1,024 with 16,384 and
+65,536 input samples. In the first adjacent comparison, medians moved -6.96%
+for the control and -4.46%/-10.31% for the targets. In the second they moved
+-0.15% and -0.14%/-0.83%. Target confidence intervals overlap, and the first
+pair's same-direction control shift prevents attribution. The candidate
+therefore fails the predeclared requirement for two reproduced improvements
+with neutral controls. Its production source and test were removed before
+commit, and the otherwise-unused Hermes public surface will not merge.
+
+The retained benchmark is the reopening oracle. A later candidate must improve
+both target rows twice while the scalar control remains neutral; removing bytes
+alone does not authorize a latency-labeled route change. Timing is local
+Windows AVX2 evidence. The value/allocation candidate was source-equivalent but
+not revision-attested, so it establishes feasibility rather than delivered
+behavior.
+
 ## Leto/Hermes multidimensional complex transpose (2026-09-01) <a id="leto-hermes-complex-transpose"></a>
 
 Apollo's private 2-D/3-D axis helper previously reconstructed Leto C-from-F

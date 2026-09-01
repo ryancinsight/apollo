@@ -2,13 +2,15 @@
 
 ## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 [perf] — Codex
 
-- [ ] Commit the unchanged CPU STFT complete-plan benchmark and record an exact
+- [x] Commit the unchanged CPU STFT complete-plan benchmark and record an exact
       pre-adoption baseline with frame-length and signal-length controls.
-- [ ] Consume merged Hermes only when two unchanged comparisons improve; remove
-      both real forward-window scratch roles without changing boundary frames.
-- [ ] Prove independent values, zero warm allocation, and retained-byte removal;
-      pass host/AArch64, debug/release, docs, SemVer, and standalone-lock gates.
-- [ ] Complete independent and hosted review and merge without squash.
+- [x] Reject the consumer because two adjacent complete-path comparisons do not
+      separate target movement from the scalar control; remove all experimental
+      source and retain the benchmark instrument only.
+- [x] Record the source-equivalent value, warm-allocation, and analytical
+      16,384-byte-per-active-worker evidence with its revision-attribution limit.
+- [ ] Pass exact benchmark smoke, warning-denied all-target Clippy, format/diff,
+      independent review, and merge the instrument without squash.
 
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [perf] — Codex
 

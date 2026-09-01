@@ -1,11 +1,9 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Remove forward-frame scratch copies [patch] [perf] — in progress
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — review
 
-- **Outcome.** Measure and, only on two reproduced complete-path wins, consume Hermes `real_mul_to_interleaved_complex_runtime` for interior CPU STFT frames so Apollo deletes both retained real forward-window scratch roles and the copy/multiply/materialize traversal.
-- **Scope / non-goals.** Confine source to CPU STFT forward window preparation, its value/allocation tests, one unchanged complete-plan benchmark, and synchronized PM/release documentation. Preserve boundary padding, Hann coefficients, frame count/order, Moirai scheduling, FFT arithmetic, public API, workloads, assertions, and timeouts; do not enter inverse or WGPU paths.
-- **Acceptance.** Establish an exact pre-change benchmark, prove dense interior and negative/right-padded boundary frames match an independent scalar formula, retain zero warm allocation, remove both scratch roles and their retained bytes, pass warning-denied host/AArch64, debug/release, Rustdoc/doctest, standalone-lock, format/diff, and SemVer gates, and retain the source only when two unchanged complete-path comparisons improve with neutral controls.
-- **Risk / dependency.** [patch] [perf]. Hermes provider candidate `c42571d` is pushed and independently reviewing; Apollo adoption waits for that provider to merge. Integrator `/root`; lease `/root` on `apollo-stft` CPU windowing/tests/new benchmark and this item's PM/doc hunks. Last update 2026-09-01.
+- **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
+- **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Lease none.
 
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
