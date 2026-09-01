@@ -2,7 +2,7 @@
 
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 [perf] — Codex
 
-- [ ] Record three exact-processor planar-pass runs at 16,384/32,768 with f64
+- [x] Record three exact-processor planar-pass runs at 16,384/32,768 with f64
       and adjacent-size controls; identify a reproducible dominant phase.
 - [ ] Build only the phase correction supported by the attribution, retaining
       one canonical scalar-generic implementation and existing route semantics.

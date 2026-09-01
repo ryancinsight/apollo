@@ -19,9 +19,14 @@
   which removed the prior transpose bottleneck. Exact local Windows AVX2
   measurements are required; AArch64 remains compilation coverage unless a
   runner supplies timing evidence.
-- **Integrator / lease:** `/root`; lease `/root` on this item block and its
-  checklist section only while the entry attribution is collected. Last
-  update 2026-08-31.
+- **Integrator / lease:** `/root`; lease `/root` on `batched/boundary.rs`, the
+  planar combine in `batched/mod.rs`, this item block, its checklist section,
+  and the resulting gap-audit/CHANGELOG entries. Three processor-2 runs place
+  f32 N = 32,768 stage set 1 at 74,559--76,138 cycles, stage set 2 at
+  78,821--79,336, transpose at 17,320--17,488, and the still-scalar fused
+  combine/output pass at 56,600--61,328. The stage sets already use Hermes'
+  native eight-lane dispatch; the combine is the remaining structural SIMD
+  gap selected for a bounded candidate. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
 
