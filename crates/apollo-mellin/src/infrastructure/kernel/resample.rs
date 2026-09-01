@@ -23,7 +23,6 @@ const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 thread_local! {
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Interpolate a positive-domain signal onto logarithmically spaced samples.
@@ -164,16 +163,8 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     let factor = -std::f64::consts::TAU / len as f64;
     let work_items = len.saturating_mul(len);
     if work_items >= HERMES_SPECTRUM_OP_THRESHOLD {
-        return REAL_LANES_SCRATCH.with(|pool| {
-            pool.with_scratch(len * 2, |input_lanes| {
-                for (i, &val) in log_samples.iter().enumerate() {
-                    input_lanes[2 * i] = val;
-                    input_lanes[2 * i + 1] = 0.0;
-                }
-                moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
-                    log_frequency_coeff_hermes(input_lanes, factor, du, k)
-                })
-            })
+        return moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
+            log_frequency_coeff_hermes(log_samples, factor, du, k)
         });
     }
 
@@ -192,15 +183,12 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     }
 }
 
-fn log_frequency_coeff_hermes(input_lanes: &[f64], factor: f64, scale: f64, k: usize) -> Complex64 {
+fn log_frequency_coeff_hermes(input: &[f64], factor: f64, scale: f64, k: usize) -> Complex64 {
     LOG_FREQUENCY_WEIGHT_LANE_SCRATCH.with(|pool| {
-        pool.with_scratch(input_lanes.len(), |weight_lanes| {
+        pool.with_scratch(input.len() * 2, |weight_lanes| {
             fill_log_frequency_weight_lanes(weight_lanes, factor, k);
-            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
-                input_lanes,
-                weight_lanes,
-            )
-            .expect("Mellin forward spectrum Hermes dot uses equal-length interleaved lanes");
+            let (re, im) = hermes_simd::real_interleaved_complex_dot_runtime(input, weight_lanes)
+                .expect("Mellin forward spectrum Hermes dot uses one complex weight per sample");
             Complex64::new(re * scale, im * scale)
         })
     })
@@ -292,16 +280,6 @@ fn inverse_log_frequency_coeff_hermes(
             re * scale
         })
     })
-}
-
-#[cfg(test)]
-fn real_interleaved_lanes(values: &[f64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(*value);
-        lanes.push(0.0);
-    }
-    lanes
 }
 
 #[inline]
@@ -436,10 +414,8 @@ mod tests {
                 x.sin() + (2.0 * x).cos()
             })
             .collect::<Vec<_>>();
-        let input_lanes = real_interleaved_lanes(&samples);
-
         for k in [0usize, 1, 17, 64, 127, 255] {
-            let actual = log_frequency_coeff_hermes(&input_lanes, factor, du, k);
+            let actual = log_frequency_coeff_hermes(&samples, factor, du, k);
             let expected = samples
                 .iter()
                 .enumerate()
