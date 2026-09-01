@@ -1,5 +1,35 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
+
+- **Outcome.** Attribute and reduce Apollo f32 N=32,768's stable 23% latency
+  deficit against retained-scratch RustFFT without changing numerical or
+  allocation semantics.
+- **Scope / non-goals.** Extend the test-only exact-processor phase instrument
+  generically across f32 and f64, then isolate movement versus arithmetic in
+  the public four-step route at N=16,384 and N=32,768. Do not change the
+  comparison workload, estimator, crossover, or production code before one
+  phase reproduces across three runs; do not trade f64 or smaller sizes for the
+  f32 row.
+- **Acceptance.** Same-binary phase attribution reproduces across three
+  processor-2 runs with f64 and N=16,384 controls. A retained production
+  correction preserves direct-DFT and round-trip values, exact route selection,
+  zero warm allocations, and improves the unchanged 100-sample comparison in
+  two adjacent runs while controls remain neutral. Reject any candidate whose
+  phase or complete-path intervals do not reproduce.
+- **Risk / dependencies.** [patch] [perf]. Depends on the exact-processor
+  comparison and N=32,768 phase coverage merged through PR #217 / `5bf93047`.
+- **Integrator / lease:** `/root`; lease none. Source `5a1b3e8a` selects Hermes'
+  exact eight-lane f32 transpose before the retained four-lane/scalar fallbacks;
+  f64 remains four-lane. Three exact-processor runs reduce the f32 transpose
+  from 50,454--50,859 to 17,341--17,564 cycles; three unchanged comparisons
+  report 72.145--74.005 us versus the retained 82.970 us baseline. Debug and
+  release Nextest pass 510/510, the focused global/direct-Mnemosyne census is
+  zero/zero, all-target/all-feature Clippy and AArch64 check pass with warnings
+  denied, and doctest/Rustdoc/format/36-source standalone-lock gates pass;
+  independent exact-object review is GREEN with dynamic gates treated as
+  supplied evidence; hosted gates, PR, and merge remain. Last update 2026-08-31.
+
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 
 - **Delivered:** source `39420cca`, review correction `f3138f50`, PR #213,
@@ -206,33 +236,12 @@
   (no AVX-512 hardware — `ATLAS-APOLLO-WIDER-ISA-2026-08-28`). Left alone
   rather than changed blind.
 
-## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — review
+## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 — Exact-processor f64 N=32,768 latency retains a 22.3% band [patch] [perf] — done 2026-08-31
 
-- **Outcome.** The 126.293--154.510 us band did not reproduce in the production
-  route. Reject a speculative kernel change and retain exact N=32,768 phase
-  coverage without changing benchmark or production semantics.
-- **Scope / non-goals.** Use the retained comparison and interleaved release
-  probe to isolate plan dispatch, copy, base kernel, combine, and host-state
-  contributions on logical processor 2. Change production code only after a
-  phase-localized cause reproduces; do not tune the benchmark, drop N=32,768,
-  raise its budget, or claim that affinity controls frequency and interrupts.
-- **Acceptance.** A same-binary, exact-processor phase attribution identifies
-  the varying production component against stable RustFFT and f32 controls. A
-  retained correction preserves direct-DFT/round-trip values and zero warm
-  allocations, then improves the complete unchanged 100-sample comparison in
-  two adjacent runs with a neutral 16,384 or 65,536 control. Reject a candidate
-  whose phase or complete-path confidence intervals do not reproduce.
-- **Risk / dependencies.** [patch] [perf]. Depends on the retained-state
-  comparison from `ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31`. Source/audit
-  candidate `3d3a7d37` extends the retained phase probe; production is unchanged.
-- **Integrator / lease:** `/root`; lease none. Four exact-processor release
-  phase runs span 2.9% at both N=16,384 and N=32,768. Two adjacent unchanged
-  comparisons report Apollo f64 N=32,768 medians of 126.314 and 125.014 us.
-  Warning-denied all-target/all-feature Clippy, 510/510 package Nextest,
-  focused probe, AArch64 check, doctest, Rustdoc, format, diff, and standalone
-  36-source lock gates pass. Independent exact-object review is GREEN with
-  timing provenance limited to supplied evidence; merge remains. Last update
-  2026-08-31.
+- **Delivered:** source `3d3a7d37`, PR #217, merge `5bf93047`; retained phase
+  coverage falsifies the broad variance without changing production FFT code.
+- **Evidence:** independent GREEN; hosted lock/workspace/bindings/benchmark
+  gates green; exact local package, cross-target, docs, and lock gates green.
 
 ## ATLAS-APOLLO-SWEEP-STOPS-AT-512-2026-08-31 — The comparison sweep cannot see the sizes where per-length kernels live [patch] — review
 

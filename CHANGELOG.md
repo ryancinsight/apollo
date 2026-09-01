@@ -54,6 +54,16 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] `apollo-fft` now requests Hermes' exact eight-lane capability
+  for f32 planar four-step transposes, with the existing exact four-lane and
+  scalar routes retained as fallbacks; f64 remains four-lane. On the measured
+  Windows AVX2 P-core, three exact-processor runs reduced the f32 N = 32,768
+  transpose from 50,454--50,859 to 17,341--17,564 cycles. The unchanged
+  100-sample comparison reported 72.15--74.00 microsecond medians, 10.81--13.05%
+  below the retained 82.97 microsecond baseline. Warm f32 execution at
+  N = 16,384/32,768 remains allocation-free through both the global allocator
+  and direct Mnemosyne hooks. AArch64 is compile-only evidence; no AVX-512 or
+  cross-machine throughput result is claimed.
 - [patch] `apollo-fft`'s bounded RustFFT comparison now covers the 1,024,
   2,048, and 32,768 specialization/control lengths, retains both engines'
   reusable execution scratch outside timing, and binds one exact logical

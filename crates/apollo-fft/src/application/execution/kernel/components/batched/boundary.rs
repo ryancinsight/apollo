@@ -9,9 +9,10 @@
 //! and the earlier "boundary vectorization loses" verdict still holds on the
 //! load side — so only the store-side kernel exists here.
 //!
-//! The driver requests the four-lane width explicitly. A host without that
-//! width, or a shape not divisible by it, falls back to the scalar loop, which
-//! remains the reference implementation.
+//! The driver requests the scalar-selected preferred width explicitly: eight
+//! lanes for f32, four for f64, then four as the portable SIMD fallback. A host
+//! without either width, or a shape not divisible by it, falls back to the
+//! scalar loop, which remains the reference implementation.
 
 use super::BatchedPlanCache;
 use hermes_simd::{LaneKernel, Simd, SimdArch, SimdKernel, SimdStorage, Vector};
@@ -119,10 +120,10 @@ impl<T: BatchedPlanCache> LaneKernel<T> for InterleaveRows<'_, T> {
     }
 }
 
-/// In-place square transpose of both padded planes through in-register
-/// `4 x 4` tiles (`Vector::transpose_square`): each off-diagonal tile pair
-/// loads eight vectors, transposes both tiles in registers, and stores them
-/// exchanged; diagonal tiles transpose in place.
+/// In-place square transpose of both padded planes through native in-register
+/// tiles (`Vector::transpose_square`): each off-diagonal tile pair loads two
+/// tiles, transposes both in registers, and stores them exchanged; diagonal
+/// tiles transpose in place.
 pub(crate) struct TransposePlanes<'a, T> {
     /// Padded real plane.
     pub(crate) re: &'a mut [T],
@@ -144,54 +145,64 @@ impl<T: BatchedPlanCache> LaneKernel<T> for TransposePlanes<'_, T> {
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, _capability: Simd<T, A>) -> bool {
-        if <A as SimdStorage<T>>::LANE_COUNT != 4 || self.m % 4 != 0 || self.stride % 4 != 0 {
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        if !matches!(lanes, 4 | 8) || self.m % lanes != 0 || self.stride % lanes != 0 {
             return false;
         }
         let (m, stride) = (self.m, self.stride);
-        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
         assert!(
             self.re.len() >= m * stride && self.im.len() >= m * stride && m * stride % lanes == 0,
             "invariant: both planes hold m padded rows"
         );
-        for plane in [self.re, self.im] {
-            for bi in (0..m).step_by(4) {
-                // Diagonal tile: transpose in place.
-                let base = |r: usize, c: usize| (r * stride + c) / 4;
-                let mut tile = [
-                    chunk::<T, A>(plane, base(bi, bi)),
-                    chunk::<T, A>(plane, base(bi + 1, bi)),
-                    chunk::<T, A>(plane, base(bi + 2, bi)),
-                    chunk::<T, A>(plane, base(bi + 3, bi)),
-                ];
-                Vector::transpose_square(&mut tile);
-                for (r, row) in tile.into_iter().enumerate() {
-                    put_chunk(row, plane, base(bi + r, bi));
-                }
-                // Off-diagonal pairs: transpose both, store exchanged.
-                for bj in (bi + 4..m).step_by(4) {
-                    let mut upper = [
-                        chunk::<T, A>(plane, base(bi, bj)),
-                        chunk::<T, A>(plane, base(bi + 1, bj)),
-                        chunk::<T, A>(plane, base(bi + 2, bj)),
-                        chunk::<T, A>(plane, base(bi + 3, bj)),
-                    ];
-                    let mut lower = [
-                        chunk::<T, A>(plane, base(bj, bi)),
-                        chunk::<T, A>(plane, base(bj + 1, bi)),
-                        chunk::<T, A>(plane, base(bj + 2, bi)),
-                        chunk::<T, A>(plane, base(bj + 3, bi)),
-                    ];
-                    Vector::transpose_square(&mut upper);
-                    Vector::transpose_square(&mut lower);
-                    for (r, row) in lower.into_iter().enumerate() {
-                        put_chunk(row, plane, base(bi + r, bj));
-                    }
-                    for (r, row) in upper.into_iter().enumerate() {
-                        put_chunk(row, plane, base(bj + r, bi));
-                    }
+        match lanes {
+            4 => {
+                for plane in [self.re, self.im] {
+                    transpose_plane::<T, A, 4>(plane, m, stride);
                 }
             }
+            8 => {
+                for plane in [self.re, self.im] {
+                    transpose_plane::<T, A, 8>(plane, m, stride);
+                }
+            }
+            _ => unreachable!("lane width was validated above"),
         }
         true
+    }
+}
+
+#[expect(
+    clippy::inline_always,
+    reason = "the tile width must remain constant inside the target-feature frame"
+)]
+#[inline(always)]
+fn transpose_plane<T, A, const LANES: usize>(plane: &mut [T], m: usize, stride: usize)
+where
+    T: BatchedPlanCache,
+    A: SimdArch + SimdKernel<T>,
+{
+    for bi in (0..m).step_by(LANES) {
+        let base = |r: usize, c: usize| (r * stride + c) / LANES;
+        let mut tile: [Vector<T, A>; LANES] =
+            core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + r, bi)));
+        Vector::transpose_square(&mut tile);
+        for (r, row) in tile.into_iter().enumerate() {
+            put_chunk(row, plane, base(bi + r, bi));
+        }
+
+        for bj in (bi + LANES..m).step_by(LANES) {
+            let mut upper: [Vector<T, A>; LANES] =
+                core::array::from_fn(|r| chunk::<T, A>(plane, base(bi + r, bj)));
+            let mut lower: [Vector<T, A>; LANES] =
+                core::array::from_fn(|r| chunk::<T, A>(plane, base(bj + r, bi)));
+            Vector::transpose_square(&mut upper);
+            Vector::transpose_square(&mut lower);
+            for (r, row) in lower.into_iter().enumerate() {
+                put_chunk(row, plane, base(bi + r, bj));
+            }
+            for (r, row) in upper.into_iter().enumerate() {
+                put_chunk(row, plane, base(bj + r, bi));
+            }
+        }
     }
 }

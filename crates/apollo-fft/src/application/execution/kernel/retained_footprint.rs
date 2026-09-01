@@ -475,6 +475,39 @@ fn native_width_base_warm_execution_is_allocation_free() {
 
 #[test]
 #[ignore = "allocation probe must run as the only selected test in its process"]
+fn wide_planar_transpose_warm_execution_is_allocation_free() {
+    let _mnemosyne_hooks = MnemosyneHooks::install();
+
+    for n in [16_384usize, 32_768] {
+        let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
+        let mut signal = (0..n)
+            .map(|index| {
+                let x = index as f32;
+                eunomia::Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect::<Vec<_>>();
+
+        plan.forward_complex_slice_inplace(&mut signal);
+        let label = format!("warm planar f32 n={n}");
+        window(&label, || {
+            plan.forward_complex_slice_inplace(std::hint::black_box(&mut signal));
+        });
+
+        assert_eq!(
+            GLOBAL_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed planar f32 n={n} execution allocated through the global allocator"
+        );
+        assert_eq!(
+            MNEMOSYNE_ALLOCATIONS.allocations.load(Ordering::Relaxed),
+            0,
+            "warmed planar f32 n={n} execution allocated directly through Mnemosyne"
+        );
+    }
+}
+
+#[test]
+#[ignore = "allocation probe must run as the only selected test in its process"]
 fn small_nonsmooth_rader_warm_execution_is_allocation_free() {
     let _mnemosyne_hooks = MnemosyneHooks::install();
 

@@ -474,6 +474,9 @@ thread_local! {
 pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
 {
+    /// Preferred exact lane width for the in-register transpose boundary.
+    const TRANSPOSE_LANES: usize;
+
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
     fn cached_four_step_planes<const INVERSE: bool>(
         n: usize,
@@ -482,8 +485,10 @@ pub(crate) trait BatchedPlanCache:
 }
 
 macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident, $planes:ident) => {
+    ($t:ty, $cache:ident, $planes:ident, $transpose_lanes:expr) => {
         impl BatchedPlanCache for $t {
+            const TRANSPOSE_LANES: usize = $transpose_lanes;
+
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
                 $cache.with(|c| {
                     let key = (len, INVERSE);
@@ -514,8 +519,8 @@ macro_rules! impl_plan_cache {
     };
 }
 
-impl_plan_cache!(f64, PLAN_CACHE_F64, PLANES_CACHE_F64);
-impl_plan_cache!(f32, PLAN_CACHE_F32, PLANES_CACHE_F32);
+impl_plan_cache!(f64, PLAN_CACHE_F64, PLANES_CACHE_F64, 4);
+impl_plan_cache!(f32, PLAN_CACHE_F32, PLANES_CACHE_F32, 8);
 
 /// Runs the stage set of `batch` transforms of length `plan.len` over planar
 /// `re`/`im`, whose rows the caller has already bit-reversed — which the
@@ -779,7 +784,17 @@ fn planar_stages<T, const INVERSE: bool>(
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
     sect!("transpose", {
-        let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::TransposePlanes {
+        let handled = if T::TRANSPOSE_LANES == 8 {
+            hermes_simd::vectorize_lanes::<8, T, _>(boundary::TransposePlanes {
+                re: &mut *re,
+                im: &mut *im,
+                m,
+                stride,
+            })
+            .unwrap_or(false)
+        } else {
+            false
+        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::TransposePlanes {
             re,
             im,
             m,

@@ -7,8 +7,10 @@
 //! be behind for want of arithmetic or for want of movement and the totals
 //! separate them.
 
-use eunomia::Complex64;
+use eunomia::{Complex, Complex32, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
+
+use crate::application::execution::kernel::mixed_radix::scalar::MixedRadixScalar;
 
 /// Sizes worth attributing: the even powers, which take the square route
 /// whole, and the odd powers, which decimate and run it twice.
@@ -29,14 +31,35 @@ fn planar_passes_by_size() {
         .expect("Windows supports processor queries")
         .get();
     assert_eq!(landed, cpu, "processor binding must remain exact");
-    for n in SIZES {
-        let src: Vec<Complex64> = (0..n)
+
+    measure_precision("f64", landed, |n| {
+        (0..n)
             .map(|i| {
                 let x = i as f64;
                 Complex64::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
             })
-            .collect();
-        let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
+            .collect()
+    });
+    measure_precision("f32", landed, |n| {
+        (0..n)
+            .map(|i| {
+                let x = i as f32;
+                Complex32::new((0.017 * x).sin(), 0.25 * (0.031 * x).cos())
+            })
+            .collect()
+    });
+}
+
+fn measure_precision<F>(
+    precision: &str,
+    landed: u32,
+    mut source: impl FnMut(usize) -> Vec<Complex<F>>,
+) where
+    F: MixedRadixScalar<Complex = Complex<F>>,
+{
+    for n in SIZES {
+        let src = source(n);
+        let plan = crate::FftPlan1D::<F>::new(crate::Shape1D { n });
         let mut work = src.clone();
 
         // One untimed call so plan and twiddle caches are warm, then drain
@@ -56,11 +79,11 @@ fn planar_passes_by_size() {
             let share = 100.0 * cycles as f64 / all as f64;
             let per_call_passes = passes as f64 / f64::from(CALLS);
             println!(
-                "BPASS cpu={landed:<2} n={n:<5} {label:<9} tsc={per_call:>9.1} share={share:>5.1}% passes={per_call_passes:>3.1}"
+                "BPASS cpu={landed:<2} type={precision:<3} n={n:<5} {label:<9} tsc={per_call:>9.1} share={share:>5.1}% passes={per_call_passes:>3.1}"
             );
         }
         println!(
-            "BPASS cpu={landed:<2} n={n:<5} {:<9} tsc={:>9.1}",
+            "BPASS cpu={landed:<2} type={precision:<3} n={n:<5} {:<9} tsc={:>9.1}",
             "total",
             all as f64 / f64::from(CALLS)
         );

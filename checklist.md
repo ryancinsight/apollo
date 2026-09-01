@@ -1,5 +1,22 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
+
+- [x] Generalize the retained phase instrument across f32/f64 without
+      duplicating route logic or changing production instrumentation.
+- [x] Collect three exact-processor release phase runs at 16,384/32,768;
+      identify the fixed four-lane transpose after f32 repeats at 50.5k cycles
+      versus f64's 26.9k while the stage sets scale to about half.
+- [x] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
+      allocations; improve three unchanged comparisons while f64 remains
+      neutral and the f32 N=16,384 control also improves.
+- [x] Commit exact source `5a1b3e8a` and pass focused, debug/release package,
+      warning-denied, AArch64, documentation, and 36-source standalone-lock
+      gates; discharge the source/test/documentation lease.
+- [x] Obtain independent exact-object GREEN review of source `5a1b3e8a`; the
+      reviewer treats dynamic gate and timing results as supplied evidence.
+- [ ] Pass hosted gates and merge the resulting PR without squash.
+
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
 
 - [x] Bind the attribution to merged comparison revision `a6fbcd02` and claim
@@ -12,7 +29,8 @@
       package Nextest, warning-denied all-target/all-feature Clippy, AArch64
       check, doctest, Rustdoc, format, diff, and 36-source standalone lock gate.
 - [x] Obtain independent exact-artifact GREEN review at PM head `5a6992cb`.
-- [ ] Merge PR #217 without squash after repository checks pass.
+- [x] Merge PR #217 without squash as `5bf93047` after every repository check
+      passes.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 [perf] — Codex
 
