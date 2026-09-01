@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] The private generated N = 96 Good-Thomas codelet now expands
+  its fixed 32-column CRT schedule into constant-address DFT-3 calls and stores.
+  Two adjacent unchanged 100-sample Windows AVX2 comparisons reduce N = 96
+  medians from 128.429/128.359 to 111.396/111.688 ns f32 and from
+  249.444/249.567 to 221.344/221.015 ns f64, while N = 64/128 controls remain
+  within 0.92%. Warm f32/f64 execution remains allocation-free through the
+  global allocator and direct Mnemosyne hooks. The same-command all-feature
+  release library grows 100,056 bytes (0.535%); no cross-machine timing is
+  claimed.
 - [patch] [perf] The f32 N = 96 Good-Thomas codelet now executes its three
   DFT-32 rows inside one exact eight-lane Hermes target frame. The register
   kernel uses Hermes' complex 4x4 transpose and retains the existing scalar

@@ -140,6 +140,60 @@ pub(crate) fn good_thomas_function(
             }
         }
     };
+    let transform_columns_and_scatter = if n1 == 3 && n2 == 32 {
+        let columns = (0..n2).map(|i2| {
+            let scratch_indices = [i2, n2 + i2, 2 * n2 + i2];
+            let base = (i2 * n1 * inv_n1_n2) % n;
+            let destinations = [base, (base + stride) % n, (base + 2 * stride) % n];
+            let [scratch0, scratch1, scratch2] = scratch_indices;
+            let [destination0, destination1, destination2] = destinations;
+            quote! {
+                let mut col = [
+                    unsafe { scratch_ptr.add(#scratch0).read() },
+                    unsafe { scratch_ptr.add(#scratch1).read() },
+                    unsafe { scratch_ptr.add(#scratch2).read() },
+                ];
+                unsafe {
+                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(&mut col);
+                }
+                data[#destination0] = col[0];
+                data[#destination1] = col[1];
+                data[#destination2] = col[2];
+            }
+        });
+        quote! {
+            #(#columns)*
+        }
+    } else {
+        quote! {
+            let inv_n1_n2 = #inv_n1_n2;
+            let inv_n2_n1 = #inv_n2_n1;
+            let stride = #stride;
+            for i2 in 0..#n2 {
+                // SAFETY: All N1 slots of `col` are written by the gather loop before
+                // `dft` reads any of them. The loop covers i1=0..N1 unconditionally.
+                let mut col = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n1]>::uninit();
+                let col_ptr = col.as_mut_ptr() as *mut eunomia::Complex<F>;
+                for i1 in 0..#n1 {
+                    unsafe { col_ptr.add(i1).write(scratch_ptr.add(i1 * #n2 + i2).read()); }
+                }
+                let col = unsafe { col.assume_init_mut() };
+                unsafe {
+                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(col);
+                }
+
+                let base = (i2 * #n1 * inv_n1_n2) % #n;
+                let mut dest_idx = base;
+                for i1 in 0..#n1 {
+                    data[dest_idx] = col[i1];
+                    dest_idx += stride;
+                    if dest_idx >= #n {
+                        dest_idx -= #n;
+                    }
+                }
+            }
+        }
+    };
 
     quote! {
         #inline_attr
@@ -168,33 +222,10 @@ pub(crate) fn good_thomas_function(
 
             #transform_rows
 
-            // Transform columns & scatter output using incremental index calculation (no runtime modulo)
-            let inv_n1_n2 = #inv_n1_n2;
-            let inv_n2_n1 = #inv_n2_n1;
-            let stride = #stride;
-            for i2 in 0..#n2 {
-                // SAFETY: All N1 slots of `col` are written by the gather loop before
-                // `dft` reads any of them. The loop covers i1=0..N1 unconditionally.
-                let mut col = std::mem::MaybeUninit::<[eunomia::Complex<F>; #n1]>::uninit();
-                let col_ptr = col.as_mut_ptr() as *mut eunomia::Complex<F>;
-                for i1 in 0..#n1 {
-                    unsafe { col_ptr.add(i1).write(scratch_ptr.add(i1 * #n2 + i2).read()); }
-                }
-                let col = unsafe { col.assume_init_mut() };
-                unsafe {
-                    <F as crate::application::execution::kernel::mixed_radix::traits::ShortDft<#n1>>::dft::<INVERSE>(col);
-                }
-
-                let base = (i2 * #n1 * inv_n1_n2) % #n;
-                let mut dest_idx = base;
-                for i1 in 0..#n1 {
-                    data[dest_idx] = col[i1];
-                    dest_idx += stride;
-                    if dest_idx >= #n {
-                        dest_idx -= #n;
-                    }
-                }
-            }
+            // Transform columns and scatter output. The measured `(3,32)`
+            // schedule expands constant addresses; every other pair retains
+            // the compact incremental-index loop.
+            #transform_columns_and_scatter
         }
     }
 }

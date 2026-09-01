@@ -1,5 +1,19 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
+
+- [x] Add a value-gated constant-index 32-column candidate to the pinned phase
+      instrument without changing production routing.
+- [x] Reject it unless isolated release phase cost improves for f32 and f64;
+      otherwise retain the minimum private generated `(3,32)` schedule.
+- [x] Prove forward/inverse direct-DFT bounds, exact CRT output coverage, scalar
+      parity, warmed zero allocation, and bounded code-size growth.
+- [x] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
+      controls; pass warning-denied host/AArch64, 524/524 debug/release, docs,
+      formatting, standalone-lock, and exact-diff gates.
+- [x] Commit exact source `c616b8c2` with no lock or unrelated peer movement.
+- [ ] Complete hosted review and merge without squash.
+
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
 
 - [x] Add a value-gated four-column Hermes DFT-3 candidate to the pinned phase

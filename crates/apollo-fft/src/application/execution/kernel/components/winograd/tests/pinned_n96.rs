@@ -38,6 +38,38 @@ fn best_block<S>(
     best
 }
 
+fn timed_calls<S>(state: &mut S, run: &mut impl FnMut(&mut S)) -> f64 {
+    let start = Instant::now();
+    for _ in 0..CALLS_PER_BLOCK {
+        run(std::hint::black_box(&mut *state));
+    }
+    start.elapsed().as_nanos() as f64 / f64::from(CALLS_PER_BLOCK)
+}
+
+fn best_paired<S>(
+    state: &mut S,
+    mut prepare: impl FnMut(&mut S),
+    mut incumbent: impl FnMut(&mut S),
+    mut candidate: impl FnMut(&mut S),
+) -> (f64, f64) {
+    let mut incumbent_best = f64::INFINITY;
+    let mut candidate_best = f64::INFINITY;
+    for block in 0..BLOCKS {
+        if block % 2 == 0 {
+            prepare(state);
+            incumbent_best = incumbent_best.min(timed_calls(state, &mut incumbent));
+            prepare(state);
+            candidate_best = candidate_best.min(timed_calls(state, &mut candidate));
+        } else {
+            prepare(state);
+            candidate_best = candidate_best.min(timed_calls(state, &mut candidate));
+            prepare(state);
+            incumbent_best = incumbent_best.min(timed_calls(state, &mut incumbent));
+        }
+    }
+    (incumbent_best, candidate_best)
+}
+
 fn gather<F: Copy>(buffers: &mut Buffers<F>) {
     for i1 in 0..3 {
         let mut source_index = i1 * 32;
@@ -93,6 +125,64 @@ where
             }
         }
     }
+}
+
+#[inline]
+fn constant_column_and_scatter<F, const COLUMN: usize>(buffers: &mut Buffers<F>)
+where
+    F: MixedRadixScalar<Complex = Complex<F>> + ShortDft<3>,
+{
+    let mut column = [
+        buffers.scratch[COLUMN],
+        buffers.scratch[32 + COLUMN],
+        buffers.scratch[64 + COLUMN],
+    ];
+    <F as ShortDft<3>>::dft::<false>(&mut column);
+
+    let first = (COLUMN * 33) % N;
+    let second = (first + 64) % N;
+    let third = (second + 64) % N;
+    buffers.data[first] = column[0];
+    buffers.data[second] = column[1];
+    buffers.data[third] = column[2];
+}
+
+fn unrolled_columns_and_scatter<F>(buffers: &mut Buffers<F>)
+where
+    F: MixedRadixScalar<Complex = Complex<F>> + ShortDft<3>,
+{
+    constant_column_and_scatter::<F, 0>(buffers);
+    constant_column_and_scatter::<F, 1>(buffers);
+    constant_column_and_scatter::<F, 2>(buffers);
+    constant_column_and_scatter::<F, 3>(buffers);
+    constant_column_and_scatter::<F, 4>(buffers);
+    constant_column_and_scatter::<F, 5>(buffers);
+    constant_column_and_scatter::<F, 6>(buffers);
+    constant_column_and_scatter::<F, 7>(buffers);
+    constant_column_and_scatter::<F, 8>(buffers);
+    constant_column_and_scatter::<F, 9>(buffers);
+    constant_column_and_scatter::<F, 10>(buffers);
+    constant_column_and_scatter::<F, 11>(buffers);
+    constant_column_and_scatter::<F, 12>(buffers);
+    constant_column_and_scatter::<F, 13>(buffers);
+    constant_column_and_scatter::<F, 14>(buffers);
+    constant_column_and_scatter::<F, 15>(buffers);
+    constant_column_and_scatter::<F, 16>(buffers);
+    constant_column_and_scatter::<F, 17>(buffers);
+    constant_column_and_scatter::<F, 18>(buffers);
+    constant_column_and_scatter::<F, 19>(buffers);
+    constant_column_and_scatter::<F, 20>(buffers);
+    constant_column_and_scatter::<F, 21>(buffers);
+    constant_column_and_scatter::<F, 22>(buffers);
+    constant_column_and_scatter::<F, 23>(buffers);
+    constant_column_and_scatter::<F, 24>(buffers);
+    constant_column_and_scatter::<F, 25>(buffers);
+    constant_column_and_scatter::<F, 26>(buffers);
+    constant_column_and_scatter::<F, 27>(buffers);
+    constant_column_and_scatter::<F, 28>(buffers);
+    constant_column_and_scatter::<F, 29>(buffers);
+    constant_column_and_scatter::<F, 30>(buffers);
+    constant_column_and_scatter::<F, 31>(buffers);
 }
 
 /// Executes the mathematically equivalent Good-Thomas `(32, 3)` orientation.
@@ -183,6 +273,58 @@ where
         swapped_complete,
     );
 
+    let mut coverage = [false; N];
+    for column in 0..32 {
+        let first = (column * 33) % N;
+        for destination in [first, (first + 64) % N, (first + 32) % N] {
+            assert!(!coverage[destination], "duplicate CRT destination");
+            coverage[destination] = true;
+        }
+    }
+    assert!(coverage.into_iter().all(core::convert::identity));
+
+    let mut expected = Buffers {
+        source,
+        data: source,
+        scratch: source,
+    };
+    gather(&mut expected);
+    routed_rows(&mut expected);
+    columns_and_scatter(&mut expected);
+    let mut candidate = Buffers {
+        source,
+        data: source,
+        scratch: source,
+    };
+    gather(&mut candidate);
+    routed_rows(&mut candidate);
+    unrolled_columns_and_scatter(&mut candidate);
+    let column_max_error = expected
+        .data
+        .iter()
+        .zip(candidate.data)
+        .map(|(expected, actual)| {
+            let re = f64::from(expected.re) - f64::from(actual.re);
+            let im = f64::from(expected.im) - f64::from(actual.im);
+            re.hypot(im)
+        })
+        .fold(0.0_f64, f64::max);
+    assert_eq!(
+        column_max_error, 0.0,
+        "constant indices must preserve arithmetic"
+    );
+
+    let (column_incumbent_ns, column_candidate_ns) = best_paired(
+        &mut candidate,
+        |buffers| {
+            buffers.data.copy_from_slice(&buffers.source);
+            gather(buffers);
+            routed_rows(buffers);
+        },
+        columns_and_scatter,
+        unrolled_columns_and_scatter,
+    );
+
     let mut incumbent = buffers.source;
     <F as ShortDft<96>>::dft::<false>(&mut incumbent);
     buffers.data.copy_from_slice(&buffers.source);
@@ -211,6 +353,9 @@ where
 
     println!(
         "N96 {label}: gather={gather_ns:.2}ns incumbent-rows={incumbent_rows_ns:.2}ns routed-rows={routed_rows_ns:.2}ns columns+scatter={columns_ns:.2}ns complete={complete_ns:.2}ns swapped={swapped_ns:.2}ns"
+    );
+    println!(
+        "N96 {label} columns unrolled: incumbent={column_incumbent_ns:.2}ns candidate={column_candidate_ns:.2}ns"
     );
 }
 
