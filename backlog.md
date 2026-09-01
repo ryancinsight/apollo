@@ -96,7 +96,7 @@
   port-saturated, so boundary shuffles cost more inside it than in the
   gather's streaming loop. Third boundary-fusion falsification.
 
-## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — todo
+## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — in progress
 
 - **Outcome:** the eight-lane kernel gains the complex-granularity strided
   load network, deleting the gather fallback, the external
@@ -108,6 +108,9 @@
   falsification: the value is a vectorized eight-lane *gather* (the f32
   route runs the blend network in the scalar-emulated frame today), not
   load fusion into phase one, which measured slower at four lanes.
+- **Integrator:** Claude `/root`; lease `base128/split_boundary.rs`,
+  `base128/mod.rs`, this item's PM hunks. Hermes provider
+  `deinterleave_pairs` merged as `a3141cd` (PR #118). Last update 2026-09-01.
 - **Baseline:** f32 256/512 after the shared column pass:
   294.2 / 694.8 ns P-core (1.31 / 1.37 vs RustFFT).
 
