@@ -474,8 +474,12 @@ thread_local! {
 pub(crate) trait BatchedPlanCache:
     MixedRadixScalar + LaneScalar + bytemuck::Pod + Sized
 {
-    /// Preferred exact lane width for the in-register transpose boundary.
-    const TRANSPOSE_LANES: usize;
+    /// Preferred exact lane width for the in-register boundary passes: the
+    /// planar transpose, the half combine, and the reinterleave sink. Eight
+    /// for `f32` and four for `f64`, which is the native AVX2 width of each.
+    /// Every site tries this width first and falls back to four lanes, then
+    /// to the scalar reference loop.
+    const BOUNDARY_LANES: usize;
 
     fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>>;
     fn cached_four_step_planes<const INVERSE: bool>(
@@ -485,9 +489,9 @@ pub(crate) trait BatchedPlanCache:
 }
 
 macro_rules! impl_plan_cache {
-    ($t:ty, $cache:ident, $planes:ident, $transpose_lanes:expr) => {
+    ($t:ty, $cache:ident, $planes:ident, $boundary_lanes:expr) => {
         impl BatchedPlanCache for $t {
-            const TRANSPOSE_LANES: usize = $transpose_lanes;
+            const BOUNDARY_LANES: usize = $boundary_lanes;
 
             fn cached_plan<const INVERSE: bool>(len: usize) -> Arc<BatchedPlan<Self>> {
                 $cache.with(|c| {
@@ -784,7 +788,7 @@ fn planar_stages<T, const INVERSE: bool>(
     // 2. Transpose so the second axis becomes batch-major. Pure exchange:
     //    the four-step twiddle now rides stage-set-2's first loads below.
     sect!("transpose", {
-        let handled = if T::TRANSPOSE_LANES == 8 {
+        let handled = if T::BOUNDARY_LANES == 8 {
             hermes_simd::vectorize_lanes::<8, T, _>(boundary::TransposePlanes {
                 re: &mut *re,
                 im: &mut *im,
@@ -854,7 +858,18 @@ pub(crate) fn four_step_batched<T, const INVERSE: bool>(
     // index computation on a pass that had to happen anyway.
     let bits = m.trailing_zeros();
     sect!("reint", {
-        let handled = hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
+        let handled = if T::BOUNDARY_LANES == 8 {
+            hermes_simd::vectorize_lanes::<8, T, _>(boundary::InterleaveRows {
+                re: &*re,
+                im: &*im,
+                data: bytemuck::cast_slice_mut(&mut *data),
+                m,
+                stride,
+            })
+            .unwrap_or(false)
+        } else {
+            false
+        } || hermes_simd::vectorize_lanes::<4, T, _>(boundary::InterleaveRows {
             re,
             im,
             data: bytemuck::cast_slice_mut(data),
@@ -976,7 +991,7 @@ pub(crate) fn combine_planar_halves<T>(
     sect!("combine", {
         let twiddle_lanes = bytemuck::cast_slice(twiddles);
         let handled =
-            if T::TRANSPOSE_LANES == 8 {
+            if T::BOUNDARY_LANES == 8 {
                 hermes_simd::vectorize_hardware_lanes::<8, T, _>(boundary::CombinePlanarHalves {
                     even_re: e_re,
                     even_im: e_im,

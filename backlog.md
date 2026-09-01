@@ -13,6 +13,43 @@
 - **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
 - **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` await the peer-owned standalone-lock lease discharge before the mandatory pre-push guard can run; re-open trigger: canonical lock regeneration. Lease none.
 
+## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — review
+
+- **Outcome.** `InterleaveRows`, the last batched boundary kernel hardcoding
+  four lanes, takes the f32 native eight-lane width. The f64 route is unchanged.
+- **Delivered** (`gap_audit.md#reinterleave-native-width`). One const-generic
+  tile body serves both widths, dispatch stays outside the loops, and
+  `TRANSPOSE_LANES` is renamed `BOUNDARY_LANES` — it already governed the
+  transpose and the half combine, so the transpose-only name had stopped
+  describing it.
+- **Evidence.** Pinned `planar_passes_by_size` (processor 2, release, three runs
+  per arm) reduced the f32 `reint` pass at n=16,384 from a 8,172.1--8,656.5
+  band to 7,954.6--8,018.5, disjoint ranges and a 6.9% median reduction; n=4,096
+  moved 2,208.4 to 2,082.9 at the median with overlapping ranges, a direction
+  rather than a result. f64 `reint` held its band at all three even powers,
+  which is the measured form of the compile-time inertness. The unpinned
+  cache-flushing `engine_census` is f64-only and so gates rather than validates
+  this change: no run approached the 4.22 ms regression recorded in
+  `gap_audit.md#batched-parallel-rejection`, warm complex allocations stayed at
+  zero, and its unpinned spread (65,536 medians of 534.225--1,425.400 us) is far
+  wider than any effect available to an f64-inert change.
+- **Coverage.** A correct answer alone cannot show the width is live: declining
+  it falls back to four lanes and then the scalar loop, and all three agree.
+  `f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink` asserts
+  the dispatched width against the independently reported capability, then
+  compares bit-exactly because the pass computes nothing. Reverting the guard to
+  four lanes fails it on `Some(false)`; that was run.
+- **Gates.** `cargo fmt -p apollo-fft -- --check`, warning-denied
+  `cargo clippy -p apollo-fft --all-targets`, `cargo nextest run -p apollo-fft`
+  511/511, and `cargo test -p apollo-fft --doc` all pass on the delivered
+  revision. Hosted review and merge remain.
+- **Not done.** No AVX-512, AArch64 runtime, or cross-machine evidence; AArch64
+  retains the four-lane arm on compile evidence only. The n=4,096 f32 result is
+  unseparated and is not claimed as a win.
+- **Integrator / lease:** Claude `/root`; lease
+  `crates/apollo-fft/src/application/execution/kernel/components/batched/**`.
+  Last update 2026-09-01.
+
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
@@ -381,6 +418,17 @@
   AArch64 Windows all-target compilation, ADR index, diff, and standalone-lock
   validation with 36 first-party Git sources. Hosted review/merge remain. Last
   update 2026-08-31.
+- **Superseded local WIP (recorded 2026-09-01).** A working tree carried an
+  unfinished per-size measurement budget for this instrument
+  (`LARGE_SIZE_THRESHOLD`, `SCALE_BASE`, `config_for`, and 4,096/8,192 added to
+  `DEFAULT_SIZES`), scaling the measurement window by `len / 512` to stop the
+  median swinging. The resolution above removes that swing's causes instead —
+  exact processor binding and `process_with_scratch` — and rejects the
+  within-a-few-percent acceptance the scaling was chasing, so the WIP is
+  superseded rather than unfinished. It is archived at `44f7a146` on
+  `perf/apollo-batched-parallel` and is not proposed for main. The companion
+  claim commit `b156a967` claimed ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31,
+  which is already done on main; it was not carried forward.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 

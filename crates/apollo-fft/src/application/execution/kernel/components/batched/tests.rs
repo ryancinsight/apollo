@@ -336,6 +336,74 @@ fn f32_planar_half_combine_matches_the_scalar_formula() {
     assert!(worst <= bound, "combine error {worst:.3e} > {bound:.3e}");
 }
 
+/// The reinterleave sink at the f32 native width.
+///
+/// A correct result alone would not prove the eight-lane body ran: declining
+/// the width falls back to the four-lane body and then the scalar loop, and
+/// all three produce the same answer. So the width is asserted against the
+/// independently dispatched capability, exactly as the four-lane kernels are
+/// (`test_support::executed_or_declined_untouched`), and only then is the
+/// output compared. The pass moves data and computes nothing, so the
+/// comparison is bit-exact rather than bounded.
+#[test]
+fn f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink() {
+    // `plane_geometry(256)`: sixteen live columns on a stride of `m + ROW_PAD`.
+    let (m, stride) = (16usize, 24usize);
+    let plane = m * stride;
+    let mut re = vec![0.0f32; plane];
+    let mut im = vec![0.0f32; plane];
+    // The pad keeps its sentinel: reading it would land a value the scalar
+    // reference never writes, so a pad touch fails the comparison below.
+    for row in 0..m {
+        for column in 0..m {
+            let index = row * stride + column;
+            let logical = (row * m + column) as f32;
+            re[index] = 0.25 + logical * 0.003;
+            im[index] = -0.5 + logical * 0.002;
+        }
+    }
+    for slot in re.iter_mut().chain(im.iter_mut()) {
+        if *slot == 0.0 {
+            *slot = f32::from_bits(0x7f80_0001);
+        }
+    }
+
+    let bits = m.trailing_zeros();
+    let mut expected = vec![Complex32::default(); m * m];
+    for row in 0..m {
+        let src = row * stride;
+        let dst = (row.reverse_bits() >> (usize::BITS - bits)) * m;
+        for column in 0..m {
+            expected[dst + column] = Complex32::new(re[src + column], im[src + column]);
+        }
+    }
+
+    let mut actual = vec![Complex32::default(); m * m];
+    let handled = hermes_simd::vectorize_lanes::<8, f32, _>(super::boundary::InterleaveRows {
+        re: &re,
+        im: &im,
+        data: bytemuck::cast_slice_mut(&mut actual),
+        m,
+        stride,
+    });
+    let available = super::super::lane_capability::native_lanes_supported::<8, f32>();
+    assert_eq!(
+        handled,
+        available.then_some(true),
+        "the sink must take exactly the eight f32 lanes the dispatcher reports"
+    );
+    if !available {
+        return;
+    }
+    for (index, (got, want)) in actual.iter().zip(&expected).enumerate() {
+        assert_eq!(
+            (got.re.to_bits(), got.im.to_bits()),
+            (want.re.to_bits(), want.im.to_bits()),
+            "eight-lane sink differs from the scalar sink at output {index}"
+        );
+    }
+}
+
 #[test]
 fn plans_are_cached_per_length_and_direction() {
     let a = <f64 as BatchedPlanCache>::cached_plan::<false>(64);
