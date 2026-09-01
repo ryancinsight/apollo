@@ -20,6 +20,34 @@
   every pinned table below; single-core "P-core" attributions were measured on
   an efficiency core. Tracked as
   `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`.
+- **Revision 2026-09-01 (EcoQoS premise measured, withdrawn):** the Context
+  paragraph dated 2026-08-26 (fourth) attributes the process-dependent
+  slowdown to Windows handing benchmark children EcoQoS. The census now
+  carries the instrument that narrative never had
+  (`APOLLO_QOS_PLACEMENT_PROBE=1`, `benches/engine_census.rs`), and one run on
+  this host — 24 logical processors, High performance plan, desktop on AC,
+  2000 unpinned calls of the 4096x16 batched shape per phase — measured:
+  explicit throttling state `control=0x0 state=0x0` before the opt-out (no
+  override; the scheduler decides) and `control=0x1 state=0x0` after;
+  landings on **all 24 processors** in both phases, 45% on the eight
+  performance cores before and 50% after (their share is 33%); median latency
+  154.0 us before and 155.2 us after, p90 372 and 407 us. Three consequences.
+  The observation "executing exclusively on E-cores" is false as measured —
+  placement is a wandering blend with a performance-core bias. The mechanism
+  is unobservable through `GetProcessInformation`, which reports only an
+  explicit override, so "Windows hands children EcoQoS" was never
+  API-established. The remedy has no measured effect on this kernel's latency
+  or placement under this power plan. **The root-cause narrative is
+  withdrawn.** What the same data does show is the likelier cause of the
+  original 12 us versus 99 us discrepancy: an unpinned process samples two
+  core classes at a scheduler-chosen ratio, so its median moves run to run
+  by up to the inter-class latency ratio without any code change
+  (`ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01`). Limits: one run, one
+  host, one power plan; EcoQoS heuristics are strongest under Balanced or
+  on battery, which this host cannot exercise, so the opt-out call is
+  retained as a measured no-op rather than deleted, and re-running the probe
+  under Balanced is the recorded next check. Tracked as
+  `ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01`.
 
 ## Context
 
@@ -261,6 +289,11 @@ hands benchmark child processes EcoQoS — efficiency cores at efficiency
 frequency — and instrumenting the census process showed the batched kernel
 executing exclusively on E-cores (CPUs 8 through 21, wandering), every call
 slow, while the identical binary elsewhere ran unthrottled.
+*(Withdrawn 2026-09-01: see the EcoQoS revision note above. The placement
+claim is false as measured, the mechanism is not API-observable, and the
+opt-out changes neither latency nor placement under High performance. The
+scheduler is still implicated — as an unpinned two-class blend, not as
+EcoQoS.)*
 
 `pot::core_matrix`, which pins the thread and so removes the scheduler from
 the question, gives at N = 4096:
