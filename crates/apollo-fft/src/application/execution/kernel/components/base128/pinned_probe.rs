@@ -2,6 +2,7 @@
 //! inner small-size transforms against the references — then the assembled
 //! experiment. Sets no performance threshold; run with `--ignored --nocapture`.
 
+use crate::application::execution::kernel::core_class;
 use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkSuite};
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
@@ -165,15 +166,21 @@ where
 #[test]
 #[ignore = "measurement instrument for the 8x128 construction's inner gate"]
 fn small_sizes_against_the_references_by_core_type() {
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = core_class::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
             .expect("Windows supports processor queries")
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
-        let core = if landed < 8 { "p-core" } else { "e-core" };
+        let core = core.class().label();
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
         small_sizes_for_scalar::<f64>(&mut suite, core, "f64");
         small_sizes_for_scalar::<f32>(&mut suite, core, "f32");
@@ -201,15 +208,21 @@ fn small_sizes_against_the_references_by_core_type() {
 #[test]
 #[ignore = "paired measurement of the N=512 final-store sink"]
 fn final_store_sink_against_incumbent_by_core_type() {
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = core_class::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
             .expect("Windows supports processor queries")
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
-        let core = if landed < 8 { "p-core" } else { "e-core" };
+        let core = core.class().label();
         let plan = super::instance_major::Plan128::<f64>::new_if_supported::<false>()
             .expect("the pinned host must provide the base capability");
         let mut suite = BenchmarkSuite::new(BenchmarkConfig::regression());
@@ -288,9 +301,13 @@ fn final_store_sink_against_incumbent_by_core_type() {
 fn split_pieces_by_size() {
     use super::instance_major::{transform_128, Plan128};
 
-    let cpu = 2;
-    let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
-        .expect("measurement processor must be available");
+    let Some(core) = core_class::selected().and_then(core_class::Selection::performance) else {
+        eprintln!("host reports no performance-core information; probe not measurable");
+        return;
+    };
+    let cpu = core.processor().get();
+    let _binding =
+        ProcessorBinding::bind(core.processor()).expect("measurement processor must be available");
     std::thread::yield_now();
     let landed = ProcessorIndex::current()
         .expect("Windows supports processor queries")

@@ -10,6 +10,7 @@
 
 use super::route::{FourStep, PotRoute};
 use super::strategies::StockhamAutosort;
+use crate::application::execution::kernel::core_class;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
@@ -37,9 +38,14 @@ fn route_cost_by_core_type() {
     let mut work = src.clone();
     let tw = <f64 as MixedRadixScalar>::cached_twiddle_fwd(n);
 
-    // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = core_class::selected() else {
+        eprintln!("host reports no processor class information; core matrix not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
@@ -50,7 +56,7 @@ fn route_cost_by_core_type() {
         let four_step = best::<FourStep>(&src, &mut work, &tw);
         println!(
             "CORE cpu={landed:<2} ({}) stockham={stockham:>9.0}ns four_step={four_step:>9.0}ns",
-            if landed < 8 { "P" } else { "E" },
+            core.class().label(),
         );
     }
 }
