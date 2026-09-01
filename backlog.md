@@ -1,5 +1,40 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01 — The regression gate flagged identical machine code [patch] [perf] — todo
+
+- **Observed (PR #242, run 33570302967):** `benchmark regression check` fails
+  with `rader_half_cyclic_vs_full_cyclic/{auto,bluestein}_f32/1031` "candidate
+  is slower in all four comparisons" — ~52.7 → ~58 us, +10%, consistent across
+  both orderings and both replications of the counterbalanced design.
+- **Verified false positive.** The PR's code delta is the import rewrite in
+  `stockham/butterfly/fixed.rs` alone. Building the `half_cyclic_rader` bench
+  from the PR head `39bb85e2` and its parent `d4782689` (rustc 1.97, MSVC,
+  one target dir) gives executables of identical size whose bytes differ at
+  **5 offsets of 124,928**: PE `TimeDateStamp` (`0xf0`) and four
+  debug-directory entry timestamps 28 bytes apart. The code sections are
+  identical. A consistent +10% between identical binaries is the instrument.
+- **What the design did not protect against:** counterbalancing orderings
+  cancels drift *within* a pair; it cannot cancel a systematic difference in
+  how the candidate artifact is produced or invoked — extraction order, page
+  cache state, path, or anything else that always attaches to "candidate".
+  Cause unknown; do not guess it into the record.
+- **Fix, two parts:**
+  1. **Identity short-circuit.** Before timing, compare the two benchmark
+     executables' code sections (strip or mask PE/ELF link metadata — on Linux
+     `objcopy --strip-all` or a `.text` `objdump -d` diff). When they match,
+     report `no code delta` and skip the pair jobs. This removes the class and
+     saves four runner jobs on every docs-, comment-, or import-only PR.
+  2. **Root-cause the systematic candidate slowdown** with the artifacts from
+     run 33570302967: swap the two binaries' roles (run the baseline artifact
+     as "candidate") and see whether the slowdown follows the *role* or the
+     *file*. That one experiment partitions the cause.
+- **Acceptance oracle:** re-running the gate on #242's head reports
+  `no code delta`; an injected real regression (a deliberate extra pass in
+  one kernel on a scratch branch) is still caught — prove the check is live
+  before trusting the short-circuit.
+- **Limit stated:** identity was shown on the Windows/MSVC build; CI's Linux
+  artifacts should be diffed the same way as the first step of part 2.
+
 ## ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01 — The engine census measures an unpinned two-class blend [patch] [perf] — todo
 
 - **Finding (EcoQoS probe, 2026-09-01, this host, High performance plan):**
@@ -235,7 +270,19 @@
   conclusion cannot be recovered by swapping labels, re-measure with the
   corrected instrument rather than reinterpreting.
 
-## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — in-progress 2026-09-01
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — review 2026-09-01
+
+- **Withdrawn (PR #245).** Probe added to the census
+  (`APOLLO_QOS_PLACEMENT_PROBE=1`); one run on this host (24 LPs, High
+  performance plan, desktop on AC, 2000 unpinned calls of 4096x16 per phase):
+  explicit throttling state `0x0/0x0` before and `0x1/0x0` after the opt-out;
+  landings on all 24 processors, 45% → 50% on the eight performance cores
+  (33% share); median 154.0 → 155.2 us; p90 372 → 407 us. The observation
+  ("exclusively on E-cores") is false as measured, the mechanism is not
+  API-observable, the remedy has no measured effect. ADR 0039 carries the
+  dated revision and an inline marker; the opt-out stays as a documented
+  measured no-op because Balanced/battery is untested here. Likelier cause
+  filed as `ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01`.
 
 - **Claim:** integrator claude (this session); lane `worktrees/apollo-ecoqos-premise` on `fix/apollo-ecoqos-premise`; lease: `benches/engine_census.rs`, `docs/adr/0039-*`, this entry.
 
