@@ -1637,8 +1637,12 @@
   production hand-out and run under miri (clean, 4.7 s standalone) — and the
   first run found the arena aligning its offset rather than its address
   (UB by contract), now fixed. A deepest-composite round trip above
-  `FUSE_THRESHOLD` (n = 98,304) joins the native suite; its interpreted miri
-  cost is recorded once measured. Footprint instrument gated
+  `FUSE_THRESHOLD` (n = 98,304) joins the native suite. Under miri that
+  end-to-end path stops before the arena at the parallel policy's NUMA probe
+  (`GetNumaHighestNodeNumber` in `themis::topology::cpu::detect::windows`,
+  an unsupported foreign call) — the arena's miri witness is the unit-test
+  replica, and an upstream `cfg(miri)` stub of that probe is the external
+  requirement for the interpreted end-to-end run. Footprint instrument gated
   `#[cfg(not(miri))]`; ratchet checker walks statement heads (398 baseline).
 - **Outcome:** the `ComposeArena` `from_raw_parts_mut`-over-TLS-`UnsafeCell`
   pattern carries a stated SAFETY invariant note and a miri-covered
