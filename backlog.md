@@ -1294,8 +1294,12 @@
   scratch and performs an explicit transpose; RustFFT is not an existence
   proof for a scratch-free construction.
 
-## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — in progress: paired comparator
+## ATLAS-APOLLO-BASE-BUTTERFLY-128 — L1-resident 128-point base + 8xn chain [arch] — done 2026-08-28
 
+- **Delivered:** PR #157 merged without squash as `cc94b12b`; all hosted lock,
+  workspace, Python, benchmark-identity, and four paired-comparison jobs passed.
+  The stale paired-comparator gate is closed; later base-route increments are
+  tracked by their own items below.
 - **Same fix carried to the production route (2026-08-28).** `batched`'s
   boundary kernels had the identical defect at runtime sizes, where the type
   cannot hold the length; they take one entry `assert!` plus proof-carrying

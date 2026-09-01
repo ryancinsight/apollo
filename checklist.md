@@ -282,7 +282,7 @@ stale branches.
       state and no duplicate incumbent forward table.
 - [x] Cover concurrent cloned execution for f32/f64, both dynamic inverse
       modes, and zero/singleton identity plans with value-semantic assertions.
-- [ ] Collect PR #157 hosted comparator verification before route promotion.
+- [x] Collect PR #157 hosted comparator verification before route promotion.
 
 Evidence: focused base/resident analytical and differential cases pass 16/16;
 the complete Apollo FFT suite passes 459/459 in 7.47 seconds; strict
@@ -292,7 +292,8 @@ Mnemosyne `0cd78e5f` and resolves with 36 first-party Git sources. Independent
 review confirmed the fixed-width call-site closure after requiring pre-mutation
 resident capability checks and conditional planar oracles. The PR #157 review
 follow-up passes the 69 focused base/plan tests with all features in debug and
-release. Hosted comparator verification remains the route-promotion gate.
+release. PR #157 merged without squash as `cc94b12b` after every hosted
+comparator, workspace, Python, and lock gate passed.
 
 ## ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27 [patch] [arch] — Codex
 
