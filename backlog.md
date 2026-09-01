@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — in progress
+
+- **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
+  after the exact-eight-lane transpose correction.
+- **Scope / non-goals.** Reuse the exact-processor planar-pass instrument to
+  separate stage, transpose, and copy costs at N = 16,384/32,768 with f64 and
+  adjacent-size controls. Do not change the comparison workload, estimator,
+  route selection, or production source until one phase reproduces across
+  three runs; do not trade f64 or smaller-size latency for the target row.
+- **Acceptance.** Three same-revision processor-2 runs identify a stable
+  dominant phase. A retained production correction preserves direct-DFT,
+  round-trip, exact-route, and zero-warm-allocation semantics, improves two
+  adjacent unchanged 100-sample comparisons, and keeps controls neutral.
+  Reject the candidate if the phase or complete-path intervals do not
+  reproduce.
+- **Risk / dependencies.** [patch] [perf]. Depends on PR #218 / `23993c6a`,
+  which removed the prior transpose bottleneck. Exact local Windows AVX2
+  measurements are required; AArch64 remains compilation coverage unless a
+  runner supplies timing evidence.
+- **Integrator / lease:** `/root`; lease `/root` on this item block and its
+  checklist section only while the entry attribution is collected. Last
+  update 2026-08-31.
+
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
 
 - **Outcome.** Attribute and reduce Apollo f32 N=32,768's stable 23% latency
