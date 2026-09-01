@@ -63,8 +63,8 @@ by anything.
 
 ## Decision
 
-Measurement processors are selected by `core_class::selected()`, and nothing
-about core class is assumed:
+Measurement processors are selected by `measurement_cores::selected()`, and
+nothing about core class is assumed:
 
 - **Class is queried, and themis owns the query.** `CpuTopology::detect()`
   supplies each processor's `EfficiencyClass`. The value is a dense ordinal,
