@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N96-COMPOSITE-2026-08-31 — Remove retained-plan composite setup overhead [patch] [perf] — in progress
+
+- **Outcome.** Attribute and reduce the stable f32 N = 96 composite-route latency gap against retained-scratch RustFFT while reducing duplicate cross-thread twiddle retention.
+- **Scope / non-goals.** Measure the `[4, 4, 2, 3]` flat Stockham route's per-execution cache ownership, scratch acquisition, and four stage passes. If cache ownership is material, retain the existing cached twiddle/offset allocation in `FftPlan1D` and borrow it during execution; preserve one canonical composite kernel and the direct non-plan API. Do not change the comparison workload, estimator, radix order, arithmetic, scheduler policy, public API, or established N = 32/64/128 routes.
+- **Acceptance.** A phase probe identifies a reproducible material setup cost before production changes. The retained candidate shares rather than duplicates cached forward/inverse state, builds inverse state lazily, introduces no warmed allocation or retained table copy, and preserves direct-DFT, normalized/unnormalized inverse, clone sharing, cross-thread execution, and AArch64 fallback semantics. Two adjacent 100-sample runs must improve f32 N = 96 with f64 N = 96 and f32/f64 N = 64/128 controls neutral; reject a candidate whose complete-path intervals do not reproduce.
+- **Entry evidence.** Three processor-2 runs place Apollo f32 N = 96 at 222.863/222.935/223.045 ns versus RustFFT at 94.133/94.087/94.280 ns (2.37x); f64 is 1.51--1.52x. N = 64 controls are 1.05--1.06x and N = 128 controls 1.10--1.15x, isolating a composite-route deficit. Source inspection shows every execution scans a thread-local radix cache and clones twiddle plus offset `Arc`s before four flat Stockham passes.
+- **Risk / dependencies.** [patch] [perf]. The state is private but crosses plan clones and threads; ownership, lazy inverse initialization, and Send/Sync must remain sound. Timing evidence is local Windows AVX2 only; AArch64 remains compilation evidence.
+- **Integrator / lease:** `/root`; lease `/root` on `radix_composite/{core,cache}`, `dimension_1d/{dynamic_impl,executors,plan_tests}`, focused allocation/value probes, `gap_audit.md`, `CHANGELOG.md`, and this item's PM sections. Last update 2026-08-31.
+
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — done 2026-08-31
 
 - **Outcome.** Remove the per-execution global twiddle-cache lookup and

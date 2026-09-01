@@ -1,5 +1,20 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N96-COMPOSITE-2026-08-31 [perf] — Codex
+
+- [x] Reproduce the exact-processor f32 N = 96 deficit across three unchanged
+      100-sample runs with f64 and N = 64/128 controls.
+- [ ] Attribute cache-owner acquisition, scratch acquisition, and each flat
+      Stockham pass before changing production ownership or arithmetic.
+- [ ] Retain the cached composite state in `FftPlan1D` only if the setup cost is
+      material; preserve lazy inverse state and cross-thread clone sharing.
+- [ ] Prove direct-DFT, normalized/unnormalized inverse, exact radix order,
+      warmed zero allocation, retained-byte ownership, and Send/Sync behavior.
+- [ ] Keep two adjacent complete-path comparisons green with f64 N = 96 and
+      f32/f64 N = 64/128 controls neutral; reject any non-reproducing source.
+- [ ] Pass focused debug/release, warning-denied host/AArch64, Rustdoc, doctest,
+      formatting, allocation, lock, independent review, and hosted gates.
+
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
 
 - [x] Record the exact entry split costs at f64 N = 256/512 and identify the
