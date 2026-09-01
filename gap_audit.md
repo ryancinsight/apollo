@@ -36,6 +36,7 @@ zero direct Mnemosyne allocations. A same-command all-feature release-library
 pair grows from 18,708,202 to 18,808,258 bytes, a bounded 100,056-byte (0.535%)
 cost for the one specialization. Timing is local Windows AVX2 evidence on
 logical processor 2; the AArch64 gate establishes compilation, not throughput.
+Exact source is `c616b8c2`.
 
 ## The N = 96 Good-Thomas row batch uses one Hermes target frame (2026-09-01) <a id="f32-n96-codelet"></a>
 

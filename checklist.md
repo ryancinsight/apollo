@@ -11,6 +11,7 @@
 - [x] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
       controls; pass warning-denied host/AArch64, 524/524 debug/release, docs,
       formatting, standalone-lock, and exact-diff gates.
+- [x] Commit exact source `c616b8c2` with no lock or unrelated peer movement.
 - [ ] Complete hosted review and merge without squash.
 
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
