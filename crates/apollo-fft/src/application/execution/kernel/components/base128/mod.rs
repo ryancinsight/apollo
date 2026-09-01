@@ -103,20 +103,52 @@ where
     <F as crate::application::execution::kernel::mixed_radix::MixedRadixScalar>::with_scratch(
         n,
         |scratch| {
-            // One gather covering every level — the whole-register blend
-            // network where the width admits it, the scalar strided read
-            // otherwise (gap_audit.md#split-boundary).
-            let gathered = if blocks == 2 {
-                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 2> {
-                    src: bytemuck::cast_slice(&*data),
-                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
-                })
-                .unwrap_or(false)
-            } else {
-                hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<F, 4> {
-                    src: bytemuck::cast_slice(&*data),
-                    dst: bytemuck::cast_slice_mut(&mut scratch[..n]),
-                })
+            // One gather covering every level — the pair-deinterleave
+            // network at the plan's native width, the scalar strided read
+            // otherwise (gap_audit.md#split-boundary). Dispatching at the
+            // base kernel's width keeps a four-byte scalar out of the
+            // scalar-emulated four-lane frame it previously gathered in.
+            let gathered = {
+                let src = bytemuck::cast_slice(&*data);
+                let dst = bytemuck::cast_slice_mut(&mut scratch[..n]);
+                match (blocks, plan.native_eight_lanes()) {
+                    (2, false) => {
+                        hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            2,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
+                    (2, true) => {
+                        hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            2,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
+                    (_, false) => {
+                        hermes_simd::vectorize_lanes::<4, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            4,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
+                    (_, true) => {
+                        hermes_simd::vectorize_lanes::<8, F, _>(split_boundary::GatherBlocks::<
+                            F,
+                            4,
+                        > {
+                            src,
+                            dst,
+                        })
+                    }
+                }
                 .unwrap_or(false)
             };
             if !gathered {

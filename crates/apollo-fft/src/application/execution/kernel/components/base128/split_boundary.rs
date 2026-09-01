@@ -17,6 +17,15 @@
 //!   scalar-combine verdict, so the combine stays scalar and the fused
 //!   radix-4 form in [`super`] attacks its pass count instead.
 //!
+//! The blend network is expressed through hermes' pair-granularity
+//! deinterleave, so the four-lane f64 route and the eight-lane f32 route run
+//! the same construction at their native widths -- a four-byte scalar
+//! previously ran the four-lane form in the scalar-emulated frame. One
+//! `deinterleave_pairs` of two consecutive chunks splits their complex
+//! samples into even and odd halves; four blocks either pair chunks at
+//! distance two (four lanes, where a chunk is exactly one pair of
+//! complexes) or compose two levels (eight lanes).
+//!
 //! Bounds are hoisted: one assert per slice at kernel entry, then raw chunk
 //! access — these buffers arrive as runtime-length slices, and the checked
 //! view accessor re-derives its bound per touch when the length is not a
@@ -39,7 +48,9 @@ where
     // SAFETY: every caller asserts its slice length once at entry, and each
     // chunk index below is derived from that length; the kernel's dispatch
     // token proves the host executes `A`.
-    unsafe { Vector::<T, A>::load_unaligned(data.as_ptr().add(c * 4)) }
+    unsafe {
+        Vector::<T, A>::load_unaligned(data.as_ptr().add(c * <A as SimdStorage<T>>::LANE_COUNT))
+    }
 }
 
 /// One-vector store at chunk `c`, which the caller has proved in bounds.
@@ -55,7 +66,7 @@ where
 {
     debug_assert!((c + 1) * <A as SimdStorage<T>>::LANE_COUNT <= data.len());
     // SAFETY: as `chunk` above.
-    unsafe { v.store_unaligned(data.as_mut_ptr().add(c * 4)) }
+    unsafe { v.store_unaligned(data.as_mut_ptr().add(c * <A as SimdStorage<T>>::LANE_COUNT)) }
 }
 
 /// Gathers the split's stride-`BLOCKS` subsequences into contiguous blocks.
@@ -83,7 +94,9 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
     )]
     #[inline(always)]
     fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> bool {
-        if <A as SimdStorage<T>>::LANE_COUNT != 4 {
+        let _ = simd;
+        let lanes = <A as SimdStorage<T>>::LANE_COUNT;
+        if lanes != 4 && lanes != 8 {
             return false;
         }
         // One bound for the whole pass, so the per-chunk compares vanish.
@@ -93,28 +106,48 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 && self.dst.len() == self.src.len(),
             "invariant: two or four 128-sample blocks"
         );
-        // The high-complex blend mask, as in the base kernels' phase one.
-        let zero = T::from_precise(0.0);
-        let neg = T::from_precise(-1.0);
-        let mask = [zero, zero, neg, neg];
-        let mask = simd.view(&mask);
-        let hi_mask = Vector::<T, A>::from_view_chunk(&mask, 0);
-        // Per group: parent chunks at pair distance `BLOCKS / 2` concatenate
-        // into one chunk of each of two subsequences.
-        let dist = BLOCKS / 2;
-        for g in 0..BLOCKS * 32 {
-            let s = g % dist;
-            let k = g / dist;
-            let base = k * 2 * dist + s;
-            let lo = chunk::<T, A>(self.src, base);
-            let hi = chunk::<T, A>(self.src, base + dist);
-            let even = hi_mask.blend(hi.swap_pairs(), lo);
-            let odd = hi_mask.blend(hi, lo.swap_pairs());
-            // Subsequences `2s` and `2s + 1` of the stride-`BLOCKS`
-            // decimation; block row `s` and `s + dist` is the bit-reversed
-            // block order (identity for two blocks, [0, 2, 1, 3] for four).
-            put_chunk(even, self.dst, s * 64 + k);
-            put_chunk(odd, self.dst, (s + dist) * 64 + k);
+        // Chunks per 128-sample block at the dispatched width.
+        let cpb = 256 / lanes;
+        if BLOCKS == 2 {
+            // One pair-deinterleave of two consecutive chunks splits their
+            // complex samples into the even and odd subsequences.
+            for g in 0..cpb {
+                let (even, odd) =
+                    chunk::<T, A>(self.src, 2 * g).deinterleave_pairs(chunk(self.src, 2 * g + 1));
+                put_chunk(even, self.dst, g);
+                put_chunk(odd, self.dst, cpb + g);
+            }
+        } else if lanes == 4 {
+            // A four-lane chunk is exactly one pair of complex samples, so
+            // pairing chunks at distance two reaches stride four in one
+            // level. Block rows land as [0, 2, 1, 3] -- the bit-reversed
+            // block order the combine chain expects.
+            for g in 0..2 * cpb {
+                let s = g % 2;
+                let k = g / 2;
+                let base = 4 * k + s;
+                let (even, odd) =
+                    chunk::<T, A>(self.src, base).deinterleave_pairs(chunk(self.src, base + 2));
+                put_chunk(even, self.dst, s * cpb + k);
+                put_chunk(odd, self.dst, (s + 2) * cpb + k);
+            }
+        } else {
+            // Eight-lane chunks hold four complexes, so stride four composes
+            // two deinterleave levels over each quad of consecutive chunks;
+            // the second level's outputs are one chunk of each block, in the
+            // same bit-reversed row order.
+            for k in 0..cpb {
+                let (e0, o0) =
+                    chunk::<T, A>(self.src, 4 * k).deinterleave_pairs(chunk(self.src, 4 * k + 1));
+                let (e1, o1) = chunk::<T, A>(self.src, 4 * k + 2)
+                    .deinterleave_pairs(chunk(self.src, 4 * k + 3));
+                let (b0, b2) = e0.deinterleave_pairs(e1);
+                let (b1, b3) = o0.deinterleave_pairs(o1);
+                put_chunk(b0, self.dst, k);
+                put_chunk(b2, self.dst, cpb + k);
+                put_chunk(b1, self.dst, 2 * cpb + k);
+                put_chunk(b3, self.dst, 3 * cpb + k);
+            }
         }
         true
     }

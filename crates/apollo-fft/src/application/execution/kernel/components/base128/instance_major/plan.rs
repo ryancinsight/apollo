@@ -58,6 +58,13 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
         Some(Self::new::<INVERSE>(lane_width))
     }
 
+    /// Whether this plan selected the eight-lane register layout, so
+    /// width-dispatched companions (the split gather) run at the same
+    /// native width as the base kernel.
+    pub(crate) const fn native_eight_lanes(&self) -> bool {
+        matches!(self.lane_width, BaseLaneWidth::Eight)
+    }
+
     fn new<const INVERSE: bool>(lane_width: BaseLaneWidth) -> Self {
         let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         let w = |j: usize, n: usize| -> [f64; 2] {
