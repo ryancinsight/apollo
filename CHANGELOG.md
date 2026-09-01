@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [minor] **Benches measure on a processor chosen by queried efficiency class.**
+  `apollo-bench` gains `bind_measurement_processor`: `APOLLO_BENCH_PROCESSOR`
+  override, else the second member of the most performant class the platform
+  reports, else the current processor labelled unclassified; the binding is
+  verified and printed in each report header. `engine_census` now pins (it
+  measured an unpinned two-class blend, p90 at 2.4x the median) and
+  `rustfft_comparison` uses the shared helper instead of its own copy;
+  `BenchmarkError` aggregates mode and processor failures for both.
+
 - [patch] [perf] The private real-half FFT split now seeds one
   native-precision complex twiddle recurrence per eight bins instead of
   evaluating f64 sine and cosine for every bin. The bounded restart adds no

@@ -47,15 +47,14 @@
 
 use std::time::{Duration, Instant};
 
-use apollo_bench::{BenchmarkCase, BenchmarkConfig, BenchmarkMode, BenchmarkSuite};
+use apollo_bench::{
+    bind_measurement_processor, BenchmarkCase, BenchmarkConfig, BenchmarkError, BenchmarkMode,
+    BenchmarkSuite,
+};
 use eunomia::{Complex32, Complex64};
-use hermes_simd::{ProcessorBinding, ProcessorBindingError, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
 use rustfft::FftPlanner;
-use std::env::VarError;
-use std::fmt;
 use std::hint::black_box;
-use std::num::ParseIntError;
 
 /// Hard wall-clock bound for the default sweep. See the module budget table.
 const BUDGET_SECS: u64 = 30;
@@ -67,9 +66,6 @@ const MEASUREMENT_MS: u64 = 80;
 const FULL_SWEEP_MAX: usize = 500;
 /// Environment switch selecting the dense 1..=FULL_SWEEP_MAX sweep.
 const FULL_SWEEP_VAR: &str = "APOLLO_BENCH_FULL_SWEEP";
-/// Optional exact logical processor used for the complete measurement process.
-const PROCESSOR_VAR: &str = "APOLLO_BENCH_PROCESSOR";
-
 /// Representative lengths spanning the regimes Apollo dispatches differently:
 /// identity, short Winograd codelets, power-of-two Stockham, odd primes that
 /// reach Rader, prime-power and smooth composites, and a few larger sizes where
@@ -78,126 +74,6 @@ const DEFAULT_SIZES: [usize; 25] = [
     1, 2, 3, 4, 5, 7, 8, 11, 13, 16, 19, 31, 32, 53, 64, 67, 96, 121, 128, 200, 256, 512, 1024,
     2048, 32768,
 ];
-
-#[derive(Debug)]
-enum ProcessorSelectionError {
-    Environment(VarError),
-    InvalidIndex(ParseIntError),
-    Binding(ProcessorBindingError),
-    Mismatch {
-        requested: ProcessorIndex,
-        observed: ProcessorIndex,
-    },
-}
-
-#[derive(Debug)]
-enum BenchmarkError {
-    Mode(apollo_bench::BenchmarkModeError),
-    Processor(ProcessorSelectionError),
-}
-
-impl fmt::Display for BenchmarkError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Mode(error) => error.fmt(formatter),
-            Self::Processor(error) => error.fmt(formatter),
-        }
-    }
-}
-
-impl std::error::Error for BenchmarkError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Mode(error) => Some(error),
-            Self::Processor(error) => Some(error),
-        }
-    }
-}
-
-impl From<apollo_bench::BenchmarkModeError> for BenchmarkError {
-    fn from(error: apollo_bench::BenchmarkModeError) -> Self {
-        Self::Mode(error)
-    }
-}
-
-impl From<ProcessorSelectionError> for BenchmarkError {
-    fn from(error: ProcessorSelectionError) -> Self {
-        Self::Processor(error)
-    }
-}
-
-impl fmt::Display for ProcessorSelectionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Environment(error) => write!(formatter, "read {PROCESSOR_VAR}: {error}"),
-            Self::InvalidIndex(error) => {
-                write!(formatter, "parse {PROCESSOR_VAR} as a u32: {error}")
-            }
-            Self::Binding(error) => write!(formatter, "bind benchmark processor: {error}"),
-            Self::Mismatch {
-                requested,
-                observed,
-            } => write!(
-                formatter,
-                "requested processor {}, but observed processor {} after binding",
-                requested.get(),
-                observed.get()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for ProcessorSelectionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Environment(error) => Some(error),
-            Self::InvalidIndex(error) => Some(error),
-            Self::Binding(error) => Some(error),
-            Self::Mismatch { .. } => None,
-        }
-    }
-}
-
-fn bind_measurement_processor() -> Result<Option<ProcessorBinding>, ProcessorSelectionError> {
-    let requested = match std::env::var(PROCESSOR_VAR) {
-        Ok(value) => Some((
-            ProcessorIndex::new(
-                value
-                    .parse()
-                    .map_err(ProcessorSelectionError::InvalidIndex)?,
-            ),
-            PROCESSOR_VAR,
-        )),
-        Err(VarError::NotPresent) => match ProcessorIndex::current() {
-            Ok(current) => Some((current, "current processor")),
-            Err(ProcessorBindingError::UnsupportedPlatform) => None,
-            Err(error) => return Err(ProcessorSelectionError::Binding(error)),
-        },
-        Err(error) => return Err(ProcessorSelectionError::Environment(error)),
-    };
-
-    let Some((requested, selection)) = requested else {
-        eprintln!(
-            "rustfft_comparison: exact processor binding is unsupported; measurements are unpinned"
-        );
-        return Ok(None);
-    };
-
-    let binding = ProcessorBinding::bind(requested).map_err(ProcessorSelectionError::Binding)?;
-    std::thread::yield_now();
-    let observed = ProcessorIndex::current().map_err(ProcessorSelectionError::Binding)?;
-    if observed != requested {
-        return Err(ProcessorSelectionError::Mismatch {
-            requested,
-            observed,
-        });
-    }
-    eprintln!(
-        "rustfft_comparison: bound to logical processor {} ({selection})",
-        observed.get(),
-    );
-    Ok(Some(binding))
-}
 
 /// Deterministic complex signal; identical values feed both engines.
 fn signal(len: usize) -> Vec<Complex64> {
@@ -296,7 +172,8 @@ fn bench_size(suite: &mut BenchmarkSuite, config: BenchmarkConfig, len: usize) {
 }
 
 fn main() -> Result<(), BenchmarkError> {
-    let _processor_binding = bind_measurement_processor()?;
+    let processor = bind_measurement_processor()?;
+    eprintln!("rustfft_comparison: {}", processor.describe());
     let started = Instant::now();
     let lengths = sizes();
     let full = lengths.len() > DEFAULT_SIZES.len();

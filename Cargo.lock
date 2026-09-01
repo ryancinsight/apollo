@@ -61,6 +61,8 @@ name = "apollo-bench"
 version = "0.16.0"
 dependencies = [
  "csv",
+ "hermes-simd",
+ "themis-topology",
  "thiserror 2.0.20",
 ]
 
