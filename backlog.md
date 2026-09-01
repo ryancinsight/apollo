@@ -27,7 +27,8 @@
   release Nextest pass 510/510, the focused global/direct-Mnemosyne census is
   zero/zero, all-target/all-feature Clippy and AArch64 check pass with warnings
   denied, and doctest/Rustdoc/format/36-source standalone-lock gates pass;
-  independent review, hosted gates, PR, and merge remain. Last update 2026-08-31.
+  independent exact-object review is GREEN with dynamic gates treated as
+  supplied evidence; hosted gates, PR, and merge remain. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 

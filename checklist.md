@@ -13,8 +13,9 @@
 - [x] Commit exact source `5a1b3e8a` and pass focused, debug/release package,
       warning-denied, AArch64, documentation, and 36-source standalone-lock
       gates; discharge the source/test/documentation lease.
-- [ ] Obtain independent exact-object review, pass hosted gates, and merge the
-      resulting PR without squash.
+- [x] Obtain independent exact-object GREEN review of source `5a1b3e8a`; the
+      reviewer treats dynamic gate and timing results as supplied evidence.
+- [ ] Pass hosted gates and merge the resulting PR without squash.
 
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
 
