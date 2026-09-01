@@ -92,6 +92,45 @@
     label-independent by construction. The `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`
     = 256 reroute and the f64 256/512 scalar reroute are both of this form and
     were re-verified.
+- **Decisive finding (2026-09-01, verified from history — read this before
+  sweeping).** The original instrument is
+  `pot/core_matrix.rs` as of `6f453687`:
+
+  ```rust
+  // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
+  for cpu in [2u32, 12] {
+      let landed = pin(cpu);
+      ... if landed < 8 { "P" } else { "E" }
+  ```
+
+  Against the real performance mask `0xc03c03` = {0, 1, 10, 11, 12, 13, 22, 23}:
+  cpu 2 was labelled **P** and is an **efficiency** core; cpu 12 was labelled
+  **E** and is a **performance** core. **Both arms are inverted, not one.**
+  That was not established when this item was written, and it changes the work:
+
+  - **Mechanical (the majority).** Because both arms swapped, every two-column
+    P/E table is correct in its *numbers* and wrong only in its *headers* —
+    swap them. Single-core attributions follow the same rule with no judgement:
+    a "P-core" figure was measured on cpu 2 and is an **efficiency-core**
+    figure; an "E-core" figure was measured on cpu 12 and is a
+    **performance-core** figure. No re-measurement is needed for these.
+  - **Needs re-reasoning (the minority).** Only claims that reason *from* a
+    property of the core type, rather than merely reporting per-core numbers.
+    Worked example — `resident/planar.rs:3-11` argues "this host's P-core has
+    the shuffle throughput to keep the interleaved form from ever being
+    shuffle-port-bound". That was measured on cpu 2, an efficiency core, so the
+    stated claim is unsupported as written. Note the correction is *not* a
+    swap: what the data actually shows is the stronger fact that even an
+    E-core had sufficient shuffle throughput, which makes the P-core case
+    likely but unmeasured. Restate to what was measured; do not invert.
+  - **Partition by provenance, not by text.** Probes added after
+    `core_class.rs` landed select the second processor of each class (cpu 1
+    performance / cpu 3 efficiency) and are **correct** — the selection logic
+    was never the defect, only the pre-`core_class` hardcoded `[2, 12]` +
+    `landed < 8` labelling was. A text grep for `P-core` cannot tell the two
+    populations apart; check whether the claim predates `core_class.rs` for
+    the file it lives in.
+
 - **Acceptance oracle:** no `P-core`/`E-core` claim traceable to a pre-2026-09-01
   pinned probe remains without either a correction or a revision note; a grep
   for `P-core` in `gap_audit.md` and `backlog.md` returns only marked text.
