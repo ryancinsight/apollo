@@ -4,13 +4,17 @@
 
 - [x] Record the exact entry split costs at f64 N = 256/512 and identify the
       per-execution cache lookup plus temporary `Arc` acquisition.
-- [ ] Retain one full-length forward table in the existing plan slot, preserve
+- [x] Retain one full-length forward table in the existing plan slot, preserve
       lazy inverse construction, and borrow the selected stage slices through
       every base-split executor.
-- [ ] Prove direct-oracle/round-trip values, clone sharing, zero warmed
+- [x] Prove direct-oracle/round-trip values, clone sharing, zero warmed
       allocation, no public change, and warning-denied cross-target coverage.
-- [ ] Retain the source only if two adjacent exact-processor comparisons improve
+- [x] Retain the source only if two adjacent exact-processor comparisons improve
       N = 256/512 with N = 64/128 controls neutral; otherwise record rejection.
+- [x] Commit exact source `ef612116`, regenerate/check the standalone 36-source
+      lock, and discharge the source/PM lease without staging unrelated dirt.
+- [ ] Obtain independent exact-object review, pass the unchanged hosted
+      comparison, and merge without squash.
 
 ## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 [perf] — Codex
 
@@ -28,7 +32,10 @@
       benchmark-smoke, formatting, diff, and standalone 36-source lock gates.
 - [x] Commit exact source `e01cadca`, discharge the lease, and complete the
       exact staged-diff self-review with no unrelated source or lock movement.
-- [ ] Pass hosted repository checks and merge without squash.
+- [x] Merge PR #221 without squash as `fcc306a5`; lock, workspace, bindings,
+      artifacts, executable identity, and all four pair jobs pass.
+- [ ] Close the post-merge final-comparator failure on f64 N = 107 Rader
+      `auto` and `half_cyclic` without changing the benchmark oracle.
 
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 [perf] — Codex
 
