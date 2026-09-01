@@ -9,8 +9,8 @@
       target-feature safety, no hot capability probe, and bounded size growth.
 - [x] Reproduce paired isolated and full-path measurements, synchronize durable
       evidence, and pass exact local gates at source `9ac833cd`.
-- [ ] Complete independent hosted gates and merge without squash; provider PR
-      #135 is merged as `060eb7eb`.
+- [x] Complete independent hosted gates and merge without squash: Apollo PR
+      #230 merged as `17bad886`; provider PR #135 is merged as `060eb7eb`.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
 
