@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
+
+- [ ] Add a value-gated four-column Hermes DFT-3 candidate to the pinned phase
+      instrument without changing production routing.
+- [ ] Reject it if the isolated column/scatter phase fails to improve; otherwise
+      retain the minimum private `(3,32)` f32 hook with scalar fallback.
+- [ ] Prove forward/inverse direct-DFT bounds, exact CRT output coverage,
+      unsupported-width no-mutation, f64 parity, and warmed zero allocation.
+- [ ] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
+      f32/f64 controls, then run warning-denied host/AArch64, debug/release,
+      documentation, formatting, lock, exact-diff, hosted, and merge gates.
+
 ## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 [perf] — Codex
 
 - [x] Reproduce the exact-processor f32 N = 96 deficit across three unchanged
