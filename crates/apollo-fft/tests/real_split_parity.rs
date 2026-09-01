@@ -34,6 +34,16 @@ fn tolerance(n: usize, l1: f64) -> f64 {
     TOLERANCE_FACTOR * stages * (f64::EPSILON / 2.0) * l1
 }
 
+fn tolerance_f32(n: usize, l1: f32) -> f32 {
+    let stages =
+        f32::from(u16::try_from(n.trailing_zeros()).expect("power-of-two stage count fits u16"));
+    // Each restarted block advances its twiddle at most seven times. A complex
+    // multiply has six rounded scalar operations, so 42u bounds the additional
+    // recurrence error independently of N.
+    const RESTARTED_RECURRENCE_FACTOR: f32 = 42.0;
+    (16.0 * stages + RESTARTED_RECURRENCE_FACTOR) * (f32::EPSILON / 2.0) * l1
+}
+
 fn signal(n: usize) -> Vec<f64> {
     (0..n)
         .map(|i| {
@@ -77,6 +87,42 @@ fn matches_exact_spectrum_of_a_known_tone_sum() {
             assert!(
                 err <= bound,
                 "N={n} bin {bin}: |{value:?} - {expected}| = {err:.3e} exceeds {bound:.3e}"
+            );
+        }
+    }
+}
+
+#[test]
+fn matches_exact_spectrum_in_native_f32() {
+    for n in SIZES {
+        let n_f32 = f32::from(u16::try_from(n).expect("test length fits exactly in f32"));
+        let tones: [(usize, f32); 3] = [(1, 1.0), (3, -0.5), (7, 0.25)];
+        let applicable: Vec<_> = tones.into_iter().filter(|(k, _)| *k < n / 2).collect();
+        let src: Vec<f32> = (0..n)
+            .map(|i| {
+                applicable
+                    .iter()
+                    .map(|(k, amplitude)| {
+                        let residue = u16::try_from((k * i) % n)
+                            .expect("test phase residue fits exactly in f32");
+                        amplitude * (std::f32::consts::TAU * f32::from(residue) / n_f32).cos()
+                    })
+                    .sum()
+            })
+            .collect();
+
+        let spectrum = apollo_fft::fft_1d_slice::<f32>(&src);
+        let l1: f32 = src.iter().map(|value| value.abs()).sum();
+        let bound = tolerance_f32(n, l1);
+        for (bin, value) in spectrum.iter().enumerate() {
+            let expected = applicable
+                .iter()
+                .find(|(k, _)| *k == bin || n - *k == bin)
+                .map_or(0.0, |(_, amplitude)| amplitude * n_f32 / 2.0);
+            let error = (value.re - expected).hypot(value.im);
+            assert!(
+                error <= bound,
+                "N={n} bin {bin}: |{value:?} - {expected}| = {error:.3e} exceeds {bound:.3e}"
             );
         }
     }

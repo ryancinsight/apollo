@@ -126,25 +126,39 @@ where
     out[0] = eunomia::Complex::new(z0.re + z0.im, zero);
     out[m] = eunomia::Complex::new(z0.re - z0.im, zero);
 
+    // Directly seed each short block, then advance in native precision. The
+    // restart bounds recurrence error by eight bins rather than N while
+    // amortizing each transcendental evaluation over the block. A retained
+    // twiddle table would remove the recurrence but add O(N) plan memory.
+    const TWIDDLE_RESTART_INTERVAL: usize = 8;
     let scale = -core::f64::consts::TAU / n as f64;
-    for k in 1..m.div_ceil(2) {
-        let a = out[k];
-        let b = out[m - k];
+    let (step_sin, step_cos) = scale.sin_cos();
+    let (step_re, step_im) = (T::from_precise(step_cos), T::from_precise(step_sin));
+    let limit = m.div_ceil(2);
+    for block_start in (1..limit).step_by(TWIDDLE_RESTART_INTERVAL) {
+        let block_end = block_start
+            .saturating_add(TWIDDLE_RESTART_INTERVAL)
+            .min(limit);
+        let (seed_sin, seed_cos) = (scale * block_start as f64).sin_cos();
+        let (mut wr, mut wi) = (T::from_precise(seed_cos), T::from_precise(seed_sin));
 
-        let fe_re = (a.re + b.re) / two;
-        let fe_im = (a.im - b.im) / two;
-        let fo_re = (a.im + b.im) / two;
-        let fo_im = (b.re - a.re) / two;
+        for k in block_start..block_end {
+            let a = out[k];
+            let b = out[m - k];
 
-        // Direct evaluation per entry, matching the twiddle-accuracy contract
-        // in this module: a recurrence here would reintroduce O(N·u) error.
-        let (sin, cos) = (scale * k as f64).sin_cos();
-        let (wr, wi) = (T::from_precise(cos), T::from_precise(sin));
-        let t_re = fo_re * wr - fo_im * wi;
-        let t_im = fo_re * wi + fo_im * wr;
+            let fe_re = (a.re + b.re) / two;
+            let fe_im = (a.im - b.im) / two;
+            let fo_re = (a.im + b.im) / two;
+            let fo_im = (b.re - a.re) / two;
 
-        out[k] = eunomia::Complex::new(fe_re + t_re, fe_im + t_im);
-        out[m - k] = eunomia::Complex::new(fe_re - t_re, t_im - fe_im);
+            let t_re = fo_re * wr - fo_im * wi;
+            let t_im = fo_re * wi + fo_im * wr;
+
+            out[k] = eunomia::Complex::new(fe_re + t_re, fe_im + t_im);
+            out[m - k] = eunomia::Complex::new(fe_re - t_re, t_im - fe_im);
+
+            (wr, wi) = (wr * step_re - wi * step_im, wr * step_im + wi * step_re);
+        }
     }
 
     if m % 2 == 0 && m >= 2 {
