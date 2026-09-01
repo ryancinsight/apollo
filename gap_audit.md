@@ -1,3 +1,61 @@
+## The f32 reinterleave sink was using half the native width (2026-09-01) <a id="reinterleave-native-width"></a>
+
+`InterleaveRows` was the last batched boundary kernel still hardcoding four
+lanes. The planar transpose and the half combine already take their width from
+the scalar plan contract, so on AVX2 the f32 sink alone moved 16 bytes per
+vector while its eight-lane width was available. The tile body now indexes in
+whole `lanes`-wide chunks and one body serves both widths; dispatch stays
+outside the loops. `TRANSPOSE_LANES` became `BOUNDARY_LANES`, which is what it
+had already grown into — it governed the transpose and the combine before this
+change and governs all three passes after it.
+
+Pinned per-pass attribution (`planar_passes_by_size`, exact processor 2, release,
+200 calls per size, three runs per arm) isolates the `reint` pass. The pass
+appears only at even powers; odd powers decimate and leave through
+`CombinePlanarHalves`, which was already width-generic.
+
+| arm | f32 n=4,096 | f32 n=16,384 |
+| --- | ---: | ---: |
+| four-lane sink | 2,208.4 / 2,272.8 / 2,052.5 | 8,555.7 / 8,656.5 / 8,172.1 |
+| native-width sink | 2,082.9 / 2,098.8 / 2,012.0 | 7,966.7 / 7,954.6 / 8,018.5 |
+
+At 16,384 the two ranges are disjoint — 8,172.1 low water against 8,018.5 high
+water — for a 6.9% median reduction, 8,555.7 to 7,966.7 cycles. At 4,096 the
+ranges overlap (2,052.5 against 2,098.8), so that length carries a direction
+but not a separated result. The pass is roughly 8% of the route, and the f32
+route total at 16,384 moved from 104,435.7--107,205.3 to 103,023.9--104,112.6
+cycles, consistent with the pass share rather than exceeding it. The gain is
+well under the halved instruction count, which is expected for a pass that
+streams two planes in and one interleaved buffer out: it is partly store-bound,
+so removing half the instructions does not remove half the time.
+
+The f64 route is unchanged by construction — `BOUNDARY_LANES` is 4 for f64, so
+the added arm is a false compile-time constant and the monomorphized f64 sink
+is the previous code. The same instrument confirms it rather than assuming it:
+f64 `reint` measured 833.7/846.7/876.7 before and 841.2/847.8/876.7 after at
+1,024, 3,915.7/3,987.2/4,006.8 before and 3,897.6/3,895.0/4,125.3 after at
+4,096, and 15,432.9/15,574.4/15,592.1 before and 15,107.6/15,719.2/15,737.3
+after at 16,384.
+
+### What the census can and cannot say here
+
+`engine_census` is the standing production oracle for this route
+(`#batched-parallel-rejection` requires beating it), but every one of its arms
+is f64, and this change is inert for f64. It is therefore a regression gate
+here, not a validation instrument. One valid paired run before a concurrent
+commit disturbed the comparison put the candidate at or below the entry arm —
+65,536 at 534.225 against 587.550 us, 262,144 at 2,635.150 against 3,065.500 us
+— and four standalone candidate runs reported 65,536 medians of 534.225,
+563.225, 737.000, and 1,425.400 us. That spread is host noise on an unpinned
+hybrid part, an order of magnitude wider than any effect this change could
+have; the useful reading is that nothing approaches the 4.22 ms regression that
+rejected the widened sequential route. Warm complex allocations stayed at zero
+and the real-full arm at one `16N`-byte allocation across every run.
+
+This is local Windows AVX2 evidence on one processor. No AVX-512, AArch64
+runtime, or cross-machine result is claimed; AArch64 keeps the four-lane arm
+and is compile evidence only.
+
 ## Leto/Hermes multidimensional complex transpose (2026-09-01) <a id="leto-hermes-complex-transpose"></a>
 
 Apollo's private 2-D/3-D axis helper previously reconstructed Leto C-from-F
