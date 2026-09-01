@@ -1,28 +1,25 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Attribute the allocation-free real split [patch] [perf] — in-progress
+## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Restart real-split twiddles [patch] [perf] — review
 
-- **Outcome.** Reduce the measured f64 half-spectrum forward latency without
-  adding allocation, duplicating FFT kernels, or changing numerical/public
-  contracts.
-- **Scope / non-goals.** Attribute cached-plan acquisition, real-pair packing,
-  the retained half-length complex transform, and untangling through the
-  existing `RealFftData`/`FftPlan1D` seams. Keep the committed engine-census
-  inputs, timed regions, sample count, and reference arms unchanged; do not
-  tune the instrument or introduce a per-length implementation.
-- **Acceptance.** An exact-revision phase instrument identifies the binding
-  term across N = 1,024--262,144. A retained production candidate must preserve
-  the independent real-signal/direct-DFT oracle, conjugate symmetry, DC/Nyquist
-  bins, f32/f64 behavior, caller-owned output, zero warm global and direct
-  Mnemosyne allocations, and non-regressing complex controls. Two adjacent
-  unchanged 100-sample comparisons must reproduce the target improvement;
-  warning-denied host/AArch64, debug/release, Rustdoc, lock, and independent
-  review gates remain required. Change class [patch], risk [perf].
-- **Integrator / lease.** Codex `/root`; lease
-  `crates/apollo-fft/src/application/execution/plan/fft/real_storage/**`,
-  `crates/apollo-fft/src/application/execution/kernel/real_fft.rs`, the existing
-  real-split integration target, and this owner-keyed PM section. Last update
-  2026-09-01.
+- **Outcome.** Exact phase attribution identifies per-bin f64 `sin_cos` as the
+  stable real-half split bound. Source `5a8b90d3` seeds one native-precision
+  complex recurrence per eight bins, bounding drift without an O(N) retained
+  table or a second FFT implementation; public, arithmetic, scratch, and
+  caller-owned-output contracts remain unchanged.
+- **Evidence.** Two unchanged 100-sample Windows AVX2 comparisons reduce f64
+  real-half medians by 34.23%/33.99% at N=1,024, 23.02%/33.20% at 4,096,
+  28.01%/20.97% at 16,384, and 27.18%/16.84% at 65,536. The 262,144 row is
+  explicitly inconclusive (-9.46%/+31.33%). Independent f32/f64 direct spectra,
+  symmetry, DC/Nyquist, and round trips pass; warmed real-half/complex execution
+  remains allocation-free and real-full retains its single 16N-byte output.
+  Debug/release Nextest pass 512/512, host/AArch64 warning-denied gates,
+  Rustdoc, doctest, format, diff, and the standalone 36-source lock guard pass.
+  `cargo asm` is unavailable locally; no assembly claim is made.
+- **Limits / delivery.** Timing is local Windows AVX2 on logical processor 2;
+  complex controls become noisy above 16,384 and do not establish cross-machine
+  behavior. Independent review, hosted gates, PR delivery, and merge remain.
+  Integrator Codex `/root`; lease none. Last update 2026-09-01.
 
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 

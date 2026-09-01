@@ -1,3 +1,43 @@
+## Restarted real-half split twiddles (2026-09-01) <a id="real-half-split-twiddles"></a>
+
+The allocation-free f64 real-half route spent more time untangling the retained
+half-length complex transform than executing it at every stable measured size.
+The exact phase probe attributed that bound to one f64 `sin_cos` evaluation per
+output bin. Apollo source `5a8b90d3` now evaluates sine and cosine once per
+eight-bin block and advances the remaining twiddles with native-precision
+complex multiplication. Restarting after at most seven advances bounds rounding
+drift while avoiding an O(N) retained twiddle table and preserving one generic
+f32/f64 implementation.
+
+The isolated untangle phase falls by about 53--56% through N=65,536. Two
+unchanged 100-sample whole-path comparisons on Windows AVX2 logical processor 2
+report the following f64 real-half medians in nanoseconds:
+
+| N | Prior 1 | Candidate 1 | Reduction 1 | Prior 2 | Candidate 2 | Reduction 2 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,024 | 1,851.428 | 1,217.634 | 34.23% | 1,850.157 | 1,221.263 | 33.99% |
+| 4,096 | 8,977.611 | 6,910.919 | 23.02% | 9,685.483 | 6,469.473 | 33.20% |
+| 16,384 | 43,385.714 | 31,232.352 | 28.01% | 42,312.500 | 33,441.666 | 20.97% |
+| 65,536 | 187,725.000 | 136,710.000 | 27.18% | 177,783.333 | 147,837.500 | 16.84% |
+| 262,144 | 1,453,550.000 | 1,591,000.000 | -9.46% | 1,997,850.000 | 1,371,950.000 | 31.33% |
+
+The final row executes one iteration per sample and the paired directions
+disagree, so it is inconclusive and is not a delivered performance claim.
+Complex controls also become noisy above N=16,384; the phase attribution and
+unchanged complex source isolate the candidate mechanism, but do not establish
+cross-machine behavior.
+
+An independent exact-tone f32 direct spectrum exercises the native recurrence;
+the established f64 analytical spectrum, RealFFT differential, conjugate
+symmetry, DC/Nyquist, and round-trip cases remain. Debug and release Nextest
+each pass 512/512. The engine census reports zero warmed global and direct
+Mnemosyne allocations for real-half and complex execution at every measured
+size; real-full retains exactly one 16N-byte output allocation. Cold retained
+bytes are unchanged. Warning-denied all-target/all-feature host Clippy,
+warning-denied AArch64 Windows library compilation, Rustdoc, doctest, format,
+diff, and the standalone 36-source lock guard pass. `cargo asm` is unavailable
+locally, so no assembly or instruction-count claim is made.
+
 ## Leto/Hermes multidimensional complex transpose (2026-09-01) <a id="leto-hermes-complex-transpose"></a>
 
 Apollo's private 2-D/3-D axis helper previously reconstructed Leto C-from-F

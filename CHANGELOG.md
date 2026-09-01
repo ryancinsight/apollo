@@ -54,6 +54,14 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] The private real-half FFT split now seeds one
+  native-precision complex twiddle recurrence per eight bins instead of
+  evaluating f64 sine and cosine for every bin. The bounded restart adds no
+  retained table or warm allocation and preserves f32/f64 direct-spectrum,
+  symmetry, DC/Nyquist, and round-trip behavior. Two unchanged 100-sample
+  Windows AVX2 comparisons reduce f64 medians by 16.84--34.23% through
+  N=65,536; the noisy N=262,144 pair is inconclusive and excluded from the
+  claim. No cross-machine or AArch64 throughput result is claimed.
 - [patch] [perf] Multidimensional CPU FFT plans now delegate batched complex
   axis transposes to Leto Ops, which selects allocation-free Hermes register
   tiles for the measured high-count small-matrix regime and retains Leto's

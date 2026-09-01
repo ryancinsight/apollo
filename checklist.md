@@ -2,14 +2,15 @@
 
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
 
-- [ ] Attribute cached-plan acquisition, pair packing, half-length FFT, and
+- [x] Attribute cached-plan acquisition, pair packing, half-length FFT, and
       untangling at every census length with an exact-revision phase probe.
-- [ ] Retain only a production change whose mechanism addresses the measured
+- [x] Retain only a production change whose mechanism addresses the measured
       bound and improves two unchanged 100-sample paired runs.
-- [ ] Preserve direct-DFT values, conjugate symmetry, DC/Nyquist behavior,
+- [x] Preserve direct-DFT values, conjugate symmetry, DC/Nyquist behavior,
       f32/f64 parity, caller-owned output, and zero warmed allocation.
-- [ ] Pass debug/release value tests, warning-denied host/AArch64 gates,
-      Rustdoc, doctests, standalone lock, codegen, docs, and exact-diff review.
+- [x] Pass 512/512 debug and release value tests, warning-denied host/AArch64
+      gates, Rustdoc, doctest, standalone lock, formatting, docs, and exact-diff
+      review. Record `cargo asm` as unavailable rather than claiming codegen.
 - [ ] Commit, publish, obtain independent review, pass hosted gates, merge, and
       discharge the source and PM leases.
 
