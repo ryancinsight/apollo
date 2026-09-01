@@ -19,16 +19,42 @@
   that lands — `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`.
 - **Integrator:** Claude session 5050c72a.
 
-## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — blocked
+## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — done 2026-09-01
 
-- **Outcome:** `kernel::core_class`'s Windows query is deleted and the probes
-  bind processors selected through the themis topology API, so core class has
-  one home across the stack instead of a hand-rolled constant per repository.
-- **Blocker:** `themis-topology` does not yet expose core efficiency class.
-  **Re-open trigger:** that API lands and apollo's themis requirement advances
-  to it.
-- **Non-goals:** widening apollo's interim module in the meantime; it stays
-  minimal precisely so it can be deleted outright.
+- **Delivered:** `kernel::core_class` is deleted outright — Windows FFI,
+  non-Windows arm, and local class enum — and apollo takes a direct
+  `themis-topology` 0.10.1 dev-dependency. The nine probe sites select through
+  `kernel::measurement_cores`, which holds only what themis does not own:
+  the representative-per-class rule and the census print. No shim, wrapper, or
+  re-export of the old name. ADR 0043 carries the discharge note.
+- **Verified:** `backend_matrix` re-run reproduces ADR 0042's selection
+  (cpu 1 performance, cpu 3 efficiency) and its table — f64 s/a 0.227–0.542 on
+  the performance core, scalar beating AVX at every probed size; all ten pinned
+  probes select cpu 1 / cpu 3 and never cpu 2. `-D warnings` clippy clean on
+  both `x86_64-pc-windows-msvc` and `x86_64-unknown-linux-gnu`; the
+  `expect(dead_code)` the interim module needed on non-Windows is gone with it.
+- **Integrator:** Claude session 5050c72a.
+
+## ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — todo
+
+- **Outcome:** `benchmark-regression.yml`'s baseline leg builds any PR,
+  including one whose candidate adds or removes a dependency.
+- **Evidence:** the "Pin candidate benchmark instrument" step copies the
+  *candidate's* `Cargo.lock` onto the *baseline's* `Cargo.toml`
+  (`cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock`), and
+  "Compile measured benchmark executables" then runs `cargo bench --locked`.
+  When the candidate adds a dependency the copied lock records it against a
+  manifest that does not declare it, so `--locked` refuses to re-resolve and
+  the step exits 101 in ~15s before compiling anything. First observed on
+  PR #236, which adds `themis-topology` to `apollo-fft`'s dev-dependencies;
+  the candidate leg is unaffected. Pre-existing: the step predates that PR and
+  fails for any dependency-adding change.
+- **Scope:** the pinning step exists to hold the instrument and workloads
+  constant across the two revisions, which is correct; only its lock handling
+  over-constrains. Options are pinning the instrument sources without the lock,
+  or dropping `--locked` for the baseline leg alone. Not: skipping the leg.
+- **Non-goals:** re-tuning any benchmark; this is a build defect, not a
+  measurement one.
 
 ## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
 
@@ -66,6 +92,45 @@
     label-independent by construction. The `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`
     = 256 reroute and the f64 256/512 scalar reroute are both of this form and
     were re-verified.
+- **Decisive finding (2026-09-01, verified from history — read this before
+  sweeping).** The original instrument is
+  `pot/core_matrix.rs` as of `6f453687`:
+
+  ```rust
+  // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
+  for cpu in [2u32, 12] {
+      let landed = pin(cpu);
+      ... if landed < 8 { "P" } else { "E" }
+  ```
+
+  Against the real performance mask `0xc03c03` = {0, 1, 10, 11, 12, 13, 22, 23}:
+  cpu 2 was labelled **P** and is an **efficiency** core; cpu 12 was labelled
+  **E** and is a **performance** core. **Both arms are inverted, not one.**
+  That was not established when this item was written, and it changes the work:
+
+  - **Mechanical (the majority).** Because both arms swapped, every two-column
+    P/E table is correct in its *numbers* and wrong only in its *headers* —
+    swap them. Single-core attributions follow the same rule with no judgement:
+    a "P-core" figure was measured on cpu 2 and is an **efficiency-core**
+    figure; an "E-core" figure was measured on cpu 12 and is a
+    **performance-core** figure. No re-measurement is needed for these.
+  - **Needs re-reasoning (the minority).** Only claims that reason *from* a
+    property of the core type, rather than merely reporting per-core numbers.
+    Worked example — `resident/planar.rs:3-11` argues "this host's P-core has
+    the shuffle throughput to keep the interleaved form from ever being
+    shuffle-port-bound". That was measured on cpu 2, an efficiency core, so the
+    stated claim is unsupported as written. Note the correction is *not* a
+    swap: what the data actually shows is the stronger fact that even an
+    E-core had sufficient shuffle throughput, which makes the P-core case
+    likely but unmeasured. Restate to what was measured; do not invert.
+  - **Partition by provenance, not by text.** Probes added after
+    `core_class.rs` landed select the second processor of each class (cpu 1
+    performance / cpu 3 efficiency) and are **correct** — the selection logic
+    was never the defect, only the pre-`core_class` hardcoded `[2, 12]` +
+    `landed < 8` labelling was. A text grep for `P-core` cannot tell the two
+    populations apart; check whether the claim predates `core_class.rs` for
+    the file it lives in.
+
 - **Acceptance oracle:** no `P-core`/`E-core` claim traceable to a pre-2026-09-01
   pinned probe remains without either a correction or a revision note; a grep
   for `P-core` in `gap_audit.md` and `backlog.md` returns only marked text.
@@ -117,7 +182,9 @@
   by a mutation-hardened reference test at both dispatch widths.
 - **Integrator:** Claude `/root`.
 - **Baseline:** f32 256/512 after the shared column pass:
-  294.2 / 694.8 ns P-core (1.31 / 1.37 vs RustFFT).
+  294.2 / 694.8 ns — measured by the pre-`core_class` probe on cpu 2,
+  an efficiency core per ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01
+  (1.31 / 1.37 vs RustFFT).
 
 ## ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01 — One column pass at every width, sinks included [patch] [perf] — done 2026-09-01
 

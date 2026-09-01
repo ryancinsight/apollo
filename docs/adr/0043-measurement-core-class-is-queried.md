@@ -5,6 +5,16 @@
 - Driving evidence: `GetLogicalProcessorInformationEx` census (this change);
   per-processor calibration timing (this change); the three-engine table in
   [0041](0041-l1-resident-interleaved-base.md) read against its own labels
+- **Revision 2026-09-01: the interim query is discharged.** This record
+  originally carried a hand-rolled `GetLogicalProcessorInformationEx` query in
+  `kernel::core_class`, declared interim and to be *deleted, not adapted*, once
+  `themis-topology` exposed core efficiency class. It has: themis 0.10.1
+  reports `CpuTopology::efficiency_classes` with the same absence discipline,
+  so `core_class` — its Windows FFI, its non-Windows arm, and its local class
+  enum — is deleted outright and the probes read themis. The decision below is
+  unchanged; only its provider moved. Tracked as
+  `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`. The selection reproduces
+  cpu 1 / cpu 3 and [0042](0042-avx-stockham-backend-retained.md)'s table.
 
 ## Context
 
@@ -53,14 +63,18 @@ by anything.
 
 ## Decision
 
-Measurement processors are selected by `core_class::selected()`, and nothing
-about core class is assumed:
+Measurement processors are selected by `measurement_cores::selected()`, and
+nothing about core class is assumed:
 
-- **Class is queried.** `GetLogicalProcessorInformationEx` supplies each
-  processor's `EfficiencyClass`. The value is an ordinal, not a flag: the
-  maximum observed value is the performance tier and anything below it is an
-  efficiency tier, so a non-hybrid host reports one class and the probes find
-  no second arm rather than inventing one.
+- **Class is queried, and themis owns the query.** `CpuTopology::detect()`
+  supplies each processor's `EfficiencyClass`. The value is a dense ordinal,
+  not a flag: the highest rank is the performance tier and rank 0 the most
+  efficient, so a host reporting one class is *uniform* — a reported result,
+  labelled as such — and the probes find no second arm rather than inventing
+  one. `efficiency_class_count()` is the absence oracle: `None` is "the
+  platform did not say", which is distinct from a homogeneous `Some(1)`.
+  Apollo keeps only what themis does not own: which processor represents each
+  class, and how that choice is printed beside the numbers it produced.
 - **The representative of each class is stated as a rule**, not a literal: the
   second processor of each class in index order. Skipping the first avoids
   processor 0, the conventional Windows interrupt and DPC target, and applies
@@ -75,20 +89,14 @@ about core class is assumed:
 - **A host with no class information is not measured.** The probes print that
   and return, rather than emitting a two-column table with invented headers.
 
-**This is an interim implementation, deliberately minimal and local.** The
-canonical home is themis, which owns `CpuTopology` — NUMA nodes and cache
-levels — and already calls `GetLogicalProcessorInformationEx` for cache
-relationships, with the discipline this dimension needs (`cache_levels()`
-returns typed absence rather than a machine-independent guess). Core efficiency
-class is the missing dimension there, and its absence is why the hardcoded
-`cpu 2` / `cpu 12` / `0xc03c03` constants have been hand-rolled per repository.
-Apollo consumes themis transitively and migrates onto `themis-topology` when it
-lands; this module is `cfg(test)` instrument support in the meantime and is
-deleted, not adapted, at that point. Hermes is not the home: it owns exact
-processor *binding* and explicitly disclaims topology
-(`hermes/docs/adr/021-exact-processor-binding.md`: "Processor selection remains
-an Apollo measurement-policy input; Hermes does not choose a core class").
-Tracked as `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`.
+The class query itself belongs to themis, which owns `CpuTopology` — NUMA
+nodes and cache levels — and already calls `GetLogicalProcessorInformationEx`
+for cache relationships, with the discipline this dimension needs
+(`cache_levels()` returns typed absence rather than a machine-independent
+guess). Hermes is not the home: it owns exact processor *binding* and
+explicitly disclaims topology (`hermes/docs/adr/021-exact-processor-binding.md`:
+"Processor selection remains an Apollo measurement-policy input; Hermes does
+not choose a core class"), which is the line the split below follows.
 
 ## Consequences
 

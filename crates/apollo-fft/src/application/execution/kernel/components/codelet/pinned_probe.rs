@@ -6,7 +6,7 @@
 //! not per call, so both arms measure transform cost, not memcpy.
 
 use super::try_transform_16;
-use crate::application::execution::kernel::core_class;
+use crate::application::execution::kernel::measurement_cores;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use std::time::Instant;
@@ -30,7 +30,7 @@ fn best_block<F: FnMut()>(mut f: F) -> f64 {
 #[ignore = "measurement instrument: interleaved against planar batched kernels"]
 fn interleaved_against_planar_by_core_type() {
     use crate::application::execution::kernel::components::batched;
-    let Some(selection) = core_class::selected() else {
+    let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
     };
@@ -86,7 +86,7 @@ fn interleaved_against_planar_by_core_type() {
             };
             println!(
                 "IVP cpu={landed:<2} ({}) n={n:<6} planar={planar:>10.1}ns interleaved={interleaved:>10.1}ns ratio={:.2}",
-                core.class().label(),
+                core.label(),
                 interleaved / planar,
             );
         }
@@ -97,7 +97,7 @@ fn interleaved_against_planar_by_core_type() {
 #[ignore = "measurement instrument: is the batched four-step the better 128..1024 route"]
 fn mid_sizes_against_the_batched_four_step_by_core_type() {
     use crate::application::execution::kernel::components::batched;
-    let Some(selection) = core_class::selected() else {
+    let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
     };
@@ -135,7 +135,7 @@ fn mid_sizes_against_the_batched_four_step_by_core_type() {
             });
             println!(
                 "MID cpu={landed:<2} ({}) n={n:<5} route={route:>9.1}ns batched={four_step:>9.1}ns ratio={:.2}",
-                core.class().label(),
+                core.label(),
                 four_step / route,
             );
         }
@@ -153,7 +153,7 @@ fn codelet_against_the_incumbent_by_core_type() {
         .collect();
     let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n: 16 });
 
-    let Some(selection) = core_class::selected() else {
+    let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; probe not measurable");
         return;
     };
@@ -178,7 +178,7 @@ fn codelet_against_the_incumbent_by_core_type() {
         });
         println!(
             "CORE cpu={landed:<2} ({}) incumbent={incumbent:>7.1}ns codelet={codelet:>7.1}ns ratio={:.2}",
-            core.class().label(),
+            core.label(),
             codelet / incumbent,
         );
     }
