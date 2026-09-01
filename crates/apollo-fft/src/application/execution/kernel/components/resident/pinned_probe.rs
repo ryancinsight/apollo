@@ -5,6 +5,7 @@
 use super::four_step_resident;
 use super::planar::four_step_planar;
 use crate::application::execution::kernel::components::batched;
+use crate::application::execution::kernel::measurement_cores;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
@@ -42,8 +43,14 @@ fn resident_against_batched_and_the_references_by_core_type() {
     let mut rust_scratch = vec![RustComplex::new(0.0, 0.0); rust.get_inplace_scratch_len()];
     let phast = phastft::planner::PlannerDit64::new(n);
 
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
@@ -87,7 +94,7 @@ fn resident_against_batched_and_the_references_by_core_type() {
         });
         println!(
             "RES cpu={landed:<2} ({}) batched={batched_ns:>7.1} resident={resident_ns:>7.1} planar={planar_ns:>7.1} rustfft={rust_ns:>7.1} phastft={phast_ns:>7.1}",
-            if landed < 8 { "P" } else { "E" },
+            core.label(),
         );
     }
 }

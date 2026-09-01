@@ -4,6 +4,7 @@
 //! alternates so fixed positional drift is counterbalanced. Asserts nothing;
 //! run with `--ignored --nocapture`.
 
+use crate::application::execution::kernel::measurement_cores;
 use eunomia::Complex64;
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 use rustfft::num_complex::Complex as RustComplex;
@@ -56,8 +57,14 @@ fn best_pair<A: FnMut(), B: FnMut()>(calls: u32, mut first: A, mut second: B) ->
 #[test]
 #[ignore = "measurement instrument for the mid-size acceptance bar"]
 fn batched_against_the_references_across_the_ladder() {
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
@@ -113,7 +120,7 @@ fn batched_against_the_references_across_the_ladder() {
             });
             println!(
                 "LAD cpu={landed:<2} ({}) n={n:<5} batched={batched_ns:>9.1} rustfft={rust_ns:>9.1} phastft={phast_ns:>9.1} vs_rust={:>5.2} vs_phast={:>5.2}",
-                if landed < 8 { "P" } else { "E" },
+                core.label(),
                 batched_ns / rust_ns,
                 batched_ns / phast_ns,
             );

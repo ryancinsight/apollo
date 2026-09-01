@@ -62,6 +62,26 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
   Windows AVX2 comparisons reduce f64 medians by 16.84--34.23% through
   N=65,536; the noisy N=262,144 pair is inconclusive and excluded from the
   claim. No cross-machine or AArch64 throughput result is claimed.
+- [patch] `apollo-fft`'s pinned measurement instruments select their processors
+  through themis (`themis-topology` 0.10.1) instead of the interim
+  `kernel::core_class` module, which is deleted with its hand-rolled
+  `GetLogicalProcessorInformationEx` query and its non-Windows arm. Core
+  efficiency class now has one home across the stack. Selection, census
+  printing, and skip-on-absence behaviour are unchanged; the census additionally
+  prints each processor's themis rank and now precedes the three single-core
+  probes that omitted it. Test-only surface; no public API change. See ADR 0043.
+
+- [patch] [perf] `apollo-mellin` passes real log-grid samples directly to
+  Hermes' real-by-interleaved-complex reduction instead of retaining a second
+  2N-lane f64 scratch buffer. This removes 16N retained bytes per active worker
+  while preserving the scalar formula, weight generation, Moirai scheduling,
+  thresholds, and public Mellin/Leto contracts. A fresh-thread census observes
+  one first-use allocation for the remaining 2N weight buffer, zero warmed row
+  allocations, and a match with an independent complex sum. Two controlled
+  same-provider Windows AVX2 pairs
+  reduce unchanged public forward-spectrum medians by 1.96%/1.49% at N = 128
+  and 1.46%/0.83% at N = 256; the below-threshold N = 64 control moves
+  -0.28%/+0.82%. No AArch64, AVX-512, or cross-machine timing is claimed.
 - [patch] [perf] Multidimensional CPU FFT plans now delegate batched complex
   axis transposes to Leto Ops, which selects allocation-free Hermes register
   tiles for the measured high-count small-matrix regime and retains Leto's

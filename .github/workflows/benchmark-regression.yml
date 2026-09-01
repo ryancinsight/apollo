@@ -80,25 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock
-          for dependency in mnemosyne moirai; do
-            candidate_spec="$(grep -m1 "^${dependency} = " apollo-candidate-source/Cargo.toml)"
-            test -n "$candidate_spec"
-            sed -i "s|^${dependency} = .*$|${candidate_spec}|" \
-              apollo-measurement/Cargo.toml
-            test "$(grep -m1 "^${dependency} = " apollo-measurement/Cargo.toml)" = \
-              "$candidate_spec"
-          done
-          candidate_rustfft_spec="$(grep -m1 '^rustfft = ' apollo-candidate-source/Cargo.toml)"
-          test -n "$candidate_rustfft_spec"
-          if grep -q '^rustfft = ' apollo-measurement/Cargo.toml; then
-            sed -i "s|^rustfft = .*$|${candidate_rustfft_spec}|" \
-              apollo-measurement/Cargo.toml
-          else
-            sed -i "/^rand = /a ${candidate_rustfft_spec}" \
-              apollo-measurement/Cargo.toml
-          fi
-          test "$(grep -m1 '^rustfft = ' apollo-measurement/Cargo.toml)" = \
-            "$candidate_rustfft_spec"
+          python3 apollo-candidate-source/scripts/pin_workspace_dependencies.py apollo-candidate-source/Cargo.toml apollo-measurement/Cargo.toml
           cp \
             apollo-candidate-source/crates/apollo-fft/Cargo.toml \
             apollo-measurement/crates/apollo-fft/Cargo.toml

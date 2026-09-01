@@ -10,6 +10,23 @@
   Proposed decision beside contrary evidence. This revision makes the current
   decision authoritative and separates admissible comparison timing from
   diagnostic phase instrumentation.
+- Revision 2026-09-01: the `P` and `E` row labels in every table below are
+  inverted. The probes pinned to cpu 2 and cpu 12 and labelled by
+  `landed < 8`, but this host's performance set is
+  `{0, 1, 10, 11, 12, 13, 22, 23}` (ADR
+  [0043](0043-measurement-core-class-is-queried.md)), so the `P` row was
+  measured on an efficiency core. **This record carries the clearest evidence
+  of the inversion in the repository**: in the four-engine table below,
+  RustFFT (84.7 vs 181.8 ns), PhastFT (149.0 vs 330.0) and Apollo's own base
+  (146.4 vs 294.5) all run roughly twice as fast on the row labelled `E`.
+  Three unrelated engines do not run twice as fast on an efficiency core. The
+  **decision stands** — the base is faster than the incumbent route on both
+  rows, which is label-independent — but every ordered pair in the prose
+  ("2.33x and 12.60x", "10.8% and 1.8%", "1.62x and 1.73x", the
+  164/521/452 vs 96/232/300 TSC attribution) reads in the opposite order, and
+  the 11.0 ns residual dispatch cost attributed to the E-core was measured on
+  the performance core. Tracked as
+  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`.
 - Revision 2026-08-27: records rejection of a premature production route that
   kept the experiment's thread-local plan instead of moving ownership into
   `FftPlan1D`. The unchanged exact comparator found repeatable unrelated-case

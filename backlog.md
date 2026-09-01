@@ -20,6 +20,255 @@
   complex controls become noisy above 16,384 and do not establish cross-machine
   behavior. Independent review, hosted gates, PR delivery, and merge remain.
   Integrator Codex `/root`; lease none. Last update 2026-09-01.
+## ATLAS-APOLLO-CORE-CLASS-LABELS-2026-09-01 — Pinned probes select cores by queried class [patch] — done 2026-09-01
+
+- **Delivered** (ADR 0043): the nine pinned-probe sites that hardcoded
+  `for cpu in [2u32, 12]` and labelled by `landed < 8` now select through
+  `kernel::core_class`, which queries `EfficiencyClass` from
+  `GetLogicalProcessorInformationEx` and prints the full per-processor class
+  census, marking its selections, ahead of every table. The premise the
+  literals encoded was false: this host's performance set is
+  `{0, 1, 10, 11, 12, 13, 22, 23}` (mask `0xc03c03`), so cpu 2 is an efficiency
+  core and cpu 12 a performance core, and both probe arms were mislabelled.
+- **Verified:** OS mask; an independent per-processor timing sweep partitioning
+  the host identically; and reproduction of ADR 0042's old `P` column on two
+  distinct efficiency cores.
+- **Interim by design.** The canonical home is themis (`themis-topology`), which
+  owns `CpuTopology` and already queries the same API for cache levels. This
+  module is `cfg(test)` instrument support and is deleted, not adapted, when
+  that lands — `ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01`.
+- **Integrator:** Claude session 5050c72a.
+
+## ATLAS-APOLLO-CORE-CLASS-UPSTREAM-2026-09-01 — Consume themis core efficiency class [patch] — done 2026-09-01
+
+- **Delivered:** `kernel::core_class` is deleted outright — Windows FFI,
+  non-Windows arm, and local class enum — and apollo takes a direct
+  `themis-topology` 0.10.1 dev-dependency. The nine probe sites select through
+  `kernel::measurement_cores`, which holds only what themis does not own:
+  the representative-per-class rule and the census print. No shim, wrapper, or
+  re-export of the old name. ADR 0043 carries the discharge note.
+- **Verified:** `backend_matrix` re-run reproduces ADR 0042's selection
+  (cpu 1 performance, cpu 3 efficiency) and its table — f64 s/a 0.227–0.542 on
+  the performance core, scalar beating AVX at every probed size; all ten pinned
+  probes select cpu 1 / cpu 3 and never cpu 2. `-D warnings` clippy clean on
+  both `x86_64-pc-windows-msvc` and `x86_64-unknown-linux-gnu`; the
+  `expect(dead_code)` the interim module needed on non-Windows is gone with it.
+- **Integrator:** Claude session 5050c72a.
+
+## ATLAS-APOLLO-BENCH-BASELINE-LOCKFILE-2026-09-01 — Benchmark baseline leg cannot build a PR that adds a dependency [patch] — todo
+
+- **Outcome:** `benchmark-regression.yml`'s baseline leg builds any PR,
+  including one whose candidate adds or removes a dependency.
+- **Evidence:** the "Pin candidate benchmark instrument" step copies the
+  *candidate's* `Cargo.lock` onto the *baseline's* `Cargo.toml`
+  (`cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock`), and
+  "Compile measured benchmark executables" then runs `cargo bench --locked`.
+  When the candidate adds a dependency the copied lock records it against a
+  manifest that does not declare it, so `--locked` refuses to re-resolve and
+  the step exits 101 in ~15s before compiling anything. First observed on
+  PR #236, which adds `themis-topology` to `apollo-fft`'s dev-dependencies;
+  the candidate leg is unaffected. Pre-existing: the step predates that PR and
+  fails for any dependency-adding change.
+- **Scope:** the pinning step exists to hold the instrument and workloads
+  constant across the two revisions, which is correct; only its lock handling
+  over-constrains. Options are pinning the instrument sources without the lock,
+  or dropping `--locked` for the baseline leg alone. Not: skipping the leg.
+- **Non-goals:** re-tuning any benchmark; this is a build defect, not a
+  measurement one.
+
+## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
+
+- **Outcome:** every recorded claim measured through the mislabelled probes
+  either reads correctly or is marked, so no second inverted conclusion stands.
+- **Scope:** the audit found 40+ affected claims. Dispatched here rather than
+  in the correction PR because each needs its own read: a column header swaps
+  mechanically, but a conclusion drawn from an asymmetric row has to be
+  re-reasoned, and some need re-measurement.
+  - **Corrected already:** ADR 0042 (re-measured), ADR 0039 and ADR 0041
+    (dated revision notes), `gap_audit.md#stockham-backend-matrix`,
+    `stockham/mod.rs` routing comment, this board's audit item.
+  - **Remaining, `gap_audit.md`:** lines ~541, 709–717, 1325–1328, 1376–1382,
+    1566, 1586, 1686, 1729, 1798, 1828–1838, 1870, 1928–1931, 2084, 2147–2157,
+    2171, 2868–2882, and the single-core "P-core" attributions at 13, 108, 115,
+    191, 207, 275, 298, 417, 653, 1005, 1029, 1179, 1243, 1275, 1411, 1630,
+    1709, 1856, 2054.
+  - **Remaining, `backlog.md`:** items `ATLAS-APOLLO-FOUR-STEP-LAYOUT-SENSITIVITY`,
+    `-INTERLEAVED-CODELETS`, `-INTERLEAVED-BATCHED`, `-PLANAR-RADIX8`,
+    `HS-VECTORIZE-LARGE-KERNEL`, the pinned-ladder standings, and the per-core
+    attributions at 172–183, 234, 749–770, 837, 1005–1029, 1294–1309, 1345,
+    1383–1405, 1489, 1544–1572, 1599, 1662–1681, 1706–1721, 1801.
+  - **Remaining, source comments:** `batched/interleaved.rs:3-11`,
+    `batched/mod.rs:1042-1047`, `resident/planar.rs:3-11`,
+    `codelet/mod.rs:3-10`, `tuning.rs:29-39`, `mixed_radix/scalar/impls.rs:539`,
+    `benches/engine_census.rs:403-409`.
+  - **Unmerged branch, will reintroduce on merge:**
+    `perf/apollo-batched-native-width` still carries the old pattern at
+    `base128/pinned_probe.rs:226`, `batched/pinned_sections.rs:26` and
+    `winograd/tests/pinned_n96.rs:365`, and adds a *new* site this correction
+    does not cover — `tests/real_split_parity.rs:262`, an integration test, so
+    it needs a reachable selector rather than the `pub(crate)` module. Resolve
+    when that branch rebases onto this correction.
+  - **Not affected:** any claim of the form "X wins on BOTH core types" —
+    label-independent by construction. The `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`
+    = 256 reroute and the f64 256/512 scalar reroute are both of this form and
+    were re-verified.
+- **Decisive finding (2026-09-01, verified from history — read this before
+  sweeping).** The original instrument is
+  `pot/core_matrix.rs` as of `6f453687`:
+
+  ```rust
+  // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
+  for cpu in [2u32, 12] {
+      let landed = pin(cpu);
+      ... if landed < 8 { "P" } else { "E" }
+  ```
+
+  Against the real performance mask `0xc03c03` = {0, 1, 10, 11, 12, 13, 22, 23}:
+  cpu 2 was labelled **P** and is an **efficiency** core; cpu 12 was labelled
+  **E** and is a **performance** core. **Both arms are inverted, not one.**
+  That was not established when this item was written, and it changes the work:
+
+  - **Mechanical (the majority).** Because both arms swapped, every two-column
+    P/E table is correct in its *numbers* and wrong only in its *headers* —
+    swap them. Single-core attributions follow the same rule with no judgement:
+    a "P-core" figure was measured on cpu 2 and is an **efficiency-core**
+    figure; an "E-core" figure was measured on cpu 12 and is a
+    **performance-core** figure. No re-measurement is needed for these.
+  - **Needs re-reasoning (the minority).** Only claims that reason *from* a
+    property of the core type, rather than merely reporting per-core numbers.
+    Worked example — `resident/planar.rs:3-11` argues "this host's P-core has
+    the shuffle throughput to keep the interleaved form from ever being
+    shuffle-port-bound". That was measured on cpu 2, an efficiency core, so the
+    stated claim is unsupported as written. Note the correction is *not* a
+    swap: what the data actually shows is the stronger fact that even an
+    E-core had sufficient shuffle throughput, which makes the P-core case
+    likely but unmeasured. Restate to what was measured; do not invert.
+  - **Partition by provenance, not by text.** Probes added after
+    `core_class.rs` landed select the second processor of each class (cpu 1
+    performance / cpu 3 efficiency) and are **correct** — the selection logic
+    was never the defect, only the pre-`core_class` hardcoded `[2, 12]` +
+    `landed < 8` labelling was. A text grep for `P-core` cannot tell the two
+    populations apart; check whether the claim predates `core_class.rs` for
+    the file it lives in.
+
+- **Acceptance oracle:** no `P-core`/`E-core` claim traceable to a pre-2026-09-01
+  pinned probe remains without either a correction or a revision note; a grep
+  for `P-core` in `gap_audit.md` and `backlog.md` returns only marked text.
+- **Risk:** [patch]. Corrections to the record, not to code. Where a
+  conclusion cannot be recovered by swapping labels, re-measure with the
+  corrected instrument rather than reinterpreting.
+
+## ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01 — Re-establish or withdraw the EcoQoS root cause [patch] — todo
+
+- **Outcome:** the "Windows hands benchmark child processes EcoQoS" diagnosis
+  (ADR 0039 Context, `benches/engine_census.rs:403`, the four-step layout
+  item) is either re-established on correct evidence or withdrawn.
+- **Why:** its stated observation was the batched kernel "executing exclusively
+  on E-cores (CPUs 8 through 21, wandering)". That range contains cpus 10–13,
+  four of this host's eight performance cores, so it does not establish
+  efficiency-core placement. The power-throttling opt-out in the census was
+  built on it, and the conclusion may still be right — the evidence given for
+  it is not.
+- **Acceptance oracle:** a run that records the queried class of each processor
+  the unpinned kernel lands on, over a full census, plus the process's QoS
+  level from `GetProcessInformation(ProcessPowerThrottling)`.
+
+## ATLAS-APOLLO-FUSED-SPLIT-LOADS-2026-09-01 — The gather rides the phase-one loads out [patch] [perf] — done 2026-09-01 (falsified)
+
+- **Outcome:** built in full and value-verified, then falsified pinned —
+  f64 256/512 ran ~6% slower with flat controls; the code is reverted and
+  the mechanism recorded (`gap_audit.md#fused-split-loads`): phase one is
+  port-saturated, so boundary shuffles cost more inside it than in the
+  gather's streaming loop. Third boundary-fusion falsification.
+
+## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — done 2026-09-01
+
+- **Outcome:** the eight-lane kernel gains the complex-granularity strided
+  load network, deleting the gather fallback, the external
+  `CombineSink`/`FinalCombineSink` family, and `split_boundary.rs` entirely.
+- **Blocker:** needs a complex-pair deinterleave at eight lanes — two
+  128-bit-half concatenations plus the pair blend — which hermes does not
+  yet expose; implement upstream (`hermes-simd` per-backend, with tests)
+  per upstream ownership, then consume here. Scope note after the fused-load
+  falsification: the value is a vectorized eight-lane *gather* (the f32
+  route runs the blend network in the scalar-emulated frame today), not
+  load fusion into phase one, which measured slower at four lanes.
+- **Delivered** (`gap_audit.md#wide-gather`): the gather dispatches at the
+  base plan's native width through hermes' pair deinterleaves — two-way
+  (PR #118) plus the fused four-way (PR #119) after the composed form
+  measured an E-core regression. ABBA pinned, fused vs pre-item: P-core
+  f32 512 **-10%** (1.45 -> 1.25 vs RustFFT), E-core **-5.4%**
+  (1.36 -> 1.29); f32 256 and f64 flat-to-slightly-better. Width asserted
+  by a mutation-hardened reference test at both dispatch widths.
+- **Integrator:** Claude `/root`.
+- **Baseline:** f32 256/512 after the shared column pass:
+  294.2 / 694.8 ns — measured by the pre-`core_class` probe on cpu 2,
+  an efficiency core per ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01
+  (1.31 / 1.37 vs RustFFT).
+
+## ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01 — One column pass at every width, sinks included [patch] [perf] — done 2026-09-01
+
+- **Delivered** (`gap_audit.md#column-pass-consolidation`): the shared
+  `column_pass` generic over `GROUPS` replaces the duplicated DIF network in
+  the four- and eight-lane base kernels and carries the `StoreSink` family to
+  both, so the eight-lane f32 route takes the 256/512 split sinks instead of
+  the two-pass fallback. `combine_sink_supported` and the unreachable
+  production fallback are deleted; the pinned probe is generic over the
+  scalar. Net -114 kernel lines.
+- **Measured pinned, P-core, back to back, twice:** f32 256 311.9 ->
+  **294.2/293.7** ns (1.39 -> **1.31** vs RustFFT); f32 512 705.7 ->
+  **694.8/690.3**; f64 and 64/128 controls flat. Debug+release 511/511.
+- **Integrator:** Claude `/root`.
+
+## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 — Remove forward-spectrum lane materialization [patch] [perf] — done 2026-09-01
+
+- **Outcome.** Measure and, only on two reproduced complete-path wins, add one Hermes real-by-interleaved-complex dot provider so Apollo Mellin deletes its retained `[sample, 0]` lane buffer and reads N real input lanes instead of 2N interleaved lanes in every direct-DFT row.
+- **Scope / non-goals.** Confine Apollo production source to CPU forward log-frequency spectra, its exact value/allocation tests, one complete public-plan benchmark, and synchronized PM/docs; confine Hermes to the generic dot kernel, runtime dispatch, tests, and isolated benchmark. Preserve inverse Mellin, resampling, weight generation, Moirai scheduling, thresholds, public Apollo APIs, workloads, assertions, and timeouts.
+- **Acceptance.** Validate `weights.len() == 2 * real.len()` before work; preserve non-conjugated complex arithmetic, empty/ragged SIMD tails, f32/f64 and scalar/native parity; remove the 16N-byte real-lane scratch role; retain the consumer only when two unchanged public forward-spectrum comparisons improve with a neutral below-threshold control. Pass exact provider/consumer value, allocation, host/AArch64, debug/release, Rustdoc/doctest, standalone-lock, SemVer, format/diff, and independent-review gates.
+- **Risk / dependency.** [patch] [perf]. Hermes provider PR #113 merged as `2e993503`. Integrator `/root`; lease `/root` on Apollo Mellin CPU kernel/tests/benchmark and this item's PM/doc hunks. The peer-owned canonical `Cargo.lock` remains outside this lease. Last update 2026-09-01.
+- **Current evidence.** Benchmark `6f0d9ff1`, source `d3410c13`, and allocation census after `cb00aa51`: one 2N f64 real-lane buffer is deleted (16N retained bytes per active worker), a fresh thread observes one remaining 2N weight-buffer allocation, and the warmed row allocates zero times while matching an independent complex-value oracle. Controlled same-provider pairs reduce N = 128 medians by 1.96%/1.49% and N = 256 by 1.46%/0.83%, while N = 64 moves -0.28%/+0.82%. Provider head `59c89431` merged through Hermes PR #113 as `2e993503`; a disposable standalone Apollo lock resolves 36 first-party Git sources to that merge and passes warning-denied all-target Clippy, 27/27 debug and 27/27 release Nextest, Rustdoc, one doctest, and benchmark smoke. Canonical lock advanced past the provider merge (first-party pins to origin mains, standalone resolution verified); mellin/stft gates green on the delivered revision (clippy -D warnings, 27+45 nextest, doctests). Collected from the stale lane and integrated by takeover.
+
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Measure forward-frame fusion [patch] [perf] — done 2026-09-01 (fusion rejected)
+
+- **Outcome.** Retain the exact reusable CPU STFT benchmark at `c1853792`; reject the fused Hermes consumer and its otherwise-unused public provider surface. The source-equivalent candidate removed two retained real scratch buffers (16,384 bytes per active worker at frame length 1,024) and kept warm execution allocation-free, but it did not clear the predeclared complete-path latency gate.
+- **Evidence.** In the first adjacent pair, the scalar control moved -6.96% while the 16,384/65,536-sample target medians moved -4.46%/-10.31%; in the second, control moved -0.15% while targets moved -0.14%/-0.83%. Target confidence intervals overlap and the first-pair movement is control-confounded, so no latency win is attributed. The experimental source and allocation test were removed before commit; production source is unchanged. Timing is local Windows AVX2 evidence only. Commits `c1853792`/`4d1e5e35` delivered with the canonical lock advance; the re-open trigger (lock regeneration) fired and was executed in the same takeover. Lease none.
+
+## ATLAS-APOLLO-BATCHED-NATIVE-WIDTH-2026-09-01 — The f32 reinterleave sink ran at half the native width [patch] [perf] — review
+
+- **Outcome.** `InterleaveRows`, the last batched boundary kernel hardcoding
+  four lanes, takes the f32 native eight-lane width. The f64 route is unchanged.
+- **Delivered** (`gap_audit.md#reinterleave-native-width`). One const-generic
+  tile body serves both widths, dispatch stays outside the loops, and
+  `TRANSPOSE_LANES` is renamed `BOUNDARY_LANES` — it already governed the
+  transpose and the half combine, so the transpose-only name had stopped
+  describing it.
+- **Evidence.** Pinned `planar_passes_by_size` (processor 2, release, three runs
+  per arm) reduced the f32 `reint` pass at n=16,384 from a 8,172.1--8,656.5
+  band to 7,954.6--8,018.5, disjoint ranges and a 6.9% median reduction; n=4,096
+  moved 2,208.4 to 2,082.9 at the median with overlapping ranges, a direction
+  rather than a result. f64 `reint` held its band at all three even powers,
+  which is the measured form of the compile-time inertness. The unpinned
+  cache-flushing `engine_census` is f64-only and so gates rather than validates
+  this change: no run approached the 4.22 ms regression recorded in
+  `gap_audit.md#batched-parallel-rejection`, warm complex allocations stayed at
+  zero, and its unpinned spread (65,536 medians of 534.225--1,425.400 us) is far
+  wider than any effect available to an f64-inert change.
+- **Coverage.** A correct answer alone cannot show the width is live: declining
+  it falls back to four lanes and then the scalar loop, and all three agree.
+  `f32_reinterleave_takes_the_native_width_and_matches_the_scalar_sink` asserts
+  the dispatched width against the independently reported capability, then
+  compares bit-exactly because the pass computes nothing. Reverting the guard to
+  four lanes fails it on `Some(false)`; that was run.
+- **Gates.** `cargo fmt -p apollo-fft -- --check`, warning-denied
+  `cargo clippy -p apollo-fft --all-targets`, `cargo nextest run -p apollo-fft`
+  511/511, and `cargo test -p apollo-fft --doc` all pass on the delivered
+  revision. Hosted review and merge remain.
+- **Not done.** No AVX-512, AArch64 runtime, or cross-machine evidence; AArch64
+  retains the four-lane arm on compile evidence only. The n=4,096 f32 result is
+  unseparated and is not claimed as a win.
+- **Integrator / lease:** Claude `/root`; lease
+  `crates/apollo-fft/src/application/execution/kernel/components/batched/**`.
+  Last update 2026-09-01.
 
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
@@ -28,6 +277,7 @@
 - **Delivery.** Independent review and every hosted repository gate passed;
   Apollo PR #230 merged without squash as `17bad886`. Leto Ops provider PR
   #135 remains merged as `060eb7eb`. Integrator `/root`; lease none.
+- **Evidence / delivery.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed. Source `9ac833cd`, evidence `f1124f81`, exact head `e030595e`; PR #230 merged without squash as `17bad886`. Lease none.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
 
@@ -392,6 +642,17 @@
   AArch64 Windows all-target compilation, ADR index, diff, and standalone-lock
   validation with 36 first-party Git sources. Hosted review/merge remain. Last
   update 2026-08-31.
+- **Superseded local WIP (recorded 2026-09-01).** A working tree carried an
+  unfinished per-size measurement budget for this instrument
+  (`LARGE_SIZE_THRESHOLD`, `SCALE_BASE`, `config_for`, and 4,096/8,192 added to
+  `DEFAULT_SIZES`), scaling the measurement window by `len / 512` to stop the
+  median swinging. The resolution above removes that swing's causes instead —
+  exact processor binding and `process_with_scratch` — and rejects the
+  within-a-few-percent acceptance the scaling was chasing, so the WIP is
+  superseded rather than unfinished. It is archived at `44f7a146` on
+  `perf/apollo-batched-parallel` and is not proposed for main. The companion
+  claim commit `b156a967` claimed ATLAS-APOLLO-FFT-1024-ROUTE-2026-08-31,
+  which is already done on main; it was not carried forward.
 
 ## ATLAS-APOLLO-BASE-64-SWITCH-RETIRED-2026-08-30 — A measured constant outlived its premises [patch] [perf] — done 2026-08-30
 
@@ -895,7 +1156,7 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — review
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — done 2026-09-01
 
 - **Integrator:** Codex `/root`; last update 2026-08-30.
 - **Lease:** none; exact source candidate `958fbfb2` is published for
@@ -990,7 +1251,11 @@
   Windows all-target compilation, Rustdoc, the compile-fail doctest, formatting,
   and diff checks pass. The AArch64 gate also closed a pre-existing test-only
   cfg mismatch by excluding the x86 TSC probe at its module boundary. Hosted
-  and independent-review closure remain open.
+  and independent-review closure remain open. Independent review closed
+  2026-09-01: the merged kernel is value- and gate-verified; its one material
+  finding — the column pass duplicated per width, stranding the sink family in
+  the four-lane copy — is resolved by
+  `ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01`.
 
 
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28
@@ -2438,21 +2703,36 @@
   instantiation coupling should be understood before the rewrite rather than
   discovered during it.
 
-## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — decided 2026-08-27: retained; f64 256/512 route scalar
+## ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25 — Decide the AVX Stockham backend's future [arch] — status: in-progress (reopened 2026-09-01)
 
-- **Verdict (2026-08-27, ADR 0042):** the retirement premise was a scheduler
-  artifact. The new same-binary pinned instrument
-  (`stockham::backend_matrix`, run `--ignored --nocapture`, release) shows the
-  AVX backend winning 1.4–2.9x on a pinned P-core at nearly every size and
-  precision; the entry ratios at 256/512/4096 sit in the pinned E-core band
-  and the 1024 entry matches neither column — unpinned scheduling (EcoQoS
-  E-core placement) is the leading hypothesis for the entry numbers.
-  Full table and correction: `gap_audit.md#stockham-backend-matrix`. The one
-  both-core-consistent exception, f64 N = 256/512 (scalar −16%/−77% at 512),
-  is now routed to the scalar stages in `StockhamKernel for f64`;
-  `PreciseStockham` compiles unconditionally to serve it. f32 keeps the AVX
-  backend everywhere. AVX-512 arms untouched (no silicon; HS-429 class).
-  Integrator: Claude session 5050c72a.
+- **Reopened 2026-09-01.** The 2026-08-27 verdict below was withdrawn: it rested
+  on a `backend_matrix` table whose two core-class columns were swapped, because
+  the probe pinned to cpu 2 / cpu 12 and labelled by `landed < 8` while this
+  host's performance set is `{0, 1, 10, 11, 12, 13, 22, 23}` (ADR 0043). The
+  instrument now queries the class; the corrected re-run (three runs, ADR 0042)
+  shows **the auto-vectorized scalar backend beating the AVX backend at every
+  probed size and both precisions on performance cores** (f64 2.2–4.4x, f32
+  1.05–2.1x), while AVX wins on efficiency cores at most sizes. The retirement
+  premise this item opened with is supported, not falsified.
+- **Next step (first, blocking):** explain ADR 0042 finding 3 — the AVX arm is
+  *absolutely* slower on a performance core than on an efficiency core (512 f64:
+  7527 ns on cpu 1 against 3126 ns on cpu 3) while the scalar arm shows the
+  normal ordering. Reproduced across three runs and two processor pairs. A
+  backend that inverts the core hierarchy is showing a microarchitectural
+  pathology; retirement should not be decided on an unexplained measurement, and
+  a fixable pathology would change the answer. Method: codegen inspection of the
+  AVX stage body (`cargo asm`) plus `perf`-class counters on both classes.
+- **Then:** decide retire / keep / narrow, with f32 efficiency-core coverage,
+  and record in ADR 0042 (which currently holds retention as status quo, not as
+  a supported decision).
+- **Unchanged and re-verified:** f64 N = 256/512 route to the scalar stages.
+  That reroute was justified as "scalar wins on both core types", which is
+  label-independent; corrected, scalar still wins on both classes at both sizes
+  (256: 0.271 / 0.989; 512: 0.225 / 0.831). No production routing changed by the
+  2026-09-01 correction.
+- **Superseded verdict (2026-08-27, withdrawn):** claimed the retirement premise
+  was a scheduler artifact and that AVX won 1.4–2.9x on a pinned P-core. That
+  column was an efficiency core. Integrator: Claude session 5050c72a.
 - **Outcome:** the AVX Stockham backend either earns its place with measurements
   or is retired, rather than being carried on the assumption that hand-written
   intrinsics are faster than what the optimizer produces.
@@ -3700,7 +3980,7 @@ Remaining replacement work:
 - [x] [patch] Route `apollo-radon` adjoint backprojection pixel reductions through Hermes. Threshold-sized angle accumulations now materialize two detector sample lanes and two interpolation-weight lanes per angle in Mnemosyne thread-local scratch before delegating the pixel sum to Hermes, while scalar linear sampling remains the small-path formula reference and forward projection remains the scatter/deposit kernel. Verification: Radon fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-sht` forward/inverse complex reductions through Hermes. Forward longitude sums now materialize one shared interleaved sample row buffer for threshold-sized rows, inverse synthesis materializes one shared interleaved coefficient buffer for threshold-sized mode sets, and both reuse Mnemosyne thread-local spherical-harmonic lane scratch before delegating complex reductions to Hermes while preserving scalar formulas for smaller workloads plus Moirai latitude-row scheduling. Verification: SHT fmt/tests/clippy/doc, semver check, provider audit, and full quick-profile `docs/benchmark_results.md` refresh.
 - [x] [patch] Route `apollo-nufft` exact 1D direct rows through Hermes. Type-1 rows now materialize one shared complex value lane buffer for threshold-sized exact transforms, Type-2 rows materialize one shared complex coefficient lane buffer, and both reuse Mnemosyne thread-local phasor-lane scratch per row before delegating complex reductions to Hermes while preserving scalar formulas for smaller workloads plus Moirai output scheduling. Verification: NUFFT fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
-- [x] [patch] Route `apollo-mellin` log-frequency spectrum rows through Hermes. Forward spectrum rows now materialize one shared real interleaved input lane buffer for threshold-sized spectra, inverse rows materialize one shared complex interleaved spectrum lane buffer, and both reuse Mnemosyne thread-local twiddle-lane scratch per row before delegating complex reductions to Hermes while preserving scalar formulas for smaller spectra plus Moirai output scheduling. Verification: Mellin fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
+- [x] [patch] Route `apollo-mellin` log-frequency spectrum rows through Hermes. Forward spectrum rows now pass real samples directly to Hermes' real-by-interleaved-complex reduction; inverse rows retain one shared complex interleaved spectrum lane buffer, and both reuse Mnemosyne thread-local twiddle-lane scratch per row while preserving scalar formulas for smaller spectra plus Moirai output scheduling. Verification: Mellin fmt/tests/clippy/doc, semver check, provider audit, examples, workspace tests, workspace clippy, and workspace docs.
 - [x] [patch] Route `apollo-dctdst` direct row reductions through Hermes. Direct DCT-I/II/III/IV and DST-I/II/III/IV rows now materialize basis rows in Mnemosyne thread-local scratch and delegate threshold-sized real reductions to Hermes while preserving scalar formulas for smaller vectors plus Moirai output scheduling. Verification: DCT/DST fmt/tests/clippy/doc, semver check, provider audit, workspace gates, and refreshed benchmarks.
 - [x] [patch] Route `apollo-frft` direct row reductions through Hermes. Direct fractional and centered-DFT rows now materialize one shared interleaved input lane buffer for threshold-sized direct transforms, reuse Mnemosyne thread-local phasor-weight scratch per row, and delegate the complex reduction to Hermes while preserving scalar formulas for smaller vectors plus Moirai output scheduling. Verification: FRFT fmt/tests/clippy/doc, semver check, and provider audit.
 - [x] [patch] Route `apollo-czt` direct row reductions through Hermes. Direct CZT now materializes one shared interleaved input lane buffer for threshold-sized direct transforms, reuses Mnemosyne thread-local geometric power-lane scratch per row, and delegates the complex reduction to Hermes while preserving scalar formulas for smaller direct transforms plus Moirai output scheduling. Verification: CZT fmt/tests/clippy/doc, semver check, and provider audit.

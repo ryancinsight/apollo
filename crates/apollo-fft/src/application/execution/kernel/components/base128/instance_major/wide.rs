@@ -59,9 +59,14 @@ pub(super) struct BaseTransform<
     const ROWS: usize,
     const LANES: usize,
     const TABLE_LANES: usize,
+    S,
 > {
     pub(super) data: &'a mut [T; LANES],
     pub(super) plan: &'a BasePlan<T, ROWS, TABLE_LANES>,
+    /// Type-selected output strategy, shared with the four-lane kernel: the
+    /// sinks index by view chunk, so the same fixed-size buffers serve both
+    /// chunk geometries.
+    pub(super) sink: S,
 }
 
 impl<
@@ -71,9 +76,11 @@ impl<
         const ROWS: usize,
         const LANES: usize,
         const TABLE_LANES: usize,
-    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES>
+        S,
+    > LaneKernel<T> for BaseTransform<'_, T, INVERSE, MEASURE_PHASES, ROWS, LANES, TABLE_LANES, S>
 where
     T: LaneScalar + MixedRadixScalar,
+    S: super::store::StoreSink<T>,
 {
     type Output = bool;
 
@@ -117,7 +124,6 @@ where
             ],
         );
         let half_root2 = simd.splat(self.plan.table[row_offset + 24]);
-        let tab_view = simd.view(self.plan.table.as_slice());
         let zero_complex = ComplexReg::from_interleaved(simd.zero());
 
         #[cfg(all(test, windows, target_arch = "x86_64"))]
@@ -242,69 +248,16 @@ where
         // established at the store site.
         let staging = unsafe { staging_uninit.assume_init_ref() };
 
-        let w8_1 = complex_splat(simd, self.plan.col[0]);
-        let w8_3 = complex_splat(simd, self.plan.col[1]);
-        let stg = simd.view(staging.as_slice());
-        let mut out = simd.view_mut(self.data.as_mut_slice());
-        for group in 0..4usize {
-            let mut c = [zero_complex; 8];
-            for (row, reg) in c.iter_mut().enumerate().take(ROWS) {
-                *reg = ComplexReg::from_interleaved(hermes_simd::Vector::from_view_chunk(
-                    &stg,
-                    row * 4 + group,
-                ));
-            }
-            for row in 1..ROWS {
-                c[row] =
-                    super::super::cmul::cmul_chunk(&tab_view, c[row], 2 * ((row - 1) * 4 + group));
-            }
-            if ROWS == 8 {
-                for row in 0..4usize {
-                    let (sum, difference) = c[row].butterfly(c[row + 4]);
-                    c[row] = sum;
-                    c[row + 4] = match row {
-                        0 => difference,
-                        1 => difference * w8_1,
-                        2 => {
-                            if INVERSE {
-                                difference.mul_i()
-                            } else {
-                                difference.mul_neg_i()
-                            }
-                        }
-                        _ => difference * w8_3,
-                    };
-                }
-            }
-            for section in 0..ROWS / 4 {
-                let base = 4 * section;
-                for offset in 0..2usize {
-                    let (sum, difference) = c[base + offset].butterfly(c[base + offset + 2]);
-                    c[base + offset] = sum;
-                    c[base + offset + 2] = if offset == 0 {
-                        difference
-                    } else if INVERSE {
-                        difference.mul_i()
-                    } else {
-                        difference.mul_neg_i()
-                    };
-                }
-            }
-            for section in 0..ROWS / 2 {
-                let base = 2 * section;
-                let (sum, difference) = c[base].butterfly(c[base + 1]);
-                (c[base], c[base + 1]) = (sum, difference);
-            }
-            for (row, reg) in c.iter().enumerate().take(ROWS) {
-                let destination = if ROWS == 8 {
-                    super::REV3[row]
-                } else {
-                    super::REV2[row]
-                };
-                reg.into_interleaved()
-                    .store_to_view_chunk(&mut out, destination * 4 + group);
-            }
-        }
+        // The shared lane-wise `ROWS`-point DIF column pass, four groups of
+        // four interleaved complex samples at this width.
+        super::column::column_pass::<T, A, S, INVERSE, ROWS, 4>(
+            simd,
+            staging.as_slice(),
+            self.plan.table.as_slice(),
+            &self.plan.col,
+            self.data.as_mut_slice(),
+            self.sink,
+        );
 
         #[cfg(all(test, windows, target_arch = "x86_64"))]
         if MEASURE_PHASES {

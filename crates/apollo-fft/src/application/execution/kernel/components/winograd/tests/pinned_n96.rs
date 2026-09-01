@@ -5,6 +5,7 @@
 //! threshold.
 
 use crate::application::execution::kernel::components::winograd::{dft32_impl, WinogradScalar};
+use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{Complex, Complex32, Complex64};
@@ -362,14 +363,24 @@ where
 #[test]
 #[ignore = "measurement instrument for N=96 Good-Thomas phase attribution"]
 fn good_thomas_phase_costs_on_performance_core() {
-    let _binding = ProcessorBinding::bind(ProcessorIndex::new(2))
-        .expect("measurement processor must be available");
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    let Some(core) = selection.performance() else {
+        eprintln!("host reports no performance-core information; probe not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    let cpu = core.processor().get();
+    let _binding =
+        ProcessorBinding::bind(core.processor()).expect("measurement processor must be available");
     std::thread::yield_now();
     assert_eq!(
         ProcessorIndex::current()
             .expect("Windows supports processor queries")
             .get(),
-        2,
+        cpu,
         "processor binding must remain exact"
     );
 

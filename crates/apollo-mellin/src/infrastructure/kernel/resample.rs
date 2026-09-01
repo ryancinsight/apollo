@@ -23,7 +23,6 @@ const HERMES_SPECTRUM_OP_THRESHOLD: usize = 16_384;
 thread_local! {
     static MOMENT_WEIGHT_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
     static LOG_FREQUENCY_WEIGHT_LANE_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
-    static REAL_LANES_SCRATCH: mnemosyne::scratch::ScratchPool<f64> = const { mnemosyne::scratch::ScratchPool::new() };
 }
 
 /// Interpolate a positive-domain signal onto logarithmically spaced samples.
@@ -164,16 +163,8 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     let factor = -std::f64::consts::TAU / len as f64;
     let work_items = len.saturating_mul(len);
     if work_items >= HERMES_SPECTRUM_OP_THRESHOLD {
-        return REAL_LANES_SCRATCH.with(|pool| {
-            pool.with_scratch(len * 2, |input_lanes| {
-                for (i, &val) in log_samples.iter().enumerate() {
-                    input_lanes[2 * i] = val;
-                    input_lanes[2 * i + 1] = 0.0;
-                }
-                moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
-                    log_frequency_coeff_hermes(input_lanes, factor, du, k)
-                })
-            })
+        return moirai::map_collect_index_with::<moirai::Adaptive, _, _>(len, |k| {
+            log_frequency_coeff_hermes(log_samples, factor, du, k)
         });
     }
 
@@ -192,15 +183,12 @@ pub fn log_frequency_spectrum(log_samples: &[f64], log_min: f64, log_max: f64) -
     }
 }
 
-fn log_frequency_coeff_hermes(input_lanes: &[f64], factor: f64, scale: f64, k: usize) -> Complex64 {
+fn log_frequency_coeff_hermes(input: &[f64], factor: f64, scale: f64, k: usize) -> Complex64 {
     LOG_FREQUENCY_WEIGHT_LANE_SCRATCH.with(|pool| {
-        pool.with_scratch(input_lanes.len(), |weight_lanes| {
+        pool.with_scratch(input.len() * 2, |weight_lanes| {
             fill_log_frequency_weight_lanes(weight_lanes, factor, k);
-            let (re, im) = hermes_simd::interleaved_complex_dot_runtime::<f64, false>(
-                input_lanes,
-                weight_lanes,
-            )
-            .expect("Mellin forward spectrum Hermes dot uses equal-length interleaved lanes");
+            let (re, im) = hermes_simd::real_interleaved_complex_dot_runtime(input, weight_lanes)
+                .expect("Mellin forward spectrum Hermes dot uses one complex weight per sample");
             Complex64::new(re * scale, im * scale)
         })
     })
@@ -294,16 +282,6 @@ fn inverse_log_frequency_coeff_hermes(
     })
 }
 
-#[cfg(test)]
-fn real_interleaved_lanes(values: &[f64]) -> Vec<f64> {
-    let mut lanes = Vec::with_capacity(values.len() * 2);
-    for value in values {
-        lanes.push(*value);
-        lanes.push(0.0);
-    }
-    lanes
-}
-
 #[inline]
 fn complex_interleaved_lanes(values: &[Complex64]) -> &[f64] {
     bytemuck::cast_slice(values)
@@ -377,130 +355,4 @@ pub fn exp_resample(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use eunomia::assert_abs_diff_eq;
-
-    #[test]
-    fn hermes_mellin_moment_matches_scalar_formula_at_threshold() {
-        let len = HERMES_MOMENT_LEN_THRESHOLD;
-        let signal_min = 1.0_f64;
-        let signal_max = 5.0_f64;
-        let exponent = 1.75_f64;
-        let step = (signal_max - signal_min) / (len as f64 - 1.0);
-        let signal = (0..len)
-            .map(|index| {
-                let coordinate = signal_min + index as f64 * step;
-                coordinate.ln().sin() + 2.0
-            })
-            .collect::<Vec<_>>();
-
-        let actual = mellin_moment_hermes(&signal, signal_min, exponent, step);
-        let expected = mellin_moment_scalar(&signal, signal_min, exponent, step);
-
-        assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-9);
-    }
-
-    #[test]
-    fn moment_weights_match_trapezoid_formula() {
-        let len = HERMES_MOMENT_LEN_THRESHOLD;
-        let signal_min = 0.5_f64;
-        let step = 0.001_f64;
-        let exponent = 2.25_f64;
-        let mut weights = vec![0.0; len];
-
-        fill_moment_weights(&mut weights, signal_min, exponent, step);
-
-        for &index in &[0usize, 1, 257, len - 2, len - 1] {
-            let coordinate = signal_min + index as f64 * step;
-            let trapezoid = if index == 0 || index + 1 == len {
-                0.5
-            } else {
-                1.0
-            };
-            let expected = trapezoid * coordinate.powf(exponent - 1.0);
-            assert_eq!(weights[index].to_bits(), expected.to_bits());
-        }
-    }
-
-    #[test]
-    fn hermes_log_frequency_rows_match_scalar_formulas_at_threshold() {
-        let len = PAR_THRESHOLD;
-        let log_min = -0.25_f64;
-        let log_max = 1.75_f64;
-        let du = (log_max - log_min) / (len as f64 - 1.0);
-        let factor = -std::f64::consts::TAU / len as f64;
-        let samples = (0..len)
-            .map(|index| {
-                let x = log_min + index as f64 * du;
-                x.sin() + (2.0 * x).cos()
-            })
-            .collect::<Vec<_>>();
-        let input_lanes = real_interleaved_lanes(&samples);
-
-        for k in [0usize, 1, 17, 64, 127, 255] {
-            let actual = log_frequency_coeff_hermes(&input_lanes, factor, du, k);
-            let expected = samples
-                .iter()
-                .enumerate()
-                .map(|(n, sample)| Complex64::from_polar(*sample, factor * k as f64 * n as f64))
-                .sum::<Complex64>()
-                * du;
-
-            assert_abs_diff_eq!(actual.re, expected.re, epsilon = 1.0e-10);
-            assert_abs_diff_eq!(actual.im, expected.im, epsilon = 1.0e-10);
-        }
-    }
-
-    #[test]
-    fn hermes_inverse_log_frequency_rows_match_scalar_formulas_at_threshold() {
-        let len = PAR_THRESHOLD;
-        let log_min = -0.25_f64;
-        let log_max = 1.75_f64;
-        let du = (log_max - log_min) / (len as f64 - 1.0);
-        let inv_du = 1.0 / du;
-        let factor = std::f64::consts::TAU / len as f64;
-        let spectrum = (0..len)
-            .map(|index| {
-                Complex64::new(
-                    (index as f64 * 0.03125).sin(),
-                    (index as f64 * 0.015625).cos(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let spectrum_lanes = complex_interleaved_lanes(&spectrum);
-
-        for n in [0usize, 1, 17, 64, 127, 255] {
-            let actual =
-                inverse_log_frequency_coeff_hermes(spectrum_lanes, factor, inv_du / len as f64, n);
-            let expected = spectrum
-                .iter()
-                .enumerate()
-                .map(|(k, s)| {
-                    let angle = factor * k as f64 * n as f64;
-                    s.re * angle.cos() - s.im * angle.sin()
-                })
-                .sum::<f64>()
-                * inv_du
-                / len as f64;
-
-            assert_abs_diff_eq!(actual, expected, epsilon = 1.0e-10);
-        }
-    }
-
-    #[test]
-    fn log_frequency_weight_lanes_match_trigonometric_formula() {
-        let len = PAR_THRESHOLD * 2;
-        let factor = -std::f64::consts::TAU / PAR_THRESHOLD as f64;
-        let row = 17usize;
-        let mut lanes = vec![0.0; len];
-
-        fill_log_frequency_weight_lanes(&mut lanes, factor, row);
-
-        for &index in &[0usize, 1, 17, 64, 127, 255] {
-            let angle = factor * row as f64 * index as f64;
-            assert_eq!(lanes[index * 2].to_bits(), angle.cos().to_bits());
-            assert_eq!(lanes[index * 2 + 1].to_bits(), angle.sin().to_bits());
-        }
-    }
-}
+mod tests;

@@ -19,6 +19,7 @@ use super::precision::{
     StockhamPrecision,
 };
 use super::transform::transform_sized;
+use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{Complex32, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
@@ -75,17 +76,21 @@ fn stockham_backend_cost_matrix() {
         eprintln!("host lacks avx+fma; backend matrix not measurable");
         return;
     }
-    // Logical 0..8 are P-cores and 8..24 E-cores on the Core Ultra 9 285K.
-    for cpu in [2u32, 12] {
-        let _binding = ProcessorBinding::bind(ProcessorIndex::new(cpu))
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; backend matrix not measurable");
+        return;
+    };
+    print!("{}", selection.describe());
+    for core in selection.cores() {
+        let cpu = core.processor().get();
+        let _binding = ProcessorBinding::bind(core.processor())
             .expect("measurement processor must be available");
         std::thread::yield_now();
         let landed = ProcessorIndex::current()
             .expect("Windows supports processor queries")
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
-        let core = if landed < 8 { "P" } else { "E" };
-        println!("== core {core} (cpu {landed}) ==");
+        println!("== {} core (cpu {landed}) ==", core.label());
         println!(
             "{:>6}  {:>12} {:>12} {:>7}   {:>12} {:>12} {:>7}",
             "n", "f64 scalar", "f64 avx", "s/a", "f32 scalar", "f32 avx", "s/a"

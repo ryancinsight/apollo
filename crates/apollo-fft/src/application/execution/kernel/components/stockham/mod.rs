@@ -130,12 +130,22 @@ impl StockhamKernel for f64 {
         }
         #[cfg(target_arch = "x86_64")]
         {
-            // Pinned backend matrix (`backend_matrix`, 2026-08-27): at N = 256
-            // and 512 the auto-vectorized scalar stages meet or beat the AVX
-            // stages on BOTH core types (512: 2614 vs 3116 ns P-core, 1721 vs
-            // 7464 ns E-core) — the only sizes where the ordering does not
-            // depend on where the scheduler lands the thread. Every other size
-            // keeps the AVX backend, which wins on P-cores.
+            // Pinned backend matrix (`backend_matrix`, re-run 2026-09-01 on
+            // queried-class processors): at N = 256 and 512 the
+            // auto-vectorized scalar stages beat the AVX stages on BOTH core
+            // classes (512: 1697 vs 7527 ns performance, 2591 vs 3126 ns
+            // efficiency), which is why this reroute is safe — it does not
+            // depend on where the scheduler lands the thread.
+            //
+            // Every other size keeps the AVX backend as the status quo, NOT
+            // because it wins: on performance cores the scalar stages win at
+            // every probed size. The earlier claim that AVX "wins on P-cores"
+            // came from a probe that had its two core classes swapped (ADR
+            // 0043). Retirement is now the leading candidate and is open as
+            // ATLAS-APOLLO-AVX-STOCKHAM-AUDIT-2026-08-25; it is blocked on
+            // explaining why the AVX arm is also absolutely slower on a
+            // performance core than on an efficiency core (ADR 0042,
+            // finding 3), which no routing change should precede.
             if matches!(n, 256 | 512) {
                 let log2 = n.trailing_zeros();
                 transform_sized::<precision::PreciseStockham>(data, scratch, twiddles, None, log2);

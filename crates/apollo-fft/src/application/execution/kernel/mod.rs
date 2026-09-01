@@ -31,6 +31,11 @@ pub mod benchmark_kernels;
 
 // Owns the test binary's global allocator; allocation attribution needs no
 // pinning, so unlike the pinned probes this is not Windows-gated.
+// Selects the pinned probes' measurement processors from the class themis
+// reports for each one. Not target-gated: themis backs Windows and Linux and
+// reports typed absence elsewhere, which the probes handle by skipping.
+#[cfg(test)]
+pub(crate) mod measurement_cores;
 #[cfg(test)]
 mod retained_footprint;
 #[cfg(test)]

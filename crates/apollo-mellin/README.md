@@ -20,6 +20,11 @@ src/
 
 `MellinPlan` is the authoritative scale configuration and execution surface.
 
+CPU forward spectra retain one Mnemosyne thread-local interleaved-weight buffer
+per active Moirai worker above the direct-DFT threshold. Real log-grid samples
+remain borrowed and pass directly to Hermes' real-by-interleaved-complex
+reduction; no second `[sample, 0]` materialization buffer is retained.
+
 Typed execution uses Apollo's shared precision profile contract:
 
 - `HIGH_ACCURACY_F64`: `f64` input and output storage with owner `f64`
