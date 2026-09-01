@@ -1,5 +1,18 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 [perf] — Codex
+
+- [x] Attribute cached-plan acquisition, pair packing, half-length FFT, and
+      untangling at every census length with an exact-revision phase probe.
+- [x] Retain only a production change whose mechanism addresses the measured
+      bound and improves two unchanged 100-sample paired runs.
+- [x] Preserve direct-DFT values, conjugate symmetry, DC/Nyquist behavior,
+      f32/f64 parity, caller-owned output, and zero warmed allocation.
+- [x] Pass 512/512 debug and release value tests, warning-denied host/AArch64
+      gates, Rustdoc, doctest, standalone lock, formatting, docs, and exact-diff
+      review. Record `cargo asm` as unavailable rather than claiming codegen.
+- [ ] Commit, publish, obtain independent review, pass hosted gates, merge, and
+      discharge the source and PM leases.
 ## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 [perf] — Codex
 
 - [x] Commit the unchanged public Mellin forward-spectrum benchmark and record
@@ -37,6 +50,8 @@
       target-feature safety, no hot capability probe, and bounded size growth.
 - [x] Reproduce paired isolated and full-path measurements, synchronize durable
       evidence, and pass exact local gates at source `9ac833cd`.
+- [x] Complete independent hosted gates and merge without squash: Apollo PR
+      #230 merged as `17bad886`; provider PR #135 is merged as `060eb7eb`.
 - [x] Complete independent hosted gates and merge without squash: provider PR
       #135 merged as `060eb7eb`; Apollo PR #230 merged as `17bad886`.
 

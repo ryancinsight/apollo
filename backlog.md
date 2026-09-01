@@ -1,5 +1,34 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Restart real-split twiddles [patch] [perf] — done 2026-09-01
+
+- **Outcome.** Exact phase attribution identifies per-bin f64 `sin_cos` as the
+  stable real-half split bound. Source `5a8b90d3` seeds one native-precision
+  complex recurrence per eight bins, bounding drift without an O(N) retained
+  table or a second FFT implementation; public, arithmetic, scratch, and
+  caller-owned-output contracts remain unchanged.
+- **Evidence.** Two unchanged 100-sample Windows AVX2 comparisons reduce f64
+  real-half medians by 34.23%/33.99% at N=1,024, 23.02%/33.20% at 4,096,
+  28.01%/20.97% at 16,384, and 27.18%/16.84% at 65,536. The 262,144 row is
+  explicitly inconclusive (-9.46%/+31.33%). Independent f32/f64 direct spectra,
+  symmetry, DC/Nyquist, and round trips pass; warmed real-half/complex execution
+  remains allocation-free and real-full retains its single 16N-byte output.
+  Debug/release Nextest pass 512/512, host/AArch64 warning-denied gates,
+  Rustdoc, doctest, format, diff, and the standalone 36-source lock guard pass.
+  `cargo asm` is unavailable locally; no assembly claim is made.
+- **Limits / delivery.** Timing is local Windows AVX2 on logical processor 2;
+  complex controls become noisy above 16,384 and do not establish cross-machine
+  behavior. Independent review, hosted gates, PR delivery, and merge remain.
+  Integrator Codex `/root`; lease none. Last update 2026-09-01.
+- **Takeover (2026-09-01, Claude `/root`).** Claim stale eight hours with the
+  branch complete but undelivered. Independent review: the eight-bin restart
+  bounds the recurrence at seven native complex multiplies (`42u`); the f32
+  oracle test carried that derivation and the f64 bound now carries the same
+  term rather than absorbing it in the engine factor. Main merged in; fmt,
+  warning-denied clippy, 515/515 debug and release, doctests green on the
+  delivered revision. "Logical processor 2" is an efficiency core per
+  `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`; the relative reductions
+  stand as recorded.
 ## ATLAS-APOLLO-CORE-CLASS-LABELS-2026-09-01 — Pinned probes select cores by queried class [patch] — done 2026-09-01
 
 - **Delivered** (ADR 0043): the nine pinned-probe sites that hardcoded
@@ -255,6 +284,10 @@
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
+- **Evidence.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed.
+- **Delivery.** Independent review and every hosted repository gate passed;
+  Apollo PR #230 merged without squash as `17bad886`. Leto Ops provider PR
+  #135 remains merged as `060eb7eb`. Integrator `/root`; lease none.
 - **Evidence / delivery.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed. Source `9ac833cd`, evidence `f1124f81`, exact head `e030595e`; PR #230 merged without squash as `17bad886`. Lease none.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
