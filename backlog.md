@@ -1,5 +1,14 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — in progress
+
+- **Outcome.** Determine whether compile-time expansion of the 32 DFT-3 columns removes enough loop, address, and CRT-wrap control to reduce the measured 46.07 ns f32 N = 96 column/scatter phase.
+- **Scope / non-goals.** Extend the pinned phase instrument first with 32 inlined constant-index calls that preserve the existing `ShortDft<3>` arithmetic and exact stores. If retained, specialize only the private generated `(3,32)` column/scatter schedule; preserve every other pair, scalar type, inverse convention, public API, scratch, allocation behavior, benchmark body, and routing. Do not add a backend or provider primitive.
+- **Acceptance.** The instrument must match the incumbent within the established direct-DFT bound and write every output exactly once. Retain production source only if the isolated phase improves for both f32 and f64 and two adjacent unchanged 100-sample whole-path comparisons reproduce N = 96 improvement with N = 64/128 controls neutral; otherwise remove the candidate and record rejection.
+- **Analytical model / stop condition.** The candidate removes 32 loop backedges, runtime base multiplication/modulo, and 96 stride/wrap updates while leaving 32 DFT-3 butterflies and 96 irregular stores unchanged. Reject if LLVM already elides that control, code-size pressure offsets it, either scalar regresses, or whole-path intervals do not separate.
+- **Risk / dependencies.** [patch] [perf]. Generated-code size, inverse parity, complete CRT coverage, f64 parity, and compile-time growth are the risks. Timing evidence is local Windows AVX2 only.
+- **Integrator / lease:** `/root`; lease `/root` on the N = 96 pinned phase instrument, the Good-Thomas generator's `(3,32)` column schedule if retained, focused value/size/allocation tests, and this item's PM sections. Last update 2026-09-01.
+
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 — Batch the residual Good-Thomas columns [patch] [perf] — done 2026-09-01
 
 - **Outcome:** rejected before production routing; the value-gated exact-eight-lane candidate regressed the release column/scatter phase from 46.07 ns to 56.91 ns (23.53%) because register materialization preserved all 96 scalar CRT stores.
