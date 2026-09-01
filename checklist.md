@@ -6,10 +6,11 @@
       adjacent f32/f64 controls; confirm or reject the historical deficit.
 - [x] Attribute a reproduced gap with the existing base-route instruments
       before leasing or editing production source.
-- [ ] Retain only a candidate whose unchanged comparisons improve with neutral
-      controls and whose analytical, round-trip, and warm-allocation gates pass.
-- [ ] Pass warning-denied, package, cross-target, docs, lock, review, hosted,
-      and non-squash merge gates; otherwise record a measured rejection.
+- [x] Reject quarter-turn twiddle reuse: three phase runs move f64 N = 512 from
+      1.293--1.303 to 1.356--1.373 microseconds while N = 256 stays neutral.
+- [x] Preserve production byte-for-byte; direct-oracle debug/release tests pass
+      4/4 and the unchanged comparison confirms a 1.358 microsecond N = 512
+      median against the 1.299--1.308 microsecond entry range.
 
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 [perf] — Codex
 

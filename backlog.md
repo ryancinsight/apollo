@@ -1,37 +1,9 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 — Re-establish the f64 256/512 bottleneck [patch] [perf] — in progress
+## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 — Re-establish the f64 256/512 bottleneck [patch] [perf] — done 2026-08-31
 
-- **Outcome.** Re-measure the current f64 N = 256/512 base-128 route after the
-  native-lane and fused-sink series, then reduce only a stable attributed
-  production phase.
-- **Scope / non-goals.** Use the unchanged exact-processor comparison and the
-  existing base-route instruments before editing production. Retain the FFT
-  workload, estimator, routing, arithmetic, allocation lifecycle, and f32
-  controls; do not revive rejected base-layout variants or change a provider
-  without a reproduced provider-owned gap.
-- **Acceptance.** Three same-revision processor-2 comparisons and focused phase
-  runs identify a reproducible component. A retained candidate must improve
-  two unchanged comparisons, keep adjacent f32/f64 controls neutral, preserve
-  direct-reference and round-trip values, and add no warm allocation. Reject
-  the candidate if the attributed or complete-path intervals overlap a
-  regression or the historical 1.4--1.5x deficit no longer reproduces.
-- **Risk / dependencies.** [patch] [perf]. Depends on merged native-width base
-  lanes and sink fusion through PR #219 / `8ef1e5d3`. Local Windows AVX2 timing
-  is empirical evidence; AArch64 remains compile coverage.
-- **Entry attribution.** Three processor-2 comparisons place f64 N = 256 at
-  1.2533--1.2564x RustFFT and N = 512 at 1.2403--1.2475x. Three release phase
-  runs place N = 256 at 54.9--55.0 ns gather, 362.7--363.8 ns base blocks,
-  and 95.3--97.1 ns fused-combine residual; N = 512 is 116.2--116.5 ns,
-  725.9--726.9 ns, and 450.7--459.2 ns respectively. The final four-block
-  sink is the largest non-base phase. Its two outer twiddle vectors differ by
-  an exact quarter turn, so a bounded candidate removes the second table load
-  and derives that turn in-register; reject unless the full comparison moves.
-- **Integrator / lease:** `/root`; lease `/root` on
-  `base128/instance_major/store.rs`, the final-sink call in `base128/mod.rs`,
-  focused base tests, this item/checklist section, and resulting
-  gap-audit/CHANGELOG entries. The existing probes remain read-only. Last
-  update 2026-08-31.
+- **Delivered:** PM-only measured rejection; exact quarter-turn twiddle reuse regressed f64 N = 512, so production source remains byte-identical to merged PR #219 / `8ef1e5d3`.
+- **Evidence:** direct-oracle debug/release 4/4; three exact-processor phase runs and one unchanged comparison reproduce the regression; lease none. See `gap_audit.md#base128-quarter-turn`.
 
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — review
 
