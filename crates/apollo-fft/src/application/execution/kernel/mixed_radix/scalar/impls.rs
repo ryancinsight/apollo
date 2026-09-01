@@ -538,7 +538,7 @@ impl MixedRadixScalar for f64 {
         };
         // Measured pinned on both core types (`codelet::pinned_probe`,
         // `pot::crossover`): the batched four-step beats this sized Stockham
-        // route from N = 256 upward — 1.5x on a P-core, 5 to 6x on an E-core —
+        // route from N = 256 upward — 1.5x on an E-core, 5 to 6x on a P-core —
         // so admissible sizes at or past the crossover leave the sized path.
         // The f32 impl keeps the incumbent route until measured on its own.
         if one_dimensional_uses_four_step(data.len()) {

@@ -5,8 +5,10 @@
 //! interleaved kernel's ~5.6k — planar trades the interleaved multiply's
 //! stage shuffles for boundary deinterleave/interleave networks and
 //! in-register permutes of its own (~96 shuffle-class ops per row either
-//! way), and this host's P-core has the shuffle throughput to keep the
-//! interleaved form from ever being shuffle-port-bound. Both register-row
+//! way), and even this host's efficiency core — the pinned measurement
+//! core — had the shuffle throughput to keep the interleaved form from
+//! being shuffle-port-bound; the performance-core case is implied, not
+//! measured. Both register-row
 //! shapes cost ~3x a batched streaming pass in arithmetic alone, so neither
 //! reaches the reference construction. RustFFT's f64/1024 plan (read from
 //! source, `avx_planner.rs`, f64 impl) is
