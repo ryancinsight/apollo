@@ -400,13 +400,21 @@ fn complex_signal(n: usize) -> Vec<Complex64> {
 
 /// Opts this process out of Windows power throttling (EcoQoS).
 ///
-/// Windows classifies benchmark child processes as background work and hands
-/// them EcoQoS: efficiency cores at efficiency frequency. Measured on the
-/// hybrid Core Ultra 9 285K, that made the batched four-step kernel report
-/// 45 us per call in this process while the same binary's calls, pinned to
-/// either core type, take 13 to 17 us — every earlier "process-dependent"
-/// four-step anomaly in the audit trail was this, not code. An instrument that
-/// measures the scheduler's opinion of it is not measuring the engines.
+/// Retained as a measured no-op, not as a fix. The claim this once carried —
+/// that Windows hands benchmark children EcoQoS and that this call is what
+/// made the batched four-step drop from ~45 us to the pinned 13 to 17 us — is
+/// withdrawn (ADR 0039, revision 2026-09-01). [`qos_placement_probe`] measured
+/// the process's explicit throttling state as unset by default, unpinned
+/// calls landing on all 24 processors with a performance-core bias rather
+/// than "exclusively on E-cores", and this call changing neither median
+/// latency (154.0 to 155.2 us) nor placement under the High performance plan.
+/// The process-dependent anomalies in the audit trail are better explained by
+/// an unpinned process sampling two core classes at a scheduler-chosen ratio
+/// (`ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01`).
+///
+/// It stays because the probe covered one power plan: EcoQoS heuristics are
+/// strongest under Balanced or on battery, which this host cannot exercise.
+/// Re-run the probe there before deleting or re-crediting this call.
 #[cfg(windows)]
 fn opt_out_of_power_throttling() {
     #[repr(C)]
@@ -549,7 +557,9 @@ fn qos_placement_probe() {
 
     let (nx, ny) = SHAPE;
     let topology = CpuTopology::detect();
-    let class_count = topology.as_ref().and_then(CpuTopology::efficiency_class_count);
+    let class_count = topology
+        .as_ref()
+        .and_then(CpuTopology::efficiency_class_count);
     let src = complex_signal(nx * ny);
     let plan = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx, ny });
     let mut plane = Array2::from_shape_vec((nx, ny), src.clone()).expect("shape matches the data");
@@ -594,7 +604,10 @@ fn qos_placement_probe() {
             micros(median),
             micros(p90)
         );
-        println!("  landed on {} distinct processors: {distinct:?}", distinct.len());
+        println!(
+            "  landed on {} distinct processors: {distinct:?}",
+            distinct.len()
+        );
         for (rank, count) in per_rank.iter().enumerate() {
             let marker = if Some(rank + 1) == class_count {
                 " (highest class)"
@@ -609,7 +622,9 @@ fn qos_placement_probe() {
             );
         }
         if class_count.is_none() {
-            println!("  topology reports no efficiency classes: placement by class is unmeasurable here");
+            println!(
+                "  topology reports no efficiency classes: placement by class is unmeasurable here"
+            );
         }
         if unclassified > 0 {
             println!("  unclassified landings: {unclassified}");
