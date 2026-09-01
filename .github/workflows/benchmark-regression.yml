@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           cp apollo-candidate-source/Cargo.lock apollo-measurement/Cargo.lock
-          python3 apollo-candidate-source/scripts/pin_workspace_dependencies.py \n            apollo-candidate-source/Cargo.toml \n            apollo-measurement/Cargo.toml
+          python3 apollo-candidate-source/scripts/pin_workspace_dependencies.py apollo-candidate-source/Cargo.toml apollo-measurement/Cargo.toml
           cp \
             apollo-candidate-source/crates/apollo-fft/Cargo.toml \
             apollo-measurement/crates/apollo-fft/Cargo.toml
