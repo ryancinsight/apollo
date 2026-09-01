@@ -55,6 +55,13 @@
     `batched/mod.rs:1042-1047`, `resident/planar.rs:3-11`,
     `codelet/mod.rs:3-10`, `tuning.rs:29-39`, `mixed_radix/scalar/impls.rs:539`,
     `benches/engine_census.rs:403-409`.
+  - **Unmerged branch, will reintroduce on merge:**
+    `perf/apollo-batched-native-width` still carries the old pattern at
+    `base128/pinned_probe.rs:226`, `batched/pinned_sections.rs:26` and
+    `winograd/tests/pinned_n96.rs:365`, and adds a *new* site this correction
+    does not cover — `tests/real_split_parity.rs:262`, an integration test, so
+    it needs a reachable selector rather than the `pub(crate)` module. Resolve
+    when that branch rebases onto this correction.
   - **Not affected:** any claim of the form "X wins on BOTH core types" —
     label-independent by construction. The `ONE_DIMENSIONAL_FOUR_STEP_THRESHOLD`
     = 256 reroute and the f64 256/512 scalar reroute are both of this form and
