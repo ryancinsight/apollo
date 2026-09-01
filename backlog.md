@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 — Re-establish the f64 256/512 bottleneck [patch] [perf] — in progress
+
+- **Outcome.** Re-measure the current f64 N = 256/512 base-128 route after the
+  native-lane and fused-sink series, then reduce only a stable attributed
+  production phase.
+- **Scope / non-goals.** Use the unchanged exact-processor comparison and the
+  existing base-route instruments before editing production. Retain the FFT
+  workload, estimator, routing, arithmetic, allocation lifecycle, and f32
+  controls; do not revive rejected base-layout variants or change a provider
+  without a reproduced provider-owned gap.
+- **Acceptance.** Three same-revision processor-2 comparisons and focused phase
+  runs identify a reproducible component. A retained candidate must improve
+  two unchanged comparisons, keep adjacent f32/f64 controls neutral, preserve
+  direct-reference and round-trip values, and add no warm allocation. Reject
+  the candidate if the attributed or complete-path intervals overlap a
+  regression or the historical 1.4--1.5x deficit no longer reproduces.
+- **Risk / dependencies.** [patch] [perf]. Depends on merged native-width base
+  lanes and sink fusion through PR #219 / `8ef1e5d3`. Local Windows AVX2 timing
+  is empirical evidence; AArch64 remains compile coverage.
+- **Integrator / lease:** `/root`; lease `/root` on this item block and its
+  checklist section only while entry attribution runs. Production and
+  instrument leases will be named only after one current phase reproduces.
+  Last update 2026-08-31.
+
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — review
 
 - **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap

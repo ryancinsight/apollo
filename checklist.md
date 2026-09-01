@@ -1,5 +1,16 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 [perf] — Codex
+
+- [ ] Record three exact-processor current comparisons at f64 N = 256/512 with
+      adjacent f32/f64 controls; confirm or reject the historical deficit.
+- [ ] Attribute a reproduced gap with the existing base-route instruments
+      before leasing or editing production source.
+- [ ] Retain only a candidate whose unchanged comparisons improve with neutral
+      controls and whose analytical, round-trip, and warm-allocation gates pass.
+- [ ] Pass warning-denied, package, cross-target, docs, lock, review, hosted,
+      and non-squash merge gates; otherwise record a measured rejection.
+
 ## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 [perf] — Codex
 
 - [x] Record three exact-processor planar-pass runs at 16,384/32,768 with f64
