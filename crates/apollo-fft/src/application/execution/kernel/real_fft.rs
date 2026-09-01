@@ -9,7 +9,7 @@
 //!
 //! This module owns two related scalar-FFT concerns:
 //!
-//! - [`RealFft`] delegates contiguous per-stage twiddle-table construction to
+//! - `RealFft` delegates contiguous per-stage twiddle-table construction to
 //!   the single implementation in `twiddle_table.rs` for Stockham and the
 //!   multidimensional plan axes.
 //! - The real-input split helpers pack an even real signal into a half-length

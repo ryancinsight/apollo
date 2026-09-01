@@ -107,8 +107,25 @@
 - **Non-goals:** re-tuning any benchmark; this is a build defect, not a
   measurement one.
 
-## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — todo
+## ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01 — Sweep merged claims resting on the swapped core labels [patch] — done 2026-09-01
 
+- **Claim (2026-09-01):** integrator Claude `/root`; lease: the core-label
+  hunks of `backlog.md`, `gap_audit.md`, ADR 0041, and the kernel doc
+  comments (`batched/`, `codelet/`, `resident/planar.rs`, `tuning.rs`,
+  `mixed_radix/scalar/impls.rs`); ADR 0039 stays with the EcoQoS lease.
+  Method: partition every mention by the enclosing record's date against
+  the `core_class.rs` landing (`b21fc172`, 13:09); pre-boundary records
+  swap mechanically, history quotes and post-boundary records stand,
+  property-based claims restate to what was measured.
+- **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#core-label-sweep`.
+  Swapped in place: 53 lines here, 37 in `gap_audit.md`, ADR 0041's prose
+  (its own correction note now says corrected), and the doc comments in
+  `batched/{mod,interleaved}.rs`, `codelet/mod.rs`, `tuning.rs`, and
+  `mixed_radix/scalar/impls.rs`; `resident/planar.rs` restated to the
+  measured efficiency-core fact. Untouched by design: post-boundary records,
+  history quotes (ADR 0042/0043, `stockham/mod.rs`, `measurement_cores.rs`),
+  the host's core counts, and ADR 0039 (EcoQoS lease). Every remaining
+  pre-boundary mention is therefore a corrected figure under this note.
 - **Outcome:** every recorded claim measured through the mislabelled probes
   either reads correctly or is marked, so no second inverted conclusion stands.
 - **Scope:** the audit found 40+ affected claims. Dispatched here rather than
@@ -248,7 +265,7 @@
   the two-pass fallback. `combine_sink_supported` and the unreachable
   production fallback are deleted; the pinned probe is generic over the
   scalar. Net -114 kernel lines.
-- **Measured pinned, P-core, back to back, twice:** f32 256 311.9 ->
+- **Measured pinned, E-core, back to back, twice:** f32 256 311.9 ->
   **294.2/293.7** ns (1.39 -> **1.31** vs RustFFT); f32 512 705.7 ->
   **694.8/690.3**; f64 and 64/128 controls flat. Debug+release 511/511.
 - **Integrator:** Claude `/root`.
@@ -452,7 +469,7 @@
   traffic-removal claim remains.
 - **Evidence:** source `72bdf90a`, Linux test-CFG correction `160d3154`;
   three same-buffer ABBA confirmations improve N = 512 by
-  0.44--2.70% on the pinned P-core and 18.36--19.51% on the pinned E-core;
+  0.44--2.70% on the pinned E-core and 18.36--19.51% on the pinned P-core;
   N = 256 controls remain neutral. Release assembly has zero sink calls and
   three rather than ten compares. Debug/release 19/19 and release 510/510
   value tests, warm f32/f64 allocation census, all-target/all-feature Clippy,
@@ -463,7 +480,7 @@
   post-merge ladder, two runs): 512 (P) = 1282-1300 ns, 1.22-1.24 against
   RustFFT, down from 1307-1310 pre-merge; 512 (E) = 586-598 ns with a
   clean in-run control; 64/128/256 stable. Matches the recorded
-  0.44-2.70% P-core and 18-19% E-core deltas.
+  0.44-2.70% E-core and 18-19% P-core deltas.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
@@ -514,8 +531,8 @@
   the per-scalar `USE_BASE_64` gate survives on the new plan. The 128
   plan also sheds 48 dead table lanes the generalization surfaced.
 - **Measured pinned, back to back, controls within 1%:** 64 goes
-  155.8 -> **89.3** ns on a P-core (1.88 -> **1.08** vs RustFFT, 0.55 vs
-  PhastFT) and 65.8 -> **46.4** on an E-core; 128/256/512 flat, verifying
+  155.8 -> **89.3** ns on an E-core (1.88 -> **1.08** vs RustFFT, 0.55 vs
+  PhastFT) and 65.8 -> **46.4** on a P-core; 128/256/512 flat, verifying
   the table relayout neutral. Every ladder size now sits between 1.07 and
   1.35 against RustFFT.
 - **Also falsified today, recorded in the same audit entry:** re-removing
@@ -1062,8 +1079,8 @@
   geometry and buffer split are named functions rather than open-coded at
   three call sites.
 - **Measured pinned:** 2048 7568.4 -> 7473.0 ns and 8192 31402.5 -> 30927.9
-  on a P-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
-  on an E-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
+  on an E-core (-1.3%, -1.5%; ratio 1.16 -> 1.13 at 8192), -3.7% and -1.4%
+  on a P-core. Controls 4096, 16384, 1024, 512, 256, 128 flat.
 - **Less than the model predicted, and the reason is recorded:** 8192 is
   128 KB, over L1 but inside L2, so the strided re-read the pass removes
   was being served from L2 rather than memory. The residual decimation cost
@@ -1082,7 +1099,7 @@
   removed; peak scratch lower than the unfused route.
 - **Measured pinned, controls in the same run:** 2048 8133.8 -> 7568.4 ns
   (-7.0%, ratio 1.44 -> 1.34) and 8192 34413.9 -> 31402.5 (-8.8%, 1.27 ->
-  1.16) on a P-core; -18.0% and -19.2% on an E-core. Controls 4096, 16384,
+  1.16) on an E-core; -18.0% and -19.2% on a P-core. Controls 4096, 16384,
   1024, 512, 256, 128 all flat. The const parameters cost the sequential
   path nothing, which was the live risk after the strided base source paid
   5% for the same shape.
@@ -1134,7 +1151,7 @@
 - **Why:** the general interleaved product is four operations (shuffle,
   multiply, alternating FMA) and so is the identity (rotation, add,
   multiply), with a longer chain. The three-shuffle model that motivated the
-  lever was wrong; this P-core is not shuffle-port-bound.
+  lever was wrong; this E-core is not shuffle-port-bound.
 - **Conclusion: the 136-vs-72 multiply gap is unconvertible in this layout**,
   and both the arithmetic and the schedule have been measured to their end.
   Further gain at n = 128 requires the register working set the AVX2 file
@@ -1149,8 +1166,8 @@
   one without its last stage, the column pass identical. The cold plan
   builder generalizes with it; `n = 64` gains a base route where it ran six
   ping-pong Stockham passes.
-- **Measured pinned:** n = 64 **158.2 -> 128.8 ns P-core (1.90x -> 1.54x
-  RustFFT)** and **108.3 -> 65.3 E-core (2.71x -> 1.67x)**; 128, 256 and 512
+- **Measured pinned:** n = 64 **158.2 -> 128.8 ns E-core (1.90x -> 1.54x
+  RustFFT)** and **108.3 -> 65.3 P-core (2.71x -> 1.67x)**; 128, 256 and 512
   unchanged. 1083 workspace tests green.
 - **Detour recorded (`gap_audit.md#base-row-length`):** the first generic
   version measured 5% slower at three sizes, which looked like the cost of
@@ -1321,9 +1338,9 @@
   radix-2 splits), with the plan building the base state for all three
   lengths so ownership stays as ADR 0041 requires, and the combine reading
   `W_N^j` from the final stage of the already-cached twiddle table.
-- **Measured pinned, P-core:** 256 820.8 -> **726.5** ns (1.99x -> **1.76x**
+- **Measured pinned, E-core:** 256 820.8 -> **726.5** ns (1.99x -> **1.76x**
   RustFFT, 1.19x -> **1.05x** PhastFT); 512 2110.9 -> **1901.3**
-  (2.01x -> **1.83x**, 1.44x -> **1.30x**). E-cores move with them.
+  (2.01x -> **1.83x**, 1.44x -> **1.30x**). P-cores move with them.
   Evidence: `gap_audit.md#small-size-splitting`.
 - **Declined:** a hand-vectorized combining kernel measured 728.9 against
   725.2 ns — no effect, so it was removed rather than kept.
@@ -1345,7 +1362,7 @@
   and therefore hit the batched planar kernel, and combines using the
   `W_N^j` entries already sitting in the last stage of the cached twiddle
   table — no new table, no new allocation class.
-- **Measured pinned, P-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
+- **Measured pinned, E-core:** 512 2623 -> **2117** ns (2.51x -> 2.02x),
   2048 14140 -> **8055** (2.56x -> **1.43x**), 8192 68117 -> **34660**
   (2.49x -> **1.27x**); even powers unchanged. Cost is monotone in size
   again. Evidence: `gap_audit.md#odd-power-routing`.
@@ -1646,16 +1663,16 @@
 
   | pinned | apollo batched | phastft | rustfft (scratch-planned) |
   | --- | --- | --- | --- |
-  | P-core | 3423 ns | 3257 | 2455 |
-  | E-core | 2305 ns | 1482 | 1264 |
+  | E-core | 3423 ns | 3257 | 2455 |
+  | P-core | 2305 ns | 1482 | 1264 |
 
-  Apollo is **within 5% of PhastFT on the P-core** at the centre of the
+  Apollo is **within 5% of PhastFT on the E-core** at the centre of the
   "weak" range, and the true RustFFT gap is 1.4x — not the 2.4x that
   cross-instrument arithmetic (pinned apollo against unpinned census
   references, and `process()` versus `process_with_scratch`) had been
-  reporting. Matching PhastFT at mid sizes on P-cores is nearly done; the
+  reporting. Matching PhastFT at mid sizes on E-cores is nearly done; the
   post-fix verdict below shows this resident shape cannot close the remaining
-  RustFFT or E-core gaps.
+  RustFFT or P-core gaps.
 
 ## HS-VECTORIZE-LARGE-KERNEL — vectorize outlines large kernel bodies out of the target-feature scope (hermes) [arch] — provider done 2026-08-28
 
@@ -1676,7 +1693,7 @@
   order of 200 cycles per row; apollo's resident probe then re-measures the
   shape against the references.
 - **Post-fix verdict (hermes PR #78 merged):** the dispatch fix landed and
-  bit — resident 26.5 us → 6.5 us at N = 1024 P-core; row passes now
+  bit — resident 26.5 us → 6.5 us at N = 1024 E-core; row passes now
   ~171 cycles per 32-point row, near their port-limited bound. Per-pass TSC
   attribution (`RESIDENT_SECTIONS=1`): rows1 5462, rows2 7659, transposes
   1369 + 1430, untangle 5086. Structural verdict: the two row passes alone
@@ -1702,7 +1719,7 @@
   including the planar-vs-interleaved differential), and still measured
   **6.3k TSC per row pass against the interleaved kernel's 5.6k** — the
   boundary deinterleave/interleave networks spend as many shuffle-class ops
-  as the interleaved multiply chain they replace, and the P-core was never
+  as the interleaved multiply chain they replace, and the E-core was never
   shuffle-port-bound. Both register-row shapes cost ~3x a batched streaming
   pass in arithmetic alone.
 - **Delivered:** `resident/planar.rs` (named-local registers, native
@@ -1729,7 +1746,7 @@
   boundary kernels had the identical defect at runtime sizes, where the type
   cannot hold the length; they take one entry `assert!` plus proof-carrying
   raw chunk helpers instead, matching the stage kernel beside them.
-  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder P-core moves to
+  Transpose **1151 -> 658 TSC (-43%)**; pinned ladder E-core moves to
   1.99/1.32/1.18/1.06 against RustFFT and 1.19/**0.98**/0.90/0.87 against
   PhastFT at n = 256/1024/4096/16384 — **apollo now leads PhastFT at 1024 as
   well as above it, and trails RustFFT by 6% at 16384.**
@@ -1743,7 +1760,7 @@
   per kernel, and keeping the register arrays pinned to memory. **Fix: put
   the lengths in the types** (`&mut [T; 256]`, `Box<[T; 496]>`). Bounds
   branches ~130 -> **zero**, verified in re-emitted assembly. **278.9 ns
-  P-core against 293.9 (-5.1%) and 135.3 against 145.2 E-core (-6.8%);
+  E-core against 293.9 (-5.1%) and 135.3 against 145.2 P-core (-6.8%);
   RustFFT ratio 1.62x -> 1.53x and 1.61x -> 1.50x.** No unsafe, no
   algorithmic change.
 - **Split executed, layout restored, both measured (2026-08-28,
@@ -1835,7 +1852,7 @@
   mixed-radix layer using one caller-owned full-length scratch and an
   explicit transpose, matching `MixedRadix8xnAvx(Butterfly128Avx64)` at
   N = 1024. Pinned five-engine probe is the acceptance instrument
-  (<= batched to merge as experiment, <= RustFFT ~2.47 us P-core to take
+  (<= batched to merge as experiment, <= RustFFT ~2.47 us E-core to take
   the route); the design increment defines the exact bit-reversal/twiddle
   address map, storage contract, bounded live set, and width gate before
   mutation (per the PR #147 review's respecification requirements).
@@ -1844,7 +1861,7 @@
   per-pass attribution is this item's first diagnostic step.
 - **Tiled transpose landed (2026-08-27, hermes `transpose_square` PR #83):**
   the plane transpose runs through in-register 4x4 tiles — 1659 → 1151 TSC
-  pinned — and the ladder moved: P-core vs PhastFT 1.26/1.08/0.92/0.88 and
+  pinned — and the ladder moved: E-core vs PhastFT 1.26/1.08/0.92/0.88 and
   vs RustFFT 2.10/1.42/1.20/1.10 at n = 256/1024/4096/16384. Movement now
   ~3.9k TSC at n = 1024 (deint 1431 kept scalar by verdict, transpose 1151,
   permute 582, reint 900); the permute-fold analysis is closed — the
@@ -1852,17 +1869,17 @@
   destination tile scatters across four row blocks, so in-place tile fusion
   is infeasible without a scratch plane. This architecture's movement is
   near its floor; the next lever is pass-count reduction (the 128-base
-  construction below) and E-core routing.
+  construction below) and P-core routing.
 - **Pinned ladder standing (2026-08-27, `batched::pinned_ladder`, contended
-  host):** P-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
+  host):** E-core vs RustFFT 2.15x/1.49x/1.24x/1.14x and vs PhastFT
   1.29x/1.13x/0.95x/0.90x at n = 256/1024/4096/16384 — **the PhastFT bar is
-  met at 4096 and 16384 on P-cores**; residual gaps concentrate at small
-  sizes and on E-cores (up to 3.0x at n = 256), both dominated by fixed
+  met at 4096 and 16384 on E-cores**; residual gaps concentrate at small
+  sizes and on P-cores (up to 3.0x at n = 256), both dominated by fixed
   per-pass movement costs. Confirms the movement burn-down as the binding
   work; n = 256 routing itself (four-step vs a straight base butterfly) is
   in question once the 128-base exists.
 - **First diagnostic delivered (2026-08-27):** batched per-pass TSC
-  attribution at N = 1024 pinned P-core — deint 1431, stages1 2655,
+  attribution at N = 1024 pinned E-core — deint 1431, stages1 2655,
   transpose 1659, permute 582, stages2 3259, reint 1252: **45% of the
   budget is data movement**, and the stage arithmetic alone (5.9k) is
   already below RustFFT's whole-transform 7.9k, so the RustFFT gap is
@@ -1893,16 +1910,16 @@
 - **Corrected pinned evidence:** the first 326/194 ns figures are invalid
   because they included four timestamp reads and four atomic updates per
   transform. The 100-sample zero-instrumentation medians and 96.4799% exact
-  intervals are 294.518 ns [294.275, 294.826] P-core and 146.401 ns
-  [146.364, 146.468] E-core. The incumbent route is 687.152 ns
+  intervals are 294.518 ns [294.275, 294.826] E-core and 146.401 ns
+  [146.364, 146.468] P-core. The incumbent route is 687.152 ns
   [686.937, 687.564] and 1844.331 ns [1843.457, 1845.866], so the base is
   2.33x and 12.60x faster. PhastFT is 330.019 ns [329.688, 330.503] and
   148.974 ns [148.899, 149.065], while RustFFT remains faster at 181.788 ns
   [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The measurement body
   completes in 11.98 seconds; its optimized test-binary rebuild took 2m15s
   and is build-cost evidence, not runtime evidence. Serialized phase
-  attribution, run separately, reports 164/521/452 TSC P-core and
-  96/232/300 TSC E-core (redistribution/rows/columns).
+  attribution, run separately, reports 164/521/452 TSC E-core and
+  96/232/300 TSC P-core (redistribution/rows/columns).
 - **Provider closure:** Hermes PR #86 merged exact-count dispatch as
   `5734b85a`; the four-lane f64 kernel now selects AVX2 on AVX-512 hosts, and
   an unavailable width returns `None` without invoking or mutating the kernel.
@@ -1916,9 +1933,9 @@
   inverse direct-DFT values, and both dynamic inverse modes plus zero/singleton
   identity plans have value-semantic coverage. Local production medians are
   295.117 ns
-  [294.899, 295.304] P-core and 163.529 ns [163.502, 163.558] E-core; the
+  [294.899, 295.304] E-core and 163.529 ns [163.502, 163.558] P-core; the
   same-run direct base is 294.865 ns [294.573, 295.022] and 152.550 ns
-  [152.520, 152.581]. The E-core wrapper has an 11.0 ns residual dispatch cost,
+  [152.520, 152.581]. The P-core wrapper has an 11.0 ns residual dispatch cost,
   while production is 11.28x faster than the incumbent entry baseline. The
   remaining merge requirement is a green unchanged hosted replicated
   counterbalanced comparator. ADR 0041 records the ownership and evidence.
@@ -1946,9 +1963,9 @@
   by 400 bytes, identifying placement sensitivity rather than a kernel win.
   The route is withdrawn; the base and its complete oracle remain test-gated.
 - **Small-size gate standing (`base128::pinned_probe`):** entry production
-  vs RustFFT at n = 64/128/256/512 P-core: 1.86/3.78/2.09/2.46 — the odd
+  vs RustFFT at n = 64/128/256/512 E-core: 1.86/3.78/2.09/2.46 — the odd
   powers route scalar (ADR 0042) and are the worst sizes in the ladder;
-  n = 128 E-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
+  n = 128 P-core is 22x. **Next increments:** (1) admit the plan-owned N = 128
   route only if the unchanged exact comparator clears; (2) tighten the base
   toward RustFFT after a fresh profile of the
   now-uninstrumented specialization;
@@ -2008,8 +2025,8 @@
 - **Radix-8 was implemented and measured honestly, and it loses.** The full
   three-stage fused block (eight rows, seven hoisted twiddles) passed all
   eleven oracles including the interleaved differential on the first run —
-  and measured flat to slower pinned: +5/+3/+8% on a P-core at 256/4096/65536,
-  +7 to +13% slower on an E-core at small sizes. Codegen inspection confirmed
+  and measured flat to slower pinned: +5/+3/+8% on an E-core at 256/4096/65536,
+  +7 to +13% slower on a P-core at small sizes. Codegen inspection confirmed
   the mechanism the item predicted: **108 ymm-to-stack spill instructions
   against 17 FMAs** in the kernel body — register traffic exceeding
   arithmetic. Sixteen data registers is the whole AVX2 file, and the register
@@ -2023,10 +2040,10 @@
   multiply by them as vectors, and the transpose becomes a pure exchange —
   the scalar multiply that was 26% of the driver at N = 256 is deleted, not
   optimized.
-- **Measured pinned on the P-core (the item's primary oracle):** +4 to 9% at
+- **Measured pinned on the E-core (the item's primary oracle):** +4 to 9% at
   256 through 16384 against both recorded radix-4 baselines (1024: 3805 to
   3504 ns, now 14.6 flops/ns; cumulative with the seam pass, 4228 to 3504 =
-  17%); 65536 inside the baseline noise band. E-core figures are within their
+  17%); 65536 inside the baseline noise band. P-core figures are within their
   historical swing and not claimed.
 - **Memory accounting, stated:** the planes cache adds `2n` reals per
   `(n, direction)` key beside the interleaved matrix, which must stay because
@@ -2066,8 +2083,8 @@
 - **Built, verified, measured pinned — and the planar kernel wins.** The
   interleaved in-place four-step (no scratch, no conversions, vector twiddle
   pass) passes five oracles including a differential against the planar
-  kernel, and loses to it 16 to 37% pinned on a P-core at every covered size,
-  256 through 65536; on an E-core it reaches parity only at 16384. The
+  kernel, and loses to it 16 to 37% pinned on an E-core at every covered size,
+  256 through 65536; on a P-core it reaches parity only at 16384. The
   three-shuffles-per-multiply cost of interleaved butterflies outweighs the
   seams it removes — the planar layout earns its conversions on this
   hardware.
@@ -2090,7 +2107,7 @@
   N = 16 register-resident codelet on `hermes_simd::ComplexReg` passes four
   oracles (direct DFT forward and inverse, normalized round trip, differential
   against the incumbent route) but loses to the incumbent sized kernel 1.8x on
-  a P-core and 1.4x on an E-core. The incumbent small codelets are already
+  an E-core and 1.4x on a P-core. The incumbent small codelets are already
   near roofline (~22 flops/ns at N = 16); the losing term is the stack-buffer
   bit reversal, whose scalar stores stall the following vector loads. Per the
   acceptance oracle it ships **unwired**, with the probe that vetoed it
@@ -2121,11 +2138,11 @@
 - **The layout hypothesis was tested honestly and refuted.** The plane stride
   was padded off the power-of-two boundary (`ROW_PAD`), which was this item's
   proposed mechanism — and the census figure did not move. Padding is kept on
-  its own merits: +10% pinned on a P-core at N = 4096, and it removes the
+  its own merits: +10% pinned on an E-core at N = 4096, and it removes the
   aliasing hazard the fused transpose had to tile around.
 - **The decisive instrument** is `pot::core_matrix`: pin the thread, measure
-  both routes. At N = 4096, four-step beats Stockham on a P-core (16.6 us
-  against 28.1) and on an E-core (13.2 against 62.6) — nowhere near the 45-99
+  both routes. At N = 4096, four-step beats Stockham on an E-core (16.6 us
+  against 28.1) and on a P-core (13.2 against 62.6) — nowhere near the 45-99
   us the throttled process reported.
 - **Consequences shipped with the closure:** the 1-D crossover moves to 4096 on
   the controlled evidence (ADR 0039, fourth revision note); the census opts
@@ -2147,8 +2164,8 @@
   by the live column count, the NaN-sentinel test proves the fused transpose
   never writes it, and `scratch_len` is the single definition of the enlarged
   requirement for driver, callers, and tests alike.
-- **Measured pinned at N = 4096:** +10% on a P-core (16.6 against 18.3 us),
-  neutral on an E-core. The aliasing argument bites hardest at m >= 256, which
+- **Measured pinned at N = 4096:** +10% on an E-core (16.6 against 18.3 us),
+  neutral on a P-core. The aliasing argument bites hardest at m >= 256, which
   the quiet-host run should confirm.
 
 ## ATLAS-APOLLO-FOUR-STEP-TWIDDLE-PLANAR-2026-08-26 — Vectorize the four-step twiddle pass [patch] — done 2026-08-26, by deletion

@@ -1,3 +1,19 @@
+## Every pre-`core_class` core label is corrected in place (2026-09-01) <a id="core-label-sweep"></a>
+
+Revision note for `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`. Every
+`P-core`/`E-core` label in a record dated before the `core_class.rs`
+landing (`b21fc172`, 2026-09-01 13:09) — including this file's
+`#column-pass-consolidation` and `#fused-split-loads` entries written that
+morning — was measured by the hardcoded `[2, 12]` probe, whose two arms were
+both inverted (`#core-class-inversion`). Those labels are swapped in place:
+the figures stand, the headers are corrected. Records dated after the landing
+used the queried class and stand as written; lines that quote the old
+labelling as history (ADR 0042/0043, `stockham/mod.rs`,
+`measurement_cores.rs`) are untouched, as are hardware facts ("8 P-cores,
+16 E-cores"). Property-based claims restate to what was measured rather than
+invert (`resident/planar.rs`). Counts: 53 lines in `backlog.md`, 37 here,
+ADR 0041's prose, and five kernel doc comments.
+
 ## Restarted real-half split twiddles (2026-09-01) <a id="real-half-split-twiddles"></a>
 
 The allocation-free f64 real-half route spent more time untangling the retained
@@ -124,7 +140,7 @@ the `combine_sink_supported` capability query is deleted along with the
 four-block split's now-unreachable production fallback (`combine_final4`
 remains as the incumbent measurement arm). Net -114 kernel lines.
 
-**Measured pinned, P-core, back to back, controls within 0.5%, twice:**
+**Measured pinned, E-core, back to back, controls within 0.5%, twice:**
 
 | case | before | after | vs RustFFT |
 | --- | --- | --- | --- |
@@ -397,7 +413,7 @@ lengths. The forward cache acquisition moves from first execution to plan
 construction; no second table allocation or table copy is introduced. Code
 inspection leaves no cache access or `Arc` clone in the base executor.
 
-Two adjacent runs of the unchanged exact-processor release probe report P-core
+Two adjacent runs of the unchanged exact-processor release probe report E-core
 medians in nanoseconds:
 
 | N | Entry | Candidate 1 | Candidate 2 |
@@ -623,7 +639,7 @@ and release package suites each pass 506/506, and the warmed N=16,384/32,768
 f32 census remains zero allocations through both the global allocator and
 direct Mnemosyne hooks. Warning-denied all-target/all-feature Clippy and the
 AArch64 Windows library check pass. The timings are local Windows AVX2 evidence
-on one P-core; dynamic frequency, interrupts, AVX-512, and cross-machine
+on one E-core; dynamic frequency, interrupts, AVX-512, and cross-machine
 behavior remain outside the evidence.
 
 PR #219 merged as `8ef1e5d3`. Its final comparator rejected generic N = 64/256
@@ -747,8 +763,8 @@ Three same-buffer ABBA confirmations use one non-inlined indirect call wrapper
 for both candidate and incumbent, so closure codegen and address placement are
 identical; the third run binds the final source layout. N = 256 invokes the
 same production function in both arms as the positional control. Median
-improvements at N = 512 were 0.44--2.70% on the pinned P-core and
-18.36--19.51% on the pinned E-core; all N = 256 control medians remained within
+improvements at N = 512 were 0.44--2.70% on the pinned E-core and
+18.36--19.51% on the pinned P-core; all N = 256 control medians remained within
 0.2% with overlapping intervals. The test-only incumbent reconstructs the
 former gather, four ordinary bases, and `combine_final4` route. Independent
 direct DFTs cover f64 forward and normalized inverse at N = 256/512 and f32
@@ -859,7 +875,7 @@ storage. A native-capability query rejects Hermes' scalar fallback; plan
 construction selects the widest implemented native layout before execution.
 
 The unchanged 100-sample clone-inclusive instrument ran on one affinitized
-Windows P-core against immutable base `c08ddf86`. Two base and two candidate
+Windows E-core against immutable base `c08ddf86`. Two base and two candidate
 runs produced 96.4799% exact distribution-free median intervals. Every f32
 base/candidate interval is disjoint (nanoseconds; reduction compares the
 corresponding runs):
@@ -923,7 +939,7 @@ ever read, a leftover from the sample-major table layout.
 
 **A 43% drop at n = 64.** The flat controls also verify that the table
 relayout is neutral for the 128 path. Every size on the ladder now sits
-between 1.07 and 1.35 against RustFFT on a P-core, and PhastFT is behind
+between 1.07 and 1.35 against RustFFT on an E-core, and PhastFT is behind
 at every size, most by 20-45%.
 
 The sample-major kernel now has no callers at any size and is deleted —
@@ -1385,7 +1401,7 @@ butterfly and DIF multiplies the difference after it. They share the twiddle
 table exactly — stage sub-length `l` at offset `l / 2 - 1` — walked upward
 by one and downward by the other.
 
-**Pinned, P-core, two clean runs, each validated by its own in-run RustFFT
+**Pinned, E-core, two clean runs, each validated by its own in-run RustFFT
 control matching history to within 3%:**
 
 | n | before | after | vs RustFFT | vs PhastFT |
@@ -1449,7 +1465,7 @@ Neither is a power of two, so neither enters `four_step_batched`, and the
 change was confined to that module. A benchmark that cannot touch the diff
 regressing under the same gate is the gate measuring its runner.
 
-A local A/B agrees. Pinned P-core, three ladder runs per side, RustFFT in
+A local A/B agrees. Pinned E-core, three ladder runs per side, RustFFT in
 the same run as the control:
 
 | | n = 1024 mean | RustFFT control | ratio |
@@ -1481,7 +1497,7 @@ per pass per call, so a size worth measuring — thousands of calls — could
 not be measured with it without the printing becoming the measurement. It
 now accumulates per label and a probe drains the totals.
 
-Pinned, P-core, 200 calls per size, TSC per call:
+Pinned, E-core, 200 calls per size, TSC per call:
 
 | n | deint | stages1 | transpose | permute | stages2 | reint/combine | total |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1617,7 +1633,7 @@ pass is irreducible — it is the butterfly.
 The ladder began at n = 256, so it could not see the two sizes the base
 kernel serves directly, and no single record stated the standing across the
 whole range. Both are fixed: the instrument now starts at n = 64, and this
-is what it reports, pinned, P-core, min-of-twelve-blocks, all three engines
+is what it reports, pinned, E-core, min-of-twelve-blocks, all three engines
 in the same run on the same core.
 
 | n | apollo | RustFFT | PhastFT | vs RustFFT | route |
@@ -1772,7 +1788,7 @@ multiply and one alternating FMA: **four operations**. The identity is a
 rotation (a shuffle and a sign flip), one add, and one multiply: also four,
 with a longer dependency chain. The three-shuffle count that made this look
 promising was the wrong model — the shuffles are not the bottleneck here,
-which agrees with the earlier finding that this P-core is not
+which agrees with the earlier finding that this E-core is not
 shuffle-port-bound.
 
 **So the multiply-count gap is real and unconvertible in this layout.** The
@@ -1792,8 +1808,8 @@ ran six ping-pong Stockham passes over 1 KB.
 
 | | before | after | vs RustFFT |
 | --- | --- | --- | --- |
-| n = 64, P-core | 158.2 ns | **128.8** | 1.90x -> **1.54x** |
-| n = 64, E-core | 108.3 | **65.3** | 2.71x -> **1.67x** |
+| n = 64, E-core | 158.2 ns | **128.8** | 1.90x -> **1.54x** |
+| n = 64, P-core | 108.3 | **65.3** | 2.71x -> **1.67x** |
 | n = 128 | 278.4 | 277.8 | unchanged |
 | n = 256 | 726.2 | 733.0 | unchanged |
 | n = 512 | 1910.6 | 1906.7 | unchanged |
@@ -1836,7 +1852,7 @@ with bit-reversed offsets feeding `d` in-place combining stages, and all 479
 tests passed, including the direct-DFT and incumbent oracles at every
 affected size.
 
-**Measured, it is a wash that costs the common size.** P-core minima:
+**Measured, it is a wash that costs the common size.** E-core minima:
 
 | n | shipped | strided | change |
 | --- | --- | --- | --- |
@@ -1892,7 +1908,7 @@ table — no new table and no new allocation class.
 | 256 | 820.8 ns | **726.5** | 1.99x -> **1.76x** | 1.19x -> **1.05x** |
 | 512 | 2110.9 | **1901.3** | 2.01x -> **1.83x** | 1.44x -> **1.30x** |
 
-E-cores move with them (256 to 1.98x, 512 to 2.20x). Nothing else changes.
+P-cores move with them (256 to 1.98x, 512 to 2.20x). Nothing else changes.
 
 ### What the remaining overhead is, and what it is not
 
@@ -1915,7 +1931,7 @@ and it is worth roughly 60 to 80 ns at this size.
 recording the reason: "an odd `log2` would need an asymmetric split, whose
 cost this route has never been measured at." Extending the pinned ladder
 through the odd powers measured it, and the exclusion was expensive well
-past a tuning margin — pinned, P-core, against RustFFT:
+past a tuning margin — pinned, E-core, against RustFFT:
 
 | n | log2 | before |
 | --- | --- | --- |
@@ -1935,7 +1951,7 @@ power-of-two size ran about 2.4x slower than its neighbours.
 
 Allowing odd powers reaches `four_step_fft`'s existing `k1 = k/2`,
 `k2 = k - k1` path. That helps at 2048 (2.56x -> 1.76x) and *hurts* at 8192
-(2.49x -> 2.79x, and 8.67x on an E-core), because the generic path streams a
+(2.49x -> 2.79x, and 8.67x on a P-core), because the generic path streams a
 full N-element cached twiddle matrix through step 3 where the batched planar
 route folds its twiddles into stage loads. The asymmetric split is real, but
 it lands on the slower of the two implementations.
@@ -2004,8 +2020,8 @@ as slices, so the compiler could not know that.
 
 | | before | after | vs RustFFT |
 | --- | --- | --- | --- |
-| P-core | 293.9 ns | **278.9** | 1.62x -> 1.53x |
-| E-core | 145.2 ns | **135.3** | 1.61x -> 1.50x |
+| E-core | 293.9 ns | **278.9** | 1.62x -> 1.53x |
+| P-core | 145.2 ns | **135.3** | 1.61x -> 1.50x |
 
 The source-reading phase alone fell from 170 to 106 TSC. No unsafe, no
 algorithmic change, no measurement caveats: the checks were simply
@@ -2034,7 +2050,7 @@ beside them already does.
 
 The transpose pass falls from **1151 to 658 TSC (-43%)**; reinterleave is
 unchanged at ~900, its accesses having been provable already. End to end,
-pinned, P-core:
+pinned, E-core:
 
 | n | before | after | vs RustFFT | vs PhastFT |
 | --- | --- | --- | --- | --- |
@@ -2043,7 +2059,7 @@ pinned, P-core:
 | 4096 | 14 748 | 14 444 | 1.20 -> 1.18 | 0.92 -> 0.90 |
 | 16384 | 65 148 | 62 854 | 1.10 -> **1.06** | 0.88 -> 0.87 |
 
-Apollo now leads PhastFT at N = 1024 on the P-core as well as at the two
+Apollo now leads PhastFT at N = 1024 on the E-core as well as at the two
 larger sizes, and trails RustFFT by 6% at 16384.
 
 ## Splitting the 128-base kernel works; the layout still cannot be cashed (2026-08-28) <a id="base128-split"></a>
@@ -2062,7 +2078,7 @@ the previous session's diagnosis: the degradation was a single kernel body
 outgrowing its `#[target_feature]` frame, not register pressure leaking
 across phases.
 
-**The layout still loses.** P-core minima, baseline 293.9 ns, RustFFT at its
+**The layout still loses.** E-core minima, baseline 293.9 ns, RustFFT at its
 own baseline in every run:
 
 | variant | rows (TSC) | columns (TSC) | transform |
@@ -2076,8 +2092,8 @@ own baseline in every run:
 \* measured while the rest of the function was degraded, which is why it
 looked like a win.
 
-Two readings follow. The split by itself costs about 2% on the P-core and
-3.5% on the E-core once normalized against RustFFT — two dispatches and the
+Two readings follow. The split by itself costs about 2% on the E-core and
+3.5% on the P-core once normalized against RustFFT — two dispatches and the
 loss of cross-phase optimization — so it is not worth shipping on its own,
 but it is available and validated for any future work that needs it.
 
@@ -2134,7 +2150,7 @@ been trying to move since the schedule experiments failed.
 
 The whole-transform number is nonetheless 610 ns against 294. The cost is
 not in the new code: the **untouched** column pass degrades from 455 to
-1771 TSC on the P-core and from 301 to 3729 on the E-core. Unchanged code
+1771 TSC on the E-core and from 301 to 3729 on the P-core. Unchanged code
 running four to twelve times slower, worse on the narrower core, is the
 signature of a body that has fallen out of its `#[target_feature]` frame —
 the `HS-VECTORIZE-LARGE-KERNEL` failure class, reached this time by the size
@@ -2260,7 +2276,7 @@ butterflies instead of four, sharing each stage's twiddle loads.
 quiet machine (`columns8` 453 TSC identical to baseline; RustFFT 182.4 ns
 against baseline 181.7 ns):
 
-| | rows16 (TSC) | whole kernel (P-core) |
+| | rows16 (TSC) | whole kernel (E-core) |
 | --- | --- | --- |
 | one row at a time | 517 | 295.9 ns |
 | two rows interleaved | **940** | **416.4 ns** |
@@ -2290,8 +2306,8 @@ and is recorded as unresolved rather than as a verdict.
 
 The machine reproduced the baseline exactly — `columns8` 456 TSC, `rows16`
 518, RustFFT 181.7 ns — so the day's measurements resolve differences the
-earlier contended session could not. Baseline: 293.9 ns min P-core,
-145.2 ns E-core.
+earlier contended session could not. Baseline: 293.9 ns min E-core,
+145.2 ns P-core.
 
 | change | rows16 | kernel (P min) | verdict |
 | --- | --- | --- | --- |
@@ -2353,14 +2369,14 @@ otherwise. Resident drivers resolve the capability before constructing their
 cached plan or applying any in-place permutation; this ordering is pinned by
 the supported-or-bit-preserving-decline tests.
 
-The first base-128 timing figures (326 ns P-core, 194 ns E-core) are invalid:
+The first base-128 timing figures (326 ns E-core, 194 ns P-core) are invalid:
 the compared base executed four timestamp reads, three atomic phase
 accumulators, and an atomic call counter per transform while the references did
 not. The corrected entry instrument monomorphizes timing and attribution
 separately, borrows an immutable plan without an `Arc` increment, and creates
 vectors from the existing Hermes capability token. Its 100-sample 96.4799%
-exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] P-core and
-146.401 ns [146.364, 146.468] E-core. The incumbent Apollo route is 687.152 ns
+exact median intervals at N = 128 are 294.518 ns [294.275, 294.826] E-core and
+146.401 ns [146.364, 146.468] P-core. The incumbent Apollo route is 687.152 ns
 [686.937, 687.564] and 1844.331 ns [1843.457, 1845.866]; PhastFT is 330.019 ns
 [329.688, 330.503] and 148.974 ns [148.899, 149.065]. RustFFT remains faster at
 181.788 ns [181.591, 181.986] and 84.694 ns [84.670, 84.726]. The corrected
@@ -2377,9 +2393,9 @@ The production candidate now gives `FftPlan1D` plan ownership: one shared base
 state initializes forward data at construction, initializes inverse data on
 first inverse execution, shares both across plan clones, and replaces rather
 than co-retains the incumbent forward-twiddle table. Its local production
-median is 295.117 ns [294.899, 295.304] P-core and 163.529 ns [163.502,
-163.558] E-core, versus the same-run direct base at 294.865 ns [294.573,
-295.022] and 152.550 ns [152.520, 152.581]. The E-core wrapper retains an
+median is 295.117 ns [294.899, 295.304] E-core and 163.529 ns [163.502,
+163.558] P-core, versus the same-run direct base at 294.865 ns [294.573,
+295.022] and 152.550 ns [152.520, 152.581]. The P-core wrapper retains an
 11.0 ns dispatch cost, but the production route is 11.28x faster than the
 1844.331 ns incumbent entry baseline. The unchanged hosted replicated
 counterbalanced comparator remains the merge gate for unrelated-case placement
@@ -3138,7 +3154,7 @@ loop.
 
 The recorded independence argument is correct but incomplete as a performance
 model. A Moirai unit owning sixteen columns must stream that narrow band through
-every padded row. On the pinned P-core probe, its minimum-of-40 samples regressed
+every padded row. On the pinned E-core probe, its minimum-of-40 samples regressed
 the sequential batched kernel at every measured length: 323.2 versus 311.0 us at
 65,536, 2.037 versus 1.939 ms at 262,144, 6.418 versus 6.200 ms at 1,048,576,
 and 24.746 versus 24.072 ms at 4,194,304. The 2.8--5.0% loss is consistent with
@@ -3150,7 +3166,7 @@ unchanged cache-flushing `engine_census` moved the 65,536 median from 558.875 us
 (96.48% interval 527.700--614.850 us) to 4.22090 ms
 (4.21040--4.23160 ms), and the 262,144 median from 2.08890 ms
 (2.03120--2.16500 ms) to 19.13965 ms (19.10360--19.17350 ms). A separate
-P-core-pinned 40-sample probe measured the widened route at 262.3 us and
+E-core-pinned 40-sample probe measured the widened route at 262.3 us and
 1.8463 ms, so the apparent single-core win is topology-dependent rather than a
 general production improvement. Both census revisions retained zero warm
 complex allocations. The `PARALLEL_ROW_THRESHOLD` boundary and the existing
