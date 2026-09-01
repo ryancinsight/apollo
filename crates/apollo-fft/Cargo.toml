@@ -18,6 +18,7 @@ apollo-leto-interop = { version = "0.18.0", path = "../apollo-leto-interop" }
 half = { workspace = true }
 hermes-simd = { workspace = true }
 leto = { workspace = true }
+leto-ops = { workspace = true }
 eunomia = { workspace = true }
 once_cell.workspace = true
 parking_lot.workspace = true
