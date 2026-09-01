@@ -1,3 +1,36 @@
+## Fused split loads are the third boundary-fusion falsification (2026-09-01) <a id="fused-split-loads"></a>
+
+Hypothesis (filed as the small-size split's next lead): the gather and the
+base kernel's first loads are the same traffic paid twice, so a `LoadSource`
+strategy — the load-side mirror of the `StoreSink` family — should absorb
+the gather's blend network into phase one at zero marginal cost and delete
+the pass (~38 ns measured at two blocks, 60-80 ns estimated with scratch
+effects).
+
+Built in full: strided external and in-place sources, in-place pair and
+final sinks (the odd halves ran in place over the parent, phase one
+consuming it before phase three overwrote it), attempt-first width dispatch
+with the gather kept as the eight-lane fallback. The full oracle sweep
+passed debug and release at every length.
+
+**Falsified, pinned, back to back, controls within 0.5%:** f64 n = 256 went
+508.2 -> 537.1 ns and n = 512 went 1276.1 -> 1314.7 — about 6% *slower* —
+while f32 (fallback route, untouched) and 64/128 held flat. The load and
+shuffle counts are identical by construction, so the loss is structural:
+the gather's shuffles run in an otherwise-empty streaming loop that
+overlaps its stores, while phase one is port-saturated by the radix-4
+arithmetic — two loads plus a blend in front of every `radix4` lengthens
+the dependency chain and serializes against it. Moving boundary work into
+the dense kernel loses even when the pass it deletes is pure overhead.
+
+This is the third independent confirmation that the split's boundary
+passes resist fusion into vector kernels (after the two combine-kernel
+falsifications, gap_audit.md#split-boundary). The code is reverted; do not
+re-attempt without a structurally different form — e.g. widening the
+strided network to eight lanes changes the port economics and is tracked
+separately (`ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01`, whose value now
+rests on deleting the f32 scalar-frame gather, not on fusion).
+
 ## The column pass is one function at every width (2026-09-01) <a id="column-pass-consolidation"></a>
 
 Independent review of the eight-lane base kernel (`ATLAS-APOLLO-BASE-KERNEL-

@@ -1,5 +1,28 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-FUSED-SPLIT-LOADS-2026-09-01 — The gather rides the phase-one loads out [patch] [perf] — done 2026-09-01 (falsified)
+
+- **Outcome:** built in full and value-verified, then falsified pinned —
+  f64 256/512 ran ~6% slower with flat controls; the code is reverted and
+  the mechanism recorded (`gap_audit.md#fused-split-loads`): phase one is
+  port-saturated, so boundary shuffles cost more inside it than in the
+  gather's streaming loop. Third boundary-fusion falsification.
+
+## ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01 — Strided phase-one loads at eight lanes [patch] [perf] — todo
+
+- **Outcome:** the eight-lane kernel gains the complex-granularity strided
+  load network, deleting the gather fallback, the external
+  `CombineSink`/`FinalCombineSink` family, and `split_boundary.rs` entirely.
+- **Blocker:** needs a complex-pair deinterleave at eight lanes — two
+  128-bit-half concatenations plus the pair blend — which hermes does not
+  yet expose; implement upstream (`hermes-simd` per-backend, with tests)
+  per upstream ownership, then consume here. Scope note after the fused-load
+  falsification: the value is a vectorized eight-lane *gather* (the f32
+  route runs the blend network in the scalar-emulated frame today), not
+  load fusion into phase one, which measured slower at four lanes.
+- **Baseline:** f32 256/512 after the shared column pass:
+  294.2 / 694.8 ns P-core (1.31 / 1.37 vs RustFFT).
+
 ## ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01 — One column pass at every width, sinks included [patch] [perf] — done 2026-09-01
 
 - **Delivered** (`gap_audit.md#column-pass-consolidation`): the shared
