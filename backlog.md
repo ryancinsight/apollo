@@ -5,7 +5,7 @@
 - **Delivered:** PM-only measured rejection; exact quarter-turn twiddle reuse regressed f64 N = 512, so production source remains byte-identical to merged PR #219 / `8ef1e5d3`.
 - **Evidence:** direct-oracle debug/release 4/4; three exact-processor phase runs and one unchanged comparison reproduce the regression; lease none. See `gap_audit.md#base128-quarter-turn`.
 
-## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — in progress
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — blocked: HS-HARDWARE-LANE-DISPATCH-2026-09-01
 
 - **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
   after the exact-eight-lane transpose correction.
@@ -31,9 +31,13 @@
   the base route and the last is unrelated to the planar combine. Attribute
   binary-wide code-generation or measurement effects before changing source;
   do not weaken the regression oracle.
-- **Integrator / lease:** `/root`; lease `/root` on the planar-combine source,
-  focused code-generation attribution, item/checklist, and resulting audit
-  record. Source `d1dda1bf` routes the
+- **Provider dependency.** Exact Linux artifacts show only 0.05--0.12% growth
+  per affected benchmark binary, but the f32 fallback links a 5,080-byte
+  `call_scalar_in_avx2_frame` exact-four kernel even though AVX2 executes the
+  exact-eight kernel. Hermes has no native-backend-only exact-width entry;
+  reopen when HS-HARDWARE-LANE-DISPATCH supplies one, then repeat the unchanged
+  local and hosted comparison before accepting the attribution.
+- **Integrator / lease:** `/root`; lease none. Source `d1dda1bf` routes the
   combine through Hermes exact-eight/exact-four lane kernels with the unchanged
   scalar fallback. Three processor-2 runs reduce its median 40.06%
   (57,172 -> 34,269 cycles) and the full instrumented-route median 8.66%
