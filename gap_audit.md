@@ -1,3 +1,33 @@
+## Leto/Hermes multidimensional complex transpose (2026-09-01) <a id="leto-hermes-complex-transpose"></a>
+
+Apollo's private 2-D/3-D axis helper previously reconstructed Leto C-from-F
+views for every adjacent matrix and called the generic assignment kernel. Leto
+Ops PR #135, merged as `060eb7eb`, now owns the complete allocation-free
+batched-complex contract: it validates the full batch before mutation, selects
+the widest exact Hermes hardware width among 16/8/4 scalar lanes for at least
+256 matrices with both sides at most 16, handles ragged edges, and retains the
+canonical Leto assignment path for other shapes or unsupported targets.
+
+Apollo source `9ac833cd` delegates the one private transpose boundary to that
+provider and deletes the local view-construction loop. Exact rectangular,
+ragged, batched, empty, and singleton tests cover f32/f64 values; independent
+2-D/3-D direct and round-trip oracles pass in debug and release; the unchanged
+engine census records zero warmed global allocations for every measured 2-D
+and 3-D shape. Two unchanged 100-sample Windows AVX2 runs reduce the selected
+f64 4,096x4x4 3-D median from the 1.1567 ms entry to 263.225 us (95% CI
+261.900--264.750 us) and 265.350 us (95% CI 263.150--279.400 us), reductions
+of 77.24% and 77.06%. The provider's isolated comparisons also improve every
+measured f32/f64 small-matrix case across two runs.
+
+The exact Apollo source passes warning-denied all-target/all-feature Clippy,
+warning-denied AArch64 Windows library compilation, 510/510 debug and 510/510
+release Nextest cases, Rustdoc, doctests, format, diff, and the standalone
+36-source lock guard. Timing is local Windows AVX2 evidence only. The size
+observation is limited to same-profile shared-target artifacts: the provider
+edge changes the rlib from 18,195,148 to 18,154,802 bytes (-40,346, -0.222%),
+but concurrent shared-tree compilation prevents revision attribution, so no
+delivered size reduction is claimed.
+
 ## N = 96 Good-Thomas columns use a compile-time CRT schedule (2026-09-01) <a id="n96-column-unroll"></a>
 
 After the three DFT-32 rows moved into one Hermes target frame, the generated

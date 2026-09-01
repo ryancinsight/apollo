@@ -4,7 +4,17 @@
 - **Date:** 2026-08-26
 - **Class:** [patch] [arch]
 - **Items:** `ATLAS-APOLLO-LETO-LAYOUT-PASSES-2026-08-26`,
-  `ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27`
+  `ATLAS-APOLLO-LETO-VIEW-LAYOUT-2026-08-27`,
+  `ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01`
+
+**Revision 2026-09-01:** Leto Ops PR #135, merged as `060eb7eb`, added one
+public allocation-free batched-complex transpose. It selects the widest exact
+Hermes hardware width among 16/8/4 scalar lanes for the measured high-count
+small-matrix regime and retains Leto's generic assignment for every other
+shape or target. Apollo now delegates its one private CPU axis-transpose
+boundary to that provider instead of reconstructing a Leto view pair per
+matrix. Apollo retains plan-owned scratch and Moirai axis scheduling; it owns
+no register-tile implementation or capability probe.
 
 **Revision 2026-08-27:** The first implementation established Leto ownership
 for internal transpose passes but admitted public mutable views through
@@ -40,11 +50,11 @@ Two private Apollo helpers enforce that boundary:
    role. Rank two borrows the otherwise dormant 3-D X role; rank three borrows
    the otherwise dormant 2-D role. The complete transform runs there before
    Leto assigns logical indices back to the caller's layout.
-2. Each internal non-contiguous FFT axis pass is presented as a Leto rank-two
-   assignment. A row-major source with shape `[rows, columns]` is viewed as a
-   Fortran-contiguous matrix with shape `[columns, rows]`, then assigned to a
-   row-major destination with that same transposed shape. The destination is
-   caller-owned scratch, so no intermediate allocation occurs.
+2. Each internal non-contiguous FFT axis pass calls Leto Ops' batched complex
+   transpose with adjacent row-major `[rows, columns]` sources and row-major
+   `[columns, rows]` destinations. Leto performs complete preflight, selects
+   the Hermes register-tile or canonical assignment route, and writes directly
+   into Apollo's caller-owned scratch without intermediate allocation.
 
 The two-dimensional plan uses one matrix. The three-dimensional Y pass uses a
 batch of adjacent `[ny, nz]` planes. Its X pass treats the volume as one
@@ -95,28 +105,28 @@ view to a row-major destination therefore produces the mathematical transpose.
 Repeating the operation with exchanged dimensions restores the original
 ordering.
 
-The transpose helper accepts only exactly sized source and destination slices
-and checks dimension multiplication before constructing views. Empty batches
-and zero-area matrices perform no assignment. The entry helper preserves
-logical indices for any valid injective mutable layout. The selected staging
-role is unreachable from that rank's nested axis passes, so it remains live
-without adding another full-volume scratch slot. All scratch remains
+The provider accepts only exactly sized source and destination slices and
+checks dimension multiplication before selecting a kernel. Empty batches and
+zero-area matrices perform no assignment. The public-view entry helper
+preserves logical indices for any valid injective mutable layout. The selected
+staging role is unreachable from that rank's nested axis passes, so it remains
+live without adding another full-volume scratch slot. All scratch remains
 thread-local and reused by the plan scratch bank.
 
-The controlled provider benchmark compares Leto assignment with Apollo's
-superseded loops in one binary at identical addresses. Four of eight
-gather/scatter confidence intervals are disjoint in Leto's favour and four
-overlap; none favours the old loop. Apollo's repeated end-to-end census is more
-variable across uncontrolled host runs, so it establishes value semantics,
-zero warm allocations, and a diagnostic baseline, not an isolated layout
-speedup.
+The controlled provider benchmark compares Leto's generic assignment with its
+Hermes-backed batched operation in one binary at identical addresses. Both
+runs improve every measured f32/f64 small-matrix case. Apollo's unchanged
+100-sample engine census reduces the selected f64 4,096x4x4 3-D median from
+the 1.1567 ms entry to 263.225/265.350 us (77.24%/77.06%) while retaining zero
+warmed allocations for every measured 2-D and 3-D shape. These timings are
+local Windows AVX2 evidence; AArch64 is compile-only evidence.
 
 ## Failure modes and verification
 
 - Swapped dimensions or matrix counts fail rectangular, ragged-tile, and
   multi-plane transpose tests.
-- Tail loss fails the 35x67 and 67x35 cases, which cross the provider's tile
-  edge in both orientations.
+- Tail loss fails the 35x67 and 67x35 generic cases and the 256x15x13
+  register-path batch; the 256x16x16 case covers complete provider tiles.
 - Incorrect axis composition fails static and dynamic two- and
   three-dimensional direct-DFT and round-trip tests.
 - Confusing physical and logical order fails Fortran-dense rectangular cases;

@@ -54,6 +54,13 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] Multidimensional CPU FFT plans now delegate batched complex
+  axis transposes to Leto Ops, which selects allocation-free Hermes register
+  tiles for the measured high-count small-matrix regime and retains Leto's
+  generic assignment elsewhere. Two unchanged 100-sample Windows AVX2 runs
+  reduce the 4,096x4x4 f64 3-D median from the 1.1567 ms entry to
+  263.225/265.350 us (77.24%/77.06%); warmed 2-D and 3-D execution remains
+  allocation-free. No AArch64, AVX-512, or cross-machine timing is claimed.
 - [patch] [perf] The private generated N = 96 Good-Thomas codelet now expands
   its fixed 32-column CRT schedule into constant-address DFT-3 calls and stores.
   Two adjacent unchanged 100-sample Windows AVX2 comparisons reduce N = 96

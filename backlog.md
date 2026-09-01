@@ -1,11 +1,10 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — in progress
+## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — review
 
-- **Outcome.** Determine whether Apollo's private 2-D/3-D C-order axis transpose can replace the generic Leto C-from-F assignment loop with Hermes register-resident complex square tiles while retaining the current Leto view contract, Mnemosyne scratch roles, and Moirai lane scheduling.
-- **Scope / non-goals.** Limit source changes to the shared FFT transpose boundary and its 2-D/3-D callers, tests, and unchanged-path measurement instrument. Preserve transform arithmetic, axis order, public API, view staging, scratch capacity, scheduler thresholds, workloads, assertions, and timeouts. Unsupported hardware must retain the existing Leto assignment path; reject the candidate if paired full-path timing does not improve.
-- **Acceptance.** Prove exact transpose values for square, asymmetric, ragged, singleton, and batched matrices; preserve independent forward/inverse 2-D/3-D f32/f64 oracles and warm zero allocation; show no per-tile allocation or capability probe; reproduce an isolated transpose reduction and two unchanged full-path comparisons with neutral controls; pass warning-denied host/AArch64, debug/release Nextest, Rustdoc, doctest, format, diff, size, and standalone-lock gates.
-- **Integrator / lease:** `/root`; lease `/root` on `plan/fft/layout.rs`, 2-D/3-D transpose callers/tests, the focused transpose instrument, and this item's PM/doc hunks. Last update 2026-09-01.
+- **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
+- **Evidence.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed.
+- **Integrator / lease:** `/root`; lease none. Local closure complete; independent hosted review, PR, and merge remain. Last update 2026-09-01.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
 
