@@ -1,5 +1,25 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Restore a green main after #240 [patch] — review 2026-09-01
+
+- **Defect:** both merge runs after #239/#240 fail `rust workspace` at Clippy
+  under 1.97: `wildcard_imports` at `stockham/butterfly/fixed.rs:377` and
+  `:439`. #240 deleted four `#[allow(clippy::wildcard_imports)]` there as dead;
+  two covered live `use std::arch::x86_64::*;` lines. A suppression is only
+  dead once the lint has been watched not to fire.
+- **Fix (PR #242):** all four globs become explicit name lists derived per
+  function (10/8/11/10 names). Not a restored suppression: `fixed.rs` was the
+  crate's only glob site and the 28 other intrinsic-using files already
+  import explicitly, so this matches convention. Clippy verifies the
+  derivation both ways (unused name warns, missing name fails). Local
+  `clippy -p apollo-fft --all-targets -D warnings` green on 1.97, lib-test
+  included; Linux CI is the second oracle before merge.
+- **Escaped-defect note (slop pattern):** a "dead suppression" cleanup that
+  does not run the lint it unsuppresses is the inverse of prove-the-check-is-live.
+  Two of the four globs did not fire under this build, so the class stays
+  latent unless every site is treated. Recorded, not root-caused: why those
+  two stay silent is unexplained and out of scope here.
+
 ## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Restart real-split twiddles [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Exact phase attribution identifies per-bin f64 `sin_cos` as the
