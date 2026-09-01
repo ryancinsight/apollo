@@ -27,6 +27,9 @@
       squash as `8ef1e5d3`; collect its exact hosted results.
 - [ ] Attribute the hosted four-of-four regressions in generic 64/256 and
       radix composite 38 without weakening the unchanged benchmark oracle.
+- [x] Consume Hermes PR #110 / `363c407d` hardware-only exact-width selection;
+      the unchanged optimized benchmark executable shrinks 7,680 bytes, while
+      pinned local timing remains inconclusive and carries no latency claim.
 - [ ] Retain only a source correction that keeps the N = 32,768 gain and clears
       two local paired comparisons plus the hosted regression check.
 

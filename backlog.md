@@ -5,7 +5,7 @@
 - **Delivered:** PM-only measured rejection; exact quarter-turn twiddle reuse regressed f64 N = 512, so production source remains byte-identical to merged PR #219 / `8ef1e5d3`.
 - **Evidence:** direct-oracle debug/release 4/4; three exact-processor phase runs and one unchanged comparison reproduce the regression; lease none. See `gap_audit.md#base128-quarter-turn`.
 
-## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — blocked: HS-HARDWARE-LANE-DISPATCH-2026-09-01
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — in progress
 
 - **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
   after the exact-eight-lane transpose correction.
@@ -34,10 +34,13 @@
 - **Provider dependency.** Exact Linux artifacts show only 0.05--0.12% growth
   per affected benchmark binary, but the f32 fallback links a 5,080-byte
   `call_scalar_in_avx2_frame` exact-four kernel even though AVX2 executes the
-  exact-eight kernel. Hermes has no native-backend-only exact-width entry;
-  reopen when HS-HARDWARE-LANE-DISPATCH supplies one, then repeat the unchanged
-  local and hosted comparison before accepting the attribution.
-- **Integrator / lease:** `/root`; lease none. Source `d1dda1bf` routes the
+  exact-eight kernel. Hermes PR #110 / merge `363c407d` now supplies the
+  hardware-only exact-width entry. The Apollo candidate removes 7,680 bytes
+  from the unchanged local optimized benchmark executable, but paired N=64 and
+  N=256 timings do not establish a latency win; repeat the hosted comparison
+  before accepting attribution.
+- **Integrator / lease:** `/root`; lease `/root` on planar-combine routing and
+  this item's documentation/PM regions. Source `d1dda1bf` routes the
   combine through Hermes exact-eight/exact-four lane kernels with the unchanged
   scalar fallback. Three processor-2 runs reduce its median 40.06%
   (57,172 -> 34,269 cycles) and the full instrumented-route median 8.66%
