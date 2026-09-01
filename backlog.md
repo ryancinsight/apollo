@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — in progress
+## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
 
 - **Outcome.** Attribute and reduce Apollo f32 N=32,768's stable 23% latency
   deficit against retained-scratch RustFFT without changing numerical or
@@ -19,13 +19,15 @@
   phase or complete-path intervals do not reproduce.
 - **Risk / dependencies.** [patch] [perf]. Depends on the exact-processor
   comparison and N=32,768 phase coverage merged through PR #217 / `5bf93047`.
-- **Integrator / lease:** `/root`; lease `/root` on batched
-  `pinned_sections.rs`, `boundary.rs`, `mod.rs`, kernel
-  `retained_footprint.rs`, and this item's PM hunks. Three
-  exact-processor release runs place f32 N=32,768 transpose at
-  50,454--50,859 cycles versus f64's 26,848--26,873, while both f32 stage sets
-  take about half the f64 cycles. The fixed four-lane transpose boundary is the
-  selected candidate; last update 2026-08-31.
+- **Integrator / lease:** `/root`; lease none. Source `5a1b3e8a` selects Hermes'
+  exact eight-lane f32 transpose before the retained four-lane/scalar fallbacks;
+  f64 remains four-lane. Three exact-processor runs reduce the f32 transpose
+  from 50,454--50,859 to 17,341--17,564 cycles; three unchanged comparisons
+  report 72.145--74.005 us versus the retained 82.970 us baseline. Debug and
+  release Nextest pass 510/510, the focused global/direct-Mnemosyne census is
+  zero/zero, all-target/all-feature Clippy and AArch64 check pass with warnings
+  denied, and doctest/Rustdoc/format/36-source standalone-lock gates pass;
+  independent review, hosted gates, PR, and merge remain. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-QFT-FFT-2026-08-31 — Route reusable QFT plans through Apollo FFT [perf] [patch] — done 2026-08-31
 

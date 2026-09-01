@@ -5,13 +5,16 @@
 - [x] Generalize the retained phase instrument across f32/f64 without
       duplicating route logic or changing production instrumentation.
 - [x] Collect three exact-processor release phase runs at 16,384/32,768;
-      select the fixed four-lane transpose after f32 repeats at 50.5k cycles
+      identify the fixed four-lane transpose after f32 repeats at 50.5k cycles
       versus f64's 26.9k while the stage sets scale to about half.
-- [ ] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
-      allocations; improve two adjacent unchanged comparisons with neutral
-      f64 and N=16,384 controls.
-- [ ] Pass focused, package, warning-denied, cross-target, documentation,
-      standalone-lock, independent-review, hosted, and non-squash merge gates.
+- [x] Preserve direct-DFT/round-trip values, exact routing, and zero warmed
+      allocations; improve three unchanged comparisons while f64 remains
+      neutral and the f32 N=16,384 control also improves.
+- [x] Commit exact source `5a1b3e8a` and pass focused, debug/release package,
+      warning-denied, AArch64, documentation, and 36-source standalone-lock
+      gates; discharge the source/test/documentation lease.
+- [ ] Obtain independent exact-object review, pass hosted gates, and merge the
+      resulting PR without squash.
 
 ## ATLAS-APOLLO-N32768-F64-VARIANCE-2026-08-31 [perf] — Codex
 
