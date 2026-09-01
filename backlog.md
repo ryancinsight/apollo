@@ -1,6 +1,6 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — in progress
+## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — review
 
 - **Outcome.** Use Hermes' hardware-only exact-width selector at the planar
   combine boundary, where Apollo already owns the portable scalar fallback, so
@@ -26,9 +26,8 @@
   the unchanged benchmark smoke, formatting, diff, and the 36-source
   standalone-lock guard pass. Paired N = 64/256 timings are inconclusive and
   are not performance evidence for this item.
-- **Integrator / lease:** `/root`; lease `/root` on planar-combine routing,
-  Hermes lock hunks, and this item's documentation/PM regions. Last update
-  2026-08-31.
+- **Integrator / lease:** `/root`; lease none. Exact source `e01cadca`; hosted
+  repository gates, PR, and merge remain. Last update 2026-08-31.
 
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 — Re-establish the f64 256/512 bottleneck [patch] [perf] — done 2026-08-31
 

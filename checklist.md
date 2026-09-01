@@ -14,8 +14,9 @@
 - [x] Pass host all-target/all-feature Clippy, 506/506 package Nextest, release
       direct-formula, warning-denied AArch64, Rustdoc, doctest, unchanged
       benchmark-smoke, formatting, diff, and standalone 36-source lock gates.
-- [ ] Commit the exact source and PM evidence, discharge the lease, obtain an
-      independent artifact verdict, and merge without squash.
+- [x] Commit exact source `e01cadca`, discharge the lease, and complete the
+      exact staged-diff self-review with no unrelated source or lock movement.
+- [ ] Pass hosted repository checks and merge without squash.
 
 ## ATLAS-APOLLO-F64-BASE128-ATTRIBUTION-2026-08-31 [perf] — Codex
 
