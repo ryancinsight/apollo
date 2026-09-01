@@ -9,8 +9,12 @@
 - [x] Delete Apollo's retained real-lane materialization only if two unchanged
       complete-path comparisons improve with a neutral control; prove the 16N
       retained-byte removal and warm allocation contract.
-- [ ] Pass provider/consumer exact gates, independent review, and merge without
-      squash; otherwise remove the candidate and retain the negative instrument.
+- [x] Merge provider head `59c89431` through Hermes PR #113 as `2e993503`; pass
+      exact-Git consumer Clippy, 27/27 debug and release Nextest, Rustdoc,
+      doctest, benchmark smoke, and the 36-source shadow-lock check.
+- [ ] Integrate the canonical Apollo lock after its peer lease discharges, pass
+      exact Apollo review, and merge without squash; otherwise remove the
+      candidate and retain the negative instrument.
 
 ## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 [perf] — Codex
 

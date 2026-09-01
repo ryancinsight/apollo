@@ -14,7 +14,12 @@ scalar complex sum. Two controlled
 same-provider public-plan pairs improve N = 128 by 1.96%/1.49% and N = 256 by
 1.46%/0.83%; the N = 64 control moves -0.28%/+0.82%. The benchmark retains the
 same public plan construction, input, timed body, and direct DFT oracle. Timing
-is local Windows AVX2 only; AArch64 remains compile-only evidence.
+is local Windows AVX2 only; AArch64 remains compile-only evidence. Hermes
+provider head `59c89431` merged through PR #113 as `2e993503`. A disposable
+standalone Apollo lock resolves all 36 first-party Git sources to that merge;
+warning-denied all-target Clippy, 27/27 debug and release tests, Rustdoc, the
+doctest, and benchmark smoke pass against the exact Git provider. The canonical
+shared lock remains outside this item until its peer lease discharges.
 
 ## CPU STFT forward-frame fusion is control-confounded (2026-09-01) <a id="stft-window-fusion"></a>
 
