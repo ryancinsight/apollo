@@ -5,7 +5,7 @@
 - **Delivered:** PM-only measured rejection; exact quarter-turn twiddle reuse regressed f64 N = 512, so production source remains byte-identical to merged PR #219 / `8ef1e5d3`.
 - **Evidence:** direct-oracle debug/release 4/4; three exact-processor phase runs and one unchanged comparison reproduce the regression; lease none. See `gap_audit.md#base128-quarter-turn`.
 
-## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — review
+## ATLAS-APOLLO-F32-N32768-STAGES-2026-08-31 — Attribute the remaining large-f32 stage deficit [patch] [perf] — in progress
 
 - **Outcome.** Attribute and reduce the remaining f32 N = 32,768 latency gap
   after the exact-eight-lane transpose correction.
@@ -24,7 +24,16 @@
   which removed the prior transpose bottleneck. Exact local Windows AVX2
   measurements are required; AArch64 remains compilation coverage unless a
   runner supplies timing evidence.
-- **Integrator / lease:** `/root`; lease none. Source `d1dda1bf` routes the
+- **Hosted fix-forward.** PR #219 merged as `8ef1e5d3`; its lock, workspace,
+  bindings, artifact, identity, and four paired benchmark jobs passed, but the
+  final comparison found four-of-four regressions in `generic_selector/64`,
+  `generic_selector/256`, and radix composite 38. The first two rows exercise
+  the base route and the last is unrelated to the planar combine. Attribute
+  binary-wide code-generation or measurement effects before changing source;
+  do not weaken the regression oracle.
+- **Integrator / lease:** `/root`; lease `/root` on the planar-combine source,
+  focused code-generation attribution, item/checklist, and resulting audit
+  record. Source `d1dda1bf` routes the
   combine through Hermes exact-eight/exact-four lane kernels with the unchanged
   scalar fallback. Three processor-2 runs reduce its median 40.06%
   (57,172 -> 34,269 cycles) and the full instrumented-route median 8.66%
@@ -33,8 +42,8 @@
   RustFFT at 66.26/67.94. Debug/release package tests pass 506/506, the focused
   analytical oracles pass 2/2, the warm global/Mnemosyne census remains zero,
   and warning-denied Clippy, AArch64 compilation, Rustdoc, doctest, format,
-  diff, and 36-source standalone-lock gates pass. Independent review, hosted
-  gates, PR, and non-squash merge remain. Last update 2026-08-31.
+  diff, and 36-source standalone-lock gates pass. Independent review is GREEN;
+  hosted fix-forward remains. Last update 2026-09-01.
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 — Localize the stable f32 N=32,768 deficit [patch] [perf] — review
 

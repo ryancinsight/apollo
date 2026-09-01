@@ -23,8 +23,12 @@
 - [x] Commit exact source `d1dda1bf`; pass warning-denied, debug/release package,
       cross-target, documentation, allocation, and 36-source standalone-lock
       gates; discharge the source/test/documentation lease.
-- [ ] Obtain independent exact-artifact review, pass hosted gates, and merge the
-      resulting PR without squash.
+- [x] Obtain independent exact-artifact GREEN review and merge PR #219 without
+      squash as `8ef1e5d3`; collect its exact hosted results.
+- [ ] Attribute the hosted four-of-four regressions in generic 64/256 and
+      radix composite 38 without weakening the unchanged benchmark oracle.
+- [ ] Retain only a source correction that keeps the N = 32,768 gain and clears
+      two local paired comparisons plus the hosted regression check.
 
 ## ATLAS-APOLLO-F32-N32768-THROUGHPUT-2026-08-31 [perf] — Codex
 
