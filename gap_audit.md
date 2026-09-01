@@ -9996,3 +9996,22 @@ slower in all four counterbalanced comparisons (+6% to +17%).
   against baseline 28974/26343/30836/29073): the gate passes and names the case as undecided.
   Existing fail-closed coverage is unchanged (order drift, single-block slowdown, family-wise
   false positive, missing-case) and a genuine slowdown clearing the spread is still reported.
+
+## Slop patterns recorded 2026-09-01
+
+- **PM pushes cancelled merge-gate runs.** `ci.yml` ran on every push to main
+  under a ref-keyed `cancel-in-progress` group with no `paths-ignore`; board
+  and ADR writes via the API started full runs and cancelled the verification
+  of the merge before them (#243, #244 both ended cancelled). Root cause: PM
+  artifacts not excluded from the push trigger; gate cancellable. Check that
+  would have caught it: a merge-gate run ending `cancelled` is a defect, not
+  a status. Fixed in #246 (paths-ignore + cancel only on pull_request);
+  proven by a board push starting no run while the gate completed.
+- **Whole-file identity never short-circuits.** The benchmark identity gate
+  compared executables with `cmp`; two build directories guarantee
+  different symbol hashes and build id, so the gate always fell through and
+  the pair jobs timed identical code, reporting +10% on #242. Check that
+  would have caught it: the gate had never once reported
+  `measurements_required=false` — a check that never passes is not a check.
+  Fixed in #250 (compare code sections); the residual candidate-role bias is
+  open under `ATLAS-APOLLO-BENCH-REGRESSION-FALSE-POSITIVE-2026-09-01`.
