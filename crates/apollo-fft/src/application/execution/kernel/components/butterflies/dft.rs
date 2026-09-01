@@ -362,7 +362,7 @@ pub(crate) fn dft15_impl<F: WinogradScalar, const INVERSE: bool>(
 // dependency on winograd::.
 //
 // Power-of-two composites (dft16 goes through ShortWinogradScalar::dft16 trait method):
-pub(crate) use super::super::winograd::composite::{dft128_impl, dft32_impl, dft64_impl};
+pub(crate) use super::super::winograd::composite::{dft128_impl, dft64_impl};
 // Small composites (N ≤ 63):
 pub(crate) use super::super::winograd::composite::{
     dft10_impl, dft12_impl, dft14_impl, dft18_impl, dft20_impl, dft21_impl, dft22_impl, dft24_impl,

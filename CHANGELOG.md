@@ -54,6 +54,15 @@ Change-class tags: [patch] backward-compatible fix, [minor] additive non-breakin
 
 ### Changed
 
+- [patch] [perf] The f32 N = 96 Good-Thomas codelet now executes its three
+  DFT-32 rows inside one exact eight-lane Hermes target frame. The register
+  kernel uses Hermes' complex 4x4 transpose and retains the existing scalar
+  codelet when that hardware width is unavailable; f64 is unchanged. Two
+  adjacent unchanged 100-sample Windows AVX2 comparisons reduced Apollo's
+  median from the 222.935 ns entry to 128.429/128.359 ns (42.39%/42.42%),
+  while the f64 N = 96 and f32/f64 N = 64/128 controls did not regress. Warm
+  execution remains allocation-free through the global allocator and direct
+  Mnemosyne hooks. No AArch64, AVX-512, or cross-machine timing is claimed.
 - [patch] [perf] `apollo-fft` base-split plans at N = 256/512 now borrow the
   complete stage-major twiddle table retained in the existing plan slot. This
   removes one or two process-cache lookups and temporary `Arc` acquisitions

@@ -1,3 +1,52 @@
+## The N = 96 Good-Thomas row batch uses one Hermes target frame (2026-09-01) <a id="f32-n96-codelet"></a>
+
+The f32 N = 96 fixed codelet entered this increment at
+222.863/222.935/223.045 ns against RustFFT at
+94.133/94.087/94.280 ns on logical processor 2. Both scalar plans select the
+generated `(3,32)` Good-Thomas codelet, so the adjacent composite cache and
+flat Stockham route are absent from this execution path.
+
+The pinned phase instrument isolates gather, the three DFT-32 rows, and the
+32 DFT-3 columns plus scatter. On the retained candidate it reports 10.52 ns,
+63.70 ns, and 45.73 ns respectively for f32; calling the incumbent scalar
+DFT-32 rows in the same instrument costs 161.47 ns. The mathematically
+equivalent `(32,3)` traversal matches the retained output within
+`384 * epsilon * input_l1`, but takes 132.23 ns versus 118.77 ns for the
+retained complete `(3,32)` batch, so the orientation change is rejected. Its
+f64 comparison is 237.06 ns versus 234.40 ns and does not motivate a route
+change.
+
+The retained f32 DFT-32 kernel holds four interleaved samples per Hermes
+register, computes radix-4 and radix-8 leaves around two complex 4x4
+transposes, and batches all three N = 96 rows through one hardware-width
+selection. Unsupported widths decline before observing the mutable operand
+and execute the prior scalar codelet; f64 remains scalar. The common
+register-butterfly leaves are shared with the existing base-64/base-128
+kernels rather than duplicated. Warm f32/f64 execution at
+N = 64/96/128/256/512 reports zero global allocations, zero direct Mnemosyne
+allocations, and zero retained bytes.
+
+Two adjacent runs of the unchanged 100-sample comparison report medians in
+nanoseconds:
+
+| scalar / N | Apollo 1 | RustFFT 1 | Apollo 2 | RustFFT 2 |
+| --- | ---: | ---: | ---: | ---: |
+| f32 / 64 | 53.411 | 51.894 | 53.520 | 51.808 |
+| f32 / 96 | 128.429 | 94.053 | 128.359 | 94.029 |
+| f32 / 128 | 115.263 | 100.478 | 116.164 | 100.599 |
+| f64 / 64 | 90.503 | 83.715 | 90.609 | 83.931 |
+| f64 / 96 | 249.444 | 165.209 | 249.567 | 165.416 |
+| f64 / 128 | 200.989 | 181.300 | 200.718 | 181.186 |
+
+The f32 N = 96 medians improve by 42.39% and 42.42% from the 222.935 ns
+entry and are 1.366x RustFFT in both runs. The f64 N = 96 ratio remains
+1.509x/1.509x, and the N = 64/128 controls do not show a candidate-specific
+regression. Release assembly for the three-row AVX2 specialization contains
+no calls or runtime capability probes and one backward branch for the row
+loop. Exact source is `074dedee`. The result is local Windows AVX2 evidence
+only. AArch64 validation is a compile gate; no AVX-512 execution or
+cross-machine throughput is established.
+
 ## Base splits now borrow their retained complete twiddle table (2026-08-31) <a id="base-split-twiddle-reuse"></a>
 
 The selected f64 base route left `FftPlan1D::twiddle_fwd` empty even though

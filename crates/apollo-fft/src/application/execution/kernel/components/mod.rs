@@ -22,5 +22,6 @@ pub(crate) mod good_thomas;
 mod lane_capability;
 pub(crate) mod rader;
 pub(crate) mod radix_composite;
+mod register_butterfly;
 pub(crate) mod stockham;
 pub(crate) mod winograd;

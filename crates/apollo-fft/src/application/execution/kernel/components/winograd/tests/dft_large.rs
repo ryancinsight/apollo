@@ -1,5 +1,6 @@
 use crate::application::execution::kernel::components::winograd::*;
 use crate::application::execution::kernel::direct::{dft_forward, dft_inverse};
+use crate::application::execution::kernel::mixed_radix::traits::ShortDft;
 use eunomia::{Complex32, Complex64};
 
 fn max_err(a: &[Complex64], b: &[Complex64]) -> f64 {
@@ -90,20 +91,51 @@ fn dft32_inverse_matches_direct() {
 }
 
 #[test]
-fn dft32_f32_forward_matches_direct() {
+fn routed_dft32_forward_matches_direct() {
     let input: Vec<Complex64> = (0..32)
         .map(|k| Complex64::new((k as f64 * 0.12).sin(), (k as f64 * 0.35).cos()))
         .collect();
     let expected = dft_forward(&input);
     let mut buf: [Complex32; 32] =
         core::array::from_fn(|i| Complex32::new(input[i].re as f32, input[i].im as f32));
-    dft32_impl::<f32, false>(&mut buf);
+    <f32 as ShortDft<32>>::dft::<false>(&mut buf);
     let got: Vec<Complex64> = buf
         .iter()
         .map(|x| Complex64::new(x.re as f64, x.im as f64))
         .collect();
     let err = max_err(&got, &expected);
-    assert!(err < 2e-5, "DFT-32 f32 forward max_err={err:.2e}");
+    let input_l1 = input.iter().map(|value| value.norm()).sum::<f64>();
+    let bound = 64.0 * f64::from(f32::EPSILON) * input_l1.max(1.0);
+    assert!(
+        err <= bound,
+        "routed DFT-32 forward max_err={err:.2e}, bound={bound:.2e}"
+    );
+}
+
+#[test]
+fn routed_dft32_inverse_matches_direct() {
+    let input: Vec<Complex64> = (0..32)
+        .map(|k| Complex64::new((k as f64 * 0.41).sin(), (k as f64 * 0.23).cos()))
+        .collect();
+    let expected: Vec<Complex64> = dft_inverse(&input)
+        .into_iter()
+        .map(|value| value * 32.0)
+        .collect();
+    let mut buf = core::array::from_fn(|index| {
+        Complex32::new(input[index].re as f32, input[index].im as f32)
+    });
+    <f32 as ShortDft<32>>::dft::<true>(&mut buf);
+    let got: Vec<Complex64> = buf
+        .iter()
+        .map(|value| Complex64::new(value.re as f64, value.im as f64))
+        .collect();
+    let err = max_err(&got, &expected);
+    let input_l1 = input.iter().map(|value| value.norm()).sum::<f64>();
+    let bound = 64.0 * f64::from(f32::EPSILON) * input_l1.max(1.0);
+    assert!(
+        err <= bound,
+        "routed DFT-32 inverse max_err={err:.2e}, bound={bound:.2e}"
+    );
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ DFT-64 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

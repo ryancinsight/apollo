@@ -415,10 +415,10 @@ fn retained_footprint_attribution() {
 
 #[test]
 #[ignore = "allocation probe must run as the only selected test in its process"]
-fn native_width_base_warm_execution_is_allocation_free() {
+fn native_width_short_and_base_warm_execution_is_allocation_free() {
     let _mnemosyne_hooks = MnemosyneHooks::install();
 
-    for n in [64usize, 128, 256, 512] {
+    for n in [64usize, 96, 128, 256, 512] {
         let plan = crate::FftPlan1D::<f32>::new(crate::Shape1D { n });
         let mut signal = (0..n)
             .map(|index| {
@@ -445,7 +445,7 @@ fn native_width_base_warm_execution_is_allocation_free() {
         );
     }
 
-    for n in [64usize, 128, 256, 512] {
+    for n in [64usize, 96, 128, 256, 512] {
         let plan = crate::FftPlan1D::<f64>::new(crate::Shape1D { n });
         let mut signal = (0..n)
             .map(|index| {

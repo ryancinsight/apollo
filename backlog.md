@@ -1,5 +1,15 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 — Reduce the N = 96 fixed-codelet latency gap [patch] [perf] — review
+
+- **Outcome.** Attribute and reduce the stable f32 N = 96 fixed-codelet latency gap against retained-scratch RustFFT without increasing retained memory.
+- **Scope / non-goals.** Measure the generated `(3, 32)` Good-Thomas gather, three DFT-32 rows, 32 DFT-3 columns, and fused scatter. Test the mathematically equivalent `(32, 3)` orientation, then retain Hermes-backed batching only for the measured DFT-32 row bottleneck. Preserve one canonical codelet generator, transform arithmetic, public API, scheduler policy, comparison workload, estimator, and the established N = 32/64/128 routes.
+- **Acceptance.** A phase probe identifies the binding cost before production changes. The retained candidate preserves the exact Good-Thomas mapping, direct-DFT forward, normalized and unnormalized inverse, f32/f64 behavior, warmed zero allocation, and non-x86 semantics. Two adjacent 100-sample runs must improve f32 N = 96 with f64 N = 96 and f32/f64 N = 64/128 controls neutral; reject a candidate whose complete-path intervals do not reproduce.
+- **Entry evidence.** Three processor-2 runs place Apollo f32 N = 96 at 222.863/222.935/223.045 ns versus RustFFT at 94.133/94.087/94.280 ns (2.37x); f64 is 1.51--1.52x. N = 64 controls are 1.05--1.06x and N = 128 controls 1.10--1.15x. The first phase hypothesis was falsified before source retention: both scalar plans select `ShortWinograd`, whose generated N = 96 codelet is a `(3, 32)` Good-Thomas transform; the adjacent composite cache is not on this execution path.
+- **Candidate evidence.** The pinned phase instrument places legacy f32 DFT-32 rows at 161.47 ns and the retained Hermes batch at 63.70 ns. The value-correct `(32,3)` orientation is rejected at 132.23 ns versus 118.77 ns for retained `(3,32)`. Two adjacent unchanged 100-sample runs reduce f32 N = 96 from 222.935 ns to 128.429/128.359 ns (42.39%/42.42%) with f64 N = 96 and N = 64/128 controls stable; warmed N = 64/96/128/256/512 execution reports zero global/direct-Mnemosyne allocations and zero retained bytes. Hermes PR #111 merged as `9ac23fa4`; Apollo source is `074dedee` after exact staged-diff self-review.
+- **Risk / dependencies.** [patch] [perf]. Generated unsafe scratch initialization and CRT gather/scatter mapping must remain sound for both directions and targets. Timing evidence is local Windows AVX2 only; AArch64 remains compilation evidence. Exact hosted gates, PR, and merge remain open.
+- **Integrator / lease:** `/root`; lease none. Last update 2026-09-01.
+
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — done 2026-08-31
 
 - **Outcome.** Remove the per-execution global twiddle-cache lookup and

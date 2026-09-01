@@ -27,6 +27,9 @@
 //! native widths decline before touching the input so production routing keeps
 //! its incumbent path.
 
+use crate::application::execution::kernel::components::register_butterfly::{
+    radix4, root2_twiddle, rot90,
+};
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use core::mem::size_of;
 use eunomia::Complex;
@@ -99,68 +102,6 @@ const fn b16_1_ch(rows: usize) -> usize {
 /// mixed-radix dup-split pairs, three broadcast pairs, one real broadcast.
 pub(crate) const fn table_lanes(rows: usize) -> usize {
     ((rows - 1) * 16 + 7) * 4
-}
-
-/// Multiplies by `-i` forward, `+i` inverse — a shuffle and a sign flip.
-#[expect(
-    clippy::inline_always,
-    reason = "must fold into the caller's target-feature scope; an outlined \
-              body re-enters baseline codegen"
-)]
-#[inline(always)]
-fn rot90<T, A, const INVERSE: bool>(v: ComplexReg<T, A>) -> ComplexReg<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    if INVERSE {
-        v.mul_i()
-    } else {
-        v.mul_neg_i()
-    }
-}
-
-/// Radix-4 step over four registers, in natural order out. Its only internal
-/// twiddle is a rotation, so it costs no complex multiplies — the property
-/// the across-instance layout exists to unlock.
-#[expect(
-    clippy::inline_always,
-    reason = "must fold into the caller's target-feature scope; an outlined \
-              body re-enters baseline codegen"
-)]
-#[inline(always)]
-fn radix4<T, A, const INVERSE: bool>(x: [ComplexReg<T, A>; 4]) -> [ComplexReg<T, A>; 4]
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    let (m0, m2) = x[0].butterfly(x[2]);
-    let (m1, m3) = x[1].butterfly(x[3]);
-    let m3r = rot90::<T, A, INVERSE>(m3);
-    let (o0, o1) = m0.butterfly(m1);
-    let (o2, o3) = m2.butterfly(m3r);
-    [o0, o2, o1, o3]
-}
-
-/// `x * W_8^1` (`SUBTRACT` false) or `x * W_8^3` (true): a rotation, one
-/// butterfly half, and one real broadcast multiply — no complex multiply.
-#[expect(
-    clippy::inline_always,
-    reason = "must fold into the caller's target-feature scope; an outlined \
-              body re-enters baseline codegen"
-)]
-#[inline(always)]
-fn root2_twiddle<T, A, const INVERSE: bool, const SUBTRACT: bool>(
-    v: ComplexReg<T, A>,
-    half_root2: hermes_simd::Vector<T, A>,
-) -> ComplexReg<T, A>
-where
-    T: LaneScalar,
-    A: SimdArch + SimdKernel<T>,
-{
-    let (sum, diff) = rot90::<T, A, INVERSE>(v).butterfly(v);
-    let picked = if SUBTRACT { diff } else { sum };
-    ComplexReg::from_interleaved(picked.into_interleaved() * half_root2)
 }
 
 /// The base transform as a lane kernel over interleaved samples: `ROWS`

@@ -151,7 +151,7 @@ pub(crate) fn dft16_impl<F: WinogradScalar, const INVERSE: bool>(
     dft16_array_impl::<F, INVERSE, false>(data);
 }
 
-const TWIDDLE32_FWD: [Complex64; 16] = [
+pub(super) const TWIDDLE32_FWD: [Complex64; 16] = [
     Complex64::new(1.0, 0.0),
     Complex64::new(0.9807852804032304, -0.19509032201612825),
     Complex64::new(0.9238795325112867, -0.3826834323650898),

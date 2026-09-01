@@ -1,5 +1,27 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 [perf] — Codex
+
+- [x] Reproduce the exact-processor f32 N = 96 deficit across three unchanged
+      100-sample runs with f64 and N = 64/128 controls.
+- [x] Falsify the initial composite-cache hypothesis against the actual
+      `ShortWinograd` strategy before retaining any production change.
+- [x] Attribute the generated `(3, 32)` gather, DFT-32 rows, DFT-3 columns, and
+      scatter, then test the bounded `(32, 3)` orientation alternative.
+- [x] Reject the slower value-correct `(32,3)` orientation and retain one
+      Hermes-backed target frame around the measured three-row DFT-32 batch.
+- [x] Prove direct-DFT, normalized/unnormalized inverse, exact CRT mapping,
+      warmed zero allocation, f32/f64 parity, and non-x86 behavior.
+- [x] Keep two adjacent complete-path comparisons green with f64 N = 96 and
+      f32/f64 N = 64/128 controls neutral; reject any non-reproducing source.
+- [x] Pass 508/508 debug and release tests, warning-denied all-target/all-feature
+      host Clippy and AArch64 checks, Rustdoc, doctest, formatting, the isolated
+      allocation census, assembly inspection, and the 36-source lock gate.
+- [x] Commit exact source `074dedee` after exact staged-diff self-review with no
+      unrelated source or lock movement.
+- [ ] Pass hosted gates, then merge the item without squash and record the
+      delivery revisions.
+
 ## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
 
 - [x] Record the exact entry split costs at f64 N = 256/512 and identify the
