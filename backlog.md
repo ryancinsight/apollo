@@ -69,6 +69,11 @@
   and warning-denied AArch64 Windows compilation pass on the current diff.
 - **Delivered:** source `72bdf90a`, Linux test-CFG correction `160d3154`,
   independent GREEN, PR #215, merge `e94757f5`.
+- **Independently verified 2026-08-31** (second agent, same pinned host,
+  post-merge ladder, two runs): 512 (P) = 1282-1300 ns, 1.22-1.24 against
+  RustFFT, down from 1307-1310 pre-merge; 512 (E) = 586-598 ns with a
+  clean in-run control; 64/128/256 stable. Matches the recorded
+  0.44-2.70% P-core and 18-19% E-core deltas.
 
 ## ATLAS-APOLLO-SPLIT-BOUNDARY-2026-08-31 — Vectorize the split's gather; fuse its combine levels [perf] — done 2026-08-31
 
