@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 — Retain selected split twiddles in the plan [patch] [perf] — in progress
+
+- **Outcome.** Remove the per-execution global twiddle-cache lookup and
+  temporary `Arc` acquisition from the f64 N = 256/512 base-split route by
+  borrowing the complete selected table already retained by `FftPlan1D`.
+- **Scope / non-goals.** Reuse the existing plan-owned forward slot and lazy
+  inverse slot; pass their borrowed tables through the private base executors.
+  Do not add table bytes, change base arithmetic, routing, normalization,
+  scratch, public API, or the unchanged measurement instruments.
+- **Acceptance.** N = 256/512 forward and inverse values match the independent
+  direct oracle; clones share the retained table; warmed execution remains
+  allocation-free; code inspection shows no cache lookup or `Arc` clone in the
+  base-split executor. Two adjacent exact-processor comparisons improve both
+  target rows with N = 64/128 controls neutral. Reject the source candidate if
+  the paired latency intervals do not reproduce.
+- **Entry model.** The pinned split probe records N = 256 at 514.5 ns
+  (55.0 ns gather, 364.1 ns bases, 95.4 ns residual) and N = 512 at 1,299.2 ns
+  (116.2 ns gather, 727.4 ns bases, 455.6 ns residual). The current executor
+  calls `cached_twiddle_fwd` once at N = 256 and twice at N = 512 per execution;
+  the full N table contains every smaller split stage already.
+- **Integrator / lease:** `/root`; lease `/root` on dynamic 1-D plan/executors,
+  base-split routing/tests, and this item's PM/audit documentation. Last update
+  2026-08-31.
+
 ## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 — Remove the redundant portable combine specialization [patch] [perf] — review
 
 - **Outcome.** Use Hermes' hardware-only exact-width selector at the planar

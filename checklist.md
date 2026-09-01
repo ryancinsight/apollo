@@ -1,5 +1,17 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-BASE-SPLIT-TWIDDLE-REUSE-2026-08-31 [perf] — Codex
+
+- [x] Record the exact entry split costs at f64 N = 256/512 and identify the
+      per-execution cache lookup plus temporary `Arc` acquisition.
+- [ ] Retain one full-length forward table in the existing plan slot, preserve
+      lazy inverse construction, and borrow the selected stage slices through
+      every base-split executor.
+- [ ] Prove direct-oracle/round-trip values, clone sharing, zero warmed
+      allocation, no public change, and warning-denied cross-target coverage.
+- [ ] Retain the source only if two adjacent exact-processor comparisons improve
+      N = 256/512 with N = 64/128 controls neutral; otherwise record rejection.
+
 ## ATLAS-APOLLO-HARDWARE-LANE-LINK-2026-08-31 [perf] — Codex
 
 - [x] Deliver Hermes' hardware-only exact-width selector through PR #110 / merge
