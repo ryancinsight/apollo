@@ -457,7 +457,192 @@ fn opt_out_of_power_throttling() {
 #[cfg(not(windows))]
 fn opt_out_of_power_throttling() {}
 
+/// Tests the premise behind [`opt_out_of_power_throttling`] instead of
+/// assuming it (`ATLAS-APOLLO-ECOQOS-PREMISE-2026-09-01`).
+///
+/// ADR 0039's Context attributed a 3x per-call slowdown of the batched
+/// four-step kernel in this process to Windows handing benchmark children
+/// EcoQoS, on the observation that calls executed "on E-cores (CPUs 8 through
+/// 21)". That range holds four of this host's eight performance cores, so it
+/// does not establish efficiency-core placement. This records what the
+/// narrative asserted but never measured: the explicit power-throttling state
+/// the process carries, and the queried efficiency class of the processor each
+/// unpinned call lands on, before and after the opt-out, with per-call latency
+/// alongside. A probe, not a benchmark: medians over a bounded loop, no
+/// harness, and no timing claim beyond the comparison it prints.
+///
+/// Absence stays typed. Landing comes from `themis::current_processor`, in
+/// themis's own processor numbering, so no affinity convention is re-derived
+/// here; a topology that reports no efficiency classes yields `unclassified`
+/// counts rather than an invented label.
+#[cfg(windows)]
+fn qos_placement_probe() {
+    use themis::CpuTopology;
+
+    #[repr(C)]
+    struct PowerThrottlingState {
+        version: u32,
+        control_mask: u32,
+        state_mask: u32,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn GetProcessInformation(
+            process: isize,
+            class: i32,
+            information: *mut core::ffi::c_void,
+            size: u32,
+        ) -> i32;
+    }
+    /// `ProcessPowerThrottling` in `PROCESS_INFORMATION_CLASS`; the read twin
+    /// of the constant [`opt_out_of_power_throttling`] writes through.
+    const PROCESS_POWER_THROTTLING: i32 = 4;
+    const EXECUTION_SPEED: u32 = 0x1;
+    /// At the ~45 us per call ADR 0039 reports, this is under a tenth of a
+    /// second per phase, enough for a placement histogram over the loop.
+    const CALLS: usize = 2_000;
+    /// The first batched two-dimensional shape: the layout the claim names.
+    const SHAPE: (usize, usize) = TWO_D_SHAPES[0];
+
+    /// `(control_mask, state_mask)` of the process's explicit throttling
+    /// override, or `None` when the query is refused. A zero control mask
+    /// means the process has set nothing and the scheduler decides; that is
+    /// evidence of neither throttled nor unthrottled execution.
+    fn explicit_throttling_state() -> Option<(u32, u32)> {
+        let mut state = PowerThrottlingState {
+            version: 1,
+            control_mask: 0,
+            state_mask: 0,
+        };
+        // SAFETY: documented Win32 call; the struct matches
+        // PROCESS_POWER_THROTTLING_STATE and outlives the call.
+        let ok = unsafe {
+            GetProcessInformation(
+                GetCurrentProcess(),
+                PROCESS_POWER_THROTTLING,
+                (&raw mut state).cast(),
+                core::mem::size_of::<PowerThrottlingState>() as u32,
+            )
+        };
+        (ok != 0).then_some((state.control_mask, state.state_mask))
+    }
+
+    fn describe_state(state: Option<(u32, u32)>) -> String {
+        match state {
+            None => "query REFUSED".to_owned(),
+            Some((control, st)) if (control & EXECUTION_SPEED) == 0 => format!(
+                "control={control:#x} state={st:#x} (no explicit override: scheduler default)"
+            ),
+            Some((control, st)) if (st & EXECUTION_SPEED) != 0 => {
+                format!("control={control:#x} state={st:#x} (explicitly THROTTLED)")
+            }
+            Some((control, st)) => {
+                format!("control={control:#x} state={st:#x} (explicitly opted out)")
+            }
+        }
+    }
+
+    fn micros(d: Duration) -> f64 {
+        d.as_secs_f64() * 1e6
+    }
+
+    let (nx, ny) = SHAPE;
+    let topology = CpuTopology::detect();
+    let class_count = topology.as_ref().and_then(CpuTopology::efficiency_class_count);
+    let src = complex_signal(nx * ny);
+    let plan = apollo_fft::FftPlan2D::<f64>::new(apollo_fft::Shape2D { nx, ny });
+    let mut plane = Array2::from_shape_vec((nx, ny), src.clone()).expect("shape matches the data");
+
+    let mut phase = |label: &str| {
+        let mut latencies = Vec::with_capacity(CALLS);
+        let mut landed: Vec<Option<u32>> = Vec::with_capacity(CALLS);
+        for _ in 0..CALLS {
+            plane
+                .as_slice_mut()
+                .expect("the plane stays contiguous")
+                .copy_from_slice(&src);
+            let started = Instant::now();
+            plan.forward_complex_inplace(std::hint::black_box(&mut plane));
+            latencies.push(started.elapsed());
+            std::hint::black_box(&plane);
+            landed.push(themis::current_processor());
+        }
+        latencies.sort_unstable();
+        let median = latencies[CALLS / 2];
+        let p90 = latencies[CALLS * 9 / 10];
+
+        let mut per_rank: Vec<usize> = vec![0; class_count.unwrap_or(0)];
+        let mut unclassified = 0usize;
+        let mut distinct = std::collections::BTreeSet::new();
+        for processor in &landed {
+            let class = processor.and_then(|p| topology.as_ref()?.processor_efficiency_class(p));
+            match class.and_then(|c| per_rank.get_mut(usize::from(c.rank()))) {
+                Some(count) => *count += 1,
+                None => unclassified += 1,
+            }
+            if let Some(p) = processor {
+                distinct.insert(*p);
+            }
+        }
+
+        println!(
+            "qos probe [{label}]: {CALLS} unpinned forward_complex_inplace calls, {nx}x{ny} f64"
+        );
+        println!(
+            "  latency   median {:.1} us   p90 {:.1} us",
+            micros(median),
+            micros(p90)
+        );
+        println!("  landed on {} distinct processors: {distinct:?}", distinct.len());
+        for (rank, count) in per_rank.iter().enumerate() {
+            let marker = if Some(rank + 1) == class_count {
+                " (highest class)"
+            } else if rank == 0 && class_count.is_some_and(|c| c > 1) {
+                " (lowest class)"
+            } else {
+                ""
+            };
+            println!(
+                "  class rank {rank}{marker}: {count} calls ({}%)",
+                count * 100 / CALLS
+            );
+        }
+        if class_count.is_none() {
+            println!("  topology reports no efficiency classes: placement by class is unmeasurable here");
+        }
+        if unclassified > 0 {
+            println!("  unclassified landings: {unclassified}");
+        }
+    };
+
+    println!(
+        "qos probe: explicit throttling state before opt-out: {}",
+        describe_state(explicit_throttling_state())
+    );
+    phase("before opt-out");
+    opt_out_of_power_throttling();
+    println!(
+        "qos probe: explicit throttling state after opt-out:  {}",
+        describe_state(explicit_throttling_state())
+    );
+    phase("after opt-out");
+}
+
+#[cfg(not(windows))]
+fn qos_placement_probe() {
+    println!(
+        "qos probe: requires the Windows power-throttling API; nothing measured on this target"
+    );
+}
+
 fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+    // The probe observes the process's default state, so it runs before the
+    // opt-out below and performs that opt-out itself midway.
+    if std::env::var_os("APOLLO_QOS_PLACEMENT_PROBE").is_some() {
+        qos_placement_probe();
+        return Ok(());
+    }
     opt_out_of_power_throttling();
     // Before the timing suites, so each size's cold window is its first touch
     // of the process-global caches (see the function's method note).
