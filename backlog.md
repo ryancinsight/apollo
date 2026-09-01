@@ -1,10 +1,16 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — review
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 — Remove forward-frame scratch copies [patch] [perf] — in progress
+
+- **Outcome.** Measure and, only on two reproduced complete-path wins, consume Hermes `real_mul_to_interleaved_complex_runtime` for interior CPU STFT frames so Apollo deletes both retained real forward-window scratch roles and the copy/multiply/materialize traversal.
+- **Scope / non-goals.** Confine source to CPU STFT forward window preparation, its value/allocation tests, one unchanged complete-plan benchmark, and synchronized PM/release documentation. Preserve boundary padding, Hann coefficients, frame count/order, Moirai scheduling, FFT arithmetic, public API, workloads, assertions, and timeouts; do not enter inverse or WGPU paths.
+- **Acceptance.** Establish an exact pre-change benchmark, prove dense interior and negative/right-padded boundary frames match an independent scalar formula, retain zero warm allocation, remove both scratch roles and their retained bytes, pass warning-denied host/AArch64, debug/release, Rustdoc/doctest, standalone-lock, format/diff, and SemVer gates, and retain the source only when two unchanged complete-path comparisons improve with neutral controls.
+- **Risk / dependency.** [patch] [perf]. Hermes provider candidate `c42571d` is pushed and independently reviewing; Apollo adoption waits for that provider to merge. Integrator `/root`; lease `/root` on `apollo-stft` CPU windowing/tests/new benchmark and this item's PM/doc hunks. Last update 2026-09-01.
+
+## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
-- **Evidence.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed.
-- **Integrator / lease:** `/root`; lease none. Local closure complete; independent hosted review, PR, and merge remain. Last update 2026-09-01.
+- **Evidence / delivery.** Exact f32/f64 transpose and independent 2-D/3-D oracles, zero warm allocations, 510/510 debug and release Nextest, warning-denied host/AArch64 gates, docs, and standalone 36-source lock pass. Two unchanged Windows AVX2 runs reduce f64 4,096x4x4 3-D medians from 1.1567 ms to 263.225/265.350 us (77.24%/77.06%); no cross-machine timing or revision-attributed size reduction is claimed. Source `9ac833cd`, evidence `f1124f81`, exact head `e030595e`; PR #230 merged without squash as `17bad886`. Lease none.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
 

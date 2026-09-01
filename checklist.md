@@ -1,5 +1,15 @@
 # Apollo Checklist
 
+## ATLAS-APOLLO-STFT-WINDOW-INTERLEAVE-2026-09-01 [perf] — Codex
+
+- [ ] Commit the unchanged CPU STFT complete-plan benchmark and record an exact
+      pre-adoption baseline with frame-length and signal-length controls.
+- [ ] Consume merged Hermes only when two unchanged comparisons improve; remove
+      both real forward-window scratch roles without changing boundary frames.
+- [ ] Prove independent values, zero warm allocation, and retained-byte removal;
+      pass host/AArch64, debug/release, docs, SemVer, and standalone-lock gates.
+- [ ] Complete independent and hosted review and merge without squash.
+
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [perf] — Codex
 
 - [x] Record exact scalar-Leto isolated and unchanged 2-D/3-D entry baselines.
@@ -9,8 +19,8 @@
       target-feature safety, no hot capability probe, and bounded size growth.
 - [x] Reproduce paired isolated and full-path measurements, synchronize durable
       evidence, and pass exact local gates at source `9ac833cd`.
-- [ ] Complete independent hosted gates and merge without squash; provider PR
-      #135 is merged as `060eb7eb`.
+- [x] Complete independent hosted gates and merge without squash: provider PR
+      #135 merged as `060eb7eb`; Apollo PR #230 merged as `17bad886`.
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
 
