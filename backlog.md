@@ -1466,7 +1466,7 @@
   for the gather, the natural PFA, and DFT-84, plus bijection tests for both
   table builders, all run in the release suite too.
 
-## ATLAS-APOLLO-SAFETY-COMMENT-RATCHET — Ratchet SAFETY-comment coverage over unsafe sites [patch] — todo
+## ATLAS-APOLLO-SAFETY-COMMENT-RATCHET — Ratchet SAFETY-comment coverage over unsafe sites [patch] — in progress
 
 - **Outcome:** every `unsafe` block in apollo-fft carries a `// SAFETY:`
   comment discharging its obligation, ratcheted per the non-increasing
@@ -1478,8 +1478,26 @@
   `crates/apollo-fft/src/application/execution/kernel/components/rader/bluestein.rs`
   314-348 fold is sound only via the debug_asserted `p ≥ 2m−1` bound. The
   twiddle raw-cache derefs were documented under
+  (see the instrument note below for the current count)
   ATLAS-APOLLO-PLAN-LENGTH-SAFETY-2026-08-27.
 
+- **Instrument delivered (2026-09-01, Claude `/root`).** `scripts/safety_ratchet.py`
+  counts `unsafe {` blocks whose contiguous comment/attribute run above
+  carries no `// SAFETY:`, per file, against the committed
+  `scripts/safety_ratchet_baseline.json`; `check` (wired into the `ci`
+  workflow beside the ADR index) fails any file above its baseline — a new
+  file against zero — and reports files that fell below it so `baseline`
+  can tighten; `baseline` refuses to raise any file. Proven to bite: one
+  appended uncommented block raised 406 -> 407 and failed the check. Baseline
+  at delivery: **406 sites in 35 files** (the earlier `grep -c unsafe` figure
+  counted tokens, not blocks). The table-indexed cluster this item names
+  first is closed by `ATLAS-APOLLO-KERNEL-ENTRY-ASSERTS` (good_thomas,
+  rader, gather: 0 remaining). Burn-down order by density:
+  `stockham/avx/generic/pair.rs` 57, `winograd/radix/odd_prime_pair.rs` 35,
+  `winograd/tests/dft_composite.rs` 35, `stockham/precision/{precise,reduced}.rs`
+  34/33, `radix_composite/arity.rs` 25, `good_thomas/cook_toom_gt.rs` 25 —
+  each slice a separate measured item; the check keeps every landed slice
+  from regressing.
 ## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — todo
 
 - **Outcome:** the `ComposeArena` `from_raw_parts_mut`-over-TLS-`UnsafeCell`
