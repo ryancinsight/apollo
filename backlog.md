@@ -1,6 +1,8 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Restore a green main after #240 [patch] — review 2026-09-01
+## ATLAS-APOLLO-MAIN-RED-BUTTERFLY-GLOBS-2026-09-01 — Explicit butterfly intrinsic imports [patch] — review 2026-09-01 (decision: author)
+
+- **Reframed 2026-09-01:** #241 restored per-site `allow(..., reason)` at both sites before this landed, so main no longer needs #242 to be green. #242 stands as the no-suppression, convention-matching alternative; accepting or closing it is the author's call, tradeoff stated once in the PR body.
 
 - **Defect:** both merge runs after #239/#240 fail `rust workspace` at Clippy
   under 1.97: `wildcard_imports` at `stockham/butterfly/fixed.rs:377` and
