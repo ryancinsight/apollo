@@ -1,5 +1,19 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01 — One column pass at every width, sinks included [patch] [perf] — done 2026-09-01
+
+- **Delivered** (`gap_audit.md#column-pass-consolidation`): the shared
+  `column_pass` generic over `GROUPS` replaces the duplicated DIF network in
+  the four- and eight-lane base kernels and carries the `StoreSink` family to
+  both, so the eight-lane f32 route takes the 256/512 split sinks instead of
+  the two-pass fallback. `combine_sink_supported` and the unreachable
+  production fallback are deleted; the pinned probe is generic over the
+  scalar. Net -114 kernel lines.
+- **Measured pinned, P-core, back to back, twice:** f32 256 311.9 ->
+  **294.2/293.7** ns (1.39 -> **1.31** vs RustFFT); f32 512 705.7 ->
+  **694.8/690.3**; f64 and 64/128 controls flat. Debug+release 511/511.
+- **Integrator:** Claude `/root`.
+
 ## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 — Remove forward-spectrum lane materialization [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Measure and, only on two reproduced complete-path wins, add one Hermes real-by-interleaved-complex dot provider so Apollo Mellin deletes its retained `[sample, 0]` lane buffer and reads N real input lanes instead of 2N interleaved lanes in every direct-DFT row.
@@ -932,7 +946,7 @@
   accessors; every shipping kernel takes fixed-size references or
   proof-carrying raw helpers.
 
-## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — review
+## ATLAS-APOLLO-BASE-KERNEL-LANE-WIDTH-2026-08-29 — The base kernel runs a four-byte scalar at half native width [perf] — done 2026-09-01
 
 - **Integrator:** Codex `/root`; last update 2026-08-30.
 - **Lease:** none; exact source candidate `958fbfb2` is published for
@@ -1027,7 +1041,11 @@
   Windows all-target compilation, Rustdoc, the compile-fail doctest, formatting,
   and diff checks pass. The AArch64 gate also closed a pre-existing test-only
   cfg mismatch by excluding the x86 TSC probe at its module boundary. Hosted
-  and independent-review closure remain open.
+  and independent-review closure remain open. Independent review closed
+  2026-09-01: the merged kernel is value- and gate-verified; its one material
+  finding — the column pass duplicated per width, stranding the sink family in
+  the four-lane copy — is resolved by
+  `ATLAS-APOLLO-COLUMN-PASS-CONSOLIDATION-2026-09-01`.
 
 
 ## ATLAS-APOLLO-SMALL-SIZE-SPLIT-2026-08-28 — Route 256 and 512 through the 128 base [patch] — done 2026-08-28

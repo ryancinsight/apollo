@@ -1,3 +1,36 @@
+## The column pass is one function at every width (2026-09-01) <a id="column-pass-consolidation"></a>
+
+Independent review of the eight-lane base kernel (`ATLAS-APOLLO-BASE-KERNEL-
+LANE-WIDTH`) found its column pass a line-for-line sibling of the four-lane
+kernel's phase 3 — same mixed-radix twiddle, same `ROWS`-point DIF network,
+same `rev` store — differing only in the chunk geometry factor (eight groups
+of two complex samples against four groups of four). The duplicate carried a
+real cost beyond drift risk: the sink family (`CombineSink`,
+`FinalCombineSink`) lived only in the four-lane copy, so an eight-lane f32
+host ran the 256/512 splits through the two-pass fallback.
+
+Both kernels now call one `column_pass` generic over `GROUPS`, carrying the
+`StoreSink` parameter. The sinks index by view chunk, so the same fixed-size
+buffers serve both chunk geometries unchanged; `transform_base` routes every
+entry (direct, pair-combining, four-block-final) through the width match, and
+the `combine_sink_supported` capability query is deleted along with the
+four-block split's now-unreachable production fallback (`combine_final4`
+remains as the incumbent measurement arm). Net -114 kernel lines.
+
+**Measured pinned, P-core, back to back, controls within 0.5%, twice:**
+
+| case | before | after | vs RustFFT |
+| --- | --- | --- | --- |
+| f32 n=256 | 311.9 ns | **294.2 / 293.7** | 1.39 -> **1.31** |
+| f32 n=512 | 705.7 | **694.8 / 690.3** | 1.39 -> **1.37** |
+| f64 256 / 512 | 508.2 / 1281.5 | 508.1 / 1276.6 | controls, flat |
+| f32 64 / 128 | 54.2 / 116.2 | 54.4 / 114.7 | route unchanged |
+
+The pinned probe now runs both scalars (`ProbeScalar` dispatches the PhastFT
+planner per type), so the f32 ladder is measured by the same instrument as
+f64. Debug and release suites 511/511; the DFT oracle sweep value-verifies
+the new f32 sink path at every length.
+
 ## Mellin real-input complex reduction (2026-09-01) <a id="mellin-real-complex-dot"></a>
 
 Resolved by `ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01`. Threshold-sized
