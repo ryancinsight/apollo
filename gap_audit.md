@@ -16,6 +16,17 @@ retained complete `(3,32)` batch, so the orientation change is rejected. Its
 f64 comparison is 237.06 ns versus 234.40 ns and does not motivate a route
 change.
 
+A follow-up tested four independent DFT-3 columns per exact eight-lane Hermes
+frame. Before timing, it proved the CRT map writes all 96 destinations once,
+initialized output to NaNs to expose missing writes, and compared values within
+the established `384 * epsilon * input_l1` bound. In the focused release run,
+the incumbent column/scatter phase took 46.07 ns and the candidate took
+56.91 ns, a 23.53% regression. Packing register results back to scalar values
+while retaining all 96 irregular stores costs more than the lane-wise arithmetic
+saves, so the experiment does not establish a Hermes capability gap and no
+production source is retained. This is local Windows AVX2 best-of-block evidence,
+not Criterion evidence; the temporary instrument diff was not revision-attested.
+
 The retained f32 DFT-32 kernel holds four interleaved samples per Hermes
 register, computes radix-4 and radix-8 leaves around two complex 4x4
 transposes, and batches all three N = 96 rows through one hardware-width

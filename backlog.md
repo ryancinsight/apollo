@@ -1,13 +1,9 @@
 # Apollo Backlog
 
-## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 — Batch the residual Good-Thomas columns [patch] [perf] — in progress
+## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 — Batch the residual Good-Thomas columns [patch] [perf] — done 2026-09-01
 
-- **Outcome.** Determine whether one exact eight-lane Hermes frame over four independent DFT-3 columns reduces the measured 45.73 ns N = 96 column/scatter phase and the remaining 34.38 ns gap to RustFFT.
-- **Scope / non-goals.** Extend the pinned N = 96 phase instrument first. A retained source may specialize only the private generated `(3,32)` f32 column phase, sharing register butterflies with the existing Hermes codelet; preserve f64, every other generated pair, CRT mapping, public API, benchmark inputs/estimator, and zero warmed allocation. Do not add a Hermes primitive unless the consumer experiment proves a provider gap.
-- **Acceptance.** The candidate must match the established direct-DFT forward/inverse bounds, cover every output exactly once, decline before mutation without native eight-lane hardware, and retain scalar fallback behavior. Keep production source only if the isolated phase improves and two adjacent unchanged 100-sample complete comparisons reproduce an N = 96 win with f32/f64 N = 64/128 controls neutral; otherwise delete the candidate and record the measured rejection.
-- **Analytical model / stop condition.** Eight batches replace 32 scalar butterflies with three contiguous complex-register loads and one lane-wise DFT-3 each, but preserve all 96 CRT stores. Reject before production routing if register materialization or scalar scatter erases the phase win, or if the complete comparison lacks disjoint improvement evidence.
-- **Risk / dependencies.** [patch] [perf]. Generated unsafe scratch initialization, inverse sign, output coverage, and target-feature containment are the correctness risks. Timing evidence remains local Windows AVX2 only.
-- **Integrator / lease:** `/root`; lease `/root` on the N = 96 phase instrument, a private f32 column-batch leaf, the `(3,32)` generator hook if retained, focused value/allocation tests, and this item's PM sections. Last update 2026-09-01.
+- **Outcome:** rejected before production routing; the value-gated exact-eight-lane candidate regressed the release column/scatter phase from 46.07 ns to 56.91 ns (23.53%) because register materialization preserved all 96 scalar CRT stores.
+- **Evidence:** focused debug and release Nextest passed; the experimental source and derived stack-overlay lock delta were removed, so production and the standalone lock are unchanged. Timing is local Windows AVX2, best-of-block, non-Criterion, and the instrument diff was not revision-attested. Lease none.
 
 ## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 — Reduce the N = 96 fixed-codelet latency gap [patch] [perf] — done 2026-09-01
 

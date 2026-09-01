@@ -2,15 +2,15 @@
 
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
 
-- [ ] Add a value-gated four-column Hermes DFT-3 candidate to the pinned phase
+- [x] Add a value-gated four-column Hermes DFT-3 candidate to the pinned phase
       instrument without changing production routing.
-- [ ] Reject it if the isolated column/scatter phase fails to improve; otherwise
+- [x] Reject it if the isolated column/scatter phase fails to improve; otherwise
       retain the minimum private `(3,32)` f32 hook with scalar fallback.
-- [ ] Prove forward/inverse direct-DFT bounds, exact CRT output coverage,
-      unsupported-width no-mutation, f64 parity, and warmed zero allocation.
-- [ ] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
-      f32/f64 controls, then run warning-denied host/AArch64, debug/release,
-      documentation, formatting, lock, exact-diff, hosted, and merge gates.
+- [x] Validate all 96 CRT destinations, finite output, and the established error
+      bound before timing the candidate.
+- [x] Record the release 46.07 ns incumbent versus 56.91 ns candidate result,
+      remove the rejected source, restore the standalone lock, and discharge the
+      lease without entering production or whole-path gates.
 
 ## ATLAS-APOLLO-F32-N96-CODELET-2026-08-31 [perf] — Codex
 
