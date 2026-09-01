@@ -12,7 +12,9 @@
       controls; pass warning-denied host/AArch64, 524/524 debug/release, docs,
       formatting, standalone-lock, and exact-diff gates.
 - [x] Commit exact source `c616b8c2` with no lock or unrelated peer movement.
-- [ ] Complete hosted review and merge without squash.
+- [x] Complete hosted review and merge without squash: PR #228 merged exact
+      head `2e263f8f` as `271dea4d` after every repository and counterbalanced
+      benchmark gate passed.
 
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
 
