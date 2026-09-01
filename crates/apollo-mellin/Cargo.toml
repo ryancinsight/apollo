@@ -34,7 +34,12 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+apollo-bench = { path = "../apollo-bench" }
 proptest.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "mellin_cpu_spectrum"
+harness = false
