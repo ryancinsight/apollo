@@ -1,3 +1,38 @@
+## The split gathers at its native width (2026-09-01) <a id="wide-gather"></a>
+
+The split's gather ran a hardcoded four-lane blend network; for a four-byte
+scalar the four-lane request lands in the scalar-emulated frame, so the f32
+route gathered without its vector unit. Two hermes provider rounds closed
+it (`ATLAS-APOLLO-WIDE-STRIDED-LOADS-2026-09-01`):
+
+1. `deinterleave_pairs` (hermes PR #118): the pair-granularity deinterleave
+   the blend network hand-rolled, native at every backend width. Dispatched
+   at the base plan's width, this measured **P-core -4% / E-core +2.7%** at
+   n = 512 — the composed two-level radix-4 form pays sixteen shuffles per
+   quad, and the cross-half permute is the expensive step on E-cores.
+2. `deinterleave_pairs4` (hermes PR #119): the fused four-way form — four
+   lane-local 64-bit unpacks plus four `vperm2f128` at f32 (half the
+   shuffles), one half concatenation per output at f64. This converted the
+   E-core regression into a win instead of shipping a P/E tradeoff.
+
+**Measured pinned, alternating same-session builds (ABBA), fused vs
+pre-item:**
+
+| case | pre | fused | delta | vs RustFFT |
+| --- | --- | --- | --- | --- |
+| P-core f32 512 | 353.7-363.3 ns | **318.6 / 318.7** | **-10%** | 1.45 -> **1.25** |
+| E-core f32 512 | 692.5-693.4 | **654.0 / 656.9** | **-5.4%** | 1.36 -> **1.29** |
+| P-core f32 256 | 146.2-148.4 | 143.9 / 144.3 | ~-1.5% | 1.31 |
+| f64 256 / 512, E f32 256 | — | — | flat | controls |
+
+Within-arm spreads are under 0.5% on both cores; the 512 ranges are
+disjoint. The gather's width is asserted, not assumed: the reference test
+requires the eight-lane dispatch to handle exactly where the plan is
+eight-lane and match the scalar strided gather bit-exactly, and both the
+two-way and fused four-way networks were proven to bite by output-row
+mutations. The four-lane f64 route now also uses the fused form (one
+`vperm2f128` per output, down from two).
+
 ## Fused split loads are the third boundary-fusion falsification (2026-09-01) <a id="fused-split-loads"></a>
 
 Hypothesis (filed as the small-size split's next lead): the gather and the
