@@ -11,7 +11,9 @@ publish = false
 
 [dependencies]
 csv.workspace = true
+hermes-simd.workspace = true
 thiserror.workspace = true
+themis.workspace = true
 
 [lints]
 workspace = true

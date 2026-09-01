@@ -651,7 +651,7 @@ fn qos_placement_probe() {
     );
 }
 
-fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
+fn main() -> Result<(), apollo_bench::BenchmarkError> {
     // The probe observes the process's default state, so it runs before the
     // opt-out below and performs that opt-out itself midway.
     if std::env::var_os("APOLLO_QOS_PLACEMENT_PROBE").is_some() {
@@ -659,6 +659,11 @@ fn main() -> Result<(), apollo_bench::BenchmarkModeError> {
         return Ok(());
     }
     opt_out_of_power_throttling();
+    // Pin after the opt-out so the whole census runs on one processor of a
+    // queried class; unpinned, its numbers are a scheduler blend of two
+    // classes (ATLAS-APOLLO-CENSUS-UNPINNED-BLEND-2026-09-01).
+    let processor = apollo_bench::bind_measurement_processor()?;
+    eprintln!("engine_census: {}", processor.describe());
     // Before the timing suites, so each size's cold window is its first touch
     // of the process-global caches (see the function's method note).
     peak_working_set_census();

@@ -1,5 +1,11 @@
 mod calibration;
+mod processor;
 mod sample;
+
+pub use processor::{
+    bind_measurement_processor, MeasurementProcessor, ProcessorSelection, ProcessorSelectionError,
+    PROCESSOR_VAR,
+};
 
 use crate::config::{BenchmarkConfig, BenchmarkMode};
 

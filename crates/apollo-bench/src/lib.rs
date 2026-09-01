@@ -32,6 +32,7 @@
 mod case;
 mod comparison;
 mod config;
+mod error;
 mod measurement;
 mod report;
 mod statistics;
@@ -46,5 +47,10 @@ pub use comparison::{
     ReplicatedCounterbalancedBenchmarkRegression, ReplicatedCounterbalancedComparisonSummary,
 };
 pub use config::{BenchmarkConfig, BenchmarkConfigError, BenchmarkMode, BenchmarkModeError};
+pub use error::BenchmarkError;
+pub use measurement::{
+    bind_measurement_processor, MeasurementProcessor, ProcessorSelection, ProcessorSelectionError,
+    PROCESSOR_VAR,
+};
 pub use report::BenchmarkRecord;
 pub use suite::BenchmarkSuite;
