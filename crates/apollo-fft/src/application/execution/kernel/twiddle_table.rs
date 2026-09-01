@@ -190,7 +190,7 @@ pub(crate) fn twiddle_components(sign: f64, exponent: usize, period: usize) -> (
 }
 
 pub(crate) fn build_twiddle_table<C: TwiddleOutput>(n: usize, sign: f64) -> Vec<C> {
-    debug_assert!(
+    assert!(
         n.is_power_of_two(),
         "build_twiddle_table requires power-of-two n"
     );

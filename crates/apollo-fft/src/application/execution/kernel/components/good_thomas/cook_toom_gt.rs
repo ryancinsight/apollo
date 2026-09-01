@@ -33,7 +33,10 @@ use crate::application::execution::kernel::components::winograd::ShortWinogradSc
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
-    debug_assert!(data.len() >= 84);
+    assert!(
+        data.len() >= 84,
+        "invariant: the DFT-84 kernel addresses 84 samples unchecked"
+    );
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 84];
 
@@ -146,7 +149,10 @@ pub(crate) fn dft84_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
 /// Refactored to a flat, zero-copy 3-way Good-Thomas PFA transform with fused permutations.
 #[inline]
 pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eunomia::Complex<F>]) {
-    debug_assert!(data.len() >= 60);
+    assert!(
+        data.len() >= 60,
+        "invariant: the DFT-60 kernel addresses 60 samples unchecked"
+    );
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 60];
 
@@ -259,7 +265,10 @@ pub(crate) fn dft60_impl<F: WinogradScalar, const INVERSE: bool>(data: &mut [eun
 pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
     data: &mut [eunomia::Complex<F>],
 ) {
-    debug_assert!(data.len() >= 90);
+    assert!(
+        data.len() >= 90,
+        "invariant: the DFT-90 kernel addresses 90 samples unchecked"
+    );
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 90];
 
@@ -361,7 +370,10 @@ pub(crate) fn dft90_impl<F: ShortWinogradScalar, const INVERSE: bool>(
 pub(crate) fn dft150_impl<F: ShortWinogradScalar, const INVERSE: bool>(
     data: &mut [eunomia::Complex<F>],
 ) {
-    debug_assert!(data.len() >= 150);
+    assert!(
+        data.len() >= 150,
+        "invariant: the DFT-150 kernel addresses 150 samples unchecked"
+    );
 
     let mut scratch = [eunomia::Complex::<F>::ZERO; 150];
 

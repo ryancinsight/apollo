@@ -220,3 +220,12 @@ fn try_fft_dispatch_150() {
         err_inv
     );
 }
+
+/// The DFT-84 kernel guards eighty unchecked accesses with one release
+/// assert, so a short buffer panics rather than reading past the slice.
+#[test]
+#[should_panic(expected = "invariant: the DFT-84 kernel addresses 84 samples unchecked")]
+fn dft84_rejects_a_short_buffer_in_release() {
+    let mut short = vec![eunomia::Complex64::new(0.0, 0.0); 83];
+    dft84_impl::<f64, false>(&mut short);
+}
