@@ -2,15 +2,16 @@
 
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 [perf] — Codex
 
-- [ ] Add a value-gated constant-index 32-column candidate to the pinned phase
+- [x] Add a value-gated constant-index 32-column candidate to the pinned phase
       instrument without changing production routing.
-- [ ] Reject it unless isolated release phase cost improves for f32 and f64;
+- [x] Reject it unless isolated release phase cost improves for f32 and f64;
       otherwise retain the minimum private generated `(3,32)` schedule.
-- [ ] Prove forward/inverse direct-DFT bounds, exact CRT output coverage, scalar
+- [x] Prove forward/inverse direct-DFT bounds, exact CRT output coverage, scalar
       parity, warmed zero allocation, and bounded code-size growth.
-- [ ] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
-      controls, then run warning-denied host/AArch64, debug/release, docs,
-      formatting, lock, exact-diff, hosted, and merge gates.
+- [x] Reproduce two unchanged 100-sample complete comparisons with N = 64/128
+      controls; pass warning-denied host/AArch64, 524/524 debug/release, docs,
+      formatting, standalone-lock, and exact-diff gates.
+- [ ] Complete hosted review and merge without squash.
 
 ## ATLAS-APOLLO-F32-N96-COLUMN-BATCH-2026-09-01 [perf] — Codex
 

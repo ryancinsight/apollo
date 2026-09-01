@@ -194,3 +194,73 @@ fn dft64_f32_forward_matches_direct() {
     let err = max_err(&got, &expected);
     assert!(err < 3e-5, "DFT-64 f32 forward max_err={err:.2e}");
 }
+
+#[test]
+fn dft96_forward_inverse_match_direct_for_each_scalar() {
+    let input64: [Complex64; 96] = core::array::from_fn(|index| {
+        let x = index as f64;
+        Complex64::new((0.17 * x).sin(), 0.25 * (0.31 * x).cos())
+    });
+    let input_l1_64 = input64.iter().map(|value| value.norm()).sum::<f64>();
+    // Each direct/codelet comparison combines two two-level transforms. Four
+    // rounded operations per input term is a conservative first-order bound.
+    let bound64 = 4.0 * 96.0 * f64::EPSILON * input_l1_64.max(1.0);
+    let expected_forward64 = dft_forward(&input64);
+    let mut forward64 = input64;
+    <f64 as ShortDft<96>>::dft::<false>(&mut forward64);
+    let forward_error64 = max_err(&forward64, &expected_forward64);
+    assert!(
+        forward_error64 <= bound64,
+        "DFT-96 f64 forward error={forward_error64:.3e}, bound={bound64:.3e}"
+    );
+
+    let expected_inverse64 = dft_inverse(&input64)
+        .into_iter()
+        .map(|value| value * 96.0)
+        .collect::<Vec<_>>();
+    let mut inverse64 = input64;
+    <f64 as ShortDft<96>>::dft::<true>(&mut inverse64);
+    let inverse_error64 = max_err(&inverse64, &expected_inverse64);
+    assert!(
+        inverse_error64 <= bound64,
+        "DFT-96 f64 inverse error={inverse_error64:.3e}, bound={bound64:.3e}"
+    );
+
+    let input32: [Complex32; 96] = core::array::from_fn(|index| {
+        let x = index as f32;
+        Complex32::new((0.17 * x).sin(), 0.25 * (0.31 * x).cos())
+    });
+    let input_l1_32 = input32
+        .iter()
+        .map(|value| f64::from(value.norm()))
+        .sum::<f64>();
+    let bound32 = 4.0 * 96.0 * f64::from(f32::EPSILON) * input_l1_32.max(1.0);
+    let expected_forward32 = dft_forward(&input32);
+    let mut forward32 = input32;
+    <f32 as ShortDft<96>>::dft::<false>(&mut forward32);
+    let forward_error32 = forward32
+        .iter()
+        .zip(&expected_forward32)
+        .map(|(actual, expected)| f64::from((*actual - *expected).norm()))
+        .fold(0.0_f64, f64::max);
+    assert!(
+        forward_error32 <= bound32,
+        "DFT-96 f32 forward error={forward_error32:.3e}, bound={bound32:.3e}"
+    );
+
+    let expected_inverse32 = dft_inverse(&input32)
+        .into_iter()
+        .map(|value| value * 96.0_f32)
+        .collect::<Vec<_>>();
+    let mut inverse32 = input32;
+    <f32 as ShortDft<96>>::dft::<true>(&mut inverse32);
+    let inverse_error32 = inverse32
+        .iter()
+        .zip(&expected_inverse32)
+        .map(|(actual, expected)| f64::from((*actual - *expected).norm()))
+        .fold(0.0_f64, f64::max);
+    assert!(
+        inverse_error32 <= bound32,
+        "DFT-96 f32 inverse error={inverse_error32:.3e}, bound={bound32:.3e}"
+    );
+}

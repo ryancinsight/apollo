@@ -1,3 +1,42 @@
+## N = 96 Good-Thomas columns use a compile-time CRT schedule (2026-09-01) <a id="n96-column-unroll"></a>
+
+After the three DFT-32 rows moved into one Hermes target frame, the generated
+N = 96 codelet still spent 46.07 ns f32 and 53.98 ns f64 in its 32 DFT-3
+columns and irregular scatter. The generic generated loop recomputed each
+column's CRT base, advanced three destinations with wrap checks, and executed
+32 backedges even though the `(3,32)` factorization fixes every address at
+macro-expansion time.
+
+The generator now expands only `(3,32)` into 32 constant scratch reads,
+unchanged `ShortDft<3>` calls, and constant output stores. Every other
+factorization retains the compact incremental-index loop. The compile-time
+token stream remains lazy rather than collecting an intermediate vector.
+The pinned instrument proves all 96 CRT destinations are unique and compares
+the expanded phase bitwise with the incumbent; an independent direct DFT
+covers forward and unnormalized inverse execution for f32 and f64.
+
+The final exact-processor release instrument reports 46.07 -> 27.37 ns f32
+(40.59%) and 53.98 -> 22.22 ns f64 (58.84%) for the isolated column/scatter
+phase. Two adjacent runs of the unchanged 100-sample comparison report medians
+in nanoseconds:
+
+| scalar / N | Prior 1 | Candidate 1 | Prior 2 | Candidate 2 |
+| --- | ---: | ---: | ---: | ---: |
+| f32 / 64 | 53.411 | 53.460 | 53.520 | 53.323 |
+| f32 / 96 | 128.429 | 111.396 | 128.359 | 111.688 |
+| f32 / 128 | 115.263 | 116.151 | 116.164 | 115.098 |
+| f64 / 64 | 90.503 | 91.147 | 90.609 | 90.626 |
+| f64 / 96 | 249.444 | 221.344 | 249.567 | 221.015 |
+| f64 / 128 | 200.989 | 200.401 | 200.718 | 201.618 |
+
+The N = 96 whole-path medians improve 12.99--13.26% f32 and
+11.27--11.44% f64; every N = 64/128 control remains within 0.92%. Warm
+f32/f64 N = 64/96/128/256/512 execution records zero global allocations and
+zero direct Mnemosyne allocations. A same-command all-feature release-library
+pair grows from 18,708,202 to 18,808,258 bytes, a bounded 100,056-byte (0.535%)
+cost for the one specialization. Timing is local Windows AVX2 evidence on
+logical processor 2; the AArch64 gate establishes compilation, not throughput.
+
 ## The N = 96 Good-Thomas row batch uses one Hermes target frame (2026-09-01) <a id="f32-n96-codelet"></a>
 
 The f32 N = 96 fixed codelet entered this increment at
