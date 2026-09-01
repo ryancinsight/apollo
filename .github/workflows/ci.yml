@@ -3,11 +3,24 @@ name: ci
 on:
   push:
     branches: [main]
+    # Board and ADR writes land on main by themselves and change no code; a
+    # run for them only costs minutes and, under the concurrency group below,
+    # would cancel the merge verification in flight. A merge touching code
+    # plus one of these still runs: paths-ignore skips only when every changed
+    # file matches. READMEs and CHANGELOG stay in scope because crate docs can
+    # include them.
+    paths-ignore:
+      - backlog.md
+      - checklist.md
+      - gap_audit.md
+      - docs/adr/**
   pull_request:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main is the merge gate and must reach a verdict; only a
+  # superseded pull-request run is safe to cancel.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Guards the one artifact whose correctness cannot be checked from inside the
