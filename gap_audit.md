@@ -1,3 +1,21 @@
+## Mellin real-input complex reduction (2026-09-01) <a id="mellin-real-complex-dot"></a>
+
+Resolved by `ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01`. Threshold-sized
+forward log-frequency rows previously retained a 2N-lane f64 buffer solely to
+materialize each real sample as `[sample, 0]` before Hermes' complex dot. Hermes
+now owns a real-by-interleaved-complex reduction, so Apollo passes the borrowed
+N-lane real input directly and retains only the 2N interleaved-weight buffer.
+The removed role is 16N bytes per active worker: 2,048 bytes at N = 128 and
+4,096 bytes at N = 256.
+
+A fresh-thread census observes exactly one first-use allocation, zero warmed
+row allocations, and 2N retained weight lanes while matching an independent
+scalar complex sum. Two controlled
+same-provider public-plan pairs improve N = 128 by 1.96%/1.49% and N = 256 by
+1.46%/0.83%; the N = 64 control moves -0.28%/+0.82%. The benchmark retains the
+same public plan construction, input, timed body, and direct DFT oracle. Timing
+is local Windows AVX2 only; AArch64 remains compile-only evidence.
+
 ## CPU STFT forward-frame fusion is control-confounded (2026-09-01) <a id="stft-window-fusion"></a>
 
 The reusable CPU STFT forward path copies one real frame into retained scratch,
@@ -5564,13 +5582,13 @@ upstream as `HS-FEARLESS-TOKEN-2026-08-25`; the Apollo-side retirement is
 - Residuals: exact 1D direct rows still materialize interleaved lane buffers because the current Hermes complex dot API consumes primitive interleaved lanes; fast 1D/3D gridding and 3D exact direct references do not yet consume Hermes.
 
 ## Mellin log-frequency Hermes complex dot routing [patch]
-- Performed: routed threshold-sized forward and inverse log-frequency spectrum rows through Hermes provider-owned interleaved complex dot products with twiddle lanes stored in Mnemosyne thread-local scratch.
+- Performed: routed threshold-sized forward rows through Hermes' real-by-interleaved-complex dot and inverse rows through its interleaved-complex dot, with twiddle lanes stored in Mnemosyne thread-local scratch.
 - Architecture effect: Mellin spectrum execution now composes Moirai row scheduling, Mnemosyne scratch reuse, Hermes SIMD complex reduction, and existing Leto public boundaries without runtime-erased dispatch in Apollo code.
-- Memory effect: threshold-sized forward spectra materialize one shared real interleaved input lane buffer; inverse spectra materialize one shared complex interleaved lane buffer; each worker row reuses thread-local twiddle-lane scratch. Small spectra retain allocation-free scalar accumulation.
+- Memory effect: threshold-sized forward spectra borrow N real lanes directly and delete their 2N-lane materialization buffer; inverse spectra retain one shared complex interleaved lane buffer; each worker row reuses thread-local twiddle-lane scratch. Small spectra retain allocation-free scalar accumulation.
 - Implementation effect: the existing scalar DFT/IDFT closures remain the small-path reference, while `log_frequency_coeff_hermes` and `inverse_log_frequency_coeff_hermes` own the provider reduction boundary.
 - Verification: `cargo fmt --check`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
-- Evidence tier: value-semantic Mellin unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
-- Residuals: log-frequency spectrum rows still materialize interleaved lane buffers because the current Hermes complex dot API consumes primitive interleaved lanes; typed storage conversion remains owner `f64` arithmetic before quantization.
+- Evidence tier: value-semantic Mellin tests, first-use/warm retained-allocation census, and controlled complete-plan Criterion pairs on local Windows AVX2.
+- Residuals: inverse rows still materialize their complex spectrum as primitive interleaved lanes; typed storage conversion remains owner `f64` arithmetic before quantization.
 
 ## DCT/DST direct Hermes dot routing [patch]
 - Performed: added the workspace Hermes provider dependency to `apollo-dctdst`; routed threshold-sized direct DCT-I/II/III/IV and DST-I/II/III/IV row reductions through Hermes real dot products with basis rows stored in Mnemosyne thread-local scratch.

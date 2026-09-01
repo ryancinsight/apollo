@@ -2,11 +2,11 @@
 
 ## ATLAS-APOLLO-MELLIN-REAL-COMPLEX-DOT-2026-09-01 [perf] — Codex
 
-- [ ] Commit the unchanged public Mellin forward-spectrum benchmark and record
+- [x] Commit the unchanged public Mellin forward-spectrum benchmark and record
       exact N = 64 control plus N = 128/256 candidate baselines.
-- [ ] Implement one generic Hermes real-by-interleaved-complex dot with exact
+- [x] Implement one generic Hermes real-by-interleaved-complex dot with exact
       preflight, scalar/native tails, differential values, and isolated timing.
-- [ ] Delete Apollo's retained real-lane materialization only if two unchanged
+- [x] Delete Apollo's retained real-lane materialization only if two unchanged
       complete-path comparisons improve with a neutral control; prove the 16N
       retained-byte removal and warm allocation contract.
 - [ ] Pass provider/consumer exact gates, independent review, and merge without
@@ -2358,12 +2358,12 @@ The source theorem is SSOT: all callers name
 - Evidence: value-semantic NUFFT unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
 
 ## Mellin log-frequency Hermes complex dot routing [patch]
-- [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::interleaved_complex_dot_runtime::<f64, false>`.
+- [x] Routed threshold-sized forward log-frequency spectrum rows through `hermes_simd::real_interleaved_complex_dot_runtime` without real-lane materialization.
 - [x] Routed threshold-sized inverse log-frequency spectrum rows through the same Hermes complex dot boundary and retained the real component required by the IDFT contract.
-- [x] Materialized one shared real interleaved input lane buffer or complex spectrum lane buffer per threshold-sized transform and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
+- [x] Deleted the forward real-lane buffer, retained the inverse complex spectrum lane buffer, and reused Mnemosyne thread-local scratch for per-row twiddle lanes.
 - [x] Kept scalar DFT/IDFT row formulas for smaller spectra and as the value-semantic formula reference.
 - [x] Preserved existing Moirai disjoint output-row scheduling and public Leto/slice spectrum execution contracts.
-- [x] Added direct threshold-path tests for Hermes forward row parity, Hermes inverse row parity, and twiddle-lane materialization.
+- [x] Added direct threshold-path tests for Hermes forward/inverse row parity, twiddle-lane materialization, and a fresh-thread census that observes one first-use retained weight buffer and zero warmed row allocations.
 - [x] Verification: `cargo fmt --check`; `cargo test -p apollo-mellin`; `cargo clippy -p apollo-mellin --all-targets -- -D warnings`; `cargo doc -p apollo-mellin --no-deps`; `cargo semver-checks -p apollo-mellin --baseline-rev HEAD`; `cargo run -p xtask -- provider-audit`; `cargo test --examples`; `cargo test`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude apollo-python --no-deps`.
 - Evidence: value-semantic Mellin unit/property tests plus direct threshold-path Hermes row tests. No runtime benchmark claim is made.
 
