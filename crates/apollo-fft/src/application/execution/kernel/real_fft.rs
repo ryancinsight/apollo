@@ -7,11 +7,14 @@
 //! (`mixed_radix.rs`) which requires no bit-reversal permutation pass and
 //! delivers better throughput via cache-friendly ping-pong buffering.
 //!
-//! The functions remaining here are twiddle-table builders
-//! (`build_forward_twiddle_table_{32,64}`, `build_inverse_twiddle_table_{32,64}`).
-//! They construct contiguous per-stage twiddle tables used by the Stockham
-//! kernel and by the 2-D / 3-D plan axes. All four delegate to the SSOT in
-//! `twiddle_table.rs`.
+//! This module owns two related scalar-FFT concerns:
+//!
+//! - [`RealFft`] delegates contiguous per-stage twiddle-table construction to
+//!   the single implementation in `twiddle_table.rs` for Stockham and the
+//!   multidimensional plan axes.
+//! - The real-input split helpers pack an even real signal into a half-length
+//!   complex transform, untangle its independent bins in place, and mirror the
+//!   conjugate half only when a full spectrum is requested.
 //!
 //! ## Twiddle-table mathematical contract
 //!

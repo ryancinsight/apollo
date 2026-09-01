@@ -54,7 +54,7 @@ fn signal(n: usize) -> Vec<f64> {
 }
 
 /// Sizes covering the split path and the lengths that fall back to widening.
-const SIZES: [usize; 8] = [4, 8, 16, 64, 256, 1024, 4096, 16384];
+const SIZES: [usize; 9] = [4, 8, 16, 64, 256, 1024, 4096, 16384, 65536];
 
 #[test]
 fn matches_exact_spectrum_of_a_known_tone_sum() {
@@ -95,7 +95,7 @@ fn matches_exact_spectrum_of_a_known_tone_sum() {
 #[test]
 fn matches_exact_spectrum_in_native_f32() {
     for n in SIZES {
-        let n_f32 = f32::from(u16::try_from(n).expect("test length fits exactly in f32"));
+        let n_f32 = f32::from(u16::try_from(n - 1).expect("test length minus one fits u16")) + 1.0;
         let tones: [(usize, f32); 3] = [(1, 1.0), (3, -0.5), (7, 0.25)];
         let applicable: Vec<_> = tones.into_iter().filter(|(k, _)| *k < n / 2).collect();
         let src: Vec<f32> = (0..n)
@@ -103,8 +103,8 @@ fn matches_exact_spectrum_in_native_f32() {
                 applicable
                     .iter()
                     .map(|(k, amplitude)| {
-                        let residue = u16::try_from((k * i) % n)
-                            .expect("test phase residue fits exactly in f32");
+                        let residue =
+                            u16::try_from((k * i) % n).expect("test phase residue fits u16");
                         amplitude * (std::f32::consts::TAU * f32::from(residue) / n_f32).cos()
                     })
                     .sum()
