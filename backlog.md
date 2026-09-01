@@ -1567,8 +1567,18 @@
   34/33, `radix_composite/arity.rs` 25, `good_thomas/cook_toom_gt.rs` 25 —
   each slice a separate measured item; the check keeps every landed slice
   from regressing.
-## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — todo
+## ATLAS-APOLLO-COMPOSE-ARENA-MIRI — Cover the compose arena's raw-pointer pattern with miri [patch] — done 2026-09-01
 
+- **Delivered (2026-09-01, Claude `/root`):** `gap_audit.md#compose-arena-alignment`.
+  The arena carries its soundness invariant and the owned-allocation
+  fallback specification on `ComposeArena`; every unsafe site in
+  `adaptive.rs` has a SAFETY comment; three arena tests replicate the
+  production hand-out and run under miri (clean, 4.7 s standalone) — and the
+  first run found the arena aligning its offset rather than its address
+  (UB by contract), now fixed. A deepest-composite round trip above
+  `FUSE_THRESHOLD` (n = 98,304) joins the native suite; its interpreted miri
+  cost is recorded once measured. Footprint instrument gated
+  `#[cfg(not(miri))]`; ratchet checker walks statement heads (398 baseline).
 - **Outcome:** the `ComposeArena` `from_raw_parts_mut`-over-TLS-`UnsafeCell`
   pattern carries a stated SAFETY invariant note and a miri-covered
   deepest-composite test; an owned-allocation fallback is specified if

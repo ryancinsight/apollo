@@ -26,6 +26,9 @@ SOURCE_ROOTS = tuple(sorted(REPOSITORY.glob("crates/*/src")))
 UNSAFE_BLOCK = re.compile(r"\bunsafe\s*\{")
 SAFETY_COMMENT = re.compile(r"^\s*//[/!]?\s*SAFETY\b")
 ATTRIBUTE_OR_COMMENT = re.compile(r"^\s*(#\[|#!\[|//)")
+# A statement head whose `unsafe` block continues on the next line
+# (`let x: T =` / `f(` / `a,`): the comment run may sit above the head.
+STATEMENT_HEAD = re.compile(r"[=(,]\s*$")
 
 
 def uncommented_sites(text: str) -> int:
@@ -41,7 +44,9 @@ def uncommented_sites(text: str) -> int:
             continue
         probe = index - 1
         discharged = False
-        while probe >= 0 and ATTRIBUTE_OR_COMMENT.match(lines[probe]):
+        while probe >= 0 and (
+            ATTRIBUTE_OR_COMMENT.match(lines[probe]) or STATEMENT_HEAD.search(lines[probe])
+        ):
             if SAFETY_COMMENT.match(lines[probe]):
                 discharged = True
                 break

@@ -1,3 +1,30 @@
+## The compose arena aligned its offset, not its address (2026-09-01) <a id="compose-arena-alignment"></a>
+
+`ATLAS-APOLLO-COMPOSE-ARENA-MIRI` asked for miri coverage of the fused
+composite's thread-local bump arena. The first miri run of the new arena
+tests found a real defect in the production pattern the tests replicate:
+`alloc` aligned the bump *offset* inside a `Vec<u8>`, whose base pointer
+promises only byte alignment, so the `&mut [Complex<F>]` handed out through
+`from_raw_parts_mut` could be misaligned — "constructing invalid value ...
+encountered an unaligned reference (required 8 byte alignment but found 1)".
+Real allocators return 16-aligned blocks, which is why it never misbehaved;
+it was undefined behavior by contract regardless. The arena now aligns on
+the buffer's address (`block_layout`) and grows with one alignment of slack
+(`grow_for`), consolidating the duplicated `reserve`/`alloc` arithmetic;
+the three arena tests pass under miri against standalone sources (4.7 s),
+and the full native suite is 525/525.
+
+Two instrument findings rode along. The crate's footprint instrument
+installs a `#[global_allocator]` forwarding to `System`; under miri that
+runs the host allocator's over-aligned header arithmetic interpreted, which
+Stacked Borrows rejects at test-harness teardown — miri's own allocator
+serves miri runs, so the module is `#[cfg(not(miri))]`. And the SAFETY
+ratchet's upward walk stopped at a statement head when the `unsafe` block
+sat on a continuation line (`let x: T =
+ unsafe {..}`), overcounting eight
+already-commented sites; it now walks through heads ending in `=`, `(`, or
+`,`, and the baseline tightened 406 -> 398.
+
 ## Every pre-`core_class` core label is corrected in place (2026-09-01) <a id="core-label-sweep"></a>
 
 Revision note for `ATLAS-APOLLO-INVERTED-CORE-CLAIMS-2026-09-01`. Every
