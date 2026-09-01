@@ -1,5 +1,12 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — in progress
+
+- **Outcome.** Determine whether Apollo's private 2-D/3-D C-order axis transpose can replace the generic Leto C-from-F assignment loop with Hermes register-resident complex square tiles while retaining the current Leto view contract, Mnemosyne scratch roles, and Moirai lane scheduling.
+- **Scope / non-goals.** Limit source changes to the shared FFT transpose boundary and its 2-D/3-D callers, tests, and unchanged-path measurement instrument. Preserve transform arithmetic, axis order, public API, view staging, scratch capacity, scheduler thresholds, workloads, assertions, and timeouts. Unsupported hardware must retain the existing Leto assignment path; reject the candidate if paired full-path timing does not improve.
+- **Acceptance.** Prove exact transpose values for square, asymmetric, ragged, singleton, and batched matrices; preserve independent forward/inverse 2-D/3-D f32/f64 oracles and warm zero allocation; show no per-tile allocation or capability probe; reproduce an isolated transpose reduction and two unchanged full-path comparisons with neutral controls; pass warning-denied host/AArch64, debug/release Nextest, Rustdoc, doctest, format, diff, size, and standalone-lock gates.
+- **Integrator / lease:** `/root`; lease `/root` on `plan/fft/layout.rs`, 2-D/3-D transpose callers/tests, the focused transpose instrument, and this item's PM/doc hunks. Last update 2026-09-01.
+
 ## ATLAS-APOLLO-N96-COLUMN-UNROLL-2026-09-01 — Elide runtime column-loop control [patch] [perf] — done 2026-09-01
 
 - **Outcome.** The private generated `(3,32)` schedule now expands 32 constant-address DFT-3/scatter blocks; every other pair retains the compact loop and all arithmetic, inverse, public, scratch, and routing contracts remain unchanged.
