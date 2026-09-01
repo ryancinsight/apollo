@@ -20,8 +20,9 @@
   measurements are required; AArch64 remains compilation coverage unless a
   runner supplies timing evidence.
 - **Integrator / lease:** `/root`; lease `/root` on `batched/boundary.rs`, the
-  planar combine in `batched/mod.rs`, this item block, its checklist section,
-  and the resulting gap-audit/CHANGELOG entries. Three processor-2 runs place
+  planar combine in `batched/mod.rs`, its focused `batched/tests.rs` oracle,
+  this item block, its checklist section, and the resulting
+  gap-audit/CHANGELOG entries. Three processor-2 runs place
   f32 N = 32,768 stage set 1 at 74,559--76,138 cycles, stage set 2 at
   78,821--79,336, transpose at 17,320--17,488, and the still-scalar fused
   combine/output pass at 56,600--61,328. The stage sets already use Hermes'
