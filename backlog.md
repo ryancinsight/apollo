@@ -1,5 +1,29 @@
 # Apollo Backlog
 
+## ATLAS-APOLLO-REAL-HALF-THROUGHPUT-2026-09-01 — Attribute the allocation-free real split [patch] [perf] — in-progress
+
+- **Outcome.** Reduce the measured f64 half-spectrum forward latency without
+  adding allocation, duplicating FFT kernels, or changing numerical/public
+  contracts.
+- **Scope / non-goals.** Attribute cached-plan acquisition, real-pair packing,
+  the retained half-length complex transform, and untangling through the
+  existing `RealFftData`/`FftPlan1D` seams. Keep the committed engine-census
+  inputs, timed regions, sample count, and reference arms unchanged; do not
+  tune the instrument or introduce a per-length implementation.
+- **Acceptance.** An exact-revision phase instrument identifies the binding
+  term across N = 1,024--262,144. A retained production candidate must preserve
+  the independent real-signal/direct-DFT oracle, conjugate symmetry, DC/Nyquist
+  bins, f32/f64 behavior, caller-owned output, zero warm global and direct
+  Mnemosyne allocations, and non-regressing complex controls. Two adjacent
+  unchanged 100-sample comparisons must reproduce the target improvement;
+  warning-denied host/AArch64, debug/release, Rustdoc, lock, and independent
+  review gates remain required. Change class [patch], risk [perf].
+- **Integrator / lease.** Codex `/root`; lease
+  `crates/apollo-fft/src/application/execution/plan/fft/real_storage/**`,
+  `crates/apollo-fft/src/application/execution/kernel/real_fft.rs`, the existing
+  real-split integration target, and this owner-keyed PM section. Last update
+  2026-09-01.
+
 ## ATLAS-APOLLO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Tile multidimensional complex transposes [patch] [perf] — done 2026-09-01
 
 - **Outcome.** Apollo source `9ac833cd` delegates its private 2-D/3-D complex transpose to Leto Ops PR #135/merge `060eb7eb`, which owns the allocation-free Hermes 16/8/4-lane tile selection and generic fallback; transform, Leto-view, Mnemosyne-scratch, and Moirai-scheduling contracts remain unchanged.
