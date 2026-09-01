@@ -58,11 +58,6 @@ impl<T: MixedRadixScalar, const ROWS: usize, const TABLE_LANES: usize>
         Some(Self::new::<INVERSE>(lane_width))
     }
 
-    /// Whether this plan's exact native width carries split-combine stores.
-    pub(crate) const fn combine_sink_supported(&self) -> bool {
-        matches!(self.lane_width, BaseLaneWidth::Four)
-    }
-
     fn new<const INVERSE: bool>(lane_width: BaseLaneWidth) -> Self {
         let dir = if INVERSE { 1.0_f64 } else { -1.0_f64 };
         let w = |j: usize, n: usize| -> [f64; 2] {

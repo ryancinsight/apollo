@@ -160,13 +160,14 @@ where
                 combine_final::<F>(data, scratch, twiddles, BASE);
                 return true;
             }
-            // Four blocks on the same four-lane layout keep only the even
-            // pair's two halves as an intermediate. Block one writes those
+            // Four blocks keep only the even pair's two halves as an
+            // intermediate; the shared column pass carries the sinks at
+            // every native width. Block one writes those
             // halves into the first two output quarters; block three applies
             // its pair butterfly and the outer level as its registers leave
             // the base kernel, replacing the intermediates and filling the
             // last two quarters. The detached scalar final pass disappears.
-            if plan.combine_sink_supported() {
+            {
                 let inner = &twiddles[BASE - 1..2 * BASE - 1];
                 let outer = &twiddles[2 * BASE - 1..4 * BASE - 1];
                 let (outer_low, outer_high) = outer.split_at(BASE);
@@ -217,13 +218,6 @@ where
                     },
                 );
             }
-            for block in scratch.chunks_exact_mut(BASE).take(blocks) {
-                if !instance_major::transform_128::<F, INVERSE>(block, plan) {
-                    return false;
-                }
-            }
-            combine_final4::<F>(data, scratch, twiddles, BASE);
-            true
         },
     )
 }
@@ -308,6 +302,7 @@ fn combine_final<F>(
 /// combines those with `W_{4 * len}` at `j` and `j + len` — the block
 /// order is the gather's bit-reversed one, which is exactly what makes the
 /// adjacent-pair pairing correct.
+#[cfg(all(test, windows, target_arch = "x86_64"))]
 fn combine_final4<F>(
     out: &mut [F::Complex],
     scratch: &[F::Complex],
