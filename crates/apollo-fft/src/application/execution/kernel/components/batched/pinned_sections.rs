@@ -7,7 +7,7 @@
 //! be behind for want of arithmetic or for want of movement and the totals
 //! separate them.
 
-use crate::application::execution::kernel::core_class;
+use crate::application::execution::kernel::measurement_cores;
 use eunomia::{Complex, Complex32, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
 
@@ -24,10 +24,15 @@ const CALLS: u32 = 200;
 #[test]
 #[ignore = "measurement instrument for the planar route's pass attribution"]
 fn planar_passes_by_size() {
-    let Some(core) = core_class::selected().and_then(core_class::Selection::performance) else {
+    let Some(selection) = measurement_cores::selected() else {
+        eprintln!("host reports no processor class information; probe not measurable");
+        return;
+    };
+    let Some(core) = selection.performance() else {
         eprintln!("host reports no performance-core information; probe not measurable");
         return;
     };
+    print!("{}", selection.describe());
     let cpu = core.processor().get();
     let _binding =
         ProcessorBinding::bind(core.processor()).expect("measurement processor must be available");

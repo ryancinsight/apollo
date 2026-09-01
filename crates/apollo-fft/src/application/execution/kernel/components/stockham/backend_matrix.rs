@@ -19,7 +19,7 @@ use super::precision::{
     StockhamPrecision,
 };
 use super::transform::transform_sized;
-use crate::application::execution::kernel::core_class;
+use crate::application::execution::kernel::measurement_cores;
 use crate::application::execution::kernel::mixed_radix::MixedRadixScalar;
 use eunomia::{Complex32, Complex64};
 use hermes_simd::{ProcessorBinding, ProcessorIndex};
@@ -76,7 +76,7 @@ fn stockham_backend_cost_matrix() {
         eprintln!("host lacks avx+fma; backend matrix not measurable");
         return;
     }
-    let Some(selection) = core_class::selected() else {
+    let Some(selection) = measurement_cores::selected() else {
         eprintln!("host reports no processor class information; backend matrix not measurable");
         return;
     };
@@ -90,7 +90,7 @@ fn stockham_backend_cost_matrix() {
             .expect("Windows supports processor queries")
             .get();
         assert_eq!(landed, cpu, "processor binding must remain exact");
-        println!("== {} core (cpu {landed}) ==", core.class().label());
+        println!("== {} core (cpu {landed}) ==", core.label());
         println!(
             "{:>6}  {:>12} {:>12} {:>7}   {:>12} {:>12} {:>7}",
             "n", "f64 scalar", "f64 avx", "s/a", "f32 scalar", "f32 avx", "s/a"
