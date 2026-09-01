@@ -22,9 +22,8 @@
 //! the same construction at their native widths -- a four-byte scalar
 //! previously ran the four-lane form in the scalar-emulated frame. One
 //! `deinterleave_pairs` of two consecutive chunks splits their complex
-//! samples into even and odd halves; four blocks either pair chunks at
-//! distance two (four lanes, where a chunk is exactly one pair of
-//! complexes) or compose two levels (eight lanes).
+//! samples into even and odd halves; four blocks take one fused four-way
+//! pair deinterleave per quad of consecutive chunks.
 //!
 //! Bounds are hoisted: one assert per slice at kernel entry, then raw chunk
 //! access — these buffers arrive as runtime-length slices, and the checked
@@ -117,32 +116,18 @@ impl<T: LaneScalar + MixedRadixScalar, const BLOCKS: usize> LaneKernel<T>
                 put_chunk(even, self.dst, g);
                 put_chunk(odd, self.dst, cpb + g);
             }
-        } else if lanes == 4 {
-            // A four-lane chunk is exactly one pair of complex samples, so
-            // pairing chunks at distance two reaches stride four in one
-            // level. Block rows land as [0, 2, 1, 3] -- the bit-reversed
-            // block order the combine chain expects.
-            for g in 0..2 * cpb {
-                let s = g % 2;
-                let k = g / 2;
-                let base = 4 * k + s;
-                let (even, odd) =
-                    chunk::<T, A>(self.src, base).deinterleave_pairs(chunk(self.src, base + 2));
-                put_chunk(even, self.dst, s * cpb + k);
-                put_chunk(odd, self.dst, (s + 2) * cpb + k);
-            }
         } else {
-            // Eight-lane chunks hold four complexes, so stride four composes
-            // two deinterleave levels over each quad of consecutive chunks;
-            // the second level's outputs are one chunk of each block, in the
-            // same bit-reversed row order.
+            // Four blocks: one fused four-way pair deinterleave per quad of
+            // consecutive chunks yields one chunk of each stride-4
+            // subsequence at any width, and the outputs store in the
+            // bit-reversed block order [0, 2, 1, 3] the combine chain
+            // expects.
             for k in 0..cpb {
-                let (e0, o0) =
-                    chunk::<T, A>(self.src, 4 * k).deinterleave_pairs(chunk(self.src, 4 * k + 1));
-                let (e1, o1) = chunk::<T, A>(self.src, 4 * k + 2)
-                    .deinterleave_pairs(chunk(self.src, 4 * k + 3));
-                let (b0, b2) = e0.deinterleave_pairs(e1);
-                let (b1, b3) = o0.deinterleave_pairs(o1);
+                let (b0, b1, b2, b3) = chunk::<T, A>(self.src, 4 * k).deinterleave_pairs4(
+                    chunk(self.src, 4 * k + 1),
+                    chunk(self.src, 4 * k + 2),
+                    chunk(self.src, 4 * k + 3),
+                );
                 put_chunk(b0, self.dst, k);
                 put_chunk(b2, self.dst, cpb + k);
                 put_chunk(b1, self.dst, 2 * cpb + k);
